@@ -83,6 +83,22 @@ export interface HartVariableRow {
   readable?: boolean;
   writable?: boolean;
   runtimeMutable?: boolean;
+  deviceVariableCode?: number;
+  deviceVariableUnit?: number;
+  classification?: number;
+  family?: number;
+  transducerSerialNumber?: number;
+  upperTransducerLimit?: number;
+  lowerTransducerLimit?: number;
+  minimumSpan?: number;
+  dampingValue?: number;
+  acquisitionPeriod?: number;
+  deviceVariableProperties?: number;
+  deviceVariableStatus?: number;
+  allowedUnitCodes?: number[];
+  rangeUnitCode?: number;
+  lowerRangeValue?: number;
+  upperRangeValue?: number;
   expression?: string;
 }
 
@@ -120,6 +136,22 @@ export function parseVariableRows(json: string): HartVariableRow[] {
     unit: typeof item.unit === "string" ? item.unit : "",
     value: typeof item.value === "number" ? item.value : 0,
     runtimeMutable: item.runtimeMutable === true,
+    ...(typeof item.deviceVariableCode === "number" ? { deviceVariableCode: item.deviceVariableCode } : {}),
+    ...(typeof item.deviceVariableUnit === "number" ? { deviceVariableUnit: item.deviceVariableUnit } : {}),
+    ...(typeof item.classification === "number" ? { classification: item.classification } : {}),
+    ...(typeof item.family === "number" ? { family: item.family } : {}),
+    ...(typeof item.transducerSerialNumber === "number" ? { transducerSerialNumber: item.transducerSerialNumber } : {}),
+    ...(typeof item.upperTransducerLimit === "number" ? { upperTransducerLimit: item.upperTransducerLimit } : {}),
+    ...(typeof item.lowerTransducerLimit === "number" ? { lowerTransducerLimit: item.lowerTransducerLimit } : {}),
+    ...(typeof item.minimumSpan === "number" ? { minimumSpan: item.minimumSpan } : {}),
+    ...(typeof item.dampingValue === "number" ? { dampingValue: item.dampingValue } : {}),
+    ...(typeof item.acquisitionPeriod === "number" ? { acquisitionPeriod: item.acquisitionPeriod } : {}),
+    ...(typeof item.deviceVariableProperties === "number" ? { deviceVariableProperties: item.deviceVariableProperties } : {}),
+    ...(typeof item.deviceVariableStatus === "number" ? { deviceVariableStatus: item.deviceVariableStatus } : {}),
+    ...(Array.isArray(item.allowedUnitCodes) ? { allowedUnitCodes: item.allowedUnitCodes.filter((x): x is number => typeof x === "number") } : {}),
+    ...(typeof item.rangeUnitCode === "number" ? { rangeUnitCode: item.rangeUnitCode } : {}),
+    ...(typeof item.lowerRangeValue === "number" ? { lowerRangeValue: item.lowerRangeValue } : {}),
+    ...(typeof item.upperRangeValue === "number" ? { upperRangeValue: item.upperRangeValue } : {}),
     ...(typeof item.expression === "string" && item.expression ? { expression: item.expression } : {}),
   }));
 }
@@ -129,6 +161,12 @@ export function serializeVariableRows(rows: HartVariableRow[]): string {
     id: row.id, name: row.name, role: row.role, type: row.type, direction: row.direction,
     unit: row.unit, ...(row.direction === "Internal" ? { value: row.value } : {}),
     ...(row.runtimeMutable ? { runtimeMutable: true } : {}),
+    ...Object.fromEntries(([
+      "deviceVariableCode", "deviceVariableUnit", "classification", "family", "transducerSerialNumber",
+      "upperTransducerLimit", "lowerTransducerLimit", "minimumSpan", "dampingValue", "acquisitionPeriod",
+      "deviceVariableProperties", "deviceVariableStatus", "allowedUnitCodes",
+      "rangeUnitCode", "lowerRangeValue", "upperRangeValue",
+    ] as const).filter((key) => row[key] !== undefined).map((key) => [key, row[key]])),
     ...(row.expression ? { expression: row.expression } : {}),
   })));
 }

@@ -44,7 +44,7 @@ public:
 int main() {
     const auto referenceCommands = HartReferenceCatalog::commandDescriptors();
     const auto referenceDevices = HartReferenceCatalog::deviceDefinitions();
-    check(referenceCommands.size() == 63, "process_simul command catalog imported");
+    check(referenceCommands.size() == 173, "process_simul command catalog imported");
     check(referenceDevices.size() == 11 && referenceDevices.front().name == "FV100CA" &&
               referenceDevices.back().name == "FIT100A",
           "process_simul device catalog imported");
@@ -199,9 +199,8 @@ int main() {
 
         const uint8_t codes[] = {0x00, 0x05};
         HartResponseBuilder cmd21(32);
-        const std::vector<uint8_t> expectedCmd21{0x00,                         // error_code
-                                                 0x39, 0x00, 0x00, 0x00, 0x00, // code 0x00 -> PV unit + value
-                                                 0xFA, 0x7F, 0xC0, 0x00, 0x00}; // code 0x05 -> not used + NaN
+        const std::vector<uint8_t> expectedCmd21{0xF6, 0x39, 0x00, 0x00, 0x00, 0x00,
+                                                 0x05, 0xFA, 0x7F, 0xA0, 0x00, 0x00};
         check(referenceEngine.execute("hart-1", 1, 0x21, codes, cmd21) &&
                   std::equal(cmd21.bytes().begin(), cmd21.bytes().end(), expectedCmd21.begin()) &&
                   cmd21.size() == expectedCmd21.size(),
@@ -1168,6 +1167,776 @@ int main() {
         HartResponseBuilder cpUndeclared(16);
         check(!cpEngine.execute("hart-1", 30, 0x21, {}, cpUndeclared),
               "Common Practice command 0x21, not declared by this device, returns \"not implemented\" (no toggle, no fallback)");
+    }
+
+    // HCF_SPEC-151 Rev 10.0 Common Practice cluster 33/34/53/54/79. The
+    // five commands share one canonical Device Variable entry and therefore
+    // prove read-after-write, unit propagation, typed metadata and atomic
+    // ownership validation without a command-specific handler.
+    {
+        HartProfileRegistry cpRegistry;
+        check(cpRegistry.registerProfile(HartReferenceCatalog::makeGenericProfile()), "Common Practice cluster profile registers");
+        HartEngine cpEngine(cpRegistry);
+        check(HartReferenceCatalog::installCommandPrograms(cpEngine), "Common Practice cluster programs compile");
+        HartDevicePlan device{"cp-cluster", "lasecsimul.hart.process-simul-compatible", "hart-1", 31, "029EB1", 12.5};
+        device.variables.push_back({"PV", "Primary Variable", "", 12.5, HartVariableRole::PrimaryVariable,
+                                    HartVariableType::Float32, HartVariableDirection::Internal, true,
+                                    246, 65, 5, 0x123456, 100.0f, 0.0f, 0.1f, 0.0f,
+                                    1000, 0, 0, true, {57, 35}});
+        device.variables.back().rangeUnitCode = 57;
+        device.variables.back().lowerRangeValue = 0.0f;
+        device.variables.back().upperRangeValue = 100.0f;
+        device.variables.push_back({"SV", "Secondary Variable", "", 4.0, HartVariableRole::SecondaryVariable,
+                                    HartVariableType::Float32, HartVariableDirection::Internal, true,
+                                    1, 65, 5, 0x123457, 100.0f, 0.0f, 0.1f, 0.0f,
+                                    1000, 0, 0, true, {57, 35}});
+        for (const auto& command : HartReferenceCatalog::commandDescriptors())
+            device.commandConfigurations.push_back({command.id, true, false, {}});
+        check(cpEngine.loadPlan({{device}}), "Common Practice cluster device loads");
+
+        const uint8_t code246[] = {246};
+        HartResponseBuilder read33(64);
+        check(cpEngine.execute("hart-1", 31, 0x21, code246, read33) && read33.size() == 6,
+              "Command 33 returns one six-byte Device Variable slot");
+        check(read33.size() >= 2 && read33.bytes()[0] == 246 && read33.bytes()[1] == 57,
+              "Command 33 returns canonical PV code and units");
+
+        const auto damping = HartTypeCodec::encodeFloat32BE(2.0f);
+        HartResponseBuilder write34(16);
+        check(cpEngine.execute("hart-1", 31, 0x22, damping, write34) && write34.size() == 4,
+              "Command 34 writes and echoes PV damping");
+        HartResponseBuilder universal15(32);
+        check(cpEngine.execute("hart-1", 31, 0x0F, {}, universal15) && universal15.size() >= 15 &&
+                  std::equal(damping.begin(), damping.end(), universal15.bytes().begin() + 11),
+              "Universal Command 15 reads the same canonical PV damping written by Command 34");
+        // HCF_SPEC-151 7.22: 1(code)+3(serial)+1(units)+4(upper)+4(lower)+
+        // 4(damping)+4(minspan)+1(classification)+1(family)+4(acquisition)+
+        // 1(properties) = 28 bytes. (Was asserted as 34 before this
+        // session's fix -- Classification/Family were wrongly emitted as
+        // 4-byte floats instead of the spec's 1-byte Enums; the test had
+        // enshrined the bug instead of catching it.)
+        HartResponseBuilder info54(64);
+        check(cpEngine.execute("hart-1", 31, 0x36, code246, info54) && info54.size() == 28,
+              "Command 54 returns the complete canonical Device Variable information record (28 bytes per HCF_SPEC-151 7.22)");
+        check(info54.size() >= 17 && std::equal(damping.begin(), damping.end(), info54.bytes().begin() + 13),
+              "Command 54 reflects the Command 34 damping mutation");
+
+        const uint8_t writeUnits[] = {246, 35};
+        HartResponseBuilder units53(16);
+        check(cpEngine.execute("hart-1", 31, 0x35, writeUnits, units53) && units53.size() == 2 &&
+                  units53.bytes()[0] == 246 && units53.bytes()[1] == 35,
+              "Command 53 writes and echoes Device Variable units");
+        HartResponseBuilder info54AfterUnits(64);
+        HartResponseBuilder universal1AfterUnits(16);
+        check(cpEngine.execute("hart-1", 31, 0x36, code246, info54AfterUnits) && info54AfterUnits.size() >= 5 &&
+                  info54AfterUnits.bytes()[4] == 35 &&
+                  cpEngine.execute("hart-1", 31, 0x01, {}, universal1AfterUnits) &&
+                  universal1AfterUnits.size() >= 1 && universal1AfterUnits.bytes()[0] == 35,
+              "Command 54 and Universal Command 1 observe the same unit written by Command 53");
+
+        const auto value = HartTypeCodec::encodeFloat32BE(77.25f);
+        const std::array<uint8_t, 7> write79{246, 1, 35, value[0], value[1], value[2], value[3]};
+        HartResponseBuilder write79Response(32);
+        check(cpEngine.execute("hart-1", 31, 0x4F, write79, write79Response) && write79Response.size() == 8,
+              "Command 79 writes a writable Device Variable with matching units");
+        HartResponseBuilder readAfter79(16);
+        check(cpEngine.execute("hart-1", 31, 0x21, code246, readAfter79) && readAfter79.size() >= 6 &&
+                  std::equal(value.begin(), value.end(), readAfter79.bytes().begin() + 2),
+              "Command 33 observes the Command 79 canonical value");
+        HartResponseBuilder readAfter79Status(32);
+        check(cpEngine.execute("hart-1", 31, 0x09, code246, readAfter79Status) && readAfter79Status.size() >= 9 &&
+                  std::equal(value.begin(), value.end(), readAfter79Status.bytes().begin() + 4),
+              "Universal Command 9 observes the same canonical value written by Command 79");
+
+        const std::array<uint8_t, 7> wrongUnits{246, 1, 57, value[0], value[1], value[2], value[3]};
+        HartResponseBuilder rejected79(32);
+        check(!cpEngine.execute("hart-1", 31, 0x4F, wrongUnits, rejected79),
+              "Command 79 rejects a units mismatch atomically");
+        HartResponseBuilder unchanged(16);
+        check(cpEngine.execute("hart-1", 31, 0x21, code246, unchanged) && unchanged.size() >= 6 &&
+                  std::equal(value.begin(), value.end(), unchanged.bytes().begin() + 2),
+              "Rejected Command 79 leaves the canonical value unchanged");
+
+        // Save/reopen proof: materialize a new plan from the committed
+        // runtime state, create a new registry/engine, and read through
+        // different commands. No original runtime objects are reused.
+        const HartDevicePlan persisted = *cpEngine.findDevicePlan("cp-cluster");
+        HartProfileRegistry reopenedRegistry;
+        check(reopenedRegistry.registerProfile(HartReferenceCatalog::makeGenericProfile()),
+              "Common Practice save/reopen profile registers");
+        HartEngine reopenedEngine(reopenedRegistry);
+        check(HartReferenceCatalog::installCommandPrograms(reopenedEngine),
+              "Common Practice save/reopen programs install");
+        check(reopenedEngine.loadPlan({{persisted}}), "Common Practice committed plan reopens");
+        HartResponseBuilder reopened33(16);
+        HartResponseBuilder reopened54(64);
+        check(reopenedEngine.execute("hart-1", 31, 0x21, code246, reopened33) && reopened33.size() >= 6 &&
+                  std::equal(value.begin(), value.end(), reopened33.bytes().begin() + 2) &&
+                  reopenedEngine.execute("hart-1", 31, 0x36, code246, reopened54) && reopened54.size() >= 17 &&
+                  reopened54.bytes()[4] == 35 && std::equal(damping.begin(), damping.end(), reopened54.bytes().begin() + 13),
+              "Command 79/53/34 values survive save/reopen and remain cross-command consistent");
+
+        // HCF_SPEC-151 7.3-7.5: range unit is independent from PV units;
+        // Command 35 is a 9-byte atomic write, 36 writes current PV to URV,
+        // and 37 writes current PV to LRV while preserving the span.
+        const auto upper90 = HartTypeCodec::encodeFloat32BE(90.0f);
+        const auto lower10 = HartTypeCodec::encodeFloat32BE(10.0f);
+        std::array<uint8_t, 9> range35{35, upper90[0], upper90[1], upper90[2], upper90[3],
+                                       lower10[0], lower10[1], lower10[2], lower10[3]};
+        HartResponseBuilder range35Response(16);
+        check(cpEngine.execute("hart-1", 31, 0x23, range35, range35Response) && range35Response.size() == 9 &&
+                  std::equal(range35.begin(), range35.end(), range35Response.bytes().begin()),
+              "Command 35 atomically writes and echoes range unit, URV and LRV");
+        cpEngine.setPrimaryValue("cp-cluster", 80.0);
+        HartResponseBuilder range36Response(8);
+        check(cpEngine.execute("hart-1", 31, 0x24, {}, range36Response) && range36Response.size() == 0,
+              "Command 36 writes current PV to URV with empty response");
+        cpEngine.setPrimaryValue("cp-cluster", 20.0);
+        HartResponseBuilder range37Response(8);
+        check(cpEngine.execute("hart-1", 31, 0x25, {}, range37Response) && range37Response.size() == 0,
+              "Command 37 writes current PV to LRV with empty response");
+        HartResponseBuilder rangeReader(32);
+        const auto expectedRangeUrv = HartTypeCodec::encodeFloat32BE(90.0f);
+        check(cpEngine.execute("hart-1", 31, 0x0F, {}, rangeReader) && rangeReader.size() >= 11 &&
+                  std::equal(expectedRangeUrv.begin(), expectedRangeUrv.end(), rangeReader.bytes().begin() + 3),
+              "Universal Command 15 sees the same canonical URV after Command 37 span preservation");
+        const HartDevicePlan* rangedPlan = cpEngine.findDevicePlan("cp-cluster");
+        check(rangedPlan && rangedPlan->variables.front().rangeUnitCode == 35 &&
+                  rangedPlan->variables.front().lowerRangeValue == 20.0f &&
+                  rangedPlan->variables.front().upperRangeValue == 90.0f,
+              "Commands 35/36/37 leave exactly one persisted canonical PV range");
+        const float lowerBeforeReject = rangedPlan ? rangedPlan->variables.front().lowerRangeValue : -1.0f;
+        HartResponseBuilder truncatedRange(16);
+        check(!cpEngine.execute("hart-1", 31, 0x23, std::span<const uint8_t>(range35.data(), 8), truncatedRange) &&
+                  cpEngine.findDevicePlan("cp-cluster")->variables.front().lowerRangeValue == lowerBeforeReject,
+              "Truncated Command 35 rejects atomically without mutating the range");
+        HartDevicePlan protectedPlan = *cpEngine.findDevicePlan("cp-cluster");
+        protectedPlan.writeProtectCode = 1;
+        HartProfileRegistry protectedRegistry;
+        protectedRegistry.registerProfile(HartReferenceCatalog::makeGenericProfile());
+        HartEngine protectedEngine(protectedRegistry);
+        HartReferenceCatalog::installCommandPrograms(protectedEngine);
+        protectedEngine.loadPlan({{protectedPlan}});
+        HartResponseBuilder protectedRange(16);
+        check(!protectedEngine.execute("hart-1", 31, 0x23, range35, protectedRange),
+              "Commands 35/36/37 honor centralized write protection");
+        const uint8_t writePvUnit[] = {57};
+        HartResponseBuilder write44(8);
+        check(cpEngine.execute("hart-1", 31, 0x2C, writePvUnit, write44) && write44.size() == 1 && write44.bytes()[0] == 57,
+              "Command 44 writes and echoes the canonical PV unit");
+        const HartDevicePlan* after44 = cpEngine.findDevicePlan("cp-cluster");
+        check(after44 && after44->variables.front().deviceVariableUnit == 57 && after44->variables.front().rangeUnitCode == 57 &&
+                  after44->variables.front().lowerRangeValue == 20.0f && after44->variables.front().upperRangeValue == 90.0f,
+              "Command 44 updates PV/range reporting units without changing range values");
+        HartResponseBuilder assignmentsInitial(8);
+        check(cpEngine.execute("hart-1", 31, 0x32, {}, assignmentsInitial) && assignmentsInitial.size() == 4 &&
+                  assignmentsInitial.bytes()[0] == 246 && assignmentsInitial.bytes()[1] == 250,
+              "Command 50 reads the canonical four-slot dynamic assignment set");
+        const std::array<uint8_t, 4> assignments{1, 250, 250, 250};
+        HartResponseBuilder assignmentsWrite(8), assignmentsAfter(8);
+        const bool assignmentsWriteOk = cpEngine.execute("hart-1", 31, 0x33, assignments, assignmentsWrite);
+        const bool assignmentsReadOk = cpEngine.execute("hart-1", 31, 0x32, {}, assignmentsAfter);
+        check(assignmentsWriteOk && assignmentsWrite.size() == 4, "Command 51 accepts a complete assignment set");
+        check(assignmentsReadOk && assignmentsAfter.size() == 4, "Command 50 returns four assignment bytes after Command 51");
+        check(assignmentsWriteOk && assignmentsWrite.size() == 4 && assignmentsReadOk && assignmentsAfter.size() == 4 &&
+                  std::equal(assignments.begin(), assignments.end(), assignmentsAfter.bytes().begin()),
+              "Command 51 atomically writes assignments read back by Command 50");
+        const std::array<uint8_t, 3> serial49{1, 2, 3};
+        HartResponseBuilder serial49Response(8);
+        check(cpEngine.execute("hart-1", 31, 0x31, serial49, serial49Response) && serial49Response.size() == 3,
+              "Command 49 writes and echoes the canonical PV transducer serial");
+        HartResponseBuilder info54Serial(64);
+        check(cpEngine.execute("hart-1", 31, 0x36, code246, info54Serial) && info54Serial.size() >= 4 &&
+                  info54Serial.bytes()[1] == 1 && info54Serial.bytes()[2] == 2 && info54Serial.bytes()[3] == 3,
+              "Command 54 reads the serial written by Command 49");
+        const std::array<uint8_t, 5> damping55{246, 0x40, 0x00, 0x00, 0x00};
+        HartResponseBuilder damping55Response(16), info54Damping(64);
+        check(cpEngine.execute("hart-1", 31, 0x37, damping55, damping55Response) &&
+                  cpEngine.execute("hart-1", 31, 0x36, code246, info54Damping) && info54Damping.size() >= 17 &&
+                  std::equal(damping55.begin() + 1, damping55.end(), info54Damping.bytes().begin() + 13),
+              "Command 55 writes damping read by Command 54");
+        const std::array<uint8_t, 4> serial56{246, 4, 5, 6};
+        HartResponseBuilder serial56Response(8);
+        check(cpEngine.execute("hart-1", 31, 0x38, serial56, serial56Response) && serial56Response.size() == 4,
+              "Command 56 writes the selected canonical Device Variable serial");
+        HartResponseBuilder unit57(32);
+        check(cpEngine.execute("hart-1", 31, 0x39, {}, unit57) && unit57.size() == 21,
+              "Command 57 reads the canonical unit tag metadata");
+        const auto newUnitTag = HartTypeCodec::encodePackedAscii("UNIT2", 8);
+        const auto newUnitDescriptor = HartTypeCodec::encodePackedAscii("PROCESS", 16);
+        std::array<uint8_t, 21> unit58{};
+        std::copy(newUnitTag.begin(), newUnitTag.end(), unit58.begin());
+        std::copy(newUnitDescriptor.begin(), newUnitDescriptor.end(), unit58.begin() + 6);
+        unit58[18] = 1; unit58[19] = 2; unit58[20] = 24;
+        HartResponseBuilder unit58Response(32), unit57After(32);
+        check(cpEngine.execute("hart-1", 31, 0x3A, unit58, unit58Response) &&
+                  cpEngine.execute("hart-1", 31, 0x39, {}, unit57After) &&
+                  std::equal(unit58.begin(), unit58.end(), unit57After.bytes().begin()),
+              "Command 58 writes metadata read back by Command 57");
+        const uint8_t preamble59[] = {7};
+        HartResponseBuilder preamble59Response(8), command0After59(32);
+        check(cpEngine.execute("hart-1", 31, 0x3B, preamble59, preamble59Response) &&
+                  cpEngine.execute("hart-1", 31, 0x00, {}, command0After59) && command0After59.size() >= 4 && command0After59.bytes()[3] == 7,
+              "Command 59 updates the same preamble authority reported by Command 0");
+        HartResponseBuilder analog60(32), universal2Analog(16);
+        check(cpEngine.execute("hart-1", 31, 0x3C, std::array<uint8_t, 1>{0}, analog60) && analog60.size() == 10 &&
+                  cpEngine.execute("hart-1", 31, 0x02, {}, universal2Analog) &&
+                  std::equal(analog60.bytes().begin() + 2, analog60.bytes().begin() + 6, universal2Analog.bytes().begin()),
+              "Command 60 reads the same canonical Loop Current as Universal Command 2");
+        HartResponseBuilder analog61(32), analog62(32), analog63(32);
+        check(cpEngine.execute("hart-1", 31, 0x3D, {}, analog61) && analog61.size() == 25,
+              "Command 61 returns primary analog level plus four assigned dynamic variables");
+        const std::array<uint8_t, 4> channelSlots{0, 0, 0, 0};
+        check(cpEngine.execute("hart-1", 31, 0x3E, channelSlots, analog62) && analog62.size() == 24,
+              "Command 62 reads the supported Analog Channel slots");
+        check(cpEngine.execute("hart-1", 31, 0x3F, std::array<uint8_t, 1>{0}, analog63) && analog63.size() == 17,
+              "Command 63 reads canonical Analog Channel configuration");
+        const auto additionalDamping = HartTypeCodec::encodeFloat32BE(1.5f);
+        std::array<uint8_t, 5> damping64{0, additionalDamping[0], additionalDamping[1], additionalDamping[2], additionalDamping[3]};
+        HartResponseBuilder damping64Response(16), analog63AfterDamping(32);
+        check(cpEngine.execute("hart-1", 31, 0x40, damping64, damping64Response) &&
+                  cpEngine.execute("hart-1", 31, 0x3F, std::array<uint8_t, 1>{0}, analog63AfterDamping) && analog63AfterDamping.size() == 17 &&
+                  std::equal(additionalDamping.begin(), additionalDamping.end(), analog63AfterDamping.bytes().begin() + 12),
+              "Command 64 updates damping observed by Command 63");
+        const auto analogUpper = HartTypeCodec::encodeFloat32BE(20.0f);
+        const auto analogLower = HartTypeCodec::encodeFloat32BE(4.0f);
+        std::array<uint8_t, 10> range65{0, 39, analogUpper[0], analogUpper[1], analogUpper[2], analogUpper[3],
+                                        analogLower[0], analogLower[1], analogLower[2], analogLower[3]};
+        HartResponseBuilder range65Response(16), endpoints70(32);
+        check(cpEngine.execute("hart-1", 31, 0x41, range65, range65Response) &&
+                  cpEngine.execute("hart-1", 31, 0x46, std::array<uint8_t, 1>{0}, endpoints70) && endpoints70.size() == 18,
+              "Command 65 updates the canonical Analog Channel range read by Command 70");
+        const auto fixed10 = HartTypeCodec::encodeFloat32BE(10.0f);
+        std::array<uint8_t, 6> fixed66{0, 39, fixed10[0], fixed10[1], fixed10[2], fixed10[3]};
+        HartResponseBuilder fixed66Response(16), analog60Fixed(32);
+        check(cpEngine.execute("hart-1", 31, 0x42, fixed66, fixed66Response) &&
+                  cpEngine.execute("hart-1", 31, 0x3C, std::array<uint8_t, 1>{0}, analog60Fixed) &&
+                  std::equal(fixed10.begin(), fixed10.end(), analog60Fixed.bytes().begin() + 2),
+              "Command 66 fixed mode is observed by Command 60");
+        HartResponseBuilder trim67(16), trim68(16);
+        check(cpEngine.execute("hart-1", 31, 0x43, fixed66, trim67) && cpEngine.execute("hart-1", 31, 0x44, fixed66, trim68),
+              "Commands 67 and 68 update the shared Analog/Loop Current trim state");
+        HartResponseBuilder transfer69(16), analog63Transfer(32);
+        check(cpEngine.execute("hart-1", 31, 0x45, std::array<uint8_t, 2>{0, 1}, transfer69) &&
+                  cpEngine.execute("hart-1", 31, 0x3F, std::array<uint8_t, 1>{0}, analog63Transfer) && analog63Transfer.bytes()[2] == 1,
+              "Command 69 transfer function is visible in Command 63");
+        cpEngine.setPrimaryValue("cp-cluster", 50.0);
+        HartResponseBuilder universal2Normal(16), universal3Normal(16);
+        check(cpEngine.execute("hart-1", 31, 0x02, {}, universal2Normal) &&
+                  cpEngine.execute("hart-1", 31, 0x03, {}, universal3Normal) && universal2Normal.size() >= 4 && universal3Normal.size() >= 4 &&
+                  std::equal(universal2Normal.bytes().begin(), universal2Normal.bytes().begin() + 4, universal3Normal.bytes().begin()),
+              "Universal Commands 2 and 3 derive loop current from one canonical path");
+        const auto fixed12 = HartTypeCodec::encodeFloat32BE(12.0f);
+        HartResponseBuilder fixed40(8);
+        check(cpEngine.execute("hart-1", 31, 0x28, fixed12, fixed40) && fixed40.size() == 4 &&
+                  std::equal(fixed12.begin(), fixed12.end(), fixed40.bytes().begin()),
+              "Command 40 enters fixed current mode and echoes actual current");
+        HartResponseBuilder universal2Fixed(16), universal3Fixed(16);
+        check(cpEngine.execute("hart-1", 31, 0x02, {}, universal2Fixed) && cpEngine.execute("hart-1", 31, 0x03, {}, universal3Fixed) &&
+                  std::equal(universal2Fixed.bytes().begin(), universal2Fixed.bytes().begin() + 4, universal3Fixed.bytes().begin()) &&
+                  std::equal(fixed12.begin(), fixed12.end(), universal2Fixed.bytes().begin()),
+              "Command 40 fixed current is observed identically by Commands 2 and 3");
+        const uint8_t exitFixed[] = {0, 0, 0, 0};
+        HartResponseBuilder exit40(8);
+        check(cpEngine.execute("hart-1", 31, 0x28, exitFixed, exit40), "Command 40 exits fixed current mode");
+        HartResponseBuilder selfTest(8);
+        check(cpEngine.execute("hart-1", 31, 0x29, {}, selfTest) && selfTest.size() == 0, "Command 41 performs deterministic self test");
+        HartResponseBuilder reset(8);
+        check(cpEngine.execute("hart-1", 31, 0x2A, {}, reset) && reset.size() == 0, "Command 42 resets volatile fixed-current state");
+        HartResponseBuilder zero(8);
+        check(cpEngine.execute("hart-1", 31, 0x2B, {}, zero) && zero.size() == 0, "Command 43 applies canonical PV zero offset");
+        HartResponseBuilder pvAfterZero(16);
+        const auto expectedZeroPv = HartTypeCodec::encodeFloat32BE(0.0f);
+        check(cpEngine.execute("hart-1", 31, 0x01, {}, pvAfterZero) && pvAfterZero.size() >= 5 &&
+                  std::equal(expectedZeroPv.begin(), expectedZeroPv.end(), pvAfterZero.bytes().begin() + 1),
+              "Command 43 is visible through the PV reader");
+        const uint8_t transferSqrt[] = {1};
+        HartResponseBuilder transfer(8);
+        check(cpEngine.execute("hart-1", 31, 0x2F, transferSqrt, transfer) && transfer.size() == 1 && transfer.bytes()[0] == 1,
+              "Command 47 writes and echoes the canonical transfer-function code");
+        const auto trimZero = HartTypeCodec::encodeFloat32BE(4.0f);
+        const auto trimGain = HartTypeCodec::encodeFloat32BE(20.0f);
+        HartResponseBuilder trimZeroOut(8), trimGainOut(8);
+        check(cpEngine.execute("hart-1", 31, 0x2D, trimZero, trimZeroOut) && cpEngine.execute("hart-1", 31, 0x2E, trimGain, trimGainOut) &&
+                  std::equal(trimZero.begin(), trimZero.end(), trimZeroOut.bytes().begin()) &&
+                  std::equal(trimGain.begin(), trimGain.end(), trimGainOut.bytes().begin()),
+              "Commands 45 and 46 update the shared loop-current calibration model");
+    }
+
+    // HCF_SPEC-151 Rev 10.0 Commands 71-78: one lock state, semantic
+    // squawk/find behavior, and real parent/child dispatch through the same
+    // HartEngine command path.
+    {
+        HartProfileRegistry registry;
+        check(registry.registerProfile(HartReferenceCatalog::makeGenericProfile()), "71-78 profile registers");
+        HartEngine engine(registry);
+        check(HartReferenceCatalog::installCommandPrograms(engine), "71-78 programs install");
+        const auto descriptors = HartReferenceCatalog::commandDescriptors();
+        HartDevicePlan parent{"io-parent", "lasecsimul.hart.process-simul-compatible", "hart-parent", 1, "010203", 10.0};
+        parent.ioSystem = true;
+        parent.findDeviceArmed = true;
+        parent.ioMaximumCards = 1; parent.ioMaximumChannelsPerCard = 1;
+        parent.ioMaximumSubDevicesPerChannel = 2;
+        parent.subDevices = {{"child-a", 0, 0, 2}, {"child-b", 0, 0, 3}};
+        for (const auto& command : descriptors) parent.commandConfigurations.push_back({command.id, true, false, {}});
+        HartDevicePlan childA{"child-a", "lasecsimul.hart.process-simul-compatible", "hart-child-a", 2, "0A0B0C", 11.0};
+        childA.findDeviceArmed = true;
+        for (const auto& command : descriptors) childA.commandConfigurations.push_back({command.id, true, false, {}});
+        HartDevicePlan childB{"child-b", "lasecsimul.hart.process-simul-compatible", "hart-child-b", 3, "0D0E0F", 22.0};
+        childB.findDeviceArmed = true;
+        for (const auto& command : descriptors) childB.commandConfigurations.push_back({command.id, true, false, {}});
+        check(engine.loadPlan({{parent, childA, childB}}), "I/O parent and two children load");
+
+        HartResponseBuilder lockState(8), lock(8), unlocked(8);
+        check(engine.execute("hart-parent", 1, 0x4C, {}, lockState) && lockState.size() == 1 && lockState.bytes()[0] == 0,
+              "Command 76 initially reports unlocked");
+        check(engine.execute("hart-parent", 1, 0x47, std::array<uint8_t, 1>{1}, lock) && lock.bytes()[0] == 1,
+              "Command 71 acquires temporary lock");
+        HartResponseBuilder lockedState(8);
+        check(engine.execute("hart-parent", 1, 0x4C, {}, lockedState) && (lockedState.bytes()[0] & 0x03) == 0x01,
+              "Command 76 reads the same canonical temporary lock");
+        HartResponseBuilder blockedWrite(8);
+        check(!engine.execute("hart-parent", 1, 0x2F, std::array<uint8_t, 1>{1}, blockedWrite, 1),
+              "Device Lock blocks a non-owner configuration write");
+        check(engine.execute("hart-parent", 1, 0x47, std::array<uint8_t, 1>{0}, unlocked) && unlocked.bytes()[0] == 0,
+              "Lock owner releases temporary lock");
+        HartResponseBuilder squawk(8);
+        check(engine.execute("hart-parent", 1, 0x48, {}, squawk) && squawk.size() == 1 && squawk.bytes()[0] == 2,
+              "Command 72 backward-compatible empty request performs Squawk Once");
+        HartResponseBuilder find(32);
+        check(engine.execute("hart-parent", 1, 0x49, {}, find) && find.size() > 0,
+              "Command 73 returns the canonical identity response when armed");
+        HartResponseBuilder capabilities(16);
+        check(engine.execute("hart-parent", 1, 0x4A, {}, capabilities) && capabilities.size() == 8 && capabilities.bytes()[6] == 2,
+              "Command 74 reports authored I/O capabilities and detected children");
+        HartResponseBuilder polledA(32), polledB(32);
+        check(engine.execute("hart-parent", 1, 0x4B, std::array<uint8_t, 3>{0, 0, 2}, polledA) &&
+                  engine.execute("hart-parent", 1, 0x4B, std::array<uint8_t, 3>{0, 0, 3}, polledB) &&
+                  polledA.size() == polledB.size() && !std::equal(polledA.bytes().begin(), polledA.bytes().end(), polledB.bytes().begin()),
+              "Command 75 discovers two different child identities");
+        const std::array<uint8_t, 7> sendA{0, 0, 5, 0x02, 2, 0x01, 0};
+        HartResponseBuilder sentA(64);
+        check(engine.execute("hart-parent", 1, 0x4D, sendA, sentA) && sentA.size() > 5,
+              "Command 77 forwards embedded Command 1 through canonical child dispatch");
+        const std::array<uint8_t, 7> aggregate{{2, 0, 1, 0, 0, 0, 0}};
+        HartResponseBuilder aggregateResponse(64);
+        check(engine.execute("hart-parent", 1, 0x4E, aggregate, aggregateResponse) && aggregateResponse.size() >= 4,
+              "Command 78 executes bounded embedded reads through canonical dispatch");
+    }
+
+    // HCF_SPEC-151 Rev. 10.0 Commands 80-90: Device Variable trim,
+    // live I/O statistics/configuration, and deterministic virtual RTC.
+    {
+        HartProfileRegistry registry;
+        check(registry.registerProfile(HartReferenceCatalog::makeGenericProfile()), "80-90 profile registers");
+        HartEngine engine(registry);
+        check(HartReferenceCatalog::installCommandPrograms(engine), "80-90 programs install");
+        const auto descriptors = HartReferenceCatalog::commandDescriptors();
+        HartDevicePlan parent{"cp-80-90", "lasecsimul.hart.process-simul-compatible", "hart-8090", 1, "010203", 10.0};
+        parent.ioSystem = true;
+        parent.ioMaximumCards = 1; parent.ioMaximumChannelsPerCard = 1; parent.ioMaximumSubDevicesPerChannel = 2;
+        parent.rtcSupported = true;
+        parent.subDevices = {{"trim-child-a", 0, 0, 2}, {"trim-child-b", 0, 0, 3}};
+        HartDevicePlan::VariableConfiguration pv;
+        pv.id = "PV"; pv.name = "Primary Variable"; pv.value = 10.0; pv.role = HartVariableRole::PrimaryVariable;
+        pv.direction = HartVariableDirection::Internal; pv.runtimeMutable = true; pv.deviceVariableCode = 246;
+        pv.deviceVariableUnit = 57; pv.trimPointsSupported = 3; pv.trimPointsUnit = 57;
+        pv.minimumLowerTrimPoint = 0.0f; pv.maximumLowerTrimPoint = 100.0f;
+        pv.minimumUpperTrimPoint = 0.0f; pv.maximumUpperTrimPoint = 100.0f;
+        pv.minimumTrimDifferential = 1.0f; pv.factoryTrimAdjustment = 0.0f;
+        parent.variables.push_back(pv);
+        for (const auto& command : descriptors) parent.commandConfigurations.push_back({command.id, true, false, {}});
+        HartDevicePlan childA{"trim-child-a", "lasecsimul.hart.process-simul-compatible", "hart-8090-a", 2, "0A0B0C", 11.0};
+        for (const auto& command : descriptors) childA.commandConfigurations.push_back({command.id, true, false, {}});
+        HartDevicePlan childB{"trim-child-b", "lasecsimul.hart.process-simul-compatible", "hart-8090-b", 3, "0D0E0F", 22.0};
+        for (const auto& command : descriptors) childB.commandConfigurations.push_back({command.id, true, false, {}});
+        check(engine.loadPlan({{parent, childA, childB}}), "80-90 plans load");
+
+        HartResponseBuilder trimPoints(16), trimGuidelines(32);
+        check(engine.execute("hart-8090", 1, 0x50, std::array<uint8_t, 1>{246}, trimPoints) && trimPoints.size() == 10,
+              "Command 80 returns canonical Device Variable trim points");
+        check(engine.execute("hart-8090", 1, 0x51, std::array<uint8_t, 1>{246}, trimGuidelines) && trimGuidelines.size() == 22,
+              "Commands 80 and 81 return canonical Device Variable trim state/guidelines");
+        const auto trimValue = HartTypeCodec::encodeFloat32BE(12.0f);
+        std::array<uint8_t, 7> trimRequest{246, 1, 57, trimValue[0], trimValue[1], trimValue[2], trimValue[3]};
+        HartResponseBuilder trimWrite(16), readAfterTrim(16);
+        check(engine.execute("hart-8090", 1, 0x52, trimRequest, trimWrite) && trimWrite.size() == 7 &&
+                  engine.execute("hart-8090", 1, 0x21, std::array<uint8_t, 1>{246}, readAfterTrim) && readAfterTrim.size() >= 6,
+              "Command 82 atomically writes trim and Command 33 reads the calibrated value");
+        HartResponseBuilder trimReset(8), trimAfterReset(16);
+        check(engine.execute("hart-8090", 1, 0x53, std::array<uint8_t, 1>{246}, trimReset) && trimReset.size() == 1 &&
+                  engine.execute("hart-8090", 1, 0x50, std::array<uint8_t, 1>{246}, trimAfterReset),
+              "Command 83 restores the factory trim authority");
+
+        const std::array<uint8_t, 7> sendA{0, 0, 5, 0x02, 2, 0x01, 0};
+        const std::array<uint8_t, 7> sendB{0, 0, 5, 0x02, 3, 0x01, 0};
+        HartResponseBuilder sentA(64), sentB(64), statsA(16), statsB(16);
+        check(engine.execute("hart-8090", 1, 0x4D, sendA, sentA) && engine.execute("hart-8090", 1, 0x4D, sendA, sentA) &&
+                  engine.execute("hart-8090", 1, 0x4D, sendB, sentB) &&
+                  engine.execute("hart-8090", 1, 0x56, std::array<uint8_t, 2>{0, 1}, statsA) &&
+                  engine.execute("hart-8090", 1, 0x56, std::array<uint8_t, 2>{0, 2}, statsB) &&
+                  statsA.size() == 8 && statsB.size() == 8 && statsA.bytes()[3] != statsB.bytes()[3],
+              "Command 86 keeps per-child statistics isolated after different traffic");
+        HartResponseBuilder identity84(64), capabilities87(8), retry88(8), channel85(16);
+        check(engine.execute("hart-8090", 1, 0x54, std::array<uint8_t, 2>{0, 1}, identity84) && identity84.size() >= 44 &&
+                  engine.execute("hart-8090", 1, 0x57, std::array<uint8_t, 1>{0}, capabilities87) && capabilities87.bytes()[0] == 0 &&
+                  engine.execute("hart-8090", 1, 0x58, std::array<uint8_t, 1>{5}, retry88) && retry88.bytes()[0] == 5 &&
+                  engine.execute("hart-8090", 1, 0x55, std::array<uint8_t, 2>{0, 0}, channel85) && channel85.size() == 12,
+              "Commands 84, 85, 87 and 88 use the same I/O System authority");
+
+        engine.setVirtualTimeSeconds(100);
+        const std::array<uint8_t, 10> setRtc{1, 2, 1, 0, 0, 0, 0, 10, 0, 0};
+        HartResponseBuilder setRtcResponse(16), readRtc0(16), readRtc1(16);
+        check(engine.execute("hart-8090", 1, 0x59, setRtc, setRtcResponse) && setRtcResponse.size() == 8 &&
+                  engine.execute("hart-8090", 1, 0x5A, {}, readRtc0) && readRtc0.size() == 15 &&
+                  readRtc0.bytes()[0] == 2 && readRtc0.bytes()[1] == 1 &&
+                  (engine.setVirtualTimeSeconds(160), engine.execute("hart-8090", 1, 0x5A, {}, readRtc1)) &&
+                  readRtc1.bytes()[6] == 70,
+              "Commands 89/90 share one deterministic RTC derived from virtual time");
+    }
+
+    // HCF_SPEC-151 Rev. 10.0 Commands 91-99: bounded Trend history,
+    // communication snapshots, and virtual-time synchronized actions.
+    {
+        HartProfileRegistry registry;
+        check(registry.registerProfile(HartReferenceCatalog::makeGenericProfile()), "91-99 profile registers");
+        HartEngine engine(registry);
+        check(HartReferenceCatalog::installCommandPrograms(engine), "91-99 programs install");
+        const auto descriptors = HartReferenceCatalog::commandDescriptors();
+        HartDevicePlan device{"cp-91-99", "lasecsimul.hart.process-simul-compatible", "hart-9199", 1, "010203", 10.0};
+        device.ioSystem = true; device.ioMaximumCards = 1; device.ioMaximumChannelsPerCard = 1; device.ioMaximumSubDevicesPerChannel = 1;
+        device.trendCount = 1; device.actionCount = 1;
+        device.subDevices = {{"cp-91-child", 0, 0, 2}};
+        HartDevicePlan::VariableConfiguration pv;
+        pv.id = "PV"; pv.name = "Primary Variable"; pv.value = 10.0; pv.role = HartVariableRole::PrimaryVariable;
+        pv.deviceVariableCode = 246; pv.deviceVariableUnit = 57; pv.classification = 65;
+        device.variables.push_back(pv);
+        for (const auto& command : descriptors) device.commandConfigurations.push_back({command.id, true, false, {}});
+        HartDevicePlan child{"cp-91-child", "lasecsimul.hart.process-simul-compatible", "hart-9199-child", 2, "0A0B0C", 2.0};
+        for (const auto& command : descriptors) child.commandConfigurations.push_back({command.id, true, false, {}});
+        check(engine.loadPlan({{device, child}}), "91-99 plans load");
+
+        HartResponseBuilder trendInitial(16);
+        check(engine.execute("hart-9199", 1, 0x5B, std::array<uint8_t, 1>{0}, trendInitial) && trendInitial.size() == 8 && trendInitial.bytes()[1] == 1,
+              "Command 91 reads the canonical Trend configuration");
+        const std::array<uint8_t, 7> trendWrite{0, 1, 246, 0, 0, 0, 10};
+        HartResponseBuilder trendWriteResponse(16), trendAfter(16);
+        check(engine.execute("hart-9199", 1, 0x5C, trendWrite, trendWriteResponse) &&
+                  engine.execute("hart-9199", 1, 0x5B, std::array<uint8_t, 1>{0}, trendAfter) && trendAfter.bytes()[2] == 1 && trendAfter.bytes()[3] == 246,
+              "Command 92 atomically changes the configuration read by Command 91");
+        engine.setVirtualTimeSeconds(10);
+        engine.setPrimaryValue("cp-91-99", 20.0);
+        engine.setVirtualTimeSeconds(20);
+        HartResponseBuilder trend(80);
+        check(engine.execute("hart-9199", 1, 0x5D, std::array<uint8_t, 1>{0}, trend) && trend.size() == 75,
+              "Command 93 returns the bounded history produced by virtual-time sampling");
+
+        const std::array<uint8_t, 7> sendChild{0, 0, 5, 0x02, 2, 0x01, 0};
+        HartResponseBuilder forwarded(64), clientStats(32), deviceStats(16);
+        check(engine.execute("hart-9199", 1, 0x4D, sendChild, forwarded) &&
+                  engine.execute("hart-9199", 1, 0x5E, {}, clientStats) && clientStats.size() == 16 &&
+                  engine.execute("hart-9199-child", 2, 0x5F, {}, deviceStats) && deviceStats.size() == 6 &&
+                  (deviceStats.bytes()[0] != 0 || deviceStats.bytes()[1] != 0),
+              "Commands 94/95 read real communication snapshots after traffic");
+
+        const std::array<uint8_t, 5> commandAction{0, 0, 0x2F, 1, 1};
+        HartResponseBuilder commandActionWrite(16), commandActionRead(16);
+        check(engine.execute("hart-9199", 1, 0x63, commandAction, commandActionWrite) &&
+                  engine.execute("hart-9199", 1, 0x62, std::array<uint8_t, 1>{0}, commandActionRead) && commandActionRead.size() == 5,
+              "Commands 98/99 share one canonical command-action configuration");
+        const std::array<uint8_t, 12> syncWrite{0, 0x91, 251, 0, 0x2F, 1, 1, 0, 0, 0, 0, 40};
+        HartResponseBuilder syncWriteResponse(16), syncRead(16), transferAfterAction(32);
+        check(engine.execute("hart-9199", 1, 0x61, syncWrite, syncWriteResponse) &&
+                  engine.execute("hart-9199", 1, 0x60, std::array<uint8_t, 1>{0}, syncRead) && syncRead.size() == 13,
+              "Commands 96/97 read back canonical synchronized action configuration");
+        check(syncRead.size() == 13 && syncRead.bytes()[6] == 1 && syncRead.bytes()[7] == 1 && syncRead.bytes()[8] == 0 && syncRead.bytes()[9] == 0 && syncRead.bytes()[12] == 40,
+              "Command 96 exposes the configured virtual trigger time");
+        check(syncRead.bytes()[2] == 0x91 && syncRead.bytes()[3] == 251 && syncRead.bytes()[4] == 0 && syncRead.bytes()[5] == 0x2F,
+              "Synchronous action has the command-action control and target");
+        engine.setVirtualTimeSeconds(39);
+        engine.setVirtualTimeSeconds(40);
+        HartResponseBuilder syncAfterAction(16);
+        check(engine.execute("hart-9199", 1, 0x60, std::array<uint8_t, 1>{0}, syncAfterAction) && syncAfterAction.size() == 13 &&
+                  syncAfterAction.bytes()[2] == 0x11,
+              "Synchronous one-shot action disables itself at its virtual trigger");
+        check(engine.execute("hart-9199", 1, 0x3F, std::array<uint8_t, 1>{0}, transferAfterAction) && transferAfterAction.size() == 17 &&
+                  transferAfterAction.bytes()[2] == 1,
+              "Command 97 triggers the configured Command 99 action exactly through canonical dispatch");
+    }
+
+    // HCF_SPEC-151 Rev. 10.0 Commands 100-110: canonical PV alarm,
+    // persistent Burst definitions, bounded virtual-time events and the
+    // same Dynamic Variable assignments used by Commands 3/61.
+    {
+        HartProfileRegistry registry;
+        check(registry.registerProfile(HartReferenceCatalog::makeGenericProfile()), "100-110 profile registers");
+        HartEngine engine(registry);
+        check(HartReferenceCatalog::installCommandPrograms(engine), "100-110 programs install");
+        const auto descriptors = HartReferenceCatalog::commandDescriptors();
+        HartDevicePlan device{"cp-100-110", "lasecsimul.hart.process-simul-compatible", "hart-100110", 1, "010203", 10.0};
+        device.ioSystem = true;
+        device.subDevices = {{"cp-100-child", 0, 0, 2}};
+        device.variables.push_back({"PV", "Primary Variable", "", 10.0, HartVariableRole::PrimaryVariable,
+                                    HartVariableType::Float32, HartVariableDirection::Internal, false, 246, 65, 250,
+                                    0, 100.0f, 0.0f, 1.0f, 0.0f, 0xFFFFFFFFu, 0, 0, false, {}, 57});
+        for (const auto& command : descriptors) device.commandConfigurations.push_back({command.id, true, false, {}});
+        HartDevicePlan child{"cp-100-child", "lasecsimul.hart.process-simul-compatible", "hart-100110-child", 2, "0A0B0C", 5.0};
+        for (const auto& command : descriptors) child.commandConfigurations.push_back({command.id, true, false, {}});
+        check(engine.loadPlan({{device, child}}), "100-110 plans load");
+
+        HartResponseBuilder alarm(8);
+        check(engine.execute("hart-100110", 1, 0x64, std::array<uint8_t, 1>{1}, alarm) && alarm.size() == 1 && alarm.bytes()[0] == 1,
+              "Command 100 writes the canonical PV alarm selection");
+        const HartDevicePlan* afterAlarm = engine.findDevicePlan("cp-100-110");
+        check(afterAlarm != nullptr && afterAlarm->alarmSelectionCode == 1,
+              "Command 100 does not create a parallel alarm state");
+
+        HartResponseBuilder mapWrite(8), mapRead(8);
+        check(engine.execute("hart-100110", 1, 0x66, std::array<uint8_t, 3>{0, 0, 1}, mapWrite) &&
+                  engine.execute("hart-100110", 1, 0x65, std::array<uint8_t, 1>{0}, mapRead) && mapRead.size() == 3 && mapRead.bytes()[2] == 1,
+              "Commands 101/102 share the stable Sub-device to Burst mapping");
+
+        const std::array<uint8_t, 9> period{0, 0, 0, 0x7D, 0, 0, 0, 0x7D, 0};
+        HartResponseBuilder periodResponse(16), triggerResponse(16), config(40);
+        check(engine.execute("hart-100110", 1, 0x67, period, periodResponse),
+              "Command 103 accepts canonical Burst update periods");
+        const auto nan = HartTypeCodec::encodeFloat32BE(std::numeric_limits<float>::quiet_NaN());
+        std::array<uint8_t, 8> trigger{0, 0, 0, 250, nan[0], nan[1], nan[2], nan[3]};
+        check(engine.execute("hart-100110", 1, 0x68, trigger, triggerResponse) &&
+                  engine.execute("hart-100110", 1, 0x69, std::array<uint8_t, 1>{0}, config) && config.size() == 29 &&
+                  config.bytes()[0] == 0 && config.bytes()[1] == 31 && config.bytes()[2] == 246,
+              "Commands 104/105 read the same canonical Burst definition");
+
+        HartResponseBuilder vars(32), cmdWrite(8), control(8);
+        check(engine.execute("hart-100110", 1, 0x6B, std::array<uint8_t, 9>{246, 250, 250, 250, 250, 250, 250, 250, 0}, vars) &&
+                  engine.execute("hart-100110", 1, 0x6C, std::array<uint8_t, 3>{0, 1, 0}, cmdWrite) &&
+                  engine.execute("hart-100110", 1, 0x6D, std::array<uint8_t, 2>{0, 1}, control),
+              "Commands 107-109 atomically configure variables, command and enable state");
+        engine.setVirtualTimeSeconds(1);
+        const auto burstEvents = engine.takeBurstEvents("cp-100-110");
+        check(burstEvents.size() == 1 && burstEvents.front().command == 1 && burstEvents.front().payload.size() == 5,
+              "Enabled Burst uses virtual time and the canonical command dispatcher");
+        check(engine.execute("hart-100110", 1, 0x6D, std::array<uint8_t, 2>{0, 0}, control),
+              "Command 109 disables the same scheduler Burst state");
+        engine.setVirtualTimeSeconds(2);
+        check(engine.takeBurstEvents("cp-100-110").empty(), "Disabled Burst emits no further events");
+
+        HartResponseBuilder dynamic(32);
+        check(engine.execute("hart-100110", 1, 0x6E, {}, dynamic) && dynamic.size() == 5 && dynamic.bytes()[0] == 57,
+              "Command 110 reads the canonical PV assignment and value");
+        HartResponseBuilder flushed(8);
+        check(engine.execute("hart-100110", 1, 0x6A, {}, flushed) && flushed.size() == 0,
+              "Command 106 flushes the real bounded delayed-event queue");
+    }
+
+    // HCF_SPEC-151 7.79-7.87 plus HCF_SPEC-190: bounded transfer session,
+    // real catch of a later command response, and one event authority shared
+    // by summary/control/acknowledge and Command 48.
+    {
+        HartProfileRegistry registry;
+        check(registry.registerProfile(HartReferenceCatalog::makeGenericProfile()), "111-119 profile registers");
+        HartEngine engine(registry);
+        check(HartReferenceCatalog::installCommandPrograms(engine), "111-119 programs install");
+        const auto descriptors = HartReferenceCatalog::commandDescriptors();
+        HartDevicePlan receiver{"cp-111-119", "lasecsimul.hart.process-simul-compatible", "hart-111119", 1, "010203", 0.0};
+        HartDevicePlan::VariableConfiguration receiverPv;
+        receiverPv.id = "PV"; receiverPv.role = HartVariableRole::PrimaryVariable; receiverPv.deviceVariableCode = 246; receiverPv.deviceVariableUnit = 57; receiverPv.value = 0.0;
+        HartDevicePlan::VariableConfiguration caught;
+        caught.id = "caught"; caught.role = HartVariableRole::SecondaryVariable; caught.deviceVariableCode = 247; caught.deviceVariableUnit = 57; caught.value = 0.0;
+        receiver.variables = {receiverPv, caught};
+        HartDevicePlan source{"cp-111-source", "lasecsimul.hart.process-simul-compatible", "hart-111119", 2, "0A0B0C", 12.5};
+        for (const auto& command : descriptors) { receiver.commandConfigurations.push_back({command.id, true, false, {}}); source.commandConfigurations.push_back({command.id, true, false, {}}); }
+        check(engine.loadPlan({{receiver, source}}), "111-119 plans load");
+
+        HartResponseBuilder transferOpen(16), transferData(16), transferClose(16);
+        check(engine.execute("hart-111119", 1, 0x6F, std::array<uint8_t, 5>{1, 4, 32, 0, 0}, transferOpen) && transferOpen.size() == 7 && transferOpen.bytes()[2] == 32,
+              "Command 111 opens one canonical HCF_SPEC-190 transfer session");
+        const std::array<uint8_t, 9> transferRequest{0, 3, 0, 0, 0, 0, 0xAA, 0xBB, 0xCC};
+        check(engine.execute("hart-111119", 1, 0x70, transferRequest, transferData) && transferData.size() == 6 && transferData.bytes()[2] == 0 && transferData.bytes()[3] == 3,
+              "Command 112 advances the same bounded master byte counter atomically");
+        check(engine.execute("hart-111119", 1, 0x6F, std::array<uint8_t, 5>{4, 4, 32, 0, 3}, transferClose) && !engine.execute("hart-111119", 1, 0x70, std::array<uint8_t, 6>{0, 0, 0, 3, 0, 0}, transferData),
+              "Transfer close makes Command 112 reject further blocks");
+
+        const auto shed = HartTypeCodec::encodeFloat32BE(0.0f);
+        const std::array<uint8_t, 15> catchWrite{247, 1, 0, 0, 0, 0, 2, 0, shed[0], shed[1], shed[2], shed[3], 0, 0, 1};
+        HartResponseBuilder catchResponse(32), caughtConfiguration(32);
+        check(engine.execute("hart-111119", 1, 0x71, catchWrite, catchResponse) && catchResponse.size() == 15 &&
+                  engine.execute("hart-111119", 1, 0x72, std::array<uint8_t, 1>{247}, caughtConfiguration) && caughtConfiguration.size() == 15,
+              "Commands 113/114 share one canonical Catch configuration");
+        engine.setVirtualTimeSeconds(10);
+        HartResponseBuilder sourceResponse(16);
+        check(engine.execute("hart-111119", 2, 0x01, {}, sourceResponse) && engine.variableValue("cp-111-119", "caught").value_or(-1.0) == 12.5,
+              "Command 113 captures a later source response without changing source authority");
+        HartResponseBuilder statusResponse(16);
+        check(engine.execute("hart-111119", 1, 0x30, {}, statusResponse) && statusResponse.bytes()[0] == 0,
+              "Command 48 remains the shared status source for event notifications");
+
+        HartResponseBuilder mask(40), timing(20), control(8), summary(64), notification(40), acknowledged(40), summaryAfter(64);
+        check(engine.execute("hart-111119", 1, 0x74, std::array<uint8_t, 3>{0, 1, 1}, mask) &&
+                  engine.execute("hart-111119", 1, 0x75, std::array<uint8_t, 13>{0, 0, 0, 0x7D, 0, 0, 0, 0x7D, 0, 0, 0, 0x7D, 0}, timing) &&
+                  engine.execute("hart-111119", 1, 0x76, std::array<uint8_t, 2>{0, 1}, control) &&
+                  engine.setDiagnosticStatus("cp-111-119", 1) &&
+                  engine.execute("hart-111119", 1, 0x73, std::array<uint8_t, 1>{0}, summary) && summary.size() == 45 &&
+                  engine.execute("hart-111119", 1, 0x77, std::array<uint8_t, 1>{0}, notification) && notification.size() == 33,
+              "Commands 115-118 expose real masked event state driven by virtual time");
+        check(engine.execute("hart-111119", 1, 0x77, notification.bytes(), acknowledged) &&
+                  engine.execute("hart-111119", 1, 0x73, std::array<uint8_t, 1>{0}, summaryAfter) && summaryAfter.bytes()[3] == 0xFF,
+              "Command 119 acknowledges the latched event without clearing underlying status");
+    }
+
+    // HCF_SPEC-151 Rev. 10.0 Commands 512-531: metadata, Event Manager,
+    // WGS84 location, Condensed Status/Status Simulation and bounded
+    // non-volatile Assignment List, all against the same canonical plan.
+    {
+        HartProfileRegistry registry;
+        check(registry.registerProfile(HartReferenceCatalog::makeGenericProfile()), "512-531 profile registers");
+        HartEngine engine(registry);
+        check(HartReferenceCatalog::installCommandPrograms(engine), "512-531 programs install");
+        const auto descriptors = HartReferenceCatalog::commandDescriptors();
+        HartDevicePlan parent{"cp-512-531", "lasecsimul.hart.process-simul-compatible", "hart-512531", 1, "010203", 0.0};
+        parent.ioSystem = true; parent.ioMaximumCards = 2; parent.ioMaximumChannelsPerCard = 2;
+        parent.assignmentCapacity = 2; parent.deviceLocationSupported = true; parent.locationDescriptionSupported = true; parent.processUnitTagSupported = true; parent.condensedStatusSupported = true;
+        HartDevicePlan::VariableConfiguration flow;
+        flow.id = "flow"; flow.role = HartVariableRole::PrimaryVariable; flow.deviceVariableCode = 246;
+        flow.deviceVariableUnit = 57; flow.classification = 66; flow.value = 3.0;
+        parent.variables.push_back(flow);
+        HartDevicePlan::VariableConfiguration pressure;
+        pressure.id = "pressure"; pressure.deviceVariableCode = 1; pressure.deviceVariableUnit = 6;
+        pressure.classification = 65; pressure.deviceVariableStatus = 0x80;
+        pressure.pressure.status0 = 0x08; pressure.pressure.familyDefinitionRevision = 1;
+        pressure.pressure.familyCapabilities0 = 0x01; pressure.pressure.familyCapabilities1 = 0;
+        pressure.pressure.supportedStatusFamilyMask = 0xFF; pressure.pressure.supportedStatus0Mask = 0xFF;
+        pressure.pressure.measurementType = 1; pressure.pressure.moduleFillFluid = 2;
+        pressure.pressure.diaphragmMaterial = 3; pressure.pressure.sensorHardwareRevision = 4;
+        pressure.pressure.sensorTechnology = 5; pressure.pressure.pressureUnitCode = 6;
+        pressure.pressure.minimumAbsolutePressure = 0.5f; pressure.pressure.maximumStaticPressure = 250.0f;
+        pressure.pressure.processConnection = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+        pressure.pressure.supportsOptionalGasket = true; pressure.pressure.optionalGasket = {11, 12, 13};
+        pressure.pressure.supportsPressureObservation = true; pressure.pressure.pressureObservationUnit = 6;
+        pressure.pressure.minimumPressureObservation = 1.0f; pressure.pressure.maximumPressureObservation = 99.0f;
+        pressure.pressure.supportsTemperatureObservation = true; pressure.pressure.temperatureObservationUnit = 7;
+        pressure.pressure.minimumTemperatureObservation = -10.0f; pressure.pressure.maximumTemperatureObservation = 85.0f;
+        pressure.pressure.supportsStaticPressureObservation = true; pressure.pressure.staticPressureObservationUnit = 8;
+        pressure.pressure.minimumStaticPressureObservation = 2.0f; pressure.pressure.maximumStaticPressureObservation = 100.0f;
+        pressure.pressure.supportsRemoteSeal = true; pressure.pressure.remoteSeal = {2, 3, 4, 5, 6, 7, 8};
+        pressure.pressure.supportsWriteProcessConnection = true; pressure.pressure.supportsWriteOptionalGasket = true; pressure.pressure.supportsWriteRemoteSeal = true;
+        parent.variables.push_back(pressure);
+        parent.tag = "DEVICE-TAG"; parent.longTag = "PARENT-LONG-TAG";
+        parent.subDevices = {{"cp-512-child-a", 0, 0, 2}, {"cp-512-child-b", 1, 1, 3}};
+        HartDevicePlan childA{"cp-512-child-a", "lasecsimul.hart.process-simul-compatible", "hart-512531", 2, "0A0B0C", 1.0};
+        childA.longTag = "CHILD-A";
+        HartDevicePlan childB{"cp-512-child-b", "lasecsimul.hart.process-simul-compatible", "hart-512531", 3, "0D0E0F", 2.0};
+        childB.longTag = "CHILD-B";
+        for (const auto& command : descriptors) {
+            parent.commandConfigurations.push_back({command.id, true, false, {}});
+            childA.commandConfigurations.push_back({command.id, true, false, {}});
+            childB.commandConfigurations.push_back({command.id, true, false, {}});
+        }
+        check(engine.loadPlan({{parent, childA, childB}}), "512-531 plans load");
+
+        HartResponseBuilder countryRead(8), countryWrite(8), countryAfter(8);
+        check(engine.execute("hart-512531", 1, 512, {}, countryRead) && countryRead.size() == 3 &&
+                  engine.execute("hart-512531", 1, 513, std::array<uint8_t, 3>{'B', 'R', 0}, countryWrite) && countryWrite.size() == 3 &&
+                  engine.execute("hart-512531", 1, 512, {}, countryAfter) && countryAfter.bytes()[0] == 'B' && countryAfter.bytes()[1] == 'R',
+              "Commands 512/513 share one country-code and SI-restriction property");
+
+        const auto lat = HartTypeCodec::encodeFloat32BE(12.5f);
+        const auto lon = HartTypeCodec::encodeFloat32BE(-45.25f);
+        const auto alt = HartTypeCodec::encodeFloat32BE(100.0f);
+        std::array<uint8_t, 13> location{};
+        std::copy(lat.begin(), lat.end(), location.begin()); std::copy(lon.begin(), lon.end(), location.begin() + 4);
+        location[8] = 7; std::copy(alt.begin(), alt.end(), location.begin() + 9);
+        HartResponseBuilder locationWrite(20), locationRead(20);
+        check(engine.execute("hart-512531", 1, 517, location, locationWrite) && locationWrite.size() == 13 &&
+                  engine.execute("hart-512531", 1, 516, {}, locationRead) && locationRead.size() == 13 && locationRead.bytes()[8] == 7,
+              "Commands 516/517 use canonical WGS84 location metadata");
+
+        std::array<uint8_t, 32> description{}; std::array<uint8_t, 32> processTag{};
+        description.fill('D'); processTag.fill('P');
+        HartResponseBuilder metadataWrite(40), metadataRead(40), processWrite(40), processRead(40);
+        check(engine.execute("hart-512531", 1, 519, description, metadataWrite) &&
+                  engine.execute("hart-512531", 1, 518, {}, metadataRead) && metadataRead.bytes()[0] == 'D' &&
+                  engine.execute("hart-512531", 1, 521, processTag, processWrite) &&
+                  engine.execute("hart-512531", 1, 520, {}, processRead) && processRead.bytes()[0] == 'P',
+              "Commands 518-521 keep Location Description and Process Unit Tag independent");
+        HartResponseBuilder classification(8);
+        check(engine.execute("hart-512531", 1, 522, std::array<uint8_t, 2>{246, 100}, classification) && classification.size() == 2 &&
+                  engine.findDevicePlan("cp-512-531")->variables[0].classification == 100,
+              "Command 522 changes only the volumetric-flow classification authority");
+
+        HartResponseBuilder manager(8), managerStatus(8), otherStatus(8);
+        check(engine.execute("hart-512531", 1, 514, std::array<uint8_t, 1>{0}, manager, 1) &&
+                  engine.execute("hart-512531", 1, 515, {}, managerStatus, 1) && managerStatus.bytes()[0] == 3 &&
+                  engine.execute("hart-512531", 1, 515, {}, otherStatus, 0) && otherStatus.bytes()[0] == 1,
+              "Commands 514/515 share one Event Manager owner and registration status");
+
+        HartResponseBuilder mappingWrite(16), mappingRead(16), mappingReset(8), mappingAfterReset(16);
+        check(engine.execute("hart-512531", 1, 524, std::array<uint8_t, 3>{0, 2, 0x13}, mappingWrite), "Command 524 accepts a complete mapping fragment");
+        check(engine.execute("hart-512531", 1, 523, std::array<uint8_t, 2>{0, 2}, mappingRead) && mappingRead.size() == 3 && mappingRead.bytes()[2] == 0x13,
+              "Command 523 reads the committed mapping fragment");
+        check(engine.execute("hart-512531", 1, 525, {}, mappingReset), "Command 525 resets the mapping atomically");
+        check(engine.execute("hart-512531", 1, 523, std::array<uint8_t, 2>{0, 2}, mappingAfterReset) && mappingAfterReset.bytes()[2] == 0,
+              "Command 523 observes the reset default mapping");
+
+        HartResponseBuilder simulationMode(8), simulatedBit(8), simulatedStatus(16), normalStatus(16);
+        check(engine.execute("hart-512531", 1, 526, std::array<uint8_t, 1>{1}, simulationMode) &&
+                  engine.execute("hart-512531", 1, 527, std::array<uint8_t, 2>{0, 1}, simulatedBit) &&
+                  engine.execute("hart-512531", 1, 48, {}, simulatedStatus) && (simulatedStatus.bytes()[0] & 0x01) != 0 &&
+                  engine.execute("hart-512531", 1, 526, std::array<uint8_t, 1>{0}, simulationMode) &&
+                  engine.execute("hart-512531", 1, 48, {}, normalStatus) && (normalStatus.bytes()[0] & 0x01) == 0,
+              "Commands 526/527 overlay reported status without mutating underlying real status");
+
+        HartResponseBuilder transfer(8), assignmentInfo(8), assignmentA(64), assignmentB(64);
+        check(engine.execute("hart-512531", 1, 531, std::array<uint8_t, 1>{0}, transfer) && transfer.size() == 1, "Command 531 atomically snapshots the live list");
+        check(engine.execute("hart-512531", 1, 528, {}, assignmentInfo) && assignmentInfo.size() == 5 && assignmentInfo.bytes()[1] == 3,
+              "Command 528 reads assignment count and capacity");
+        const bool assignmentAOk = engine.execute("hart-512531", 1, 529, std::array<uint8_t, 2>{0, 1}, assignmentA);
+        check(assignmentAOk && assignmentA.size() == 45 && assignmentA.bytes()[12] == 'C',
+              "Command 529 reads assignment A with stable identity");
+        const bool assignmentBOk = engine.execute("hart-512531", 1, 529, std::array<uint8_t, 2>{0, 2}, assignmentB);
+        check(assignmentBOk && assignmentB.size() == 45 && assignmentB.bytes()[12] == 'C',
+              "Command 529 reads assignment B with stable identity");
+        std::array<uint8_t, 44> assignmentRewrite{}; std::fill(assignmentRewrite.begin() + 11, assignmentRewrite.begin() + 43, static_cast<uint8_t>(' '));
+        assignmentRewrite[1] = 1; assignmentRewrite[2] = 1; assignmentRewrite[3] = 1;
+        assignmentRewrite[11] = 'C'; assignmentRewrite[12] = 'H'; assignmentRewrite[13] = 'I'; assignmentRewrite[14] = 'L';
+        assignmentRewrite[15] = 'D'; assignmentRewrite[16] = '-'; assignmentRewrite[17] = 'A';
+        HartResponseBuilder assignmentWrite(64), assignmentAfterWrite(64);
+        check(engine.execute("hart-512531", 1, 530, assignmentRewrite, assignmentWrite) && assignmentWrite.size() == 44 &&
+                  engine.execute("hart-512531", 1, 529, std::array<uint8_t, 2>{0, 1}, assignmentAfterWrite) && assignmentAfterWrite.bytes()[3] == 1,
+              "Command 530 atomically replaces an existing stable assignment");
+
+        HartResponseBuilder pressureStatus(8), pressureCapabilities(8), pressureMask(8), pressureSensor(24), pressureConnection(16), pressureAssociated(8);
+        const auto exactPressure = [](std::span<const uint8_t> actual, std::initializer_list<uint8_t> expected) {
+            return actual.size() == expected.size() && std::equal(expected.begin(), expected.end(), actual.begin());
+        };
+        check(engine.execute("hart-512531", 1, 1280, std::array<uint8_t, 1>{1}, pressureStatus) && exactPressure(pressureStatus.bytes(), {1, 0x80, 0x08}), "Pressure 1280");
+        check(engine.execute("hart-512531", 1, 1281, std::array<uint8_t, 1>{1}, pressureCapabilities) && exactPressure(pressureCapabilities.bytes(), {1, 1, 1, 0}), "Pressure 1281");
+        check(engine.execute("hart-512531", 1, 1282, std::array<uint8_t, 1>{1}, pressureMask) && exactPressure(pressureMask.bytes(), {1, 0xFF, 0xFF}), "Pressure 1282");
+        check(engine.execute("hart-512531", 1, 1283, std::array<uint8_t, 1>{1}, pressureSensor) && pressureSensor.size() == 15, "Pressure 1283");
+        check(engine.execute("hart-512531", 1, 1284, std::array<uint8_t, 1>{1}, pressureConnection) && exactPressure(pressureConnection.bytes(), {1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}), "Pressure 1284");
+        check(engine.execute("hart-512531", 1, 1285, std::array<uint8_t, 1>{1}, pressureAssociated) && exactPressure(pressureAssociated.bytes(), {1, 250, 250}), "Pressure 1285");
+        HartResponseBuilder gasket(8), pressureObs(16), temperatureObs(16), staticObs(16), remoteSeal(16);
+        check(engine.execute("hart-512531", 1, 1286, std::array<uint8_t, 1>{1}, gasket) && exactPressure(gasket.bytes(), {1, 11, 12, 13}) &&
+                  engine.execute("hart-512531", 1, 1287, std::array<uint8_t, 1>{1}, pressureObs) && pressureObs.size() == 10 &&
+                  engine.execute("hart-512531", 1, 1288, std::array<uint8_t, 1>{1}, temperatureObs) && temperatureObs.size() == 10 &&
+                  engine.execute("hart-512531", 1, 1289, std::array<uint8_t, 1>{1}, staticObs) && staticObs.size() == 10 &&
+                  engine.execute("hart-512531", 1, 1290, std::array<uint8_t, 1>{1}, remoteSeal) && exactPressure(remoteSeal.bytes(), {1, 2, 3, 4, 5, 6, 7, 8}),
+              "Pressure optional readers are capability-gated and byte-sized by the specification");
+        const std::array<uint8_t, 11> nextConnection{1, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30};
+        HartResponseBuilder connectionWrite(16), connectionAfter(16);
+        check(engine.execute("hart-512531", 1, 1408, nextConnection, connectionWrite) &&
+                  engine.execute("hart-512531", 1, 1284, std::array<uint8_t, 1>{1}, connectionAfter) &&
+                  exactPressure(connectionAfter.bytes(), {1, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30}),
+              "Command 1408 writes the same canonical process connection read by 1284");
+        HartResponseBuilder gasketWrite(8), gasketAfter(8), remoteWrite(16), remoteAfter(16);
+        check(engine.execute("hart-512531", 1, 1409, std::array<uint8_t, 4>{1, 31, 32, 33}, gasketWrite) &&
+                  engine.execute("hart-512531", 1, 1286, std::array<uint8_t, 1>{1}, gasketAfter) && exactPressure(gasketAfter.bytes(), {1, 31, 32, 33}) &&
+                  engine.execute("hart-512531", 1, 1410, std::array<uint8_t, 8>{1, 41, 42, 43, 44, 45, 46, 47}, remoteWrite) &&
+                  engine.execute("hart-512531", 1, 1290, std::array<uint8_t, 1>{1}, remoteAfter) && exactPressure(remoteAfter.bytes(), {1, 41, 42, 43, 44, 45, 46, 47}),
+              "Commands 1409/1410 round-trip through their canonical Pressure readers");
+        HartResponseBuilder pressureRejected(8);
+        check(!engine.execute("hart-512531", 1, 1280, std::array<uint8_t, 1>{246}, pressureRejected),
+              "Pressure Device Family rejects a non-pressure Device Variable instead of fabricating support");
     }
 
     if (failures == 0) std::puts("HART engine contracts: PASS");

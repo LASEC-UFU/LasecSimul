@@ -363,7 +363,9 @@ bool SimulationSession::publishSimulationPlan() {
     input.electricalTopology = &m_topology;
     input.execution = m_runtimeState.execution;
     input.resolvedSignalSubscribers = m_runtimeState.resolvedSignalSubscribers;
-    input.signalGraph = &m_signalGraphDefinition;
+    simulation::SignalGraphDefinition materializedSignalGraph =
+        materializeHartSignalPortsUnlocked(m_signalGraphDefinition);
+    input.signalGraph = &materializedSignalGraph;
     input.electricalSignalBridges = m_electricalSignalBridgeDefinitions;
     input.pythonBlocks.reserve(m_pythonBlockDefinitions.size());
     for (const auto& block : m_pythonBlockDefinitions) {
@@ -411,8 +413,9 @@ void SimulationSession::setSignalGraph(simulation::SignalGraphDefinition definit
         if (self.m_scheduler.isRunning()) {
             throw std::runtime_error("setSignalGraph requer simulacao parada para publicar SignalPlan");
         }
-        // Compile before mutating authoring state so a malformed graph is transactionally rejected.
-        (void)simulation::SignalCompiler::compile(definition);
+        // Compile the effective graph before mutating authoring state so a malformed
+        // graph or a HART port collision is transactionally rejected.
+        (void)simulation::SignalCompiler::compile(self.materializeHartSignalPortsUnlocked(definition));
         self.m_signalGraphDefinition = std::move(definition);
         self.m_signalBoundaryScheduledNs.reset();
         ++self.m_signalScheduleGeneration;
@@ -1088,6 +1091,7 @@ void SimulationSession::publishElectricalSensorsToSignalUnlocked() {
 void SimulationSession::onStableStepUnlocked(uint64_t timestampNs) {
     m_runtimeState.virtualTimeNs = timestampNs;
     publishElectricalSensorsToSignalUnlocked();
+    publishHartOutputsToSignalUnlocked();
     m_runtimeState.signals.executeUntil(timestampNs);
     scheduleNextSignalBoundaryUnlocked(timestampNs);
     publishSnapshot();
@@ -1421,6 +1425,39 @@ std::optional<std::string> SimulationSession::setProperty(uint32_t component, co
     });
 }
 
+simulation::SignalGraphDefinition SimulationSession::materializeHartSignalPortsUnlocked(
+    const simulation::SignalGraphDefinition& definition) const {
+    simulation::SignalGraphDefinition result = definition;
+    std::unordered_set<std::string> ids;
+    for (const auto& block : result.blocks) ids.insert(block.id);
+    for (uint32_t index : m_activeComponentIndices) {
+        const auto* hart = dynamic_cast<const protocols::HartCommunicationComponent*>(
+            m_componentInstances[index].get());
+        if (!hart) continue;
+        for (const SignalPortDescriptor& port : hart->signalPorts()) {
+            const std::string blockId = hart->signalBlockId(port.id);
+            if (!ids.insert(blockId).second)
+                throw std::invalid_argument("Signal Graph block id collides with HART port: " + blockId);
+            simulation::SignalBlockDefinition block;
+            block.id = blockId;
+            const simulation::SignalScalarType scalar = port.kind == SignalValueKind::Digital
+                ? simulation::SignalScalarType::Bool : simulation::SignalScalarType::Real;
+            block.output = {"out", {scalar, 1}, port.unit};
+            block.rate = {1, 0, 0};
+            if (port.direction == SignalPortDirection::Input) {
+                block.kind = simulation::SignalBlockKind::Probe;
+                block.inputs.push_back({"in", {scalar, 1}, port.unit});
+            } else {
+                block.kind = simulation::SignalBlockKind::ExternalInput;
+                if (scalar == simulation::SignalScalarType::Real) block.realParameters = {0.0};
+                else block.boolParameters = {0};
+            }
+            result.blocks.push_back(std::move(block));
+        }
+    }
+    return result;
+}
+
 std::optional<std::vector<uint8_t>> SimulationSession::hartTransact(uint32_t componentIndex,
                                                                      std::span<const uint8_t> request) {
     std::vector<uint8_t> copy(request.begin(), request.end());
@@ -1429,10 +1466,47 @@ std::optional<std::vector<uint8_t>> SimulationSession::hartTransact(uint32_t com
         if (componentIndex >= self.m_componentInstances.size() || !self.m_componentInstances[componentIndex]) return std::nullopt;
         auto* component = dynamic_cast<protocols::HartCommunicationComponent*>(self.m_componentInstances[componentIndex].get());
         if (!component) return std::nullopt;
+        self.sampleHartInputsFromSignalUnlocked();
         protocols::HartResponseBuilder response(272);
         if (!component->transact(request, response)) return std::nullopt;
         return std::vector<uint8_t>(response.bytes().begin(), response.bytes().end());
     });
+}
+
+void SimulationSession::sampleHartInputsFromSignalUnlocked() {
+    for (uint32_t index : m_activeComponentIndices) {
+        auto* hart = dynamic_cast<protocols::HartCommunicationComponent*>(m_componentInstances[index].get());
+        if (!hart) continue;
+        for (const SignalPortDescriptor& port : hart->signalPorts()) {
+            if (port.direction != SignalPortDirection::Input) continue;
+            try {
+                const auto slot = m_runtimeState.signals.output(hart->signalBlockId(port.id));
+                const double value = port.kind == SignalValueKind::Digital
+                    ? (m_runtimeState.signals.boolean(slot) ? 1.0 : 0.0)
+                    : m_runtimeState.signals.real(slot);
+                hart->setSignalInput(port.id, value);
+            } catch (...) { }
+        }
+    }
+}
+
+void SimulationSession::publishHartOutputsToSignalUnlocked() {
+    for (uint32_t index : m_activeComponentIndices) {
+        auto* hart = dynamic_cast<protocols::HartCommunicationComponent*>(m_componentInstances[index].get());
+        if (!hart) continue;
+        for (const SignalPortDescriptor& port : hart->signalPorts()) {
+            if (port.direction != SignalPortDirection::Output) continue;
+            const auto value = hart->signalOutput(port.id);
+            if (!value) continue;
+            try {
+                if (port.kind == SignalValueKind::Digital)
+                    m_runtimeState.signals.setExternalBool(hart->signalBlockId(port.id), *value != 0.0);
+                else
+                    m_runtimeState.signals.setExternalReal(hart->signalBlockId(port.id), *value);
+            }
+            catch (...) { }
+        }
+    }
 }
 
 std::optional<std::string> SimulationSession::setPropertyUnlocked(uint32_t component, const std::string& propertyName,

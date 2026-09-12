@@ -53,6 +53,22 @@ enum class HartVarId : uint8_t {
     LoopCurrentMode,           // 1 byte enum (Common Table 16: 0=Disabled, 1=Enabled) -- Universal Command 6/7
     UpperRangeValue,           // 4 bytes float -- profile.upperRangeValue (Universal Command 15, Common Practice 35-37)
     LowerRangeValue,           // 4 bytes float -- profile.lowerRangeValue (Universal Command 15, Common Practice 35-37)
+    /** These three are real, persisted, WRITABLE device state -- not
+     * hardcoded response literals. They are read by Universal Command 15
+     * and are the SAME storage that Common Practice write commands mutate
+     * (47 Write PV Transfer Function, 100 Write PV Alarm Code -- Write Protect Code has no HART write command by
+     * design, hardware/jumper-controlled, but still gets one identity so a
+     * future read of it is never a second, disconnected literal). Adding a
+     * command that touches one of these MUST reference the existing
+     * HartVarId, never introduce a second one for the same concept. */
+    PvTransferFunctionCode,    // 1 byte enum (Common Table 3) -- default 0 (Linear)
+    AlarmSelectionCode,        // 1 byte enum (Common Table 6) -- default 251 (None)
+    WriteProtectCode,          // 1 byte enum (Common Table 7) -- default 251 (None, not implemented)
+};
+
+enum class HartDeviceVariableField : uint8_t {
+    Code, Units, Value, Status, UpperLimit, LowerLimit, MinimumSpan,
+    ClassificationCode, Family, AcquisitionPeriod, Properties, Serial, Damping, WriteMode,
 };
 
 /** `$BODY`, `$BODY[a:b]`, hex literal, row/variable reference, `$code`. */
@@ -65,13 +81,14 @@ struct HartExpr {
      * needs (HART-FR extensibility gate: add a new formula as a new Kind,
      * do not build a general arithmetic language for a single use). */
     enum class Kind : uint8_t { RequestBody, BodySlice, HexConstant, Variable, UserVariable, LocalCode,
-                                LoopCurrentMilliamps, PercentOfRange };
+                                LoopCurrentMilliamps, PercentOfRange, DeviceVariable };
     Kind kind = Kind::RequestBody;
     size_t offset = 0;              // BodySlice
     size_t length = 0;               // BodySlice; 0 means "to end of body"
     std::vector<uint8_t> constant;   // HexConstant
     HartVarId variable = HartVarId::ManufacturerId; // Variable
     std::string variableId;           // UserVariable, resolved against the plan
+    HartDeviceVariableField deviceVariableField = HartDeviceVariableField::Value;
 
     static HartExpr body() noexcept { HartExpr e; e.kind = Kind::RequestBody; return e; }
     static HartExpr bodySlice(size_t offset, size_t length) noexcept {
@@ -86,6 +103,9 @@ struct HartExpr {
     static HartExpr localCode() noexcept { HartExpr e; e.kind = Kind::LocalCode; return e; }
     static HartExpr loopCurrentMilliamps() noexcept { HartExpr e; e.kind = Kind::LoopCurrentMilliamps; return e; }
     static HartExpr percentOfRange() noexcept { HartExpr e; e.kind = Kind::PercentOfRange; return e; }
+    static HartExpr deviceVariable(HartDeviceVariableField field) noexcept {
+        HartExpr e; e.kind = Kind::DeviceVariable; e.deviceVariableField = field; return e;
+    }
 };
 
 struct HartStatement; // fwd
@@ -96,6 +116,14 @@ struct HartAppendStmt { HartExpr source; };
 
 /** `SET(variable, value)` -- write-stage/after-stage side effect. */
 struct HartSetStmt { HartVarId target; HartExpr value; };
+
+/** Mutates the Device Variable selected by the current FOR_CODES/local-code
+ * context. This is a generic bounded primitive used by Common Practice
+ * writes, not a command-specific handler. */
+struct HartSetDeviceVariableStmt { HartDeviceVariableField target; HartExpr value; };
+
+enum class HartDeviceVariableGuard : uint8_t { Exists, Writable, UnitsMatch, ValidWriteCode };
+struct HartGuardDeviceVariableStmt { HartDeviceVariableGuard guard; HartExpr value; };
 
 /** `IF EQ(lhs, rhs) THEN [...] ELSE [...]`. */
 struct HartIfStmt {
@@ -125,7 +153,8 @@ struct HartForCodesStmt {
     size_t maxIterations = 32;
 };
 
-using HartStatementNode = std::variant<HartAppendStmt, HartSetStmt, HartIfStmt, HartMapStmt, HartForCodesStmt>;
+using HartStatementNode = std::variant<HartAppendStmt, HartSetStmt, HartSetDeviceVariableStmt,
+                                       HartGuardDeviceVariableStmt, HartIfStmt, HartMapStmt, HartForCodesStmt>;
 struct HartStatement { HartStatementNode node; };
 
 struct HartCommandDefinition {
@@ -187,11 +216,43 @@ struct HartExecutionVariables {
     std::array<uint8_t, 32> longTag{};
     uint8_t pollingAddress = 0;
     uint8_t loopCurrentMode = 1; // Common Table 16: 1 = Enabled (HART default per HCF_SPEC-127 6.7)
+    uint8_t rangeUnitCode = 57; // Command 35 range units; distinct from PV units per HCF_SPEC-151 7.3
     float upperRangeValue = 100.0f;
     float lowerRangeValue = 0.0f;
+    uint8_t pvTransferFunctionCode = 0x00; // 0 = Linear
+    uint8_t alarmSelectionCode = 0xFB;     // 251 = None
+    uint8_t writeProtectCode = 0xFB;       // 251 = None
+    bool fixedCurrentMode = false;
+    float fixedCurrentMilliamps = 0.0f;
+    float loopCurrentZeroTrim = 0.0f;
+    float loopCurrentGainTrim = 1.0f;
+    uint8_t diagnosticStatus = 0;
     struct UserVariable { std::string id; double value = 0.0; HartVariableType type = HartVariableType::Float32; };
     std::span<const UserVariable> userVariables;
+    struct DeviceVariable {
+        uint8_t code = 0xFF;
+        uint8_t units = 250;
+        float value = 0.0f;
+        uint8_t status = 0;
+        float upperLimit = 0.0f;
+        float lowerLimit = 0.0f;
+        float minimumSpan = 0.0f;
+        float damping = 0.0f;
+        uint8_t classification = 0;
+        uint8_t family = 250;
+        uint32_t acquisitionPeriod = 0xFFFFFFFFu;
+        uint8_t properties = 0;
+        uint32_t serial = 0;
+        bool writable = false;
+        bool unitsMatchRequired = false;
+        std::span<const uint8_t> allowedUnits;
+    };
+    std::span<DeviceVariable> deviceVariables;
 };
+
+// Shared derived values used by Universal and Analog Channel commands.
+float hartPercentOfRange(const HartExecutionVariables& variables) noexcept;
+float hartLoopCurrentMilliamps(const HartExecutionVariables& variables) noexcept;
 
 class HartCommandExecutor final {
 public:

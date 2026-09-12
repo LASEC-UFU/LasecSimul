@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <memory>
 #include <unordered_map>
 
@@ -31,11 +32,54 @@ std::array<uint8_t, 3> parseDeviceIdHex(std::string_view text) noexcept {
     return result;
 }
 
+uint64_t daysFromCivil(uint32_t year, uint32_t month, uint32_t day) noexcept {
+    // Days since 1900-01-01; deterministic proleptic Gregorian conversion.
+    if (month <= 2) --year;
+    const uint32_t era = year / 400;
+    const uint32_t yoe = year - era * 400;
+    const uint32_t mp = month + (month > 2 ? -3u : 9u);
+    const uint32_t doy = (153u * mp + 2u) / 5u + day - 1u;
+    const uint32_t doe = yoe * 365u + yoe / 4u - yoe / 100u + doy;
+    const int64_t absolute = static_cast<int64_t>(era) * 146097 + static_cast<int64_t>(doe);
+    constexpr int64_t epoch1900 = 693901; // civil 1900-01-01 in the same origin
+    return absolute >= epoch1900 ? static_cast<uint64_t>(absolute - epoch1900) : 0;
+}
+
+std::array<uint8_t, 7> dateTimeBytes(uint64_t seconds) noexcept {
+    const uint64_t days = seconds / 86400u;
+    uint64_t z = days + 693901u;
+    const uint64_t era = z / 146097u;
+    const uint64_t doe = z - era * 146097u;
+    const uint64_t yoe = (doe - doe / 1460u + doe / 36524u - doe / 146096u) / 365u;
+    uint64_t year = yoe + era * 400u;
+    const uint64_t doy = doe - (365u * yoe + yoe / 4u - yoe / 100u);
+    const uint64_t mp = (5u * doy + 2u) / 153u;
+    const uint64_t day = doy - (153u * mp + 2u) / 5u + 1u;
+    const uint64_t month = mp < 10u ? mp + 3u : mp - 9u;
+    year += month <= 2u;
+    const uint32_t daySeconds = static_cast<uint32_t>(seconds % 86400u);
+    return {static_cast<uint8_t>(day), static_cast<uint8_t>(month), static_cast<uint8_t>(year - 1900u),
+            static_cast<uint8_t>(daySeconds >> 24), static_cast<uint8_t>(daySeconds >> 16),
+            static_cast<uint8_t>(daySeconds >> 8), static_cast<uint8_t>(daySeconds)};
+}
+
+bool decodeDateTime(std::span<const uint8_t> bytes, uint64_t& seconds) noexcept {
+    if (bytes.size() != 7) return false;
+    const uint32_t year = 1900u + bytes[2];
+    const uint32_t month = bytes[1];
+    const uint32_t day = bytes[0];
+    const uint32_t time = (static_cast<uint32_t>(bytes[3]) << 24) |
+        (static_cast<uint32_t>(bytes[4]) << 16) | (static_cast<uint32_t>(bytes[5]) << 8) | bytes[6];
+    if (month < 1 || month > 12 || day < 1 || day > 31 || time >= 86400u) return false;
+    seconds = daysFromCivil(year, month, day) * 86400u + time;
+    return true;
+}
+
 } // namespace
 
 std::vector<HartCommandDescriptor> HartReferenceCatalog::commandDescriptors() {
     // Union of process_simul's command seed table and its transmitter dispatch table.
-    static constexpr std::array<std::pair<HartCommandId, std::string_view>, 63> commands{{
+    static constexpr std::array<std::pair<HartCommandId, std::string_view>, 173> commands{{
         {0x00, "Read Unique Identifier"},
         {0x01, "Read Primary Variable"},
         {0x02, "Read Loop Current And Percent Of Range"},
@@ -77,19 +121,129 @@ std::vector<HartCommandDescriptor> HartReferenceCatalog::commandDescriptors() {
         {0x15, "Read Unique Identifier Associated With Long Tag"},
         {0x16, "Write Long Tag"},
         {0x21, "Read Device Variables"},
+        {0x22, "Write Primary Variable Damping Value"},
+        {0x23, "Write Primary Variable Range Values"},
+        {0x24, "Set Primary Variable Upper Range Value"},
+        {0x25, "Set Primary Variable Lower Range Value"},
+        {0x2C, "Write Primary Variable Units"},
         {0x26, "Reset Configuration Changed Flag"},
+        {0x27, "EEPROM Control"},
         // 0x30 (48, Read Additional Device Status) was likewise absent --
         // the existing 0x48 entry below is a DIFFERENT, distinct command
         // (decimal 72, Common Practice range), not decimal 48.
         {0x30, "Read Additional Device Status"},
+        {0x31, "Write Primary Variable Transducer Serial Number"},
+        {0x32, "Read Dynamic Variable Assignments"},
+        {0x33, "Write Dynamic Variable Assignments"},
+        {0x34, "Set Device Variable Zero"},
         {0x28, "Enter/Exit Fixed Current Mode"},
-        {0x29, "Trim DAC Zero"},
-        {0x2A, "Trim DAC Gain"},
-        {0x2B, "Write Transmitter Message"},
-        {0x2D, "Write Polling Address (extended)"},
-        {0x2E, "Write Loop Current Mode"},
-        {0x48, "Read Additional Transmitter Status"},
-        {0x50, "Read Dynamic Variable Assignment"},
+        {0x29, "Perform Self Test"},
+        {0x2A, "Perform Device Reset"},
+        {0x2B, "Set Primary Variable Zero"},
+        {0x2D, "Trim Loop Current Zero"},
+        {0x2E, "Trim Loop Current Gain"},
+        {0x2F, "Write Primary Variable Transfer Function"},
+        {0x35, "Write Device Variable Units"},
+        {0x36, "Read Device Variable Information"},
+        {0x37, "Write Device Variable Damping Value"},
+        {0x38, "Write Device Variable Transducer Serial Number"},
+        {0x39, "Read Unit Tag, Descriptor, Date"},
+        {0x3A, "Write Unit Tag, Descriptor, Date"},
+        {0x3B, "Write Number Of Response Preambles"},
+        {0x3C, "Read Analog Channel And Percent Of Range"},
+        {0x3D, "Read Dynamic Variables And Primary Variable Analog Channel"},
+        {0x3E, "Read Analog Channels"},
+        {0x3F, "Read Analog Channel Information"},
+        {0x40, "Write Analog Channel Additional Damping Value"},
+        {0x41, "Write Analog Channel Range Values"},
+        {0x42, "Enter/Exit Fixed Analog Channel Mode"},
+        {0x43, "Trim Analog Channel Zero"},
+        {0x44, "Trim Analog Channel Gain"},
+        {0x45, "Write Analog Channel Transfer Function"},
+        {0x46, "Read Analog Channel Endpoint Values"},
+        {0x47, "Lock Device"},
+        {0x48, "Squawk"},
+        {0x49, "Find Device"},
+        {0x4A, "Read I/O System Capabilities"},
+        {0x4B, "Poll Sub-Device"},
+        {0x4C, "Read Lock Device State"},
+        {0x4D, "Send Command to Sub-Device"},
+        {0x4E, "Read Aggregated Commands"},
+        {0x4F, "Write Device Variable"},
+        {0x50, "Read Device Variable Trim Points"},
+        {0x51, "Read Device Variable Trim Guidelines"},
+        {0x52, "Write Device Variable Trim Point"},
+        {0x53, "Reset Device Variable Trim"},
+        {0x54, "Read Sub-Device Identity Summary"},
+        {0x55, "Read I/O Channel Statistics"},
+        {0x56, "Read Sub-Device Statistics"},
+        {0x57, "Write I/O System Master Mode"},
+        {0x58, "Write I/O System Retry Count"},
+        {0x59, "Set Real-Time Clock"},
+        {0x5A, "Read Real-Time Clock"},
+        {0x5B, "Read Trend Configuration"},
+        {0x5C, "Write Trend Configuration"},
+        {0x5D, "Read Trend"},
+        {0x5E, "Read I/O System Client-Side Communication Statistics"},
+        {0x5F, "Read Device Communications Statistics"},
+        {0x60, "Read Synchronous Action"},
+        {0x61, "Configure Synchronous Action"},
+        {0x62, "Read Command Action"},
+        {0x63, "Configure Command Action"},
+        {0x64, "Write Primary Variable Alarm Code"},
+        {0x65, "Read Sub-device to Burst Message Map"},
+        {0x66, "Map Sub-device to Burst Message"},
+        {0x67, "Write Burst Period"},
+        {0x68, "Write Burst Trigger"},
+        {0x69, "Read Burst Mode Configuration"},
+        {0x6A, "Flush Delayed Responses"},
+        {0x6B, "Write Burst Device Variables"},
+        {0x6C, "Write Burst Mode Command Number"},
+        {0x6D, "Burst Mode Control"},
+        {0x6E, "Read All Dynamic Variables"},
+        {0x6F, "Transfer Service Control"},
+        {0x70, "Transfer Service"},
+        {0x71, "Catch Device Variable"},
+        {0x72, "Read Caught Device Variable"},
+        {0x73, "Read Event Notification Summary"},
+        {0x74, "Write Event Notification Bit Mask"},
+        {0x75, "Write Event Notification Timing"},
+        {0x76, "Event Notification Control"},
+        {0x77, "Acknowledge Event Notification"},
+        {512, "Read Country Code"},
+        {513, "Write Country Code"},
+        {514, "Register Event Manager"},
+        {515, "Read Event Manager Registration Status"},
+        {516, "Read Device Location"},
+        {517, "Write Device Location"},
+        {518, "Read Location Description"},
+        {519, "Write Location Description"},
+        {520, "Read Process Unit Tag"},
+        {521, "Write Process Unit Tag"},
+        {522, "Write Volumetric Flow Classification"},
+        {523, "Read Condensed Status Mapping Array"},
+        {524, "Write Condensed Status Mapping"},
+        {525, "Reset Condensed Status Map"},
+        {526, "Write Status Simulation Mode"},
+        {527, "Simulate Status Bit"},
+        {528, "Read Sub-Device Assignment List Information"},
+        {529, "Read Sub-Device Assignment"},
+        {530, "Write Sub-Device Assignment"},
+        {531, "Transfer Live Sub-Device List to Assignment List"},
+        {1280, "Read Pressure Status"},
+        {1281, "Read Pressure Capabilities"},
+        {1282, "Read Supported Pressure Status Mask"},
+        {1283, "Read Pressure Sensor Information"},
+        {1284, "Read Pressure Process Connection"},
+        {1285, "Read Associated Pressure Device Variables"},
+        {1286, "Read Optional Gasket Material Data"},
+        {1287, "Read Min/Max Pressure Observation"},
+        {1288, "Read Min/Max Temperature Observation"},
+        {1289, "Read Min/Max Static Pressure Observation"},
+        {1290, "Read Remote Seal Information"},
+        {1408, "Write Process Connection"},
+        {1409, "Write Optional Gasket Material"},
+        {1410, "Write Remote Seal Information"},
         {0x80, "Vendor Read Configuration"},
         {0x82, "Vendor Read Device Identity"},
         {0x84, "Vendor Read Sensor Configuration"},
@@ -208,6 +362,92 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
         commands.push_back(std::move(cmd));
     }
 
+    // Common Practice 34 (0x22): write the canonical PV Device Variable
+    // damping property and echo the actual value used. HartCommandExecutor validates finite,
+    // non-negative seconds and the engine commits atomically.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x22; cmd.name = "Write Primary Variable Damping Value";
+        cmd.write = {HartStatement{HartSetDeviceVariableStmt{HartDeviceVariableField::Damping, HartExpr::bodySlice(0, 4)}}};
+        cmd.resp = {HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Damping)}}};
+        commands.push_back(std::move(cmd));
+    }
+
+    // Common Practice 53 (0x35): one-byte Device Variable code followed by
+    // the selected Common Tables engineering-unit code.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x35; cmd.name = "Write Device Variable Units";
+        HartForCodesStmt write;
+        write.source = HartExpr::bodySlice(0, 1); write.maxIterations = 1;
+        write.body = {
+            HartStatement{HartGuardDeviceVariableStmt{HartDeviceVariableGuard::Exists, HartExpr::body()}},
+            HartStatement{HartSetDeviceVariableStmt{HartDeviceVariableField::Units, HartExpr::bodySlice(1, 1)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Code)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Units)}},
+        };
+        cmd.resp = {HartStatement{std::move(write)}};
+        commands.push_back(std::move(cmd));
+    }
+
+    // Common Practice 54 (0x36): complete Device Variable information. The
+    // field order and widths follow HCF_SPEC-151 Rev 10.0 section 7.22:
+    // code(1), serial(3, Unsigned-24), units(1), upper/lower limit(4 each),
+    // damping(4), minimum span(4), classification(1), family(1), acquisition
+    // period(4), properties(1) = 28 bytes total. Classification/Family are
+    // BOTH single-byte Enums -- confirmed against the spec's own revision
+    // history ("Included Response Data Byte 21, Variable Classification").
+    // A bug found during this session's audit had Classification emitting 4
+    // bytes via a duplicate `Classification` field accessor that shadowed
+    // the already-correct `ClassificationCode` one; fixed by removing the
+    // duplicate and using the single correct accessor here.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x36; cmd.name = "Read Device Variable Information";
+        HartForCodesStmt read;
+        read.source = HartExpr::bodySlice(0, 1); read.maxIterations = 1;
+        read.body = {
+            HartStatement{HartGuardDeviceVariableStmt{HartDeviceVariableGuard::Exists, HartExpr::body()}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Code)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Serial)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Units)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::UpperLimit)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::LowerLimit)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Damping)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::MinimumSpan)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::ClassificationCode)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Family)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::AcquisitionPeriod)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Properties)}},
+        };
+        cmd.resp = {HartStatement{std::move(read)}};
+        commands.push_back(std::move(cmd));
+    }
+
+    // Common Practice 79 (0x4F): validate selection, write mode, exact unit
+    // match and ownership before mutating the canonical Device Variable.
+    {
+        HartCommandDefinition cmd;
+        cmd.id = 0x4F; cmd.name = "Write Device Variable";
+        HartForCodesStmt write;
+        write.source = HartExpr::bodySlice(0, 1); write.maxIterations = 1;
+        write.body = {
+            HartStatement{HartGuardDeviceVariableStmt{HartDeviceVariableGuard::Exists, HartExpr::body()}},
+            HartStatement{HartGuardDeviceVariableStmt{HartDeviceVariableGuard::Writable, HartExpr::body()}},
+            HartStatement{HartGuardDeviceVariableStmt{HartDeviceVariableGuard::ValidWriteCode, HartExpr::bodySlice(1, 1)}},
+            HartStatement{HartGuardDeviceVariableStmt{HartDeviceVariableGuard::UnitsMatch, HartExpr::bodySlice(2, 1)}},
+            HartStatement{HartSetDeviceVariableStmt{HartDeviceVariableField::WriteMode, HartExpr::bodySlice(1, 1)}},
+            HartStatement{HartSetDeviceVariableStmt{HartDeviceVariableField::Value, HartExpr::bodySlice(3, 4)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Code)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::WriteMode)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Units)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Value)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Status)}},
+        };
+        cmd.resp = {HartStatement{std::move(write)}};
+        commands.push_back(std::move(cmd));
+    }
+
     // 0x01 -- Read Primary Variable: PV unit code (1 byte) + PV float32 BE.
     // The prior native handler omitted the unit byte (4-byte response instead
     // of the correct 5); fixed here per HART command-1 layout, not carried
@@ -295,34 +535,23 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
         commands.push_back(std::move(cmd));
     }
 
-    // 0x21 -- Read Device Variables: error_code + FOR_CODES over the request
-    // body, one (unit, value) pair per requested device-variable code. Only
-    // code 0x00 (PV) is modeled; every other code returns the HART "not used"
-    // convention. Matches the FASE 33 worked example exactly.
+    // 0x21 (33) -- Read Device Variables. HCF_SPEC-151 section 7.1 allows
+    // one through four requested codes and returns exactly one six-byte
+    // tuple per requested slot: code, units, float value. Code 0 is retained
+    // as the historical PV alias for the older Universal-9 fixtures; real
+    // Common Practice Table 34 PV is code 246.
     {
         HartCommandDefinition cmd;
         cmd.id = 0x21;
         cmd.name = "Read Device Variables";
         HartForCodesStmt forCodes;
-        forCodes.source = HartExpr::body();
-        forCodes.maxIterations = 8; // bounded: worst case 8 * 5 = 40 response bytes
-        HartIfStmt knownCode;
-        knownCode.lhs = HartExpr::localCode();
-        knownCode.rhs = HartExpr::hexByte(0x00);
-        knownCode.thenBranch = {
-            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariableUnit)}},
-            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariable)}},
+        forCodes.source = HartExpr::body(); forCodes.maxIterations = 4;
+        forCodes.body = {
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Code)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Units)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Value)}},
         };
-        const auto nan = HartTypeCodec::encodeFloat32BE(HartTypeCodec::quietNaN());
-        knownCode.elseBranch = {
-            HartStatement{HartAppendStmt{HartExpr::hexByte(0xFA)}},
-            HartStatement{HartAppendStmt{HartExpr::hex(std::vector<uint8_t>(nan.begin(), nan.end()))}},
-        };
-        forCodes.body = {HartStatement{std::move(knownCode)}};
-        cmd.resp = {
-            HartStatement{HartAppendStmt{HartExpr::hexByte(0x00)}}, // error_code: no per-device error tracking yet
-            HartStatement{std::move(forCodes)},
-        };
+        cmd.resp = {HartStatement{std::move(forCodes)}};
         commands.push_back(std::move(cmd));
     }
 
@@ -578,29 +807,19 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
         HartCommandDefinition cmd;
         cmd.id = 0x09;
         cmd.name = "Read Device Variables with Status";
-        const auto nan = HartTypeCodec::encodeFloat32BE(HartTypeCodec::quietNaN());
-        const std::vector<uint8_t> nanBytes(nan.begin(), nan.end());
         HartForCodesStmt forCodes;
         forCodes.source = HartExpr::body();
         forCodes.maxIterations = 8;
-        HartIfStmt isPv;
-        isPv.lhs = HartExpr::localCode();
-        isPv.rhs = HartExpr::hexByte(0x00);
-        isPv.thenBranch = {
-            HartStatement{HartAppendStmt{HartExpr::localCode()}},                       // Device Variable Code (echo: 0 = PV)
-            HartStatement{HartAppendStmt{HartExpr::hexByte(0x00)}},                      // Classification: Not Yet Classified
-            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariableUnit)}},// Units Code
-            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariable)}},    // Value
-            HartStatement{HartAppendStmt{HartExpr::hexByte(0x00)}},                      // Status: Good
+        // Each slot is a view of the same canonical Device Variable table;
+        // code 0 remains the protocol's PV alias and is resolved by the
+        // runtime handle table.
+        forCodes.body = {
+            HartStatement{HartAppendStmt{HartExpr::localCode()}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::ClassificationCode)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Units)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Value)}},
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Status)}},
         };
-        isPv.elseBranch = {
-            HartStatement{HartAppendStmt{HartExpr::localCode()}},   // Device Variable Code (echo the requested, unsupported code)
-            HartStatement{HartAppendStmt{HartExpr::hexByte(0x00)}}, // Classification: Not Yet Classified
-            HartStatement{HartAppendStmt{HartExpr::hexByte(0xFA)}}, // Units: Not Used
-            HartStatement{HartAppendStmt{HartExpr::hex(nanBytes)}}, // Value: Not Used
-            HartStatement{HartAppendStmt{HartExpr::hexByte(0x30)}}, // Status: Bad + Constant
-        };
-        forCodes.body = {HartStatement{std::move(isPv)}};
         cmd.resp = {
             HartStatement{HartAppendStmt{HartExpr::hexByte(0x00)}}, // Extended Field Device Status: all-clear (not modeled)
             HartStatement{std::move(forCodes)},
@@ -631,33 +850,35 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
     }
 
     // 0x0F (15) -- Read Device Information. HCF_SPEC-127 6.15: every field
-    // this project cannot genuinely model has a documented spec fallback --
-    // Transfer Function "must return 0, Linear, if... not supported" and
-    // Write Protect Code "must return 251, None, when... not implemented"
-    // (both quoted directly in the spec text), byte 16 is explicitly
-    // "Reserved, must be set to 250". Alarm Selection uses the Common
-    // Table 6 "251 = None" code (this project models no alarm/failsafe
-    // behavior). PV Units/Upper/Lower Range Value are real, profile-backed
-    // values, not placeholders. PV Damping Value defaults to 0.0 (no
-    // damping applied -- a real, valid value, not a stand-in for a missing
-    // one: a damping constant is genuinely optional hardware/firmware
-    // behavior this simulator does not add). Analog Channel Flags = 0x00:
-    // per Common Table 26, bit 0 reset means "this channel is an analog
-    // OUTPUT (DAC)", which is factually correct for a transmitter's PV loop
-    // -- not an unmodeled placeholder either.
+    // this project cannot genuinely model has a documented spec fallback,
+    // and every one of those is now REAL, SHARED, WRITABLE device state
+    // (HartVarId::AlarmSelectionCode/PvTransferFunctionCode/
+    // WriteProtectCode) -- the SAME variables Common Practice write
+    // commands 34/47/100 will mutate, not independent hardcoded literals
+    // that a later write command could silently fail to affect. Defaults
+    // (set on HartDevicePlan/HartExecutionVariables) match the spec's own
+    // documented fallback: Transfer Function "must return 0, Linear, if...
+    // not supported", Write Protect Code "must return 251, None, when...
+    // not implemented", Alarm Selection uses Common Table 6's "251 = None".
+    // Byte 16 is explicitly "Reserved, must be set to 250" -- a true
+    // protocol constant, not device state, so it stays a literal. PV
+    // Units/Upper/Lower Range Value are real, profile-backed values.
+    // Analog Channel Flags = 0x00: per Common Table 26, bit 0 reset means
+    // "this channel is an analog OUTPUT (DAC)", factually correct for a
+    // transmitter's PV loop, not a placeholder either.
     {
         HartCommandDefinition cmd;
         cmd.id = 0x0F;
         cmd.name = "Read Device Information";
         cmd.resp = {
-            HartStatement{HartAppendStmt{HartExpr::hexByte(0xFB)}}, // Alarm Selection Code: 251 None
-            HartStatement{HartAppendStmt{HartExpr::hexByte(0x00)}}, // Transfer Function Code: 0 Linear
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::AlarmSelectionCode)}},
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PvTransferFunctionCode)}},
             HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariableUnit)}},
             HartStatement{HartAppendStmt{HartExpr::var(HartVarId::UpperRangeValue)}},
             HartStatement{HartAppendStmt{HartExpr::var(HartVarId::LowerRangeValue)}},
-            HartStatement{HartAppendStmt{HartExpr::hex({0x00, 0x00, 0x00, 0x00})}}, // Damping Value: 0.0 seconds
-            HartStatement{HartAppendStmt{HartExpr::hexByte(0xFB)}}, // Write Protect Code: 251 None
-            HartStatement{HartAppendStmt{HartExpr::hexByte(0xFA)}}, // Reserved: 250 Not Used
+            HartStatement{HartAppendStmt{HartExpr::deviceVariable(HartDeviceVariableField::Damping)}},
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::WriteProtectCode)}},
+            HartStatement{HartAppendStmt{HartExpr::hexByte(0xFA)}}, // Reserved: 250 Not Used (true protocol constant)
             HartStatement{HartAppendStmt{HartExpr::hexByte(0x00)}}, // Analog Channel Flags: output channel, no flags
         };
         commands.push_back(std::move(cmd));
@@ -714,14 +935,24 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
 namespace {
 HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartCommandId, HartCompiledCommandProgram>> programs) {
     return [programs](const HartDeviceProfile& profile, HartDevicePlan& plan, double primaryValue,
-                      HartCommandId command, std::span<const uint8_t> request, HartResponseBuilder& response) -> bool {
+                      HartCommandId command, std::span<const uint8_t> request, HartResponseBuilder& response,
+                      uint8_t masterRole) -> bool {
         const auto it = programs->find(command);
-        if (it == programs->end()) return false;
+        // 35/36/37 are handled below as one atomic StandardCore semantic
+        // operation; they deliberately have no command-local DSL program.
+        const bool standardCoreNoProgram = command == 0x23 || command == 0x24 || command == 0x25 || command == 0x27 ||
+            command == 0x28 || command == 0x29 || command == 0x2A || command == 0x2B || command == 0x2C ||
+            command == 0x2D || command == 0x2E || command == 0x2F || command == 0x31 || command == 0x32 ||
+            command == 0x33 || command == 0x34 || command == 0x37 || command == 0x38 || command == 0x39 ||
+            command == 0x3A || command == 0x3B || (command >= 0x3C && command <= 0x46) ||
+            (command >= 0x47 && command <= 0x77) || (command >= 512 && command <= 531) ||
+            (command >= 1280 && command <= 1290) || (command >= 1408 && command <= 1410);
+        if (it == programs->end() && !standardCoreNoProgram) return false;
         HartExecutionVariables vars;
         vars.manufacturerId = static_cast<uint8_t>(profile.manufacturerId);
         vars.deviceType = static_cast<uint8_t>(profile.deviceType);
         vars.deviceId = parseDeviceIdHex(plan.uniqueId);
-        vars.numRequestPreambles = profile.identity.numRequestPreambles;
+        vars.numRequestPreambles = plan.responsePreambles;
         vars.universalCommandRevision = profile.identity.universalCommandRevision;
         vars.transmitterSpecificRevision = profile.identity.transmitterSpecificRevision;
         vars.softwareRevision = profile.identity.softwareRevision;
@@ -741,9 +972,68 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
         vars.pollingAddress = plan.pollingAddress;
         vars.loopCurrentMode = plan.loopCurrentMode;
         vars.primaryVariableUnit = profile.primaryVariableUnit;
-        vars.upperRangeValue = profile.upperRangeValue;
-        vars.lowerRangeValue = profile.lowerRangeValue;
-        vars.primaryVariable = static_cast<float>(primaryValue);
+        const auto primary = std::find_if(plan.variables.begin(), plan.variables.end(), [](const auto& v) {
+            return v.deviceVariableCode == 246 || v.role == HartVariableRole::PrimaryVariable ||
+                   v.id == "PV" || v.id == "primary";
+        });
+        vars.rangeUnitCode = primary != plan.variables.end() && primary->rangeUnitCode != 0xFF
+            ? primary->rangeUnitCode : profile.primaryVariableUnit;
+        vars.upperRangeValue = primary != plan.variables.end() && std::isfinite(primary->upperRangeValue)
+            ? primary->upperRangeValue : profile.upperRangeValue;
+        vars.lowerRangeValue = primary != plan.variables.end() && std::isfinite(primary->lowerRangeValue)
+            ? primary->lowerRangeValue : profile.lowerRangeValue;
+        vars.pvTransferFunctionCode = plan.pvTransferFunctionCode;
+        vars.alarmSelectionCode = plan.alarmSelectionCode;
+        vars.writeProtectCode = plan.writeProtectCode;
+        vars.fixedCurrentMode = plan.fixedCurrentMode;
+        vars.fixedCurrentMilliamps = plan.fixedCurrentMilliamps;
+        vars.loopCurrentZeroTrim = plan.loopCurrentZeroTrim;
+        vars.loopCurrentGainTrim = plan.loopCurrentGainTrim;
+        vars.diagnosticStatus = plan.diagnosticStatus;
+        vars.primaryVariable = static_cast<float>(primaryValue + plan.primaryVariableZeroOffset);
+        std::vector<HartExecutionVariables::DeviceVariable> deviceVariables;
+        std::vector<std::vector<uint8_t>> allowedUnits;
+        deviceVariables.reserve(plan.variables.size() + 1);
+        allowedUnits.reserve(plan.variables.size() + 1);
+        for (const auto& authored : plan.variables) {
+            if (authored.deviceVariableCode == 0xFF) continue;
+            const bool isPrimary = authored.deviceVariableCode == 246 || authored.id == "PV" || authored.id == "primary";
+            HartExecutionVariables::DeviceVariable variable;
+            variable.code = authored.deviceVariableCode;
+            variable.units = authored.deviceVariableUnit != 250
+                ? authored.deviceVariableUnit
+                : (isPrimary ? profile.primaryVariableUnit : 250);
+            variable.value = static_cast<float>(isPrimary && !authored.writable
+                ? vars.primaryVariable + authored.trimAdjustment
+                : authored.value + authored.trimAdjustment);
+            variable.status = authored.deviceVariableStatus;
+            variable.upperLimit = authored.upperTransducerLimit;
+            variable.lowerLimit = authored.lowerTransducerLimit;
+            variable.minimumSpan = authored.minimumSpan;
+            variable.damping = authored.dampingValue;
+            variable.classification = authored.classification;
+            variable.family = authored.family;
+            variable.acquisitionPeriod = authored.acquisitionPeriod;
+            variable.properties = authored.deviceVariableProperties;
+            variable.serial = authored.transducerSerialNumber;
+            variable.writable = authored.writable && authored.direction != HartVariableDirection::Input;
+            allowedUnits.push_back(authored.allowedUnitCodes);
+            if (allowedUnits.back().empty()) allowedUnits.back().push_back(variable.units);
+            variable.allowedUnits = allowedUnits.back();
+            deviceVariables.push_back(variable);
+        }
+        const bool isDeviceVariableCommonPractice = command == 0x21 || command == 0x22 ||
+            command == 0x35 || command == 0x36 || command == 0x4F;
+        const bool legacyPrimaryVariableAlias = command == 0x21 && !request.empty() && request.front() == 0;
+        if (deviceVariables.empty() && (!isDeviceVariableCommonPractice || legacyPrimaryVariableAlias)) {
+            HartExecutionVariables::DeviceVariable primary;
+            primary.code = 246; primary.units = profile.primaryVariableUnit;
+            primary.value = vars.primaryVariable; primary.upperLimit = profile.upperRangeValue;
+            primary.lowerLimit = profile.lowerRangeValue; primary.writable = false;
+            allowedUnits.push_back({primary.units}); primary.allowedUnits = allowedUnits.back();
+            deviceVariables.push_back(primary);
+        }
+        vars.deviceVariables = deviceVariables;
         std::vector<HartExecutionVariables::UserVariable> userVariables;
         userVariables.reserve(plan.variables.size());
         for (size_t i = 0; i < plan.variables.size(); ++i) {
@@ -753,6 +1043,1016 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
             userVariables.push_back({variable.id, value, variable.type});
         }
         vars.userVariables = userVariables;
+
+        // Common Practice 71/76 share one canonical Lock Code.  The status
+        // byte is derived, never stored as a second mutable lock state.
+        if (command == 0x47) {
+            if (request.size() != 1 || request[0] > 3) return false;
+            const uint8_t requested = request[0];
+            const bool owner = plan.lockCode != 0 && plan.lockOwner == masterRole;
+            if (requested == 0) {
+                if (plan.lockCode != 0 && plan.lockCode != 3 && !owner) return false;
+            } else if (plan.lockCode != 0 && plan.lockCode != 3 && !owner) {
+                return false;
+            }
+            plan.lockCode = requested;
+            if (requested != 0) plan.lockOwner = masterRole;
+            return response.writeByte(requested);
+        }
+        if (command == 0x4C) {
+            if (!request.empty()) return false;
+            uint8_t status = plan.lockCode == 0 ? 0 : 0x01;
+            if (plan.lockCode == 2) status |= 0x02;
+            if (plan.lockCode != 0 && (plan.lockOwner == 0 || plan.lockOwner == 2)) status |= 0x04;
+            if (plan.lockCode == 3) status |= 0x08;
+            if (plan.lockCode != 0 && plan.lockOwner == 2) status |= 0x10;
+            return response.writeByte(status);
+        }
+        if (command == 0x48) {
+            if (request.size() > 1) return false;
+            const uint8_t control = request.empty() ? 2 : request[0];
+            if (control > 2) return false;
+            plan.squawkControl = control;
+            if (control == 2) plan.squawkEvent = 1;
+            return response.writeByte(control);
+        }
+        if (command == 0x49) {
+            if (!request.empty()) return false;
+            if (!plan.findDeviceArmed) return false;
+            const auto identity = programs->find(0x00);
+            if (identity == programs->end()) return false;
+            return HartCommandExecutor::execute(identity->second, vars, {}, response);
+        }
+        if (command == 0x4A) {
+            if (!plan.ioSystem || !request.empty() || plan.ioMaximumCards == 0 ||
+                plan.ioMaximumChannelsPerCard == 0 || plan.ioMaximumSubDevicesPerChannel == 0 ||
+                plan.ioMaximumDelayedResponses < 2 || plan.ioRetryCount < 2 || plan.ioRetryCount > 5) return false;
+            const uint16_t cards = plan.ioMaximumCards;
+            if (!response.writeByte(plan.ioMaximumDelayedResponses) || !response.writeByte(plan.ioMasterMode) ||
+                !response.writeByte(plan.ioRetryCount) || !response.writeByte(static_cast<uint8_t>(cards >> 8)) ||
+                !response.writeByte(static_cast<uint8_t>(cards)) || !response.writeByte(plan.ioMaximumChannelsPerCard) ||
+                !response.writeByte(plan.ioMaximumSubDevicesPerChannel) ||
+                !response.writeByte(static_cast<uint8_t>(1 + plan.subDevices.size()))) return false;
+            plan.ioSubDeviceListChanged = false;
+            return true;
+        }
+        if (command == 0x4B) {
+            // Polling is resolved by HartEngine's shared device registry.  A
+            // hook cannot manufacture child identity, so this branch is kept
+            // as an explicit not-applicable result for non-routed execution.
+            return false;
+        }
+
+        auto findTrimVariable = [&](uint8_t code) {
+            return std::find_if(plan.variables.begin(), plan.variables.end(),
+                [code](const auto& variable) { return variable.deviceVariableCode == code; });
+        };
+        if (command == 0x50 || command == 0x51) {
+            if (request.size() != 1) return false;
+            auto variable = findTrimVariable(request[0]);
+            if (variable == plan.variables.end()) return false;
+            const bool supported = variable->trimPointsSupported != 0;
+            const uint8_t units = supported ? variable->trimPointsUnit : 250;
+            const float nan = std::numeric_limits<float>::quiet_NaN();
+            if (command == 0x50) {
+                if (!response.writeByte(request[0]) || !response.writeByte(units) ||
+                    !response.writeBytes(HartTypeCodec::encodeFloat32BE(
+                        supported && (variable->trimPointsSupported & 0x03) != 2 ? variable->lowerTrimPoint : nan)) ||
+                    !response.writeBytes(HartTypeCodec::encodeFloat32BE(
+                        supported && (variable->trimPointsSupported & 0x02) != 0 ? variable->upperTrimPoint : nan))) return false;
+                return true;
+            }
+            const auto guideline = [&](float value) {
+                return response.writeBytes(HartTypeCodec::encodeFloat32BE(supported ? value : nan));
+            };
+            return response.writeByte(variable->trimPointsSupported) && response.writeByte(units) &&
+                guideline(variable->minimumLowerTrimPoint) && guideline(variable->maximumLowerTrimPoint) &&
+                guideline(variable->minimumUpperTrimPoint) && guideline(variable->maximumUpperTrimPoint) &&
+                guideline(variable->minimumTrimDifferential);
+        }
+        if (command == 0x52) {
+            if (plan.writeProtectCode != 0xFB || request.size() != 7) return false;
+            auto variable = findTrimVariable(request[0]);
+            if (variable == plan.variables.end() || request[1] == 0 || request[1] > 2) return false;
+            if ((variable->trimPointsSupported & request[1]) == 0 || request[2] != variable->trimPointsUnit) return false;
+            const float value = HartTypeCodec::decodeFloat32BE(request.subspan(3, 4));
+            if (!std::isfinite(value)) return false;
+            const bool lower = request[1] == 1;
+            const float minimum = lower ? variable->minimumLowerTrimPoint : variable->minimumUpperTrimPoint;
+            const float maximum = lower ? variable->maximumLowerTrimPoint : variable->maximumUpperTrimPoint;
+            if (std::isfinite(minimum) && value < minimum) return false;
+            if (std::isfinite(maximum) && value > maximum) return false;
+            const float raw = (variable->id == "PV" || variable->id == "primary")
+                ? static_cast<float>(primaryValue) : static_cast<float>(variable->value);
+            const float nextAdjustment = value - raw;
+            if (lower && (variable->trimPointsSupported & 0x02) != 0 && std::isfinite(variable->upperTrimPoint) &&
+                std::isfinite(variable->minimumTrimDifferential) && variable->upperTrimPoint - value < variable->minimumTrimDifferential) return false;
+            if (!lower && (variable->trimPointsSupported & 0x01) != 0 && std::isfinite(variable->lowerTrimPoint) &&
+                std::isfinite(variable->minimumTrimDifferential) && value - variable->lowerTrimPoint < variable->minimumTrimDifferential) return false;
+            variable->trimAdjustment = nextAdjustment;
+            if (lower) variable->lowerTrimPoint = value; else variable->upperTrimPoint = value;
+            return response.writeByte(request[0]) && response.writeByte(request[1]) && response.writeByte(request[2]) &&
+                response.writeBytes(HartTypeCodec::encodeFloat32BE(value));
+        }
+        if (command == 0x53) {
+            if (plan.writeProtectCode != 0xFB || request.size() != 1) return false;
+            auto variable = findTrimVariable(request[0]);
+            if (variable == plan.variables.end() || variable->trimPointsSupported == 0) return false;
+            variable->trimAdjustment = variable->factoryTrimAdjustment;
+            variable->lowerTrimPoint = std::numeric_limits<float>::quiet_NaN();
+            variable->upperTrimPoint = std::numeric_limits<float>::quiet_NaN();
+            return response.writeByte(request[0]);
+        }
+        if (command == 0x57) {
+            if (!plan.ioSystem || plan.writeProtectCode != 0xFB || request.size() != 1 || request[0] > 1) return false;
+            plan.ioMasterMode = request[0];
+            return response.writeByte(plan.ioMasterMode);
+        }
+        if (command == 0x58) {
+            if (!plan.ioSystem || plan.writeProtectCode != 0xFB || request.size() != 1 || request[0] < 2 || request[0] > 5) return false;
+            plan.ioRetryCount = request[0];
+            return response.writeByte(plan.ioRetryCount);
+        }
+        if (command == 0x59) {
+            if (!plan.rtcSupported || request.size() != 10 || (request[8] != 0 || request[9] != 0) || request[0] > 1) return false;
+            uint64_t requestedSeconds = 0;
+            if (!decodeDateTime(request.subspan(1, 7), requestedSeconds)) return false;
+            const uint64_t now = plan.virtualTimeSeconds;
+            if (request[0] == 1) {
+                plan.rtcValueSeconds = requestedSeconds;
+                plan.rtcSetVirtualSeconds = now;
+                plan.rtcLastSetSeconds = requestedSeconds;
+                plan.rtcInitialized = true;
+            }
+            const auto current = dateTimeBytes(request[0] == 1 ? requestedSeconds : (plan.rtcInitialized ?
+                plan.rtcValueSeconds + (now >= plan.rtcSetVirtualSeconds ? now - plan.rtcSetVirtualSeconds : 0) : 0));
+            return response.writeByte(request[0]) && response.writeBytes(current);
+        }
+        if (command == 0x5A) {
+            if (!plan.rtcSupported || !request.empty()) return false;
+            const uint64_t now = plan.virtualTimeSeconds;
+            const uint64_t currentSeconds = plan.rtcInitialized
+                ? plan.rtcValueSeconds + (now >= plan.rtcSetVirtualSeconds ? now - plan.rtcSetVirtualSeconds : 0) : 0;
+            const uint64_t lastSetSeconds = plan.rtcInitialized ? plan.rtcLastSetSeconds : 0;
+            const auto current = dateTimeBytes(currentSeconds);
+            const auto lastSet = dateTimeBytes(lastSetSeconds);
+            uint8_t flags = plan.rtcNonVolatile ? 0x01 : 0;
+            if (!plan.rtcInitialized) flags |= 0x02;
+            return response.writeBytes(current) && response.writeBytes(lastSet) && response.writeByte(flags);
+        }
+        if (command >= 1280 && command <= 1285) {
+            // HCF_SPEC-160.05 selects every Pressure Family operation by a
+            // real Pressure Device Variable Code.  A generic plan therefore
+            // cannot accidentally advertise this family.
+            if (request.size() != 1) return false;
+            const auto pressure = std::find_if(plan.variables.begin(), plan.variables.end(), [&](const auto& variable) {
+                return variable.deviceVariableCode == request[0] && variable.classification == 65;
+            });
+            if (pressure == plan.variables.end()) return false;
+            const auto& metadata = pressure->pressure;
+            auto associatedCode = [&](const std::string& id) -> uint8_t {
+                if (id.empty()) return 250;
+                const auto associated = std::find_if(plan.variables.begin(), plan.variables.end(), [&](const auto& variable) {
+                    return variable.id == id && variable.deviceVariableCode != 0xFF;
+                });
+                return associated == plan.variables.end() ? 250 : associated->deviceVariableCode;
+            };
+            if (command == 1280) {
+                return response.writeByte(request[0]) && response.writeByte(pressure->deviceVariableStatus) &&
+                    response.writeByte(metadata.status0);
+            }
+            if (command == 1281) {
+                return response.writeByte(request[0]) && response.writeByte(metadata.familyDefinitionRevision) &&
+                    response.writeByte(metadata.familyCapabilities0) && response.writeByte(metadata.familyCapabilities1);
+            }
+            if (command == 1282) {
+                return response.writeByte(request[0]) && response.writeByte(metadata.supportedStatusFamilyMask) &&
+                    response.writeByte(metadata.supportedStatus0Mask);
+            }
+            if (command == 1283) {
+                return response.writeByte(request[0]) && response.writeByte(metadata.measurementType) &&
+                    response.writeByte(metadata.moduleFillFluid) && response.writeByte(metadata.diaphragmMaterial) &&
+                    response.writeByte(metadata.sensorHardwareRevision) && response.writeByte(metadata.sensorTechnology) &&
+                    response.writeByte(metadata.pressureUnitCode) && response.writeBytes(HartTypeCodec::encodeFloat32BE(metadata.minimumAbsolutePressure)) &&
+                    response.writeBytes(HartTypeCodec::encodeFloat32BE(metadata.maximumStaticPressure));
+            }
+            if (command == 1284) {
+                return response.writeByte(request[0]) && response.writeBytes(metadata.processConnection);
+            }
+            return response.writeByte(request[0]) && response.writeByte(associatedCode(metadata.associatedTemperatureVariableId)) &&
+                response.writeByte(associatedCode(metadata.associatedStaticPressureVariableId));
+        }
+        if (command >= 1286 && command <= 1290) {
+            if (request.size() != 1) return false;
+            const auto pressure = std::find_if(plan.variables.begin(), plan.variables.end(), [&](const auto& variable) {
+                return variable.deviceVariableCode == request[0] && variable.classification == 65;
+            });
+            if (pressure == plan.variables.end()) return false;
+            const auto& metadata = pressure->pressure;
+            if (command == 1286) {
+                if (!metadata.supportsOptionalGasket) return false;
+                return response.writeByte(request[0]) && response.writeBytes(metadata.optionalGasket);
+            }
+            if (command == 1287) {
+                if (!metadata.supportsPressureObservation) return false;
+                return response.writeByte(request[0]) && response.writeByte(metadata.pressureObservationUnit) &&
+                    response.writeBytes(HartTypeCodec::encodeFloat32BE(metadata.minimumPressureObservation)) &&
+                    response.writeBytes(HartTypeCodec::encodeFloat32BE(metadata.maximumPressureObservation));
+            }
+            if (command == 1288) {
+                if (!metadata.supportsTemperatureObservation) return false;
+                return response.writeByte(request[0]) && response.writeByte(metadata.temperatureObservationUnit) &&
+                    response.writeBytes(HartTypeCodec::encodeFloat32BE(metadata.minimumTemperatureObservation)) &&
+                    response.writeBytes(HartTypeCodec::encodeFloat32BE(metadata.maximumTemperatureObservation));
+            }
+            if (command == 1289) {
+                if (!metadata.supportsStaticPressureObservation) return false;
+                return response.writeByte(request[0]) && response.writeByte(metadata.staticPressureObservationUnit) &&
+                    response.writeBytes(HartTypeCodec::encodeFloat32BE(metadata.minimumStaticPressureObservation)) &&
+                    response.writeBytes(HartTypeCodec::encodeFloat32BE(metadata.maximumStaticPressureObservation));
+            }
+            if (!metadata.supportsRemoteSeal) return false;
+            return response.writeByte(request[0]) && response.writeBytes(metadata.remoteSeal);
+        }
+        if (command >= 1408 && command <= 1410) {
+            const size_t expected = command == 1408 ? 11 : (command == 1409 ? 4 : 8);
+            if (request.size() != expected || plan.writeProtectCode != 0xFB) return false;
+            const auto pressure = std::find_if(plan.variables.begin(), plan.variables.end(), [&](const auto& variable) {
+                return variable.deviceVariableCode == request[0] && variable.classification == 65;
+            });
+            if (pressure == plan.variables.end()) return false;
+            if ((command == 1408 && !pressure->pressure.supportsWriteProcessConnection) ||
+                (command == 1409 && !pressure->pressure.supportsWriteOptionalGasket) ||
+                (command == 1410 && !pressure->pressure.supportsWriteRemoteSeal)) return false;
+            auto next = pressure->pressure;
+            if (command == 1408) {
+                std::copy_n(request.begin() + 1, 10, next.processConnection.begin());
+            } else if (command == 1409) {
+                std::copy_n(request.begin() + 1, 3, next.optionalGasket.begin());
+            } else {
+                std::copy_n(request.begin() + 1, 7, next.remoteSeal.begin());
+            }
+            pressure->pressure = next;
+            if (command == 1408) return response.writeByte(request[0]) && response.writeBytes(next.processConnection);
+            if (command == 1409) return response.writeByte(request[0]) && response.writeByte(next.optionalGasket[0]) &&
+                response.writeByte(next.optionalGasket[1]) && response.writeByte(next.optionalGasket[2]);
+            return response.writeByte(request[0]) && response.writeBytes(next.remoteSeal);
+        }
+        if (command >= 512 && command <= 527) {
+            auto put32 = [&](uint32_t value) {
+                return response.writeByte(static_cast<uint8_t>(value >> 24)) && response.writeByte(static_cast<uint8_t>(value >> 16)) &&
+                    response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value));
+            };
+            auto putFloat = [&](float value) { return response.writeBytes(HartTypeCodec::encodeFloat32BE(value)); };
+            auto getU32 = [](std::span<const uint8_t> bytes) {
+                return (static_cast<uint32_t>(bytes[0]) << 24) | (static_cast<uint32_t>(bytes[1]) << 16) |
+                    (static_cast<uint32_t>(bytes[2]) << 8) | bytes[3];
+            };
+            const auto validLatinCountry = [](uint8_t value) {
+                return (value >= static_cast<uint8_t>('A') && value <= static_cast<uint8_t>('Z')) ||
+                    (value >= static_cast<uint8_t>('a') && value <= static_cast<uint8_t>('z'));
+            };
+            if (command == 512) {
+                if (!request.empty()) return false;
+                return response.writeByte(plan.countryCode[0]) && response.writeByte(plan.countryCode[1]) &&
+                    response.writeByte(plan.siUnitsControl);
+            }
+            if (command == 513) {
+                if (plan.writeProtectCode != 0xFB || request.size() != 3 || !validLatinCountry(request[0]) ||
+                    !validLatinCountry(request[1]) || request[2] > 1) return false;
+                if (request[2] == 1) {
+                    for (const auto& variable : plan.variables) {
+                        if (variable.deviceVariableUnit == 250) continue;
+                        // The Common Tables mark the standard SI base/derived
+                        // unit codes; unknown authored unit codes cannot be
+                        // silently declared SI-compliant.
+                        static constexpr std::array<uint8_t, 16> si{{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 39}};
+                        if (std::find(si.begin(), si.end(), variable.deviceVariableUnit) == si.end()) return false;
+                    }
+                }
+                plan.countryCode = {request[0], request[1]}; plan.siUnitsControl = request[2];
+                return response.writeBytes(request);
+            }
+            if (command == 514) {
+                if (!plan.ioSystem || request.size() != 1 || request[0] > 2) return false;
+                const uint8_t control = request[0];
+                if (control == 0) {
+                    if (plan.eventManagerRegistered && plan.eventManagerOwner != masterRole) return false;
+                    plan.eventManagerRegistered = true; plan.eventManagerOwner = masterRole;
+                } else if (control == 1) {
+                    if (plan.eventManagerRegistered && plan.eventManagerOwner != masterRole) return false;
+                    plan.eventManagerRegistered = false;
+                } else {
+                    plan.eventManagerRegistered = false;
+                }
+                return response.writeByte(control);
+            }
+            if (command == 515) {
+                if (!plan.ioSystem || !request.empty()) return false;
+                uint8_t status = plan.eventManagerRegistered ? 0x01 : 0;
+                if (plan.eventManagerRegistered && plan.eventManagerOwner == masterRole) status |= 0x02;
+                return response.writeByte(status);
+            }
+            if (command == 516) {
+                if (!plan.deviceLocationSupported || !request.empty()) return false;
+                return putFloat(plan.deviceLocation.latitude) && putFloat(plan.deviceLocation.longitude) &&
+                    response.writeByte(plan.deviceLocation.method) && putFloat(plan.deviceLocation.altitude);
+            }
+            if (command == 517) {
+                if (!plan.deviceLocationSupported || plan.writeProtectCode != 0xFB || request.size() != 13) return false;
+                const float latitude = HartTypeCodec::decodeFloat32BE(request.subspan(0, 4));
+                const float longitude = HartTypeCodec::decodeFloat32BE(request.subspan(4, 4));
+                const float altitude = HartTypeCodec::decodeFloat32BE(request.subspan(9, 4));
+                if (!std::isfinite(latitude) || !std::isfinite(longitude) || !std::isfinite(altitude) ||
+                    std::fabs(latitude) > 90.0f || std::fabs(longitude) > 180.0f || request[8] > 8) return false;
+                plan.deviceLocation = {latitude, longitude, request[8], altitude};
+                return response.writeBytes(request);
+            }
+            if (command == 518) {
+                if (!plan.locationDescriptionSupported || !request.empty()) return false;
+                return response.writeBytes(plan.locationDescription);
+            }
+            if (command == 519) {
+                if (!plan.locationDescriptionSupported || plan.writeProtectCode != 0xFB || request.size() != 32) return false;
+                std::copy(request.begin(), request.end(), plan.locationDescription.begin());
+                return response.writeBytes(plan.locationDescription);
+            }
+            if (command == 520) {
+                if (!plan.processUnitTagSupported || !request.empty()) return false;
+                return response.writeBytes(plan.processUnitTag);
+            }
+            if (command == 521) {
+                if (!plan.processUnitTagSupported || plan.writeProtectCode != 0xFB || request.size() != 32) return false;
+                std::copy(request.begin(), request.end(), plan.processUnitTag.begin());
+                return response.writeBytes(plan.processUnitTag);
+            }
+            if (command == 522) {
+                if (plan.writeProtectCode != 0xFB || request.size() != 2 || request[1] < 100 || request[1] > 107) return false;
+                auto variable = std::find_if(plan.variables.begin(), plan.variables.end(), [&](const auto& item) {
+                    return item.deviceVariableCode == request[0] && item.classification == 66;
+                });
+                if (variable == plan.variables.end()) return false;
+                variable->classification = request[1];
+                return response.writeBytes(request);
+            }
+            if (command == 523 || command == 524 || command == 525) {
+                if (!plan.condensedStatusSupported) return false;
+                const auto validMap = [](uint8_t code) { return code == 0 || code == 1 || code == 3 || code == 4 || code == 5 || code == 6; };
+                auto packMaps = [&](uint8_t start, uint8_t count, std::array<uint8_t, 208> const& maps) {
+                    if (!response.writeByte(start) || !response.writeByte(count)) return false;
+                    for (uint8_t i = 0; i < count; i += 2) {
+                        const uint8_t low = maps[start + i];
+                        const uint8_t high = (i + 1 < count) ? maps[start + i + 1] : 0;
+                        if (!response.writeByte(static_cast<uint8_t>(low | (high << 4)))) return false;
+                    }
+                    return true;
+                };
+                const auto normativeDefaultMap = [] {
+                    std::array<uint8_t, 208> defaults{};
+                    // Common Table 30, Standardized Status 1: Status
+                    // Simulation Active is Function Check.  Tables 31/32
+                    // provide the standardized I/O/Wireless defaults below;
+                    // all unspecified bits are explicitly No Effect.
+                    defaults[81] = 5;
+                    defaults[97] = 1; defaults[98] = 1; defaults[100] = 4;
+                    defaults[101] = 3; defaults[102] = 3;
+                    defaults[104] = 1; defaults[108] = 3;
+                    return defaults;
+                };
+                if (command == 525) {
+                    if (plan.writeProtectCode != 0xFB || !request.empty()) return false;
+                    plan.condensedStatusMapping = normativeDefaultMap();
+                    return true;
+                }
+                if (request.size() < 2 || request[0] >= plan.condensedStatusMapping.size()) return false;
+                const uint8_t requestedStart = request[0];
+                uint8_t start = static_cast<uint8_t>(requestedStart & 0xFE);
+                uint8_t count = request[1];
+                if (count < 2) return false;
+                count = static_cast<uint8_t>(std::min<size_t>(count, plan.condensedStatusMapping.size() - start));
+                count = static_cast<uint8_t>(count & 0xFE);
+                if (count < 2) return false;
+                if (command == 523) return packMaps(start, count, plan.condensedStatusMapping);
+                if (plan.writeProtectCode != 0xFB || request.size() != 2 + (request[1] + 1) / 2 || request[1] < 2 || (request[1] & 1) != 0) return false;
+                if (start + request[1] > plan.condensedStatusMapping.size()) return false;
+                std::array<uint8_t, 208> staged = plan.condensedStatusMapping;
+                for (uint8_t i = 0; i < request[1]; ++i) {
+                    const uint8_t code = static_cast<uint8_t>((request[2 + i / 2] >> ((i & 1) ? 4 : 0)) & 0x0F);
+                    if (!validMap(code)) return false;
+                    staged[start + i] = code;
+                }
+                plan.condensedStatusMapping = staged;
+                return packMaps(start, request[1], plan.condensedStatusMapping);
+            }
+            if (command == 526) {
+                if (!plan.condensedStatusSupported || plan.writeProtectCode != 0xFB || request.size() != 1 || request[0] > 1) return false;
+                if (request[0] == 0) {
+                    plan.statusSimulationEnabled = false;
+                    plan.simulatedStatusMask.fill(0);
+                } else {
+                    plan.statusSimulationEnabled = true;
+                }
+                return response.writeByte(plan.statusSimulationEnabled ? 1 : 0);
+            }
+            if (command == 527) {
+                if (!plan.condensedStatusSupported || !plan.statusSimulationEnabled || request.size() != 2 || request[0] >= plan.simulatedStatusMask.size() || request[1] > 1) return false;
+                if (request[0] >= 56 && request[0] <= 59) return false;
+                plan.simulatedStatusMask[request[0]] = 1;
+                plan.simulatedStatusValues[request[0]] = request[1];
+                return response.writeBytes(request);
+            }
+        }
+        if (command >= 0x64 && command <= 0x6E) {
+            auto validBurstIndex = [&](uint8_t index) { return index < plan.burstMessageCount && index < plan.burstMessages.size(); };
+            auto burst = [&](uint8_t index) -> HartBurstConfiguration& { return plan.burstMessages[index]; };
+            auto burstSubDeviceIndex = [&](const HartBurstConfiguration& configuration) -> uint16_t {
+                if (configuration.mappedSubDeviceId.empty()) return 0;
+                for (size_t i = 0; i < plan.subDevices.size(); ++i)
+                    if (plan.subDevices[i].childDeviceId == configuration.mappedSubDeviceId) return static_cast<uint16_t>(i + 1);
+                return 0xFFFF;
+            };
+            auto validBurstCommand = [](HartCommandId id) {
+                return id == 1 || id == 2 || id == 3 || id == 9 || id == 33 || id == 48 || id < 256;
+            };
+            auto put32 = [&](uint32_t value) {
+                return response.writeByte(static_cast<uint8_t>(value >> 24)) && response.writeByte(static_cast<uint8_t>(value >> 16)) &&
+                    response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value));
+            };
+            auto put16 = [&](uint16_t value) { return response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value)); };
+            if (command == 0x64) {
+                if (plan.writeProtectCode != 0xFB || request.size() != 1 || request[0] > 3) return false;
+                plan.alarmSelectionCode = request[0];
+                return response.writeByte(plan.alarmSelectionCode);
+            }
+            if (command == 0x65) {
+                if (request.size() != 1 || !validBurstIndex(request[0])) return false;
+                const auto& configuration = burst(request[0]);
+                return response.writeByte(request[0]) && put16(burstSubDeviceIndex(configuration));
+            }
+            if (command == 0x66) {
+                if (plan.writeProtectCode != 0xFB || request.size() != 3 || !validBurstIndex(request[0])) return false;
+                const uint16_t subIndex = static_cast<uint16_t>(request[1] << 8 | request[2]);
+                if (subIndex > plan.subDevices.size()) return false;
+                if (subIndex == 0) burst(request[0]).mappedSubDeviceId.clear();
+                else burst(request[0]).mappedSubDeviceId = plan.subDevices[subIndex - 1].childDeviceId;
+                return response.writeBytes(request);
+            }
+            if (command == 0x67) {
+                if (plan.writeProtectCode != 0xFB || request.size() != 9 || !validBurstIndex(request[0])) return false;
+                const uint32_t update = (static_cast<uint32_t>(request[1]) << 24) | (static_cast<uint32_t>(request[2]) << 16) |
+                    (static_cast<uint32_t>(request[3]) << 8) | request[4];
+                const uint32_t maximum = (static_cast<uint32_t>(request[5]) << 24) | (static_cast<uint32_t>(request[6]) << 16) |
+                    (static_cast<uint32_t>(request[7]) << 8) | request[8];
+                const auto allowedPeriod = [](uint32_t ticks) {
+                    constexpr std::array<uint32_t, 9> standard{{3200, 8000, 16000, 32000, 64000, 128000, 256000, 512000, 1024000}};
+                    return std::find(standard.begin(), standard.end(), ticks) != standard.end() ||
+                        (ticks >= 60u * 32000u && ticks <= 3600u * 32000u);
+                };
+                if (!allowedPeriod(update) || !allowedPeriod(maximum) || update > maximum) return false;
+                auto& configuration = burst(request[0]);
+                configuration.updatePeriodTicks = update; configuration.maximumUpdatePeriodTicks = maximum;
+                return response.writeBytes(request);
+            }
+            if (command == 0x68) {
+                if (plan.writeProtectCode != 0xFB || request.size() != 8 || !validBurstIndex(request[0])) return false;
+                const uint8_t mode = request[1];
+                const uint8_t classification = request[2];
+                const uint8_t units = request[3];
+                const float value = HartTypeCodec::decodeFloat32BE(request.subspan(4, 4));
+                if (mode > 3) return false;
+                if (mode == 0) {
+                    if (classification != 0 || units != 250 || !std::isnan(value)) return false;
+                } else if (!std::isfinite(value) || value <= 0.0f || units == 250) return false;
+                auto& configuration = burst(request[0]);
+                configuration.triggerMode = mode; configuration.triggerClassification = classification;
+                configuration.triggerUnits = units; configuration.triggerValue = value;
+                return response.writeBytes(request);
+            }
+            if (command == 0x69) {
+                if (!((request.empty() || request.size() == 1) && (request.empty() || validBurstIndex(request[0])))) return false;
+                const uint8_t index = request.empty() ? 0 : request[0];
+                const auto& configuration = burst(index);
+                if (!response.writeByte(configuration.control) || !response.writeByte(31)) return false;
+                for (const uint8_t code : configuration.deviceVariableCodes) if (!response.writeByte(code)) return false;
+                if (!response.writeByte(index) || !response.writeByte(plan.burstMessageCount) || !put16(configuration.command) ||
+                    !put32(configuration.updatePeriodTicks) || !put32(configuration.maximumUpdatePeriodTicks) ||
+                    !response.writeByte(configuration.triggerMode) || !response.writeByte(configuration.triggerClassification) ||
+                    !response.writeByte(configuration.triggerUnits) || !response.writeBytes(HartTypeCodec::encodeFloat32BE(configuration.triggerValue))) return false;
+                return true;
+            }
+            if (command == 0x6A) {
+                if (!request.empty()) return false;
+                return true; // The bounded burst event queue is the delayed-response authority.
+            }
+            if (command == 0x6B) {
+                if (plan.writeProtectCode != 0xFB || request.size() != 9 || !validBurstIndex(request[8])) return false;
+                std::array<uint8_t, 8> next{};
+                for (size_t i = 0; i < next.size(); ++i) {
+                    if (request[i] != 250 && std::find_if(plan.variables.begin(), plan.variables.end(), [&](const auto& variable) {
+                        return variable.deviceVariableCode == request[i];
+                    }) == plan.variables.end()) return false;
+                    next[i] = request[i];
+                }
+                burst(request[8]).deviceVariableCodes = next;
+                return response.writeBytes(request);
+            }
+            if (command == 0x6C) {
+                const bool legacy = request.size() == 1;
+                if (plan.writeProtectCode != 0xFB || (request.size() != 1 && request.size() != 3)) return false;
+                const HartCommandId target = legacy ? request[0] : static_cast<HartCommandId>(request[0] << 8 | request[1]);
+                const uint8_t index = legacy ? 0 : request[2];
+                if (!validBurstIndex(index) || !validBurstCommand(target)) return false;
+                burst(index).command = target;
+                if (legacy) return response.writeByte(static_cast<uint8_t>(target));
+                return response.writeBytes(request);
+            }
+            if (command == 0x6D) {
+                const bool legacy = request.size() == 1;
+                if ((request.size() != 1 && request.size() != 2) || (legacy && request[0] > 1)) return false;
+                const uint8_t index = legacy ? 0 : request[0];
+                const uint8_t control = legacy ? request[0] : request[1];
+                if (plan.writeProtectCode != 0xFB || !validBurstIndex(index) || control > 3) return false;
+                burst(index).control = control;
+                if (legacy) return response.writeByte(control);
+                return response.writeBytes(request);
+            }
+            if (!request.empty()) return false;
+            for (size_t i = 0; i < 4; ++i) {
+                const uint8_t code = plan.dynamicVariableAssignments[i];
+                if (code == 250) break;
+                const auto variable = std::find_if(vars.deviceVariables.begin(), vars.deviceVariables.end(), [code](const auto& candidate) { return candidate.code == code; });
+                if (variable == vars.deviceVariables.end() || !response.writeByte(variable->units) ||
+                    !response.writeBytes(HartTypeCodec::encodeFloat32BE(variable->value))) return false;
+            }
+            return true;
+        }
+        if (command >= 0x71 && command <= 0x77) {
+            auto findVariable = [&](uint8_t code) {
+                return std::find_if(plan.variables.begin(), plan.variables.end(), [code](const auto& variable) {
+                    return variable.deviceVariableCode == code;
+                });
+            };
+            auto findCatch = [&](uint8_t code) {
+                return std::find_if(plan.catchConfigurations.begin(), plan.catchConfigurations.end(), [code](const auto& configuration) {
+                    return configuration.destinationDeviceVariable == code;
+                });
+            };
+            auto put16 = [&](uint16_t value) { return response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value)); };
+            auto put32 = [&](uint32_t value) {
+                return response.writeByte(static_cast<uint8_t>(value >> 24)) && response.writeByte(static_cast<uint8_t>(value >> 16)) &&
+                    response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value));
+            };
+            auto allowedTime = [](uint32_t value) {
+                constexpr std::array<uint32_t, 9> standard{{3200, 8000, 16000, 32000, 64000, 128000, 256000, 512000, 1024000}};
+                return std::find(standard.begin(), standard.end(), value) != standard.end() ||
+                    (value >= 60u * 32000u && value <= 3600u * 32000u);
+            };
+            if (command == 0x71 || command == 0x72) {
+                if (command == 0x71) {
+                    if (plan.writeProtectCode != 0xFB || request.size() != 15 || request[1] > 2) return false;
+                    if (findVariable(request[0]) == plan.variables.end() || request[7] > 7 || request[1] == 1 && request[13] == 0 && request[14] == 0) return false;
+                    auto slot = findCatch(request[0]);
+                    if (slot == plan.catchConfigurations.end()) slot = std::find_if(plan.catchConfigurations.begin(), plan.catchConfigurations.end(), [](const auto& item) { return item.destinationDeviceVariable == 250; });
+                    if (slot == plan.catchConfigurations.end()) return false;
+                    const float shed = HartTypeCodec::decodeFloat32BE(request.subspan(8, 4));
+                    if (!std::isfinite(shed) || shed < 0.0f) return false;
+                    slot->destinationDeviceVariable = request[0]; slot->captureMode = request[1];
+                    std::copy_n(request.begin() + 2, 5, slot->sourceAddress.begin()); slot->sourceSlot = request[7];
+                    slot->shedTime = shed; slot->sourceCommand = static_cast<HartCommandId>(request[13] << 8 | request[14]);
+                }
+                const uint8_t destination = request[0];
+                const auto slot = findCatch(destination);
+                HartCatchConfiguration defaults;
+                defaults.destinationDeviceVariable = destination;
+                const auto& configuration = slot == plan.catchConfigurations.end() ? defaults : *slot;
+                if (!response.writeByte(destination) || !response.writeByte(configuration.captureMode) || !response.writeBytes(configuration.sourceAddress) ||
+                    !response.writeByte(configuration.sourceSlot) || !response.writeByte(static_cast<uint8_t>(configuration.sourceCommand)) ||
+                    !response.writeBytes(HartTypeCodec::encodeFloat32BE(configuration.shedTime)) || !put16(configuration.sourceCommand)) return false;
+                return true;
+            }
+            auto& event = plan.eventNotifications[0];
+            if (command == 0x73) {
+                if (request.size() != 1 || request[0] != 0) return false;
+                const uint8_t status = event.control == 0 ? 0 : 0;
+                return response.writeByte(0) && response.writeByte(1) && response.writeByte(static_cast<uint8_t>((status << 4) | (event.control & 0x0F))) &&
+                    put32(0xFFFFFFFFu) && put32(event.retryTimeTicks) && put32(event.maximumUpdateTimeTicks) && put32(event.debounceTimeTicks) &&
+                    response.writeByte(event.deviceStatusMask) && response.writeBytes(event.eventMask);
+            }
+            if (command == 0x74) {
+                if (plan.writeProtectCode != 0xFB || request.size() < 2 || request.size() > 27 || request[0] != 0) return false;
+                event.deviceStatusMask = request[1]; event.eventMask.fill(0);
+                std::copy(request.begin() + 2, request.end(), event.eventMask.begin());
+                return response.writeBytes(request);
+            }
+            if (command == 0x75) {
+                if (plan.writeProtectCode != 0xFB || request.size() != 13 || request[0] != 0) return false;
+                const uint32_t retry = (static_cast<uint32_t>(request[1]) << 24) | (static_cast<uint32_t>(request[2]) << 16) | (static_cast<uint32_t>(request[3]) << 8) | request[4];
+                const uint32_t maximum = (static_cast<uint32_t>(request[5]) << 24) | (static_cast<uint32_t>(request[6]) << 16) | (static_cast<uint32_t>(request[7]) << 8) | request[8];
+                const uint32_t debounce = (static_cast<uint32_t>(request[9]) << 24) | (static_cast<uint32_t>(request[10]) << 16) | (static_cast<uint32_t>(request[11]) << 8) | request[12];
+                if (!allowedTime(retry) || !allowedTime(maximum) || !allowedTime(debounce) || retry > maximum) return false;
+                event.retryTimeTicks = retry; event.maximumUpdateTimeTicks = maximum; event.debounceTimeTicks = debounce;
+                return response.writeBytes(request);
+            }
+            if (command == 0x76) {
+                if (plan.writeProtectCode != 0xFB || request.size() != 2 || request[0] != 0 || request[1] > 3) return false;
+                event.control = request[1];
+                return response.writeBytes(request);
+            }
+            if (request.size() != 1 && request.size() != 33 || request[0] != 0) return false;
+            HartEventNotificationRecord record;
+            if (request.size() == 33) {
+                record.timestamp = (static_cast<uint32_t>(request[1]) << 24) | (static_cast<uint32_t>(request[2]) << 16) | (static_cast<uint32_t>(request[3]) << 8) | request[4];
+                record.configurationChangedCounter = static_cast<uint32_t>(request[5] << 8 | request[6]);
+                record.deviceStatus = request[7]; std::copy(request.begin() + 8, request.end(), record.command48Data.begin());
+            } else if (!response.writeByte(0)) return false;
+            // The runtime record is attached by HartEngine before dispatch; a
+            // no-payload request returns the oldest latched snapshot.
+            return put32(request.size() == 33 ? static_cast<uint32_t>(record.timestamp) : 0xFFFFFFFFu) && put16(static_cast<uint16_t>(request.size() == 33 ? record.configurationChangedCounter : 0)) &&
+                response.writeByte(static_cast<uint8_t>(request.size() == 33 ? record.deviceStatus : 0)) && response.writeBytes(request.size() == 33 ? record.command48Data : std::array<uint8_t, 25>{});
+        }
+        if (command == 0x5B || command == 0x5C) {
+            if (request.size() != (command == 0x5B ? 1u : 7u) || plan.trendCount == 0) return false;
+            const uint8_t index = request[0];
+            if (index >= plan.trendCount || index >= plan.trends.size()) return false;
+            if (command == 0x5B) {
+                const auto& trend = plan.trends[index];
+                return response.writeByte(index) && response.writeByte(plan.trendCount) && response.writeByte(trend.control) &&
+                    response.writeByte(trend.deviceVariableCode) && response.writeByte(static_cast<uint8_t>(trend.samplePeriodSeconds >> 24)) &&
+                    response.writeByte(static_cast<uint8_t>(trend.samplePeriodSeconds >> 16)) && response.writeByte(static_cast<uint8_t>(trend.samplePeriodSeconds >> 8)) &&
+                    response.writeByte(static_cast<uint8_t>(trend.samplePeriodSeconds));
+            }
+            const uint8_t control = request[1];
+            const uint8_t variableCode = request[2];
+            const uint32_t period = (static_cast<uint32_t>(request[3]) << 24) | (static_cast<uint32_t>(request[4]) << 16) |
+                (static_cast<uint32_t>(request[5]) << 8) | request[6];
+            if (control > 3 || period == 0 || period > 7200) return false;
+            if (control != 0 && std::find_if(plan.variables.begin(), plan.variables.end(),
+                [variableCode](const auto& variable) { return variable.deviceVariableCode == variableCode; }) == plan.variables.end()) return false;
+            plan.trends[index] = {control, variableCode, period};
+            return response.writeBytes(request);
+        }
+        if (command == 0x60 || command == 0x61) {
+            if (plan.actionCount == 0 || request.size() != (command == 0x60 ? 1u : 12u)) return false;
+            const uint8_t index = request[0];
+            if (index >= plan.actionCount || index >= plan.synchronousActions.size()) return false;
+            auto& action = plan.synchronousActions[index];
+            if (command == 0x60) {
+                const auto dateTime = dateTimeBytes(action.triggerSeconds);
+                return response.writeByte(index) && response.writeByte(plan.actionCount) && response.writeByte(action.control) &&
+                    response.writeByte(action.deviceVariableCode) && response.writeByte(static_cast<uint8_t>(action.command >> 8)) &&
+                    response.writeByte(static_cast<uint8_t>(action.command)) && response.writeBytes(std::span<const uint8_t>(dateTime.data(), dateTime.size()));
+            }
+            const uint8_t control = request[1];
+            const uint8_t variableCode = request[2];
+            const HartCommandId target = static_cast<HartCommandId>(request[3] << 8 | request[4]);
+            uint64_t requested = 0;
+            if (control & 0x01) {
+                if (variableCode != 251 || target == 0xFFFF) return false;
+            } else {
+                if (target != 0xFFFF || std::find_if(plan.variables.begin(), plan.variables.end(),
+                    [variableCode](const auto& variable) { return variable.deviceVariableCode == variableCode; }) == plan.variables.end()) return false;
+            }
+            if ((control & ~0x91u) != 0 || !decodeDateTime(request.subspan(5, 7), requested)) return false;
+            const uint64_t currentRtc = plan.rtcInitialized ? plan.rtcValueSeconds +
+                (plan.virtualTimeSeconds >= plan.rtcSetVirtualSeconds ? plan.virtualTimeSeconds - plan.rtcSetVirtualSeconds : 0) : 0;
+            const uint64_t triggerVirtual = plan.rtcInitialized
+                ? plan.virtualTimeSeconds + (requested >= currentRtc ? requested - currentRtc : 0)
+                : requested;
+            action = {control, variableCode, target, triggerVirtual, {}};
+            const auto normalized = dateTimeBytes(action.triggerSeconds);
+            return response.writeByte(index) && response.writeByte(action.control) && response.writeByte(action.deviceVariableCode) &&
+                response.writeByte(static_cast<uint8_t>(action.command >> 8)) && response.writeByte(static_cast<uint8_t>(action.command)) &&
+                response.writeBytes(std::span<const uint8_t>(normalized.data(), normalized.size()));
+        }
+        if (command == 0x62 || command == 0x63) {
+            if (plan.actionCount == 0 || (command == 0x62 ? request.size() != 1u : request.size() < 4u)) return false;
+            const uint8_t index = request[0];
+            if (index >= plan.actionCount || index >= plan.commandActions.size()) return false;
+            auto& action = plan.commandActions[index];
+            if (command == 0x62) {
+                if (action.command == 0xFFFF) return response.writeByte(index) && response.writeByte(0xFF) && response.writeByte(0xFF) && response.writeByte(0);
+                return response.writeByte(index) && response.writeByte(static_cast<uint8_t>(action.command >> 8)) && response.writeByte(static_cast<uint8_t>(action.command)) &&
+                    response.writeByte(static_cast<uint8_t>(action.requestData.size())) && response.writeBytes(action.requestData);
+            }
+            const HartCommandId target = static_cast<HartCommandId>(request[1] << 8 | request[2]);
+            const size_t count = request[3];
+            if (target == 0xFFFF || target == 0x60 || target == 0x61 || target == 0x62 || target == 0x63 || count != request.size() - 4 || count > 255) return false;
+            action.command = target;
+            action.requestData.assign(request.begin() + 4, request.end());
+            return response.writeBytes(request);
+        }
+
+        // Commands 35/36/37 are intentionally kept as one StandardCore
+        // semantic mutation because 35 must validate both values before it
+        // commits. HCF_SPEC-151 7.3 permits reverse ranges and explicitly
+        // says range units do not change PV units. Invalid requests therefore
+        // fail without touching the canonical VariableConfiguration.
+        if (command == 0x23 || command == 0x24 || command == 0x25) {
+            if (plan.writeProtectCode != 0xFB) return false;
+            if (primary == plan.variables.end()) return false;
+            const auto& authored = *primary;
+            auto validUnit = [&](uint8_t unit) {
+                if (unit == 0xFA || unit == 0xFF) return false;
+                return authored.allowedUnitCodes.empty() ||
+                    std::find(authored.allowedUnitCodes.begin(), authored.allowedUnitCodes.end(), unit) != authored.allowedUnitCodes.end();
+            };
+            float nextLower = vars.lowerRangeValue;
+            float nextUpper = vars.upperRangeValue;
+            uint8_t nextUnit = vars.rangeUnitCode;
+            if (command == 0x23) {
+                if (request.size() != 9) return false;
+                nextUnit = request[0];
+                const auto upperBytes = request.subspan(1, 4);
+                const auto lowerBytes = request.subspan(5, 4);
+                nextUpper = HartTypeCodec::decodeFloat32BE(upperBytes);
+                nextLower = HartTypeCodec::decodeFloat32BE(lowerBytes);
+            } else {
+                if (!request.empty()) return false;
+                if (command == 0x24) nextUpper = vars.primaryVariable;
+                else {
+                    const float delta = vars.primaryVariable - nextLower;
+                    nextLower = vars.primaryVariable;
+                    nextUpper += delta;
+                }
+            }
+            if (!validUnit(nextUnit) || !std::isfinite(nextLower) || !std::isfinite(nextUpper)) return false;
+            const bool limitsConfigured = authored.upperTransducerLimit > authored.lowerTransducerLimit;
+            if (limitsConfigured && (nextLower < authored.lowerTransducerLimit || nextUpper > authored.upperTransducerLimit)) return false;
+            if (authored.minimumSpan > 0.0f && std::fabs(nextUpper - nextLower) < authored.minimumSpan) return false;
+            // All validation is complete: this is the sole commit point.
+            vars.rangeUnitCode = nextUnit;
+            vars.lowerRangeValue = nextLower;
+            vars.upperRangeValue = nextUpper;
+            response = HartResponseBuilder(16);
+            if (command == 0x23) {
+                if (!response.writeByte(nextUnit) || !response.writeBytes(HartTypeCodec::encodeFloat32BE(nextUpper)) ||
+                    !response.writeBytes(HartTypeCodec::encodeFloat32BE(nextLower))) return false;
+            }
+            auto& mutablePrimary = *const_cast<HartDevicePlan::VariableConfiguration*>(primary.operator->());
+            mutablePrimary.rangeUnitCode = nextUnit;
+            mutablePrimary.lowerRangeValue = nextLower;
+            mutablePrimary.upperRangeValue = nextUpper;
+            return true;
+        }
+        if (command == 0x2C) {
+            if (plan.writeProtectCode != 0xFB || request.size() != 1 || primary == plan.variables.end()) return false;
+            const auto& authored = *primary;
+            const uint8_t unit = request[0];
+            if (unit == 0xFA || unit == 0xFF ||
+                (!authored.allowedUnitCodes.empty() && std::find(authored.allowedUnitCodes.begin(), authored.allowedUnitCodes.end(), unit) == authored.allowedUnitCodes.end())) return false;
+            // HCF_SPEC-151 7.12 selects the unit for PV, limits and minimum
+            // span. It does not define a numeric conversion; preserve the
+            // configured values and change only the canonical unit metadata.
+            auto& mutablePrimary = *primary;
+            mutablePrimary.deviceVariableUnit = unit;
+            mutablePrimary.rangeUnitCode = unit;
+            if (!response.writeByte(unit)) return false;
+            return true;
+        }
+        const bool hasAuthoredDeviceVariables = std::any_of(plan.variables.begin(), plan.variables.end(),
+            [](const auto& variable) { return variable.deviceVariableCode != 0xFF; });
+        if (command == 0x08 && hasAuthoredDeviceVariables) {
+            if (!request.empty()) return false;
+            for (const uint8_t code : plan.dynamicVariableAssignments) {
+                if (code == 250) { if (!response.writeByte(250)) return false; continue; }
+                const auto variable = std::find_if(plan.variables.begin(), plan.variables.end(),
+                    [code](const auto& candidate) { return candidate.deviceVariableCode == code; });
+                if (variable == plan.variables.end() || !response.writeByte(variable->classification)) return false;
+            }
+            return true;
+        }
+        if (command >= 0x27 && command <= 0x2F) {
+            if (plan.writeProtectCode != 0xFB && command != 0x2A) return false;
+            switch (command) {
+                case 0x27: // EEPROM control: virtual device has no separate EEPROM; echo validated control.
+                    if (request.size() != 1 || request[0] > 1) return false;
+                    return response.writeByte(request[0]);
+                case 0x28: { // fixed current mode
+                    if (request.size() != 4) return false;
+                    const float requested = HartTypeCodec::decodeFloat32BE(request);
+                    if (!std::isfinite(requested) || requested < 0.0f || requested > 20.0f) return false;
+                    plan.fixedCurrentMode = requested != 0.0f;
+                    plan.fixedCurrentMilliamps = requested;
+                    return response.writeBytes(HartTypeCodec::encodeFloat32BE(requested));
+                }
+                case 0x29: // self-test is instantaneous for this deterministic virtual device.
+                    if (!request.empty()) return false;
+                    plan.diagnosticStatus = 0;
+                    return true;
+                case 0x2A: // device reset clears volatile current/diagnostic state only.
+                    if (!request.empty()) return false;
+                    plan.fixedCurrentMode = false;
+                    plan.fixedCurrentMilliamps = 0.0f;
+                    plan.diagnosticStatus = 0;
+                    if (plan.lockCode == 1) plan.lockCode = 0;
+                    plan.squawkControl = 0;
+                    plan.squawkEvent = 0;
+                    return true;
+                case 0x2B: // zero adjustment changes PV offset, not range.
+                    if (!request.empty()) return false;
+                    plan.primaryVariableZeroOffset = -static_cast<float>(primaryValue);
+                    return true;
+                case 0x2D: { // trim zero: measured value must be the 4 mA endpoint.
+                    if (request.size() != 4) return false;
+                    const float measured = HartTypeCodec::decodeFloat32BE(request);
+                    if (!std::isfinite(measured) || std::fabs(measured - 4.0f) > 0.01f) return false;
+                    plan.loopCurrentZeroTrim = 4.0f - measured;
+                    return response.writeBytes(HartTypeCodec::encodeFloat32BE(measured));
+                }
+                case 0x2E: { // trim gain: measured value must be the 20 mA endpoint.
+                    if (request.size() != 4) return false;
+                    const float measured = HartTypeCodec::decodeFloat32BE(request);
+                    if (!std::isfinite(measured) || std::fabs(measured - 20.0f) > 0.01f) return false;
+                    plan.loopCurrentGainTrim = measured == 0.0f ? 1.0f : 20.0f / measured;
+                    return response.writeBytes(HartTypeCodec::encodeFloat32BE(measured));
+                }
+                case 0x2F: // HCF common table 3: linear/square-root are the modeled selections.
+                    if (request.size() != 1 || request[0] > 1) return false;
+                    plan.pvTransferFunctionCode = request[0];
+                    return response.writeByte(request[0]);
+                default: return false;
+            }
+        }
+        if (command >= 0x31 && command <= 0x3B) {
+            auto findVariable = [&](uint8_t code) {
+                return std::find_if(plan.variables.begin(), plan.variables.end(),
+                    [code](const auto& variable) { return variable.deviceVariableCode == code; });
+            };
+            auto findPrimary = [&]() {
+                return std::find_if(plan.variables.begin(), plan.variables.end(), [](const auto& variable) {
+                    return variable.deviceVariableCode == 246 || variable.role == HartVariableRole::PrimaryVariable ||
+                           variable.id == "PV" || variable.id == "primary";
+                });
+            };
+            if (plan.writeProtectCode != 0xFB && command != 0x32) return false;
+            if (command == 0x31) {
+                if (request.size() != 3) return false;
+                auto pv = findPrimary(); if (pv == plan.variables.end()) return false;
+                const uint32_t serial = (static_cast<uint32_t>(request[0]) << 16) |
+                    (static_cast<uint32_t>(request[1]) << 8) | request[2];
+                pv->transducerSerialNumber = serial;
+                return response.writeBytes(request);
+            }
+            if (command == 0x32) {
+                if (!request.empty()) return false;
+                return response.writeBytes(plan.dynamicVariableAssignments);
+            }
+            if (command == 0x33) {
+                if (request.size() != 4) return false;
+                std::array<uint8_t, 4> next{};
+                for (size_t i = 0; i < next.size(); ++i) {
+                    const uint8_t code = request[i];
+                    if (code >= 244 && code <= 249) return false;
+                    if (code != 250 && findVariable(code) == plan.variables.end()) return false;
+                    next[i] = code;
+                }
+                plan.dynamicVariableAssignments = next;
+                return response.writeBytes(next);
+            }
+            if (command == 0x34) {
+                if (request.size() != 1) return false;
+                const uint8_t code = request[0];
+                auto variable = findVariable(code); if (variable == plan.variables.end()) return false;
+                variable->zeroOffset = -variable->value;
+                if (code == 246) plan.primaryVariableZeroOffset = -static_cast<float>(primaryValue);
+                return response.writeByte(code);
+            }
+            if (command == 0x37) {
+                if (request.size() != 5) return false;
+                const uint8_t code = request[0];
+                auto variable = findVariable(code); if (variable == plan.variables.end()) return false;
+                const float value = HartTypeCodec::decodeFloat32BE(request.subspan(1, 4));
+                if (!std::isfinite(value) || value < 0.0f) return false;
+                variable->dampingValue = value;
+                return response.writeByte(code) && response.writeBytes(HartTypeCodec::encodeFloat32BE(value));
+            }
+            if (command == 0x38) {
+                if (request.size() != 4) return false;
+                const uint8_t code = request[0];
+                auto variable = findVariable(code); if (variable == plan.variables.end()) return false;
+                variable->transducerSerialNumber = (static_cast<uint32_t>(request[1]) << 16) |
+                    (static_cast<uint32_t>(request[2]) << 8) | request[3];
+                return response.writeByte(code) && response.writeBytes(request.subspan(1, 3));
+            }
+            if (command == 0x39) {
+                if (!request.empty()) return false;
+                const auto tag = HartTypeCodec::encodePackedAscii(plan.tag.empty() ? plan.id : plan.tag, 8);
+                const auto descriptor = HartTypeCodec::encodePackedAscii(plan.descriptor, 16);
+                return response.writeBytes(tag) && response.writeBytes(descriptor) && response.writeBytes(plan.date);
+            }
+            if (command == 0x3A) {
+                if (request.size() != 21) return false;
+                const auto tagBytes = request.subspan(0, 6);
+                const auto descriptorBytes = request.subspan(6, 12);
+                plan.tag = HartTypeCodec::decodePackedAscii(tagBytes);
+                plan.descriptor = HartTypeCodec::decodePackedAscii(descriptorBytes);
+                std::copy_n(request.begin() + 18, 3, plan.date.begin());
+                return response.writeBytes(request);
+            }
+            if (command == 0x3B) {
+                if (request.size() != 1 || request[0] < 5) return false;
+                plan.responsePreambles = request[0];
+                return response.writeByte(plan.responsePreambles);
+            }
+        }
+        if (command >= 0x3C && command <= 0x46) {
+            if (!plan.analogChannel0Supported) return false;
+            const auto channelOk = [](uint8_t channel) { return channel == 0; };
+            const auto invalidFloat = std::array<uint8_t, 4>{0x7F, 0xA0, 0x00, 0x00};
+            const auto writeFloat = [&](float value) { return response.writeBytes(HartTypeCodec::encodeFloat32BE(value)); };
+            const auto writeChannelLevel = [&](uint8_t channel) {
+                return response.writeByte(channel) && response.writeByte(plan.analogChannel0UnitCode) &&
+                    writeFloat(hartLoopCurrentMilliamps(vars));
+            };
+            if (command == 0x3C) {
+                if (request.size() != 1 || !channelOk(request[0])) return false;
+                return writeChannelLevel(0) && writeFloat(hartPercentOfRange(vars));
+            }
+            if (command == 0x3D) {
+                if (!request.empty()) return false;
+                if (!response.writeByte(plan.analogChannel0UnitCode) || !writeFloat(hartLoopCurrentMilliamps(vars))) return false;
+                const auto writeDynamic = [&](uint8_t code, bool primarySlot) {
+                    if (code == 250) return response.writeByte(250) && response.writeBytes(invalidFloat);
+                    const auto variable = std::find_if(plan.variables.begin(), plan.variables.end(),
+                        [code](const auto& candidate) { return candidate.deviceVariableCode == code; });
+                    if (variable == plan.variables.end()) return false;
+                    const float value = primarySlot ? vars.primaryVariable : static_cast<float>(variable->value + variable->zeroOffset);
+                    return response.writeByte(variable->deviceVariableUnit) && writeFloat(value);
+                };
+                for (size_t slot = 0; slot < 4; ++slot) {
+                    if (!writeDynamic(plan.dynamicVariableAssignments[slot], slot == 0)) return false;
+                }
+                return true;
+            }
+            if (command == 0x3E) {
+                if (request.empty() || request.size() > 4) return false;
+                std::array<uint8_t, 4> slots{0, 0, 0, 0};
+                for (size_t i = 0; i < slots.size(); ++i) slots[i] = i < request.size() ? request[i] : 0;
+                for (const uint8_t channel : slots) if (!channelOk(channel)) return false;
+                for (const uint8_t channel : slots) if (!writeChannelLevel(channel)) return false;
+                return true;
+            }
+            if (command == 0x3F) {
+                if (request.size() != 1 || !channelOk(request[0])) return false;
+                return response.writeByte(0) && response.writeByte(plan.alarmSelectionCode) &&
+                    response.writeByte(plan.pvTransferFunctionCode) && response.writeByte(plan.analogChannel0RangeUnitCode) &&
+                    writeFloat(plan.analogChannel0UpperRangeValue) && writeFloat(plan.analogChannel0LowerRangeValue) &&
+                    writeFloat(plan.analogChannel0AdditionalDamping) && response.writeByte(plan.analogChannel0Flags);
+            }
+            if (command == 0x40) {
+                if (plan.writeProtectCode != 0xFB || request.size() != 5 || !channelOk(request[0])) return false;
+                const float damping = HartTypeCodec::decodeFloat32BE(request.subspan(1, 4));
+                if (!std::isfinite(damping) || damping < 0.0f) return false;
+                plan.analogChannel0AdditionalDamping = damping;
+                return response.writeByte(0) && writeFloat(damping);
+            }
+            if (command == 0x41) {
+                if (plan.writeProtectCode != 0xFB || request.size() != 10 || !channelOk(request[0])) return false;
+                const uint8_t unit = request[1];
+                const float upper = HartTypeCodec::decodeFloat32BE(request.subspan(2, 4));
+                const float lower = HartTypeCodec::decodeFloat32BE(request.subspan(6, 4));
+                if (unit == 0xFA || unit == 0xFF || !std::isfinite(upper) || !std::isfinite(lower)) return false;
+                plan.analogChannel0RangeUnitCode = unit;
+                plan.analogChannel0UpperRangeValue = upper;
+                plan.analogChannel0LowerRangeValue = lower;
+                return response.writeByte(0) && response.writeByte(unit) && writeFloat(upper) && writeFloat(lower);
+            }
+            if (command == 0x42) {
+                if (plan.writeProtectCode != 0xFB || request.size() != 6 || !channelOk(request[0])) return false;
+                const uint8_t unit = request[1];
+                const auto valueBytes = request.subspan(2, 4);
+                const float level = HartTypeCodec::decodeFloat32BE(valueBytes);
+                if (unit == 0xFA || unit == 0xFF) return false;
+                if (std::equal(valueBytes.begin(), valueBytes.end(), invalidFloat.begin())) {
+                    plan.fixedCurrentMode = false; plan.fixedCurrentMilliamps = 0.0f;
+                } else {
+                    if (!std::isfinite(level) || level < plan.analogChannel0LowerLimit || level > plan.analogChannel0UpperLimit) return false;
+                    plan.fixedCurrentMode = true; plan.fixedCurrentMilliamps = level;
+                }
+                return response.writeByte(0) && response.writeByte(unit) && response.writeBytes(valueBytes);
+            }
+            if (command == 0x43 || command == 0x44) {
+                if (plan.writeProtectCode != 0xFB || request.size() != 6 || !channelOk(request[0]) || request[1] == 0xFA || request[1] == 0xFF) return false;
+                if (!plan.fixedCurrentMode) return false;
+                const float measured = HartTypeCodec::decodeFloat32BE(request.subspan(2, 4));
+                if (!std::isfinite(measured)) return false;
+                if (command == 0x43) plan.loopCurrentZeroTrim = measured - plan.fixedCurrentMilliamps;
+                else if (plan.fixedCurrentMilliamps == 0.0f) return false;
+                else plan.loopCurrentGainTrim = measured / plan.fixedCurrentMilliamps;
+                return response.writeByte(0) && response.writeByte(request[1]) && writeFloat(measured);
+            }
+            if (command == 0x45) {
+                if (plan.writeProtectCode != 0xFB || request.size() != 2 || !channelOk(request[0]) || request[1] > 1) return false;
+                plan.pvTransferFunctionCode = request[1];
+                return response.writeByte(0) && response.writeByte(request[1]);
+            }
+            if (command == 0x46) {
+                if (request.size() != 1 || !channelOk(request[0])) return false;
+                return response.writeByte(0) && response.writeByte(plan.analogChannel0RangeUnitCode) &&
+                    writeFloat(plan.analogChannel0UpperRangeValue) && writeFloat(plan.analogChannel0LowerRangeValue) &&
+                    writeFloat(plan.analogChannel0UpperLimit) && writeFloat(plan.analogChannel0LowerLimit);
+            }
+        }
         // Snapshot the packed fields exactly as seeded above so persistence
         // below can tell "this command's write stage actually SET this
         // field" apart from "this field's packed encoding is merely stable
@@ -767,6 +2067,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
         const auto dateBefore = vars.date;
         const auto finalAssemblyBefore = vars.finalAssemblyNumber;
         const auto longTagBefore = vars.longTag;
+        if (it == programs->end()) return false;
         if (!HartCommandExecutor::execute(it->second, vars, request, response)) return false;
         // Persist only the fields this command's `write`/`after` stage
         // actually mutated (see the doc comment on
@@ -789,6 +2090,23 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
         // this is what makes Command 6's live readdressing take effect.
         plan.pollingAddress = vars.pollingAddress;
         plan.loopCurrentMode = vars.loopCurrentMode;
+        // Same "plain scalar, no lossy round-trip" reasoning as
+        // pollingAddress/loopCurrentMode above -- these are the SAME fields
+        // Common Practice write commands (34/47/100) will mutate, never a
+        // second copy.
+        plan.pvTransferFunctionCode = vars.pvTransferFunctionCode;
+        plan.alarmSelectionCode = vars.alarmSelectionCode;
+        plan.writeProtectCode = vars.writeProtectCode;
+        for (auto& authored : plan.variables) {
+            for (const auto& variable : vars.deviceVariables) {
+                if (authored.deviceVariableCode != variable.code) continue;
+                authored.value = variable.value;
+                authored.deviceVariableUnit = variable.units;
+                authored.dampingValue = variable.damping;
+                authored.deviceVariableStatus = variable.status;
+                authored.writable = variable.writable;
+            }
+        }
         return true;
     };
 }

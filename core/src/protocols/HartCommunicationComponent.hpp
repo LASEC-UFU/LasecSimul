@@ -93,6 +93,9 @@ private:
     uint16_t m_udpPort = 5094;
     bool m_enabled = true;
     std::string m_hartVariablesJson = "[]", m_hartCommandsJson = "[]";
+    std::string m_hartBurstJson = "[]";
+    std::string m_hartAdditionalJson = "{}";
+    uint8_t m_alarmSelectionCode = 0xFB;
     uint32_t m_componentIndex = 0;
     /** Universal Command 12/17, 13/18, 16/19, 20/22, 6/7 persisted state
      * (Anexo F.6 gap closed): these mirror `HartDevicePlan`'s identity

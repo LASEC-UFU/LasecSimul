@@ -613,6 +613,10 @@ private:
      * sempre gera slots novos, nunca reciclados) em toda edição de propriedade com
      * `AffectsPinCount`, mesmo quando o valor não mudou o suficiente pra alterar a contagem. */
     void reregisterPinsIfChanged(uint32_t componentIndex, IComponentModel* instance);
+    simulation::SignalGraphDefinition materializeHartSignalPortsUnlocked(
+        const simulation::SignalGraphDefinition& definition) const;
+    void publishHartOutputsToSignalUnlocked();
+    void sampleHartInputsFromSignalUnlocked();
     simulation::PlanDomain refreshComponentExecutionLists(uint32_t componentIndex);
     void invalidatePlan(simulation::PlanDomain domains);
 

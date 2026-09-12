@@ -171,6 +171,14 @@ set(TEST_COMMON_SOURCE_FILES
     src/mcu/McuController.cpp
     src/mcu/McuComponent.cpp
     src/plc/PlcRuntime.cpp
+    src/protocols/HartEngine.cpp
+    src/protocols/HartReferenceCatalog.cpp
+    src/protocols/HartCommandProgram.cpp
+    src/protocols/HartCommandJson.cpp
+    src/protocols/HartCommandClassification.cpp
+    src/protocols/HartTypeCodec.cpp
+    src/protocols/HartTransport.cpp
+    src/protocols/HartCommunicationComponent.cpp
     src/protocols/IndustrialProtocols.cpp
     src/fpga/FpgaComponent.cpp
     src/fpga/FpgaPortMapper.cpp
@@ -1307,6 +1315,14 @@ add_executable(session_restart_stress_test
     src/resources/ResourceGovernor.cpp
     src/python/PythonRuntime.cpp
     src/plc/PlcRuntime.cpp
+    src/protocols/HartEngine.cpp
+    src/protocols/HartReferenceCatalog.cpp
+    src/protocols/HartCommandProgram.cpp
+    src/protocols/HartCommandJson.cpp
+    src/protocols/HartCommandClassification.cpp
+    src/protocols/HartTypeCodec.cpp
+    src/protocols/HartTransport.cpp
+    src/protocols/HartCommunicationComponent.cpp
     src/session/PauseExpression.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp

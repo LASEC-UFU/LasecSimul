@@ -3,9 +3,21 @@
 #include "HartTypeCodec.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <optional>
 
 namespace lasecsimul::protocols {
+
+float hartPercentOfRange(const HartExecutionVariables& variables) noexcept {
+    const float span = variables.upperRangeValue - variables.lowerRangeValue;
+    return span != 0.0f ? 100.0f * (variables.primaryVariable - variables.lowerRangeValue) / span : 0.0f;
+}
+
+float hartLoopCurrentMilliamps(const HartExecutionVariables& variables) noexcept {
+    if (variables.fixedCurrentMode) return variables.fixedCurrentMilliamps;
+    const float calculated = 4.0f + 16.0f * (hartPercentOfRange(variables) / 100.0f);
+    return (calculated + variables.loopCurrentZeroTrim) * variables.loopCurrentGainTrim;
+}
 
 namespace {
 
@@ -25,13 +37,22 @@ size_t hartVarWidth(HartVarId id) noexcept {
     }
 }
 
+HartExecutionVariables::DeviceVariable* selectedDeviceVariable(HartExecutionVariables& vars, uint8_t code) noexcept {
+    for (auto& variable : vars.deviceVariables) if (variable.code == code) return &variable;
+    // Legacy Universal Command 9/33 fixtures used code 0 for PV before the
+    // Common Practice Table 34 code 246 was modeled. Keep that alias only in
+    // the cold-resolved handle table; no string/name lookup is involved.
+    if (code == 0) for (auto& variable : vars.deviceVariables) if (variable.code == 246) return &variable;
+    return nullptr;
+}
+
 // Evaluates one expression to a byte span. Scalar/computed values are written
 // into `scratch` and the returned span points into it; values with stable
 // backing storage (constants, request slices, multi-byte identity fields) are
 // returned directly. Returns std::nullopt on an out-of-bounds slice -- the
 // caller must abort the whole command, never emit partial/garbage output
 // (section 103 security requirement).
-std::optional<std::span<const uint8_t>> evalExpr(const HartExpr& expr, const HartExecutionVariables& vars,
+std::optional<std::span<const uint8_t>> evalExpr(const HartExpr& expr, HartExecutionVariables& vars,
                                                   std::span<const uint8_t> request, uint8_t localCode,
                                                   std::array<uint8_t, 8>& scratch) noexcept {
     switch (expr.kind) {
@@ -61,7 +82,13 @@ std::optional<std::span<const uint8_t>> evalExpr(const HartExpr& expr, const Har
                 case HartVarId::HardwareRevisionAndSignal: scratch[0] = vars.hardwareRevisionAndSignal; return std::span(scratch.data(), 1);
                 case HartVarId::Flags: scratch[0] = vars.flags; return std::span(scratch.data(), 1);
                 case HartVarId::Tag: return std::span<const uint8_t>(vars.tagPacked.data(), vars.tagPacked.size());
-                case HartVarId::PrimaryVariableUnit: scratch[0] = vars.primaryVariableUnit; return std::span(scratch.data(), 1);
+                case HartVarId::PrimaryVariableUnit: {
+                    // PV units have one authority: Device Variable code 246.
+                    // The profile value is only the initialization fallback.
+                    if (auto* pv = selectedDeviceVariable(vars, 246)) scratch[0] = pv->units;
+                    else scratch[0] = vars.primaryVariableUnit;
+                    return std::span(scratch.data(), 1);
+                }
                 case HartVarId::PrimaryVariable: {
                     const auto encoded = HartTypeCodec::encodeFloat32BE(vars.primaryVariable);
                     std::copy(encoded.begin(), encoded.end(), scratch.begin());
@@ -84,6 +111,9 @@ std::optional<std::span<const uint8_t>> evalExpr(const HartExpr& expr, const Har
                     std::copy(encoded.begin(), encoded.end(), scratch.begin());
                     return std::span<const uint8_t>(scratch.data(), 4);
                 }
+                case HartVarId::PvTransferFunctionCode: scratch[0] = vars.pvTransferFunctionCode; return std::span(scratch.data(), 1);
+                case HartVarId::AlarmSelectionCode: scratch[0] = vars.alarmSelectionCode; return std::span(scratch.data(), 1);
+                case HartVarId::WriteProtectCode: scratch[0] = vars.writeProtectCode; return std::span(scratch.data(), 1);
             }
             return std::nullopt;
         case HartExpr::Kind::PercentOfRange:
@@ -94,12 +124,87 @@ std::optional<std::span<const uint8_t>> evalExpr(const HartExpr& expr, const Har
             // a degenerate device misconfiguration this project cannot fix
             // up -- 0% is the defined fallback rather than propagating
             // NaN/Inf into the response.
-            const float span = vars.upperRangeValue - vars.lowerRangeValue;
-            const float percent = span != 0.0f ? 100.0f * (vars.primaryVariable - vars.lowerRangeValue) / span : 0.0f;
-            const float value = expr.kind == HartExpr::Kind::PercentOfRange ? percent : 4.0f + 16.0f * (percent / 100.0f);
+            const float percent = hartPercentOfRange(vars);
+            const float calculated = hartLoopCurrentMilliamps(vars);
+            const float value = expr.kind == HartExpr::Kind::PercentOfRange
+                ? percent
+                : calculated;
             const auto encoded = HartTypeCodec::encodeFloat32BE(value);
             std::copy(encoded.begin(), encoded.end(), scratch.begin());
             return std::span<const uint8_t>(scratch.data(), 4);
+        }
+        case HartExpr::Kind::DeviceVariable: {
+            auto* variable = selectedDeviceVariable(vars, localCode);
+            if (expr.deviceVariableField == HartDeviceVariableField::Code) {
+                scratch[0] = variable ? variable->code : localCode;
+                return std::span<const uint8_t>(scratch.data(), 1);
+            }
+            const auto emitFloat = [&](float value) -> std::span<const uint8_t> {
+                const auto encoded = HartTypeCodec::encodeFloat32BE(value);
+                std::copy(encoded.begin(), encoded.end(), scratch.begin());
+                return std::span<const uint8_t>(scratch.data(), 4);
+            };
+            const auto emitU32 = [&](uint32_t value) -> std::span<const uint8_t> {
+                const auto encoded = HartTypeCodec::encodeUnsignedBE(value, 4);
+                std::copy(encoded.begin(), encoded.end(), scratch.begin());
+                return std::span<const uint8_t>(scratch.data(), 4);
+            };
+            if (!variable) {
+                switch (expr.deviceVariableField) {
+                    case HartDeviceVariableField::Units: scratch[0] = 250; return std::span(scratch.data(), 1);
+                    case HartDeviceVariableField::Value:
+                    case HartDeviceVariableField::UpperLimit:
+                    case HartDeviceVariableField::LowerLimit:
+                    case HartDeviceVariableField::MinimumSpan:
+                    case HartDeviceVariableField::Damping: {
+                        static constexpr std::array<uint8_t, 4> kNotUsed{0x7F, 0xA0, 0x00, 0x00};
+                        return std::span<const uint8_t>(kNotUsed.data(), kNotUsed.size());
+                    }
+                    // HCF_SPEC-151 7.22 footnotes 40/41: Classification "not
+                    // supported" -> 0 (Not Yet Implemented); Family "not
+                    // supported" -> 250 (Not Used). Both are single-byte
+                    // Enums (confirmed by the spec's own revision history:
+                    // "Included Response Data Byte 21, Variable
+                    // Classification" -- ONE byte, not the 4-byte float this
+                    // field was wrongly emitting before this fix).
+                    case HartDeviceVariableField::ClassificationCode: scratch[0] = 0; return std::span(scratch.data(), 1);
+                    case HartDeviceVariableField::Family: scratch[0] = 250; return std::span(scratch.data(), 1);
+                    case HartDeviceVariableField::AcquisitionPeriod: return emitU32(0xFFFFFFFFu);
+                    case HartDeviceVariableField::Serial: scratch[0] = scratch[1] = scratch[2] = 0; return std::span(scratch.data(), 3);
+                    case HartDeviceVariableField::Status: scratch[0] = 0x30; return std::span(scratch.data(), 1);
+                    case HartDeviceVariableField::Properties: scratch[0] = 0; return std::span(scratch.data(), 1);
+                    case HartDeviceVariableField::WriteMode: scratch[0] = 0; return std::span(scratch.data(), 1);
+                    case HartDeviceVariableField::Code: break;
+                }
+            } else {
+                switch (expr.deviceVariableField) {
+                    case HartDeviceVariableField::Units: scratch[0] = variable->units; return std::span(scratch.data(), 1);
+                    case HartDeviceVariableField::Value: return emitFloat(variable->value);
+                    case HartDeviceVariableField::Status: scratch[0] = variable->status; return std::span(scratch.data(), 1);
+                    case HartDeviceVariableField::UpperLimit: return emitFloat(variable->upperLimit);
+                    case HartDeviceVariableField::LowerLimit: return emitFloat(variable->lowerLimit);
+                    case HartDeviceVariableField::MinimumSpan: return emitFloat(variable->minimumSpan);
+                    case HartDeviceVariableField::Damping: return emitFloat(variable->damping);
+                    // Classification is a single byte (HCF_SPEC-151 7.22
+                    // byte 21, per the spec's own revision history) --
+                    // `ClassificationCode` is the ONE authority for it. A
+                    // second `Classification` case here previously emitted
+                    // 4 bytes (an incorrect float encoding of the same
+                    // underlying `variable->classification` byte); removed
+                    // rather than fixed-in-place, since having two accessors
+                    // for one field is itself the defect (section 18: one
+                    // semantic property, one authority).
+                    case HartDeviceVariableField::ClassificationCode: scratch[0] = variable->classification; return std::span(scratch.data(), 1);
+                    case HartDeviceVariableField::Family: scratch[0] = variable->family; return std::span(scratch.data(), 1);
+                    case HartDeviceVariableField::AcquisitionPeriod: return emitU32(variable->acquisitionPeriod);
+                    case HartDeviceVariableField::Properties: scratch[0] = variable->properties; return std::span(scratch.data(), 1);
+                    case HartDeviceVariableField::WriteMode: scratch[0] = (variable->properties & 0x80) ? 1 : 0; return std::span(scratch.data(), 1);
+                    case HartDeviceVariableField::Serial:
+                        scratch[0] = static_cast<uint8_t>(variable->serial >> 16); scratch[1] = static_cast<uint8_t>(variable->serial >> 8); scratch[2] = static_cast<uint8_t>(variable->serial); return std::span(scratch.data(), 3);
+                    case HartDeviceVariableField::Code: break;
+                }
+            }
+            return std::nullopt;
         }
         case HartExpr::Kind::UserVariable:
             for (const auto& value : vars.userVariables) {
@@ -174,6 +279,18 @@ size_t estimateExprMax(const HartExpr& expr, size_t maxRequestBytes) noexcept {
         case HartExpr::Kind::UserVariable: return 4;
         case HartExpr::Kind::LoopCurrentMilliamps: return 4;
         case HartExpr::Kind::PercentOfRange: return 4;
+        case HartExpr::Kind::DeviceVariable:
+            switch (expr.deviceVariableField) {
+                case HartDeviceVariableField::Code:
+                case HartDeviceVariableField::Units:
+                case HartDeviceVariableField::Status:
+                case HartDeviceVariableField::ClassificationCode:
+                case HartDeviceVariableField::Family:
+                case HartDeviceVariableField::Properties:
+                case HartDeviceVariableField::WriteMode: return 1;
+                case HartDeviceVariableField::Serial: return 3;
+                default: return 4;
+            }
     }
     return maxRequestBytes;
 }
@@ -188,6 +305,9 @@ size_t estimateMaxBytes(const std::vector<HartStatement>& statements, size_t max
                     total += estimateExprMax(node.source, maxRequestBytes);
                 } else if constexpr (std::is_same_v<T, HartSetStmt>) {
                     // no response bytes
+                } else if constexpr (std::is_same_v<T, HartSetDeviceVariableStmt> ||
+                                     std::is_same_v<T, HartGuardDeviceVariableStmt>) {
+                    // side effect/validation only
                 } else if constexpr (std::is_same_v<T, HartIfStmt>) {
                     total += std::max(estimateMaxBytes(node.thenBranch, maxRequestBytes),
                                       estimateMaxBytes(node.elseBranch, maxRequestBytes));
@@ -237,11 +357,18 @@ std::string validateStatements(const std::vector<HartStatement>& statements, siz
                         case HartVarId::LongTag:
                         case HartVarId::PollingAddress:
                         case HartVarId::LoopCurrentMode:
+                        case HartVarId::PvTransferFunctionCode:
+                        case HartVarId::AlarmSelectionCode:
+                        case HartVarId::WriteProtectCode:
                             break;
                         default:
                             error = "HART command SET targets a non-writable variable";
                             return;
                     }
+                    error = validateExpr(node.value, maxRequestBytes);
+                } else if constexpr (std::is_same_v<T, HartSetDeviceVariableStmt>) {
+                    error = validateExpr(node.value, maxRequestBytes);
+                } else if constexpr (std::is_same_v<T, HartGuardDeviceVariableStmt>) {
                     error = validateExpr(node.value, maxRequestBytes);
                 } else if constexpr (std::is_same_v<T, HartIfStmt>) {
                     error = validateExpr(node.lhs, maxRequestBytes);
@@ -283,6 +410,41 @@ bool execStatement(const HartStatement& statement, HartExecutionVariables& vars,
                 std::array<uint8_t, 8> scratch{};
                 const auto bytes = evalExpr(node.source, vars, request, localCode, scratch);
                 return bytes.has_value() && response.writeBytes(*bytes);
+            } else if constexpr (std::is_same_v<T, HartSetDeviceVariableStmt>) {
+                std::array<uint8_t, 8> scratch{};
+                const auto bytes = evalExpr(node.value, vars, request, localCode, scratch);
+                auto* variable = selectedDeviceVariable(vars, localCode);
+                if (!bytes.has_value() || !variable) return false;
+                switch (node.target) {
+                    case HartDeviceVariableField::Value:
+                        if (bytes->size() != 4) return false;
+                        variable->value = HartTypeCodec::decodeFloat32BE(*bytes);
+                        return std::isfinite(variable->value);
+                case HartDeviceVariableField::Damping:
+                        if (bytes->size() != 4) return false;
+                        variable->damping = HartTypeCodec::decodeFloat32BE(*bytes);
+                        return std::isfinite(variable->damping) && variable->damping >= 0.0f;
+                    case HartDeviceVariableField::WriteMode:
+                        if (bytes->size() != 1 || ((*bytes)[0] != 0 && (*bytes)[0] != 1)) return false;
+                        if ((*bytes)[0]) variable->properties |= 0x80; else variable->properties &= static_cast<uint8_t>(~0x80u);
+                        return true;
+                    case HartDeviceVariableField::Units: {
+                        if (bytes->size() != 1 || (*bytes)[0] == 250 || (*bytes)[0] == 255) return false;
+                        if (!variable->allowedUnits.empty() && std::find(variable->allowedUnits.begin(), variable->allowedUnits.end(), (*bytes)[0]) == variable->allowedUnits.end()) return false;
+                        variable->units = (*bytes)[0]; return true;
+                    }
+                    default: return false;
+                }
+            } else if constexpr (std::is_same_v<T, HartGuardDeviceVariableStmt>) {
+                std::array<uint8_t, 8> scratch{};
+                const auto bytes = evalExpr(node.value, vars, request, localCode, scratch);
+                auto* variable = selectedDeviceVariable(vars, localCode);
+                if (node.guard == HartDeviceVariableGuard::Exists) return variable != nullptr;
+                if (!variable || !bytes.has_value()) return false;
+                if (node.guard == HartDeviceVariableGuard::Writable) return variable->writable;
+                if (node.guard == HartDeviceVariableGuard::UnitsMatch)
+                    return bytes->size() == 1 && (*bytes)[0] == variable->units;
+                return bytes->size() == 1 && ((*bytes)[0] == 0 || (*bytes)[0] == 1);
             } else if constexpr (std::is_same_v<T, HartSetStmt>) {
                 std::array<uint8_t, 8> scratch{};
                 const auto bytes = evalExpr(node.value, vars, request, localCode, scratch);
@@ -295,6 +457,7 @@ bool execStatement(const HartStatement& statement, HartExecutionVariables& vars,
                     case HartVarId::PrimaryVariableUnit:
                         if (bytes->size() != 1) return false;
                         vars.primaryVariableUnit = (*bytes)[0];
+                        if (auto* pv = selectedDeviceVariable(vars, 246)) pv->units = (*bytes)[0];
                         return true;
                     case HartVarId::PrimaryVariable:
                         if (bytes->size() != 4) return false;
@@ -327,6 +490,18 @@ bool execStatement(const HartStatement& statement, HartExecutionVariables& vars,
                     case HartVarId::LoopCurrentMode:
                         if (bytes->size() != 1 || (*bytes)[0] > 1) return false;
                         vars.loopCurrentMode = (*bytes)[0];
+                        return true;
+                    case HartVarId::PvTransferFunctionCode:
+                        if (bytes->size() != 1) return false;
+                        vars.pvTransferFunctionCode = (*bytes)[0];
+                        return true;
+                    case HartVarId::AlarmSelectionCode:
+                        if (bytes->size() != 1) return false;
+                        vars.alarmSelectionCode = (*bytes)[0];
+                        return true;
+                    case HartVarId::WriteProtectCode:
+                        if (bytes->size() != 1) return false;
+                        vars.writeProtectCode = (*bytes)[0];
                         return true;
                     default: return false;
                 }

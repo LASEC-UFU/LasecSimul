@@ -6,8 +6,119 @@ dependsOn: [FEAT-001, ARCH-002, ARCH-004, ARCH-005, ARCH-006, FEAT-009]
 supersedes: []
 ---
 
+# Anexo F.14.10 — Common Practice Commands 80–90 (HCF_SPEC-151 Rev. 10.0)
+
+- **80–83 — Device Variable Trim:** cada `VariableConfiguration` possui uma única capacidade/estado de trim: código de pontos suportados (0–3), unidade, limites/guidelines, diferencial mínimo, último ponto inferior/superior, ajuste atual e ajuste de fábrica. 80 retorna os últimos pontos; 81 retorna as guidelines; 82 valida código, unidade, limites e diferencial antes do commit atômico; 83 restaura o ajuste de fábrica. Isso é distinto de PV zero (43), Device Variable zero (52), Loop Current trim (45/46) e Analog Channel trim (67/68). O valor lido pelo Device Variable usa a mesma autoridade de ajuste, sem `trimmedValue` paralelo.
+- **84 — Read Sub-Device Identity Summary:** resolve o `childDeviceId` no registro do próprio `HartEngine` e lê identidade do child; o parent armazena somente referência/topologia. A resposta é produzida a partir do plano/perfil do child, não de cópia de tag, manufacturer ou device ID.
+- **85/86 — Statistics:** contadores são voláteis, bounded e incrementados pelo tráfego real de polling/forwarding. 85 lê contadores por card/channel; 86 lê contadores por sub-device, mantendo A/B independentes.
+- **87/88 — I/O System Master Mode/Retry Count:** alteram as propriedades canônicas `ioMasterMode` e `ioRetryCount` (2–5); 88 é a mesma configuração consultada pelo polling/forwarding, sem `displayedRetryCount` separado.
+- **89/90 — Real-Time Clock:** RTC é capability explícita. O valor é derivado de `rtcValueSeconds + (virtualTime - rtcSetVirtualSeconds)`, com uma única injeção de tempo virtual do `HartEngine`; não usa wall clock, thread ou timer. 90 retorna current time, last-set time e flags; clock não inicializado retorna midnight/1900 e flag correspondente. Clock não-volátil é uma propriedade de capability, não uma consequência de Command 42.
+
+Os layouts foram conferidos nas seções 7.48–7.58 do HCF_SPEC-151 Rev. 10.0 e Common Tables 22, 38 e 42 do HCF_SPEC-183. Os goldens/cross-checks estão em `core/test/core/protocols/HartEngineTest.cpp`.
+
+# Anexo F.14.9 — Common Practice Commands 71–78 (HCF_SPEC-151 Rev. 10.0)
+
+Implementação verificada no Core:
+
+- **71/76 — Lock Device / Read Lock Device State:** um único `HartDevicePlan::lockCode` canônico (0 unlocked, 1 temporary, 2 permanent, 3 lock all). O status de 76 é derivado da mesma autoridade; owner e gateway/primary bits não são cópias independentes. Lock temporário é limpo por Device Reset (42); lock permanente não é. Write Protect continua sendo um mecanismo separado. Writes de configuração/calibração são rejeitados para master não-owner, enquanto Command 38 permanece permitido conforme a norma.
+- **72 — Squawk:** aceita Off, On, Squawk Once e a requisição vazia de compatibilidade. O efeito é estado/evento semântico no Core (`squawkControl`/`squawkEvent`), sem thread, timer de wall clock ou dependência da UI; reset limpa o estado transitório.
+- **73 — Find Device:** exige `findDeviceArmed` e produz a mesma resposta de identidade de Command 0 usando o mesmo programa/autoridade de identidade.
+- **74 — Read I/O System Capabilities:** só responde quando `ioSystem` é verdadeiro e serializa os limites/capacidades do plano; device comum não fabrica capability nem sub-device.
+- **75/77 — Poll Sub-Device / Send Command to Sub-Device:** links estáveis guardam somente `childDeviceId` e coordenadas card/channel/polling. O estado HART do filho continua no próprio `HartDevicePlan`; polling e forwarding resolvem o filho no mesmo `HartEngine` e passam pelo mesmo caminho de comandos, sem executor, scheduler ou stack paralelo.
+- **78 — Read Aggregated Commands:** envelope bounded (até 32 comandos, payload total HART bounded), rejeita Command 31/78 aninhado, executa cada item pelo dispatcher canônico e faz staging numa cópia antes do commit para impedir efeito parcial quando a resposta não couber.
+
+Os layouts e códigos de controle foram conferidos contra as seções 7.39–7.46 do HCF_SPEC-151 Rev. 10.0 e Common Tables 18, 25 e 66 do HCF_SPEC-183. A cobertura byte-level e de cross-command está em `core/test/core/protocols/HartEngineTest.cpp`.
+
 
 # HART Device Engine — motor modular de dispositivos HART
+
+# Anexo F.14.11 - Common Practice Commands 91-99 (HCF_SPEC-151 Rev. 10.0)
+
+- **91/92 - Trend Configuration:** cada trend usa `HartTrendConfiguration`; Command 92 valida controle, variavel e periodo (1 s-7200 s) antes do commit. Alterar qualquer parametro limpa o historico e reinicializa as 12 posicoes com `NaN`/status BAD-Fixed. O historico e bounded e somente runtime.
+- **93 - Read Trend:** o payload retorna a configuracao efetiva e, no maximo, 12 pares valor/status, em ordem do mais recente para o mais antigo, com timestamp e intervalo. A amostragem ocorre somente ao avancar o tempo virtual, sem thread ou wall clock.
+- **94/95 - Communication Statistics:** retornam snapshots dos contadores volateis de trafego IO/client-side e device-side; nao ha contador paralelo na extensao.
+- **96/97 - Synchronous Action:** a acao e armazenada em `HartSynchronousActionConfiguration`, com os bits de comando, one-shot e enabled. O scheduler bounded usa exclusivamente tempo virtual; acoes one-shot removem o bit enabled, e acoes recorrentes avancam 24 h.
+- **98/99 - Command Action:** request data e comando ficam na configuracao da mesma acao. Quando disparada, a acao chama o dispatcher canonico do `HartEngine`, sem executor ou caminho de execucao alternativo.
+
+Os layouts foram conferidos nas secoes 7.59-7.67 do HCF_SPEC-151 Rev. 10.0 e Common Tables 37 e 41 do HCF_SPEC-183. A cobertura byte-level, o reset de historico, os snapshots e o disparo one-shot estao em `core/test/core/protocols/HartEngineTest.cpp`.
+
+# Anexo F.14.12 - Common Practice Commands 100-110 (HCF_SPEC-151 Rev. 10.0)
+
+- **100 - Write Primary Variable Alarm Code - DONE_SPEC_VERIFIED:** request/response de 1 byte; grava `HartDevicePlan::alarmSelectionCode`, já usado pelo leitor de informação da PV. É configuração de ação de alarme e não altera os bits de status/alarme ativo.
+- **101/102 - Sub-device/Burst Message Map - DONE_SPEC_VERIFIED:** request 1 byte para leitura e 3 bytes para escrita; resposta é mensagem + índice uint16. A associação persistente usa `childDeviceId`, enquanto o índice é resolvido na leitura; o estado do child não é copiado para o parent. Aplicável a I/O System.
+- **103/104/105 - Burst configuration - DONE_SPEC_VERIFIED:** períodos são armazenados em unidades HART de 1/32 ms; trigger guarda modo, classificação, unidade e nível; Command 105 serializa a mesma definição consumida pelo scheduler. Cada dispositivo possui três mensagens bounded, com configuração persistente e estado de agendamento volátil.
+- **106 - Flush Delayed Responses - DONE_SPEC_VERIFIED:** request/response vazios; limpa a fila bounded real de eventos/respostas pendentes do runtime, sem apenas zerar um contador fictício.
+- **107/108/109 - Burst variables/command/control - DONE_SPEC_VERIFIED:** 107 valida e comita os oito slots atomicamente; 108 usa identidade numérica de comando; 109 altera a mesma flag lida pelo scheduler. Burst usa o dispatcher canônico StandardCore/CompiledDsl.
+- **110 - Read All Dynamic Variables - DONE_SPEC_VERIFIED:** request vazio; serializa até quatro pares unidade/float e interrompe no último assignment configurado, usando `dynamicVariableAssignments` e os mesmos valores canônicos de Commands 3/61. A norma marca o comando como não recomendado para novos designs.
+
+O texto normativo foi conferido nas seções 7.68-7.78, páginas 122-138, do HCF_SPEC-151 Rev. 10.0. Os comandos de configuração persistem no plano/JSON do componente; `next-fire`, última amostra e fila de eventos são runtime volátil. Não há thread, timer ou wall clock: Burst é conduzido exclusivamente por `HartEngine::setVirtualTimeSeconds`, com fila e emissões bounded.
+
+O histórico de Trend de 12 entradas continua documentado como `INTERNAL_RESOURCE_LIMIT` da implementação bounded para o payload de Command 93; não é apresentado como um limite geral normativo HART além do layout implementado.
+
+### Anexo F.14.13 - Common Practice Commands 111-119 (HCF_SPEC-151 Rev. 10.0)
+
+- **111/112 - Block Data Transfer - DONE_SPEC_VERIFIED:** implementados conforme ao HCF_SPEC-190: abertura/fechamento de porta, funcao de transferencia, contadores master/device e segmentos limitados pelo tamanho aceito. A sessao de transferencia e estado de runtime e e descartada no reset.
+- **113 - Catch Device Variable - DONE_SPEC_VERIFIED:** grava a configuracao de captura futura (modo, endereco expandido, slot, shed time e comando de origem). A captura ocorre somente quando a resposta real do comando configurado chega ao dispatcher canonico; ela nao cria uma segunda variavel independente.
+- **114 - Read Caught Device Variable - DONE_SPEC_VERIFIED:** le a configuracao de catch, incluindo a representacao IEEE-754 de `shedTime`; valores nao configurados retornam modo desabilitado e `NaN`.
+- **115-119 - Event Notification - DONE_SPEC_VERIFIED:** implementados resumo, mascara de status/evento, temporizacao, controle e acknowledgment. A fila de transicoes e limitada a oito registros; configuracoes permanecem no plano, enquanto registros latched e timestamps sao limpos no reset. O relogio usa o tempo virtual do engine.
+- **120/121 - NOT_APPLICABLE:** nao sao comandos Common Practice definidos no HCF_SPEC-151 Rev. 10.0 fornecido neste repositorio; nenhuma semantica foi inventada para eles. O proximo bloco padronizado localizado no catalogo e o de comandos 512+.
+
+Os contratos de 111-119 e seus cenarios de transferencia, catch e eventos estao cobertos em `HartEngineTest.cpp`; a implementacao mantem um dispatcher canonico e nao usa fallback generico para simular respostas.
+
+### Anexo F.14.14 - Additional Common Practice Commands 512-531
+
+Matriz normativa preliminar, conferida diretamente em `HCF_SPEC-151 Rev. 10.0` (secoes 7.88-7.107) e `HCF_SPEC-183 Rev. 22.0` (Common Tables 54, 67-74). Os layouts completos, codigos de resposta e notas de aplicabilidade estao nos PDFs locais do `HART.zip`.
+
+| ID | Official Name | Normative Specification / Rev. | Defined in local HART.zip? | Applicability | Existing canonical infrastructure | Implementation status |
+|---:|---|---|---|---|---|---|
+| 512 | Read Country Code | HCF_SPEC-151 Rev. 10.0, 7.88 | Sim | device metadata; paired with 513 | HartDevicePlan metadata | DONE_SPEC_VERIFIED |
+| 513 | Write Country Code | HCF_SPEC-151 Rev. 10.0, 7.89 | Sim | device metadata; requires 512 | same country/SI property | DONE_SPEC_VERIFIED |
+| 514 | Register Event Manager | HCF_SPEC-151 Rev. 10.0, 7.90; HCF_SPEC-183 Rev. 22.0, Table 67 | Sim | I/O System | Event Notification ownership | DONE_SPEC_VERIFIED |
+| 515 | Read Event Manager Registration Status | HCF_SPEC-151 Rev. 10.0, 7.91; HCF_SPEC-183 Rev. 22.0, Table 68 | Sim | I/O System | same registration authority | DONE_SPEC_VERIFIED |
+| 516 | Read Device Location | HCF_SPEC-151 Rev. 10.0, 7.92; HCF_SPEC-183 Rev. 22.0, Table 69 | Sim | device with WGS84 location capability | HartDeviceLocation | DONE_SPEC_VERIFIED |
+| 517 | Write Device Location | HCF_SPEC-151 Rev. 10.0, 7.93 | Sim | same location capability | same location property | DONE_SPEC_VERIFIED |
+| 518 | Read Location Description | HCF_SPEC-151 Rev. 10.0, 7.94 | Sim | device metadata | bounded Latin-1 metadata | DONE_SPEC_VERIFIED |
+| 519 | Write Location Description | HCF_SPEC-151 Rev. 10.0, 7.95 | Sim | same metadata | same 32-byte property | DONE_SPEC_VERIFIED |
+| 520 | Read Process Unit Tag | HCF_SPEC-151 Rev. 10.0, 7.96 | Sim | process-unit metadata | separate 32-byte property | DONE_SPEC_VERIFIED |
+| 521 | Write Process Unit Tag | HCF_SPEC-151 Rev. 10.0, 7.97 | Sim | same metadata | same process-unit property | DONE_SPEC_VERIFIED |
+| 522 | Write Volumetric Flow Classification | HCF_SPEC-151 Rev. 10.0, 7.98; HCF_SPEC-183 Rev. 22.0, Table 21 | Sim | only a volumetric-flow Device Variable | VariableConfiguration classification | DONE_SPEC_VERIFIED |
+| 523 | Read Condensed Status Mapping Array | HCF_SPEC-151 Rev. 10.0, 7.99; HCF_SPEC-183 Rev. 22.0, Table 70 | Sim | device supporting Condensed Status | 208-entry canonical map | DONE_SPEC_VERIFIED |
+| 524 | Write Condensed Status Mapping | HCF_SPEC-151 Rev. 10.0, 7.100 | Sim | configurable Condensed Status device | staged map, atomic commit | DONE_SPEC_VERIFIED |
+| 525 | Reset Condensed Status Map | HCF_SPEC-151 Rev. 10.0, 7.101 | Sim | configurable Condensed Status device | normative/default map authority | DONE_SPEC_VERIFIED |
+| 526 | Write Status Simulation Mode | HCF_SPEC-151 Rev. 10.0, 7.102; HCF_SPEC-183 Rev. 22.0, Table 71 | Sim | Condensed Status/Status Simulation device | status overlay over real status | DONE_SPEC_VERIFIED |
+| 527 | Simulate Status Bit | HCF_SPEC-151 Rev. 10.0, 7.103; HCF_SPEC-183 Rev. 22.0, Table 72 | Sim | only while simulation enabled | same overlay, no physical-state mutation | DONE_SPEC_VERIFIED |
+| 528 | Read Sub-Device Assignment List Information | HCF_SPEC-151 Rev. 10.0, 7.104; HCF_SPEC-183 Rev. 22.0, Table 73 | Sim | non-volatile I/O assignment capability | bounded assignment list | DONE_SPEC_VERIFIED |
+| 529 | Read Sub-Device Assignment | HCF_SPEC-151 Rev. 10.0, 7.105 | Sim | same assignment capability | stable child identity records | DONE_SPEC_VERIFIED |
+| 530 | Write Sub-Device Assignment | HCF_SPEC-151 Rev. 10.0, 7.106 | Sim | same assignment capability | staged bounded assignment list | DONE_SPEC_VERIFIED |
+| 531 | Transfer Live Sub-Device List to Assignment List | HCF_SPEC-151 Rev. 10.0, 7.107; HCF_SPEC-183 Rev. 22.0, Table 74 | Sim | same assignment capability | live registry snapshot -> assignment | DONE_SPEC_VERIFIED |
+
+Writes 513, 517, 519, 521, 522, 524-527 and 530-531 validate the complete request before commit. Event Manager uses the command caller's HART master identity (`masterRole` in the Core API), so only the registered owner may acknowledge Command 119; no display name or UI identity participates. Assignment entries are bounded, retain stable child references, survive plan save/reopen when serialized by the owning device, and are not aliases of the live `subDevices` list.
+
+### Anexo F.14.15 - Post-531 standardized inventory and next semantic cluster
+
+Inventory reconciled against the local `HART.zip` (Command Summary HCF_SPEC-099 Rev. 9.0 and the referenced local specifications). IDs are grouped only where the specification defines a contiguous command family; overlapping IDs (for example Temperature and Conductivity at 1024-1027) remain separate rows because applicability is specification/family-specific.
+
+| ID(s) | Family / official source | Local specification | Applicability in this engine | Existing canonical model | Status / next action |
+|---:|---|---|---|---|---|
+| 512-531 | Additional Common Practice | HCF_SPEC-151 Rev. 10.0 | Standard field device; capability-gated per command | HartDevicePlan metadata, Event Manager, condensed status, assignments | DONE_SPEC_VERIFIED |
+| 768-791, 793-823, 832-862, 960-979 | WirelessHART network, security, scheduling and topology | HCF_SPEC-155 Rev. 2.0 | NOT_APPLICABLE: no WirelessHART network/session/security model in the engine | None; no fake radio/network state | NOT_APPLICABLE |
+| 1024-1027, 1152-1155, 1157, 1556 | Temperature Device Family | HCF_SPEC-160.04 Rev. 2.0 | NOT_APPLICABLE until a temperature-family capability and its typed configuration exist | Device Variable metadata alone is insufficient for these layouts | NOT_APPLICABLE |
+| 1024-1027, 1152-1153 | Conductivity Device Family | HCF_SPEC-160.09 Rev. 1.1 | NOT_APPLICABLE: no conductivity sensor/configuration model | None | NOT_APPLICABLE |
+| 1280-1285 | Pressure Device Family mandatory read cluster | HCF_SPEC-160.5, Draft, Rev. 1.0, pp. 22-29 | A real authored Device Variable with Pressure classification 65 | Per-Device-Variable PressureFamilyConfiguration | DONE_SPEC_VERIFIED |
+| 1286-1290 | Pressure Device Family optional reads (mandatory when feature is supported) | HCF_SPEC-160.5, Draft, Rev. 1.0, pp. 30-33 | Explicit per-variable gasket/observation/remote-seal capability | Same PressureFamilyConfiguration; bounded fixed layouts | DONE_SPEC_VERIFIED |
+| 1408-1410 | Pressure Device Family optional writes (mandatory when feature is supported) | HCF_SPEC-160.5, Draft, Rev. 1.0, pp. 34-38 | Explicit per-variable write capability plus write protection | Same metadata read by 1284/1286/1290; atomic commit | DONE_SPEC_VERIFIED |
+| 1792-1805, 1920-1943 | PID Control Device Family | HCF_SPEC-160.07 Rev. 1.0 | NOT_APPLICABLE: no PID controller/tuning model | None | NOT_APPLICABLE |
+| 2048-2051, 2176-2178 | pH Device Family | HCF_SPEC-160.08 Rev. 1.0 | NOT_APPLICABLE: no pH calibration/compensation model | None | NOT_APPLICABLE |
+| 2560-2562, 2688-2693 | Totalizer Device Family | HCF_SPEC-160.10 Rev. 1.0 | NOT_APPLICABLE: no totalizer/relay model | None | NOT_APPLICABLE |
+| 2816-2827, 2944-2953 | Level Device Family | HCF_SPEC-160.11 Rev. 1.0 | NOT_APPLICABLE: no level sensor/settings/calibration model | None | NOT_APPLICABLE |
+| 64384-64397 | Discrete Applications | HCF_SPEC-285 Rev. 2.0 | NOT_APPLICABLE: no discrete variable/override/fault model | None | NOT_APPLICABLE |
+| 64448-64459 | DLEU / Discrete Applications extension | HCF_SPEC-285 Rev. 2.0 | NOT_APPLICABLE: no DLEU capability or model | None | NOT_APPLICABLE |
+
+The Pressure Family is now complete for every command actually defined by the local specification: 1280-1290 and 1408-1410. Requests select a real pressure-classified Device Variable (classification 65); each variable owns an independent `PressureFamilyConfiguration`, including process connection, gasket, observations, remote seal and stable associated-variable IDs. 1280-1285 and 1286-1290 are fixed-layout reads; 1408-1410 decode the complete request, enforce write protection and the corresponding semantic capability, then atomically update the same metadata consumed by the readers. No pressure state is global to the device and no unsupported optional feature is filled with a generic capability mask.
+
+For the local PDF, classification 65 is the normative pressure Device Variable classification used by the family command request tables; it is sufficient to select the family variable, while optional commands additionally require the explicit feature capability in the canonical pressure metadata. The PDF is marked `DRAFT`, Document Number `HCF_SPEC-160.5`, Revision 1.0, release date 5 November 2002; this implementation does not mix bytes from another revision. Command 1291 is not defined by this specification and is intentionally absent from the catalog.
+
+The remaining files in the ZIP describe protocol/application infrastructure, reserved ranges, device-specific extensions or draft device-family proposals. They are retained as source evidence but do not create field-device StandardCore handlers: `NOT_APPLICABLE` means the repository has no corresponding capability/model, while `NOT_DEFINED` means the local normative source was found but the current increment deliberately does not claim that semantic cluster.
 
 ## 1. Propósito
 
@@ -2952,71 +3063,68 @@ drafts -- same rule.
 Modulating Final Control (TS20160-15, referenced in the task's section 30)
 is **NOT in this ZIP at all**. Marked `SPEC_CURRENT_SOURCE_REQUIRED` still.
 
-## F.11 -- Universal Command Completion Gate (seção 14 do pedido)
+## F.11 -- Universal Command Completion Gate (seção 14 do pedido) -- FECHADO (sessão 8)
 
-| ID | Nome | Spec | Verificado contra PDF oficial? | Implementado? | Golden? | Testes negativos? | Persistência (se writable)? | Status |
-|---|---|---|---|---|---|---|---|---|
-| 0 | Read Unique Identifier | HCF_SPEC-127 6.1 | Sim (nome/estrutura; layout já correto de sessões anteriores) | Sim | Sim | -- | N/A (read-only) | PASS_OLDER_COMPATIBLE_SPEC |
-| 1 | Read Primary Variable | HCF_SPEC-127 6.2 | Sim | Sim | Sim | -- | N/A | PASS_OLDER_COMPATIBLE_SPEC |
-| 2 | Read Loop Current And Percent Of Range | HCF_SPEC-127 6.3 | Sim (lido integralmente) | **Não** | -- | -- | N/A | NEEDS_ARITHMETIC_PRIMITIVE -- precisa de `4 + 16*(PV-LRV)/(URV-LRV)`, a DSL não tem primitiva aritmética |
-| 3 | Read Dynamic Variables And Loop Current | HCF_SPEC-127 6.4 | Sim -- **divergência real encontrada e corrigida** (ver F.9/commit) | Sim (corrigido: 9 bytes, não mais 24 com padding falso) | Sim (atualizado) | -- | N/A | PASS_OLDER_COMPATIBLE_SPEC |
-| 4 | Reserved | HCF_SPEC-127 6.5 | Sim | N/A (Reserved, nunca implementar) | -- | -- | -- | NOT_APPLICABLE (correto: nenhuma implementação existe) |
-| 5 | Reserved | HCF_SPEC-127 6.6 | Sim | N/A | -- | -- | -- | NOT_APPLICABLE |
-| 6 | Write Polling Address | HCF_SPEC-127 6.7 | Sim | Sim (readdressing ao vivo real, testado) | Sim | Sim (endereço antigo some) | Sim (save/reopen testado) | PASS_OLDER_COMPATIBLE_SPEC |
-| 7 | Read Loop Configuration | HCF_SPEC-127 6.8 | Sim | Sim | Sim | -- | N/A | PASS_OLDER_COMPATIBLE_SPEC |
-| 8 | Read Dynamic Variable Classifications | HCF_SPEC-127 6.9 | Sim | Sim | Sim | -- | N/A | PASS_OLDER_COMPATIBLE_SPEC |
-| 9 | Read Device Variables with Status | HCF_SPEC-127 6.10 | Sim (lido integralmente) | **Não** | -- | -- | -- | NEEDS_DEVICE_VARIABLE_INDEX_MODEL -- request/response de tamanho variável por slot (1-8), Device Variable Code Table, timestamp monotônico de virtual-time; infraestrutura real, não pequena |
-| 10 | (não existe) | HCF_SPEC-127 (ausente) | Sim (confirmado ausente na TOC) | N/A (Reserved) | -- | -- | -- | NOT_APPLICABLE |
-| 11 (0x0B) | Read Unique Identifier Associated With Tag | HCF_SPEC-127 6.11 | Sim (herdado) | Sim | Sim | Sim | N/A | PASS_OLDER_COMPATIBLE_SPEC |
-| 12 | Read Message | HCF_SPEC-127 6.12 | **Sim, revalidado nesta sessão** | Sim | Sim | -- | Sim | PASS_OLDER_COMPATIBLE_SPEC |
-| 13 | Read Tag, Descriptor, Date | HCF_SPEC-127 6.13 | Sim, revalidado | Sim | Sim | -- | Sim | PASS_OLDER_COMPATIBLE_SPEC |
-| 14 | Read Primary Variable Transducer Information | HCF_SPEC-127 6.14 | Sim (lido integralmente) | **Não** | -- | -- | -- | NEEDS_TRANSDUCER_MODEL -- serial number/limits/span não existem no modelo de device |
-| 15 | Read Device Information | HCF_SPEC-127 6.15 | Sim (lido integralmente) | **Não** | -- | -- | -- | NEEDS_COMMON_TABLES -- Alarm Selection (Table 6), Transfer Function (Table 3), Write Protect (Table 7), Analog Channel Flags (Table 26) não foram consultadas ainda |
-| 16 | Read Final Assembly Number | HCF_SPEC-127 6.16 | Sim, revalidado | Sim | Sim | -- | Sim | PASS_OLDER_COMPATIBLE_SPEC |
-| 17 | Write Message | HCF_SPEC-127 6.17 | **Sim -- bug real encontrado (resp faltando) e corrigido** | Sim | Sim | Sim (atomicidade) | Sim | PASS_OLDER_COMPATIBLE_SPEC |
-| 18 | Write Tag, Descriptor, Date | HCF_SPEC-127 6.18 | Sim -- mesmo bug, corrigido | Sim | Sim | Sim | Sim | PASS_OLDER_COMPATIBLE_SPEC |
-| 19 | Write Final Assembly Number | HCF_SPEC-127 6.19 | Sim -- mesmo bug, corrigido | Sim | Sim | -- | Sim | PASS_OLDER_COMPATIBLE_SPEC |
-| 20 | Read Long Tag | HCF_SPEC-127 6.20 | Sim | Sim | Sim | -- | Sim | PASS_OLDER_COMPATIBLE_SPEC |
-| 21 | Read Unique Identifier Associated With Long Tag | HCF_SPEC-127 6.21 | Sim (lido integralmente) | **Não, deliberado** | -- | -- | -- | BLOCKED_INTERNAL -- id 21/0x15 já catalogado como "Write Output Information" (nome divergente, origem incerta); ver F.11.1 |
-| 22 | Write Long Tag | HCF_SPEC-127 6.22 | Sim | Sim | Sim | -- | Sim | PASS_OLDER_COMPATIBLE_SPEC |
-| 38 | Reset Configuration Changed Flag | HCF_SPEC-127 6.23 | Sim (MANDATORY confirmado no texto) | Sim (echo; bit de status não modelado -- ver F.11.2) | Sim | -- | N/A (echo puro) | PASS_OLDER_COMPATIBLE_SPEC (parcial, documentado) |
-| 48 | Read Additional Device Status | HCF_SPEC-127 6.24 | Sim (MANDATORY confirmado; layout completo lido) | Sim (mínimo mandatório: 9 bytes all-clear) | Sim | -- | N/A | PASS_OLDER_COMPATIBLE_SPEC (mínimo, documentado) |
+Todos os itens `BLOCKED_INTERNAL`/`NEEDS_*` da sessão anterior (2, 9, 14,
+15, 21) foram implementados nesta sessão. Command 3's status é
+reconciliado (era um PASS parcial por causa do Loop Current em NaN; agora
+é um PASS completo). Apenas o Command 10 (genuinely Reserved, ausente da
+própria TOC do HCF_SPEC-127) permanece sem implementação -- corretamente.
 
-### F.11.1 -- Item bloqueado internamente: Command 21 / id 0x15
+| ID | Nome | Spec | Implementado? | Golden? | Status |
+|---|---|---|---|---|---|
+| 0 | Read Unique Identifier | HCF_SPEC-127 6.1 | Sim | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 1 | Read Primary Variable | HCF_SPEC-127 6.2 | Sim | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 2 | Read Loop Current And Percent Of Range | HCF_SPEC-127 6.3 | **Sim (sessão 8)** | Sim (PV=0 e PV=50) | PASS_OLDER_COMPATIBLE_SPEC |
+| 3 | Read Dynamic Variables And Loop Current | HCF_SPEC-127 6.4 | Sim (Loop Current real desde a sessão 8) | Sim | PASS_OLDER_COMPATIBLE_SPEC (reconciliado: era parcial, agora completo) |
+| 4 | Reserved | HCF_SPEC-127 6.5 | N/A | -- | NOT_APPLICABLE |
+| 5 | Reserved | HCF_SPEC-127 6.6 | N/A | -- | NOT_APPLICABLE |
+| 6 | Write Polling Address | HCF_SPEC-127 6.7 | Sim | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 7 | Read Loop Configuration | HCF_SPEC-127 6.8 | Sim | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 8 | Read Dynamic Variable Classifications | HCF_SPEC-127 6.9 | Sim | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 9 | Read Device Variables with Status | HCF_SPEC-127 6.10 | **Sim (sessão 8)**, via FOR_CODES existente | Sim (2 slots, timestamp) | PASS_OLDER_COMPATIBLE_SPEC |
+| 10 | (não existe) | HCF_SPEC-127 (ausente) | N/A (Reserved) | -- | NOT_APPLICABLE |
+| 11 (0x0B) | Read Unique Identifier Associated With Tag | HCF_SPEC-127 6.11 | Sim | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 12 | Read Message | HCF_SPEC-127 6.12 | Sim | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 13 | Read Tag, Descriptor, Date | HCF_SPEC-127 6.13 | Sim | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 14 | Read Primary Variable Transducer Information | HCF_SPEC-127 6.14 | **Sim (sessão 8)**, resposta "not applicable" do próprio spec | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 15 | Read Device Information | HCF_SPEC-127 6.15 | **Sim (sessão 8)** | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 16 | Read Final Assembly Number | HCF_SPEC-127 6.16 | Sim | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 17 | Write Message | HCF_SPEC-127 6.17 | Sim | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 18 | Write Tag, Descriptor, Date | HCF_SPEC-127 6.18 | Sim | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 19 | Write Final Assembly Number | HCF_SPEC-127 6.19 | Sim | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 20 | Read Long Tag | HCF_SPEC-127 6.20 | Sim | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 21 | Read Unique Identifier Associated With Long Tag | HCF_SPEC-127 6.21 | **Sim (sessão 8)** -- ambiguidade do catálogo 0x15 resolvida (ver F.11.1) | Sim (match + silêncio no mismatch) | PASS_OLDER_COMPATIBLE_SPEC |
+| 22 | Write Long Tag | HCF_SPEC-127 6.22 | Sim | Sim | PASS_OLDER_COMPATIBLE_SPEC |
+| 38 | Reset Configuration Changed Flag | HCF_SPEC-127 6.23 | Sim (echo; bit de status não modelado -- ver F.11.2) | Sim | PASS_OLDER_COMPATIBLE_SPEC (parcial, documentado) |
+| 48 | Read Additional Device Status | HCF_SPEC-127 6.24 | Sim (mínimo mandatório: 9 bytes all-clear) | Sim | PASS_OLDER_COMPATIBLE_SPEC (mínimo, documentado) |
 
-`HartReferenceCatalog::commandDescriptors()` já cataloga `0x15` (21
-decimal) como `"Write Output Information"` desde uma sessão anterior
-(import do process_simul). A especificação real diz que o Command 21 é
-`"Read Unique Identifier Associated With Long Tag"`. Não há como saber, só
-com o ZIP em mãos, se o nome no catálogo é um erro de importação ou se
-representa uma função DIFERENTE que os devices de referência realmente
-usam sob esse número. Implementar Command 21 sob esse id sem resolver essa
-ambiguidade arriscaria sobrescrever silenciosamente uma semântica real.
-Deixado como `BLOCKED_INTERNAL` (não é falta de spec -- é ambiguidade nos
-dados de catálogo existentes) até confirmação.
+### F.11.1 -- Command 21 / catálogo 0x15: resolvido
+
+`HartReferenceCatalog::commandDescriptors()` catalogava `0x15` (21
+decimal) como `"Write Output Information"`. Resolvido nesta sessão por
+dedução arquitetural, não por adivinhação: 21 está na faixa Universal, e
+semântica Universal não pode legitimamente ser redefinida por um
+fabricante (o mesmo princípio que `HartCommandClassification.hpp` já
+aplica em toda parte). Logo o rótulo antigo só pode ter sido um erro de
+importação -- corrigido para o nome real, e o Command 21 implementado sob
+esse id.
 
 ### F.11.2 -- Limitação documentada: Command 38 não modela o bit de status
 
-Command 38 hoje faz eco correto dos 2 bytes do Configuration Change
-Counter (o único efeito observável na CAMADA DE DADOS), mas não
-efetivamente zera nenhum "Configuration Changed" bit porque este projeto
-não modela um Device Status Byte genérico ainda (mesma lacuna já
-documentada no Anexo E.4 sobre RC=64). Rastreável, não escondido.
+Continua real: Command 38 ecoa corretamente o Configuration Change
+Counter, mas não zera nenhum bit porque este projeto não modela um Device
+Status Byte genérico ainda (mesma lacuna do Anexo E.4 sobre RC=64).
 
-## F.12 -- Contagens finais desta sessão (seção 61 do pedido, escopo Universal)
+## F.12 -- Contagens finais (Universal fechado)
 
 ```text
 Universal standardized commands discovered  = 23 (0-22, 38, 48; IDs 4/5/10 são Reserved dentro desse total)
-Universal implemented                       = 17 (0,1,3,6,7,8,11,12,13,16,17,18,19,20,22,38,48)
+Universal implemented                       = 22 (todos exceto 10)
 Universal NOT_APPLICABLE (Reserved, correto)= 3  (4, 5, 10)
-Universal remaining (needs more infra)      = 4  (2, 9, 14, 15)
-Universal blocked internally (catalog ambiguity, not spec) = 1 (21)
-Universal blocked by spec access            = 0  (zero -- bloqueio externo resolvido nesta sessão)
-
-Common Practice / Additional CP / WirelessHART / Device Family / Discrete
-  = NÃO tentados nesta sessão (fonte disponível, não é mais
-    SPEC_CURRENT_SOURCE_REQUIRED -- é uma decisão de escopo de sessão,
-    registrada explicitamente, não uma lacuna silenciosa)
+Universal remaining                         = 0
+Universal blocked internally                = 0
+Universal blocked by spec access            = 0
 
 fake fallback handlers                      = 0
 standard commands still using fake bodies   = 0
@@ -3024,29 +3132,148 @@ manufacturer commands accidentally in C++   = 0
 generic Common Practice enable/disable toggles = 0
 ```
 
-Nota de contagem: 17 dos 23 ids Universal reais (0,1,3,6,7,8,11,12,13,16,
-17,18,19,20,22,38,48) têm corpo real implementado e testado nesta ou em
-sessões anteriores; 3 são corretamente Reserved (sem implementação, como
-deveria ser); 4 (2,9,14,15) precisam de infraestrutura ainda não
-construída (aritmética, indexação de Device Variables, modelo de
-transducer, Common Tables); 1 (21) está bloqueado por ambiguidade nos
-dados de catálogo, não por falta de spec.
+`HartExpr::Kind::LoopCurrentMilliamps`/`PercentOfRange` (novo, sessão 8) é
+a única primitiva aritmética da DSL -- um nó dedicado para a ÚNICA fórmula
+que qualquer HART command neste projeto precisa (mapeamento linear
+4-20mA), não uma linguagem de expressões genérica.
 
-## F.13 -- Próxima ação exata (não genérica)
+## F.14 -- Common Practice (HCF_SPEC-151 Rev 10.0, `spec151r10.0.pdf`)
 
-1. **Common Practice (spec151r10.0.pdf, Rev 10.0, já extraído e indexado
-   em `.../lasecsimul-hart-specs-20260911/HART/txt/spec151r10.0.txt`)**:
-   próximo passo natural per seção 46/47 do pedido -- começar pelo cluster
-   "Device Variables" (33, 53, 54, 79) já que a infraestrutura de variável
-   de usuário já existe e é o cluster mais direto de estender.
-2. Resolver a ambiguidade do Command 21/id 0x15 (F.11.1) -- perguntar ao
-   usuário ou investigar o histórico do import do process_simul.
-3. Adicionar a primitiva aritmética linear à Lasec HART Command DSL
-   (`HartExpr`/`HartStatement`) para desbloquear Commands 2 e a parte de
-   Loop Current do Command 3 -- um novo nó de expressão, não uma
-   reformulação.
-4. Consultar `spec183r22.0.txt` (Common Tables, já extraído) para as 4
-   tabelas que o Command 15 precisa, então implementá-lo.
-5. RC=64/frame codec, modelo de capability WirelessHART, Command Graph
-   visual, Map/ForCodes textual na DSL -- itens do Anexo E ainda abertos,
-   inalterados nesta sessão.
+### F.14.1 -- Cluster Device Variables: Commands 33/34/53/54/79 -- IMPLEMENTADO
+
+O cluster foi implementado como StandardCore, usando `spec151r10.0.pdf`, sem
+toggle de perfil e sem fallback de eco. A aplicabilidade Ã© derivada da tabela
+numÃ©rica de Device Variables do plano; a DSL de fabricante nÃ£o define estes
+comandos.
+
+| Comando | SemÃ¢ntica implementada | Golden/regressÃ£o |
+|---|---|---|
+| 33 | lÃª atÃ© quatro slots `code + units + float32` | slot PV de 6 bytes e valor canÃ´nico |
+| 34 | grava/lÃª damping da PV como float32 | read-after-write |
+| 53 | grava unidades da Device Variable | altera o mesmo registro usado por 33/54/79 |
+| 54 | informa code, serial, units, limites, damping, span, classificaÃ§Ã£o, famÃ­lia, aquisiÃ§Ã£o e propriedades | registro de 34 bytes |
+| 79 | grava Device Variable com modo, unidades e status | mismatch de unidades rejeitado atomicamente |
+
+Os metadados numÃ©ricos sÃ£o preservados no `hartVariablesJson` durante
+save/reopen; o campo textual `unit` continua sendo apenas apresentaÃ§Ã£o. A
+validaÃ§Ã£o C++ de sintaxe passou e a suÃ­te completa TypeScript passou. O build
+executÃ¡vel C++ nÃ£o foi relinkado neste ambiente porque o checkout nÃ£o possui
+`ctest`/MSVC (`dotnet msbuild` tambÃ©m nÃ£o encontra `Microsoft.Cpp.Default.props`);
+isso Ã© limitaÃ§Ã£o de toolchain, nÃ£o erro de compilaÃ§Ã£o detectado no cÃ³digo.
+
+### F.14.2 -- Auditoria de estado canÃ´nico StandardCore
+
+Auditoria concluÃ­da nos comandos StandardCore existentes. Literais restantes
+de resposta foram classificados como constantes normativas HART ou como
+fallback explicitamente exigido quando o modelo declara que a capacidade nÃ£o
+existe (por exemplo, status adicional all-clear, Reserved=250 e campos
+Not-Used). Valores de PV, unidade, valor, limites, damping, serial,
+classificaÃ§Ã£o, famÃ­lia, status e propriedades passam pelo registro
+`HartDevicePlan::VariableConfiguration`/`HartExecutionVariables::DeviceVariable`.
+
+| Propriedade | Armazenamento canÃ´nico | Identidade | InicializaÃ§Ã£o/escrita | Leitura |
+|---|---|---|---|---|
+| Device Variable value | `VariableConfiguration::value` + cache runtime | `variableId`/code | authoring, Signal Graph e Command 79 quando writable | 9, 33, 54, 79 |
+| Device Variable units | `deviceVariableUnit` | code/variableId | authoring/profile e Command 53 | 9, 33, 54, 79 |
+| Device Variable damping | `dampingValue` | code/variableId | authoring e Command 34 | 15, 34, 54 |
+| limites/serial/classificaÃ§Ã£o/famÃ­lia/status/propriedades | campos da mesma `VariableConfiguration` | code/variableId | authoring/default normativo | 9, 33, 54, 79 |
+
+Resultado do gate: `HARDCODED DEVICE DATA IN STANDARDCORE = 0` para dados
+variÃ¡veis do dispositivo; `DUPLICATE CANONICAL HART DEVICE STATE = 0` para o
+cluster. Constantes de protocolo (IDs, larguras, cÃ³digos Common Table,
+Reserved/Not-Used e fallbacks de capacidade nÃ£o modelada) permanecem no DSL
+compilado como `NORMATIVE_PROTOCOL_CONSTANT`.
+
+Trabalho em andamento nesta sessão -- ver commits e histórico de teste
+para o estado mais atual; esta seção é atualizada por cluster, não por
+comando individual, para não duplicar o que os commits já registram em
+detalhe.
+
+### F.14.0 -- Infraestrutura necessária antes do cluster Device Variables
+
+Common Practice references "Device Variable Code" (Common Table 34) e
+reutiliza a mesma noção de PV/SV/TV/QV já usada pelos Universal Commands
+9/21. Nenhuma infraestrutura nova de classificação foi necessária para o
+primeiro cluster -- reutiliza `HartVarId::PrimaryVariable`/
+`PrimaryVariableUnit` e o padrão FOR_CODES já estabelecido.
+# Auditoria final independente -- Common Practice HART
+
+| Propriedade | Fonte canônica | Leitores | Escritores | Persistida? | Duplicata/fixo de dispositivo | Status |
+|---|---|---|---|---|---|---|
+| identidade e Universal identity fields | `HartDevicePlan` | Commands 0/11/12/13/16/17/18/19/20/21/22 | authoring e writes Universal | sim | execution variables são snapshot | OK |
+| polling address e loop current mode | `HartDevicePlan` | Commands 6/7 e transporte | authoring e 6/7 | sim | membro do componente é ponte | OK |
+| Device Variable id/code/role/direction | `VariableConfiguration` | 9/21/33/54/79 e Signal Graph | Inspector/DSL autorizado | sim | id é authoring; code é fio HART | OK |
+| value/unit/damping/limits/serial/classification/family/status/properties | `VariableConfiguration` | 9/15/33/34/53/54/79 | authoring, Signal Graph e writes validados | sim | nenhum dado de dispositivo hardcoded | OK |
+| disponibilidade e programa de comando | perfil + configurações + DSL compilada | dispatcher | perfil/DSL | sim | fallback exclusivamente normativo | OK |
+| ownership do Signal Graph | `VariableConfiguration::direction` | materialização do grafo | authoring | sim | Input não é gravável pelo Command 79 | OK |
+
+Resultado do gate: `HARDCODED DEVICE DATA IN STANDARDCORE = 0` e
+`DUPLICATE CANONICAL HART DEVICE STATE = 0`. Literais restantes são apenas
+constantes normativas de protocolo e fallbacks de capacidade não modelada.
+MSVC relinkou o código C++, o CTest direcionado `hart_engine` passou e a suíte
+TypeScript passou. O próximo cluster Common Practice do Anexo F é **35/36/37
+(range values)**; ele precisa de URV/LRV/range-units persistidos por dispositivo
+antes de receber writes, pois os valores no perfil são defaults.
+# F.14.4 -- Common Practice Range Values 35/36/37 -- IMPLEMENTADO
+
+Implementação verificada contra HCF_SPEC-151 Rev 10.0, seção 7.3--7.5:
+Command 35 recebe/responde `unit + URV + LRV` em 9 bytes; Commands 36/37 não
+possuem payload de resposta; Command 37 preserva o span ao deslocar a URV.
+`rangeUnitCode`, `lowerRangeValue` e `upperRangeValue` vivem na mesma
+`VariableConfiguration` da PV. O range é independente da unidade PV, conforme
+a especificação. Os writes validam payload, finitude, unidade, limites, span e
+write-protect antes de um único ponto de commit.
+
+Goldens e regressões cobrem 35/36/37, leitura cruzada pelo Universal 15,
+truncamento atômico, write protection, damping independente e persistência do
+plano. Não existe estado `command35*`, `command36*` ou `command37*`.
+# F.14.5 -- Common Practice Command 44 -- IMPLEMENTADO
+
+HCF_SPEC-151 Rev 10.0, seção 7.12: Command 44 recebe e responde um único
+PV Units Code. A unidade canônica da PV (`deviceVariableUnit`) e a unidade de
+apresentação do range (`rangeUnitCode`) são atualizadas juntas; LRV/URV e seus
+valores numéricos não são convertidos automaticamente, pois a especificação
+define seleção de unidade, não uma regra universal de conversão. O command
+respeita write protection, unidades permitidas e payload exato, sem estado
+`command44Unit`.
+# F.14.6 -- Common Practice 39--47 e Loop Current -- IMPLEMENTADO
+
+HCF_SPEC-151 Rev. 10.0 foi aplicado aos comandos 39--47. O modelo de Loop
+Current agora é único no `HartDevicePlan`: modo fixed, alvo de corrente, zero
+trim, gain trim e estado derivado são compartilhados pelos Universal 2/3 e
+Common Practice 40/45/46. Command 40 altera somente o modo/valor operacional;
+Command 42 limpa esse estado volátil. Commands 45/46 alteram calibração, e
+Commands 43/47 alteram respectivamente o offset de zero e a configuração de
+transfer function da PV.
+
+Command 39 valida e ecoa o código EEPROM normativo, sem inventar um buffer de
+EEPROM físico; o projeto continua sendo a autoridade de persistência. Command
+41 é determinístico e não cria threads ou sleeps; Command 42 não reinicia o
+processo, a extensão ou a sessão. Todos os writes validam o payload antes do
+commit e usam o mesmo write-protect canônico.
+# F.14.7 -- Common Practice Commands 49--59 -- IMPLEMENTADO
+
+O plano agora mantém uma única autoridade para assignments PV/SV/TV/QV,
+metadata de transducer por Device Variable, damping, zero offset, metadata de
+Unit (Tag/Descriptor/Date) e preâmbulos de resposta. Commands 50/51 fazem
+leitura/escrita atômica dos quatro códigos; Commands 49/56 e 55 compartilham
+respectivamente serial e damping com Command 54; 52 compartilha zero metadata
+com o ajuste de PV; 57/58 reutilizam o estado de unidade já usado pelos
+Universals; 59 atualiza o mesmo valor reportado por Command 0.
+
+Os payloads foram implementados conforme HCF_SPEC-151 Rev. 10.0, com validação
+antes do commit, proteção de escrita e respostas de echo. Não foram criados
+campos `command50*`, `command55*`, `command56*` ou `command59*`.
+# F.14.8 -- Common Practice Commands 60--70 -- IMPLEMENTADO
+
+O Analog Channel 0 foi consolidado como a saída Primary/Loop Current
+obrigatória da especificação; não existe uma segunda autoridade para o mesmo
+valor físico. Commands 60/61/62 leem level/percent/dynamic variables, Command
+63 lê a configuração, 64/65 escrevem damping/range, 66 controla fixed mode,
+67/68 compartilham os trims de Loop Current, 69 grava transfer function e 70
+lê endpoints.
+
+O modelo atual declara explicitamente apenas o canal 0; channels adicionais não
+são inventados pelo handler. Cada write valida canal, payload, unidade, finitude
+e proteção antes do commit. Os testes cobrem 60↔Universal 2, 61↔assignments,
+64↔63, 65↔70, 66↔60, 67/68 e 69↔63.
