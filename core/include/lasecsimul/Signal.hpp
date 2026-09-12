@@ -13,6 +13,18 @@ struct SignalSubscription {
     SignalValueKind requestedKind = SignalValueKind::Digital;
 };
 
+/** Generic component-side signal endpoint.  Unlike an electrical Pin this is
+ * resolved by the Signal Graph and its id is part of the component's stable
+ * authoring identity. */
+enum class SignalPortDirection : uint8_t { Input, Output };
+
+struct SignalPortDescriptor {
+    std::string id;
+    SignalPortDirection direction = SignalPortDirection::Input;
+    SignalValueKind kind = SignalValueKind::Analog;
+    std::string unit;
+};
+
 struct SignalDescriptor {
     std::string channelId;
     std::string source;

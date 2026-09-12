@@ -156,6 +156,29 @@ export function parseVariableRows(json: string): HartVariableRow[] {
   }));
 }
 
+/** Defense-in-depth for the variable `id` field's "stable identity, not
+ * editable after creation" contract (the rendered `<input readonly>` is the
+ * primary defense, same convention as the DSL-draft-open guard in
+ * `PropertyInspectorViewProvider.onDidReceiveMessage` -- a message that
+ * slips through a stale/bypassed webview must still never reach the
+ * Authoring Model). `id` is the Signal Graph identity for Input/Output
+ * variables (`HartCommunicationComponent::signalBlockId` = `hart.<index>.
+ * <id>`); silently accepting a changed id for an existing row would orphan
+ * any wire bound to the old block id with no warning. Rows are matched by
+ * array position, the same indexing the client script itself uses to build
+ * the payload -- a row that already existed at position i keeps its old id
+ * regardless of what the incoming payload says; a genuinely new row (no
+ * previous row at that position) keeps whatever id it arrived with. */
+export function preserveExistingVariableIds(previousJson: string, nextJson: string): string {
+  const previous = asRecordArray(previousJson);
+  const next = asRecordArray(nextJson);
+  const corrected = next.map((row, i) => {
+    const previousId = previous[i]?.id;
+    return typeof previousId === "string" && previousId ? { ...row, id: previousId } : row;
+  });
+  return JSON.stringify(corrected);
+}
+
 export function serializeVariableRows(rows: HartVariableRow[]): string {
   return JSON.stringify(rows.map((row) => ({
     id: row.id, name: row.name, role: row.role, type: row.type, direction: row.direction,
@@ -225,7 +248,7 @@ export function renderVariablesSection(rows: HartVariableRow[], options: HartSec
     const valueDisabled = options.structuralEditsLocked && !row.runtimeMutable;
     return `<div class="hv-row">
       <div class="hv-line">
-        <input ${d("id")} value="${escapeAttr(row.id)}" placeholder="variableId (stable)" ${structuralDisabled ? "readonly" : ""} title="Stable identity -- referenced by commands and bindings; not editable after creation">
+        <input ${d("id")} value="${escapeAttr(row.id)}" placeholder="variableId (stable)" readonly title="Stable identity -- referenced by commands, Signal Graph wires (hart.&lt;index&gt;.&lt;id&gt; block id) and bindings; never editable after creation, not just while RUN is active. Remove and re-add the variable to change it (this intentionally breaks any wire on the old id instead of silently orphaning it).">
         <input ${d("name")} value="${escapeAttr(row.name)}" placeholder="Display name">
         <button data-hv-remove="${i}" ${structuralDisabled ? "disabled" : ""} title="Remove variable">&minus;</button>
       </div>

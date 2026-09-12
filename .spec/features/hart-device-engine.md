@@ -2092,27 +2092,82 @@ O que a auditoria encontrou **não** implementado, apesar de o arquivo existir:
 
 ### B.3 Editor de Variables — modelo real exposto
 
-`id` (variableId estável, somente-leitura após criado) · `name`
-(displayName) · `role` (select: PV/SV/TV/QV/Internal/DeviceSpecific/
-VendorSpecific/Custom) · `type` (select: Float32/UInt8/UInt16/Int16/
-PackedAscii/Bool — só os tipos que `HartTypeCodec` de fato implementa) ·
-`direction` (select: Internal/Input/Output) · `unit` · `value` · `readable`/
-`writable`/`runtimeMutable` (checkboxes). `writable` desabilita
-automaticamente quando `direction=Input`, com explicação inline. Um
-`expression` legado (authoring computado via SignalExpression, pré-existente)
-sobrevive ao round-trip sem ganhar um campo dedicado no editor novo — não é
-mais um "modo de origem" de primeira classe, mas dado existente nunca é
-descartado silenciosamente.
+`id` (variableId estável) · `name` (displayName) · `role` (select: PV/SV/TV/
+QV/Internal/DeviceSpecific/VendorSpecific/Custom) · `type` (select: Float32/
+UInt8/UInt16/Int16/PackedAscii/Bool — só os tipos que `HartTypeCodec` de fato
+implementa) · `direction` (select: Internal/Input/Output) · `unit` · `value`
+· `runtimeMutable`. `writable` desabilita automaticamente quando
+`direction=Input`, com explicação inline. Um `expression` legado (authoring
+computado via SignalExpression, pré-existente) sobrevive ao round-trip sem
+ganhar um campo dedicado no editor novo — não é mais um "modo de origem" de
+primeira classe, mas dado existente nunca é descartado silenciosamente.
 
-**Gap real, documentado, não fechado**: `direction=Input`/`Output` é
-armazenado e validado (write-ownership), mas **não materializa uma porta no
-Signal Graph** — isso exigiria estender o mecanismo `ComponentPinSpec`/
-`DynamicPinGroupSpec` (`lasecsimul/Types.hpp`) para portas dirigidas por uma
-coleção JSON (hoje ele só deriva contagem de pinos de UMA propriedade
-numérica), preservação de fios ao trocar direction, e mudanças no
-`PlanCompiler`. Isso é um recurso estrutural grande e separado — o Gate 3 do
+**CORREÇÃO (auditoria FEAT-013 cross-system, sessão posterior)**: a
+afirmação anterior deste parágrafo -- "`id` somente-leitura após criado" --
+estava **desatualizada em relação ao próprio código**, não apenas à
+especificação: o atributo HTML `readonly` só era aplicado quando
+`structuralEditsLocked` (RUN ativo ou draft DSL aberto). Com a simulação
+PARADA -- o estado normal de edição -- o campo era um `<input>` comum,
+permitindo reescrever o `id` de uma variável já existente. Como confirmado
+nesta sessão (`HartCommunicationComponent::signalBlockId` deriva o bloco do
+Signal Graph diretamente desse id, `hart.<index>.<id>`), isso teria órfão
+silenciosamente qualquer fio do Signal Graph ligado ao id antigo assim que a
+materialização de porta abaixo entrasse em uso real. Corrigido: o `id` agora
+é `readonly` incondicionalmente, mais uma segunda defesa em profundidade no
+lado do host (`preserveExistingVariableIds` em `hartInspectorSections.ts`,
+chamada em `PropertyInspectorViewProvider.onDidReceiveMessage`) que reverte
+qualquer tentativa de mudar o id de uma linha já existente antes de a
+mutação alcançar o Authoring Model, mesmo que uma mensagem adulterada ou
+obsoleta da webview escape do bloqueio de UI. Regression tests cobrindo
+ambas as camadas em `hartInspectorSections.test.ts`.
+
+**Gap anterior PARCIALMENTE FECHADO nesta sessão (era "Gap real,
+documentado, não fechado" -- claim de estar totalmente em aberto estava
+desatualizada; ver a precisão logo abaixo sobre o que realmente fechou)**:
+`direction=Input`/`Output` agora MATERIALIZA uma porta real no Signal Graph, implementada
+concorrentemente a esta auditoria (`lasecsimul/Signal.hpp::
+SignalPortDescriptor`/`SignalPortDirection`, `HartCommunicationComponent::
+signalPorts()`/`signalBlockId()`/`setSignalInput()`/`signalOutput()`,
+`SimulationSession::materializeHartSignalPortsUnlocked()`/
+`sampleHartInputsFromSignalUnlocked()`/`publishHartOutputsToSignalUnlocked()`).
+Esta implementação NÃO tinha nenhum teste em todo o repositório antes desta
+auditoria (busca por `signalPorts`/`materializeHartSignalPorts` no diretório
+de testes não retornava nada) -- adicionado um bloco de teste dedicado em
+`HartEngineTest.cpp` provando: variável `Internal` nunca aparece em
+`signalPorts()`; `Input` materializa porta Input com `kind` correto
+(Analog/Digital conforme `type`) e `unit`; `Output` materializa porta
+Output; `signalBlockId` tem o formato exato `hart.<index>.<id>`;
+`setSignalInput` aceita para `Input` real e rejeita `Internal`/id
+inexistente; `signalOutput` lê o valor real de uma variável `Output`. Um
+achado real e corrigido no mesmo teste: `signalOutput()` (ao contrário de
+`setSignalInput()`, que já validava direção) não verificava que a variável
+fosse realmente `Output` antes de devolver seu valor -- inofensivo na
+prática porque o único chamador real (`publishHartOutputsToSignalUnlocked`)
+já filtra por `signalPorts()` antes de chamar, mas uma segunda defesa em
+profundidade ausente onde a função irmã já a tinha; corrigido para
+verificar a direção real da variável antes de responder.
+
+**Precisão importante sobre o alcance real desta materialização** (a
+formulação inicial desta correção, ao vivo, superestimou o quanto está
+pronto -- corrigida aqui antes do commit): o que existe e está testado é
+inteiramente do lado Core -- `signalPorts()` alimenta
+`SimulationSession::materializeHartSignalPortsUnlocked()`, que injeta blocos
+`Probe`/`ExternalInput` diretamente na `SignalGraphDefinition` COMPILADA:
+sampling/publish por tick funcionam de fato. Busca em todo
+`extension/src/ui/webview/*.ts` (a definição do modelo de componente da
+Webview, `main.ts`, o pipeline de pinos/fios do canvas) por
+`signalPorts`/`SignalPortDescriptor`/`protocol.hart` não encontrou NENHUMA
+referência -- ou seja, `WebviewComponentModel.pins[]` de um componente HART
+não inclui essas portas dinâmicas, e não existe mecanismo para o usuário
+desenhar um fio até uma variável Input/Output pelo canvas hoje. O Gate 3 do
 contrato original (mudar direction e ver a porta aparecer/fio conectável)
-**não está pronto**; a validação write-ownership (Gate 9) está.
+portanto NÃO está pronto de ponta a ponta -- só a metade Core (compilação/
+tick) está; a metade de UI (pino aparecer no componente, fio desenhável) é
+trabalho ainda não iniciado, não apenas "não confirmado clicando" como uma
+sessão anterior já registrava (ver a tabela C.6, cuja frase "portas
+materializam mas não confirmadas clicando no canvas" já estava mais
+precisa que o primeiro rascunho desta nota e é a formulação que deve
+prevalecer).
 
 ### B.4 Editor de Commands — modelo real exposto
 
@@ -2190,26 +2245,45 @@ portanto não reivindicados como prontos:
 
 ### B.6 Checklist do contrato original (seção 90) — estado real
 
+**Reconciliado nesta sessão (auditoria cross-system FEAT-013)**: a linha
+"`variableId` estável (não-editável após criado)" abaixo estava
+`CONFIRMED` apenas em intenção -- o código real permitia editar o `id` com a
+simulação parada. `UPDATED` para refletir a correção real (readonly
+incondicional + defesa em profundidade no host), ver B.3. A linha "porta
+Signal Graph para Input/Output" na lista de pendências foi `REMOVED_AS_STALE`
+-- a materialização de porta existe agora e tem teste dedicado, ver B.3.
+
 Feito e comprovado: painel persistente via infraestrutura oficial · sem modal
 HART canônico competindo · fluxo de seleção canônico (`setSelection`
 alimentado por `state.schematicState`, não DOM scraping) · seções agrupadas ·
-`variableId` estável (não-editável após criado) · Internal/Input/Output
-armazenado e validado · edição estrutural bloqueada durante RUN · campos
-`runtimeMutable` seguem a regra do Core · comandos editáveis
-semanticamente (subconjunto plano) · `Body`/`BodySlice`/`Variable`/`Hex`
-representados · diagnóstico do compilador exposto · nenhum bytecode exposto
-· commit-on-change (não por tecla) · sem polling do projeto inteiro ·
-Inspector nunca é fonte de verdade · testes Core e Extension passam.
+`variableId` estável e **de fato somente-leitura incondicionalmente após
+criado, com defesa em profundidade no host** (corrigido nesta sessão, era
+apenas readonly durante RUN) · Internal/Input/Output armazenado e validado
+· **porta real no Signal Graph (lado Core) para Input/Output, com teste
+dedicado** (implementado concorrentemente, verificado e um achado corrigido
+nesta sessão -- lado canvas/Webview ainda não existe, ver B.3) · edição
+estrutural bloqueada durante RUN · campos `runtimeMutable`
+seguem a regra do Core · comandos editáveis semanticamente (subconjunto
+plano) · `Body`/`BodySlice`/`Variable`/`Hex` representados · diagnóstico do
+compilador exposto · nenhum bytecode exposto · commit-on-change (não por
+tecla) · sem polling do projeto inteiro · Inspector nunca é fonte de verdade
+· testes Core e Extension passam (e, desde esta sessão, realmente falham
+quando deveriam -- ver Anexo F.16).
 
 Parcial ou pendente: `req`/`write`/`after` e `If`/`Map`/`ForCodes` sem editor
-· referência a variável customizada dentro de comando · porta Signal Graph
-para Input/Output · encapsulamento `.lssubcircuit` não auditado · Undo/Redo,
-temas, resize e os demais gates que exigem Extension Development Host
-interativo não confirmados manualmente · consolidação do editor canônico é
-parcial (dispatch de `kind` unificado; os dois renderers HTML continuam
-fisicamente separados, um DOM client-side e um HTML string server-side —
-unificação completa exigiria mover a sidebar para o mesmo modelo de
-webview+DOM do canvas, fora do escopo desta sessão).
+· referência a variável customizada dentro de comando · encapsulamento
+`.lssubcircuit` não auditado · **a ponta de UI/canvas real da porta Signal
+Graph -- não apenas "não confirmada clicando", genuinamente não implementada:
+nenhuma referência a `signalPorts`/`SignalPortDescriptor`/`protocol.hart` em
+todo `extension/src/ui/webview/*.ts`, então um componente HART não expõe
+essas portas em `pins[]` e não há como desenhar um fio até elas pelo canvas
+hoje** · Undo/Redo, temas, resize, e os demais gates que exigem Extension
+Development Host interativo não confirmados manualmente · consolidação do
+editor canônico é parcial (dispatch de `kind` unificado; os dois renderers
+HTML continuam fisicamente separados, um DOM client-side e um HTML string
+server-side — unificação completa exigiria
+mover a sidebar para o mesmo modelo de webview+DOM do canvas, fora do escopo
+desta sessão).
 
 ### B.7 Próxima ação
 
@@ -3347,6 +3421,15 @@ sintético.
 | 821--822 | Write/Read Network Access Mode | u8/u8 e vazio/u8 | access mode | DONE_SPEC_VERIFIED |
 | 860--861 | Read/Write Join Key Mode | vazio/u8 e u8/u8 | join-key mode | DONE_SPEC_VERIFIED |
 
+As leituras 782--785 agora usam tabelas canônicas bounded por dispositivo para
+Session, Superframe, Link e Graph, com IDs/referências normativas e rejeição
+atômica de índices inválidos. O mesmo modelo agora cobre 802/803 e
+974--977 (rotas e source-routes) e 814--816 (listas de dispositivos), com
+capacidade fixa, UID de cinco bytes, validação prévia e remoção consistente de
+source-route ao remover a rota. Os demais comandos Wireless permanecem
+explicitamente pendentes neste inventário; nenhum handler cria estado por
+comando nem usa eco genérico como fallback.
+
 Writes Wireless acima usam a mesma autoridade de Configuration Changed,
 write-protect e estado persistente `hartAdditionalJson`; chaves são mantidas
 somente no modelo canônico e não são logadas. Os demais comandos Wireless
@@ -3799,3 +3882,187 @@ Zero defeitos. Resolve definitivamente a incerteza registrada nas sessões
 anteriores sobre este item (a suspeita era infundada -- o teste já usava
 valores não degenerados o suficiente para expor um erro de layout, e nenhum
 foi encontrado).
+
+## Anexo F.16 -- Auditoria cross-system: Lasec (Signal Graph) DSL, Property Inspector, reconciliação (sessão posterior)
+
+Escopo desta seção: itens 1-26 do pedido de continuação ("Lasec DSL --
+auditoria completa", "Property Inspector -- auditoria completa",
+"reconciliação cross-system"). Metodologia idêntica ao resto do Anexo F:
+reconstruir a arquitetura real a partir do código, não assumir que "os
+testes passam" prova algo, provar diretamente cada propriedade exigida.
+
+### F.16.1 -- Achado crítico: o harness de teste do Lasec DSL nunca executava
+
+`extension/src/dsl/DslReconciler.test.ts` exportava uma função
+`runDslReconcilerTests` e NUNCA A CHAMAVA -- sem o IIFE auto-invocado que
+todo outro arquivo de teste deste projeto usa. `node
+out-test/.../DslReconciler.test.js` carregava o módulo, definia a função, e
+saía com código 0 tendo executado zero asserções. Isto mascarava quatro
+defeitos reais (F.16.2) que existiam desde que este arquivo foi escrito.
+
+Investigando por que isso passou despercebido, encontrado um segundo
+defeito sistêmico, mais grave em alcance: **15 outros arquivos de teste** já
+conectados ao `npm test` chamavam `finish()` sem nunca inspecionar
+`{failed}` nem setar `process.exitCode` -- então uma asserção que falhasse
+dentro deles imprimia "✗" no console mas NUNCA fazia o comando `npm test`
+(nem a cadeia `&&` do CI) falhar de verdade:
+`catalogCommands.test.ts`, `deviceUniqueness.test.ts`,
+`topologyDocument.test.ts`, `componentSymbols.test.ts`,
+`genericSubcircuitPackage.test.ts`, `componentLabels.test.ts`,
+`batchProperties.test.ts`, `hartInspectorSections.test.ts`,
+`subcircuitDocument.test.ts`, `subcircuitPinModel.test.ts`,
+`subcircuitExposedComponents.test.ts`, `subcircuitValidation.test.ts`,
+`subcircuitSymbolScene.test.ts`, `HartCommandDsl.test.ts`,
+`schematicModel.test.ts`. Todos corrigidos com o padrão já usado
+corretamente em outros arquivos deste mesmo projeto
+(`const { failed } = finish(); process.exitCode = failed > 0 ? 1 : 0;`).
+`npm test` completo re-executado verde com todas as correções em vigor --
+desta vez o verde é real, não apenas não observado.
+
+### F.16.2 -- Quatro defeitos reais no `DslParser.ts`/`DslReconciler.ts` (compact syntax)
+
+1. **IDs instáveis sob edição não relacionada**: blocos inline anônimos
+   (`A -> Gain(2) -> B`, sem binding `nome = Tipo(...)` explícito) e fios
+   auto-numerados tiravam o id de um contador ÚNICO compartilhado pelo
+   documento inteiro. Qualquer edição não relacionada em outro lugar do
+   arquivo podia reatribuir silenciosamente a identidade de um bloco/fio de
+   uma cadeia completamente diferente, quebrando preservação de
+   posição/rota na reconciliação. Corrigido: contador por âncora (o
+   endpoint inicial da própria cadeia), provado com teste de reordenação e
+   com dois blocos idênticos em cadeias diferentes nunca colidindo.
+2. **Sintaxe `componente.pino` / `in.porta` / `out.porta` estava
+   completamente quebrada**: o lexer inclui `.` dentro de tokens de
+   palavra de propósito (assim `filtro.p1` vira UM token, igual à própria
+   gramática legada), mas `parseTarget()` da sintaxe compacta esperava um
+   token `.` separado que nunca pode aparecer -- toda referência com ponto
+   caía no fallback "componente literalmente chamado foo.bar, pino 'out'".
+   Corrigido dividindo o token mesclado do mesmo jeito que o parser legado
+   já faz.
+3. **Pino padrão ambíguo usava um "out" literal hardcoded** que
+   essencialmente nunca bate com um pino real de catálogo (não existe
+   convenção universal de nomes in/out entre `WebviewComponentCatalogEntry`).
+   Corrigido: o parser emite um sentinel (`DEFAULT_PIN_SENTINEL`) que o
+   reconciliador resolve usando a lista real e ordenada de pinos do
+   catálogo (primeiro pino para o lado receptor do fio, último para o lado
+   emissor) -- dado real do catálogo, não uma segunda convenção inventada.
+4. **A sintaxe compacta não aceitava quebra de linha como terminador de
+   instrução**, apesar de ser exatamente essa a ergonomia que o próprio
+   teste pré-existente (nunca executado) pressupunha (seu DSL de exemplo
+   não tem ponto-e-vírgula nenhum). Corrigido para aceitar `;` OU quebra de
+   linha como terminador.
+
+Todos os quatro confirmados via reprodução direta antes da correção e
+regression test depois. `DslReconciler.test.ts` reescrito para
+auto-executar de verdade, com os testes antigos preservados e novos:
+IDs estáveis sob reordenação, ausência de colisão entre blocos idênticos em
+cadeias diferentes, e sobrevivência de uma rota de fio editada manualmente
+através de uma reconciliação não relacionada.
+
+### F.16.3 -- Lasec DSL: demais itens do checklist, verificados sem novos defeitos
+
+- **ONE LASEC DSL / ONE SEMANTIC AUTHORING MODEL**: confirmado. As duas
+  sintaxes (`model {...}` explícita e a forma compacta) são dois
+  front-ends léxicos que convergem para o MESMO `DslDocument`, reconciliado
+  pela MESMA `reconcileDsl()`. A DSL de comandos HART
+  (`HartCommandDsl.ts`) é deliberadamente um parser/compilador separado (
+  domínio diferente: topologia de circuito vs. pipeline de bytes de um
+  comando HART), mas reusa o MESMO lexer -- não uma segunda linguagem de
+  expressões genérica por acidente.
+- **Invalid DSL Gate**: provado diretamente. `reconcileDsl` retorna
+  `{diagnostics}` SEM campo `state` em qualquer erro (tipo desconhecido,
+  endpoint inválido, id duplicado) -- o chamador real
+  (`dslCommands.ts::commitDslCommand`) verifica `!reconciled.state` e
+  aborta sem tocar `state.schematicState`. Nenhuma mutação parcial possível
+  por construção (o objeto de estado só é montado no final, depois de toda
+  validação).
+- **Save/Run com DSL pendente**: `commitOpenDslIfPresent()` é chamado antes
+  de Save/Run (múltiplos pontos em `extension.ts`); se um draft DSL está
+  aberto, ele DEVE ser commitado primeiro -- falha de parse/reconciliação
+  aborta o Save/Run inteiro (`return` antes de prosseguir).
+- **Ausência de parsing de DSL no hot path**: confirmado nos dois lados.
+  Lado Sinal: `parseDsl`/`reconcileDsl` só são importados por
+  `dslCommands.ts`, disparados por comandos VSCode explícitos, nunca por um
+  callback de tick. Lado HART: `HartCommandDsl.ts` compila para JSON UMA
+  vez (na autoria), `HartCommandJson::parseCommandDefinition` (C++) compila
+  esse JSON para IR UMA vez em `installCommandPrograms`
+  (`HartCommandCompiler::compile`), e o hot path (`HartCommandExecutor::
+  execute`, chamado por toda transação) só executa a IR já compilada.
+  Zero parsing de texto de DSL por requisição em qualquer um dos dois.
+- **Limite HART Manufacturer DSL**: comandos padronizados continuam
+  StandardCore (`HartCommandClassification`); a DSL de fabricante não pode
+  redefinir um id protegido -- já confirmado em sessões anteriores
+  (Anexo E) e não afetado por mudanças concorrentes desta sessão.
+- **Resolução de blocos via catálogo**: `addInline()` aceita qualquer
+  `typeId` string; a validação de tipo conhecido acontece só em
+  `reconcileDsl` via `catalogByType`. Nenhum `switch("Gain")`/lista
+  hardcoded de tipos de bloco encontrada no parser.
+- **Tipos de propriedade**: `DslValue = string | number | boolean |
+  DslValue[]`; o parser (`value()`) e o serializer (`value()`) usam a
+  MESMA lógica de coerção em espelho (string via `JSON.stringify`,
+  number/boolean diretos, array recursivo) -- nenhuma perda de tipo
+  encontrada no round-trip Visual -> DSL -> Visual.
+- **Mutação estrutural durante RUN**: `commitDslCommand` chama
+  `rebuildCoreFromSchematicState()` incondicionalmente, mas
+  `rebuildCoreFromSchematicStateNow()` já para a simulação primeiro
+  (`stopSimulation()` + `setSimulationStatus("stopped")`) quando estava
+  rodando, antes de aplicar qualquer mutação -- transição explícita e
+  visível para "stopped", não uma mutação estrutural silenciosa em pleno
+  RUN. Decisão de UX já documentada no próprio código (evita o timeout
+  conhecido ao trocar firmware rodando); não é uma violação da política, é
+  a política aplicada de um jeito mais amigável que "falhar e exigir stop
+  manual".
+
+### F.16.4 -- Property Inspector: achado e correção
+
+Ver B.3/B.6 para os detalhes completos e a reconciliação de texto. Resumo:
+
+- **`variableId` não era de fato imutável após a criação** -- só ficava
+  `readonly` durante RUN/draft DSL aberto; com a simulação parada (estado
+  normal) o campo era editável, e como o Signal Graph agora deriva a
+  identidade do bloco diretamente desse id (`hart.<index>.<id>`), isso
+  órfã-aria silenciosamente qualquer fio. Corrigido com duas camadas:
+  `readonly` incondicional na UI, e `preserveExistingVariableIds()` no
+  host revertendo qualquer tentativa de mudança para uma linha já
+  existente antes de a mutação alcançar o Authoring Model.
+- **Porta Signal Graph para variáveis Input/Output (lado Core)**: gap
+  documentado como "não fechado" em B.3 na sessão anterior; o lado Core
+  (`HartCommunicationComponent::signalPorts()`, `SimulationSession::
+  materializeHartSignalPortsUnlocked`) JÁ estava implementado (trabalho
+  concorrente) no momento desta auditoria, só sem nenhum teste -- o lado
+  canvas/Webview continua genuinamente não implementado (zero referências
+  em `extension/src/ui/webview/*.ts`), não apenas não confirmado
+  manualmente; ver a precisão em B.3. Verificado com um bloco de teste
+  dedicado em `HartEngineTest.cpp` (zero defeitos na materialização em si)
+  e um achado
+  real e corrigido: `signalOutput()` não verificava a direção real da
+  variável antes de responder (`setSignalInput()`, a função irmã, já
+  fazia essa validação) -- inofensivo no chamador real de hoje mas uma
+  segunda defesa em profundidade ausente; corrigido.
+- Demais itens do checklist (Inspector nunca guarda estado semântico
+  independente, Inspector fica read-only com draft DSL aberto -- com
+  defesa em profundidade própria já existente, Input nunca expõe um campo
+  Value genérico, `readable`/`writable`/`runtimeMutable` não são
+  checkboxes technical-flag genéricas expostas ao usuário, save/reopen
+  usa uma segunda instância real do componente): já corretos, confirmados
+  sem novos defeitos.
+
+### F.16.5 -- Configuration Changed: autoridade única reconfirmada (item 28 do pedido)
+
+Reconfirmado nesta sessão, sem mudança necessária: `HartDevicePlan::
+configurationChangedCounter` continua a única autoridade viva (incrementada
+por toda escrita normativa de Common Practice/Pressure/Temperature/
+WirelessHART que muta configuração persistida, lida por Command 38/48).
+`HartEventNotificationRecord::configurationChangedCounter` continua um
+snapshot congelado dentro de um registro de evento (padrão correto
+"valor vivo" vs. "snapshot histórico"), não uma segunda autoridade -- ver
+F.15.3 para a análise original, que segue válida (nenhuma mudança
+concorrente a este campo desde então).
+
+### F.16.6 -- `standardCoreNoProgram`: sem novas alterações necessárias (item 29 do pedido)
+
+Revisto novamente contra o estado atual do arquivo: continua um booleano de
+auto-documentação/atalho de despacho, não uma autoridade de runtime (a
+autoridade real é o `if` nativo mais o guard final `it ==
+programs->end()`). Nenhuma nova inconsistência encontrada desde a
+reconciliação registrada em F.15.4. Não tratado como prioridade, conforme
+instruído.

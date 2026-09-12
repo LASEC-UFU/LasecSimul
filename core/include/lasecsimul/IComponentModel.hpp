@@ -109,6 +109,10 @@ public:
 
     /** Aquisição declarativa executada pela sessão somente após o passo convergir. */
     virtual std::vector<SignalSubscription> signalSubscriptions() const { return {}; }
+    /** Generic Signal Graph endpoints.  Components with dynamic signal
+     * variables derive this list from their authoring model; it is never a
+     * second, independently-authored pin list. */
+    virtual std::vector<SignalPortDescriptor> signalPorts() const { return {}; }
     /** Consulta barata antes de resolver nós/barramentos. Evita trabalho no hot path quando o
      * intervalo próprio do instrumento ainda não venceu. */
     virtual bool wantsResolvedSignalSample(uint64_t) const { return false; }

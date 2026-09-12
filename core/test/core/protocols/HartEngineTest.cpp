@@ -1023,6 +1023,77 @@ int main() {
         }
     }
 
+    // Signal Graph port materialization for Input/Output HART variables
+    // (`HartCommunicationComponent::signalPorts()`/`signalBlockId()`/
+    // `setSignalInput()`/`signalOutput()`, `SimulationSession::
+    // materializeHartSignalPortsUnlocked`). This is genuinely new,
+    // concurrently-developed surface with NO prior test coverage anywhere in
+    // this suite (grep for "signalPorts"/"materializeHartSignalPorts" before
+    // this session found nothing) -- the audit mandate is explicit that a
+    // missing test is not a reason to skip verification, so this is written
+    // from spec/architecture first: a HART Input variable must materialize
+    // an Input-direction port (Signal Graph writes into it, HART reads it),
+    // an Output variable an Output-direction port (HART writes it, Signal
+    // Graph reads it), Internal variables must NOT appear at all (their
+    // value lives only in the device, no Signal Graph identity), and the
+    // block id must be exactly `hart.<componentIndex>.<variableId>` so a
+    // rename (now blocked at the Property Inspector layer, see the
+    // Extension-side `preserveExistingVariableIds` fix landed alongside this
+    // test) would otherwise silently orphan a Signal Graph wire.
+    {
+        lasecsimul::simulation::Scheduler scheduler(5, [] { return true; });
+        lasecsimul::registry::ComponentParams params;
+        params.properties["bus"] = std::string("hart-signal");
+        params.properties["endpoint"] = std::string("COM10");
+        params.properties["uniqueId"] = std::string("445566");
+        params.properties["pollingAddress"] = 9.0;
+        params.properties["enabled"] = true;
+        params.properties["hartVariablesJson"] = std::string(
+            R"([{"id":"PV","name":"Process Value","role":"PV","type":"Float32","direction":"Internal","value":1.0},)"
+            R"({"id":"setpoint","name":"Setpoint","type":"Float32","direction":"Input","value":0.0,"unit":"kPa"},)"
+            R"({"id":"alarmActive","name":"Alarm","type":"Bool","direction":"Input","value":0},)"
+            R"({"id":"measured","name":"Measured","type":"Float32","direction":"Output","value":0.0,"unit":"kPa"}])");
+        HartCommunicationComponent signalComponent(HartCommunicationComponent::Mode::Serial, scheduler, params);
+
+        const auto ports = signalComponent.signalPorts();
+        check(ports.size() == 3, "signalPorts() exposes exactly the 3 non-Internal variables (Internal PV must not appear)");
+        const auto findPort = [&](const std::string& id) {
+            return std::find_if(ports.begin(), ports.end(), [&](const auto& p) { return p.id == id; });
+        };
+        check(findPort("PV") == ports.end(), "an Internal variable must never materialize a Signal Graph port");
+        const auto setpointPort = findPort("setpoint");
+        check(setpointPort != ports.end() && setpointPort->direction == lasecsimul::SignalPortDirection::Input &&
+                  setpointPort->kind == lasecsimul::SignalValueKind::Analog && setpointPort->unit == "kPa",
+              "Input Float32 variable materializes an Analog Input port with its declared unit");
+        const auto alarmPort = findPort("alarmActive");
+        check(alarmPort != ports.end() && alarmPort->direction == lasecsimul::SignalPortDirection::Input &&
+                  alarmPort->kind == lasecsimul::SignalValueKind::Digital,
+              "Input Bool variable materializes a Digital (not Analog) port");
+        const auto measuredPort = findPort("measured");
+        check(measuredPort != ports.end() && measuredPort->direction == lasecsimul::SignalPortDirection::Output,
+              "Output variable materializes an Output-direction port");
+
+        check(signalComponent.signalBlockId("setpoint") == "hart.0." + std::string("setpoint"),
+              "signalBlockId is exactly hart.<componentIndex>.<variableId> -- the id a rename would silently orphan");
+
+        // Input: Signal Graph -> HART. setSignalInput() is what
+        // SimulationSession::sampleHartInputsFromSignalUnlocked calls every
+        // tick with the Signal Engine's current value for this port; a HART
+        // read of that variable must observe it immediately (no separate,
+        // possibly-stale "hartPorts" copy).
+        check(signalComponent.setSignalInput("setpoint", 12.5), "setSignalInput accepts a value for a real Input variable");
+        check(!signalComponent.setSignalInput("PV", 99.0), "setSignalInput must reject an Internal variable (it is not a Signal Graph port)");
+        check(!signalComponent.setSignalInput("does-not-exist", 1.0), "setSignalInput must reject an unknown variable id, not silently succeed");
+
+        // Output: HART -> Signal Graph. signalOutput() is what
+        // SimulationSession::publishHartOutputsToSignalUnlocked reads every
+        // tick to push into the Signal Engine; it must reflect the device's
+        // real, current value for that variable.
+        const auto measuredValue = signalComponent.signalOutput("measured");
+        check(measuredValue.has_value() && *measuredValue == 0.0, "signalOutput reads the Output variable's real current value");
+        check(!signalComponent.signalOutput("PV").has_value(), "signalOutput must not expose an Internal variable's value as if it were a Signal Graph output");
+    }
+
     // Direct DSL primitive characterization (not a real HART command): proves
     // SET, IF/EQ, MAP and FOR_CODES individually, and the write -> resp -> after
     // ordering guarantee (FASE 76 gate), independent of any specific command.
@@ -2146,6 +2217,29 @@ int main() {
         check(wirelessEngine.execute("hart-wireless", 1, 809, std::array<uint8_t, 1>{3}, ttlWrite) && ttlWrite.bytes()[0] == 8 &&
                   wirelessEngine.execute("hart-wireless", 1, 808, {}, ttlRead) && ttlRead.bytes()[0] == 8,
               "Wireless TTL enforces normative minimum and reads back");
+        HartResponseBuilder blacklistWrite(8), blacklistRead(8);
+        check(wirelessEngine.execute("hart-wireless", 1, 818, std::array<uint8_t, 3>{16, 0x55, 0xAA}, blacklistWrite) &&
+                  wirelessEngine.execute("hart-wireless", 1, 817, {}, blacklistRead) && blacklistRead.size() == 5 &&
+                  blacklistRead.bytes()[1] == 0xFF && blacklistRead.bytes()[3] == 0x55 && blacklistRead.bytes()[4] == 0xAA,
+              "Wireless channel blacklist atomically writes and reads current/pending maps");
+        HartResponseBuilder blacklistRejected(8);
+        check(!wirelessEngine.execute("hart-wireless", 1, 818, std::array<uint8_t, 3>{15, 0x55, 0xAA}, blacklistRejected),
+              "Wireless channel blacklist rejects an invalid map width without mutation");
+        const std::array<uint8_t, 6> listAdd{1, 0x01, 0x02, 0x03, 0x04, 0x05};
+        HartResponseBuilder listWrite(16), listRead(16), listDelete(16);
+        check(wirelessEngine.execute("hart-wireless", 1, 815, listAdd, listWrite) && listWrite.size() == 8 &&
+                  wirelessEngine.execute("hart-wireless", 1, 814, std::array<uint8_t, 4>{1, 1, 0, 0}, listRead) &&
+                  listRead.size() == 11 && listRead.bytes()[1] == 1 && listRead.bytes()[6] == 1 && listRead.bytes()[10] == 5 &&
+                  wirelessEngine.execute("hart-wireless", 1, 816, listAdd, listDelete) && listDelete.size() == 6,
+              "Wireless device-list add/read/delete uses one bounded UID table");
+        HartResponseBuilder routeWrite(16), routeRead(16), sourceWrite(32), sourceRead(32), sourceDelete(16), routeDelete(16);
+        check(wirelessEngine.execute("hart-wireless", 1, 974, std::array<uint8_t, 5>{7, 0x12, 0x34, 0, 1}, routeWrite) &&
+                  wirelessEngine.execute("hart-wireless", 1, 976, std::array<uint8_t, 6>{7, 2, 0, 2, 0, 3}, sourceWrite) &&
+                  wirelessEngine.execute("hart-wireless", 1, 802, std::array<uint8_t, 2>{0, 1}, routeRead) && routeRead.bytes()[4] == 7 &&
+                  wirelessEngine.execute("hart-wireless", 1, 803, std::array<uint8_t, 1>{7}, sourceRead) && sourceRead.size() == 7 && sourceRead.bytes()[1] == 2 &&
+                  wirelessEngine.execute("hart-wireless", 1, 977, std::array<uint8_t, 1>{7}, sourceDelete) &&
+                  wirelessEngine.execute("hart-wireless", 1, 975, std::array<uint8_t, 1>{7}, routeDelete),
+              "Wireless route/source-route writes, reads and deletes share canonical bounded state");
         HartResponseBuilder wiredRejected(8);
         check(!engine.execute("hart-512531", 1, 774, {}, wiredRejected),
               "Non-Wireless device rejects Wireless command without synthetic capability");

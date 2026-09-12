@@ -621,6 +621,20 @@ bool HartCommunicationComponent::setSignalInput(std::string_view variableId, dou
 }
 
 std::optional<double> HartCommunicationComponent::signalOutput(std::string_view variableId) const noexcept {
+    // `HartEngine::variableValue` is a generic "read this device's current
+    // variable value" accessor (also used internally by Command 113/114's
+    // Catch mechanism, which legitimately reads variables of any direction)
+    // -- it does not itself restrict to Output-direction variables. This
+    // wrapper is the actual Signal Graph-facing boundary
+    // (`SimulationSession::publishHartOutputsToSignalUnlocked`), so it
+    // enforces the same "not a real Signal Graph port" rule
+    // `setSignalInput` already enforces for Input, rather than relying
+    // entirely on every caller already having filtered via `signalPorts()`.
+    const HartDevicePlan* plan = m_engine.findDevicePlan(m_deviceId);
+    if (!plan) return std::nullopt;
+    const auto variable = std::find_if(plan->variables.begin(), plan->variables.end(),
+        [&](const auto& candidate) { return candidate.id == variableId; });
+    if (variable == plan->variables.end() || variable->direction != HartVariableDirection::Output) return std::nullopt;
     return m_engine.variableValue(m_deviceId, variableId);
 }
 

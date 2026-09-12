@@ -535,6 +535,24 @@ struct HartDevicePlan {
         uint16_t batteryLifeDays = 0xFFFF;
         uint16_t nickname = 0;
         uint8_t securityLevelAdvertised = 1;
+        struct Session { uint8_t type = 0; uint16_t peerNickname = 0; std::array<uint8_t, 5> peerUniqueId{}; uint32_t peerNonce = 0; uint32_t deviceNonce = 0; };
+        struct Superframe { uint8_t id = 0; uint16_t slots = 0; uint8_t modeFlags = 0; };
+        struct Link { uint8_t superframeId = 0; uint16_t slot = 0; uint8_t channelOffset = 0; uint16_t neighborNickname = 0xFFFF; uint8_t options = 0; uint8_t type = 0; };
+        struct Graph { uint16_t id = 0; std::array<uint16_t, 16> neighbors{}; uint8_t neighborCount = 0; };
+        struct Route { uint8_t id = 0; uint16_t destinationNickname = 0; uint16_t graphId = 0; bool sourceRouteAttached = false; };
+        struct Timetable { uint8_t id = 0; uint8_t requestFlags = 0; uint8_t domain = 0; uint16_t peerNickname = 0; uint32_t period = 0; uint8_t routeId = 0; };
+        std::array<Session, 8> sessions{}; uint8_t sessionCount = 0;
+        std::array<Superframe, 8> superframes{}; uint8_t superframeCount = 0;
+        std::array<Link, 32> links{}; uint8_t linkCount = 0;
+        std::array<Graph, 8> graphs{}; uint8_t graphCount = 0;
+        std::array<Route, 8> routes{}; uint8_t routeCount = 0;
+        struct SourceRoute { uint8_t routeId = 0; std::array<uint16_t, 16> hops{}; uint8_t hopCount = 0; };
+        std::array<SourceRoute, 8> sourceRoutes{}; uint8_t sourceRouteCount = 0;
+        std::array<Timetable, 8> timetables{}; uint8_t timetableCount = 0;
+        struct DeviceListEntry { uint8_t listCode = 0; std::array<uint8_t, 5> uniqueId{}; };
+        std::array<DeviceListEntry, 64> deviceListEntries{}; uint8_t deviceListCount = 0;
+        std::array<uint8_t, 2> channelBlacklist{{0xFF, 0xFF}};
+        std::array<uint8_t, 2> pendingChannelBlacklist{{0xFF, 0xFF}};
     } wireless;
 };
 

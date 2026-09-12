@@ -5,6 +5,7 @@ import {
   hartInspectorClientScript,
   parseCommandRows,
   parseVariableRows,
+  preserveExistingVariableIds,
   renderCommandsSection,
   renderVariablesSection,
   serializeCommandRows,
@@ -95,6 +96,36 @@ import {
     const nonMutableRow: HartVariableRow = { ...runtimeMutableRow, runtimeMutable: false };
     const lockedNonMutableHtml = renderVariablesSection([nonMutableRow], { structuralEditsLocked: true });
     assert(/data-hv-field="value"[^>]*disabled/.test(lockedNonMutableHtml), "value deveria ficar desabilitado durante RUN quando a linha NÃO é runtimeMutable");
+  });
+
+  await test("o campo 'id' é sempre readonly, mesmo com a simulação PARADA (identidade estável de fato, não só durante RUN)", () => {
+    // Achado desta auditoria: o input só virava readonly quando
+    // structuralEditsLocked (RUN ativo ou draft DSL aberto), mas o tooltip
+    // já afirmava "not editable after creation" incondicionalmente. Com a
+    // simulação parada -- o estado normal de edição -- o campo era um
+    // <input> comum, permitindo reescrever o id de uma variável já
+    // existente. Como `HartCommunicationComponent::signalBlockId` deriva o
+    // bloco do Signal Graph diretamente desse id (`hart.<index>.<id>`),
+    // isso órfã silenciosamente qualquer fio ligado ao id antigo.
+    const row: HartVariableRow = { id: "PV", name: "PV", role: "PV", type: "Float32", direction: "Input", unit: "", value: 0, runtimeMutable: false };
+    const stoppedHtml = renderVariablesSection([row], { structuralEditsLocked: false });
+    assert(/data-hv-field="id"[^>]*readonly/.test(stoppedHtml), "o id deveria ser readonly mesmo com a simulação parada (não editável após a criação, sempre)");
+  });
+
+  await test("preserveExistingVariableIds reverte um id trocado de uma linha JÁ EXISTENTE (defesa em profundidade contra mensagem adulterada/obsoleta)", () => {
+    const previous = JSON.stringify([{ id: "PV", name: "Process Value", direction: "Internal" }, { id: "SV", name: "Secondary", direction: "Internal" }]);
+    const tampered = JSON.stringify([{ id: "PV_RENAMED", name: "Process Value Renamed", direction: "Internal" }, { id: "SV", name: "Secondary", direction: "Internal" }]);
+    const corrected = JSON.parse(preserveExistingVariableIds(previous, tampered));
+    assert(corrected[0].id === "PV", "o id da linha 0 (já existia) deveria ser revertido para o valor anterior, ignorando a tentativa de mudança");
+    assert(corrected[0].name === "Process Value Renamed", "outros campos (ex.: name) da mesma linha devem continuar passando normalmente");
+    assert(corrected[1].id === "SV", "linha não alterada deveria permanecer intocada");
+  });
+
+  await test("preserveExistingVariableIds preserva o id de uma linha genuinamente NOVA (sem correspondente anterior na mesma posição)", () => {
+    const previous = JSON.stringify([{ id: "PV", direction: "Internal" }]);
+    const next = JSON.stringify([{ id: "PV", direction: "Internal" }, { id: "var1", direction: "Internal" }]);
+    const corrected = JSON.parse(preserveExistingVariableIds(previous, next));
+    assert(corrected.length === 2 && corrected[1].id === "var1", "uma linha nova (posição sem linha anterior correspondente) deveria manter o id com que chegou");
   });
 
   await test("renderVariablesSection desabilita 'writable' quando direction=Input (write-ownership visível na UI)", () => {

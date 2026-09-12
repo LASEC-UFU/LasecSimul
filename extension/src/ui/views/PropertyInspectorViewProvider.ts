@@ -7,6 +7,7 @@ import {
   hartInspectorClientScript,
   parseCommandRows,
   parseVariableRows,
+  preserveExistingVariableIds,
   renderCommandsSection,
   renderVariablesSection,
 } from "./hartInspectorSections";
@@ -69,7 +70,16 @@ export class PropertyInspectorViewProvider implements vscode.WebviewViewProvider
       // input while a DSL draft is open, but a message that slips through
       // anyway (e.g. a stale webview that hasn't re-rendered yet) must still
       // never reach the Authoring Model.
-      if (message.type === "setProperty" && this.component && !this.dslDraftOpen) this.forwardMutation(this.component.id, message.name, message.value);
+      if (message.type !== "setProperty" || !this.component || this.dslDraftOpen) return;
+      // Second defense in depth, specific to hartVariablesJson: the `id`
+      // input is rendered `readonly` for existing rows (Signal Graph wires
+      // are keyed on it -- see hartInspectorSections.ts), but a stale/
+      // bypassed webview message must not be able to sneak a changed id
+      // through and silently orphan a wire.
+      const value = message.name === "hartVariablesJson" && typeof message.value === "string"
+        ? preserveExistingVariableIds(String(this.component.properties.hartVariablesJson ?? "[]"), message.value)
+        : message.value;
+      this.forwardMutation(this.component.id, message.name, value);
     });
     return this.render();
   }
