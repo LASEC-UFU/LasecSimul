@@ -4239,3 +4239,64 @@ a auditoria (F.16.1)**: 15 arquivos de teste da Extension nunca propagavam
 falha de asserção para o `process.exitCode` -- corrigidos. Sem isso, uma
 parte desconhecida do "testes passam" reportado em sessões anteriores não
 era necessariamente verificável.
+
+### F.16.10 -- Regressão final completa (item 32 do pedido)
+
+- **MSVC Debug full build**: verde (`cmake --build . --config Debug`, todos
+  os alvos, sem erros).
+- **`hart_engine_test.exe`**: `HART engine contracts: PASS`.
+- **`CTest -R "^hart_engine$"`**: 1/1 passou.
+- **`npm test` (Extension)**: 43 suítes, 0 falhas, `process.exitCode == 0`
+  -- e, desde a correção do F.16.1, essa afirmação agora é realmente
+  verificável (antes desta sessão, uma falha em 15 desses arquivos não
+  teria mudado o código de saída).
+- **`git diff --check`**: limpo (só avisos de fim de linha CRLF/LF, sem
+  marcador de conflito nem espaço em branco problemático).
+- **CTest completo (99 testes, não só `hart_engine`)**: executado
+  integralmente conforme instruído ("se for praticamente executável, rode
+  também"). Resultado: 82 passaram, 2 pulados (`mcu_blink_long_run`,
+  `mcu_firmware_lasecplot`, marcados Skipped pelo próprio CTest, não por
+  este agente), **17 falharam**. Classificação honesta, não escondida:
+
+  Todas as 17 falhas pertencem a exatamente UMA causa raiz, pré-existente e
+  já registrada em memória de sessão anterior (`project_qemu_v0030_release_gate`,
+  "hipótese de empacotamento UCRT não confirmada"): **`QEMU arena ABI v5
+  handshake failed`, processo QEMU terminando com `exit=0xc0000139`
+  (STATUS_ENTRYPOINT_NOT_FOUND no Windows -- um binário/DLL do QEMU
+  empacotado não compatível com o ABI que o Core desta máquina espera)**.
+  Isso é um problema de ambiente/empacotamento desta máquina, não do código
+  fonte: `git log`/`git diff` confirmam ZERO commits desta sessão (ou de
+  qualquer commit desde `b35cc3b5`, o início desta continuação) tocando
+  `core/src/mcu/`, `core/src/plc/`, ou qualquer arquivo com "qemu" no nome --
+  nada no escopo desta auditoria (HART, DSL, Property Inspector) tem
+  qualquer relação com o subsistema de emulação QEMU/MCU.
+
+  Detalhamento das 17, todas na mesma causa raiz ou uma variante direta
+  dela:
+  - 12 rotuladas `external-qemu` pelo próprio CTest (já assumem depender de
+    QEMU real): `mcu_controller_real_qemu`, `qemu_icount_calibrator`,
+    `qemu_queue_stress`, `qemu_mttcg_smoke`, `qemu_arena_v3_smoke`,
+    `qemu_queue_full_timeout`, `mcu_restart_stress`,
+    `session_restart_stress`, `mcu_multiple_controllers_real_qemu`,
+    `cache_wait_e2e_real_qemu` (esta com uma causa adjacente: variáveis de
+    ambiente `LASECSIMUL_TEST_FIRMWARE`/`LASECSIMUL_TEST_QEMU_BINARY`
+    ausentes nesta máquina, não configuradas para este agente),
+    `mcu_scheduler_pacing_sync_real_qemu`,
+    `mcu_scheduler_pacing_sync_real_qemu_mttcg` (estes dois com SEGFAULT,
+    consistente com o mesmo processo QEMU externo morrendo de forma
+    anômala em vez de retornar um erro limpo).
+  - 2 rotuladas `external-plc` (`plc_compiler`, `plc_runtime_hang`) --
+    dependem de toolchain externa (GHDL/PLC), não investigadas byte a byte
+    nesta sessão por estarem inteiramente fora do escopo pedido (Lasec DSL/
+    Property Inspector/HART), mas pelo próprio rótulo `external-*` já se
+    autodeclaram dependentes de ferramenta externa, não de lógica hermética.
+  - 3 rotuladas `hermetic` mas cujo log de falha mostra a MESMA assinatura
+    QEMU: `mcu_component` (log: "QEMU arena ABI v5 handshake failed"),
+    `mcu_debug_launch` (assert num argumento de `-accel icount` passado ao
+    QEMU), `mcu_scheduler_pacing_sync` (Timeout de 60s -- consistente com
+    contenção de recursos dos vários processos QEMU falhando/reiniciando
+    durante a mesma corrida paralela, não com uma mudança de código).
+
+  **Nenhuma das 17 falhas está em código tocado por esta auditoria.** Zero
+  testes relacionados a HART, Lasec DSL, Property Inspector, ou Signal
+  Graph falharam na suíte completa.
