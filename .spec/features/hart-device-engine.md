@@ -4127,6 +4127,34 @@ auditada, incluindo as duas onde uma duplicação real já tinha existido
 historicamente (Command 54 Classification/Family, Command 48
 diagnosticStatus) -- ambas já fechadas em sessões anteriores/nesta sessão.
 
+### F.16.8b -- DSL diagnostics: achado real, menor, não corrigido (item 10 do pedido)
+
+Não existe `DslSourceMap` neste projeto -- item do checklist não aplicável
+literalmente. Diagnostics existem de fato (`DslDiagnostic{message, line,
+column, severity}`), retornados tanto por `parseDsl` quanto por
+`reconcileDsl`, e consumidos por `dslCommands.ts::reportDiagnostics` que os
+converte em `vscode.Diagnostic` reais com `Range` derivado de linha/coluna
+-- erros de PARSE (sintaxe) são corretamente posicionados (o parser usa
+`token.line`/`token.column` de verdade).
+
+**Achado real, não corrigido**: erros de RECONCILIAÇÃO (tipo de catálogo
+desconhecido, endpoint inválido, id duplicado) usam um helper
+`diag(message)` em `DslReconciler.ts` que hardcoda `line: 1, column: 1`
+incondicionalmente, porque `DslDocument`/`DslComponent`/`DslWire`/`DslNode`
+não carregam posição alguma (o parser descarta a posição de cada construto
+assim que o documento é montado com sucesso; só usa posição para os próprios
+erros de sintaxe). Resultado: uma mensagem como "tipo de componente
+desconhecido 'foo'" é sublinhada no topo do arquivo, não na linha real onde
+`foo` foi declarado -- o texto da mensagem ainda nomeia o construto
+corretamente, então o usuário consegue localizar o problema, só não pelo
+sublinhado. **Não corrigido nesta sessão**: exigiria estender
+`DslComponent`/`DslWire`/`DslNode` com `line`/`column` e propagar por todo
+`parseLegacyDsl`/`parseCompactDsl`, uma mudança estrutural maior que uma
+correção pontual, e o defeito é de UX (posição do sublinhado), não de
+corretude (a validação em si funciona, a mensagem em si está correta, o
+gate atômico -- nenhuma mutação parcial -- não é afetado). Registrado como
+gap real e honesto, não como "future work" vago.
+
 ### F.16.9 -- Tally final consolidado do Anexo F (item 30 do pedido)
 
 **Universal Commands (0-22, 38, 48)**: 23 definidos · 22 `DONE_SPEC_VERIFIED`
