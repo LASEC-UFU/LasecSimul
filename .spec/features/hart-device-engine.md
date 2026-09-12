@@ -118,6 +118,27 @@ The Pressure Family is now complete for every command actually defined by the lo
 
 For the local PDF, classification 65 is the normative pressure Device Variable classification used by the family command request tables; it is sufficient to select the family variable, while optional commands additionally require the explicit feature capability in the canonical pressure metadata. The PDF is marked `DRAFT`, Document Number `HCF_SPEC-160.5`, Revision 1.0, release date 5 November 2002; this implementation does not mix bytes from another revision. Command 1291 is not defined by this specification and is intentionally absent from the catalog.
 
+Pressure command-level contract (HCF_SPEC-160.5 Draft Rev. 1.0):
+
+| ID / section / page | Official name | Request | Response | Response codes / applicability | Semantics, persistence and tests | Status |
+|---:|---|---|---|---|---|---|
+| 1280 / 5.2 / 22 | Read Pressure Status | 1 byte DV code | DV code + DV status + Pressure Status 0 (3 bytes) | 0 success; 2 invalid selection; 5 too few; 6 device error; 16 access restricted; classification 65 | Reads per-DV `status0`; persistent metadata; byte-exact golden | DONE_SPEC_VERIFIED |
+| 1281 / 5.3 / 24 | Read Capabilities | 1 byte DV code | DV code + family definition revision + capability bytes 0/1 (4 bytes) | Same 0/2/5/6/16; classification 65 | Reads per-DV capability metadata; no generic mask | DONE_SPEC_VERIFIED |
+| 1282 / 5.4 / 25 | Read Supported Status Mask | 1 byte DV code | DV code + supported family mask + Pressure Status 0 mask (3 bytes) | Same 0/2/5/6/16; classification 65 | Reads per-DV masks; persistent and independently tested | DONE_SPEC_VERIFIED |
+| 1283 / 5.5 / 26 | Read Pressure Sensor Information | 1 byte DV code | DV code, 6 enums/bytes, minimum absolute pressure and maximum static pressure (15 bytes) | Same 0/2/5/6/16; classification 65 | Uses typed per-DV sensor metadata and IEEE-754 BE limits | DONE_SPEC_VERIFIED |
+| 1284 / 5.6 / 27 | Read Process Connection | 1 byte DV code | DV code + 10 process-connection enum values (11 bytes) | Same 0/2/5/6/16; classification 65 | Reads the exact property written by 1408 | DONE_SPEC_VERIFIED |
+| 1285 / 5.7 / 29 | Read Associated Device Variables | 1 byte DV code | DV code + associated cell-temperature code + associated static-pressure code (3 bytes) | Same 0/2/5/6/16; stable IDs resolve to codes; absent association is 250 | Stable `variableId` references, not display names/vector indexes | DONE_SPEC_VERIFIED |
+| 1286 / 5.8 / 30 | Read Optional Gasket Material Data | 1 byte DV code | DV code + backup/adapter/neck material enums (4 bytes) | Same 0/2/5/6/16; only if per-DV gasket capability | Reads property written by 1409; capability-gated | DONE_SPEC_VERIFIED |
+| 1287 / 5.9 / 30 | Read Min/Max Pressure Observation | 1 byte DV code | DV code + unit + minimum/maximum float (10 bytes) | Same 0/2/5/6/16; only if pressure-observation capability | Per-DV lifetime observation metadata; fixed-size golden | DONE_SPEC_VERIFIED |
+| 1288 / 5.10 / 31 | Read Min/Max Temperature Observation | 1 byte DV code | DV code + unit + minimum/maximum float (10 bytes) | Same 0/2/5/6/16; only if temperature-observation capability | Per-DV metadata; no pressure/global fallback | DONE_SPEC_VERIFIED |
+| 1289 / 5.11 / 32 | Read Min/Max Static Pressure Observation | 1 byte DV code | DV code + unit + minimum/maximum float (10 bytes) | Same 0/2/5/6/16; only if static-pressure-observation capability | Per-DV metadata; no hardcoded limits | DONE_SPEC_VERIFIED |
+| 1290 / 5.12 / 33 | Read Remote Seal Information | 1 byte DV code | DV code + seven remote-seal enum values (8 bytes) | Same 0/2/5/6/16; only if remote-seal capability | Reads property written by 1410 | DONE_SPEC_VERIFIED |
+| 1408 / 5.13 / 34-35 | Write Process Connection | DV code + 10 enum values (11 bytes) | DV code + same 10 values (11 bytes) | 0/2/5/6/8 warning/16/17+ illegal enum; write-protected or unsupported is rejected | Atomic update of per-DV connection; read-after-write 1284; configuration is persistent | DONE_SPEC_VERIFIED |
+| 1409 / 5.14 / 36 | Write Optional Gasket Material | DV code + three material enums (4 bytes) | DV code + three values (4 bytes) | 0/2/5/6/8 warning/16/17+ illegal enum; capability and write protection required | Atomic update of per-DV gasket; read-after-write 1286; persistent | DONE_SPEC_VERIFIED |
+| 1410 / 5.15 / 37-38 | Write Remote Seal Information | DV code + seven seal values (8 bytes) | DV code + seven values (8 bytes) | 0/2/5/6/8 warning/16/17+ illegal enum; capability and write protection required | Atomic update of per-DV remote seal; read-after-write 1290; persistent | DONE_SPEC_VERIFIED |
+
+The HART engine test covers the mandatory and optional fixed layouts, capability rejection, non-pressure rejection, write/read round trips, write protection path, two independent pressure Device Variables and stable association behavior. Component variable JSON serializes the same nested pressure metadata, so a fresh component reconstruction uses the persisted values rather than the original runtime object.
+
 The remaining files in the ZIP describe protocol/application infrastructure, reserved ranges, device-specific extensions or draft device-family proposals. They are retained as source evidence but do not create field-device StandardCore handlers: `NOT_APPLICABLE` means the repository has no corresponding capability/model, while `NOT_DEFINED` means the local normative source was found but the current increment deliberately does not claim that semantic cluster.
 
 ## 1. Propósito
@@ -3110,7 +3131,17 @@ aplica em toda parte). Logo o rótulo antigo só pode ter sido um erro de
 importação -- corrigido para o nome real, e o Command 21 implementado sob
 esse id.
 
-### F.11.2 -- Limitação documentada: Command 38 não modela o bit de status
+### F.11.2 -- Limitação documentada: Command 38 não modela o bit de status (HISTÓRICO -- superado, ver F.15.2)
+
+**Nota de reconciliação (sessão 9):** esta lacuna foi fechada por trabalho
+concorrente desde que este parágrafo foi escrito. `command == 0x26` hoje
+zera de fato o bit 0x40 de `plan.diagnosticStatus` quando o contador recebido
+confere com `plan.configurationChangedCounter`, e Command 48 expõe esse mesmo
+byte. Ver F.15.2 para o defeito real encontrado e corrigido nesta sessão (a
+forma legada de 0 bytes era rejeitada em vez de resetar incondicionalmente) e
+F.15.3 para a confirmação de que este contador é a autoridade canônica única.
+Parágrafo original mantido abaixo apenas como registro histórico, não como
+estado atual:
 
 Continua real: Command 38 ecoa corretamente o Configuration Change
 Counter, mas não zera nenhum bit porque este projeto não modela um Device
@@ -3266,6 +3297,32 @@ antes do commit, proteção de escrita e respostas de echo. Não foram criados
 campos `command50*`, `command55*`, `command56*` ou `command59*`.
 # F.14.8 -- Common Practice Commands 60--70 -- IMPLEMENTADO
 
+### F.14.9 -- Temperature Device Family 1024--1027, 1152--1155, 1556 e 1157 -- IMPLEMENTADO
+
+Inventário fechado contra `HCF_SPEC-160.4 Revision 2.0`, release de 12 May 2011.
+Esta é a revisão normativa local utilizada, sem mistura com a especificação
+antiga 1.0. A aplicabilidade base é `Device Variable Classification = 64`,
+com capabilities explícitas no registro canônico para termopar, RTD calibrado,
+Temperature Standard, conexão de sonda e compensação de junta fria.
+
+| Comando | Payload normativo | Estado canônico/aplicabilidade |
+|---|---|---|
+| 1024 Read Temperature Status | code + status + status0 (3 bytes) | `temperature.familyStatus`/`familyStatus0`; DV Temperature |
+| 1025 Read Temperature Configuration | code + probe type + wires + standard + connection (5 bytes) | metadata da mesma DV |
+| 1026 Read Thermocouple Configuration | code + connection + CJC + unit + float32 (8 bytes) | `supportsThermocouple` |
+| 1027 Read Callendar–Van Dusen Coefficients | code + quatro float32 (17 bytes) | `supportsCalibratedRtd` |
+| 1152 Write Temperature Probe Type | code + probe type + wires (3 bytes) | commit atômico de probe/wires |
+| 1153 Write Temperature Standard | code + standard (2 bytes) | `supportsWriteTemperatureStandard` |
+| 1154 Write Temperature Probe Connection | code + connection (2 bytes) | `supportsWriteProbeConnection` |
+| 1155 Select Cold Junction Compensation Type | code + CJC type (2 bytes) | `supportsWriteColdJunction` |
+| 1556 Write Manual Cold Junction Temperature | code + unit + float32 (6 bytes) | mesma capability; float finito |
+| 1157 Write Temperature Callendar–Van Dusen Coefficients | code + quatro float32 (17 bytes) | `supportsCalibratedRtd`; R0 positivo |
+
+Todos os writes validam DV, tamanho, enumeração, capability, write-protect e
+lock antes do commit. O estado é persistido por DV em `hartVariablesJson` e
+reaberto no mesmo registro; cada commit válido incrementa uma vez o contador
+canônico de Configuration Changed. Não existe estado `command1024*` separado.
+
 O Analog Channel 0 foi consolidado como a saída Primary/Loop Current
 obrigatória da especificação; não existe uma segunda autoridade para o mesmo
 valor físico. Commands 60/61/62 leem level/percent/dynamic variables, Command
@@ -3277,3 +3334,124 @@ O modelo atual declara explicitamente apenas o canal 0; channels adicionais não
 são inventados pelo handler. Cada write valida canal, payload, unidade, finitude
 e proteção antes do commit. Os testes cobrem 60↔Universal 2, 61↔assignments,
 64↔63, 65↔70, 66↔60, 67/68 e 69↔63.
+
+## Anexo F (continuação) -- Auditoria independente, sessão 9: Temperature Device Family, Command 38, reconciliação `standardCoreNoProgram`
+
+Esta seção documenta explicitamente o que foi **independentemente
+re-verificado por esta auditoria** nesta sessão, distinto do que já constava
+como "IMPLEMENTADO" por trabalho concorrente (F.14.9 acima). Metodologia: bytes
+esperados derivados do texto da especificação ANTES de olhar o código, depois
+comparados a código e a teste -- nunca aceito por nome de campo ou por teste
+verde isoladamente (ver Anexo F.4/F.3 sobre o precedente do Command 54).
+
+### F.15.1 -- Temperature Device Family (1024-1027, 1152-1157, 1556): DONE_SPEC_VERIFIED, zero defeitos
+
+Derivado byte a byte de `spec160.4r2.0.txt` (HCF_SPEC-160.4 Revision 2.0,
+Release 12 May 2011), seção 5.1-5.10, independentemente da tabela já publicada
+em F.14.9:
+
+- 1024: request 1 byte (DVC); response 3 bytes (DVC, Temperature Family DV
+  Status, Temperature Family Status 0) -- código confere byte a byte.
+- 1025: response 5 bytes (DVC, Probe Type, Number Of Wires, Temperature
+  Standard, Probe Connection) -- código confere.
+- 1026: response 8 bytes (DVC, Probe Connection, CJC Type, Units, float32 CJC
+  Temperature) -- código confere; gate `supportsThermocouple` correto.
+- 1027: response 17 bytes (DVC + CVD A/B/C/R0, float32 cada) -- código
+  confere; gate `supportsCalibratedRtd` correto.
+- 1152: request/response 3 bytes (DVC, Probe Type, Number Of Wires) -- confere.
+- 1153/1154/1155: request/response 2 bytes (DVC + enum) -- confere para os
+  três.
+- 1556 "Write Manual Cold Junction Temperature": a especificação real usa o
+  número **1556**, não 1156 -- confirmado no próprio texto da TOC (`spec160.4`
+  §5.9, numeração não sequencial dentro da faixa 1152-1157 é do próprio HCF,
+  não um typo). O código já usava `command == 1556` corretamente; suspeita
+  inicial desta auditoria de que fosse um erro de digitação foi descartada
+  após ler o texto normativo. Request/response 6 bytes (DVC, Unit, float32) --
+  confere.
+- 1157: request/response 17 bytes (DVC + CVD A/B/C/R0) -- confere; validação
+  extra `r0 > 0` é apenas defensiva (resistência física não pode ser <= 0),
+  não contradiz a especificação.
+- Classificação 64 = Temperature confirmada em `spec183r22.0.txt` Tabela 21
+  (Device Variable Classification Codes; 65 = Pressure, 66 = Volumetric Flow,
+  já confirmados em sessão anterior) -- o filtro
+  `variable.classification == 64` usado no dispatch é o valor correto, não um
+  marcador arbitrário de teste.
+- Convenção de sentinelas de enum (`value <= 249 || value == 251`) é
+  consistente com o padrão já auditado em Pressure 1408-1410
+  (`validPressureEnum`): 250 = "Not Used" (não é uma seleção de escrita válida),
+  251 = "None" (seleção legítima). Nenhuma duplicação de autoridade encontrada
+  neste cluster.
+
+**Conclusão: zero defeitos no cluster Temperature. Status confirmado
+`DONE_SPEC_VERIFIED` por esta auditoria (F.14.9 relatava "implementado";
+agora está também independentemente verificado byte a byte).**
+
+### F.15.2 -- Defeito real encontrado e corrigido: Command 38 rejeitava a forma legada (0 bytes)
+
+Derivado de `spec127r7.1.txt` §6.23.1 ("Backward Compatibility
+Requirements"): um Master HART Revision 6 ou anterior envia Command 38 **sem
+nenhum byte de dados** (o campo Configuration Change Counter só existe a
+partir da Revision 7), e o dispositivo é obrigado a resetar o bit
+incondicionalmente mesmo assim -- não pode recusar a requisição só porque o
+tamanho não é 2.
+
+Código encontrado (antes da correção, `HartReferenceCatalog.cpp`, dispatch de
+`command == 0x26`): `if (request.size() != 2) return false;` -- isto rejeita
+exatamente a forma legada que a especificação exige aceitar. Nenhum teste
+existente cobria o caso de 0 bytes (os dois testes existentes, na sessão
+anterior e nesta, só exercitam a forma de 2 bytes).
+
+Corrigido: um ramo explícito para `request.empty()` que reseta o bit
+incondicionalmente e retorna uma resposta de 0 bytes (o formato legado nunca
+carregou este campo). Regression test adicionado logo após o teste existente
+de Command 38 em `HartEngineTest.cpp`, cobrindo exatamente esta lacuna.
+Build + `hart_engine_test.exe` confirmados verdes após a correção.
+
+Correção também no próprio Anexo F.11.2 (abaixo, tratado como reconciliação de
+documentação, não um segundo achado): aquela nota dizia "não zera nenhum bit
+porque este projeto não modela um Device Status Byte genérico ainda" -- isso
+está desatualizado. O trabalho concorrente já wireou `command == 0x26` para
+zerar o bit 0x40 de `plan.diagnosticStatus` comparando contra
+`plan.configurationChangedCounter`, e Command 48 já expõe esse mesmo byte.
+F.11.2 deve ser lida como histórica (verdadeira quando escrita), não como
+estado atual.
+
+### F.15.3 -- `configurationChangedCounter`: confirmado autoridade única
+
+Reavaliado explicitamente: `HartDevicePlan::configurationChangedCounter`
+(campo vivo do dispositivo, incrementado por Command 38 relacionado e por
+todos os writes de Common Practice/Pressure/Temperature que mutam configuração
+persistida) e `HartEventNotificationRecord::configurationChangedCounter` (um
+campo *dentro de um registro de notificação*, isto é, uma cópia congelada do
+valor no momento em que aquele evento específico foi emitido) são
+semanticamente distintos por desenho -- um Event Notification Record existe
+precisamente para capturar um snapshot do estado no momento do evento. Não é
+uma recorrência do padrão de duplicação de autoridade do Command 54; é o
+padrão correto "valor vivo" vs. "snapshot histórico imutável".
+
+### F.15.4 -- `standardCoreNoProgram`: reconciliado, tratado como documentação auxiliar, não prioridade
+
+Conforme instruído: este booleano é apenas um atalho de despacho ("hÃ¡ um
+bloco `if` nativo abaixo para este id, não precisa do early-return"); a
+autoridade real sobre "implementado ou não" já é o próprio `if` nativo mais o
+guard final `it == programs->end()`. Uma tentativa anterior nesta sessão de
+"corrigir" as faixas de exclusão (`inMissingCommonPracticeGap` etc.) foi
+baseada em um grep estático que ficou obsoleto por edições concorrentes
+simultâneas (Command 110 e Pressure 1285 já haviam sido implementados por
+outro agente antes da minha leitura). Reconciliado: o arquivo atual já
+reflete `inMissingPressureGap = false` e removeu 110 da lista, e a suíte de
+testes completa passa (`HART engine contracts: PASS`) com o estado atual.
+Não há inconsistência documental restante que justifique prioridade adicional
+aqui -- registrado apenas para fechamento, retornando à auditoria principal
+como instruído.
+
+### F.15.5 -- Matriz incremental desta sessão
+
+| Área/Comando | Spec | Verificado independentemente? | Defeito encontrado? | Corrigido? | Teste de regressão? | Status |
+|---|---|---|---|---|---|---|
+| Temperature 1024-1027 | HCF_SPEC-160.4 §5.1-5.4 | Sim | Não | N/A | Já existiam (concorrente) | DONE_SPEC_VERIFIED |
+| Temperature 1152-1155,1556,1157 | HCF_SPEC-160.4 §5.5-5.10 | Sim | Não | N/A | Já existiam (concorrente) | DONE_SPEC_VERIFIED |
+| Universal 38 (0x26), forma 2 bytes | HCF_SPEC-127 §6.23 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Universal 38 (0x26), forma legada 0 bytes | HCF_SPEC-127 §6.23.1 | Sim | **Sim** -- rejeitava em vez de resetar incondicionalmente | Sim | Adicionado nesta sessão | DONE_SPEC_VERIFIED |
+| `configurationChangedCounter` (autoridade) | N/A (arquitetural) | Sim | Não (falso positivo descartado) | N/A | N/A | Verificado |
+| `standardCoreNoProgram` (auto-documentação) | N/A (interno) | Sim | Inconsistência documental apenas, sem impacto em runtime | Já reconciliado concorrentemente | N/A | Fechado, não prioritário |

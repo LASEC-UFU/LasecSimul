@@ -332,6 +332,30 @@ struct HartDevicePlan {
             bool supportsWriteOptionalGasket = false;
             bool supportsWriteRemoteSeal = false;
         } pressure;
+        /** HCF_SPEC-160.4 Rev. 2.0 Temperature Family metadata, owned by
+         * this Device Variable. Base applicability is temperature
+         * classification 64; optional thermocouple/RTD operations require
+         * their explicit semantic capability. */
+        struct TemperatureFamilyConfiguration {
+            uint8_t familyStatus = 0;
+            uint8_t familyStatus0 = 0;
+            uint8_t probeType = 0;
+            uint8_t numberOfWires = 0;
+            uint8_t temperatureStandard = 0;
+            uint8_t probeConnection = 0;
+            uint8_t coldJunctionCompensationType = 0;
+            uint8_t manualColdJunctionUnit = 250;
+            float manualColdJunctionTemperature = 0.0f;
+            float cvdA = 0.0f;
+            float cvdB = 0.0f;
+            float cvdC = 0.0f;
+            float cvdR0 = 0.0f;
+            bool supportsThermocouple = false;
+            bool supportsCalibratedRtd = false;
+            bool supportsWriteTemperatureStandard = false;
+            bool supportsWriteProbeConnection = false;
+            bool supportsWriteColdJunction = false;
+        } temperature;
         /** Common Practice 35 range units. 0xFF means "not authored" and
          * resolves once from the profile default; unlike deviceVariableUnit,
          * this is intentionally independent of the PV engineering units. */

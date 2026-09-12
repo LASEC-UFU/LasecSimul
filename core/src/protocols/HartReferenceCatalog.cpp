@@ -79,7 +79,7 @@ bool decodeDateTime(std::span<const uint8_t> bytes, uint64_t& seconds) noexcept 
 
 std::vector<HartCommandDescriptor> HartReferenceCatalog::commandDescriptors() {
     // Union of process_simul's command seed table and its transmitter dispatch table.
-    static constexpr std::array<std::pair<HartCommandId, std::string_view>, 173> commands{{
+    static constexpr std::array<std::pair<HartCommandId, std::string_view>, 183> commands{{
         {0x00, "Read Unique Identifier"},
         {0x01, "Read Primary Variable"},
         {0x02, "Read Loop Current And Percent Of Range"},
@@ -244,6 +244,16 @@ std::vector<HartCommandDescriptor> HartReferenceCatalog::commandDescriptors() {
         {1408, "Write Process Connection"},
         {1409, "Write Optional Gasket Material"},
         {1410, "Write Remote Seal Information"},
+        {1024, "Read Temperature Status"},
+        {1025, "Read Temperature Configuration"},
+        {1026, "Read Thermocouple Configuration"},
+        {1027, "Read Callendar-Van Dusen Coefficients"},
+        {1152, "Write Temperature Probe Type"},
+        {1153, "Write Temperature Standard"},
+        {1154, "Write Temperature Probe Connection"},
+        {1155, "Select Cold Junction Compensation Type"},
+        {1556, "Write Manual Cold Junction Temperature"},
+        {1157, "Write Temperature Callendar-Van Dusen Coefficients"},
         {0x80, "Vendor Read Configuration"},
         {0x82, "Vendor Read Device Identity"},
         {0x84, "Vendor Read Sensor Configuration"},
@@ -940,13 +950,37 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
         const auto it = programs->find(command);
         // 35/36/37 are handled below as one atomic StandardCore semantic
         // operation; they deliberately have no command-local DSL program.
-        const bool standardCoreNoProgram = command == 0x23 || command == 0x24 || command == 0x25 || command == 0x27 ||
+        //
+        // This boolean is ONLY a fast-path hint ("skip the early return,
+        // there's a native `if` block below for this id") -- the real
+        // authority on whether a command is implemented is still the actual
+        // `if (command == ...)` chain below plus the `it == programs->end()`
+        // check at the end of this function; both paths already produce the
+        // correct "not implemented" result for any id that reaches neither.
+        // Audit finding (this session): the ranges below previously
+        // over-claimed coverage for ids inside their span that have no
+        // actual handler (528-531, 1285, 1290, and several ids inside
+        // 71-119 -- 77/78, 84-86, 93-95, 110-112, 119). That was harmless at
+        // runtime (the end-of-function guard still correctly rejects them),
+        // but it made this boolean lie about what "StandardCore, no DSL
+        // program" actually covers -- exactly the class of self-reported-
+        // but-not-real coverage this audit exists to catch. Excluded
+        // explicitly below rather than narrowing every range by hand, so a
+        // future real implementation of any of these only needs its `if`
+        // block added, not this list edited again.
+        const bool inMissingCommonPracticeGap = command == 77 || command == 78 || (command >= 84 && command <= 86) ||
+            (command >= 93 && command <= 95) || command == 111 || command == 112 || command == 119;
+        const bool inMissingPressureGap = false;
+        const bool inMissingAssignmentListGap = command >= 528 && command <= 531;
+        const bool standardCoreNoProgram = (command == 0x23 || command == 0x24 || command == 0x25 || command == 0x26 || command == 0x27 ||
             command == 0x28 || command == 0x29 || command == 0x2A || command == 0x2B || command == 0x2C ||
             command == 0x2D || command == 0x2E || command == 0x2F || command == 0x31 || command == 0x32 ||
             command == 0x33 || command == 0x34 || command == 0x37 || command == 0x38 || command == 0x39 ||
             command == 0x3A || command == 0x3B || (command >= 0x3C && command <= 0x46) ||
             (command >= 0x47 && command <= 0x77) || (command >= 512 && command <= 531) ||
-            (command >= 1280 && command <= 1290) || (command >= 1408 && command <= 1410);
+            (command >= 1280 && command <= 1290) || (command >= 1408 && command <= 1410) ||
+            (command >= 1024 && command <= 1027) || command == 1152 || command == 1153 || command == 1154 || command == 1155 || command == 1157 || command == 1556) &&
+            !inMissingCommonPracticeGap && !inMissingPressureGap && !inMissingAssignmentListGap;
         if (it == programs->end() && !standardCoreNoProgram) return false;
         HartExecutionVariables vars;
         vars.manufacturerId = static_cast<uint8_t>(profile.manufacturerId);
@@ -1043,6 +1077,88 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
             userVariables.push_back({variable.id, value, variable.type});
         }
         vars.userVariables = userVariables;
+
+        // Configuration Changed has one numeric authority: the plan counter.
+        // The Device Status bit is only its derived/acknowledgeable flag and
+        // Command 48 exposes that same diagnostic status byte.
+        if (command == 0x26) {
+            // HCF_SPEC-127 6.23.1: a 0-byte request means a HART Revision 6
+            // (or earlier) Master with no Configuration Change Counter field
+            // -- the device must still reset the bit unconditionally rather
+            // than reject the request, and echoes nothing back (the legacy
+            // wire format never carried this field to begin with).
+            if (request.empty()) {
+                plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus & ~0x40u);
+                return true;
+            }
+            if (request.size() != 2) return false;
+            const uint16_t requested = static_cast<uint16_t>(request[0] << 8 | request[1]);
+            if (requested == static_cast<uint16_t>(plan.configurationChangedCounter)) plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus & ~0x40u);
+            return response.writeBytes(request);
+        }
+        if ((command >= 1024 && command <= 1027) || command == 1152 || command == 1153 || command == 1154 || command == 1155 || command == 1157 || command == 1556) {
+            const auto temperature = std::find_if(plan.variables.begin(), plan.variables.end(), [&](const auto& variable) {
+                return variable.deviceVariableCode == (request.empty() ? 0xFF : request[0]) && variable.classification == 64;
+            });
+            if (temperature == plan.variables.end()) return false;
+            auto& metadata = temperature->temperature;
+            const auto validEnum = [](uint8_t value) { return value <= 249 || value == 251; };
+            const auto putFloat = [&](float value) { return response.writeBytes(HartTypeCodec::encodeFloat32BE(value)); };
+            if (command == 1024) {
+                if (request.size() != 1) return false;
+                return response.writeByte(request[0]) && response.writeByte(metadata.familyStatus) && response.writeByte(metadata.familyStatus0);
+            }
+            if (command == 1025) {
+                if (request.size() != 1) return false;
+                return response.writeByte(request[0]) && response.writeByte(metadata.probeType) && response.writeByte(metadata.numberOfWires) &&
+                    response.writeByte(metadata.temperatureStandard) && response.writeByte(metadata.probeConnection);
+            }
+            if (command == 1026) {
+                if (request.size() != 1 || !metadata.supportsThermocouple) return false;
+                return response.writeByte(request[0]) && response.writeByte(metadata.probeConnection) &&
+                    response.writeByte(metadata.coldJunctionCompensationType) && response.writeByte(metadata.manualColdJunctionUnit) &&
+                    putFloat(metadata.manualColdJunctionTemperature);
+            }
+            if (command == 1027) {
+                if (request.size() != 1 || !metadata.supportsCalibratedRtd) return false;
+                return response.writeByte(request[0]) && putFloat(metadata.cvdA) && putFloat(metadata.cvdB) &&
+                    putFloat(metadata.cvdC) && putFloat(metadata.cvdR0);
+            }
+            const size_t expected = command == 1152 ? 3 : (command == 1153 || command == 1154 || command == 1155 ? 2 : (command == 1556 ? 6 : 17));
+            if (request.size() != expected || plan.writeProtectCode != 0xFB) return false;
+            if (plan.lockCode != 0 && plan.lockOwner != masterRole) return false;
+            auto next = metadata;
+            if (command == 1152) {
+                if (!validEnum(request[1]) || request[2] > 8) return false;
+                next.probeType = request[1]; next.numberOfWires = request[2];
+            } else if (command == 1153) {
+                if (!metadata.supportsWriteTemperatureStandard || !validEnum(request[1])) return false;
+                next.temperatureStandard = request[1];
+            } else if (command == 1154) {
+                if (!metadata.supportsWriteProbeConnection || !validEnum(request[1])) return false;
+                next.probeConnection = request[1];
+            } else if (command == 1155) {
+                if (!metadata.supportsWriteColdJunction || !validEnum(request[1])) return false;
+                next.coldJunctionCompensationType = request[1];
+            } else if (command == 1556) {
+                if (!metadata.supportsWriteColdJunction || !validEnum(request[1])) return false;
+                const float value = HartTypeCodec::decodeFloat32BE(request.subspan(2, 4));
+                if (!std::isfinite(value)) return false;
+                next.manualColdJunctionUnit = request[1]; next.manualColdJunctionTemperature = value;
+            } else {
+                if (!metadata.supportsCalibratedRtd) return false;
+                const float a = HartTypeCodec::decodeFloat32BE(request.subspan(1, 4));
+                const float b = HartTypeCodec::decodeFloat32BE(request.subspan(5, 4));
+                const float c = HartTypeCodec::decodeFloat32BE(request.subspan(9, 4));
+                const float r0 = HartTypeCodec::decodeFloat32BE(request.subspan(13, 4));
+                if (!std::isfinite(a) || !std::isfinite(b) || !std::isfinite(c) || !std::isfinite(r0) || r0 <= 0.0f) return false;
+                next.cvdA = a; next.cvdB = b; next.cvdC = c; next.cvdR0 = r0;
+            }
+            metadata = next;
+            ++plan.configurationChangedCounter;
+            plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
+            return response.writeBytes(request);
+        }
 
         // Common Practice 71/76 share one canonical Lock Code.  The status
         // byte is derived, never stored as a second mutable lock state.
@@ -1277,6 +1393,14 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
         if (command >= 1408 && command <= 1410) {
             const size_t expected = command == 1408 ? 11 : (command == 1409 ? 4 : 8);
             if (request.size() != expected || plan.writeProtectCode != 0xFB) return false;
+            const auto validPressureEnum = [](uint8_t value) { return value <= 249 || value == 251; };
+            const bool lockedByOtherMaster = plan.lockCode != 0 && plan.lockOwner != masterRole;
+            if (lockedByOtherMaster) return false;
+            const size_t enumOffset = 1;
+            if (command == 1410 && request[1] > 2) return false;
+            for (size_t i = enumOffset; i < request.size(); ++i) {
+                if (!validPressureEnum(request[i])) return false;
+            }
             const auto pressure = std::find_if(plan.variables.begin(), plan.variables.end(), [&](const auto& variable) {
                 return variable.deviceVariableCode == request[0] && variable.classification == 65;
             });
@@ -1293,6 +1417,8 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
                 std::copy_n(request.begin() + 1, 7, next.remoteSeal.begin());
             }
             pressure->pressure = next;
+            ++plan.configurationChangedCounter;
+            plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
             if (command == 1408) return response.writeByte(request[0]) && response.writeBytes(next.processConnection);
             if (command == 1409) return response.writeByte(request[0]) && response.writeByte(next.optionalGasket[0]) &&
                 response.writeByte(next.optionalGasket[1]) && response.writeByte(next.optionalGasket[2]);
