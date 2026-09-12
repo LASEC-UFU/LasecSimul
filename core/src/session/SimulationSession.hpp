@@ -51,7 +51,19 @@ struct SubcircuitExposedPin {
 
 struct SubcircuitExpansionResult {
     uint32_t subcircuitInstanceId;
+    /** Fronteira ELÉTRICA: `SubcircuitInterfaceDef` com `domain == "electrical"` (ou ausente, para
+     * compat retroativa) -- sempre resolve pra um `components::Tunnel` interno, participa do
+     * Netlist. */
     std::unordered_map<std::string, SubcircuitExposedPin> exposedPins;
+    /** Fronteira Signal Graph: `SubcircuitInterfaceDef` com `domain == "signal"` -- sempre resolve
+     * pra um `components::SignalTunnel` interno (`SubcircuitExposedPin::pinId ==
+     * SignalTunnel::kPortId`), nunca um pino elétrico. Deliberadamente um mapa SEPARADO de
+     * `exposedPins` (nunca fundido) -- as duas fronteiras são domínios semanticamente diferentes
+     * (ver `IComponentModel.hpp`, nota de `signalPorts()`, e `SignalTunnel.hpp`); só a Extension
+     * (`resolveWireEndpoint`) funde os dois num único cache de resolução de fio, porque ali é só
+     * "ache o alvo real", sem nenhuma decisão semântica de domínio -- essa decisão continua sendo
+     * feita exclusivamente por `SimulationSession::findSignalPortUnlocked`/`connectWireUnlocked`. */
+    std::unordered_map<std::string, SubcircuitExposedPin> exposedSignalPins;
     std::optional<uint32_t> primaryMcuInstanceId;
 };
 
@@ -65,6 +77,21 @@ struct WireTopologyOperation {
     Kind kind;
     WireEndpointRef from;
     WireEndpointRef to;
+};
+
+/** A live connection between two generic Signal Graph ports (`IComponentModel::
+ * signalPorts()`), authored through the SAME `connectWire`/`applyWireTopologyTransaction`
+ * entry points as an electrical wire -- `connectWireUnlocked` detects which
+ * domain a `(component, pinId)` pair belongs to and routes accordingly, so
+ * there is exactly one wiring mechanism from the caller's point of view.
+ * Always source=Output-direction port, target=Input-direction port (direction
+ * is the port's OWN declared `SignalPortDirection`, never inferred from which
+ * side of the pair happened to be named "from"). */
+struct SignalWireDefinition {
+    uint32_t sourceComponent = 0;
+    std::string sourcePort;
+    uint32_t targetComponent = 0;
+    std::string targetPort;
 };
 
 struct PauseConditionTriggered {
@@ -535,6 +562,24 @@ private:
                               const std::string& pinIdB);
     bool disconnectWireUnlocked(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
                                  const std::string& pinIdB);
+    /** The Signal Graph-domain half of `connectWireUnlocked`, entered only
+     * when BOTH `(componentA,pinIdA)`/`(componentB,pinIdB)` resolve to a
+     * `signalPorts()` entry (never one signal + one electrical -- that is a
+     * domain-mismatch error `connectWireUnlocked` raises itself before
+     * calling this). Validates: exactly one Output-direction + one
+     * Input-direction endpoint (never Output-Output/Input-Input), and that
+     * the target Input port does not already have a driving wire
+     * (single-writer semantics -- a Signal Graph input is owned by at most
+     * one upstream wire, mirroring how it is never ALSO settable by HART
+     * itself while wired, see `HartEngine::setVariableInput`). */
+    void connectSignalWireUnlocked(uint32_t componentA, const SignalPortDescriptor& portA,
+                                    uint32_t componentB, const SignalPortDescriptor& portB);
+    /** Mirrors `connectSignalWireUnlocked`: removes the one `m_signalWires`
+     * entry (if any) between these two ports, in either recorded direction.
+     * Returns whether an entry was actually removed (same contract as
+     * `disconnectWireUnlocked`). */
+    bool disconnectSignalWireUnlocked(uint32_t componentA, const std::string& pinIdA,
+                                       uint32_t componentB, const std::string& pinIdB);
     uint64_t applyWireTopologyTransactionUnlocked(uint64_t baseRevision,
                                                    const std::vector<WireTopologyOperation>& operations);
     void setTunnelNameUnlocked(uint32_t component, const std::string& pinId, const std::string& oldName,
@@ -613,7 +658,25 @@ private:
      * sempre gera slots novos, nunca reciclados) em toda edição de propriedade com
      * `AffectsPinCount`, mesmo quando o valor não mudou o suficiente pra alterar a contagem. */
     void reregisterPinsIfChanged(uint32_t componentIndex, IComponentModel* instance);
-    simulation::SignalGraphDefinition materializeHartSignalPortsUnlocked(
+    /** Finds `portId` among `component`'s `signalPorts()` -- the ONE lookup
+     * every Signal Graph-domain caller (`connectWireUnlocked`,
+     * `materializeSignalGraphUnlocked`) shares, so "is this a signal port"
+     * is never independently re-derived. `nullopt` for a component with no
+     * such port (the common case: most components have none at all). */
+    std::optional<SignalPortDescriptor> findSignalPortUnlocked(uint32_t component, const std::string& portId) const;
+    /** Builds the real, live Signal Graph for this session: one block per
+     * `signalPorts()` entry across EVERY active component (generic -- not
+     * specific to any one component type), plus one `SignalConnectionDefinition`
+     * per entry in `m_signalWires`. `definition` is the authoring-level base
+     * graph (`m_signalGraphDefinition`, settable only via the test/compat
+     * `setSignalGraph()` seam -- always empty in production, since nothing
+     * else populates it); this appends the REAL, generic materialization on
+     * top of it, never the other way around. A wire whose endpoint no longer
+     * resolves (component/port removed since the wire was authored) is
+     * silently skipped here -- the compiled graph never contains a bogus
+     * connection -- without needing every port-count-affecting property edit
+     * to proactively scrub `m_signalWires` itself. */
+    simulation::SignalGraphDefinition materializeSignalGraphUnlocked(
         const simulation::SignalGraphDefinition& definition) const;
     void publishHartOutputsToSignalUnlocked();
     void sampleHartInputsFromSignalUnlocked();
@@ -673,6 +736,14 @@ private:
     uint32_t m_nextSubcircuitInstanceId = 0;
     plugins::PluginRuntime m_pluginRuntime;
     simulation::Netlist m_netlist;
+    /** Live, generic Signal Graph wiring -- the authoring-level counterpart of
+     * `m_netlist` for the signal domain. Deliberately never merged into
+     * `m_netlist`/electrical topology (a Signal Graph connection has no
+     * voltage/current and is directional; forcing it through the electrical
+     * model would conflate two different domains). Populated only through
+     * `connectWireUnlocked`/`disconnectWireUnlocked` once they detect both
+     * endpoints are Signal Graph ports, never a second, HART-specific list. */
+    std::vector<SignalWireDefinition> m_signalWires;
     simulation::MnaSolver m_mnaSolver;
     simulation::Scheduler m_scheduler;
     python::PythonRuntime m_pythonRuntime;

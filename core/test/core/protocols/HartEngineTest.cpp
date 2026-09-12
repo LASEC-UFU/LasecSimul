@@ -1073,8 +1073,9 @@ int main() {
         check(measuredPort != ports.end() && measuredPort->direction == lasecsimul::SignalPortDirection::Output,
               "Output variable materializes an Output-direction port");
 
-        check(signalComponent.signalBlockId("setpoint") == "hart.0." + std::string("setpoint"),
-              "signalBlockId is exactly hart.<componentIndex>.<variableId> -- the id a rename would silently orphan");
+        check(signalComponent.signalBlockId("setpoint") == lasecsimul::signalPortBlockId(0, "setpoint"),
+              "signalBlockId delegates to the shared signalPortBlockId naming authority (HART is just a consumer of it), "
+              "so a rename would silently orphan whatever wire targets this exact id");
 
         // Input: Signal Graph -> HART. setSignalInput() is what
         // SimulationSession::sampleHartInputsFromSignalUnlocked calls every
@@ -2227,19 +2228,54 @@ int main() {
               "Wireless channel blacklist rejects an invalid map width without mutation");
         const std::array<uint8_t, 6> listAdd{1, 0x01, 0x02, 0x03, 0x04, 0x05};
         HartResponseBuilder listWrite(16), listRead(16), listDelete(16);
-        check(wirelessEngine.execute("hart-wireless", 1, 815, listAdd, listWrite) && listWrite.size() == 8 &&
+        const bool listOk = wirelessEngine.execute("hart-wireless", 1, 815, listAdd, listWrite) && listWrite.size() == 8 &&
                   wirelessEngine.execute("hart-wireless", 1, 814, std::array<uint8_t, 4>{1, 1, 0, 0}, listRead) &&
                   listRead.size() == 11 && listRead.bytes()[1] == 1 && listRead.bytes()[6] == 1 && listRead.bytes()[10] == 5 &&
-                  wirelessEngine.execute("hart-wireless", 1, 816, listAdd, listDelete) && listDelete.size() == 6,
+                  wirelessEngine.execute("hart-wireless", 1, 816, listAdd, listDelete) && listDelete.size() == 6;
+        check(listOk,
               "Wireless device-list add/read/delete uses one bounded UID table");
         HartResponseBuilder routeWrite(16), routeRead(16), sourceWrite(32), sourceRead(32), sourceDelete(16), routeDelete(16);
-        check(wirelessEngine.execute("hart-wireless", 1, 974, std::array<uint8_t, 5>{7, 0x12, 0x34, 0, 1}, routeWrite) &&
+        const bool routeOk = wirelessEngine.execute("hart-wireless", 1, 974, std::array<uint8_t, 5>{7, 0x12, 0x34, 0, 1}, routeWrite) &&
                   wirelessEngine.execute("hart-wireless", 1, 976, std::array<uint8_t, 6>{7, 2, 0, 2, 0, 3}, sourceWrite) &&
                   wirelessEngine.execute("hart-wireless", 1, 802, std::array<uint8_t, 2>{0, 1}, routeRead) && routeRead.bytes()[4] == 7 &&
-                  wirelessEngine.execute("hart-wireless", 1, 803, std::array<uint8_t, 1>{7}, sourceRead) && sourceRead.size() == 7 && sourceRead.bytes()[1] == 2 &&
+                  wirelessEngine.execute("hart-wireless", 1, 803, std::array<uint8_t, 1>{7}, sourceRead) && sourceRead.size() == 6 && sourceRead.bytes()[1] == 2 &&
                   wirelessEngine.execute("hart-wireless", 1, 977, std::array<uint8_t, 1>{7}, sourceDelete) &&
-                  wirelessEngine.execute("hart-wireless", 1, 975, std::array<uint8_t, 1>{7}, routeDelete),
+                  wirelessEngine.execute("hart-wireless", 1, 975, std::array<uint8_t, 1>{7}, routeDelete);
+        check(routeOk,
               "Wireless route/source-route writes, reads and deletes share canonical bounded state");
+        wirelessEngine.setVirtualTimeSeconds(9);
+        HartResponseBuilder suspendWrite(16), suspendedRead(8), resumedRead(8);
+        const std::array<uint8_t, 10> suspendWindow{0, 0, 0, 0, 10, 0, 0, 0, 0, 20};
+        check(wirelessEngine.execute("hart-wireless", 1, 972, suspendWindow, suspendWrite) &&
+                  (wirelessEngine.setVirtualTimeSeconds(10), !wirelessEngine.execute("hart-wireless", 1, 774, {}, suspendedRead)) &&
+                  (wirelessEngine.setVirtualTimeSeconds(20), wirelessEngine.execute("hart-wireless", 1, 774, {}, resumedRead)),
+              "Wireless suspend window changes command availability only with virtual time progression");
+        std::array<uint8_t, 34> sessionWrite{}; sessionWrite[0] = 1; sessionWrite[1] = 0x12; sessionWrite[2] = 0x35; sessionWrite[3] = 1; sessionWrite[4] = 2; sessionWrite[5] = 3; sessionWrite[6] = 4; sessionWrite[7] = 5; sessionWrite[11] = 1; sessionWrite[12] = 0xA5; sessionWrite[28] = 0; sessionWrite[33] = 30;
+        HartResponseBuilder sessionResponse(48), sessionRead(32);
+        check(wirelessEngine.execute("hart-wireless", 1, 963, sessionWrite, sessionResponse, 2) && sessionResponse.size() == 34 &&
+                  wirelessEngine.execute("hart-wireless", 1, 855, std::array<uint8_t, 2>{0, 0}, sessionRead) && sessionRead.size() == 19 && sessionRead.bytes()[3] == 1,
+              "Wireless Command 963 modifies the canonical session table and Command 855 observes it");
+        HartResponseBuilder deleteSession(8), deletedSessionRead(32);
+        check(wirelessEngine.execute("hart-wireless", 1, 964, std::array<uint8_t, 3>{1, 0x12, 0x35}, deleteSession, 2) && deleteSession.size() == 4 &&
+                  !wirelessEngine.execute("hart-wireless", 1, 855, std::array<uint8_t, 2>{0, 0}, deletedSessionRead),
+              "Wireless Command 964 atomically deletes the canonical session and rejects the now-missing identity");
+        HartResponseBuilder superframeWrite(16), superframeRead(16), superframeDelete(8);
+        const bool superframeOk = wirelessEngine.execute("hart-wireless", 1, 965, std::array<uint8_t, 5>{9, 0, 16, 0, 0}, superframeWrite, 2) &&
+                  wirelessEngine.execute("hart-wireless", 1, 783, std::array<uint8_t, 2>{0, 1}, superframeRead) && superframeRead.bytes()[3] == 9 &&
+                  wirelessEngine.execute("hart-wireless", 1, 966, std::array<uint8_t, 1>{9}, superframeDelete, 2) &&
+                  !wirelessEngine.execute("hart-wireless", 1, 783, std::array<uint8_t, 2>{0, 1}, superframeRead);
+        check(superframeOk,
+              "Wireless Commands 965/966 modify and delete the canonical Superframe Table");
+        HartResponseBuilder linkAdd(16), linkRead(16), neighborWrite(8), graphAdd(16), graphRead(32), graphDelete(16), linkDelete(16);
+        check(wirelessEngine.execute("hart-wireless", 1, 965, std::array<uint8_t, 5>{20, 0, 8, 0, 0}, superframeWrite, 2) &&
+                  wirelessEngine.execute("hart-wireless", 1, 967, std::array<uint8_t, 8>{20, 0, 1, 2, 0x12, 0x34, 3, 1}, linkAdd, 2) &&
+                  wirelessEngine.execute("hart-wireless", 1, 784, std::array<uint8_t, 3>{0, 0, 1}, linkRead) && linkRead.bytes()[8] == 2 &&
+                  wirelessEngine.execute("hart-wireless", 1, 971, std::array<uint8_t, 3>{0x12, 0x34, 0x03}, neighborWrite, 2) && neighborWrite.bytes()[2] == 2 &&
+                  wirelessEngine.execute("hart-wireless", 1, 969, std::array<uint8_t, 4>{1, 0, 0x12, 0x34}, graphAdd, 2) &&
+                  wirelessEngine.execute("hart-wireless", 1, 785, std::array<uint8_t, 1>{0}, graphRead) && graphRead.size() == 7 && graphRead.bytes()[4] == 1 &&
+                  wirelessEngine.execute("hart-wireless", 1, 970, std::array<uint8_t, 4>{1, 0, 0x12, 0x34}, graphDelete, 2) &&
+                  wirelessEngine.execute("hart-wireless", 1, 968, std::array<uint8_t, 5>{20, 0, 1, 0x12, 0x34}, linkDelete, 2),
+              "Wireless Commands 967-971 mutate canonical Links/Graphs and enforce neighbor flags");
         HartResponseBuilder wiredRejected(8);
         check(!engine.execute("hart-512531", 1, 774, {}, wiredRejected),
               "Non-Wireless device rejects Wireless command without synthetic capability");

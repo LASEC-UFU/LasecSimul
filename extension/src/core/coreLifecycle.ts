@@ -62,11 +62,19 @@ export function reportCoreWarning(action: string, err: unknown): void {
 export function registerCoreIdsForComponent(
   componentId: string,
   typeId: string,
-  response: { instanceId: string; primaryMcuInstanceId?: string; exposedPins?: Record<string, { instanceId: string; pinId: string }> }
+  response: {
+    instanceId: string;
+    primaryMcuInstanceId?: string;
+    exposedPins?: Record<string, { instanceId: string; pinId: string }>;
+    exposedSignalPins?: Record<string, { instanceId: string; pinId: string }>;
+  }
 ): void {
   coreInstanceIdByComponentId.set(componentId, response.instanceId);
-  if (response.exposedPins && Object.keys(response.exposedPins).length > 0) {
-    subcircuitBoundaryPinsByComponentId.set(componentId, response.exposedPins);
+  // The IPC contract preserves the two domains. They share only this endpoint-resolution cache;
+  // connectWire() remains the single Core authority for the actual domain semantics.
+  const boundaryPins = { ...(response.exposedPins ?? {}), ...(response.exposedSignalPins ?? {}) };
+  if (Object.keys(boundaryPins).length > 0) {
+    subcircuitBoundaryPinsByComponentId.set(componentId, boundaryPins);
   } else {
     subcircuitBoundaryPinsByComponentId.delete(componentId);
   }
@@ -1267,6 +1275,9 @@ export function pinsForProjectComponent(component: {
   if (component.typeId === "plc.instance") {
     return (component.plc?.exportedIo ?? []).map((io, index) => ({ id: io.ioId, x: 0, y: index * 12 }));
   }
+  // HART (`protocol.hart.serial`/`protocol.hart.udp`) tem seus pinos de canvas derivados de
+  // `hartVariablesJson` diretamente dentro de `pinsForTypeId` (mesma assinatura `(typeId,
+  // properties)` que já recebe aqui) -- ver o branch lá, não precisa de um segundo aqui.
   const descriptor = state.schematicState.catalog.find((item) => item.typeId === component.typeId);
   const lastKnownPinIds = component.subcircuitRef?.lastKnownPinIds ?? component.deviceRef?.lastKnownPinIds;
   if (!descriptor && lastKnownPinIds && lastKnownPinIds.length > 0) {

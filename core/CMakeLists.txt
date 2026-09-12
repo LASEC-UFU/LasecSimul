@@ -563,6 +563,21 @@ if(NOT WIN32)
 endif()
 add_test(NAME subcircuit COMMAND subcircuit_test)
 
+# Fronteira de `.lssubcircuit` pro dominio Signal Graph (item 6/16g do gate de materializacao de
+# portas Signal Graph, HART Device Engine v2 FEAT-013) -- generico, via `connectors.signal_tunnel`
+# + `SubcircuitExpansionResult::exposedSignalPins`, SEPARADO da fronteira eletrica existente
+# (`connectors.tunnel`/`exposedPins`, ver subcircuit_test.cpp acima).
+add_executable(signal_graph_subcircuit_boundary_test
+    test/core/session/SignalGraphSubcircuitBoundaryTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(signal_graph_subcircuit_boundary_test PRIVATE include src)
+target_link_libraries(signal_graph_subcircuit_boundary_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(signal_graph_subcircuit_boundary_test PRIVATE dl)
+endif()
+add_test(NAME signal_graph_subcircuit_boundary COMMAND signal_graph_subcircuit_boundary_test)
+
 # Componentes "Fontes"/"Medidores" portados do SimulIDE
 add_executable(simulide_sources_meters_test
     test/simulide_sources_meters_test.cpp
@@ -1644,6 +1659,21 @@ if(NOT WIN32)
 endif()
 add_test(NAME i2c_fast_path_dispatch COMMAND i2c_fast_path_dispatch_test)
 
+# Fechamento do gate de materializacao de portas Signal Graph (HART Device Engine v2, FEAT-013):
+# prova que connectWire()/disconnectWire() roteiam para o dominio Signal Graph quando os dois
+# endpoints resolvem via IComponentModel::signalPorts(), usando componentes fake GENERICOS (nao
+# HART) -- ver .spec/features/hart-device-engine.md, Anexo F.
+add_executable(signal_graph_wiring_test
+    test/core/session/SignalGraphWiringTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(signal_graph_wiring_test PRIVATE include src)
+target_link_libraries(signal_graph_wiring_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(signal_graph_wiring_test PRIVATE dl)
+endif()
+add_test(NAME signal_graph_wiring COMMAND signal_graph_wiring_test)
+
 # Watchdog de plugins nativos (Épico D do roadmap de pendências)
 add_executable(plugin_watchdog_test test/core/plugins/PluginWatchdogTest.cpp src/plugins/CrashGuard.cpp)
 target_include_directories(plugin_watchdog_test PRIVATE include src)
@@ -1656,10 +1686,10 @@ add_test(NAME plugin_watchdog COMMAND plugin_watchdog_test)
 # Mantenha todos os testes em exatamente um grupo: o runner descobre os nomes via CTest e usa
 # estes labels, sem duplicar listas de testes em JavaScript ou no workflow de CI.
 set(LASECSIMUL_HERMETIC_TESTS
-    pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues shared_host_capacity simulation_plan signal_engine signal_dynamics signal_bridge process_subcircuit simulation_plan_session dense_hot_path voltage_divider circuit_group_reuse diode zener_led
+    pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues shared_host_capacity simulation_plan signal_engine signal_dynamics signal_bridge signal_graph_wiring signal_graph_subcircuit_boundary process_subcircuit simulation_plan_session dense_hot_path voltage_divider circuit_group_reuse diode zener_led
     inert_components_fix probe_pause_on_change subcircuit simulide_sources_meters voltmeter
     component_removal netlist union_find scheduler sparse_set core_bootstrap circuit_group logic_value
-    session_execution_identity vnext_b_arbiter drain_cutoff_gate dynamic_component_dispatch i2c_fast_path_dispatch
+    session_execution_identity vnext_b_arbiter vnext_b_wait_dispatcher drain_cutoff_gate dynamic_component_dispatch i2c_fast_path_dispatch hart_engine
     ghdl_arena_bridge ghdl_process_manager fpga_port_mapper mna_solver sha256 passive_components
     transient_rc transient_rlc simulation_performance_smoke property_definition dynamic_pins
     logic_components plugin_loader plugin_loader_real_dll plugin_checksum plugin_duplicate_device_id

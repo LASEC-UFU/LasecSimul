@@ -12,6 +12,10 @@ function tunnel(id: string, pinId: string): ProjectComponent {
   return { id, typeId: "connectors.tunnel", properties: { name: pinId, pinId }, visual: { x: 0, y: 0, rotation: 0 } };
 }
 
+function signalTunnel(id: string, name: string, direction: "Input" | "Output"): ProjectComponent {
+  return { id, typeId: "connectors.signal_tunnel", properties: { name, direction, valueType: "Real", unit: "V" }, visual: { x: 0, y: 0, rotation: 0 } };
+}
+
 function fullDocument(): SubcircuitDocument {
   return {
     schemaVersion: SUBCIRCUIT_SCHEMA_VERSION,
@@ -19,14 +23,14 @@ function fullDocument(): SubcircuitDocument {
     name: "Demo",
     components: [
       { id: "r1", typeId: "passive.resistor", properties: { resistance: 220 }, visual: { x: 80, y: 40, rotation: 0 } },
-      tunnel("tun_vcc", "VCC"),
+      signalTunnel("tun_vcc", "VCC", "Input"),
       tunnel("tun_gnd", "GND"),
     ],
     topology: {
       revision: 1,
       nodes: [],
       conductors: [
-        { id: "w1", from: { kind: "port", componentId: "r1", pinId: "pin-1" }, to: { kind: "port", componentId: "tun_vcc", pinId: "pin" }, vertices: [{ x: 10, y: 20 }] },
+        { id: "w1", from: { kind: "port", componentId: "r1", pinId: "pin-1" }, to: { kind: "port", componentId: "tun_vcc", pinId: "value" }, vertices: [{ x: 10, y: 20 }] },
       ],
     },
     interface: [

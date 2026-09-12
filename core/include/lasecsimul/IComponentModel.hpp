@@ -216,4 +216,16 @@ public:
     virtual std::span<const uint32_t> leakagePinIndices() const { return {}; }
 };
 
+/** The ONE naming authority for a generic `SignalPortDescriptor`'s materialized
+ * `SignalBlockDefinition::id`, shared by every component type that exposes
+ * `signalPorts()` (HART, and any future one) and by whoever compiles the live
+ * session topology into a `SignalGraphDefinition` -- so a component never
+ * needs to invent or own its own scheme. `componentIndex` makes the id unique
+ * per live instance (two components of the same type never collide); `portId`
+ * is the component's own stable identity for that port (e.g. a HART
+ * variable's `id`) and is never re-derived from a display name. */
+inline std::string signalPortBlockId(uint32_t componentIndex, std::string_view portId) {
+    return "sig." + std::to_string(componentIndex) + "." + std::string(portId);
+}
+
 } // namespace lasecsimul

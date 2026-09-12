@@ -197,9 +197,9 @@ export class CoreClient {
       cacheRootDir: string;
       sourceRootDir: string;
     }
-  ): Promise<{ instanceId: string; primaryMcuInstanceId?: string; exposedPins?: Record<string, { instanceId: string; pinId: string }> }> {
+  ): Promise<{ instanceId: string; primaryMcuInstanceId?: string; exposedPins?: Record<string, { instanceId: string; pinId: string }>; exposedSignalPins?: Record<string, { instanceId: string; pinId: string }> }> {
     const resp = await this.request("addComponent", { typeId, properties, pins, instanceName, signalAliases, fpga });
-    return resp as { instanceId: string; primaryMcuInstanceId?: string; exposedPins?: Record<string, { instanceId: string; pinId: string }> };
+    return resp as { instanceId: string; primaryMcuInstanceId?: string; exposedPins?: Record<string, { instanceId: string; pinId: string }>; exposedSignalPins?: Record<string, { instanceId: string; pinId: string }> };
   }
 
   /** `requiresRestart: true` quando a propriedade alterada tem essa flag no schema (`Core` já

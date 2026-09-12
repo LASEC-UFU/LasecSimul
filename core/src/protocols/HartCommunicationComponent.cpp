@@ -613,7 +613,11 @@ void HartCommunicationComponent::onAssignedIndex(uint32_t index) {
 }
 
 std::string HartCommunicationComponent::signalBlockId(std::string_view variableId) const {
-    return "hart." + std::to_string(m_componentIndex) + "." + std::string(variableId);
+    // Delegates to the ONE naming authority every `signalPorts()`-exposing
+    // component shares (`lasecsimul::signalPortBlockId`) -- HART is just a
+    // consumer of the generic Signal Graph port infrastructure, not a second,
+    // independently-named one.
+    return signalPortBlockId(m_componentIndex, variableId);
 }
 
 bool HartCommunicationComponent::setSignalInput(std::string_view variableId, double value) noexcept {
@@ -671,7 +675,15 @@ std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode
     // `component.properties` directly rather than iterating visible schemas;
     // `propertyDialogShowAll` remains an escape hatch for debugging.
     auto hartJson = textSchema("hartVariablesJson", "Variáveis HART", "HART", "[]"); hartJson.flags |= PropertySchemaHidden;
-    hartJson.flags |= PropertySchemaAffectsTopology;
+    // AffectsTopology (Input/Output materializa/desmaterializa uma porta Signal Graph -- edição
+    // estrutural, ver ARCH-002) + AffectsPinCount: embora `pins()` (linha 27, `HartCommunicationComponent.
+    // hpp`) permaneça sempre vazio -- separação deliberada Electrical Pins x Signal Ports, nunca
+    // misturadas -- o flag também é o que o lado da Extension usa (`propertySchema[].affectsPinCount` sincronizado
+    // por IPC) pra saber que precisa recalcular os pinos de CANVAS (`pinsForTypeId` ->
+    // `hartSignalGraphPinIds`) e podar fios órfãos depois de editar esta propriedade -- sem ele, um
+    // fio Signal Graph sobreviveria visualmente apontando pra uma porta que a variável removida já
+    // não tem mais.
+    hartJson.flags |= PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount;
     out.push_back(hartJson);
     auto hartCommands = textSchema("hartCommandsJson", "Comandos HART", "HART", "[]"); hartCommands.flags |= PropertySchemaHidden;
     out.push_back(hartCommands);

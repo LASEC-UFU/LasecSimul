@@ -3,6 +3,7 @@ import {
   HartCommandRow,
   HartVariableRow,
   hartInspectorClientScript,
+  hartSignalGraphPinIds,
   parseCommandRows,
   parseVariableRows,
   preserveExistingVariableIds,
@@ -30,6 +31,24 @@ import {
     assert(parseVariableRows("{not json").length === 0, "JSON inválido deveria virar lista vazia, não exceção");
     assert(parseVariableRows("").length === 0, "string vazia deveria virar lista vazia");
     assert(parseVariableRows("[1,2,3]").length === 0, "array de não-objetos deveria virar lista vazia");
+  });
+
+  await test("hartSignalGraphPinIds deriva um pino de canvas por variável Input/Output, na mesma identidade estável (id, nunca name)", () => {
+    const json = JSON.stringify([
+      { id: "PV", name: "Process Value", direction: "Internal" },
+      { id: "SP", name: "Setpoint", direction: "Input" },
+      { id: "MV", name: "Measured Value", direction: "Output" },
+    ]);
+    const ids = hartSignalGraphPinIds(json);
+    assert(ids.length === 2, "Internal não deveria virar pino de canvas -- só Input/Output");
+    assert(ids.includes("SP") && ids.includes("MV"), "pino usa o id estável, nunca o name de exibição");
+  });
+
+  await test("hartSignalGraphPinIds volta lista vazia pra JSON malformado/sem variáveis Input ou Output", () => {
+    assert(hartSignalGraphPinIds("{not json").length === 0, "JSON inválido não deveria lançar nem inventar pino");
+    assert(hartSignalGraphPinIds("[]").length === 0, "nenhuma variável -- nenhum pino");
+    assert(hartSignalGraphPinIds(JSON.stringify([{ id: "PV", direction: "Internal" }])).length === 0,
+      "só variáveis Internal -- nenhum pino de canvas");
   });
 
   await test("serializeVariableRows produz exatamente os campos que HartCommunicationComponent::rebuildConfiguredPlan espera", () => {

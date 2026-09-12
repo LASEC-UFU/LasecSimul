@@ -88,7 +88,11 @@ CompiledProcessSubcircuit ProcessSubcircuitCompiler::compile(
         Json properties = Json::parse(component.propertiesJson);
         applyOverrides(properties, component.id, parameterOverrides);
         const uint64_t periodNs = static_cast<uint64_t>(std::max(1.0, number(properties, "samplePeriodNs", 100'000'000.0)));
-        if (component.typeId == "connectors.tunnel") {
+        if (component.typeId == "connectors.tunnel" || component.typeId == "connectors.signal_tunnel") {
+            // Legacy process documents used the electrical tunnel as a signal relay. New authoring
+            // uses SignalTunnel; accepting both here preserves old process files while all new
+            // `domain:signal` boundaries stay in the generic Signal Graph domain.
+            const std::string portId = component.typeId == "connectors.signal_tunnel" ? "value" : "pin";
             const std::string name = properties.value("name", component.id);
             const auto interfaceIt = interfaceByTunnel.find(name);
             std::string direction = interfaceIt == interfaceByTunnel.end() ? std::string{} : interfaceIt->second->direction;
@@ -107,7 +111,7 @@ CompiledProcessSubcircuit ProcessSubcircuitCompiler::compile(
                 if (interfaceIt != interfaceByTunnel.end()) result.externalInputs[interfaceIt->second->pinId] = component.id;
             } else if (direction == "out") {
                 result.graph.blocks.push_back(realBlock(component.id, SignalBlockKind::Probe, {"in"}, {}, periodNs));
-                ports[component.id].inputs["pin"] = {component.id, "in"};
+                ports[component.id].inputs[portId] = {component.id, "in"};
                 ports[component.id].output = {component.id, "out"};
                 if (interfaceIt != interfaceByTunnel.end()) result.externalOutputs[interfaceIt->second->pinId] = component.id;
             } else {

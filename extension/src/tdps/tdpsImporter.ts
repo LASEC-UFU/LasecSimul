@@ -272,14 +272,14 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
 
   const ensureExternal = (variable: number): { componentId: string; pinId: string } => {
     const existing = external.get(variable);
-    if (existing) return { componentId: existing, pinId: "pin" };
+    if (existing) return { componentId: existing, pinId: "value" };
     const pinId = `external-${String(variable).padStart(2, "0")}`;
     const componentId = `tunnel-${pinId}`;
     external.set(variable, componentId);
-    components.push({ id: componentId, typeId: "connectors.tunnel", label: pinId, properties: { name: pinId, pinId, legacyVariableIndex: variable }, visual: { x: 20, y: 40 + external.size * 30, rotation: 0 } });
+    components.push({ id: componentId, typeId: "connectors.signal_tunnel", label: pinId, properties: { name: pinId, direction: "Input", valueType: "Real", legacyVariableIndex: variable }, visual: { x: 20, y: 40 + external.size * 30, rotation: 0 } });
     interfaces.push({ pinId, label: pinId, internalTunnel: pinId, domain: "signal", direction: "in", valueType: "Real", width: 1 });
     pins.push({ id: pinId, label: pinId, kind: "ANALOG_IN", x: 0, y: 20 + external.size * 20, angle: 180, length: 8 });
-    return { componentId, pinId: "pin" };
+    return { componentId, pinId: "value" };
   };
   const connectVariable = (variable: number, targetComponentId: string, targetPinId: string): void => {
     const source = producers.get(variable) ?? ensureExternal(variable);
@@ -328,10 +328,10 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
     const source = producers.get(variable)!;
     const pinId = `output-${String(variable).padStart(2, "0")}`;
     const componentId = `tunnel-${pinId}`;
-    components.push({ id: componentId, typeId: "connectors.tunnel", label: pinId, properties: { name: pinId, pinId, legacyVariableIndex: variable }, visual: { x: 1000, y: 40 + interfaces.length * 30, rotation: 180 } });
+    components.push({ id: componentId, typeId: "connectors.signal_tunnel", label: pinId, properties: { name: pinId, direction: "Output", valueType: "Real", legacyVariableIndex: variable }, visual: { x: 1000, y: 40 + interfaces.length * 30, rotation: 180 } });
     interfaces.push({ pinId, label: pinId, internalTunnel: pinId, domain: "signal", direction: "out", valueType: "Real", width: 1 });
     pins.push({ id: pinId, label: pinId, kind: "ANALOG_OUT", x: 140, y: 20 + outputVariables.indexOf(variable) * 20, angle: 0, length: 8 });
-    addWire(source.componentId, source.pinId, componentId, "pin");
+    addWire(source.componentId, source.pinId, componentId, "value");
   }
 
   const document: SubcircuitDocument = {

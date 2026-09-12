@@ -2272,7 +2272,12 @@ quando deveriam -- ver Anexo F.16).
 
 Parcial ou pendente: `req`/`write`/`after` e `If`/`Map`/`ForCodes` sem editor
 · referência a variável customizada dentro de comando · encapsulamento
-`.lssubcircuit` não auditado · **a ponta de UI/canvas real da porta Signal
+`.lssubcircuit` possui fronteira Signal Graph genérica validada: `domain=signal`,
+`SignalTunnel` e `exposedSignalPins` permanecem separados dos pinos elétricos;
+aninhamento, identidade estável, HART Input/Output e reconstrução de sessão são
+cobertos por `signal_graph_subcircuit_boundary_test`. A Extension preserva
+`exposedSignalPins` no mesmo pipeline canônico de resolução de fios, sem wiring
+específico de HART nem pinos elétricos artificiais. · **a ponta de UI/canvas real da porta Signal
 Graph -- não apenas "não confirmada clicando", genuinamente não implementada:
 nenhuma referência a `signalPorts`/`SignalPortDescriptor`/`protocol.hart` em
 todo `extension/src/ui/webview/*.ts`, então um componente HART não expõe
@@ -3420,6 +3425,14 @@ sintético.
 | 810--813 | Join/Receive Priority | vazio/u8 e u8/u8 | bounded priorities | DONE_SPEC_VERIFIED |
 | 821--822 | Write/Read Network Access Mode | u8/u8 e vazio/u8 | access mode | DONE_SPEC_VERIFIED |
 | 860--861 | Read/Write Join Key Mode | vazio/u8 e u8/u8 | join-key mode | DONE_SPEC_VERIFIED |
+| 799--801, 862 | Timetable request/read/delete/read-by-ID | layouts de §7.31--7.33/7.86 | `wireless.timetables[8]` | DONE_SPEC_VERIFIED |
+| 802--803, 974--977 | Route/source-route read/write/delete | layouts de §7.34--7.35/7.101--7.104 | `wireless.routes[8]`, `sourceRoutes[8]` | DONE_SPEC_VERIFIED |
+| 814--816 | Device List read/add/delete | UID-40 e listas bounded | `wireless.deviceListEntries[64]` | DONE_SPEC_VERIFIED |
+| 852--856 | Stale data, extended session, suspend setting | layouts de §7.79--7.86 | estado Wireless bounded | IMPLEMENTED_WITH_RUNTIME_EFFECT_PENDING |
+| 972 | Suspend Device(s) | ASN-40 suspend/resume; virtual-time window | `wireless.suspendAtAsn` / `resumeAtAsn` | DONE_SPEC_VERIFIED |
+| 960--962, 978--979 | Disconnect, Network Key, Nickname, counter/security level writes | layouts de §7.87--7.89/7.105--7.106 | security/identity authority Wireless | IMPLEMENTED_WITH_PERSISTENCE_AND_RUNTIME_RECONCILIATION_PENDING |
+| 64512 | Read Wireless Module Revision | §8.1; Wireless Device-Specific | CompiledDsl/manufacturer-specific, não StandardCore | NOT_DEFINED_FOR_REFERENCE_PROFILE |
+| 858 | Reset Availability Statistics | §7.82; comando de Gateway | não aplicável ao modelo Field Device atual | NOT_APPLICABLE |
 
 As leituras 782--785 agora usam tabelas canônicas bounded por dispositivo para
 Session, Superframe, Link e Graph, com IDs/referências normativas e rejeição
@@ -3430,11 +3443,23 @@ source-route ao remover a rota. Os demais comandos Wireless permanecem
 explicitamente pendentes neste inventário; nenhum handler cria estado por
 comando nem usa eco genérico como fallback.
 
-Writes Wireless acima usam a mesma autoridade de Configuration Changed,
-write-protect e estado persistente `hartAdditionalJson`; chaves são mantidas
-somente no modelo canônico e não são logadas. Os demais comandos Wireless
-serão classificados no mesmo inventário por sua tabela/estrutura normativa,
-sem fallback de sucesso nem eco genérico.
+Writes Wireless acima usam a mesma autoridade de Configuration Changed e
+write-protect; o estado de tabelas permanece somente no modelo runtime
+canônico até que o adaptador de persistência seja estendido para esses campos.
+Chaves são mantidas somente no modelo canônico e não são logadas. Os demais
+comandos Wireless serão classificados no mesmo inventário por sua
+tabela/estrutura normativa, sem fallback de sucesso nem eco genérico.
+
+Checkpoint operacional atual: os IDs ainda abertos para implementação ou
+classificação final são `777, 779--780, 786--791, 793--796, 806--807,
+819--820, 823, 832--851, 963--971, 973`; `858` permanece
+`NOT_APPLICABLE` e `64512` permanece `NOT_DEFINED_FOR_REFERENCE_PROFILE`.
+Os últimos commands validados são `963 Write/Modify Session` (§7.90),
+`964 Delete Session` (§7.91), `965 Write/Modify Superframe` (§7.92),
+`966 Delete Superframe` (§7.93) e o cluster `967--971` (§7.94--7.98), em
+HCF_SPEC-155. O macro-lote corrente fechou `777 Read Wireless Device
+Capabilities` (§7.10), com os 22 bytes normativos derivados da specification e
+capability gate. O próximo pending command é `779 Report Device Health`, §7.12.
 
 O Analog Channel 0 foi consolidado como a saída Primary/Loop Current
 obrigatória da especificação; não existe uma segunda autoridade para o mesmo

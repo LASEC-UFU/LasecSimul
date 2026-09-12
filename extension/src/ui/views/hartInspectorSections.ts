@@ -126,6 +126,22 @@ function asRecordArray(json: string): Array<Record<string, unknown>> {
   }
 }
 
+/** Derives the CANVAS pin ids for a HART instance's generic Signal Graph ports -- the visual
+ * counterpart of `HartCommunicationComponent::signalPorts()` (Core): one entry per Input/Output
+ * variable (never Internal), id = the variable's stable `id` (never `name` -- see
+ * `preserveExistingVariableIds`, the same identity guarantee applies here: renaming the display
+ * name must never change this id, or an existing wire would orphan). `connectWire`, the canvas
+ * wire-gesture handling, and `SimulationSession::materializeSignalGraphUnlocked` are all fully
+ * generic already; this function is the one HART-specific piece they all need -- "how many/which
+ * ports does THIS instance have" -- exactly like `buildFpgaPins`/`fpga.ports` already is for FPGA
+ * and `plc.exportedIo` already is for PLC (see `pinsForProjectComponent` in `coreLifecycle.ts`). */
+export function hartSignalGraphPinIds(hartVariablesJson: string): string[] {
+  return parseVariableRows(hartVariablesJson)
+    .filter((row) => row.direction === "Input" || row.direction === "Output")
+    .map((row) => row.id)
+    .filter((id) => id.length > 0);
+}
+
 export function parseVariableRows(json: string): HartVariableRow[] {
   return asRecordArray(json).map((item) => ({
     id: typeof item.id === "string" ? item.id : "",
@@ -162,8 +178,11 @@ export function parseVariableRows(json: string): HartVariableRow[] {
  * `PropertyInspectorViewProvider.onDidReceiveMessage` -- a message that
  * slips through a stale/bypassed webview must still never reach the
  * Authoring Model). `id` is the Signal Graph identity for Input/Output
- * variables (`HartCommunicationComponent::signalBlockId` = `hart.<index>.
- * <id>`); silently accepting a changed id for an existing row would orphan
+ * variables -- the same `portId` `HartCommunicationComponent::signalPorts()`
+ * exposes, which `lasecsimul::signalPortBlockId(componentIndex, id)` (the ONE
+ * naming authority shared by every Signal Graph-port-exposing component, not
+ * a HART-private scheme) turns into the materialized block id `sig.<index>.
+ * <id>`; silently accepting a changed id for an existing row would orphan
  * any wire bound to the old block id with no warning. Rows are matched by
  * array position, the same indexing the client script itself uses to build
  * the payload -- a row that already existed at position i keeps its old id

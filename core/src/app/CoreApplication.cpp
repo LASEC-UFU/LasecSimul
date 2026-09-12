@@ -30,6 +30,7 @@
 #include "../components/sources/Rail.hpp"
 #include "../components/sources/VoltSource.hpp"
 #include "../components/sources/WaveGen.hpp"
+#include "../components/connectors/SignalTunnel.hpp"
 #include "../components/connectors/Tunnel.hpp"
 #include "../components/connectors/Bus.hpp"
 #include "../components/logic/Button.hpp"
@@ -205,6 +206,20 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         std::vector<PropertySchema>{},
         R"json({"en":{"name":"Tunnel"}})json",
         std::nullopt, std::nullopt, std::vector<std::string>{"pin"});
+
+    // O equivalente de connectors.tunnel para o domínio Signal Graph -- marca um pino de fronteira
+    // de `.lssubcircuit` (`SubcircuitInterfaceDef::domain == "signal"`) sem NENHUM pino elétrico
+    // (ver SignalTunnel.hpp): `pinIds` vazio aqui é deliberado, nunca `{"pin"}` como o elétrico --
+    // um `SignalTunnel` nunca aparece no Netlist, só em `signalPorts()`.
+    reg.registerFactory("connectors.signal_tunnel", [](const ComponentParams& p) {
+        return std::make_unique<components::SignalTunnel>(p);
+    });
+    registerBuiltinMetadata(
+        "connectors.signal_tunnel",
+        "Túnel de Sinal",
+        std::vector<PropertySchema>{},
+        R"json({"en":{"name":"Signal Tunnel"}})json",
+        std::nullopt, std::nullopt, std::vector<std::string>{});
 
     reg.registerFactory("bridges.voltage_sensor", [](const ComponentParams& p) {
         return std::make_unique<components::SignalVoltageSensor>(makePins2(p, "p", "n"));
@@ -1211,7 +1226,8 @@ RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesyste
             throw std::runtime_error("properties de componente deve ser objeto: " + comp.id);
         }
         comp.propertiesJson = compJson.contains("properties") ? compJson["properties"].dump() : "{}";
-        if (comp.typeId == "connectors.tunnel" && compJson.contains("properties") && compJson["properties"].is_object()) {
+        if ((comp.typeId == "connectors.tunnel" || comp.typeId == "connectors.signal_tunnel") &&
+            compJson.contains("properties") && compJson["properties"].is_object()) {
             const auto& properties = compJson["properties"];
             if (properties.contains("name") && properties["name"].is_string() && !properties["name"].get<std::string>().empty()) {
                 tunnelNames.insert(properties["name"].get<std::string>());
@@ -1670,9 +1686,20 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                 for (const auto& [pinId, exposed] : expansion.exposedPins) {
                     exposedPinsJson[pinId] = {{"instanceId", std::to_string(exposed.instanceId)}, {"pinId", exposed.pinId}};
                 }
+                // Fronteira Signal Graph -- SEMPRE uma chave separada de "exposedPins" (nunca
+                // fundidas no mesmo objeto JSON), mesma separação de domínio de
+                // `SubcircuitExpansionResult::exposedSignalPins`. A Extension é livre pra fundir os
+                // dois num único cache de RESOLUÇÃO de fio (`resolveWireEndpoint`) porque ali não é
+                // uma decisão semântica, só "ache o {instanceId,pinId} real" -- mas o contrato de
+                // IPC em si preserva a separação.
+                nlohmann::json exposedSignalPinsJson = nlohmann::json::object();
+                for (const auto& [pinId, exposed] : expansion.exposedSignalPins) {
+                    exposedSignalPinsJson[pinId] = {{"instanceId", std::to_string(exposed.instanceId)}, {"pinId", exposed.pinId}};
+                }
                 resp.ok = true;
                 resp.payloadJson = nlohmann::json{{"instanceId", std::to_string(expansion.subcircuitInstanceId)},
                                                    {"exposedPins", exposedPinsJson},
+                                                   {"exposedSignalPins", exposedSignalPinsJson},
                                                    {"primaryMcuInstanceId",
                                                     expansion.primaryMcuInstanceId
                                                         ? nlohmann::json(std::to_string(*expansion.primaryMcuInstanceId))

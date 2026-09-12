@@ -1,6 +1,7 @@
 #include "SimulationSession.hpp"
 #include "../protocols/HartCommunicationComponent.hpp"
 #include "../components/bridges/SignalBridges.hpp"
+#include "../components/connectors/SignalTunnel.hpp"
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -364,7 +365,7 @@ bool SimulationSession::publishSimulationPlan() {
     input.execution = m_runtimeState.execution;
     input.resolvedSignalSubscribers = m_runtimeState.resolvedSignalSubscribers;
     simulation::SignalGraphDefinition materializedSignalGraph =
-        materializeHartSignalPortsUnlocked(m_signalGraphDefinition);
+        materializeSignalGraphUnlocked(m_signalGraphDefinition);
     input.signalGraph = &materializedSignalGraph;
     input.electricalSignalBridges = m_electricalSignalBridgeDefinitions;
     input.pythonBlocks.reserve(m_pythonBlockDefinitions.size());
@@ -415,7 +416,7 @@ void SimulationSession::setSignalGraph(simulation::SignalGraphDefinition definit
         }
         // Compile the effective graph before mutating authoring state so a malformed
         // graph or a HART port collision is transactionally rejected.
-        (void)simulation::SignalCompiler::compile(self.materializeHartSignalPortsUnlocked(definition));
+        (void)simulation::SignalCompiler::compile(self.materializeSignalGraphUnlocked(definition));
         self.m_signalGraphDefinition = std::move(definition);
         self.m_signalBoundaryScheduledNs.reset();
         ++self.m_signalScheduleGeneration;
@@ -1258,6 +1259,21 @@ void SimulationSession::connectWireUnlocked(uint32_t componentA, const std::stri
     }
     if (m_netlist.isComponentRemoved(componentA) || m_netlist.isComponentRemoved(componentB))
         throw std::invalid_argument("SimulationSession::connectWire: componente removido");
+    // Detecta domínio ANTES de qualquer resolução elétrica: um `(componente,pinId)` que resolve
+    // como Signal Graph port nunca deveria disparar a exceção elétrica "pin inexistente" só porque
+    // não está em `Netlist::pinSlotsOf`. Mesma entrada IPC (`connectWire`/`applyWireTopologyTransaction`)
+    // pros dois domínios -- nunca um segundo mecanismo de fiação, ver `SignalWireDefinition`.
+    const std::optional<SignalPortDescriptor> signalPortA = findSignalPortUnlocked(componentA, pinIdA);
+    const std::optional<SignalPortDescriptor> signalPortB = findSignalPortUnlocked(componentB, pinIdB);
+    if (signalPortA && signalPortB) {
+        connectSignalWireUnlocked(componentA, *signalPortA, componentB, *signalPortB);
+        return;
+    }
+    if (signalPortA || signalPortB) {
+        throw std::invalid_argument(
+            "SimulationSession::connectWire: não é possível ligar uma porta Signal Graph a um pino elétrico ("
+            + pinIdA + " / " + pinIdB + ")");
+    }
     // Arquivos de autoria antigos e alguns packages genéricos usam `pin-N`, enquanto a factory
     // elétrica pode publicar ids semânticos (`p1`, `p2`, `out`...). Preserve primeiro o id exato;
     // o fallback posicional só é aceito para o formato genérico estrito e dentro do span real.
@@ -1314,6 +1330,17 @@ bool SimulationSession::disconnectWireUnlocked(uint32_t componentA, const std::s
     }
     if (m_netlist.isComponentRemoved(componentA) || m_netlist.isComponentRemoved(componentB))
         throw std::invalid_argument("SimulationSession::disconnectWire: componente removido");
+    // Mesma detecção de domínio de `connectWireUnlocked` -- ver comentário lá.
+    const std::optional<SignalPortDescriptor> signalPortA = findSignalPortUnlocked(componentA, pinIdA);
+    const std::optional<SignalPortDescriptor> signalPortB = findSignalPortUnlocked(componentB, pinIdB);
+    if (signalPortA && signalPortB) {
+        return disconnectSignalWireUnlocked(componentA, pinIdA, componentB, pinIdB);
+    }
+    if (signalPortA || signalPortB) {
+        throw std::invalid_argument(
+            "SimulationSession::disconnectWire: não é possível desligar uma porta Signal Graph de um pino elétrico ("
+            + pinIdA + " / " + pinIdB + ")");
+    }
     const auto endpointSlots = [&](uint32_t component, const std::string& pinId) {
         std::vector<uint32_t> slots;
         const auto& byId = m_netlist.pinSlotsOf(component);
@@ -1354,6 +1381,7 @@ uint64_t SimulationSession::applyWireTopologyTransactionUnlocked(uint64_t baseRe
     // resolução aqui seria uma segunda regra, então uma cópia barata do Netlist funciona também
     // como staging.
     simulation::Netlist staged = m_netlist;
+    const std::vector<SignalWireDefinition> signalWiresBefore = m_signalWires;
     const bool dirtyBefore = m_topologyDirty;
     const bool reuseSafeBefore = m_topologyReuseSafe;
     const uint64_t revisionBefore = m_wireTopologyRevision;
@@ -1376,6 +1404,7 @@ uint64_t SimulationSession::applyWireTopologyTransactionUnlocked(uint64_t baseRe
         }
     } catch (...) {
         m_netlist = std::move(staged);
+        m_signalWires = signalWiresBefore;
         m_topologyDirty = dirtyBefore;
         m_topologyReuseSafe = reuseSafeBefore;
         m_wireTopologyRevision = revisionBefore;
@@ -1425,26 +1454,135 @@ std::optional<std::string> SimulationSession::setProperty(uint32_t component, co
     });
 }
 
-simulation::SignalGraphDefinition SimulationSession::materializeHartSignalPortsUnlocked(
+std::optional<SignalPortDescriptor> SimulationSession::findSignalPortUnlocked(
+    uint32_t component, const std::string& portId) const {
+    if (component >= m_componentInstances.size() || !m_componentInstances[component]) return std::nullopt;
+    for (const SignalPortDescriptor& port : m_componentInstances[component]->signalPorts()) {
+        if (port.id == portId) return port;
+    }
+    return std::nullopt;
+}
+
+void SimulationSession::connectSignalWireUnlocked(uint32_t componentA, const SignalPortDescriptor& portA,
+                                                    uint32_t componentB, const SignalPortDescriptor& portB) {
+    // `connectors.signal_tunnel` (fronteira de `.lssubcircuit`, ver SignalTunnel.hpp) é um RELAY,
+    // não um produtor/consumidor: o MESMO port declarado "Input" (pro lado de fora, que precisa
+    // dirigi-lo) também precisa servir de FONTE pro fio interno que lê o valor que atravessou a
+    // fronteira -- e vice-versa pra um tunnel "Output". Por isso, e SÓ pra este typeId (mesma
+    // exceção estrutural que `connectors.tunnel`/`connectors.junction` já recebem no domínio
+    // elétrico -- nunca genérica pra qualquer componente comum), o papel efetivo de um endpoint
+    // tunnel é o COMPLEMENTAR do outro lado, não sua própria `direction` declarada. Encadear dois
+    // tunnels direto um no outro (raro) cai no caso normal abaixo, sem ambiguidade adicional.
+    const bool aIsTunnel = m_componentInstances.at(componentA) &&
+                            std::string_view(m_componentInstances.at(componentA)->typeId()) == "connectors.signal_tunnel";
+    const bool bIsTunnel = m_componentInstances.at(componentB) &&
+                            std::string_view(m_componentInstances.at(componentB)->typeId()) == "connectors.signal_tunnel";
+    SignalPortDirection effectiveA = portA.direction;
+    SignalPortDirection effectiveB = portB.direction;
+    if (aIsTunnel && !bIsTunnel) {
+        effectiveA = portB.direction == SignalPortDirection::Output ? SignalPortDirection::Input : SignalPortDirection::Output;
+    } else if (bIsTunnel && !aIsTunnel) {
+        effectiveB = portA.direction == SignalPortDirection::Output ? SignalPortDirection::Input : SignalPortDirection::Output;
+    } else if (aIsTunnel && bIsTunnel && portA.direction == portB.direction) {
+        // Encadeamento tunnel-a-tunnel com o MESMO papel de fronteira declarado -- o caso real de
+        // reexpor o limite de um subcircuito aninhado através de outro tunnel no nível de fora
+        // (ex: um tunnel "in" do wrapper alimentando o tunnel "in" do subcircuito aninhado, ambos
+        // legitimamente "Input" na SUA PRÓPRIA fronteira local). Sem nenhum terceiro sinal pra
+        // derivar a direção, a ordem de autoria do fio (`componentA`/`pinIdA` é sempre o "from" --
+        // ver `expandSubcircuit`'s `resolveEndpoint`/`connectWireUnlocked(from..., to...)`) decide:
+        // A relay pra B, sempre.
+        effectiveA = SignalPortDirection::Output;
+        effectiveB = SignalPortDirection::Input;
+    }
+    if (effectiveA == effectiveB) {
+        throw std::invalid_argument(effectiveA == SignalPortDirection::Output
+            ? "SimulationSession::connectWire: não é possível ligar duas portas Signal Graph Output"
+            : "SimulationSession::connectWire: não é possível ligar duas portas Signal Graph Input");
+    }
+    const bool aIsOutput = effectiveA == SignalPortDirection::Output;
+    const SignalPortDescriptor& sourcePort = aIsOutput ? portA : portB;
+    const SignalPortDescriptor& targetPort = aIsOutput ? portB : portA;
+    const uint32_t sourceComponent = aIsOutput ? componentA : componentB;
+    const uint32_t targetComponent = aIsOutput ? componentB : componentA;
+    if (sourcePort.kind != targetPort.kind) {
+        throw std::invalid_argument("SimulationSession::connectWire: tipos de sinal incompatíveis entre "
+            + sourcePort.id + " e " + targetPort.id);
+    }
+    for (const SignalWireDefinition& existing : m_signalWires) {
+        if (existing.targetComponent == targetComponent && existing.targetPort == targetPort.id) {
+            throw std::invalid_argument(
+                "SimulationSession::connectWire: porta Signal Graph de entrada já possui um fio conectado: "
+                + targetPort.id);
+        }
+    }
+    m_signalWires.push_back(SignalWireDefinition{sourceComponent, sourcePort.id, targetComponent, targetPort.id});
+    ++m_wireTopologyRevision;
+    invalidatePlan(simulation::PlanDomain::Signal);
+}
+
+bool SimulationSession::disconnectSignalWireUnlocked(uint32_t componentA, const std::string& pinIdA,
+                                                       uint32_t componentB, const std::string& pinIdB) {
+    const auto matches = [&](const SignalWireDefinition& wire) {
+        return (wire.sourceComponent == componentA && wire.sourcePort == pinIdA &&
+                wire.targetComponent == componentB && wire.targetPort == pinIdB) ||
+               (wire.sourceComponent == componentB && wire.sourcePort == pinIdB &&
+                wire.targetComponent == componentA && wire.targetPort == pinIdA);
+    };
+    const auto it = std::find_if(m_signalWires.begin(), m_signalWires.end(), matches);
+    if (it == m_signalWires.end()) return false;
+    m_signalWires.erase(it);
+    ++m_wireTopologyRevision;
+    invalidatePlan(simulation::PlanDomain::Signal);
+    return true;
+}
+
+simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnlocked(
     const simulation::SignalGraphDefinition& definition) const {
     simulation::SignalGraphDefinition result = definition;
     std::unordered_set<std::string> ids;
     for (const auto& block : result.blocks) ids.insert(block.id);
+    // `SignalCompiler::compile` rejeita QUALQUER input de bloco declarado sem conexão -- um Input
+    // port ainda não fiado (o caso comum: acabou de ser criado, ou o autor simplesmente não ligou
+    // nada nele) não pode virar um `Probe` com um `"in"` pendurado, ou a sessão inteira deixaria de
+    // compilar. Resolve isso ANTES do loop de materialização: só vira `Probe` (leitura do fio) quem
+    // de fato é alvo de uma entrada em `m_signalWires`; sem fio, degrada pro MESMO formato de um
+    // Output não fiado (`ExternalInput` com valor default) -- semanticamente correto (sem fio =
+    // sem valor upstream = fica no default/último valor ajustado), e nunca quebra o compile.
+    // Só conta como "fiado" um alvo cujos DOIS lados ainda resolvem como Signal Graph port de
+    // verdade -- mesmo critério de resolução do loop de conexões logo abaixo (`findSignalPortUnlocked`).
+    // Sem isso, um fio cujo endpoint sumiu (porta removida por edição de propriedade, sem passar por
+    // `removeComponentUnlocked`) marcaria o bloco como Probe aqui mas a conexão correspondente seria
+    // silenciosamente pulada lá embaixo -- reproduzindo exatamente o mesmo "entrada sem conexao" que
+    // esta materialização existe pra evitar.
+    std::unordered_set<std::string> wiredInputTargets;
+    for (const SignalWireDefinition& wire : m_signalWires) {
+        if (!findSignalPortUnlocked(wire.sourceComponent, wire.sourcePort) ||
+            !findSignalPortUnlocked(wire.targetComponent, wire.targetPort))
+            continue;
+        wiredInputTargets.insert(signalPortBlockId(wire.targetComponent, wire.targetPort));
+    }
     for (uint32_t index : m_activeComponentIndices) {
-        const auto* hart = dynamic_cast<const protocols::HartCommunicationComponent*>(
-            m_componentInstances[index].get());
-        if (!hart) continue;
-        for (const SignalPortDescriptor& port : hart->signalPorts()) {
-            const std::string blockId = hart->signalBlockId(port.id);
+        IComponentModel* component = m_componentInstances[index].get();
+        for (const SignalPortDescriptor& port : component->signalPorts()) {
+            const std::string blockId = signalPortBlockId(index, port.id);
             if (!ids.insert(blockId).second)
-                throw std::invalid_argument("Signal Graph block id collides with HART port: " + blockId);
+                throw std::invalid_argument("Signal Graph: id de bloco colide com porta genérica: " + blockId);
             simulation::SignalBlockDefinition block;
             block.id = blockId;
             const simulation::SignalScalarType scalar = port.kind == SignalValueKind::Digital
                 ? simulation::SignalScalarType::Bool : simulation::SignalScalarType::Real;
             block.output = {"out", {scalar, 1}, port.unit};
             block.rate = {1, 0, 0};
-            if (port.direction == SignalPortDirection::Input) {
+            // `connectors.signal_tunnel` é um relay (ver comentário em `connectSignalWireUnlocked`):
+            // sua declared `direction` só descreve o papel de FRONTEIRA (quem de fora pode dirigi-lo),
+            // nunca decide sozinha se o BLOCO precisa de um `"in"` -- é `wiredInputTargets` (o fato de
+            // ALGUÉM, dentro ou fora do subcircuito, já apontar um fio pra ele) que decide isso pra um
+            // tunnel. Pra qualquer componente NORMAL (produtor/consumidor real, nunca um relay), a
+            // regra continua a original: só um Input DECLARADO vira Probe.
+            const bool isSignalTunnel = std::string_view(component->typeId()) == "connectors.signal_tunnel";
+            const bool isWiredInput = wiredInputTargets.count(blockId) != 0 &&
+                                       (isSignalTunnel || port.direction == SignalPortDirection::Input);
+            if (isWiredInput) {
                 block.kind = simulation::SignalBlockKind::Probe;
                 block.inputs.push_back({"in", {scalar, 1}, port.unit});
             } else {
@@ -1454,6 +1592,22 @@ simulation::SignalGraphDefinition SimulationSession::materializeHartSignalPortsU
             }
             result.blocks.push_back(std::move(block));
         }
+    }
+    // `m_signalWires` é autoria genérica (Visual/DSL, ver `connectSignalWireUnlocked`) -- nunca
+    // específica de HART. Um endpoint que não resolve mais (componente/porta removido desde que o
+    // fio foi criado) é ignorado aqui em vez de lançar: a topologia compilada nunca contém uma
+    // conexão inválida, sem exigir que toda edição que afete contagem de portas escaneie
+    // proativamente `m_signalWires`.
+    for (const SignalWireDefinition& wire : m_signalWires) {
+        const std::optional<SignalPortDescriptor> sourcePort = findSignalPortUnlocked(wire.sourceComponent, wire.sourcePort);
+        const std::optional<SignalPortDescriptor> targetPort = findSignalPortUnlocked(wire.targetComponent, wire.targetPort);
+        if (!sourcePort || !targetPort) continue;
+        simulation::SignalConnectionDefinition connection;
+        connection.sourceBlock = signalPortBlockId(wire.sourceComponent, wire.sourcePort);
+        connection.sourcePort = "out";
+        connection.targetBlock = signalPortBlockId(wire.targetComponent, wire.targetPort);
+        connection.targetPort = "in";
+        result.connections.push_back(std::move(connection));
     }
     return result;
 }
@@ -1659,7 +1813,19 @@ void SimulationSession::removeComponentUnlocked(uint32_t componentIndex) {
     m_scheduler.dirtySet().remove(componentIndex);
     m_topologyDirty = true;
     m_topologyReuseSafe = false;
-    invalidatePlan(simulation::PlanDomain::Electrical | executionChanges);
+    // Poda `m_signalWires` referenciando o componente removido -- sem isso, o fio sobreviveria como
+    // referência pendente até `materializeSignalGraphUnlocked` silenciosamente ignorá-lo a cada
+    // compilação (correto lá, mas deixar crescer indefinidamente aqui seria um leak de autoria).
+    const size_t signalWiresBefore = m_signalWires.size();
+    m_signalWires.erase(std::remove_if(m_signalWires.begin(), m_signalWires.end(),
+                                        [componentIndex](const SignalWireDefinition& wire) {
+                                            return wire.sourceComponent == componentIndex ||
+                                                   wire.targetComponent == componentIndex;
+                                        }),
+                         m_signalWires.end());
+    const simulation::PlanDomain signalChanges =
+        m_signalWires.size() != signalWiresBefore ? simulation::PlanDomain::Signal : simulation::PlanDomain::None;
+    invalidatePlan(simulation::PlanDomain::Electrical | executionChanges | signalChanges);
 }
 
 void SimulationSession::scheduleNextSignalBoundaryUnlocked(uint64_t timestampNs) {
@@ -1861,12 +2027,17 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
     const auto resolveEndpoint = [&](const std::string& localId, const std::string& portId) {
         if (const auto nestedIt = nestedExpansionByLocalId.find(localId);
             nestedIt != nestedExpansionByLocalId.end()) {
-            const auto pinIt = nestedIt->second.exposedPins.find(portId);
-            if (pinIt == nestedIt->second.exposedPins.end()) {
-                throw std::runtime_error("subcircuito '" + typeId + "': componente aninhado '" + localId +
-                                         "' nao possui portId externo '" + portId + "'");
-            }
-            return pinIt->second;
+            // Checa as DUAS fronteiras do subcircuito aninhado -- elétrica e Signal Graph -- nunca
+            // fundidas num só mapa (ver doc de `SubcircuitExpansionResult::exposedSignalPins`).
+            // Qual delas realmente contém `portId` decide o domínio; `connectWireUnlocked` (chamado
+            // logo abaixo com o par resolvido) nunca precisa re-adivinhar isso.
+            if (const auto pinIt = nestedIt->second.exposedPins.find(portId); pinIt != nestedIt->second.exposedPins.end())
+                return pinIt->second;
+            if (const auto signalPinIt = nestedIt->second.exposedSignalPins.find(portId);
+                signalPinIt != nestedIt->second.exposedSignalPins.end())
+                return signalPinIt->second;
+            throw std::runtime_error("subcircuito '" + typeId + "': componente aninhado '" + localId +
+                                     "' nao possui portId externo '" + portId + "'");
         }
         const auto componentIt = componentIndexByLocalId.find(localId);
         if (componentIt == componentIndexByLocalId.end()) {
@@ -1888,7 +2059,54 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
     }
 
     std::unordered_map<std::string, SubcircuitExposedPin> exposedPins;
+    std::unordered_map<std::string, SubcircuitExposedPin> exposedSignalPins;
     for (const registry::SubcircuitInterfaceDef& ifaceDef : def->interfaceDefs) {
+        if (exposedPins.count(ifaceDef.pinId) != 0 || exposedSignalPins.count(ifaceDef.pinId) != 0) {
+            throw std::runtime_error("subcircuito '" + typeId + "': pinId de interface duplicado: " + ifaceDef.pinId);
+        }
+        if (ifaceDef.domain == "signal") {
+            // Fronteira Signal Graph: resolve direto pro `components::SignalTunnel` interno que
+            // carrega este nome -- NUNCA um `connectors.tunnel` elétrico, e sem nenhum "rename pra
+            // nome globalmente único" (ao contrário do elétrico logo abaixo): a identidade de um
+            // `SignalTunnel` já é o seu `componentIndex` (globalmente único por instância viva),
+            // não um nome comparado contra um registro global como o `Netlist` faz pra túnel
+            // elétrico -- ver `SignalTunnel.hpp`.
+            const auto signalTunnelIt = std::find_if(
+                def->components.begin(), def->components.end(), [&](const registry::SubcircuitComponentDef& c) {
+                    return c.typeId == "connectors.signal_tunnel" &&
+                           tunnelNameFromPropertiesJson(c.propertiesJson) == ifaceDef.internalTunnel;
+                });
+            if (signalTunnelIt == def->components.end()) {
+                throw std::runtime_error("subcircuito '" + typeId + "': interface de sinal '" + ifaceDef.pinId +
+                                          "' referencia signal tunnel interno inexistente: " + ifaceDef.internalTunnel);
+            }
+            const uint32_t signalTunnelIndex = componentIndexByLocalId.at(signalTunnelIt->id);
+            // `ifaceDef.direction` é só metadado de CATÁLOGO (permite a Extension desenhar a seta do
+            // pino de fronteira sem instanciar nada) -- a fonte real de verdade é sempre a própria
+            // instância `SignalTunnel` (ver doc de `exposedSignalPins`). Uma declaração "in"/"out"
+            // que diverge da instância real é rejeitada aqui, na hora da expansão -- nunca
+            // silenciosamente ignorada, o que deixaria o catálogo mentindo pro usuário sobre o
+            // sentido do fio.
+            if (ifaceDef.direction == "in" || ifaceDef.direction == "out") {
+                const std::optional<SignalPortDescriptor> resolvedPort =
+                    findSignalPortUnlocked(signalTunnelIndex, std::string(components::SignalTunnel::kPortId));
+                // Convenção deliberada: `direction:"in"` (de fora pra dentro do subcircuito) exige
+                // que o `SignalTunnel` interno seja ele próprio um Input (é ele quem tem uma entrada
+                // a preencher, dirigida por quem estiver do lado de fora). `direction:"out"` é o
+                // espelho: o `SignalTunnel` PUBLICA um valor pra fora, então é Output por dentro.
+                const SignalPortDirection requiredInternalDirection =
+                    ifaceDef.direction == "in" ? SignalPortDirection::Input : SignalPortDirection::Output;
+                if (!resolvedPort || resolvedPort->direction != requiredInternalDirection) {
+                    throw std::runtime_error(
+                        "subcircuito '" + typeId + "': interface de sinal '" + ifaceDef.pinId +
+                        "' declara direction='" + ifaceDef.direction +
+                        "' incompatível com a direção real do SignalTunnel interno '" + ifaceDef.internalTunnel + "'");
+                }
+            }
+            exposedSignalPins[ifaceDef.pinId] =
+                SubcircuitExposedPin{signalTunnelIndex, std::string(components::SignalTunnel::kPortId)};
+            continue;
+        }
         const auto tunnelCompIt = std::find_if(
             def->components.begin(), def->components.end(), [&](const registry::SubcircuitComponentDef& c) {
                 return c.typeId == "connectors.tunnel" &&
@@ -1910,7 +2128,8 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
     m_subcircuitChildIndexByLocalId[rawId] = std::move(componentIndexByLocalId);
 
     expansionStack.pop_back();
-    return SubcircuitExpansionResult{subcircuitInstanceId, std::move(exposedPins), primaryMcuInstanceId};
+    return SubcircuitExpansionResult{subcircuitInstanceId, std::move(exposedPins), std::move(exposedSignalPins),
+                                      primaryMcuInstanceId};
     } catch (...) {
         // Expansão é uma publicação atômica: nenhum filho criado no staging pode sobreviver a um
         // endpoint inválido, factory ausente, ciclo ou erro de propriedade.

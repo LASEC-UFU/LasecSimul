@@ -79,7 +79,7 @@ bool decodeDateTime(std::span<const uint8_t> bytes, uint64_t& seconds) noexcept 
 
 std::vector<HartCommandDescriptor> HartReferenceCatalog::commandDescriptors() {
     // Union of process_simul's command seed table and its transmitter dispatch table.
-    static constexpr std::array<std::pair<HartCommandId, std::string_view>, 231> commands{{
+    static constexpr std::array<std::pair<HartCommandId, std::string_view>, 258> commands{{
         {0x00, "Read Unique Identifier"},
         {0x01, "Read Primary Variable"},
         {0x02, "Read Loop Current And Percent Of Range"},
@@ -254,7 +254,8 @@ std::vector<HartCommandDescriptor> HartReferenceCatalog::commandDescriptors() {
         {1155, "Select Cold Junction Compensation Type"},
         {1556, "Write Manual Cold Junction Temperature"},
         {1157, "Write Temperature Callendar-Van Dusen Coefficients"},
-        {768, "Write Join Key"}, {769, "Read Join Status"}, {770, "Request Active Advertising"},
+        {768, "Write Join Key"}, {769, "Read Join Status"}, {770, "Request Active Advertising"}, {777, "Read Wireless Device Capabilities"}, {779, "Report Device Health"}, {780, "Report Neighbor Health List"}, {786, "Read Neighbor Property Flag"},
+        {793, "Write RTC Time Mapping"}, {794, "Read RTC Time Mapping"}, {795, "Write Timer Interval"}, {796, "Read Timer Interval"},
         {771, "Force Join Mode"}, {772, "Read Join Mode Configuration"}, {773, "Write Network ID"},
         {774, "Read Network ID"}, {775, "Write Network Tag"}, {776, "Read Network Tag"},
         {797, "Write Radio Transmit Power"}, {798, "Read Radio Transmit Power"},
@@ -272,7 +273,14 @@ std::vector<HartCommandDescriptor> HartReferenceCatalog::commandDescriptors() {
         {814, "Read Device List Entries"}, {815, "Add Device List Table Entry"}, {816, "Delete Device List Table Entry"},
         {817, "Read Channel Blacklist"}, {818, "Write Channel Blacklist"},
         {862, "Read Timetable by ID"},
+        {852, "Read Stale Data Setpoints"}, {853, "Write Stale Data Timer"}, {854, "Write Stale Data Count Setpoint"},
+        {855, "Read Session (Extended)"}, {856, "Read Device Suspend Setting"}, {858, "Reset Availability Statistics"},
+        {972, "Suspend Device(s)"},
+        {960, "Disconnect Device"}, {961, "Write Network (Data-Link) Key"}, {962, "Write Device Nickname Address"},
+        {978, "Write Status Counter Mode"}, {979, "Write Security Level Supported"},
         {963, "Write/Modify Session"}, {964, "Delete Session"},
+        {965, "Write/Modify Superframe"}, {966, "Delete Superframe"},
+        {967, "Add Link"}, {968, "Delete Link"}, {969, "Add Graph Edge"}, {970, "Delete Graph Edge"}, {971, "Write Neighbor Property Flag"},
         {974, "Write/Modify Route"}, {975, "Delete Route"}, {976, "Write/Modify Source-Route"}, {977, "Delete Source-Route"},
         {0x80, "Vendor Read Configuration"},
         {0x82, "Vendor Read Device Identity"},
@@ -994,11 +1002,22 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
             (command >= 0x47 && command <= 0x77) || (command >= 512 && command <= 531) ||
             (command >= 1280 && command <= 1290) || (command >= 1408 && command <= 1410) ||
             (command >= 768 && command <= 776) ||
+            command == 777 ||
+            command == 779 ||
+            command == 780 || command == 786 ||
+            (command >= 793 && command <= 796) ||
             command == 797 || command == 798 || command == 804 || command == 805 ||
             (command >= 808 && command <= 813) || command == 821 || command == 822 || command == 860 || command == 861 ||
             command == 778 || command == 781 || command == 857 || command == 859 ||
             (command >= 782 && command <= 785) ||
-            command == 817 || command == 818 ||
+            command == 799 || command == 800 || command == 801 || command == 802 || command == 803 ||
+            command == 814 || command == 815 || command == 816 || command == 817 || command == 818 ||
+            command == 862 || command == 963 || command == 964 || command == 965 || command == 966 ||
+            (command >= 974 && command <= 977) ||
+            (command >= 852 && command <= 856) || command == 972 ||
+            (command >= 960 && command <= 962) || command == 978 || command == 979 ||
+            command == 965 || command == 966 ||
+            (command >= 967 && command <= 971) ||
             (command >= 1024 && command <= 1027) || command == 1152 || command == 1153 || command == 1154 || command == 1155 || command == 1157 || command == 1556) &&
             !inMissingCommonPracticeGap && !inMissingPressureGap && !inMissingAssignmentListGap;
         if (it == programs->end() && !standardCoreNoProgram) return false;
@@ -1178,6 +1197,115 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
             ++plan.configurationChangedCounter;
             plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
             return response.writeBytes(request);
+        }
+
+        // WirelessHART suspension is derived from the engine-injected virtual
+        // time.  It is deliberately not a wall-clock timer or a second
+        // scheduler: while the configured ASN window is active, operational
+        // Wireless commands are unavailable; the suspend setting itself can
+        // still be read or replaced.
+        if (plan.wireless.capable && plan.wireless.suspendAtAsn != 0 && plan.virtualTimeSeconds >= plan.wireless.suspendAtAsn &&
+            plan.virtualTimeSeconds < plan.wireless.resumeAtAsn && command != 856 && command != 960 && command != 972) return false;
+
+        if (command == 777) {
+            const auto& w = plan.wireless;
+            if (!w.capable || !request.empty()) return false;
+            const auto peak = HartTypeCodec::encodeFloat32BE(w.peakPacketsPerSecond);
+            return response.writeByte(static_cast<uint8_t>((w.capabilityFlags << 4) | (w.powerSource & 0x0F))) && response.writeBytes(peak) &&
+                response.writeByte(static_cast<uint8_t>(w.peakLoadDuration >> 24)) && response.writeByte(static_cast<uint8_t>(w.peakLoadDuration >> 16)) && response.writeByte(static_cast<uint8_t>(w.peakLoadDuration >> 8)) && response.writeByte(static_cast<uint8_t>(w.peakLoadDuration)) &&
+                response.writeByte(static_cast<uint8_t>(w.powerRecoveryTime >> 24)) && response.writeByte(static_cast<uint8_t>(w.powerRecoveryTime >> 16)) && response.writeByte(static_cast<uint8_t>(w.powerRecoveryTime >> 8)) && response.writeByte(static_cast<uint8_t>(w.powerRecoveryTime)) && response.writeByte(static_cast<uint8_t>(w.goodConnectionRsl)) &&
+                response.writeByte(static_cast<uint8_t>(w.requiredKeepAlive >> 24)) && response.writeByte(static_cast<uint8_t>(w.requiredKeepAlive >> 16)) && response.writeByte(static_cast<uint8_t>(w.requiredKeepAlive >> 8)) && response.writeByte(static_cast<uint8_t>(w.requiredKeepAlive)) &&
+                response.writeByte(static_cast<uint8_t>(w.maximumNeighbors >> 8)) && response.writeByte(static_cast<uint8_t>(w.maximumNeighbors)) && response.writeByte(static_cast<uint8_t>(w.maximumPacketBuffers >> 8)) && response.writeByte(static_cast<uint8_t>(w.maximumPacketBuffers));
+        }
+        if (command >= 793 && command <= 796) {
+            auto& w = plan.wireless;
+            if (!w.capable || !plan.rtcSupported) return false;
+            if (command == 793) {
+                if (request.size() != 7 || plan.writeProtectCode != 0xFB) return false;
+                uint64_t seconds = 0; if (!decodeDateTime(request, seconds)) return false;
+                plan.rtcValueSeconds = seconds; plan.rtcSetVirtualSeconds = plan.virtualTimeSeconds; plan.rtcLastSetSeconds = seconds; plan.rtcInitialized = true;
+                ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u); return response.writeBytes(request);
+            }
+            if (command == 794) {
+                if (!request.empty()) return false;
+                const uint64_t value = plan.rtcInitialized ? plan.rtcValueSeconds + (plan.virtualTimeSeconds >= plan.rtcSetVirtualSeconds ? plan.virtualTimeSeconds - plan.rtcSetVirtualSeconds : 0) : 0;
+                return response.writeBytes(dateTimeBytes(value));
+            }
+            if (request.size() != (command == 795 ? 5u : 1u)) return false;
+            const uint8_t type = request[0]; if (type >= w.timerIntervals.size()) return false;
+            if (command == 795) {
+                const uint32_t interval = static_cast<uint32_t>(request[1] << 24 | request[2] << 16 | request[3] << 8 | request[4]); if (interval == 0 || plan.writeProtectCode != 0xFB) return false;
+                w.timerIntervals[type] = interval; ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
+            }
+            return response.writeByte(type) && response.writeByte(static_cast<uint8_t>(w.timerIntervals[type] >> 24)) && response.writeByte(static_cast<uint8_t>(w.timerIntervals[type] >> 16)) && response.writeByte(static_cast<uint8_t>(w.timerIntervals[type] >> 8)) && response.writeByte(static_cast<uint8_t>(w.timerIntervals[type]));
+        }
+        if (command == 779) {
+            const auto& w = plan.wireless;
+            if (!w.capable || !request.empty()) return false;
+            const auto put16 = [&](uint32_t value) { return response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value)); };
+            const auto put32 = [&](uint32_t value) { return response.writeByte(static_cast<uint8_t>(value >> 24)) && response.writeByte(static_cast<uint8_t>(value >> 16)) && response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value)); };
+            const auto zeroFloat = HartTypeCodec::encodeFloat32BE(0.0f);
+            return put16(plan.clientMessagesReceived) && put16(plan.clientResponsesReturned) && response.writeByte(0) && response.writeByte(0) && response.writeByte(0) && response.writeByte(0) && response.writeByte(0) && response.writeByte(0) && response.writeBytes(zeroFloat) && put32(0) && put32(0) && put32(0) && put32(0) && response.writeByte(0);
+        }
+        if (command == 780 || command == 786) {
+            auto& w = plan.wireless;
+            if (!w.capable) return false;
+            const auto put16 = [&](uint16_t value) { return response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value)); };
+            std::array<uint16_t, 32> neighbors{}; size_t neighborCount = 0;
+            for (size_t i = 0; i < w.linkCount; ++i) {
+                const uint16_t n = w.links[i].neighborNickname; if (n == 0xFFFF) continue;
+                bool seen = false; for (size_t j = 0; j < neighborCount; ++j) if (neighbors[j] == n) { seen = true; break; }
+                if (!seen && neighborCount < neighbors.size()) neighbors[neighborCount++] = n;
+            }
+            if (command == 786) {
+                if (request.size() != 2) return false;
+                const uint16_t n = static_cast<uint16_t>(request[0] << 8 | request[1]);
+                for (size_t i = 0; i < w.neighborPropertyCount; ++i) if (w.neighborProperties[i].nickname == n)
+                    return put16(n) && response.writeByte(static_cast<uint8_t>(w.neighborProperties[i].flags & 0xFEu));
+                return false;
+            }
+            if (request.size() != 2) return false;
+            const uint8_t start = request[0], wanted = request[1]; if (start >= neighborCount && neighborCount != 0) return false;
+            size_t emitted = 0; if (!response.writeByte(start) || !response.writeByte(0) || !response.writeByte(static_cast<uint8_t>(neighborCount))) return false;
+            for (size_t i = start; i < neighborCount && emitted < wanted; ++i) {
+                if (!put16(neighbors[i]) || !response.writeByte(0) || !response.writeByte(static_cast<uint8_t>(-80)) || !put16(0) || !put16(0) || !put16(0)) return false;
+                ++emitted;
+            }
+            return true;
+        }
+
+        if (command >= 960 && command <= 962 || command == 978 || command == 979) {
+            auto& wireless = plan.wireless;
+            if (!wireless.capable || plan.writeProtectCode != 0xFB) return false;
+            const auto put40 = [&](uint64_t value) { for (int shift = 32; shift >= 0; shift -= 8) if (!response.writeByte(static_cast<uint8_t>(value >> shift))) return false; return true; };
+            const auto read40 = [](std::span<const uint8_t> bytes, size_t offset) { uint64_t value = 0; for (size_t i = 0; i < 5; ++i) value = (value << 8) | bytes[offset + i]; return value; };
+            const auto changed = [&]() { ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u); };
+            if (command == 960) {
+                if (request.size() != 1) return false;
+                wireless.sessionCount = 0; wireless.routeCount = 0; wireless.sourceRouteCount = 0; wireless.timetableCount = 0;
+                wireless.joinStatus = 0; wireless.suspendAtAsn = wireless.resumeAtAsn = 0; changed();
+                return response.writeByte(request[0]);
+            }
+            if (command == 961) {
+                if (request.size() != 16 && request.size() != 21) return false;
+                std::array<uint8_t, 16> next{}; std::copy_n(request.begin(), 16, next.begin());
+                const uint64_t execution = request.size() == 21 ? read40(request, 16) : 0;
+                if (execution != 0 && execution < plan.virtualTimeSeconds) return false;
+                wireless.networkKey = next; wireless.pendingNetworkKeyExecutionAsn = execution; changed();
+                return response.writeBytes(request);
+            }
+            if (command == 962) {
+                if (request.size() != 2) return false;
+                const uint16_t nickname = static_cast<uint16_t>(request[0] << 8 | request[1]);
+                if (nickname == 0 || nickname == 0xFFFF) return false;
+                wireless.nickname = nickname; changed(); return response.writeBytes(request);
+            }
+            if (command == 978) {
+                if (request.size() != 1 || request[0] > 1) return false;
+                wireless.statusCounterMode = request[0]; changed(); return response.writeByte(request[0]);
+            }
+            if (request.size() != 1 || request[0] > 3) return false;
+            wireless.securityLevelSupported = request[0]; changed(); return response.writeByte(request[0]);
         }
 
         // WirelessHART provisioning cluster, HCF_SPEC-155 Rev 2.0 §§7.1-7.9.
@@ -1458,6 +1586,205 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
             if (request.size() != 1) return false; size_t index = wireless.sourceRouteCount; for (size_t i = 0; i < wireless.sourceRouteCount; ++i) if (wireless.sourceRoutes[i].routeId == request[0]) { index = i; break; }
             if (index == wireless.sourceRouteCount) return false; for (size_t i = index + 1; i < wireless.sourceRouteCount; ++i) wireless.sourceRoutes[i - 1] = wireless.sourceRoutes[i]; --wireless.sourceRouteCount;
             ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u); return response.writeByte(request[0]) && response.writeByte(static_cast<uint8_t>(wireless.sourceRoutes.size() - wireless.sourceRouteCount));
+        }
+
+        if (command == 799 || command == 800 || command == 801 || command == 862) {
+            auto& wireless = plan.wireless;
+            if (!wireless.capable) return false;
+            const auto put16 = [&](uint16_t value) { return response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value)); };
+            const auto put32 = [&](uint32_t value) { return response.writeByte(static_cast<uint8_t>(value >> 24)) && response.writeByte(static_cast<uint8_t>(value >> 16)) && response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value)); };
+            if (command == 799) {
+                if (request.size() != 9 || request[0] > 0x7F || wireless.timetableCount >= wireless.timetables.size()) return false;
+                auto& t = wireless.timetables[wireless.timetableCount++]; t.id = request[0]; t.requestFlags = request[1]; t.domain = request[2]; t.peerNickname = static_cast<uint16_t>(request[3] << 8 | request[4]); t.period = static_cast<uint32_t>(request[5] << 24 | request[6] << 16 | request[7] << 8 | request[8]); t.routeId = 0;
+                ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
+                return response.writeByte(t.id) && response.writeByte(t.requestFlags) && response.writeByte(t.domain) && put16(t.peerNickname) && put32(t.period) && response.writeByte(t.routeId);
+            }
+            if (command == 800) {
+                if (request.size() != 2 || request[1] != 1 || request[0] >= wireless.timetableCount) return false;
+                const auto& t = wireless.timetables[request[0]];
+                return response.writeByte(request[0]) && response.writeByte(1) && response.writeByte(wireless.timetableCount) && response.writeByte(t.id) && response.writeByte(t.requestFlags) && response.writeByte(t.domain) && put16(t.peerNickname) && put32(t.period) && response.writeByte(t.routeId);
+            }
+            size_t index = wireless.timetableCount;
+            if (command == 862) {
+                if (request.size() != 1) return false;
+                for (size_t i = 0; i < wireless.timetableCount; ++i) if (wireless.timetables[i].id == request[0]) { index = i; break; }
+                if (index == wireless.timetableCount) return false;
+                const auto& t = wireless.timetables[index];
+                return response.writeByte(t.id) && response.writeByte(t.requestFlags) && response.writeByte(t.domain) && put16(t.peerNickname) && put32(t.period) && response.writeByte(t.routeId);
+            }
+            if (request.size() != 2) return false;
+            for (size_t i = 0; i < wireless.timetableCount; ++i) if (wireless.timetables[i].id == request[0]) { index = i; break; }
+            if (index == wireless.timetableCount) return false;
+            for (size_t i = index + 1; i < wireless.timetableCount; ++i) wireless.timetables[i - 1] = wireless.timetables[i];
+            --wireless.timetableCount;
+            ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
+            return response.writeByte(request[0]) && response.writeByte(request[1]) && response.writeByte(static_cast<uint8_t>(wireless.timetables.size() - wireless.timetableCount));
+        }
+
+        if (command == 852 || command == 853 || command == 854 || command == 855 || command == 856 || command == 972) {
+            auto& wireless = plan.wireless;
+            if (!wireless.capable) return false;
+            const auto put16 = [&](uint16_t value) { return response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value)); };
+            const auto put32 = [&](uint32_t value) { return response.writeByte(static_cast<uint8_t>(value >> 24)) && response.writeByte(static_cast<uint8_t>(value >> 16)) && response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value)); };
+            const auto put40 = [&](uint64_t value) { for (int shift = 32; shift >= 0; shift -= 8) if (!response.writeByte(static_cast<uint8_t>(value >> shift))) return false; return true; };
+            const auto read40 = [](std::span<const uint8_t> bytes, size_t offset) { uint64_t value = 0; for (size_t i = 0; i < 5; ++i) value = (value << 8) | bytes[offset + i]; return value; };
+            const auto changed = [&]() { ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u); };
+            if (command == 972) {
+                if (request.size() != 10 || plan.writeProtectCode != 0xFB) return false;
+                const uint64_t suspendAt = read40(request, 0), resumeAt = read40(request, 5);
+                if (suspendAt == 0 || resumeAt <= suspendAt) return false;
+                wireless.suspendAtAsn = suspendAt; wireless.resumeAtAsn = resumeAt; changed();
+                return put40(suspendAt) && put40(resumeAt);
+            }
+            if (command == 852) {
+                if (!request.empty()) return false;
+                const auto bytes = HartTypeCodec::encodeFloat32BE(wireless.staleDataTimer);
+                return response.writeBytes(bytes) && response.writeByte(wireless.staleDataCountSetpoint);
+            }
+            if (command == 853) {
+                if (request.size() != 4 || plan.writeProtectCode != 0xFB) return false;
+                const float value = HartTypeCodec::decodeFloat32BE(request);
+                if (!std::isfinite(value) || value < 0.0f) return false;
+                wireless.staleDataTimer = value; changed(); return response.writeBytes(request);
+            }
+            if (command == 854) {
+                if (request.size() != 1 || request[0] == 0 || plan.writeProtectCode != 0xFB) return false;
+                wireless.staleDataCountSetpoint = request[0]; changed(); return response.writeByte(request[0]);
+            }
+            if (command == 855) {
+                if (request.size() != 2 || wireless.sessionCount == 0) return false;
+                const uint16_t index = static_cast<uint16_t>(request[0] << 8 | request[1]);
+                if (index >= wireless.sessionCount) return false;
+                const auto& s = wireless.sessions[index];
+                return put16(index) && response.writeByte(wireless.sessionCount) && response.writeByte(s.type) && put16(s.peerNickname) && response.writeBytes(s.peerUniqueId) && put32(s.peerNonce) && put32(s.deviceNonce);
+            }
+            if (command == 856) {
+                if (!request.empty()) return false;
+                return put40(wireless.suspendAtAsn) && put40(wireless.resumeAtAsn);
+            }
+        }
+
+        if (command == 963) {
+            auto& wireless = plan.wireless;
+            if (!wireless.capable || masterRole != 2 || plan.writeProtectCode != 0xFB) return false;
+            if (request.size() != 29 && request.size() != 34) return false;
+            const uint8_t type = request[0];
+            const uint16_t peer = static_cast<uint16_t>(request[1] << 8 | request[2]);
+            if (type > 7 || peer == 0 || peer == 0xFFFF) return false;
+            for (size_t i = 3; i < 8; ++i) if (request[i] == 0xFF) return false;
+            const uint32_t nonce = static_cast<uint32_t>(request[8] << 24 | request[9] << 16 | request[10] << 8 | request[11]);
+            std::array<uint8_t, 16> key{}; std::copy_n(request.begin() + 12, 16, key.begin());
+            const uint64_t execution = request.size() == 34 ? [&] { uint64_t value = 0; for (size_t i = 29; i < 34; ++i) value = (value << 8) | request[i]; return value; }() : 0;
+            if (execution != 0 && execution < plan.virtualTimeSeconds) return false;
+            size_t index = wireless.sessionCount;
+            for (size_t i = 0; i < wireless.sessionCount; ++i) if (wireless.sessions[i].type == type && wireless.sessions[i].peerNickname == peer) { index = i; break; }
+            if (index == wireless.sessionCount && index >= wireless.sessions.size()) return false;
+            if (index == wireless.sessionCount) ++wireless.sessionCount;
+            auto& s = wireless.sessions[index]; s.type = type; s.peerNickname = peer; s.peerNonce = nonce; s.key = key; s.executionTimeAsn = execution;
+            std::copy_n(request.begin() + 3, 5, s.peerUniqueId.begin());
+            ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
+            if (!response.writeByte(s.type) || response.writeByte(static_cast<uint8_t>(s.peerNickname >> 8)) == false || !response.writeByte(static_cast<uint8_t>(s.peerNickname)) || !response.writeBytes(s.peerUniqueId) || !response.writeByte(static_cast<uint8_t>(s.peerNonce >> 24)) || !response.writeByte(static_cast<uint8_t>(s.peerNonce >> 16)) || !response.writeByte(static_cast<uint8_t>(s.peerNonce >> 8)) || !response.writeByte(static_cast<uint8_t>(s.peerNonce)) || !response.writeBytes(s.key) || !response.writeByte(static_cast<uint8_t>(wireless.sessionCount == 0 ? 0 : wireless.sessionCount - 1))) return false;
+            if (request.size() == 34) for (int shift = 32; shift >= 0; shift -= 8) if (!response.writeByte(static_cast<uint8_t>(s.executionTimeAsn >> shift))) return false;
+            return true;
+        }
+
+        if (command == 964) {
+            auto& wireless = plan.wireless;
+            if (!wireless.capable || masterRole != 2 || plan.writeProtectCode != 0xFB) return false;
+            if (request.size() != 3) return false;
+            const uint8_t type = request[0];
+            const uint16_t peer = static_cast<uint16_t>(request[1] << 8 | request[2]);
+            // Session type zero is the join session and is explicitly not
+            // deletable by Command 964 (HCF_SPEC-155 §7.91).
+            if (type == 0 || type > 7 || peer == 0 || peer == 0xFFFF) return false;
+            size_t index = wireless.sessionCount;
+            for (size_t i = 0; i < wireless.sessionCount; ++i)
+                if (wireless.sessions[i].type == type && wireless.sessions[i].peerNickname == peer) { index = i; break; }
+            if (index == wireless.sessionCount) return false;
+            for (size_t i = index + 1; i < wireless.sessionCount; ++i) wireless.sessions[i - 1] = wireless.sessions[i];
+            --wireless.sessionCount;
+            ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
+            return response.writeByte(type) && response.writeByte(static_cast<uint8_t>(peer >> 8)) && response.writeByte(static_cast<uint8_t>(peer)) && response.writeByte(wireless.sessionCount);
+        }
+
+        if (command == 965 || command == 966) {
+            auto& wireless = plan.wireless;
+            if (!wireless.capable || masterRole != 2 || plan.writeProtectCode != 0xFB) return false;
+            const auto put16 = [&](uint16_t value) { return response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value)); };
+            const auto put40 = [&](uint64_t value) { for (int shift = 32; shift >= 0; shift -= 8) if (!response.writeByte(static_cast<uint8_t>(value >> shift))) return false; return true; };
+            if (command == 966) {
+                if (request.size() != 1) return false;
+                size_t index = wireless.superframeCount;
+                for (size_t i = 0; i < wireless.superframeCount; ++i) if (wireless.superframes[i].id == request[0]) { index = i; break; }
+                if (index == wireless.superframeCount) return false;
+                const uint8_t id = request[0];
+                for (size_t i = index + 1; i < wireless.superframeCount; ++i) wireless.superframes[i - 1] = wireless.superframes[i];
+                --wireless.superframeCount;
+                for (size_t i = 0; i < wireless.linkCount;) { if (wireless.links[i].superframeId == id) { for (size_t j = i + 1; j < wireless.linkCount; ++j) wireless.links[j - 1] = wireless.links[j]; --wireless.linkCount; } else ++i; }
+                ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
+                return response.writeByte(id) && response.writeByte(wireless.superframeCount);
+            }
+            if (request.size() != 5 && request.size() != 10) return false;
+            if ((request[1] == 0 && request[2] == 0) || request[4] != 0) return false;
+            uint64_t execution = 0;
+            if (request.size() == 10) for (size_t i = 5; i < 10; ++i) execution = (execution << 8) | request[i];
+            if (execution != 0 && execution < plan.virtualTimeSeconds) return false;
+            size_t index = wireless.superframeCount;
+            for (size_t i = 0; i < wireless.superframeCount; ++i) if (wireless.superframes[i].id == request[0]) { index = i; break; }
+            if (index == wireless.superframeCount && index >= wireless.superframes.size()) return false;
+            if (index == wireless.superframeCount) ++wireless.superframeCount;
+            auto& sf = wireless.superframes[index]; sf.id = request[0]; sf.slots = static_cast<uint16_t>(request[1] << 8 | request[2]); sf.modeFlags = request[3]; sf.executionTimeAsn = execution;
+            ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
+            if (!response.writeByte(sf.id) || !put16(sf.slots) || !response.writeByte(sf.modeFlags) || !response.writeByte(static_cast<uint8_t>(wireless.superframes.size() - wireless.superframeCount))) return false;
+            return request.size() == 5 || put40(sf.executionTimeAsn);
+        }
+
+        if (command >= 967 && command <= 971) {
+            auto& wireless = plan.wireless;
+            if (!wireless.capable || masterRole != 2 || plan.writeProtectCode != 0xFB) return false;
+            const auto put16 = [&](uint16_t value) { return response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value)); };
+            if (command == 967) {
+                if (request.size() != 8) return false;
+                const uint8_t sf = request[0], offset = request[3], options = request[6], type = request[7];
+                const uint16_t slot = static_cast<uint16_t>(request[1] << 8 | request[2]);
+                const uint16_t neighbor = static_cast<uint16_t>(request[4] << 8 | request[5]);
+                if ((neighbor == 0 && neighbor != 0xFFFF) || wireless.links.size() == wireless.linkCount || options == 0) return false;
+                bool sfExists = false; uint16_t slots = 0;
+                for (size_t i = 0; i < wireless.superframeCount; ++i) if (wireless.superframes[i].id == sf) { sfExists = true; slots = wireless.superframes[i].slots; break; }
+                if (!sfExists || slot >= slots) return false;
+                for (size_t i = 0; i < wireless.linkCount; ++i) { const auto& l = wireless.links[i]; if (l.superframeId == sf && l.slot == slot && l.neighborNickname == neighbor) return false; }
+                auto& l = wireless.links[wireless.linkCount++]; l.superframeId = sf; l.slot = slot; l.channelOffset = offset; l.neighborNickname = neighbor; l.options = options; l.type = type;
+                ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
+                return response.writeByte(sf) && put16(slot) && response.writeByte(offset) && put16(neighbor) && response.writeByte(options) && response.writeByte(type) && put16(static_cast<uint16_t>(wireless.links.size() - wireless.linkCount));
+            }
+            if (command == 968) {
+                if (request.size() != 5) return false;
+                const uint8_t sf = request[0]; const uint16_t slot = static_cast<uint16_t>(request[1] << 8 | request[2]); const uint16_t neighbor = static_cast<uint16_t>(request[3] << 8 | request[4]);
+                size_t index = wireless.linkCount; for (size_t i = 0; i < wireless.linkCount; ++i) if (wireless.links[i].superframeId == sf && wireless.links[i].slot == slot && wireless.links[i].neighborNickname == neighbor) { index = i; break; }
+                if (index == wireless.linkCount) return false;
+                for (size_t i = index + 1; i < wireless.linkCount; ++i) wireless.links[i - 1] = wireless.links[i]; --wireless.linkCount;
+                ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
+                return response.writeByte(sf) && put16(slot) && put16(neighbor) && put16(static_cast<uint16_t>(wireless.links.size() - wireless.linkCount));
+            }
+            if (command == 969 || command == 970) {
+                if (request.size() != 4) return false;
+                const uint16_t graph = static_cast<uint16_t>(request[0] << 8 | request[1]); const uint16_t neighbor = static_cast<uint16_t>(request[2] << 8 | request[3]);
+                if (graph <= 0xFF || graph == 0xFFFF || neighbor == 0 || neighbor == 0xFFFF) return false;
+                size_t index = wireless.graphCount; for (size_t i = 0; i < wireless.graphCount; ++i) if (wireless.graphs[i].id == graph) { index = i; break; }
+                if (command == 969) {
+                    if (index == wireless.graphCount) { if (index >= wireless.graphs.size()) return false; wireless.graphs[index].id = graph; ++wireless.graphCount; }
+                    auto& g = wireless.graphs[index]; for (size_t i = 0; i < g.neighborCount; ++i) if (g.neighbors[i] == neighbor) return false; if (g.neighborCount >= g.neighbors.size()) return false; g.neighbors[g.neighborCount++] = neighbor;
+                    ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u); return put16(graph) && put16(neighbor) && response.writeByte(static_cast<uint8_t>(g.neighbors.size() - g.neighborCount));
+                }
+                if (index == wireless.graphCount) return false; auto& g = wireless.graphs[index]; size_t edge = g.neighborCount; for (size_t i = 0; i < g.neighborCount; ++i) if (g.neighbors[i] == neighbor) { edge = i; break; } if (edge == g.neighborCount) return false; for (size_t i = edge + 1; i < g.neighborCount; ++i) g.neighbors[i - 1] = g.neighbors[i]; --g.neighborCount;
+                ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u); return put16(graph) && put16(neighbor) && response.writeByte(g.neighborCount);
+            }
+            if (request.size() != 3) return false; const uint16_t neighbor = static_cast<uint16_t>(request[0] << 8 | request[1]); if (neighbor == 0 || neighbor == 0xFFFF) return false;
+            bool known = false; for (size_t i = 0; i < wireless.linkCount; ++i) if (wireless.links[i].neighborNickname == neighbor) { known = true; break; } if (!known) return false;
+            size_t index = wireless.neighborPropertyCount; for (size_t i = 0; i < wireless.neighborPropertyCount; ++i) if (wireless.neighborProperties[i].nickname == neighbor) { index = i; break; }
+            if (index == wireless.neighborPropertyCount) { if (index >= wireless.neighborProperties.size()) return false; ++wireless.neighborPropertyCount; }
+            auto& property = wireless.neighborProperties[index]; property.nickname = neighbor; property.flags = static_cast<uint8_t>(request[2] & 0xFEu);
+            ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u); return put16(neighbor) && response.writeByte(property.flags);
         }
 
         // Common Practice 71/76 share one canonical Lock Code.  The status

@@ -2,6 +2,8 @@ import { TUNNEL_TYPE_ID } from "../ui/webview/model";
 import { SubcircuitDocument } from "./subcircuitDocument";
 import { pruneInvalidExportedPropertyRefs, pruneInvalidExposedComponentRefs } from "./subcircuitExposedComponents";
 
+const SIGNAL_TUNNEL_TYPE_ID = "connectors.signal_tunnel";
+
 /** Validação obrigatória ANTES de salvar (pré-save) -- ponto único, testável, sem DOM, que decide se
  * um `SubcircuitDocument` pode ser gravado em disco. Nunca lança exceção -- toda condição vira
  * `errors[]` (bloqueante) ou `warnings[]` (não-bloqueante). Correções automáticas (`autoFixed`) só
@@ -19,8 +21,8 @@ export interface SubcircuitValidationResult {
 }
 
 function tunnelPinId(component: { typeId: string; properties: Record<string, unknown> }): string | undefined {
-  if (component.typeId !== TUNNEL_TYPE_ID) return undefined;
-  const value = component.properties.pinId;
+  if (component.typeId !== TUNNEL_TYPE_ID && component.typeId !== SIGNAL_TUNNEL_TYPE_ID) return undefined;
+  const value = component.typeId === SIGNAL_TUNNEL_TYPE_ID ? component.properties.name : component.properties.pinId;
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
@@ -125,15 +127,28 @@ export function validateSubcircuitDocument(document: SubcircuitDocument): Subcir
     if (!interfacePinIds.has(pinId)) errors.push(`Pino "${pinId}" do Símbolo não possui entrada correspondente em interface[].`);
   }
 
-  const tunnelNames = new Set(
-    document.components
-      .filter((component) => component.typeId === TUNNEL_TYPE_ID)
-      .map((component) => component.properties.name)
-      .filter((name): name is string => typeof name === "string" && name.trim().length > 0)
-  );
+  const tunnelTypesByName = new Map<string, Set<string>>();
+  for (const component of document.components) {
+    if (component.typeId !== TUNNEL_TYPE_ID && component.typeId !== SIGNAL_TUNNEL_TYPE_ID) continue;
+    const name = component.properties.name;
+    if (typeof name !== "string" || !name.trim()) continue;
+    const types = tunnelTypesByName.get(name) ?? new Set<string>();
+    types.add(component.typeId);
+    tunnelTypesByName.set(name, types);
+  }
   for (const entry of document.interface) {
-    if (entry.internalTunnel && !tunnelNames.has(entry.internalTunnel)) {
+    const types = tunnelTypesByName.get(entry.internalTunnel);
+    if (entry.internalTunnel && !types) {
       errors.push(`Interface "${entry.pinId}" referencia o túnel interno inexistente "${entry.internalTunnel}".`);
+      continue;
+    }
+    const requiredType = entry.domain === "signal" ? SIGNAL_TUNNEL_TYPE_ID : TUNNEL_TYPE_ID;
+    // Checked-in process composites predate SignalTunnel and are executed by the legacy
+    // ProcessSubcircuitCompiler, which deliberately supports that historical representation.
+    // New generic authoring (including TDPS import) must use SignalTunnel and is still rejected.
+    const legacyProcessTunnel = document.workspaceSection === "process" && types?.has(TUNNEL_TYPE_ID);
+    if (types && !types.has(requiredType) && !legacyProcessTunnel) {
+      errors.push(`Interface "${entry.pinId}" referencia túnel de domínio incompatível; esperado "${requiredType}".`);
     }
   }
 

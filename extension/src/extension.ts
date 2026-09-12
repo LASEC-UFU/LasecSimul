@@ -15,6 +15,7 @@ import { assertTopologyInvariants } from "./ui/webview/topologyDocument";
 import { WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { PropertyInspectorViewProvider } from "./ui/views/PropertyInspectorViewProvider";
+import { hartSignalGraphPinIds } from "./ui/views/hartInspectorSections";
 import { materializePinGroup, registerPackage } from "./ui/webview/componentSymbols";
 import { buildGenericSubcircuitPackage, buildGenericSubcircuitSymbol, regenerateGenericSubcircuitState } from "./ui/webview/genericSubcircuitPackage";
 import { absoluteDeviceRefPath, absoluteSubcircuitRefPath, importProjectCommand, openProjectCommand, openProjectFile, openRecentProjectCommand, projectComponentToWebviewComponent, refreshDirtyIndicator, saveProjectAsCommand, saveProjectCommand, webviewComponentToProjectComponent } from "./project/projectCommands";
@@ -1011,6 +1012,17 @@ async function chooseFilePropertyCommand(componentId: string, propertyKey: strin
  * `pinIds` estáticos já cadastrados no catálogo pro caso default, sem regressão pros chamadores que
  * não foram atualizados pra passar a instância real. */
 export function pinsForTypeId(typeId: string, properties?: Record<string, unknown>): Array<{ id: string; x: number; y: number }> {
+  // `protocol.hart.serial`/`protocol.hart.udp` têm `pinCount: 0` fixo no catálogo -- sem pino
+  // elétrico nenhum (ver `HartCommunicationComponent::pins()`). Os únicos pinos de canvas que
+  // existem são as portas Signal Graph genéricas derivadas de `hartVariablesJson` (Input/Output),
+  // na mesma convenção de `IComponentModel::signalPorts()` (Core). A partir daqui um pino HART é
+  // um pino igual a qualquer outro pro resto do pipeline (`connectWire`, gesto de fio do canvas,
+  // `pinLocalPosition`'s fallback genérico de zig-zag) -- nenhum caminho de fiação especial.
+  if (typeId === "protocol.hart.serial" || typeId === "protocol.hart.udp") {
+    const hartVariablesJson = typeof properties?.hartVariablesJson === "string" ? properties.hartVariablesJson : "[]";
+    const ids = hartSignalGraphPinIds(hartVariablesJson);
+    if (ids.length > 0) return ids.map((id, index) => ({ id, x: 0, y: index * 12 }));
+  }
   const descriptor = state.schematicState.catalog.find((item) => item.typeId === typeId);
   const dynamicGroups = descriptor?.package?.dynamicLayout?.pinGroups;
   if (dynamicGroups && dynamicGroups.length > 0) {

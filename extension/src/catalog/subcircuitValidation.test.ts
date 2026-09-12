@@ -171,6 +171,16 @@ function makeIdFactory(prefix: string): () => string {
     assert(JSON.stringify([...resultA.errors].sort()) === JSON.stringify([...resultB.errors].sort()), "conjunto de erros deveria ser o mesmo independente da ordem de components[]");
   });
 
+  await test("interface signal never accepts an electrical tunnel", () => {
+    const doc: SubcircuitDocument = {
+      ...emptyDocument(),
+      components: [{ id: "electrical", typeId: TUNNEL_TYPE_ID, properties: { name: "PV" }, visual: { x: 0, y: 0, rotation: 0 } }],
+      interface: [{ pinId: "PV", label: "PV", internalTunnel: "PV", domain: "signal", direction: "in", valueType: "Real", width: 1 }],
+    };
+    const result = validateSubcircuitDocument(doc);
+    assert(result.errors.some((error) => error.includes("connectors.signal_tunnel")), `expected domain separation: ${result.errors.join(" | ")}`);
+  });
+
   const { failed } = finish();
   process.exitCode = failed > 0 ? 1 : 0;
 })();
