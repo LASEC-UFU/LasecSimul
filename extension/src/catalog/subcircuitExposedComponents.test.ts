@@ -107,5 +107,6 @@ function baseDocument(): SubcircuitDocument {
     assert(result.document === doc, "sem mudanças necessárias, deveria devolver a MESMA referência de documento");
   });
 
-  finish();
+  const { failed } = finish();
+  process.exitCode = failed > 0 ? 1 : 0;
 })();

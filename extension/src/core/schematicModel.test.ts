@@ -203,5 +203,6 @@ function baseState(): WebviewProjectState {
     assert(state.components.some((c) => c.id === "r1"), "remover a exposição nunca deveria afetar o componente interno em si");
   });
 
-  finish();
+  const { failed } = finish();
+  process.exitCode = failed > 0 ? 1 : 0;
 })();

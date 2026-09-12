@@ -1786,5 +1786,6 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
   registerPackage("test.runtime.luma", undefined);
   registerPackage("logic.and_gate", undefined);
   registerPackage("logic.or_gate", undefined);
-  finish();
+  const { failed } = finish();
+  process.exitCode = failed > 0 ? 1 : 0;
 })();

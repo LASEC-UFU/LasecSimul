@@ -155,5 +155,6 @@ function inferFields(component: WebviewComponentModel): PropertyField[] {
     }
   });
 
-  finish();
+  const { failed } = finish();
+  process.exitCode = failed > 0 ? 1 : 0;
 })();

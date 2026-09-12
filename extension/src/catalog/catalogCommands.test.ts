@@ -70,5 +70,6 @@ const { findRegisteredSourceById } = require("./catalogCommands") as typeof Cata
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 
-  finish();
+  const { failed } = finish();
+  process.exitCode = failed > 0 ? 1 : 0;
 })();

@@ -159,5 +159,6 @@ import {
     assert(nextLabelRotation(270, 1) === 0, `270+90 deveria dar wrap pra 0, recebido ${nextLabelRotation(270, 1)}`);
   });
 
-  finish();
+  const { failed } = finish();
+  process.exitCode = failed > 0 ? 1 : 0;
 })();

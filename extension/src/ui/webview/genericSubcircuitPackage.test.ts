@@ -60,5 +60,6 @@ function idFactory(): () => string {
     assert(Boolean(pins.find((pin) => pin.properties.pinId === "P3")?.id), "P3 deveria receber um componentId novo");
   });
 
-  finish();
+  const { failed } = finish();
+  process.exitCode = failed > 0 ? 1 : 0;
 })();

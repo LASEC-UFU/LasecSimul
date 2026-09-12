@@ -128,5 +128,6 @@ import {
     assert(script.includes("nextId <= 253"), "a sugestão de novo id nunca deveria ultrapassar 253 (fim da faixa Device-Specific)");
   });
 
-  finish();
+  const { failed } = finish();
+  process.exitCode = failed > 0 ? 1 : 0;
 })();

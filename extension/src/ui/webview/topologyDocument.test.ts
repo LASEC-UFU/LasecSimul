@@ -49,5 +49,6 @@ void (async () => {
     if (!rejected) throw new Error("condutor de comprimento zero aceito");
   });
 
-  finish();
+  const { failed } = finish();
+  process.exitCode = failed > 0 ? 1 : 0;
 })();

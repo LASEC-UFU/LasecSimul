@@ -1,4 +1,5 @@
 import { nodeEndpoint, portEndpoint } from "../ui/webview/model.js";
+import { DEFAULT_PIN_SENTINEL } from "./DslTypes.js";
 import type { DslComponent, DslDiagnostic, DslDocument, DslEndpoint, DslNode, DslParseResult, DslTunnel, DslValue, DslWire } from "./DslTypes.js";
 
 export type Token = { kind: "word" | "string" | "number" | "symbol" | "eof"; text: string; line: number; column: number };
@@ -85,10 +86,44 @@ function parseCompactDsl(source: string): DslParseResult {
   const expect = (text: string) => { if (peek().text !== text) { error(`esperado '${text}'`); return false; } take(); return true; };
   const word = () => { const t = take(); if (t.kind !== "word" && t.kind !== "string") { error("identificador esperado", t); return undefined; } return t.kind === "string" ? JSON.parse(t.text) as string : t.text; };
   const components: DslComponent[] = []; const wires: DslWire[] = []; const nodes: DslNode[] = []; const tunnels: DslTunnel[] = [];
-  const declared = new Set<string>(); let inlineNo = 0; let wireNo = 0;
-  const addInline = (typeId: string, properties: Record<string, DslValue>, explicit?: string): string => {
-    const id = explicit ?? `__inline_${typeId.replace(/[^A-Za-z0-9_]/g, "_")}_${inlineNo++}`;
+  const declared = new Set<string>();
+  // Anonymous inline blocks (`A -> Gain(2) -> B`, no explicit `name = Type(...)`
+  // binding) and auto-numbered wires used to get their id from a SINGLE counter
+  // shared across the whole document (`inlineNo++`/`wireNo++`). That made every
+  // anonymous entity's identity depend on how many OTHER anonymous entities had
+  // already been declared earlier in the file -- adding, removing, or
+  // reordering an unrelated chain anywhere else would silently reassign the id
+  // of every inline block/wire declared after it, breaking position/route
+  // preservation in `reconcileDsl` (which looks entities up by id). Counters
+  // are now scoped per chain-anchor (the stable identity the chain hangs off
+  // of -- a component id, tunnel name, or in/out context port) so an edit to
+  // one chain cannot perturb another chain's generated ids. Two structurally
+  // identical inline blocks in DIFFERENT chains (e.g. `A -> Gain(2) -> B` and
+  // `C -> Gain(2) -> D`) get different ids because their anchors differ; two
+  // in the SAME chain get distinct sequential ids because the counter is
+  // per-anchor, not global.
+  const anchorCounts = new Map<string, number>();
+  const wireCounts = new Map<string, number>();
+  const endpointAnchor = (e: DslEndpoint): string => {
+    if (e.kind === "tunnel") return `tunnel_${e.tunnelId}`;
+    if (e.kind === "context") return `context_${e.direction}_${e.portId ?? "default"}`;
+    return (e.kind === "node" ? e.nodeId : e.componentId).replace(/[^A-Za-z0-9_]/g, "_");
+  };
+  const addInline = (typeId: string, properties: Record<string, DslValue>, anchor: string, explicit?: string): string => {
+    let id = explicit;
+    if (id === undefined) {
+      const sanitizedType = typeId.replace(/[^A-Za-z0-9_]/g, "_");
+      const next = anchorCounts.get(anchor) ?? 0;
+      anchorCounts.set(anchor, next + 1);
+      id = `__inline_${anchor}_${sanitizedType}_${next}`;
+    }
     components.push({ id, typeId, properties }); declared.add(id); return id;
+  };
+  const nextWireId = (from: DslEndpoint, to: DslEndpoint): string => {
+    const key = `${endpointAnchor(from)}__${endpointAnchor(to)}`;
+    const next = wireCounts.get(key) ?? 0;
+    wireCounts.set(key, next + 1);
+    return `wire_${key}${next > 0 ? `_${next}` : ""}`;
   };
   const value = (): DslValue | undefined => {
     const t = peek();
@@ -100,26 +135,57 @@ function parseCompactDsl(source: string): DslParseResult {
   };
   const parseTarget = (): DslEndpoint | undefined => {
     if (peek().text === "@") { take(); const name = word(); if (!name) return undefined; if (!tunnels.some((x) => x.id === name)) tunnels.push({ id: name, name }); return { kind: "tunnel", tunnelId: name }; }
-    const first = word(); if (!first) return undefined;
-    if (first === "in" || first === "out") { let portId: string | undefined; if (peek().text === ".") { take(); portId = word(); } return { kind: "context", direction: first, portId }; }
-    if (peek().text === ".") { take(); const pin = word(); if (!pin) return undefined; return portEndpoint(first, pin); }
-    if (declared.has(first)) return portEndpoint(first, "out");
-    return portEndpoint(first, "out");
+    const raw = word(); if (!raw) return undefined;
+    // The lexer's word regex intentionally includes '.' (so `endpoint.pin`
+    // lexes as ONE token, matching the legacy grammar's own `endpoint()`
+    // helper) -- so `peek().text === "."` right after `word()` can never be
+    // true for realistic input; that dead branch used to make EVERY
+    // `component.pin` / `in.port` / `out.port` reference here silently
+    // resolve as a component/context literally named "component.pin" with a
+    // hardcoded default "out" pin, instead of splitting on the dot. Split
+    // manually, same rule the legacy `endpoint()` parser already uses
+    // (split at the LAST '.'; a trailing dot with nothing after it doesn't
+    // count as a separator).
+    const separator = raw.lastIndexOf(".");
+    const hasTail = separator > 0 && separator < raw.length - 1;
+    const head = hasTail ? raw.slice(0, separator) : raw;
+    const tail = hasTail ? raw.slice(separator + 1) : undefined;
+    if (head === "in" || head === "out") return { kind: "context", direction: head, portId: tail };
+    if (tail !== undefined) return portEndpoint(head, tail);
+    // Bare reference, no `.pin` given: the parser has no catalog access to
+    // pick a real pin id (see DEFAULT_PIN_SENTINEL) -- `reconcileDsl` resolves
+    // this once it has the component's actual, ordered pin list.
+    return portEndpoint(head, DEFAULT_PIN_SENTINEL);
   };
-  const parseBlock = (): string | undefined => {
+  const parseBlock = (anchor: string): string | undefined => {
     const type = word(); if (!type) return undefined; const props: Record<string, DslValue> = {};
     if (peek().text === "(") { take(); let positional = 0; while (peek().text !== ")" && peek().kind !== "eof") { const key = peek().kind === "word" && tokens[p + 1]?.text === "=" ? word() : undefined; if (key) { expect("="); const v = value(); if (v !== undefined) props[key] = v; } else { const v = value(); if (v !== undefined) props[`arg${positional++}`] = v; } if (peek().text === ",") take(); else if (peek().text !== ")") { error("esperado ',' ou ')'"); break; } } expect(")"); }
-    return addInline(type, props);
+    return addInline(type, props, anchor);
   };
   const parseChain = (first: DslEndpoint | string | undefined) => {
-    let current: DslEndpoint | undefined = typeof first === "string" ? portEndpoint(first, "out") : first;
-    while (peek().text === "->") { take(); let next: DslEndpoint | undefined; if (peek().kind === "word" && tokens[p + 1]?.text === "(" ) next = portEndpoint(parseBlock()!, "out"); else next = parseTarget(); if (!current || !next) return; wires.push({ id: `line_${wireNo++}`, from: current, to: next }); current = next; }
+    let current: DslEndpoint | undefined = typeof first === "string" ? portEndpoint(first, DEFAULT_PIN_SENTINEL) : first;
+    // The chain's own starting endpoint is the anchor for every anonymous
+    // inline block/wire declared within it -- stable across unrelated edits
+    // elsewhere in the document (see the comment on `anchorCounts` above).
+    const anchor = current ? endpointAnchor(current) : "root";
+    while (peek().text === "->") { take(); let next: DslEndpoint | undefined; if (peek().kind === "word" && tokens[p + 1]?.text === "(" ) next = portEndpoint(parseBlock(anchor)!, DEFAULT_PIN_SENTINEL); else next = parseTarget(); if (!current || !next) return; wires.push({ id: nextWireId(current, next), from: current, to: next }); current = next; }
+  };
+  // A statement ends at an explicit ';', at '}'/eof, OR at a line break (this
+  // IS the "compact" one-connection-per-line syntax -- requiring a trailing
+  // ';' on every line defeats the point, and the tests/usage this grammar
+  // was written for never included one). `tokens[p - 1]` is the last token
+  // actually consumed by the statement just parsed.
+  const statementTerminated = (): boolean => {
+    if (peek().text === ";") { take(); return true; }
+    if (peek().text === "}" || peek().kind === "eof") return true;
+    const lastConsumedLine = tokens[p - 1]?.line;
+    return lastConsumedLine === undefined || peek().line > lastConsumedLine;
   };
   if (peek().text === "model") { take(); word(); } if (!expect("{")) return { diagnostics };
   while (peek().kind !== "eof" && peek().text !== "}") {
     if (peek().kind !== "word" && peek().text !== "@") { error("declaração esperada"); take(); continue; }
-    if (peek().kind === "word" && tokens[p + 1]?.text === "=" && tokens[p + 2]?.kind === "word") { const id = word()!; take(); const type = word()!; const props: Record<string, DslValue> = {}; if (peek().text === "(") { take(); while (peek().text !== ")" && peek().kind !== "eof") { const k = word(); expect("="); const v = value(); if (k && v !== undefined) props[k] = v; if (peek().text === ",") take(); else break; } expect(")"); } addInline(type, props, id); if (peek().text === ";") take(); continue; }
-    const first = peek().text === "@" ? parseTarget() : parseTarget(); parseChain(first); if (peek().text === ";") take(); else if (peek().text !== "}") error("esperado ';' ou '}'");
+    if (peek().kind === "word" && tokens[p + 1]?.text === "=" && tokens[p + 2]?.kind === "word") { const id = word()!; take(); const type = word()!; const props: Record<string, DslValue> = {}; if (peek().text === "(") { take(); while (peek().text !== ")" && peek().kind !== "eof") { const k = word(); expect("="); const v = value(); if (k && v !== undefined) props[k] = v; if (peek().text === ",") take(); else break; } expect(")"); } addInline(type, props, id, id); if (!statementTerminated()) error("esperado ';' ou fim de linha"); continue; }
+    const first = peek().text === "@" ? parseTarget() : parseTarget(); parseChain(first); if (!statementTerminated()) error("esperado ';' ou fim de linha");
   }
   expect("}");
   for (const t of tunnels) nodes.push({ id: `tunnel:${t.id}` });

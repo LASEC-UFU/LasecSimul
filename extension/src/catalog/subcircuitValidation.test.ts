@@ -171,5 +171,6 @@ function makeIdFactory(prefix: string): () => string {
     assert(JSON.stringify([...resultA.errors].sort()) === JSON.stringify([...resultB.errors].sort()), "conjunto de erros deveria ser o mesmo independente da ordem de components[]");
   });
 
-  finish();
+  const { failed } = finish();
+  process.exitCode = failed > 0 ? 1 : 0;
 })();

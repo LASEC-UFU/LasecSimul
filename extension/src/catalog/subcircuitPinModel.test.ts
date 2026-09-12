@@ -212,5 +212,6 @@ function makeIdFactory(prefix: string): () => string {
     assert(entry?.domain === "signal" && entry.direction === "in" && entry.unit === "%", "tipagem deveria sobreviver ao save");
   });
 
-  finish();
+  const { failed } = finish();
+  process.exitCode = failed > 0 ? 1 : 0;
 })();

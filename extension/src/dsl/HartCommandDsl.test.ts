@@ -110,5 +110,6 @@ import { hartCommandBodyToJson, parseHartCommandDsl } from "./HartCommandDsl";
     assert(Array.isArray(json.writeSteps) && (json.writeSteps as unknown[]).length === 0, "writeSteps presente (vazio)");
   });
 
-  finish();
+  const { failed } = finish();
+  process.exitCode = failed > 0 ? 1 : 0;
 })();

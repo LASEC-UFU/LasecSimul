@@ -187,5 +187,6 @@ function fullDocument(): SubcircuitDocument {
     }
   });
 
-  finish();
+  const { failed } = finish();
+  process.exitCode = failed > 0 ? 1 : 0;
 })();

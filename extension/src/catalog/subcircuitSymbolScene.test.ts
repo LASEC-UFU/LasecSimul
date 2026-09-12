@@ -240,5 +240,6 @@ function makeIdFactory(prefix: string): () => string {
     assert(p1.labelHidden === p2.labelHidden && p2.labelHidden === true, `labelHidden deveria ser estável, recebido ${p1.labelHidden} vs ${p2.labelHidden}`);
   });
 
-  finish();
+  const { failed } = finish();
+  process.exitCode = failed > 0 ? 1 : 0;
 })();
