@@ -1636,7 +1636,15 @@ int main() {
                   statsA.size() == 8 && statsB.size() == 8 && statsA.bytes()[3] != statsB.bytes()[3],
               "Command 86 keeps per-child statistics isolated after different traffic");
         HartResponseBuilder identity84(64), capabilities87(8), retry88(8), channel85(16);
-        check(engine.execute("hart-8090", 1, 0x54, std::array<uint8_t, 2>{0, 1}, identity84) && identity84.size() >= 44 &&
+        // HCF_SPEC-151 7.52: exactly 48 bytes (index(2)+card(1)+channel(1)+
+        // mfg(2)+deviceType(2)+deviceId(3)+univCmdRev(1)+longTag(32)+
+        // deviceRev(1)+deviceProfile(1)+distributorCode(2)); byte 45 (Device
+        // Profile) falls back to 1 "Process Automation Device" per footnote
+        // 64 when the sub-device doesn't report its own -- was previously 0
+        // (not a defined Common Table 57 code) with one extra trailing byte
+        // (49 total), both fixed this session.
+        check(engine.execute("hart-8090", 1, 0x54, std::array<uint8_t, 2>{0, 1}, identity84) && identity84.size() == 48 &&
+                  identity84.bytes()[45] == 1 &&
                   engine.execute("hart-8090", 1, 0x57, std::array<uint8_t, 1>{0}, capabilities87) && capabilities87.bytes()[0] == 0 &&
                   engine.execute("hart-8090", 1, 0x58, std::array<uint8_t, 1>{5}, retry88) && retry88.bytes()[0] == 5 &&
                   engine.execute("hart-8090", 1, 0x55, std::array<uint8_t, 2>{0, 0}, channel85) && channel85.size() == 12,

@@ -3653,3 +3653,34 @@ com verificação explícita do byte de eco.
 | Command 81 (0x51) Read Device Variable Trim Guidelines | HCF_SPEC-151 §7.49 | Sim | **Sim** -- byte de eco (DVC) ausente na resposta, resposta 1 byte curta | Sim | Corrigido nesta sessão | DONE_SPEC_VERIFIED |
 | Command 82 (0x52) Write Device Variable Trim Point | HCF_SPEC-151 §7.50 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
 | Command 83 (0x53) Reset Device Variable Trim | HCF_SPEC-151 §7.51 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+
+### F.15.10 -- Cluster 84-90 (Sub-Device Identity/Statistics, I/O System, RTC)
+
+**Command 84 (0x54) Read Sub-Device Identity Summary -- 7.52, dois defeitos
+pequenos e reais.** Layout confirmado por extração sem `-layout`: resposta de
+48 bytes exatos (índice(2)+card(1)+channel(1)+fabricante(2)+tipo(2)+
+deviceId(3)+revUniversal(1)+longTag(32)+deviceRev(1)+deviceProfile(1)+
+distributorCode(2)). O código escrevia (a) `0` para o byte de Device Profile
+em vez de `1` "Process Automation Device" -- a própria nota de rodapé 64 da
+especificação exige esse fallback exato quando o sub-dispositivo não relata
+seu próprio Device Profile, e `0` não é sequer um código definido na Common
+Table 57 -- e (b) um byte extra de padding, produzindo 49 bytes em vez de 48.
+Ambos corrigidos numa única edição (a lista de `writeByte(0)` finais tinha um
+elemento a mais). Teste existente só checava `size() >= 44` (não pegava nem o
+valor errado nem o byte extra); reforçado para `size() == 48` mais o valor do
+byte 45.
+
+**Commands 85 (0x55)/86 (0x56)/87 (0x57)/88 (0x58)/89 (0x59)/90 (0x5A)**:
+todos verificados byte a byte contra `spec151r10.0` §7.53-7.58 -- zero
+defeitos. RTC (89/90) usa `plan.virtualTimeSeconds` (nunca wall-clock),
+consistente com a arquitetura já confirmada em sessões anteriores.
+
+| Área/Comando | Spec | Verificado independentemente? | Defeito encontrado? | Corrigido? | Teste de regressão? | Status |
+|---|---|---|---|---|---|---|
+| Command 84 (0x54) Read Sub-Device Identity Summary | HCF_SPEC-151 §7.52 | Sim | **Sim** -- Device Profile default errado (0 em vez de 1) + 1 byte extra no total | Sim | Reforçado nesta sessão | DONE_SPEC_VERIFIED |
+| Command 85 (0x55) Read I/O Channel Statistics | HCF_SPEC-151 §7.53 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 86 (0x56) Read Sub-Device Statistics | HCF_SPEC-151 §7.54 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 87 (0x57) Write I/O System Master Mode | HCF_SPEC-151 §7.55 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 88 (0x58) Write I/O System Retry Count | HCF_SPEC-151 §7.56 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 89 (0x59) Set Real-Time Clock | HCF_SPEC-151 §7.57 | Sim | Não (nota: rejeita bytes 8-9 não-zero, que a spec só marca "should be 0"; decisão defensável, não tratada como defeito) | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 90 (0x5A) Read Real-Time Clock | HCF_SPEC-151 §7.58 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |

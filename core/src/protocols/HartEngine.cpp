@@ -898,8 +898,12 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
             !response.writeByte(static_cast<uint8_t>(childProfile->deviceType >> 8)) ||
             !response.writeByte(static_cast<uint8_t>(childProfile->deviceType)) || !response.writeBytes(deviceId) ||
             !response.writeByte(childProfile->identity.universalCommandRevision) || !response.writeBytes(encodedTag) ||
-            !response.writeByte(childProfile->identity.transmitterSpecificRevision) || !response.writeByte(0) ||
-            !response.writeByte(0) || !response.writeByte(0) || !response.writeByte(0)) return false;
+            // HCF_SPEC-151 7.52 footnote 64: a sub-device that doesn't report
+            // its own Device Profile must be reported as Device Profile 1
+            // "Process Automation Device" (Common Table 57) -- 0 is not a
+            // defined code in that table and was a wrong default.
+            !response.writeByte(childProfile->identity.transmitterSpecificRevision) || !response.writeByte(1) ||
+            !response.writeByte(0) || !response.writeByte(0)) return false;
         return true;
     }
     if (command == 0x55) {
