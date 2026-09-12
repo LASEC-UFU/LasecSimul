@@ -1606,8 +1606,15 @@ int main() {
         HartResponseBuilder trimPoints(16), trimGuidelines(32);
         check(engine.execute("hart-8090", 1, 0x50, std::array<uint8_t, 1>{246}, trimPoints) && trimPoints.size() == 10,
               "Command 80 returns canonical Device Variable trim points");
-        check(engine.execute("hart-8090", 1, 0x51, std::array<uint8_t, 1>{246}, trimGuidelines) && trimGuidelines.size() == 22,
-              "Commands 80 and 81 return canonical Device Variable trim state/guidelines");
+        // HCF_SPEC-151 7.49: response byte 0 echoes the requested Device
+        // Variable Code (1) + trim points supported (1) + units (1) + 5
+        // floats (20) = 23 bytes. (Was asserted as 22 before this session's
+        // fix -- the echo byte was missing, shifting every field one byte
+        // early; the test had enshrined the bug instead of catching it, the
+        // same pattern as the Command 54 byte-width bug.)
+        check(engine.execute("hart-8090", 1, 0x51, std::array<uint8_t, 1>{246}, trimGuidelines) && trimGuidelines.size() == 23 &&
+                  trimGuidelines.bytes()[0] == 246,
+              "Commands 80 and 81 return canonical Device Variable trim state/guidelines (23 bytes per HCF_SPEC-151 7.49)");
         const auto trimValue = HartTypeCodec::encodeFloat32BE(12.0f);
         std::array<uint8_t, 7> trimRequest{246, 1, 57, trimValue[0], trimValue[1], trimValue[2], trimValue[3]};
         HartResponseBuilder trimWrite(16), readAfterTrim(16);

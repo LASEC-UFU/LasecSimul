@@ -1379,7 +1379,11 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
             const auto guideline = [&](float value) {
                 return response.writeBytes(HartTypeCodec::encodeFloat32BE(supported ? value : nan));
             };
-            return response.writeByte(variable->trimPointsSupported) && response.writeByte(units) &&
+            // HCF_SPEC-151 7.49: response byte 0 echoes the requested Device
+            // Variable Code, same as every other command in this cluster --
+            // this was missing (audit finding this session), shifting every
+            // field one byte early and under-sizing the response by one byte.
+            return response.writeByte(request[0]) && response.writeByte(variable->trimPointsSupported) && response.writeByte(units) &&
                 guideline(variable->minimumLowerTrimPoint) && guideline(variable->maximumLowerTrimPoint) &&
                 guideline(variable->minimumUpperTrimPoint) && guideline(variable->maximumUpperTrimPoint) &&
                 guideline(variable->minimumTrimDifferential);

@@ -3632,3 +3632,24 @@ antes desta sessão nesta profundidade.
 | Command 113/114 (0x71/0x72), forma moderna (15 bytes) | HCF_SPEC-151 §7.81 | Sim | **Sim** -- bytes 7/8 trocados + Shed Time decalado (padrão Command 54) | Sim | Reforçado nesta sessão | DONE_SPEC_VERIFIED |
 | Command 113 (0x71), forma legada (13 bytes) | HCF_SPEC-151 §7.81.1 | Sim | **Sim** -- não implementada (rejeitada) | Sim | Adicionado nesta sessão | DONE_SPEC_VERIFIED |
 | Command 77 (0x4D) Send Command to Sub-Device | HCF_SPEC-151 §7.45 | Sim (revisado estruturalmente; convenção de comando estendido 2-byte não modelada, consistente com o resto do projeto) | Não | N/A | N/A (cobertura indireta) | DONE_SPEC_VERIFIED |
+
+### F.15.9 -- Command 81 (0x51): terceiro bug classe Command-54 -- byte de eco ausente
+
+`spec151r10.0` §7.49, confirmado por extração sem `-layout`: a resposta do
+Command 81 (Read Device Variable Trim Guidelines) começa ecoando o Device
+Variable Code solicitado no byte 0, exatamente como Command 80 (mesmo
+cluster, já correto) e como todo o resto deste cluster de comandos. O código
+pulava direto para `trimPointsSupported` como primeiro byte escrito,
+produzindo uma resposta de 22 bytes em vez de 23, com todos os campos
+subsequentes deslocados um byte para trás em relação à especificação. O teste
+existente afirmava `size() == 22` -- o mesmo padrão exato do bug do
+Command 54 (código errado, teste combinando com o erro, suite verde).
+Corrigido: byte 0 agora ecoa `request[0]`; teste corrigido para `size() == 23`
+com verificação explícita do byte de eco.
+
+| Área/Comando | Spec | Verificado independentemente? | Defeito encontrado? | Corrigido? | Teste de regressão? | Status |
+|---|---|---|---|---|---|---|
+| Command 80 (0x50) Read Device Variable Trim Points | HCF_SPEC-151 §7.48 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 81 (0x51) Read Device Variable Trim Guidelines | HCF_SPEC-151 §7.49 | Sim | **Sim** -- byte de eco (DVC) ausente na resposta, resposta 1 byte curta | Sim | Corrigido nesta sessão | DONE_SPEC_VERIFIED |
+| Command 82 (0x52) Write Device Variable Trim Point | HCF_SPEC-151 §7.50 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 83 (0x53) Reset Device Variable Trim | HCF_SPEC-151 §7.51 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
