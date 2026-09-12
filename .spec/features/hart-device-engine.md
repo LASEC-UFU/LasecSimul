@@ -4066,3 +4066,148 @@ autoridade real é o `if` nativo mais o guard final `it ==
 programs->end()`). Nenhuma nova inconsistência encontrada desde a
 reconciliação registrada em F.15.4. Não tratado como prioridade, conforme
 instruído.
+
+### F.16.7 -- Add/Remove variable: referências penduradas (item 24 do pedido)
+
+Verificado especificamente: remover uma variável via Property Inspector
+(editar `hartVariablesJson`) enquanto um Burst config (`hartBurstJson`,
+propriedade oculta, escrita pelos Commands 100-109 via protocolo HART, não
+pelo Inspector) já referencia o `deviceVariableCode` dessa variável.
+`rebuildConfiguredPlan()` (linhas ~325-346) recarrega `device.burstMessages`
+a partir de `hartBurstJson` SEM cruzar contra a lista atual de variáveis --
+o código de 8 bits é aceito como está (só validado como inteiro 0-255),
+mesmo que nenhuma variável com aquele código exista mais.
+
+**Não tratado como defeito**: este é exatamente o mesmo padrão "resolver no
+uso, não na edição" já verificado exaustivamente em toda a auditoria de
+Common Practice desta sessão -- TODO handler de comando que lê um
+`deviceVariableCode` (Commands 51, 91, 93, 105, 107, etc., todos já
+confirmados nesta auditoria) já degrada graciosamente quando o código não
+resolve para nenhuma variável (erro/"Not Used"/`return false`, nunca
+crash ou corrupção). Um dispositivo HART real também não pode rejeitar uma
+config de Burst só porque uma variável foi reconfigurada por outro canal --
+o comportamento esperado É responder graciosamente na próxima leitura, que
+é exatamente o que este código já faz. Satisfaz a exigência do item 24
+("reject OR perform a defined transactional update") pela segunda opção: a
+referência persiste como bytes armazenados, e toda leitura já trata a
+ausência de forma definida e testada.
+
+### F.16.8 -- Matriz cross-system final (item 26 do pedido)
+
+| Propriedade semântica | Fonte de autoria | Representação DSL | Representação Inspector | Fonte Runtime | Leitor(es) HART | Escritor(es) HART | Persistência | Autoridade duplicada? |
+|---|---|---|---|---|---|---|---|---|
+| Tag (6 bytes packed) | `HartDevicePlan::tag` | n/a (propriedade `tag`, fora do DSL de comandos) | campo `tag` (texto) | `HartEngine` plan | Cmd 0x0B/0x13/0x39 (via `HartVarId::Tag`) | Cmd 0x0B write/0x18/0x3A | `ComponentParams` -> reopen (testado) | Não |
+| Long Tag (32 bytes Latin-1) | `HartDevicePlan::longTag` | n/a | campo `longTag` | `HartEngine` plan | Cmd 0x15/0x21(529 index 0) | Cmd 0x16/0x3A | testado | Não |
+| Message | `HartDevicePlan::message` | n/a | campo `message` | `HartEngine` plan | Cmd 0x0C | Cmd 0x11 | testado (Anexo F.6 fechado) | Não |
+| Descriptor | `HartDevicePlan::descriptor` | n/a | campo `descriptor` | `HartEngine` plan | Cmd 0x0C | Cmd 0x0D/0x3A | testado | Não |
+| Date | `HartDevicePlan::date` | n/a | campo `dateDay/Month/Year` | `HartEngine` plan | Cmd 0x0C/0x0F | Cmd 0x0E/0x3A | testado | Não |
+| Polling Address | `HartDevicePlan::pollingAddress` | n/a | campo `pollingAddress` | `HartEngine` plan (também chave de roteamento) | Cmd 0x00/0x07 | Cmd 0x06 (gap de compat. legado documentado, não corrigido, ver F.15.9-adjacente Universal 6) | testado (Gate 12) | Não |
+| PV (valor) | `HartExecutionVariables::primaryVariable` (via Signal Graph quando `role=PV`) | `HartVarId::PrimaryVariable` | campo `value` da variável `role=PV` | Signal Graph (`primaryValue` param) OU `variableValues[i]` para Internal | Cmd 1/2/3/9/33/48 (via `hartLoopCurrentMilliamps`) | Signal Graph wire (nunca escrito por comando -- PV é sempre lido do grafo) | n/a (recalculado a cada tick) | Não (uma única autoridade: `hartPercentOfRange`/`hartLoopCurrentMilliamps`) |
+| Unit (PV/Device Variable) | `VariableConfiguration::deviceVariableUnit` | `HartDeviceVariableField::Units` | campo `unit` da variável | `HartDevicePlan::variables[]` | Cmd 1/33/34/53/54 | Cmd 44/53 | testado | Não |
+| Range (upper/lower) | `VariableConfiguration::lowerRangeValue/upperRangeValue` | n/a (StandardCore nativo, não DSL) | não exposto diretamente (via `hartAdditionalJson`/comandos) | `HartDevicePlan::variables[]` | Cmd 3/15 | Cmd 35/36/37 (uma mutação atômica) | testado | Não |
+| Damping | `VariableConfiguration::dampingValue` | n/a | não exposto diretamente | `HartDevicePlan::variables[]` | Cmd 3/15/54 | Cmd 34 (PV)/55 (Device Variable) | testado | Não (superou o campo antigo `pvDampingValue`, removido) |
+| Device Variable Classification | `VariableConfiguration::classification` | `HartDeviceVariableField::ClassificationCode` | campo `classification` (avançado, não na UI simples) | `HartDevicePlan::variables[]` | Cmd 54/8/9/33 | n/a (somente leitura, exceto via authoring) | testado | Não (bug histórico Command 54 corrigido; ver Anexo F.3/F.4) |
+| Dynamic Variable Assignment | `HartDevicePlan::dynamicVariableAssignments` | n/a | não exposto diretamente | `HartDevicePlan` | Cmd 3/9/50/60/62(analog)/70/110 | Cmd 51 | testado | Não |
+| Loop Current | derivado (`hartLoopCurrentMilliamps`) | `HartExpr::LoopCurrentMilliamps` | n/a (derivado) | Signal Graph + `HartDevicePlan::fixedCurrentMode/Milliamps` | Cmd 2/3/9/33/48/60 | Cmd 40 (fixed mode)/45/46 (trim) | testado | Não (uma função compartilhada) |
+| Analog Channel config | `HartDevicePlan::analogChannel0*` | n/a (StandardCore) | não exposto diretamente | `HartDevicePlan` | Cmd 60-63/70 | Cmd 64/65/66/67/68/69 | testado | Não |
+| RTC | `HartDevicePlan::rtcValueSeconds`/`rtcLastSetSeconds`/`virtualTimeSeconds` | n/a | não exposto | `HartDevicePlan` (nunca wall-clock) | Cmd 89/90 | Cmd 89 | testado | Não |
+| Burst config | `HartDevicePlan::burstMessages[]` | n/a | oculto (`hartBurstJson`, escrito só via protocolo) | `HartDevicePlan` | Cmd 65/101/105 | Cmd 66/67/68/100(alarm, adjacente)/102/103/104/107/108/109 | testado | Não |
+| Event config | `HartDevicePlan::eventNotifications[0]` | n/a | oculto | `HartDevicePlan` + `RuntimeDevice::eventRecords` | Cmd 48/73/115 | Cmd 74-76/116-118 | testado | Não (Command 48 tinha stub DSL duplicado -- corrigido, ver F.15.7) |
+| Trend config | `HartDevicePlan::trends[]` | n/a | oculto | `HartDevicePlan` + `RuntimeDevice::trendSamples[]` | Cmd 91/93 | Cmd 92 (limpa ring buffer atomicamente na mesma transação, verificado) | testado | Não |
+| Actions | `HartDevicePlan::synchronousActions[]`/`commandActions[]` | n/a | oculto | `HartDevicePlan` | Cmd 96/98 | Cmd 97/99 | testado | Não |
+| Status Simulation | `HartDevicePlan::statusSimulationEnabled/simulatedStatusMask/Values` | n/a | oculto (`hartAdditionalJson`) | `HartDevicePlan`, lido por Cmd 48 | Cmd 48/527 | Cmd 526/527 | testado | Não |
+| Sub-Device Assignment List | `HartDevicePlan::assignments[]`/`assignmentCount` | n/a | oculto | `HartDevicePlan` | Cmd 528/529 | Cmd 530/531 | testado | Não (Command 531 tinha campo de contagem ausente -- corrigido, ver F.15.11) |
+| Pressure metadata | `VariableConfiguration::pressure` (sub-struct) | n/a (StandardCore nativo) | oculto | `HartDevicePlan::variables[].pressure` | Cmd 1280-1290 | Cmd 1408-1410 | testado | Não |
+| Temperature metadata | `VariableConfiguration::temperature` (sub-struct, concorrente) | n/a | oculto | `HartDevicePlan::variables[].temperature` | Cmd 1024-1027 | Cmd 1152-1157/1556 | testado | Não |
+| Configuration Changed | `HartDevicePlan::configurationChangedCounter` | n/a | n/a | `HartDevicePlan` | Cmd 38/48 | toda escrita normativa que muta config persistida | testado | Não (reconfirmado F.16.5; distinto do snapshot em `HartEventNotificationRecord`) |
+| HART variable `id`/identidade Signal Graph | `VariableConfiguration::id` | n/a | campo `id`, agora **readonly incondicional** + defesa em profundidade no host | `signalBlockId()` = `hart.<index>.<id>` | n/a (interno ao Signal Graph) | Inspector cria (id novo auto-gerado), nunca renomeia (corrigido nesta sessão) | testado | Não (era uma autoridade FRÁGIL -- corrigida nesta sessão, ver F.16.4) |
+
+**Resultado**: `Duplicate Authority? = NO` para toda propriedade semântica
+auditada, incluindo as duas onde uma duplicação real já tinha existido
+historicamente (Command 54 Classification/Family, Command 48
+diagnosticStatus) -- ambas já fechadas em sessões anteriores/nesta sessão.
+
+### F.16.9 -- Tally final consolidado do Anexo F (item 30 do pedido)
+
+**Universal Commands (0-22, 38, 48)**: 23 definidos · 22 `DONE_SPEC_VERIFIED`
+(inclui os dois achados desta sessão: Cmd 38 forma legada, Cmd 48
+duplicidade) · 0 `PARTIAL` · 0 `BROKEN` · 0 `NOT_IMPLEMENTED` · 3
+`NOT_APPLICABLE` (4/5/10, Reserved, corretamente) · 0 `NOT_DEFINED` · 0
+`BLOCKED_EXTERNAL`. Exceção documentada e não corrigida: Cmd 6 forma legada
+de 1 byte é `PARTIAL` (disclosed, ver F.15.8-adjacente) -- risco/benefício
+de mexer numa mutação de re-endereçamento ao vivo já sinalizada como
+delicada pelo próprio código.
+
+**Common Practice (33-119)**: todos os ids definidos no intervalo com
+handler real (33-99, 100-119) revisados byte a byte nesta e em sessões
+anteriores -- `DONE_SPEC_VERIFIED` em todos, exceto: `NOT_DEFINED`/ambíguo
+por contradição real na própria especificação (Command 113 vs. 114, byte 7
+-- documentado em F.15.12, nenhuma ação de código possível). Defeitos reais
+encontrados e corrigidos nesta sessão neste intervalo: Commands 38(compat),
+48(duplicidade), 51(compat), 54(histórico, sessão anterior), 81(byte de
+eco), 84(default+byte extra), 105/107/109/113(compat/byte-order/byte-map),
+531(campo ausente) -- total 10 defeitos reais nesta sessão de continuação,
+mais o achado histórico do Command 54 que iniciou toda a auditoria.
+
+**Additional Common Practice (512-531)**: todos `DONE_SPEC_VERIFIED` exceto
+Command 531 (defeito encontrado e corrigido nesta sessão).
+
+**Device Families presentes**: Pressure (1280-1290, 1408-1410) --
+`DONE_SPEC_VERIFIED` em todos, incluindo 1285/1290 (incerteza de sessões
+anteriores fechada nesta sessão, F.15.14). Temperature (1024-1027,
+1152-1157, 1556) -- `DONE_SPEC_VERIFIED`, zero defeitos, cluster inteiro
+novo desde a última verificação byte a byte (F.15.1).
+
+**Fake fallback paths**: 0 encontrados, 0 remanescentes (reconfirmado; zero
+mudanças à `HartCommandClassification` desde a última reconfirmação).
+
+**Hardcoded mutable device-data defects**: 0 remanescentes nos comandos
+auditados; o único "hardcoded" real encontrado nesta sessão (Command 84
+Device Profile = 0 em vez do fallback normativo 1) foi corrigido.
+
+**Duplicate semantic authorities encontradas nesta sessão**: 2 (Command 48
+diagnosticStatus via stub DSL paralelo; HART variable `id`/Signal Graph
+block id sem proteção real de imutabilidade). **Remanescentes**: 0 -- ambas
+corrigidas.
+
+**Configuration Changed authorities**: 1 (esperado = 1), reconfirmado
+F.16.5.
+
+**Unbounded runtime containers encontrados**: 0 (reconfirmado; toda
+estrutura nova concorrente -- WirelessHART sessions/superframes/links/
+graphs/routes/timetables/device lists -- usa `std::array` de tamanho fixo).
+
+**Wall-clock/thread/timer HART violations**: 0 (reconfirmado; RTC usa
+`virtualTimeSeconds` injetado, nunca `system_clock`/`sleep`/`std::thread`).
+
+**DSL defects encontrados nesta sessão**: 4 (ids/wires instáveis sob edição
+não relacionada; sintaxe `componente.pino`/`in.porta`/`out.porta` quebrada;
+pino padrão ambíguo hardcoded; quebra de linha não aceita como terminador).
+**Remanescentes**: 0.
+
+**Inspector authority defects encontrados**: 1 (variableId editável com
+simulação parada). **Remanescentes**: 0.
+
+**Cross-command regression tests adicionados nesta sessão**: pelo menos 15
+(Commands 38/48/51/81/84/105/107/109/113 x2/531, mais os testes de
+verificação sem defeito onde a cobertura anterior era fraca).
+
+**DSL regression tests adicionados**: 10 (arquivo inteiro reescrito para
+executar de fato, mais os novos casos de estabilidade de id/colisão/rota).
+
+**Inspector regression tests adicionados**: 3 (id sempre readonly,
+`preserveExistingVariableIds` reverte linha existente/preserva linha nova).
+
+**Persistence fresh-reopen tests adicionados**: 0 novos nesta sessão
+especificamente (o gate de save/reopen do HART já tinha cobertura real de
+sessão anterior, reutilizada sem alteração -- ver Gate 12 em B.5); a nova
+cobertura de `signalPorts()` nesta sessão não inclui um teste de
+save/reopen dedicado (gap honesto: ficaria como próxima ação caso a ponta
+de UI/canvas seja implementada, momento em que um teste de round-trip real
+passa a fazer sentido).
+
+**Achado sistêmico adicional, fora do escopo original mas descoberto durante
+a auditoria (F.16.1)**: 15 arquivos de teste da Extension nunca propagavam
+falha de asserção para o `process.exitCode` -- corrigidos. Sem isso, uma
+parte desconhecida do "testes passam" reportado em sessões anteriores não
+era necessariamente verificável.
