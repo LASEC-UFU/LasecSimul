@@ -3562,4 +3562,73 @@ do gap documentado do Command 6), não um bug silencioso.
 | Command 71 (0x47) Lock Device | HCF_SPEC-151 §7.39 | Sim | Não | N/A | N/A (cobertura indireta) | DONE_SPEC_VERIFIED |
 | Command 73 (0x49) Find Device | HCF_SPEC-151 §7.41 | Sim | Não | N/A | N/A (cobertura indireta) | DONE_SPEC_VERIFIED |
 | Command 74 (0x4A) Read I/O System Capabilities | HCF_SPEC-151 §7.42 | Sim | Não | N/A | N/A (cobertura indireta) | DONE_SPEC_VERIFIED |
+
+### F.15.8 -- Cluster Burst/Catch (105/107/109/113): mais três defeitos reais, incluindo um segundo bug classe Command-54
+
+Continuando a busca sistemática nas seções "Backward Compatibility
+Requirements" (alto valor: 3 de 3 achados reais até aqui vieram delas nesta
+sessão), o cluster Burst Mode e Catch Device Variable revelou mais defeitos
+reais:
+
+**Command 105 (0x69) Read Burst Mode Configuration -- 7.73.1.** A forma
+legada (0 bytes, já aceita corretamente) sempre escrevia o byte 1 da resposta
+como o literal `31`, mas a especificação exige que, especificamente para essa
+forma legada, o byte 1 seja o LSByte do número de comando de burst em vez de
+31. Corrigido; regression test adicionado usando o comando 1 (já configurado
+via Command 108) para confirmar `byte[1] == 1`, não 31.
+
+**Command 107 (0x6B) Write Burst Device Variables -- 7.75.1.** A forma
+truncada (1-4 bytes) era rejeitada inteiramente (`request.size() != 9 ->
+false`) em vez de aceita com os slots não especificados preenchidos com 250
+"Not Used" e Burst Message assumido 0, exatamente a mesma classe de bug já
+corrigida no Command 51/38. Corrigido; regression test adicionado confirmando
+que uma escrita de 1 byte retorna os 9 bytes completos não truncados.
+
+**Command 109 (0x6D) Burst Mode Control -- 7.77, ordem de bytes trocada.**
+Achado por extração de texto sem `-layout` (a tabela `-layout` rendeu
+ambígua): a forma moderna (2 bytes) é `{Burst Mode Control Code, Burst
+Message}`, controle PRIMEIRO. O código lia `index = request[0]` e `control =
+request[1]` -- ordem invertida. O teste existente usava `{0, 1}` esperando
+"liga a mensagem 0", o que só "funcionava" porque o bug e o dado do teste
+concordavam por acidente -- mesmo padrão do Command 54 (bug no código e no
+teste, mascarando um ao outro). Corrigido para `control = request[0]`,
+`index = request[1]`; teste ajustado para `{1, 0}` (semântica correta) e uma
+segunda leitura via Command 105 confirma `byte[0] == 1` (controle realmente
+ligado), fechando o ciclo.
+
+**Command 113 (0x71/0x72) Catch Device Variable -- 7.81, MESMO padrão do
+Command 54 (dois campos de byte trocados + leitura decalada em uma posição).**
+O mais sério dos quatro achados deste cluster. Layout real (confirmado por
+extração sem `-layout`): `{Destino DV(1), Modo de Captura(1), Endereço
+Escravo Fonte(5), marcador 31/0x1F(1), Número do Slot Fonte(1), Shed Time
+float(4), Número do Comando Fonte 16-bit(2)} = 15 bytes`. O código trocava os
+papéis dos bytes 7 e 8 (lia `sourceSlot` do byte 7 -- que deveria ser o
+marcador/comando -- e nunca usava o byte 8 real) e, como consequência,
+decodificava o float de Shed Time a partir dos bytes 8-11 em vez de 9-12 --
+um deslocamento de um byte que corrompe silenciosamente o valor. O teste
+existente usava Shed Time = 0.0 (todos os bytes zero), o único valor capaz de
+disfarçar completamente esse deslocamento, e não verificava nenhum byte
+individual da resposta -- apenas o tamanho. Corrigido: `sourceSlot` agora lê
+do byte 8, Shed Time do span correto (9-12), e a resposta escreve o marcador
+`31` (ou, numa resposta à própria escrita legada de 7.81.1, o LSByte do
+comando) no byte 7 e o slot no byte 8. Implementada também a forma legada
+(13 bytes, sem os bytes 13-14, comando de 1 byte no próprio byte 7) exigida
+por 7.81.1, incluindo a regra "o número do comando deve retornar tanto no
+byte 7 quanto nos bytes 13-14" para essa forma. Testes reforçados com valores
+não degenerados (Shed Time = 2.5, não 0.0) e verificação byte a byte real,
+mais um teste dedicado à forma legada de 13 bytes -- nenhum dos dois existia
+antes desta sessão nesta profundidade.
+
+| Área/Comando | Spec | Verificado independentemente? | Defeito encontrado? | Corrigido? | Teste de regressão? | Status |
+|---|---|---|---|---|---|---|
+| Command 105 (0x69), forma moderna | HCF_SPEC-151 §7.73 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 105 (0x69), forma legada (0 bytes) | HCF_SPEC-151 §7.73.1 | Sim | **Sim** -- byte 1 sempre 31, nunca o LSByte do comando | Sim | Adicionado nesta sessão | DONE_SPEC_VERIFIED |
+| Command 106 (0x6A) Flush Delayed Responses | HCF_SPEC-151 §7.74 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 107 (0x6B), forma moderna (9 bytes) | HCF_SPEC-151 §7.75 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 107 (0x6B), forma legada (1-4 bytes) | HCF_SPEC-151 §7.75.1 | Sim | **Sim** -- rejeitada inteiramente | Sim | Adicionado nesta sessão | DONE_SPEC_VERIFIED |
+| Command 108 (0x6C) Write Burst Mode Command Number | HCF_SPEC-151 §7.76/7.76.1 | Sim | Não (já corretamente implementado, ambas as formas) | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 109 (0x6D), forma moderna (2 bytes) | HCF_SPEC-151 §7.77 | Sim | **Sim** -- ordem control/index invertida | Sim | Corrigido + adicionado nesta sessão | DONE_SPEC_VERIFIED |
+| Command 109 (0x6D), forma legada (1 byte) | HCF_SPEC-151 §7.77.1 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 113/114 (0x71/0x72), forma moderna (15 bytes) | HCF_SPEC-151 §7.81 | Sim | **Sim** -- bytes 7/8 trocados + Shed Time decalado (padrão Command 54) | Sim | Reforçado nesta sessão | DONE_SPEC_VERIFIED |
+| Command 113 (0x71), forma legada (13 bytes) | HCF_SPEC-151 §7.81.1 | Sim | **Sim** -- não implementada (rejeitada) | Sim | Adicionado nesta sessão | DONE_SPEC_VERIFIED |
 | Command 77 (0x4D) Send Command to Sub-Device | HCF_SPEC-151 §7.45 | Sim (revisado estruturalmente; convenção de comando estendido 2-byte não modelada, consistente com o resto do projeto) | Não | N/A | N/A (cobertura indireta) | DONE_SPEC_VERIFIED |

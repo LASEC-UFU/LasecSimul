@@ -1796,7 +1796,13 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
                 if (!((request.empty() || request.size() == 1) && (request.empty() || validBurstIndex(request[0])))) return false;
                 const uint8_t index = request.empty() ? 0 : request[0];
                 const auto& configuration = burst(index);
-                if (!response.writeByte(configuration.control) || !response.writeByte(31)) return false;
+                // HCF_SPEC-151 7.73.1: a HART 5/6 Master sends no request
+                // bytes and, for that legacy form only, response byte 1 must
+                // carry the LSByte of the burst command number INSTEAD OF the
+                // literal 31 (0x1F) Command Number Expansion Flag a modern
+                // request gets.
+                const uint8_t commandNumberFlagByte = request.empty() ? static_cast<uint8_t>(configuration.command) : 31;
+                if (!response.writeByte(configuration.control) || !response.writeByte(commandNumberFlagByte)) return false;
                 for (const uint8_t code : configuration.deviceVariableCodes) if (!response.writeByte(code)) return false;
                 if (!response.writeByte(index) || !response.writeByte(plan.burstMessageCount) || !put16(configuration.command) ||
                     !put32(configuration.updatePeriodTicks) || !put32(configuration.maximumUpdatePeriodTicks) ||
@@ -1809,15 +1815,29 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
                 return true; // The bounded burst event queue is the delayed-response authority.
             }
             if (command == 0x6B) {
-                if (plan.writeProtectCode != 0xFB || request.size() != 9 || !validBurstIndex(request[8])) return false;
+                // HCF_SPEC-151 7.75.1: a HART 5/6 Master may send only 1-4
+                // Device Variable slots instead of the full 9 bytes; the
+                // device must accept that (never Response Code 5), assume
+                // Burst Message 0, set every unspecified slot to 250 "Not
+                // Used", and the response must still be the full, untruncated
+                // 9 bytes (footnote 76) -- never mirror the short request.
+                const bool legacy = !request.empty() && request.size() <= 4;
+                if (plan.writeProtectCode != 0xFB || !(legacy || request.size() == 9)) return false;
+                const uint8_t index = legacy ? 0 : request[8];
+                if (!validBurstIndex(index)) return false;
                 std::array<uint8_t, 8> next{};
+                next.fill(250);
                 for (size_t i = 0; i < next.size(); ++i) {
-                    if (request[i] != 250 && std::find_if(plan.variables.begin(), plan.variables.end(), [&](const auto& variable) {
-                        return variable.deviceVariableCode == request[i];
+                    const uint8_t code = (legacy && i >= request.size()) ? uint8_t{250} : request[i];
+                    if (code != 250 && std::find_if(plan.variables.begin(), plan.variables.end(), [&](const auto& variable) {
+                        return variable.deviceVariableCode == code;
                     }) == plan.variables.end()) return false;
-                    next[i] = request[i];
+                    next[i] = code;
                 }
-                burst(request[8]).deviceVariableCodes = next;
+                burst(index).deviceVariableCodes = next;
+                if (legacy) {
+                    return response.writeBytes(next) && response.writeByte(index);
+                }
                 return response.writeBytes(request);
             }
             if (command == 0x6C) {
@@ -1831,10 +1851,16 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
                 return response.writeBytes(request);
             }
             if (command == 0x6D) {
+                // HCF_SPEC-151 7.77: the modern (2-byte) request is {Burst
+                // Mode Control Code, Burst Message} in that order -- control
+                // code FIRST, message index SECOND (confirmed against a
+                // non-layout PDF text extraction after the -layout table
+                // rendered ambiguously). The legacy (1-byte) form is the
+                // control code alone with the message index assumed 0.
                 const bool legacy = request.size() == 1;
                 if ((request.size() != 1 && request.size() != 2) || (legacy && request[0] > 1)) return false;
-                const uint8_t index = legacy ? 0 : request[0];
-                const uint8_t control = legacy ? request[0] : request[1];
+                const uint8_t control = request[0];
+                const uint8_t index = legacy ? 0 : request[1];
                 if (plan.writeProtectCode != 0xFB || !validBurstIndex(index) || control > 3) return false;
                 burst(index).control = control;
                 if (legacy) return response.writeByte(control);
@@ -1873,24 +1899,54 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
             };
             if (command == 0x71 || command == 0x72) {
                 if (command == 0x71) {
-                    if (plan.writeProtectCode != 0xFB || request.size() != 15 || request[1] > 2) return false;
-                    if (findVariable(request[0]) == plan.variables.end() || request[7] > 7 || request[1] == 1 && request[13] == 0 && request[14] == 0) return false;
+                    // HCF_SPEC-151 7.81: request/response are {Destination DV
+                    // (1), Capture Mode (1), Source Slave Address (5: bytes
+                    // 2-3 expanded device type + bytes 4-6 device id), a byte
+                    // that is normally the literal 31 (0x1F) marker (1),
+                    // Source Slot Number (1), Shed Time float (4), Source
+                    // Command Number (2, 16-bit)} = 15 bytes. (This session's
+                    // audit found and fixed a prior byte-mapping bug here:
+                    // the marker/command byte and the slot-number byte were
+                    // swapped, and the shed-time float was read one byte
+                    // early as a result -- confirmed against a non-layout PDF
+                    // text extraction after the -layout table rendered
+                    // ambiguously, same as Command 109's byte-order fix.)
+                    // 7.81.1: a HART 5/6 Master sends only 13 bytes (no bytes
+                    // 13-14) and puts the 1-byte command number directly in
+                    // that marker byte (byte 7) instead of 31; the response
+                    // must then carry that command number in BOTH byte 7 and
+                    // bytes 13-14 (handled below via `sourceCommand`, which
+                    // becomes the single value written to both places).
+                    const bool legacy = request.size() == 13;
+                    if (plan.writeProtectCode != 0xFB || !(legacy || request.size() == 15) || request[1] > 2) return false;
+                    if (findVariable(request[0]) == plan.variables.end() || request[8] > 7) return false;
+                    const HartCommandId sourceCommand = legacy ? static_cast<HartCommandId>(request[7])
+                        : static_cast<HartCommandId>(request[13] << 8 | request[14]);
+                    if (request[1] == 1 && sourceCommand == 0) return false;
                     auto slot = findCatch(request[0]);
                     if (slot == plan.catchConfigurations.end()) slot = std::find_if(plan.catchConfigurations.begin(), plan.catchConfigurations.end(), [](const auto& item) { return item.destinationDeviceVariable == 250; });
                     if (slot == plan.catchConfigurations.end()) return false;
-                    const float shed = HartTypeCodec::decodeFloat32BE(request.subspan(8, 4));
+                    const float shed = HartTypeCodec::decodeFloat32BE(request.subspan(9, 4));
                     if (!std::isfinite(shed) || shed < 0.0f) return false;
                     slot->destinationDeviceVariable = request[0]; slot->captureMode = request[1];
-                    std::copy_n(request.begin() + 2, 5, slot->sourceAddress.begin()); slot->sourceSlot = request[7];
-                    slot->shedTime = shed; slot->sourceCommand = static_cast<HartCommandId>(request[13] << 8 | request[14]);
+                    std::copy_n(request.begin() + 2, 5, slot->sourceAddress.begin()); slot->sourceSlot = request[8];
+                    slot->shedTime = shed; slot->sourceCommand = sourceCommand;
                 }
                 const uint8_t destination = request[0];
                 const auto slot = findCatch(destination);
                 HartCatchConfiguration defaults;
                 defaults.destinationDeviceVariable = destination;
                 const auto& configuration = slot == plan.catchConfigurations.end() ? defaults : *slot;
+                // Byte 7 is the literal 31 (0x1F) expansion-flag marker for a
+                // normal (Command 114, or any modern-request Command 113)
+                // read -- bytes 13-14 already carry the full 16-bit command
+                // number. The one exception (7.81.1) is answering a legacy
+                // (13-byte) Command 113 write in the very same transaction,
+                // where byte 7 must instead echo that command number's LSByte.
+                const bool answeringLegacyWrite = command == 0x71 && request.size() == 13;
+                const uint8_t commandMarkerByte = answeringLegacyWrite ? static_cast<uint8_t>(configuration.sourceCommand) : uint8_t{31};
                 if (!response.writeByte(destination) || !response.writeByte(configuration.captureMode) || !response.writeBytes(configuration.sourceAddress) ||
-                    !response.writeByte(configuration.sourceSlot) || !response.writeByte(static_cast<uint8_t>(configuration.sourceCommand)) ||
+                    !response.writeByte(commandMarkerByte) || !response.writeByte(configuration.sourceSlot) ||
                     !response.writeBytes(HartTypeCodec::encodeFloat32BE(configuration.shedTime)) || !put16(configuration.sourceCommand)) return false;
                 return true;
             }

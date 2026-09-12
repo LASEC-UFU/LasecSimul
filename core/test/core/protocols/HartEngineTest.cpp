@@ -1759,10 +1759,38 @@ int main() {
               "Commands 104/105 read the same canonical Burst definition");
 
         HartResponseBuilder vars(32), cmdWrite(8), control(8);
+        // Command 109's 2-byte request is {Burst Mode Control Code, Burst
+        // Message} per HCF_SPEC-151 7.77 -- {1, 0} means "On, message 0"
+        // (this used to be written {0, 1} under a swapped byte-order bug
+        // fixed this session; see the dedicated byte-order regression test
+        // further below).
         check(engine.execute("hart-100110", 1, 0x6B, std::array<uint8_t, 9>{246, 250, 250, 250, 250, 250, 250, 250, 0}, vars) &&
                   engine.execute("hart-100110", 1, 0x6C, std::array<uint8_t, 3>{0, 1, 0}, cmdWrite) &&
-                  engine.execute("hart-100110", 1, 0x6D, std::array<uint8_t, 2>{0, 1}, control),
+                  engine.execute("hart-100110", 1, 0x6D, std::array<uint8_t, 2>{1, 0}, control),
               "Commands 107-109 atomically configure variables, command and enable state");
+
+        // HCF_SPEC-151 7.75.1: a HART 5/6 Master's Command 107 request may
+        // have only 1-4 Device Variable slots instead of the full 9 bytes;
+        // the device must accept it (never Response Code 5), assume Burst
+        // Message 0, set every unspecified slot to 250 "Not Used", and the
+        // response must still be the full untruncated 9 bytes (footnote 76).
+        HartResponseBuilder legacyBurstVars(16);
+        check(engine.execute("hart-100110", 1, 0x6B, std::array<uint8_t, 1>{246}, legacyBurstVars) &&
+                  legacyBurstVars.size() == 9 && legacyBurstVars.bytes()[0] == 246 &&
+                  legacyBurstVars.bytes()[1] == 250 && legacyBurstVars.bytes()[7] == 250 && legacyBurstVars.bytes()[8] == 0,
+              "Command 107 accepts a truncated (1-4 byte) request per 7.75.1 and returns the full untruncated 9 bytes");
+
+        // HCF_SPEC-151 7.73.1: a HART 5/6 Master's Command 105 request has NO
+        // data bytes, and for that legacy form only, response byte 1 must be
+        // the LSByte of the burst command number (now 1, from Command 108
+        // above) INSTEAD OF the literal 31 Command Number Expansion Flag a
+        // modern (1-byte) request gets -- see the other Command 105 check
+        // above, which already covers the modern/byte1==31 case.
+        HartResponseBuilder legacyConfig(40);
+        check(engine.execute("hart-100110", 1, 0x69, {}, legacyConfig) && legacyConfig.size() == 29 &&
+                  legacyConfig.bytes()[0] == 1 && legacyConfig.bytes()[1] == 1,
+              "Command 105 legacy (0-byte) request returns the LSByte of the burst command at byte 1, not 31, "
+              "and byte 0 confirms Command 109's {control, message} byte order actually turned message 0 on");
         engine.setVirtualTimeSeconds(1);
         const auto burstEvents = engine.takeBurstEvents("cp-100-110");
         check(burstEvents.size() == 1 && burstEvents.front().command == 1 && burstEvents.front().payload.size() == 5,
@@ -1808,12 +1836,41 @@ int main() {
         check(engine.execute("hart-111119", 1, 0x6F, std::array<uint8_t, 5>{4, 4, 32, 0, 3}, transferClose) && !engine.execute("hart-111119", 1, 0x70, std::array<uint8_t, 6>{0, 0, 0, 3, 0, 0}, transferData),
               "Transfer close makes Command 112 reject further blocks");
 
-        const auto shed = HartTypeCodec::encodeFloat32BE(0.0f);
-        const std::array<uint8_t, 15> catchWrite{247, 1, 0, 0, 0, 0, 2, 0, shed[0], shed[1], shed[2], shed[3], 0, 0, 1};
+        // HCF_SPEC-151 7.81: {Destination DV, Capture Mode, Source Address(5),
+        // marker byte (31 on a modern write's own response), Source Slot,
+        // Shed Time float, Source Command(16-bit)}. Slot must stay 0 here
+        // (Table 9 only defines Slot 1 == PV for Command 1, and the
+        // downstream capture-matching logic below requires exactly that),
+        // but Shed Time (2.5, distinctly non-zero/non-degenerate) and the
+        // byte-7 marker check below still catch a byte-mapping regression --
+        // this session's audit found and fixed a bug where the marker/slot
+        // bytes were swapped and the shed float was read one byte early; the
+        // previous version of this test used shed=0.0 (all-zero bytes), which
+        // could not distinguish the correct offsets from the buggy ones.
+        const auto shed = HartTypeCodec::encodeFloat32BE(2.5f);
+        const std::array<uint8_t, 15> catchWrite{247, 1, 0, 0, 0, 0, 2, 0, 0, shed[0], shed[1], shed[2], shed[3], 0, 1};
         HartResponseBuilder catchResponse(32), caughtConfiguration(32);
         check(engine.execute("hart-111119", 1, 0x71, catchWrite, catchResponse) && catchResponse.size() == 15 &&
-                  engine.execute("hart-111119", 1, 0x72, std::array<uint8_t, 1>{247}, caughtConfiguration) && caughtConfiguration.size() == 15,
-              "Commands 113/114 share one canonical Catch configuration");
+                  catchResponse.bytes()[0] == 247 && catchResponse.bytes()[1] == 1 && catchResponse.bytes()[6] == 2 &&
+                  catchResponse.bytes()[7] == 31 && catchResponse.bytes()[8] == 0 &&
+                  std::equal(shed.begin(), shed.end(), catchResponse.bytes().begin() + 9) &&
+                  catchResponse.bytes()[13] == 0 && catchResponse.bytes()[14] == 1 &&
+                  engine.execute("hart-111119", 1, 0x72, std::array<uint8_t, 1>{247}, caughtConfiguration) &&
+                  std::equal(catchResponse.bytes().begin(), catchResponse.bytes().end(), caughtConfiguration.bytes().begin()),
+              "Commands 113/114 share one canonical Catch configuration with the correct HCF_SPEC-151 7.81 byte layout");
+
+        // HCF_SPEC-151 7.81.1: a HART 5/6 Master's Command 113 request has
+        // only 13 bytes (no bytes 13-14) and puts the 1-byte command number
+        // directly in byte 7 instead of the literal 31 marker; the response
+        // must carry that command number in BOTH byte 7 and bytes 13-14
+        // (re-applies the same dest/mode/address/slot/shed as the modern
+        // write above, so this does not disturb the capture wired by it).
+        const std::array<uint8_t, 13> catchWriteLegacy{247, 1, 0, 0, 0, 0, 2, 1, 0, shed[0], shed[1], shed[2], shed[3]};
+        HartResponseBuilder catchResponseLegacy(32);
+        check(engine.execute("hart-111119", 1, 0x71, catchWriteLegacy, catchResponseLegacy) &&
+                  catchResponseLegacy.size() == 15 && catchResponseLegacy.bytes()[7] == 1 &&
+                  catchResponseLegacy.bytes()[13] == 0 && catchResponseLegacy.bytes()[14] == 1,
+              "Command 113 legacy (13-byte) request returns the command number in both byte 7 and bytes 13-14");
         engine.setVirtualTimeSeconds(10);
         HartResponseBuilder sourceResponse(16);
         check(engine.execute("hart-111119", 2, 0x01, {}, sourceResponse) && engine.variableValue("cp-111-119", "caught").value_or(-1.0) == 12.5,
