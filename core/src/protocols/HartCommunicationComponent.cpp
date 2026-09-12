@@ -380,6 +380,9 @@ void HartCommunicationComponent::rebuildConfiguredPlan() {
             wireless.packetReceivePriority = static_cast<uint8_t>(std::clamp(w.value("packetReceivePriority", 0), 0, 255));
             wireless.networkAccessMode = static_cast<uint8_t>(std::clamp(w.value("networkAccessMode", 0), 0, 255));
             wireless.joinKeyMode = static_cast<uint8_t>(std::clamp(w.value("joinKeyMode", 0), 0, 255));
+            wireless.batteryLifeDays = static_cast<uint16_t>(std::clamp(w.value("batteryLifeDays", 65535), 0, 65535));
+            wireless.nickname = static_cast<uint16_t>(std::clamp(w.value("nickname", 0), 0, 65535));
+            wireless.securityLevelAdvertised = static_cast<uint8_t>(std::clamp(w.value("securityLevelAdvertised", 1), 0, 255));
             auto copyBytes = [](const nlohmann::json& value, auto& target) {
                 if (!value.is_array() || value.size() != target.size()) return;
                 for (size_t i = 0; i < target.size(); ++i) target[i] = static_cast<uint8_t>(std::clamp(value[i].get<int>(), 0, 255));
@@ -506,6 +509,8 @@ void HartCommunicationComponent::syncPersistedStateFromEngine() {
             {"packetTimeToLive", wireless.packetTimeToLive}, {"joinPriority", wireless.joinPriority},
             {"packetReceivePriority", wireless.packetReceivePriority}, {"networkAccessMode", wireless.networkAccessMode},
             {"joinKeyMode", wireless.joinKeyMode}, {"joinKey", wireless.joinKey}, {"networkTag", wireless.networkTag}
+            , {"batteryLifeDays", wireless.batteryLifeDays}, {"nickname", wireless.nickname},
+            {"securityLevelAdvertised", wireless.securityLevelAdvertised}
         };
         additional["assignmentCapacity"] = plan->assignmentCapacity;
         additional["assignments"] = nlohmann::json::array();

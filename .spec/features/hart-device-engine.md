@@ -3508,3 +3508,58 @@ inteiramente novo que apareceu no mesmo arquivo durante essa janela). Suite
 completa confirmada verde (`HART engine contracts: PASS`) após a
 reconciliação. Isto é o padrão de reconciliação já estabelecido no Anexo F
 (seção 6 do pedido do usuário) aplicado a uma colisão real, não hipotética.
+
+### F.15.7 -- Defeito real, silencioso, classe Command-54: Universal 48 (0x30) tinha DUAS implementações divergentes
+
+Ao caçar sistematicamente o padrão "duas representações do mesmo campo
+semântico" (item 5 do pedido do usuário) nos comandos com cláusula
+"Backward Compatibility Requirements" (alto valor: já produziu os defeitos
+de Command 38 e 51 nesta sessão), Universal Command 48 (Read Additional
+Device Status, HCF_SPEC-127 §6.24) revelou o MESMO padrão do bug histórico
+do Command 54, e não apenas uma lacuna de compatibilidade:
+
+- `HartEngine::execute()` tinha um handler nativo para `command == 0x30`
+  **mas só quando `request.empty()`** -- construía os 9 bytes reais a partir
+  de `plan.diagnosticStatus` e da simulação de status.
+- `HartReferenceCatalog::commandPrograms()` registrava um SEGUNDO programa
+  DSL para o mesmo id 0x30, cujo `resp` era um literal de 9 bytes zero,
+  incondicional -- nunca lia `plan.diagnosticStatus`.
+- Como o handler nativo só intercepta requests vazios, qualquer request NÃO
+  vazio (ou seja, a forma HART7 normal, com os bytes de comparação que a
+  §6.24 descreve, não apenas a forma legada) caía no `m_programHook` e
+  recebia o stub DSL -- sempre "tudo limpo", mesmo com uma condição de
+  diagnóstico real ativa. Um host fazendo polling corretamente (enviando os
+  bytes de comparação) NUNCA veria o status real; só um caller usando a
+  forma legada de 0 bytes via o motor de testes via essa via.
+- Todos os testes existentes (`HartEngineTest.cpp`, 3 ocorrências) só
+  chamavam Command 48 com `{}` (vazio) -- exatamente o único caminho que
+  usava o handler correto -- mascarando o defeito exatamente como o teste
+  do Command 54 mascarava seu próprio bug antes desta auditoria.
+
+Corrigido: o handler nativo em `HartEngine.cpp` deixou de exigir
+`request.empty()` (a especificação exige a mesma resposta
+"irrespective of the contents of the Request Data Bytes"); o stub DSL
+duplicado foi removido inteiramente de `HartReferenceCatalog.cpp`, deixando
+exatamente uma autoridade. Regression test adicionado: seta
+`diagnosticStatus = 0x80` via `setDiagnosticStatus`, chama Command 48 com um
+request de 9 bytes não vazio, confirma que o byte 0 da resposta é `0x80` (não
+zero) -- este teste teria falhado antes da correção. Build + suite completa
+confirmados verdes.
+
+Não modelado (gap disclosed, distinto do bug acima): o reset condicional do
+bit "More Status Available" por Master quando os bytes de comparação
+conferem exatamente (§6.24/6.24.1) -- este projeto não tem um bit de status
+por-Master ainda. Isso é uma lacuna de modelagem já conhecida (mesma classe
+do gap documentado do Command 6), não um bug silencioso.
+
+| Área/Comando | Spec | Verificado independentemente? | Defeito encontrado? | Corrigido? | Teste de regressão? | Status |
+|---|---|---|---|---|---|---|
+| Universal 48 (0x30), request vazio | HCF_SPEC-127 §6.24.1 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Universal 48 (0x30), request não vazio | HCF_SPEC-127 §6.24 | Sim | **Sim** -- stub DSL duplicado sempre retornava zero, ignorando o status real | Sim | Adicionado nesta sessão | DONE_SPEC_VERIFIED (conteúdo da resposta); reset do bit More-Status-Available por Master permanece NOT_IMPLEMENTED (disclosed) |
+| Universal 6 (0x06), forma completa (2 bytes) | HCF_SPEC-127 §6.7 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Universal 6 (0x06), forma legada (1 byte) | HCF_SPEC-127 §6.7.1 | Sim | Gap já divulgado no próprio código-fonte (comentário explícito), não um bug silencioso | Não corrigido nesta sessão (risco/benefício: é uma mutação de re-endereçamento ao vivo, já sinalizada como delicada pelo próprio comentário) | N/A | PARTIAL (disclosed) |
+| Command 72 (0x48) Squawk, forma legada (0 bytes) | HCF_SPEC-151 §7.40.1 | Sim | Não -- já implementado corretamente (`control = request.empty() ? 2 : request[0]`, 2 = Squawk Once confirmado em Common Table 66) | N/A | N/A (cobertura indireta) | DONE_SPEC_VERIFIED |
+| Command 71 (0x47) Lock Device | HCF_SPEC-151 §7.39 | Sim | Não | N/A | N/A (cobertura indireta) | DONE_SPEC_VERIFIED |
+| Command 73 (0x49) Find Device | HCF_SPEC-151 §7.41 | Sim | Não | N/A | N/A (cobertura indireta) | DONE_SPEC_VERIFIED |
+| Command 74 (0x4A) Read I/O System Capabilities | HCF_SPEC-151 §7.42 | Sim | Não | N/A | N/A (cobertura indireta) | DONE_SPEC_VERIFIED |
+| Command 77 (0x4D) Send Command to Sub-Device | HCF_SPEC-151 §7.45 | Sim (revisado estruturalmente; convenção de comando estendido 2-byte não modelada, consistente com o resto do projeto) | Não | N/A | N/A (cobertura indireta) | DONE_SPEC_VERIFIED |

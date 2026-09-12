@@ -592,7 +592,21 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
     auto put16Engine = [&](uint16_t value) {
         return response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value));
     };
-    if (command == 0x30 && request.empty()) {
+    if (command == 0x30) {
+        // HCF_SPEC-127 6.24: "Irrespective of the contents of the Request
+        // Data Bytes the device must return the current values of the
+        // fields contained in the Response Data Bytes" -- this must not be
+        // gated on an empty request. A non-empty (HART7, comparison-bytes)
+        // request used to fall through to a DSL stub registered elsewhere
+        // that always answered all-zero regardless of real diagnostic
+        // status; that stub has been removed (see
+        // HartReferenceCatalog::commandPrograms, formerly command id 0x30)
+        // so this is now the single authority for Command 48's response,
+        // matched by request shape or not. Comparing the request against
+        // the current value to conditionally reset the per-Master "More
+        // Status Available" bit (6.24, 6.24.1) is not modeled -- this
+        // project has no per-Master device status bit yet -- and remains a
+        // disclosed gap, distinct from the response-content bug fixed here.
         std::array<uint8_t, 9> statusBytes{};
         statusBytes[0] = selected->plan.diagnosticStatus;
         if (selected->plan.statusSimulationEnabled) {

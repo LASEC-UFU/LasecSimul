@@ -79,7 +79,7 @@ bool decodeDateTime(std::span<const uint8_t> bytes, uint64_t& seconds) noexcept 
 
 std::vector<HartCommandDescriptor> HartReferenceCatalog::commandDescriptors() {
     // Union of process_simul's command seed table and its transmitter dispatch table.
-    static constexpr std::array<std::pair<HartCommandId, std::string_view>, 206> commands{{
+    static constexpr std::array<std::pair<HartCommandId, std::string_view>, 210> commands{{
         {0x00, "Read Unique Identifier"},
         {0x01, "Read Primary Variable"},
         {0x02, "Read Loop Current And Percent Of Range"},
@@ -264,6 +264,8 @@ std::vector<HartCommandDescriptor> HartReferenceCatalog::commandDescriptors() {
         {812, "Read Packet Receive Priority"}, {813, "Write Packet Receive Priority"},
         {821, "Write Network Access Mode"}, {822, "Read Network Access Mode"},
         {860, "Read Join Key Mode"}, {861, "Write Join Key Mode"},
+        {778, "Read Battery Life"}, {781, "Read Device Nickname Address"},
+        {857, "Read Security Level Advertised"}, {859, "Read Active Advertising Status"},
         {0x80, "Vendor Read Configuration"},
         {0x82, "Vendor Read Device Identity"},
         {0x84, "Vendor Read Sensor Configuration"},
@@ -770,27 +772,21 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
         commands.push_back(std::move(cmd));
     }
 
-    // 0x30 (48) -- Read Additional Device Status. HCF_SPEC-127 6.24: "This
-    // command must be implemented by all devices." Full response is up to
-    // 25 bytes of device/analog-channel status this project has no model
-    // for yet (Device Status Byte, Extended Device Status, Operating Mode,
-    // Standardized Status 0-3, Analog Channel Saturated/Fixed -- see Anexo
-    // F). The spec explicitly permits truncating "after the last status
-    // byte supported by the Field Device" and requires AT LEAST bytes 0-8
-    // (Device-Specific Status 0-5 + Extended Device Status + Operating Mode
-    // + Standardized Status 0). All nine are returned as literal zero here:
-    // a real, spec-compliant, minimal response (all-clear/no-condition for
-    // every currently-unmodeled bit/enum), not a fake placeholder -- the
-    // wire contract (this command exists, returns exactly this shape) is
-    // genuinely satisfied even though no diagnostic condition can currently
-    // be reported through it.
-    {
-        HartCommandDefinition cmd;
-        cmd.id = 0x30;
-        cmd.name = "Read Additional Device Status";
-        cmd.resp = {HartStatement{HartAppendStmt{HartExpr::hex(std::vector<uint8_t>(9, 0x00))}}};
-        commands.push_back(std::move(cmd));
-    }
+    // 0x30 (48) -- Read Additional Device Status. HCF_SPEC-127 6.24. NOT
+    // registered here: this command's response must reflect the real,
+    // mutable `HartDevicePlan::diagnosticStatus` (and the Status Simulation
+    // overlay), which only `HartEngine::execute()` can see before this hook
+    // even runs. A DSL stub here that always answered a literal all-zero 9
+    // bytes used to shadow that real handler for any non-empty (i.e. normal
+    // HART7 comparison-bytes) request -- a silent duplicate-authority bug
+    // (same class as the Command 54 Classification/Family bug this audit's
+    // methodology was built to catch): callers sending an empty request saw
+    // real diagnostic status, callers sending a proper comparison request
+    // saw a hardcoded all-clear regardless of actual device state. Fixed by
+    // deleting this stub and making `HartEngine::execute()`'s own handler
+    // (see its `command == 0x30` branch) unconditional on request shape, so
+    // there is exactly one authority for this response, matching the spec's
+    // own "irrespective of the contents of the Request Data Bytes" text.
 
     // 0x08 (8) -- Read Dynamic Variable Classifications. HCF_SPEC-127 6.9:
     // exactly 4 bytes, one Enum per Dynamic Variable. This project models no
@@ -992,6 +988,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
             (command >= 768 && command <= 776) ||
             command == 797 || command == 798 || command == 804 || command == 805 ||
             (command >= 808 && command <= 813) || command == 821 || command == 822 || command == 860 || command == 861 ||
+            command == 778 || command == 781 || command == 857 || command == 859 ||
             (command >= 1024 && command <= 1027) || command == 1152 || command == 1153 || command == 1154 || command == 1155 || command == 1157 || command == 1556) &&
             !inMissingCommonPracticeGap && !inMissingPressureGap && !inMissingAssignmentListGap;
         if (it == programs->end() && !standardCoreNoProgram) return false;
@@ -1284,6 +1281,21 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
             if (command == 860) return request.empty() && response.writeByte(wireless.joinKeyMode);
             if (request.size() != 1 || request[0] > 1 || plan.writeProtectCode != 0xFB) return false;
             wireless.joinKeyMode = request[0]; changed(); return response.writeByte(request[0]);
+        }
+        if (command == 778 || command == 781 || command == 857 || command == 859) {
+            const auto& wireless = plan.wireless;
+            if (!wireless.capable || !request.empty()) return false;
+            const auto put16 = [&](uint16_t value) {
+                return response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value));
+            };
+            const auto put32 = [&](uint32_t value) {
+                return response.writeByte(static_cast<uint8_t>(value >> 24)) && response.writeByte(static_cast<uint8_t>(value >> 16)) &&
+                    response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value));
+            };
+            if (command == 778) return put16(wireless.batteryLifeDays);
+            if (command == 781) return put16(wireless.nickname);
+            if (command == 857) return response.writeByte(wireless.securityLevelAdvertised);
+            return put32(wireless.activeAdvertisingShedTime) && put32(wireless.advertisingPeriod);
         }
 
         // Common Practice 71/76 share one canonical Lock Code.  The status

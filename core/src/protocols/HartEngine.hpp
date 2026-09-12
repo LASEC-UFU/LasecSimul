@@ -532,6 +532,9 @@ struct HartDevicePlan {
         uint8_t packetReceivePriority = 0;
         uint8_t networkAccessMode = 0;
         uint8_t joinKeyMode = 0;
+        uint16_t batteryLifeDays = 0xFFFF;
+        uint16_t nickname = 0;
+        uint8_t securityLevelAdvertised = 1;
     } wireless;
 };
 

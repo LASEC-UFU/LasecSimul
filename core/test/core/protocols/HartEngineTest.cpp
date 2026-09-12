@@ -392,6 +392,21 @@ int main() {
                   std::all_of(cmd48Resp.bytes().begin(), cmd48Resp.bytes().end(), [](uint8_t b) { return b == 0x00; }),
               "0x30 read additional device status returns the mandatory minimum 9 bytes, all-clear");
 
+        // HCF_SPEC-127 6.24: "Irrespective of the contents of the Request
+        // Data Bytes the device must return the current values" -- a
+        // non-empty (real, HART7 comparison-bytes) request must see the SAME
+        // live diagnostic status as an empty (legacy) one, not a hardcoded
+        // all-clear. (A DSL stub used to shadow the real handler for any
+        // non-empty request; removed this session -- see HartEngine.cpp's
+        // `command == 0x30` branch and HartReferenceCatalog.cpp's comment
+        // at the former 0x30 registration site.)
+        check(referenceEngine.setDiagnosticStatus(referencePlans.front().id, 0x80), "Command 48 regression: diagnostic status can be set");
+        HartResponseBuilder cmd48Nonempty(32);
+        check(referenceEngine.execute("hart-1", 1, 0x30, std::array<uint8_t, 9>{}, cmd48Nonempty) &&
+                  cmd48Nonempty.size() == 9 && cmd48Nonempty.bytes()[0] == 0x80,
+              "0x30 with a non-empty (comparison-bytes) request reflects the real diagnostic status, not a hardcoded zero");
+        check(referenceEngine.setDiagnosticStatus(referencePlans.front().id, 0), "Command 48 regression: diagnostic status restored for later tests");
+
         // Universal Commands 6/7 (Write Polling Address / Read Loop
         // Configuration) -- the live-readdressing gate (section 12 of the
         // task). Device "FV100CA" starts at address 1 on bus "hart-1".
