@@ -836,7 +836,10 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
             }
             selected->plan.assignments = staged;
             selected->plan.assignmentCount = static_cast<uint8_t>(selected->plan.subDevices.size());
-            return response.writeByte(request[0]);
+            // HCF_SPEC-151 7.107: response is {Transfer Code (echo), Number
+            // of Sub-devices transferred (16-bit)} = 3 bytes -- the count
+            // was missing entirely (1-byte response instead of 3).
+            return response.writeByte(request[0]) && put16(static_cast<uint16_t>(selected->plan.assignmentCount));
         }
     }
 

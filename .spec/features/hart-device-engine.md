@@ -3684,3 +3684,51 @@ consistente com a arquitetura já confirmada em sessões anteriores.
 | Command 88 (0x58) Write I/O System Retry Count | HCF_SPEC-151 §7.56 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
 | Command 89 (0x59) Set Real-Time Clock | HCF_SPEC-151 §7.57 | Sim | Não (nota: rejeita bytes 8-9 não-zero, que a spec só marca "should be 0"; decisão defensável, não tratada como defeito) | N/A | Já existia | DONE_SPEC_VERIFIED |
 | Command 90 (0x5A) Read Real-Time Clock | HCF_SPEC-151 §7.58 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+
+### F.15.11 -- Commands 91-99, 110: zero defeitos; Command 531: quarto bug classe Command-54
+
+Verificados byte a byte contra `spec151r10.0` §7.59-7.67 e §7.78: Commands 91
+(Read Trend Config), 92 (Write Trend Config -- inclui o efeito colateral de
+limpar o ring buffer em `HartEngine.cpp` quando a config muda, corretamente
+implementado numa camada diferente do hook que grava a config), 93 (Read
+Trend, comando complexo de 75 bytes com 12 valores históricos -- confere
+byte a byte, incluindo a ordem newest-primeiro), 94/95 (estatísticas I/O
+System/dispositivo), 96/97 (Synchronous Action), 98/99 (Command Action), e
+110 (Read All Dynamic Variables, com truncamento correto no primeiro slot
+"250 Not Used"). Zero defeitos em todo este bloco.
+
+**Command 531 (Transfer Live List to Assignment List) -- 7.107, QUARTO bug
+classe Command-54.** A resposta real é `{Transfer Code (echo), Número de
+Sub-devices transferidos (16-bit)} = 3 bytes`, confirmado por extração sem
+`-layout`. O código só escrevia o byte de eco (`response.writeByte(request[0])`),
+omitindo inteiramente o campo de contagem -- resposta de 1 byte em vez de 3.
+O teste existente afirmava `transfer.size() == 1`, o mesmo padrão exato dos
+outros três bugs desta classe encontrados nesta sessão (Command 48, 81, e
+agora este). Corrigido: `put16(assignmentCount)` adicionado; teste corrigido
+para `size() == 3` com verificação do valor da contagem (2, os dois
+dispositivos filhos do fixture).
+
+Também confirmados byte a byte nesta sessão, sem defeitos: Command 528 (Read
+Sub-Device Assignment List Information, 5 bytes), Command 529 (Read
+Sub-Device Assignment, 45 bytes incluindo o caso especial índice-0 com
+card/channel = 251 "None"), Command 530 (Write Sub-Device Assignment, 44
+bytes de request e resposta, lógica completa de identidade
+tag/tipo-expandido/deviceId e inserção/substituição/exclusão) -- um cluster
+que sessões anteriores desta auditoria acreditavam (incorretamente, por
+inventário estático desatualizado) estar totalmente `NOT_IMPLEMENTED`; na
+verdade está implementado com grande fidelidade em `HartEngine.cpp`, exceto
+pelo bug pontual do Command 531 corrigido acima.
+
+| Área/Comando | Spec | Verificado independentemente? | Defeito encontrado? | Corrigido? | Teste de regressão? | Status |
+|---|---|---|---|---|---|---|
+| Command 91 (0x5B) Read Trend Configuration | HCF_SPEC-151 §7.59 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 92 (0x5C) Write Trend Configuration | HCF_SPEC-151 §7.60 | Sim | Não (efeito colateral de limpar ring buffer confirmado) | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 93 (0x5D) Read Trend | HCF_SPEC-151 §7.61 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 94 (0x5E)/95 (0x5F) Estatísticas | HCF_SPEC-151 §7.62-7.63 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 96 (0x60)/97 (0x61) Synchronous Action | HCF_SPEC-151 §7.64-7.65 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 98 (0x62)/99 (0x63) Command Action | HCF_SPEC-151 §7.66-7.67 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 110 (0x6E) Read All Dynamic Variables | HCF_SPEC-151 §7.78 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 528 Read Assignment List Information | HCF_SPEC-151 §7.104 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 529 Read Sub-Device Assignment | HCF_SPEC-151 §7.105 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 530 Write Sub-Device Assignment | HCF_SPEC-151 §7.106 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 531 Transfer Live List to Assignment List | HCF_SPEC-151 §7.107 | Sim | **Sim** -- campo de contagem ausente na resposta (1 byte em vez de 3) | Sim | Corrigido nesta sessão | DONE_SPEC_VERIFIED |

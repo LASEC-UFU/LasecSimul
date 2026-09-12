@@ -2027,7 +2027,13 @@ int main() {
               "Commands 526/527 overlay reported status without mutating underlying real status");
 
         HartResponseBuilder transfer(8), assignmentInfo(8), assignmentA(64), assignmentB(64);
-        check(engine.execute("hart-512531", 1, 531, std::array<uint8_t, 1>{0}, transfer) && transfer.size() == 1, "Command 531 atomically snapshots the live list");
+        // HCF_SPEC-151 7.107: response is {Transfer Code (echo), Number of
+        // Sub-devices transferred (16-bit)} = 3 bytes; the count field was
+        // missing entirely (response was 1 byte) before this session's fix.
+        // Two children (childA, childB) are registered in this fixture.
+        check(engine.execute("hart-512531", 1, 531, std::array<uint8_t, 1>{0}, transfer) && transfer.size() == 3 &&
+                  transfer.bytes()[0] == 0 && transfer.bytes()[1] == 0 && transfer.bytes()[2] == 2,
+              "Command 531 atomically snapshots the live list and reports the transferred count");
         check(engine.execute("hart-512531", 1, 528, {}, assignmentInfo) && assignmentInfo.size() == 5 && assignmentInfo.bytes()[1] == 3,
               "Command 528 reads assignment count and capacity");
         const bool assignmentAOk = engine.execute("hart-512531", 1, 529, std::array<uint8_t, 2>{0, 1}, assignmentA);
