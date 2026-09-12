@@ -3777,3 +3777,25 @@ corrigidos nesta sessão (Command 105, 107, 109, 113 -- ver F.15.8 -- mais
 Command 531 -- F.15.11), e uma inconsistência real na própria especificação
 documentada sem ação de código (F.15.12 acima). Todos os demais comandos
 deste intervalo: `DONE_SPEC_VERIFIED`, zero defeitos.
+
+### F.15.14 -- Pressure 1285/1290: DONE_SPEC_VERIFIED, zero defeitos (item pendente de sessões anteriores, agora fechado)
+
+Verificado byte a byte contra `spec160.05.pdf` §5.7 e §5.12, item que
+sessões anteriores desta auditoria haviam deixado como "status incerto,
+precisa reverificação":
+
+- Command 1285 (Read Associated Device Variables, MANDATORY): resposta
+  `{DVC echo(1), Associated Cell-Temperature DV(1), Associated Static
+  Pressure DV(1)} = 3 bytes`. Teste existente usa `{1, 250, 250}` (250 =
+  "None" para ambas as medições associadas, coerente com o fixture não ter
+  temperatura/pressão estática associadas) -- confere exatamente.
+- Command 1290 (Read Remote Seal Information): resposta `{DVC echo(1),
+  Número de Remote Seals(1), Seal1 Type/Diaphragm/FillFluid(3), Seal2
+  Type/Diaphragm/FillFluid(3)} = 8 bytes`. Teste existente usa
+  `{1, 2, 3, 4, 5, 6, 7, 8}`, valores não degenerados e distintos -- confere
+  exatamente byte a byte contra a especificação.
+
+Zero defeitos. Resolve definitivamente a incerteza registrada nas sessões
+anteriores sobre este item (a suspeita era infundada -- o teste já usava
+valores não degenerados o suficiente para expor um erro de layout, e nenhum
+foi encontrado).
