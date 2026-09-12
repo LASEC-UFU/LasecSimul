@@ -1,0 +1,9 @@
+<circuit version="1.0" rev="250000" width="800" height="600" >
+<item itemtype="Resistor" CircId="Resistor-1" Pos="100,100" rotation="0" hflip="1" vflip="1" Resistance="100" />
+<item itemtype="Resistor" CircId="Resistor-2" Pos="300,100" rotation="0" hflip="1" vflip="1" Resistance="200" />
+<item itemtype="Ground" CircId="Ground-3" Pos="200,240" rotation="0" hflip="1" vflip="1" />
+<item itemtype="Node" CircId="Node-4" Pos="200,104" />
+<item itemtype="Connector" uid="connector-1" startpinid="Resistor-1-rPin" endpinid="Node-4-0" pointList="132,104,200,104" />
+<item itemtype="Connector" uid="connector-2" startpinid="Node-4-1" endpinid="Resistor-2-lPin" pointList="200,104,268,104" />
+<item itemtype="Connector" uid="connector-3" startpinid="Node-4-2" endpinid="Ground-3-pin-1" pointList="200,104,200,240,208,240" />
+</circuit>

@@ -11,6 +11,8 @@ import { ProjectComponent, ProjectDocument, ProjectTopology, createEmptyProject 
 import { assertTopologyInvariants } from "../ui/webview/topologyDocument";
 import { decideSaveTarget } from "./savePolicy";
 import { resolveProjectSourcePaths } from "./projectPathPolicy";
+import { isSimulideCircuitPath } from "../import/simulide/SimulideImporter";
+import { openSimulideAsLsproj } from "../import/simulide/SimulideOpenWorkflow";
 
 export function absoluteSubcircuitRefPath(refPath: string): string {
   if (path.isAbsolute(refPath)) return path.normalize(refPath);
@@ -478,12 +480,41 @@ export async function openProjectCommand(options: {
 }): Promise<void> {
   if (!(await canReplaceCurrentProject())) return;
   const uris = await vscode.window.showOpenDialog({
-    filters: { "LasecSimul Project": ["lsproj"] },
+    filters: {
+      "LasecSimul / SimulIDE": ["lsproj", "sim1", "sim2"],
+      "LasecSimul Project": ["lsproj"],
+      "SimulIDE Circuit": ["sim1", "sim2"],
+    },
     canSelectMany: false,
   });
   const selected = uris?.[0];
   if (!selected) return;
-  await openProjectFile(selected.fsPath, options);
+  await openSupportedProjectFile(selected.fsPath, options);
+}
+
+/**
+ * Única porta de entrada de arquivos de projeto suportados. `.lsproj` segue pelo pipeline nativo;
+ * `.sim1`/`.sim2` é convertido para `.lsproj` no mesmo diretório e só então aberto pelo mesmo
+ * pipeline (usado tanto pelo diálogo "Abrir Projeto" acima quanto pelo clique direto no Explorer,
+ * ver `SimulideImportCustomEditorProvider`).
+ */
+export async function openSupportedProjectFile(filePath: string, options: {
+  extensionUri: vscode.Uri;
+  beforeOpen?: () => void;
+  resolveExternalDeviceReferences?: (projectDir: string) => Promise<void>;
+  openSchematicEditor: (extensionUri: vscode.Uri) => void;
+  syncSchematicPanel: () => void;
+}): Promise<void> {
+  const extension = path.extname(filePath).toLowerCase();
+  if (extension === ".lsproj") {
+    await openProjectFile(filePath, options);
+    return;
+  }
+  if (isSimulideCircuitPath(filePath)) {
+    await openSimulideAsLsproj(filePath, (convertedPath) => openProjectFile(convertedPath, options));
+    return;
+  }
+  vscode.window.showErrorMessage(`Formato de projeto não suportado: ${extension || filePath}`);
 }
 
 /** Abertura não-interativa pelo mesmo pipeline de produção. O harness E2E usa este ponto em vez

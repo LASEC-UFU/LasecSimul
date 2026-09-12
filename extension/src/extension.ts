@@ -103,6 +103,7 @@ import {
 import { initSimulationLog, logSimulation, noteSimulationStatusChange, showSimulationLogChannel } from "./diagnostics/simulationLog";
 import { importTdpsSmpCommand } from "./tdps/tdpsCommand";
 import { ProjectCustomEditorProvider } from "./ui/panels/ProjectCustomEditorProvider";
+import { SimulideImportCustomEditorProvider } from "./ui/panels/SimulideImportCustomEditorProvider";
 import { IecProjectEditorProvider } from "./plc/IecProjectEditorProvider";
 import { newIecProjectCommand } from "./plc/plcCommands";
 import { parseIecProject } from "./plc/iecProject";
@@ -2398,6 +2399,18 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
         syncSchematicPanel,
       }),
       { webviewOptions: { retainContextWhenHidden: false } }
+    )
+  );
+  context.subscriptions.push(
+    vscode.window.registerCustomEditorProvider(
+      "lasecsimul.simulideImportEditor",
+      new SimulideImportCustomEditorProvider({
+        extensionUri: context.extensionUri,
+        beforeOpen: closeAllMcuSerialMonitors,
+        resolveExternalDeviceReferences,
+        openSchematicEditor,
+        syncSchematicPanel,
+      })
     )
   );
   const lasecPlot = initializeLasecPlot(context);

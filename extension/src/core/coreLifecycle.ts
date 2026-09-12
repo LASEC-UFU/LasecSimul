@@ -18,6 +18,7 @@ import { RollingRateSampler } from "./rollingRateSampler";
 import { buildFpgaPins, FpgaPortSpec } from "../fpga/fpgaPins";
 import { resolveFpgaToolchainConfig } from "../fpga/fpgaToolchain";
 import { readPlcNativeModule } from "../plc/artifact";
+import { SIMULIDE_UNRESOLVED_TYPE_ID } from "../import/simulide/SimulideToLasecConverter";
 
 export { electricalEdgesForProject, diffElectricalEdges, voltageProbesForProject };
 
@@ -1091,6 +1092,11 @@ export function stopSimulation(): void {
 }
 
 export function shouldSyncComponentToCore(typeId: string): boolean {
+  // Placeholder do importador SimulIDE (ver `import/simulide/SimulideToLasecConverter.ts`): typeId
+  // deliberadamente sem implementação no Core. Sem este corte explícito, o teste genérico abaixo
+  // trataria "não está no catálogo" (`descriptor` undefined) como `pinCount ?? 2 > 0` == true, e
+  // toda importação best-effort geraria um toast de erro do Core por componente não suportado.
+  if (typeId === SIMULIDE_UNRESOLVED_TYPE_ID) return false;
   // `digital.generic_fpga` tem `pinCount: 0` FIXO no catálogo de propósito (o pinset real só é
   // conhecido por instância, depois de "Analyze VHDL" -- ver fpga/fpgaPins.ts/component-catalog.json)
   // -- sem este caso especial, o teste genérico abaixo (`pinCount > 0`) nunca deixaria NENHUMA
@@ -1274,6 +1280,26 @@ export function pinsForProjectComponent(component: {
   }
   if (component.typeId === "plc.instance") {
     return (component.plc?.exportedIo ?? []).map((io, index) => ({ id: io.ioId, x: 0, y: index * 12 }));
+  }
+  // Placeholder do importador SimulIDE: não existe no catálogo, então o fallback genérico abaixo
+  // sintetizaria sempre "pin-1"/"pin-2" (2 pinos fixos), descartando qualquer fio para um
+  // componente original com mais (ou outros nomes) de pino. `__ui_simulidePinIds` é gravado pelo
+  // conversor com os IDs LOCAIS de pino realmente referenciados pelos fios preservados.
+  if (component.typeId === SIMULIDE_UNRESOLVED_TYPE_ID) {
+    const raw = component.properties?.__ui_simulidePinIds;
+    if (typeof raw === "string") {
+      try {
+        const ids: unknown = JSON.parse(raw);
+        if (Array.isArray(ids)) {
+          return ids
+            .filter((id): id is string => typeof id === "string" && id.length > 0)
+            .map((id, index) => ({ id, x: 0, y: index * 12 }));
+        }
+      } catch {
+        // Propriedade corrompida/editada manualmente -- cai no fallback genérico abaixo.
+      }
+    }
+    return [];
   }
   // HART (`protocol.hart.serial`/`protocol.hart.udp`) tem seus pinos de canvas derivados de
   // `hartVariablesJson` diretamente dentro de `pinsForTypeId` (mesma assinatura `(typeId,

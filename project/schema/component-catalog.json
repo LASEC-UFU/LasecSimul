@@ -6534,7 +6534,8 @@
         "height": 40,
         "stroke": "#94a3b8",
         "fill": "none",
-        "strokeWidth": 1
+        "strokeWidth": 1,
+        "strokeStyle": "solid"
       },
       "category": "Graphical",
       "help": {
@@ -6554,7 +6555,9 @@
         "width": 40,
         "height": 40,
         "stroke": "#94a3b8",
-        "fill": "none"
+        "fill": "none",
+        "strokeWidth": 1,
+        "strokeStyle": "solid"
       },
       "category": "Graphical",
       "help": {
@@ -6572,7 +6575,8 @@
       ],
       "defaultProperties": {
         "length": 40,
-        "stroke": "#94a3b8"
+        "stroke": "#94a3b8",
+        "strokeStyle": "solid"
       },
       "category": "Graphical",
       "help": {

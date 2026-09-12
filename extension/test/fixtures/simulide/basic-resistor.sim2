@@ -1,0 +1,5 @@
+<circuit version="1.0" rev="250000" stepSize="1000" stepsPS="1000000" NLsteps="50" width="800" height="600" >
+<item itemtype="Resistor" CircId="Resistor-1" Show_id="1" Show_Val="1" Pos="100,100" rotation="0" hflip="1" vflip="1" label="R1" ShowProp="Resistance" Resistance="1 kΩ" />
+<item itemtype="Ground" CircId="Ground-2" Show_id="0" Show_Val="0" Pos="240,100" rotation="0" hflip="1" vflip="1" label="GND" />
+<item itemtype="Connector" uid="connector-1" startpinid="Resistor-1-rPin" endpinid="Ground-2-pin-1" pointList="132,104,184,104,184,100,248,100" />
+</circuit>

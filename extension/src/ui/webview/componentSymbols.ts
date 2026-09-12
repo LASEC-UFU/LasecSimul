@@ -2061,6 +2061,17 @@ function logicAnalyzerPanelSvg(properties?: Record<string, unknown>): string {
   );
 }
 
+/** `strokeStyle` de `graphics.rectangle`/`ellipse`/`line` ("solid" | "dashed" | "dotted", default
+ * "solid" -- ver `SimulidePropertyMapper.ts` pra origem/conversão do valor importado do SimulIDE).
+ * O padrão é escalado por `strokeWidth` (mesma convenção do SVG/CSS: traços proporcionais à
+ * espessura da linha ficam visualmente consistentes em qualquer zoom). */
+function strokeDashArrayAttr(strokeStyle: unknown, strokeWidth: number): string {
+  const width = Number.isFinite(strokeWidth) && strokeWidth > 0 ? strokeWidth : 1;
+  if (strokeStyle === "dashed") return ` stroke-dasharray="${width * 3},${width * 2}"`;
+  if (strokeStyle === "dotted") return ` stroke-dasharray="${width},${width * 1.5}" stroke-linecap="round"`;
+  return "";
+}
+
 /** Corpo do símbolo (SVG inline, em coordenadas locais da caixa do tipo) para um `typeId` conhecido.
  * Tipos sem símbolo dedicado caem num retângulo genérico com leads — nunca undefined/branco.
  * `properties` (opcional) é a instância real -- só os typeIds "de autoria de símbolo" (Épico G) leem
@@ -2139,13 +2150,14 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
       const stroke = typeof properties?.stroke === "string" ? properties.stroke : "currentColor";
       const fill = typeof properties?.fill === "string" ? properties.fill : "none";
       const strokeWidth = typeof properties?.strokeWidth === "number" ? properties.strokeWidth : 1;
-      return `<rect x="0.5" y="0.5" width="${Math.max(0, box.width - 1)}" height="${Math.max(0, box.height - 1)}" stroke="${stroke}" fill="${fill}" stroke-width="${strokeWidth}"/>`;
+      return `<rect x="0.5" y="0.5" width="${Math.max(0, box.width - 1)}" height="${Math.max(0, box.height - 1)}" stroke="${stroke}" fill="${fill}" stroke-width="${strokeWidth}"${strokeDashArrayAttr(properties?.strokeStyle, strokeWidth)}/>`;
     }
 
     case "graphics.ellipse": {
       const stroke = typeof properties?.stroke === "string" ? properties.stroke : "currentColor";
       const fill = typeof properties?.fill === "string" ? properties.fill : "none";
-      return `<ellipse cx="${midX}" cy="${yMid}" rx="${box.width / 2 - 0.5}" ry="${box.height / 2 - 0.5}" stroke="${stroke}" fill="${fill}"/>`;
+      const strokeWidth = typeof properties?.strokeWidth === "number" ? properties.strokeWidth : 1;
+      return `<ellipse cx="${midX}" cy="${yMid}" rx="${box.width / 2 - 0.5}" ry="${box.height / 2 - 0.5}" stroke="${stroke}" fill="${fill}" stroke-width="${strokeWidth}"${strokeDashArrayAttr(properties?.strokeStyle, strokeWidth)}/>`;
     }
 
     case "graphics.line": {
@@ -2155,7 +2167,7 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
       // volta pra `PackageShape.x1/y1/x2/y2` em `extension.ts::compileSymbolAuthoringComponents`.
       const length = typeof properties?.length === "number" ? properties.length : 40;
       const stroke = typeof properties?.stroke === "string" ? properties.stroke : "currentColor";
-      return `<line x1="${midX - length / 2}" y1="${yMid}" x2="${midX + length / 2}" y2="${yMid}" stroke="${stroke}" stroke-width="2"/>`;
+      return `<line x1="${midX - length / 2}" y1="${yMid}" x2="${midX + length / 2}" y2="${yMid}" stroke="${stroke}" stroke-width="2"${strokeDashArrayAttr(properties?.strokeStyle, 2)}/>`;
     }
 
     case "other.package": {

@@ -1,0 +1,7 @@
+<circuit version="1.0" rev="1">
+<item itemtype="Rectangle" CircId="Rectangle-1" Pos="100,100" H_size="320" V_size="180" Border="3" Color="#ddeeff" Opacity="0.55" Z_Value="-5" />
+<item itemtype="Ellipse" CircId="Ellipse-2" Pos="180,140" H_size="90" V_size="60" Border="2" Color="#ffcc88" Opacity="0.75" Z_Value="-4" />
+<item itemtype="Line" CircId="Line-3" Pos="160,80" H_size="120" V_size="50" Border="4" Color="#cc0066" Opacity="0.8" Z_Value="-3" />
+<item itemtype="TextComponent" CircId="Text-4" Pos="110,110" Margin="8" Border="2" Color="#fff1aa" Opacity="0.85" Font="Arial" Font_Color="#003399" Font_Size="16" Fixed_Width="1" Text="LASEC&#xa;SimulIDE -> LasecSimul" />
+<item itemtype="Image" CircId="Image-5" Pos="300,110" H_size="64" V_size="64" Border="2" Image_File="logo.png" BckGndData="89504e470d0a1a0a" />
+</circuit>
