@@ -506,6 +506,33 @@ struct HartDevicePlan {
     uint16_t deviceStxReceived = 0;
     uint16_t deviceAckSent = 0;
     uint16_t deviceBackSent = 0;
+    struct WirelessConfiguration {
+        bool capable = false;
+        std::array<uint8_t, 16> joinKey{};
+        uint16_t networkId = 0;
+        uint16_t pendingNetworkId = 0;
+        std::array<uint8_t, 32> networkTag{};
+        uint8_t joinMode = 0;
+        uint32_t activeSearchShedTime = 0;
+        uint8_t maxJoinRetries = 5;
+        uint8_t wirelessMode = 0;
+        uint16_t joinStatus = 0;
+        uint8_t availableNeighbors = 0;
+        uint8_t advertisingPacketsReceived = 0;
+        uint8_t joinAttempts = 0;
+        uint32_t joinRetryTimer = 0;
+        uint32_t networkSearchTimer = 0;
+        uint32_t activeAdvertisingShedTime = 0;
+        uint32_t advertisingPeriod = 0;
+        uint8_t advertisingNeighbors = 0;
+        uint8_t radioTransmitPower = 0;
+        uint8_t ccaMode = 0;
+        uint32_t packetTimeToLive = 0;
+        uint8_t joinPriority = 0;
+        uint8_t packetReceivePriority = 0;
+        uint8_t networkAccessMode = 0;
+        uint8_t joinKeyMode = 0;
+    } wireless;
 };
 
 struct HartProtocolPlan {

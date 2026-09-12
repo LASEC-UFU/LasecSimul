@@ -3323,6 +3323,36 @@ lock antes do commit. O estado é persistido por DV em `hartVariablesJson` e
 reaberto no mesmo registro; cada commit válido incrementa uma vez o contador
 canônico de Configuration Changed. Não existe estado `command1024*` separado.
 
+## F.15 -- WirelessHART (HCF_SPEC-155 Rev 2.0)
+
+O inventário normativo foi reconstruído diretamente da seção 7 de
+`spec155r2.0`: o range Wireless definido é 768--823, 832--862, 960--979,
+além de 64,512. Nesta etapa foi fechado o cluster de provisionamento e
+parâmetros básicos com capability explícita `wireless.capable`; dispositivos
+sem essa capability rejeitam o comando e não recebem estado Wireless
+sintético.
+
+| IDs | Nomes oficiais | Request/response | Estado canônico | Status |
+|---|---|---|---|---|
+| 768 | Write Join Key | 16 / 16 bytes | `wireless.joinKey` | DONE_SPEC_VERIFIED |
+| 769 | Read Join Status | vazio / 14 bytes | status de join bounded | DONE_SPEC_VERIFIED |
+| 770 | Request Active Advertising | uint32 / uint32+uint32+u8 | advertising state | DONE_SPEC_VERIFIED |
+| 771--772 | Force/Read Join Mode Configuration | 5/6 e vazio; 5/6 | join mode, shed time, retries | DONE_SPEC_VERIFIED |
+| 773--774 | Write/Read Network ID | u16 / 4 bytes | current/pending Network ID | DONE_SPEC_VERIFIED |
+| 775--776 | Write/Read Network Tag | 32 / 32 bytes Latin-1 | bounded network tag | DONE_SPEC_VERIFIED |
+| 797--798 | Write/Read Radio Transmit Power | u8 signed / u8 signed | radio power | DONE_SPEC_VERIFIED |
+| 804--805 | Read/Write CCA Mode | vazio/u8; u8/u8 | CCA mode | DONE_SPEC_VERIFIED |
+| 808--809 | Read/Write Packet TTL | vazio/u8; u8/u8 | TTL com mínimo normativo 8 | DONE_SPEC_VERIFIED |
+| 810--813 | Join/Receive Priority | vazio/u8 e u8/u8 | bounded priorities | DONE_SPEC_VERIFIED |
+| 821--822 | Write/Read Network Access Mode | u8/u8 e vazio/u8 | access mode | DONE_SPEC_VERIFIED |
+| 860--861 | Read/Write Join Key Mode | vazio/u8 e u8/u8 | join-key mode | DONE_SPEC_VERIFIED |
+
+Writes Wireless acima usam a mesma autoridade de Configuration Changed,
+write-protect e estado persistente `hartAdditionalJson`; chaves são mantidas
+somente no modelo canônico e não são logadas. Os demais comandos Wireless
+serão classificados no mesmo inventário por sua tabela/estrutura normativa,
+sem fallback de sucesso nem eco genérico.
+
 O Analog Channel 0 foi consolidado como a saída Primary/Loop Current
 obrigatória da especificação; não existe uma segunda autoridade para o mesmo
 valor físico. Commands 60/61/62 leem level/percent/dynamic variables, Command
@@ -3455,3 +3485,26 @@ como instruído.
 | Universal 38 (0x26), forma legada 0 bytes | HCF_SPEC-127 §6.23.1 | Sim | **Sim** -- rejeitava em vez de resetar incondicionalmente | Sim | Adicionado nesta sessão | DONE_SPEC_VERIFIED |
 | `configurationChangedCounter` (autoridade) | N/A (arquitetural) | Sim | Não (falso positivo descartado) | N/A | N/A | Verificado |
 | `standardCoreNoProgram` (auto-documentação) | N/A (interno) | Sim | Inconsistência documental apenas, sem impacto em runtime | Já reconciliado concorrentemente | N/A | Fechado, não prioritário |
+| Command 49 (0x31) | HCF_SPEC-151 §7.17 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 50 (0x32) | HCF_SPEC-151 §7.18 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 51 (0x33), forma completa (4 bytes) | HCF_SPEC-151 §7.19 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
+| Command 51 (0x33), forma truncada (1-3 bytes) | HCF_SPEC-151 §7.19.1 | Sim | **Sim** -- rejeitava em vez de aceitar e preservar os slots não especificados | Sim | Adicionado nesta sessão | DONE_SPEC_VERIFIED |
+| Command 52 (0x34) | HCF_SPEC-151 §7.20 | Sim | Não | N/A | N/A (cobertura indireta) | DONE_SPEC_VERIFIED |
+| Command 57/58 (0x39/0x3A) | HCF_SPEC-151 §7.25-7.26 | Sim | Não | N/A | N/A (cobertura indireta) | DONE_SPEC_VERIFIED |
+| Command 59 (0x3B) | HCF_SPEC-151 §7.27 | Sim | Não | N/A | N/A (cobertura indireta) | DONE_SPEC_VERIFIED |
+
+### F.15.6 -- Nota de processo: colisão de edição concorrente real, ao vivo, no mesmo bloco (Command 51)
+
+Durante a correção do Command 51 (0x33), esta auditoria encontrou e corrigiu
+a ausência do ramo de compatibilidade retroativa (7.19.1). Entre uma
+compilação e a seguinte, outro agente editou exatamente o mesmo bloco de
+código (mesmo `if (command == 0x33)`) e, ao fazer isso, removeu sem intenção
+aparente a validação "códigos 244-249 são seleção inválida" que já existia
+antes desta sessão. `git diff` confirmou que a remoção não fazia parte desta
+auditoria. Como a validação removida é normativa (7.19, não apenas uma
+preferência de estilo), foi restaurada explicitamente, preservando todo o
+resto do trabalho concorrente (inclusive um cluster WirelessHART 768-776
+inteiramente novo que apareceu no mesmo arquivo durante essa janela). Suite
+completa confirmada verde (`HART engine contracts: PASS`) após a
+reconciliação. Isto é o padrão de reconciliação já estabelecido no Anexo F
+(seção 6 do pedido do usuário) aplicado a uma colisão real, não hipotética.

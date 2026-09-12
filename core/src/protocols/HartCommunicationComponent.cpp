@@ -287,6 +287,28 @@ void HartCommunicationComponent::rebuildConfiguredPlan() {
                 if (p.contains("remoteSeal") && p["remoteSeal"].is_array() && p["remoteSeal"].size() == pressure.remoteSeal.size())
                     for (size_t i = 0; i < pressure.remoteSeal.size(); ++i) pressure.remoteSeal[i] = p["remoteSeal"][i].get<uint8_t>();
             }
+            if (item.contains("temperature") && item["temperature"].is_object()) {
+                const auto& t = item["temperature"];
+                auto& temperature = variable.temperature;
+                temperature.familyStatus = static_cast<uint8_t>(std::clamp(t.value("familyStatus", 0), 0, 255));
+                temperature.familyStatus0 = static_cast<uint8_t>(std::clamp(t.value("familyStatus0", 0), 0, 255));
+                temperature.probeType = static_cast<uint8_t>(std::clamp(t.value("probeType", 0), 0, 255));
+                temperature.numberOfWires = static_cast<uint8_t>(std::clamp(t.value("numberOfWires", 0), 0, 255));
+                temperature.temperatureStandard = static_cast<uint8_t>(std::clamp(t.value("temperatureStandard", 0), 0, 255));
+                temperature.probeConnection = static_cast<uint8_t>(std::clamp(t.value("probeConnection", 0), 0, 255));
+                temperature.coldJunctionCompensationType = static_cast<uint8_t>(std::clamp(t.value("coldJunctionCompensationType", 0), 0, 255));
+                temperature.manualColdJunctionUnit = static_cast<uint8_t>(std::clamp(t.value("manualColdJunctionUnit", 250), 0, 255));
+                temperature.manualColdJunctionTemperature = t.value("manualColdJunctionTemperature", 0.0f);
+                temperature.cvdA = t.value("cvdA", 0.0f);
+                temperature.cvdB = t.value("cvdB", 0.0f);
+                temperature.cvdC = t.value("cvdC", 0.0f);
+                temperature.cvdR0 = t.value("cvdR0", 0.0f);
+                temperature.supportsThermocouple = t.value("supportsThermocouple", false);
+                temperature.supportsCalibratedRtd = t.value("supportsCalibratedRtd", false);
+                temperature.supportsWriteTemperatureStandard = t.value("supportsWriteTemperatureStandard", false);
+                temperature.supportsWriteProbeConnection = t.value("supportsWriteProbeConnection", false);
+                temperature.supportsWriteColdJunction = t.value("supportsWriteColdJunction", false);
+            }
             // Legacy flags are accepted only as migration input.  Ownership
             // and access are derived from direction/profile/command semantics;
             // they are never copied into the canonical model.
@@ -342,6 +364,29 @@ void HartCommunicationComponent::rebuildConfiguredPlan() {
         copyFixed(additional.value("locationDescription", std::string{}), device.locationDescription);
         copyFixed(additional.value("processUnitTag", std::string{}), device.processUnitTag);
         device.condensedStatusSupported = additional.value("condensedStatusSupported", false);
+        if (additional.contains("wireless") && additional["wireless"].is_object()) {
+            const auto& w = additional["wireless"];
+            auto& wireless = device.wireless;
+            wireless.capable = w.value("capable", false);
+            wireless.networkId = static_cast<uint16_t>(std::clamp(w.value("networkId", 0), 0, 65535));
+            wireless.pendingNetworkId = static_cast<uint16_t>(std::clamp(w.value("pendingNetworkId", static_cast<int>(wireless.networkId)), 0, 65535));
+            wireless.joinMode = static_cast<uint8_t>(std::clamp(w.value("joinMode", 0), 0, 255));
+            wireless.activeSearchShedTime = w.value("activeSearchShedTime", 0u);
+            wireless.maxJoinRetries = static_cast<uint8_t>(std::clamp(w.value("maxJoinRetries", 5), 0, 255));
+            wireless.radioTransmitPower = static_cast<uint8_t>(std::clamp(w.value("radioTransmitPower", 0), 0, 255));
+            wireless.ccaMode = static_cast<uint8_t>(std::clamp(w.value("ccaMode", 0), 0, 255));
+            wireless.packetTimeToLive = w.value("packetTimeToLive", 0u);
+            wireless.joinPriority = static_cast<uint8_t>(std::clamp(w.value("joinPriority", 0), 0, 255));
+            wireless.packetReceivePriority = static_cast<uint8_t>(std::clamp(w.value("packetReceivePriority", 0), 0, 255));
+            wireless.networkAccessMode = static_cast<uint8_t>(std::clamp(w.value("networkAccessMode", 0), 0, 255));
+            wireless.joinKeyMode = static_cast<uint8_t>(std::clamp(w.value("joinKeyMode", 0), 0, 255));
+            auto copyBytes = [](const nlohmann::json& value, auto& target) {
+                if (!value.is_array() || value.size() != target.size()) return;
+                for (size_t i = 0; i < target.size(); ++i) target[i] = static_cast<uint8_t>(std::clamp(value[i].get<int>(), 0, 255));
+            };
+            copyBytes(w.value("joinKey", nlohmann::json::array()), wireless.joinKey);
+            copyBytes(w.value("networkTag", nlohmann::json::array()), wireless.networkTag);
+        }
         if (additional.contains("condensedStatusMapping") && additional["condensedStatusMapping"].is_array()) {
             if (additional["condensedStatusMapping"].size() != device.condensedStatusMapping.size()) { m_hartVariablesStatus = "ERROR: invalid Condensed Status mapping length"; return; }
             for (size_t i = 0; i < device.condensedStatusMapping.size(); ++i) device.condensedStatusMapping[i] = additional["condensedStatusMapping"][i].get<uint8_t>();
@@ -452,6 +497,16 @@ void HartCommunicationComponent::syncPersistedStateFromEngine() {
         additional["processUnitTag"] = std::string(reinterpret_cast<const char*>(plan->processUnitTag.data()), plan->processUnitTag.size());
         additional["condensedStatusSupported"] = plan->condensedStatusSupported;
         additional["condensedStatusMapping"] = plan->condensedStatusMapping;
+        const auto& wireless = plan->wireless;
+        additional["wireless"] = {
+            {"capable", wireless.capable}, {"networkId", wireless.networkId},
+            {"pendingNetworkId", wireless.pendingNetworkId}, {"joinMode", wireless.joinMode},
+            {"activeSearchShedTime", wireless.activeSearchShedTime}, {"maxJoinRetries", wireless.maxJoinRetries},
+            {"radioTransmitPower", wireless.radioTransmitPower}, {"ccaMode", wireless.ccaMode},
+            {"packetTimeToLive", wireless.packetTimeToLive}, {"joinPriority", wireless.joinPriority},
+            {"packetReceivePriority", wireless.packetReceivePriority}, {"networkAccessMode", wireless.networkAccessMode},
+            {"joinKeyMode", wireless.joinKeyMode}, {"joinKey", wireless.joinKey}, {"networkTag", wireless.networkTag}
+        };
         additional["assignmentCapacity"] = plan->assignmentCapacity;
         additional["assignments"] = nlohmann::json::array();
         for (size_t i = 0; i < plan->assignmentCount && i < plan->assignments.size(); ++i) {
@@ -508,6 +563,22 @@ void HartCommunicationComponent::syncPersistedStateFromEngine() {
                     {"supportsStaticPressureObservation", pressure.supportsStaticPressureObservation}, {"supportsRemoteSeal", pressure.supportsRemoteSeal},
                     {"supportsWriteProcessConnection", pressure.supportsWriteProcessConnection},
                     {"supportsWriteOptionalGasket", pressure.supportsWriteOptionalGasket}, {"supportsWriteRemoteSeal", pressure.supportsWriteRemoteSeal}
+                };
+                const auto& temperature = it->temperature;
+                item["temperature"] = {
+                    {"familyStatus", temperature.familyStatus}, {"familyStatus0", temperature.familyStatus0},
+                    {"probeType", temperature.probeType}, {"numberOfWires", temperature.numberOfWires},
+                    {"temperatureStandard", temperature.temperatureStandard}, {"probeConnection", temperature.probeConnection},
+                    {"coldJunctionCompensationType", temperature.coldJunctionCompensationType},
+                    {"manualColdJunctionUnit", temperature.manualColdJunctionUnit},
+                    {"manualColdJunctionTemperature", temperature.manualColdJunctionTemperature},
+                    {"cvdA", temperature.cvdA}, {"cvdB", temperature.cvdB},
+                    {"cvdC", temperature.cvdC}, {"cvdR0", temperature.cvdR0},
+                    {"supportsThermocouple", temperature.supportsThermocouple},
+                    {"supportsCalibratedRtd", temperature.supportsCalibratedRtd},
+                    {"supportsWriteTemperatureStandard", temperature.supportsWriteTemperatureStandard},
+                    {"supportsWriteProbeConnection", temperature.supportsWriteProbeConnection},
+                    {"supportsWriteColdJunction", temperature.supportsWriteColdJunction}
                 };
                 if (std::isfinite(it->lowerTrimPoint)) item["lowerTrimPoint"] = it->lowerTrimPoint;
                 if (std::isfinite(it->upperTrimPoint)) item["upperTrimPoint"] = it->upperTrimPoint;

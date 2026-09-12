@@ -79,7 +79,7 @@ bool decodeDateTime(std::span<const uint8_t> bytes, uint64_t& seconds) noexcept 
 
 std::vector<HartCommandDescriptor> HartReferenceCatalog::commandDescriptors() {
     // Union of process_simul's command seed table and its transmitter dispatch table.
-    static constexpr std::array<std::pair<HartCommandId, std::string_view>, 183> commands{{
+    static constexpr std::array<std::pair<HartCommandId, std::string_view>, 206> commands{{
         {0x00, "Read Unique Identifier"},
         {0x01, "Read Primary Variable"},
         {0x02, "Read Loop Current And Percent Of Range"},
@@ -254,6 +254,16 @@ std::vector<HartCommandDescriptor> HartReferenceCatalog::commandDescriptors() {
         {1155, "Select Cold Junction Compensation Type"},
         {1556, "Write Manual Cold Junction Temperature"},
         {1157, "Write Temperature Callendar-Van Dusen Coefficients"},
+        {768, "Write Join Key"}, {769, "Read Join Status"}, {770, "Request Active Advertising"},
+        {771, "Force Join Mode"}, {772, "Read Join Mode Configuration"}, {773, "Write Network ID"},
+        {774, "Read Network ID"}, {775, "Write Network Tag"}, {776, "Read Network Tag"},
+        {797, "Write Radio Transmit Power"}, {798, "Read Radio Transmit Power"},
+        {804, "Read CCA Mode"}, {805, "Write CCA Mode"},
+        {808, "Read Packet Time-to-Live"}, {809, "Write Packet Time-to-Live"},
+        {810, "Read Join Priority"}, {811, "Write Join Priority"},
+        {812, "Read Packet Receive Priority"}, {813, "Write Packet Receive Priority"},
+        {821, "Write Network Access Mode"}, {822, "Read Network Access Mode"},
+        {860, "Read Join Key Mode"}, {861, "Write Join Key Mode"},
         {0x80, "Vendor Read Configuration"},
         {0x82, "Vendor Read Device Identity"},
         {0x84, "Vendor Read Sensor Configuration"},
@@ -979,6 +989,9 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
             command == 0x3A || command == 0x3B || (command >= 0x3C && command <= 0x46) ||
             (command >= 0x47 && command <= 0x77) || (command >= 512 && command <= 531) ||
             (command >= 1280 && command <= 1290) || (command >= 1408 && command <= 1410) ||
+            (command >= 768 && command <= 776) ||
+            command == 797 || command == 798 || command == 804 || command == 805 ||
+            (command >= 808 && command <= 813) || command == 821 || command == 822 || command == 860 || command == 861 ||
             (command >= 1024 && command <= 1027) || command == 1152 || command == 1153 || command == 1154 || command == 1155 || command == 1157 || command == 1556) &&
             !inMissingCommonPracticeGap && !inMissingPressureGap && !inMissingAssignmentListGap;
         if (it == programs->end() && !standardCoreNoProgram) return false;
@@ -1158,6 +1171,119 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
             ++plan.configurationChangedCounter;
             plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
             return response.writeBytes(request);
+        }
+
+        // WirelessHART provisioning cluster, HCF_SPEC-155 Rev 2.0 §§7.1-7.9.
+        // The capability gate is deliberately device-level: a wired device
+        // must not acquire synthetic network state merely because it receives
+        // a standardized Wireless command.
+        if (command >= 768 && command <= 776) {
+            auto& wireless = plan.wireless;
+            if (!wireless.capable) return false;
+            const auto writeU32 = [&](uint32_t value) {
+                return response.writeByte(static_cast<uint8_t>(value >> 24)) && response.writeByte(static_cast<uint8_t>(value >> 16)) &&
+                    response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value));
+            };
+            const auto readU32 = [](std::span<const uint8_t> bytes, size_t offset) {
+                return (static_cast<uint32_t>(bytes[offset]) << 24) | (static_cast<uint32_t>(bytes[offset + 1]) << 16) |
+                    (static_cast<uint32_t>(bytes[offset + 2]) << 8) | static_cast<uint32_t>(bytes[offset + 3]);
+            };
+            if (command == 768) {
+                if (request.size() != wireless.joinKey.size() || plan.writeProtectCode != 0xFB) return false;
+                std::copy(request.begin(), request.end(), wireless.joinKey.begin());
+                ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
+                return response.writeBytes(request);
+            }
+            if (command == 769) {
+                if (!request.empty()) return false;
+                return response.writeByte(wireless.wirelessMode) && response.writeByte(static_cast<uint8_t>(wireless.joinStatus >> 8)) &&
+                    response.writeByte(static_cast<uint8_t>(wireless.joinStatus)) && response.writeByte(wireless.availableNeighbors) &&
+                    response.writeByte(wireless.advertisingPacketsReceived) && response.writeByte(wireless.joinAttempts) &&
+                    writeU32(wireless.joinRetryTimer) && writeU32(wireless.networkSearchTimer);
+            }
+            if (command == 770) {
+                if (request.size() != 4) return false;
+                const uint32_t shed = readU32(request, 0);
+                wireless.activeAdvertisingShedTime = shed;
+                return writeU32(shed) && writeU32(wireless.advertisingPeriod) && response.writeByte(wireless.advertisingNeighbors);
+            }
+            if (command == 771) {
+                if (request.size() != 5 && request.size() != 6 || plan.writeProtectCode != 0xFB) return false;
+                const uint8_t mode = request[0];
+                if (mode > 3) return false;
+                wireless.joinMode = mode; wireless.activeSearchShedTime = readU32(request, 1);
+                if (request.size() == 6) wireless.maxJoinRetries = request[5];
+                ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
+                return response.writeBytes(request);
+            }
+            if (command == 772) {
+                if (!request.empty()) return false;
+                return response.writeByte(wireless.joinMode) && writeU32(wireless.activeSearchShedTime) && response.writeByte(wireless.maxJoinRetries);
+            }
+            if (command == 773) {
+                if (request.size() != 2 || plan.writeProtectCode != 0xFB) return false;
+                const uint16_t id = static_cast<uint16_t>(request[0] << 8 | request[1]);
+                if (id >= 0xE000 && id <= 0xEFFF) return false;
+                wireless.pendingNetworkId = id; wireless.networkId = id;
+                ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
+                return response.writeByte(static_cast<uint8_t>(id >> 8)) && response.writeByte(static_cast<uint8_t>(id)) &&
+                    response.writeByte(static_cast<uint8_t>(wireless.networkId >> 8)) && response.writeByte(static_cast<uint8_t>(wireless.networkId));
+            }
+            if (command == 774) {
+                if (!request.empty()) return false;
+                return response.writeByte(static_cast<uint8_t>(wireless.pendingNetworkId >> 8)) && response.writeByte(static_cast<uint8_t>(wireless.pendingNetworkId)) &&
+                    response.writeByte(static_cast<uint8_t>(wireless.networkId >> 8)) && response.writeByte(static_cast<uint8_t>(wireless.networkId));
+            }
+            if (command == 775) {
+                if (request.size() != wireless.networkTag.size() || plan.writeProtectCode != 0xFB) return false;
+                std::copy(request.begin(), request.end(), wireless.networkTag.begin());
+                ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
+                return response.writeBytes(request);
+            }
+            if (!request.empty()) return false;
+            return response.writeBytes(wireless.networkTag);
+        }
+        if (command == 797 || command == 798 || command == 804 || command == 805 ||
+            (command >= 808 && command <= 813) || command == 821 || command == 822 || command == 860 || command == 861) {
+            auto& wireless = plan.wireless;
+            if (!wireless.capable) return false;
+            const auto changed = [&]() {
+                ++plan.configurationChangedCounter;
+                plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
+            };
+            if (command == 797) {
+                if (request.size() != 1 || plan.writeProtectCode != 0xFB || static_cast<int8_t>(request[0]) < -10 || static_cast<int8_t>(request[0]) > 10) return false;
+                wireless.radioTransmitPower = request[0]; changed(); return response.writeByte(request[0]);
+            }
+            if (command == 798) return request.empty() && response.writeByte(wireless.radioTransmitPower);
+            if (command == 804) return request.empty() && response.writeByte(wireless.ccaMode);
+            if (command == 805) {
+                if (request.size() != 1 || request[0] > 1 || plan.writeProtectCode != 0xFB) return false;
+                wireless.ccaMode = request[0]; changed(); return response.writeByte(request[0]);
+            }
+            if (command == 808) return request.empty() && response.writeByte(static_cast<uint8_t>(wireless.packetTimeToLive));
+            if (command == 809) {
+                if (request.size() != 1 || plan.writeProtectCode != 0xFB) return false;
+                wireless.packetTimeToLive = std::max<uint8_t>(request[0], static_cast<uint8_t>(8)); changed(); return response.writeByte(static_cast<uint8_t>(wireless.packetTimeToLive));
+            }
+            if (command == 810) return request.empty() && response.writeByte(wireless.joinPriority);
+            if (command == 811) {
+                if (request.size() != 1 || plan.writeProtectCode != 0xFB) return false;
+                wireless.joinPriority = std::min<uint8_t>(request[0], 15); changed(); return response.writeByte(wireless.joinPriority);
+            }
+            if (command == 812) return request.empty() && response.writeByte(wireless.packetReceivePriority);
+            if (command == 813) {
+                if (request.size() != 1 || request[0] > 3 || plan.writeProtectCode != 0xFB) return false;
+                wireless.packetReceivePriority = request[0]; changed(); return response.writeByte(request[0]);
+            }
+            if (command == 821) {
+                if (request.size() != 1 || request[0] > 5 || plan.writeProtectCode != 0xFB) return false;
+                wireless.networkAccessMode = request[0]; changed(); return response.writeByte(request[0]);
+            }
+            if (command == 822) return request.empty() && response.writeByte(wireless.networkAccessMode);
+            if (command == 860) return request.empty() && response.writeByte(wireless.joinKeyMode);
+            if (request.size() != 1 || request[0] > 1 || plan.writeProtectCode != 0xFB) return false;
+            wireless.joinKeyMode = request[0]; changed(); return response.writeByte(request[0]);
         }
 
         // Common Practice 71/76 share one canonical Lock Code.  The status
@@ -2024,10 +2150,20 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
                 return response.writeBytes(plan.dynamicVariableAssignments);
             }
             if (command == 0x33) {
-                if (request.size() != 4) return false;
-                std::array<uint8_t, 4> next{};
-                for (size_t i = 0; i < next.size(); ++i) {
+                // HCF_SPEC-151 7.19.1 Backward Compatibility Requirements: an
+                // older Master may send only 1-3 bytes (fewer than all four
+                // Dynamic Variables); the device must accept that -- never
+                // Response Code 5 -- leaving the unspecified trailing slots
+                // at their current assignment, and always echo all 4 slots.
+                if (request.empty() || request.size() > 4) return false;
+                std::array<uint8_t, 4> next = plan.dynamicVariableAssignments;
+                for (size_t i = 0; i < request.size(); ++i) {
                     const uint8_t code = request[i];
+                    // 7.19: Device Variable codes 244-249 are an invalid
+                    // selection for this command specifically (they are
+                    // sentinel/reserved codes elsewhere, e.g. 250 "Not Used"
+                    // just below); do not confuse this with the write-protect
+                    // or missing-variable checks.
                     if (code >= 244 && code <= 249) return false;
                     if (code != 250 && findVariable(code) == plan.variables.end()) return false;
                     next[i] = code;

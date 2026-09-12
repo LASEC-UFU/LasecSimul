@@ -1357,6 +1357,26 @@ int main() {
         check(assignmentsWriteOk && assignmentsWrite.size() == 4 && assignmentsReadOk && assignmentsAfter.size() == 4 &&
                   std::equal(assignments.begin(), assignments.end(), assignmentsAfter.bytes().begin()),
               "Command 51 atomically writes assignments read back by Command 50");
+
+        // HCF_SPEC-151 7.19.1 Backward Compatibility Requirements: a Master
+        // may truncate the request to 1-3 bytes; the device must accept it
+        // (never Response Code 5), leave the unspecified trailing slots at
+        // their current assignment, and always echo all 4 slots back.
+        // (Device Variable codes 244-249 -- including this device's own PV
+        // code 246 -- are themselves an invalid *selection* per 7.19, so the
+        // baseline and truncated write below deliberately use only 250 "Not
+        // Used" and the SV's real code 1, never 246.)
+        const std::array<uint8_t, 4> truncationBaseline{250, 1, 250, 250};
+        HartResponseBuilder truncationBaselineResp(8);
+        check(cpEngine.execute("hart-1", 31, 0x33, truncationBaseline, truncationBaselineResp),
+              "Command 51 baseline write for the truncation regression test below");
+        const std::array<uint8_t, 1> truncatedAssignment{1};
+        HartResponseBuilder truncatedAssignmentResp(8);
+        check(cpEngine.execute("hart-1", 31, 0x33, truncatedAssignment, truncatedAssignmentResp) &&
+                  truncatedAssignmentResp.size() == 4 && truncatedAssignmentResp.bytes()[0] == 1 &&
+                  truncatedAssignmentResp.bytes()[1] == 1 && truncatedAssignmentResp.bytes()[2] == 250 &&
+                  truncatedAssignmentResp.bytes()[3] == 250,
+              "Command 51 accepts a truncated (1-3 byte) request per 7.19.1 and preserves the untouched slots");
         const std::array<uint8_t, 3> serial49{1, 2, 3};
         HartResponseBuilder serial49Response(8);
         check(cpEngine.execute("hart-1", 31, 0x31, serial49, serial49Response) && serial49Response.size() == 3,
@@ -2007,6 +2027,35 @@ int main() {
         check(engine.execute("hart-512531", 1, 1157, cvdWrite, tempCvdWrite) && engine.execute("hart-512531", 1, 1027, std::array<uint8_t, 1>{3}, tempCvdRead) &&
                   std::equal(cvdA.begin(), cvdA.end(), tempCvdRead.bytes().begin() + 1) && std::equal(cvdR0.begin(), cvdR0.end(), tempCvdRead.bytes().begin() + 13),
               "Temperature CVD write/read share one canonical coefficient set");
+    }
+
+    // HCF_SPEC-155 Rev 2.0 provisioning and bounded radio configuration.
+    {
+        HartProfileRegistry wirelessRegistry;
+        check(wirelessRegistry.registerProfile(HartReferenceCatalog::makeGenericProfile()), "Wireless profile registers");
+        HartEngine wirelessEngine(wirelessRegistry);
+        check(HartReferenceCatalog::installCommandPrograms(wirelessEngine), "Wireless programs install");
+        HartDevicePlan wireless{"wireless-device", "lasecsimul.hart.process-simul-compatible", "hart-wireless", 1, "ABCDEF", 1.0};
+        wireless.wireless.capable = true;
+        for (const auto& descriptor : HartReferenceCatalog::commandDescriptors()) wireless.commandConfigurations.push_back({descriptor.id, true, false, {}});
+        check(wirelessEngine.loadPlan({{wireless}}), "Wireless plan loads");
+        HartResponseBuilder networkWrite(8), networkRead(8);
+        check(wirelessEngine.execute("hart-wireless", 1, 773, std::array<uint8_t, 2>{0x12, 0x34}, networkWrite) &&
+                  wirelessEngine.execute("hart-wireless", 1, 774, {}, networkRead) && networkRead.size() == 4 &&
+                  networkRead.bytes()[0] == 0x12 && networkRead.bytes()[1] == 0x34,
+              "Wireless network ID write/read share canonical current state");
+        std::array<uint8_t, 32> tag{}; tag[0] = 'N'; tag[1] = '1';
+        HartResponseBuilder tagWrite(40), tagRead(40);
+        check(wirelessEngine.execute("hart-wireless", 1, 775, tag, tagWrite) && wirelessEngine.execute("hart-wireless", 1, 776, {}, tagRead) &&
+                  tagRead.size() == 32 && tagRead.bytes()[0] == 'N' && tagRead.bytes()[1] == '1',
+              "Wireless network tag write/read share bounded canonical state");
+        HartResponseBuilder ttlWrite(8), ttlRead(8);
+        check(wirelessEngine.execute("hart-wireless", 1, 809, std::array<uint8_t, 1>{3}, ttlWrite) && ttlWrite.bytes()[0] == 8 &&
+                  wirelessEngine.execute("hart-wireless", 1, 808, {}, ttlRead) && ttlRead.bytes()[0] == 8,
+              "Wireless TTL enforces normative minimum and reads back");
+        HartResponseBuilder wiredRejected(8);
+        check(!engine.execute("hart-512531", 1, 774, {}, wiredRejected),
+              "Non-Wireless device rejects Wireless command without synthetic capability");
     }
 
     if (failures == 0) std::puts("HART engine contracts: PASS");
