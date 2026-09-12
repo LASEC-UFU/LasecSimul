@@ -3732,3 +3732,48 @@ pelo bug pontual do Command 531 corrigido acima.
 | Command 529 Read Sub-Device Assignment | HCF_SPEC-151 §7.105 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
 | Command 530 Write Sub-Device Assignment | HCF_SPEC-151 §7.106 | Sim | Não | N/A | Já existia | DONE_SPEC_VERIFIED |
 | Command 531 Transfer Live List to Assignment List | HCF_SPEC-151 §7.107 | Sim | **Sim** -- campo de contagem ausente na resposta (1 byte em vez de 3) | Sim | Corrigido nesta sessão | DONE_SPEC_VERIFIED |
+
+### F.15.12 -- Commands 113/114: inconsistência real no próprio texto da especificação (não um bug de código)
+
+Ao verificar Command 114 (Read Caught Device Variable, §7.82) contra o
+Command 113 já corrigido (F.15.8), foi encontrada uma genuína contradição no
+texto da especificação, não um erro de extração: a tabela de resposta do
+Command 113 (`spec151r10.0` páginas 140-141, confirmado por extração `-raw`
+duas vezes, sem `-layout`) descreve o byte 7 como o literal constante
+`31 (0x1F)`, tanto no request quanto no response, em duas ocorrências
+independentes e consistentes entre si. Já a tabela do Command 114 (página
+142, mesmo tipo de extração limpa) descreve o MESMO byte 7 conceitual como
+"Least Significant Byte of the Source Command Number" -- direto conflito.
+
+Adotada a leitura do Command 113 como autoritativa (dupla ocorrência
+consistente, e alinhada com o próprio texto de 7.81.1, que só menciona byte 7
+virar o número do comando no caso legado de 13 bytes -- o que só faz sentido
+se byte 7 normalmente NÃO for o número do comando). A inconsistência do
+Command 114 é registrada aqui como um achado real da auditoria sobre a
+especificação em si, não uma ação corretiva no código -- não há ação de
+código possível diante de uma contradição textual na fonte normativa; a
+decisão foi documentada explicitamente para que uma revisão futura com
+acesso à FieldComm/errata oficial possa resolver definitivamente.
+
+### F.15.13 -- Commands 115-119: zero defeitos
+
+Verificados byte a byte contra `spec151r10.0` §7.83-7.87 (extração `-raw`
+limpa): Command 115 (Read Event Notification Summary, 45 bytes, packed
+nibble Event Status/Control Code no byte 2, index de evento restrito a 0 --
+decisão arquitetural consistente com o projeto modelar exatamente uma
+configuração de evento, não um bug), Command 116 (Write Event Notification
+Bit Mask, truncável 2-27 bytes conforme nota de rodapé 85, preenchimento
+correto com zero para bytes não especificados), Command 117 (Write Event
+Notification Timing, 13 bytes, valida retry <= maximum conforme exigido),
+Command 118 (Event Notification Control, 2 bytes), e Command 119
+(Acknowledge Event Notification, aceita 1 ou 33 bytes conforme a
+especificação permite consulta somente com o número do evento, lógica de
+correspondência timestamp+contador+status+dados48 para limpar o evento mais
+antigo, gate de propriedade do Event Manager para o reconhecimento de 33
+bytes). Zero defeitos em todo o cluster 115-119.
+
+**Fecha o cluster completo 91-119 e 528-531**: 4 defeitos reais encontrados e
+corrigidos nesta sessão (Command 105, 107, 109, 113 -- ver F.15.8 -- mais
+Command 531 -- F.15.11), e uma inconsistência real na própria especificação
+documentada sem ação de código (F.15.12 acima). Todos os demais comandos
+deste intervalo: `DONE_SPEC_VERIFIED`, zero defeitos.
