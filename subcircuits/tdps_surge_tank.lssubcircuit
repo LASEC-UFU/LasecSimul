@@ -1,28 +1,28 @@
 {
   "schemaVersion": 3,
-  "typeId": "subcircuits.tdps.smith_predictor",
-  "name": "Espessura de Camada com Preditor de Smith",
+  "typeId": "subcircuits.tdps.surge_tank",
+  "name": "Caixa de Polpa",
   "language": "pt-BR",
   "folderPath": [
     "Modelos"
   ],
   "workspaceSection": "process",
   "help": {
-    "description": "Modelo TDPS v7.71 convertido da fonte Smith predictor/smithpredictor.smp."
+    "description": "Modelo TDPS v7.71 convertido da fonte surge tank/surge tank.smp."
   },
   "components": [
     {
       "id": "pid-01",
       "typeId": "control.pid",
-      "label": "ZIC",
+      "label": "FIC01",
       "visual": {
-        "x": 425,
-        "y": 221,
+        "x": 132,
+        "y": 317,
         "rotation": 0
       },
       "properties": {
-        "kc": 1,
-        "ti": 3,
+        "kc": 0.95,
+        "ti": 6.72,
         "td": 0,
         "bias": 50,
         "derivativeFilter": 0.1,
@@ -37,25 +37,50 @@
       }
     },
     {
+      "id": "pid-02",
+      "typeId": "control.pid",
+      "label": "LIC01",
+      "visual": {
+        "x": 410,
+        "y": 95,
+        "rotation": 0
+      },
+      "properties": {
+        "kc": 1.645,
+        "ti": 30.4,
+        "td": 0,
+        "bias": 50,
+        "derivativeFilter": 0.1,
+        "outputMin": 0,
+        "outputMax": 100,
+        "action": -1,
+        "derivativeOnPv": false,
+        "remoteSpEnabled": false,
+        "feedForwardEnabled": false,
+        "autoMode": true,
+        "samplePeriodNs": 10000000
+      }
+    },
+    {
       "id": "process-21",
       "typeId": "control.process",
-      "label": "G",
+      "label": "FT01",
       "visual": {
-        "x": 516,
-        "y": 436,
+        "x": 713,
+        "y": 277,
         "rotation": 0
       },
       "properties": {
         "tau1": 3,
         "tau2": 0,
         "saturationEnabled": false,
-        "hysteresis": 0,
-        "deadTime": 12,
-        "gain": 1.15,
+        "hysteresis": 3,
+        "deadTime": 2,
+        "gain": 1,
         "valveType": 0,
         "stiction": 0,
         "rateLimiter": 0,
-        "actuatorTau": 0,
+        "actuatorTau": 5,
         "transferFunctionType": 0,
         "lead": 0,
         "lag": 0,
@@ -65,24 +90,24 @@
     {
       "id": "process-22",
       "typeId": "control.process",
-      "label": "Gtil",
+      "label": "LT01",
       "visual": {
-        "x": 515,
-        "y": 566,
+        "x": 664,
+        "y": 518,
         "rotation": 0
       },
       "properties": {
         "tau1": 3,
-        "tau2": 0,
+        "tau2": 3,
         "saturationEnabled": false,
         "hysteresis": 0,
-        "deadTime": 0,
-        "gain": 1.15,
+        "deadTime": 1,
+        "gain": 0.078,
         "valveType": 0,
         "stiction": 0,
         "rateLimiter": 0,
-        "actuatorTau": 0,
-        "transferFunctionType": 0,
+        "actuatorTau": 1,
+        "transferFunctionType": 3,
         "lead": 0,
         "lag": 0,
         "samplePeriodNs": 10000000
@@ -91,20 +116,20 @@
     {
       "id": "process-23",
       "typeId": "control.process",
-      "label": "Delay",
+      "label": "FT02",
       "visual": {
-        "x": 629,
-        "y": 571,
+        "x": 657,
+        "y": 487,
         "rotation": 0
       },
       "properties": {
-        "tau1": 0,
+        "tau1": 1.1,
         "tau2": 0,
         "saturationEnabled": false,
         "hysteresis": 0,
-        "deadTime": 12,
+        "deadTime": 0.4,
         "gain": 1,
-        "valveType": -1,
+        "valveType": 0,
         "stiction": 0,
         "rateLimiter": 0,
         "actuatorTau": 0,
@@ -117,15 +142,15 @@
     {
       "id": "process-24",
       "typeId": "control.process",
-      "label": "D",
+      "label": "FY01",
       "visual": {
-        "x": 790,
-        "y": 349,
+        "x": 711,
+        "y": 244,
         "rotation": 0
       },
       "properties": {
-        "tau1": 0,
-        "tau2": 0,
+        "tau1": 37,
+        "tau2": 23,
         "saturationEnabled": false,
         "hysteresis": 0,
         "deadTime": 0,
@@ -133,7 +158,7 @@
         "valveType": 0,
         "stiction": 0,
         "rateLimiter": 0,
-        "actuatorTau": 0,
+        "actuatorTau": 33,
         "transferFunctionType": 0,
         "lead": 0,
         "lag": 0,
@@ -143,20 +168,22 @@
     {
       "id": "calc-41",
       "typeId": "control.calc_expression",
-      "label": "PV_medida",
+      "label": "BM",
       "visual": {
-        "x": 790,
-        "y": 378,
+        "x": 744,
+        "y": 486,
         "rotation": 0
       },
       "properties": {
-        "expression": "x0+x1-50",
+        "expression": "x0+x1*x2-x3",
         "inputs": [
           "x0",
-          "x1"
+          "x1",
+          "x2",
+          "x3"
         ],
         "upperLimit": 105,
-        "lowerLimit": -5,
+        "lowerLimit": 0,
         "upperLimitEnabled": false,
         "lowerLimitEnabled": false,
         "samplePeriodNs": 10000000
@@ -165,195 +192,41 @@
     {
       "id": "calc-42",
       "typeId": "control.calc_expression",
-      "label": "DesvioPS",
+      "label": "FY02",
       "visual": {
-        "x": 778,
-        "y": 545,
+        "x": 710,
+        "y": 212,
         "rotation": 0
       },
       "properties": {
-        "expression": "x0-x1",
+        "expression": "x0+x1+(x0/100)*x2",
         "inputs": [
           "x0",
-          "x1"
+          "x1",
+          "x2"
         ],
         "upperLimit": 105,
-        "lowerLimit": -5,
+        "lowerLimit": 0,
         "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
+        "lowerLimitEnabled": true,
         "samplePeriodNs": 10000000
       }
     },
     {
-      "id": "calc-43",
-      "typeId": "control.calc_expression",
-      "label": "PV_Realim",
-      "visual": {
-        "x": 187,
-        "y": 476,
-        "rotation": 0
-      },
-      "properties": {
-        "expression": "x0+x1",
-        "inputs": [
-          "x0",
-          "x1"
-        ],
-        "upperLimit": 105,
-        "lowerLimit": -5,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
-      }
-    },
-    {
-      "id": "calc-44",
-      "typeId": "control.calc_expression",
-      "label": "Sel",
-      "visual": {
-        "x": 331,
-        "y": 531,
-        "rotation": 0
-      },
-      "properties": {
-        "expression": "(x0)*x1",
-        "inputs": [
-          "x0",
-          "x1"
-        ],
-        "upperLimit": 105,
-        "lowerLimit": -5,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
-      }
-    },
-    {
-      "id": "tunnel-external-14",
+      "id": "tunnel-external--1",
       "typeId": "connectors.signal_tunnel",
-      "label": "external-14",
+      "label": "external--1",
       "properties": {
-        "name": "external-14",
+        "name": "external--1",
         "direction": "Input",
         "valueType": "Real",
-        "legacyVariableIndex": 14,
+        "legacyVariableIndex": -1,
         "samplePeriodNs": 10000000
       },
       "visual": {
         "x": 20,
         "y": 70,
         "rotation": 0
-      }
-    },
-    {
-      "id": "tunnel-external-15",
-      "typeId": "connectors.signal_tunnel",
-      "label": "external-15",
-      "properties": {
-        "name": "external-15",
-        "direction": "Input",
-        "valueType": "Real",
-        "legacyVariableIndex": 15,
-        "samplePeriodNs": 10000000
-      },
-      "visual": {
-        "x": 20,
-        "y": 100,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "tunnel-external-11",
-      "typeId": "connectors.signal_tunnel",
-      "label": "external-11",
-      "properties": {
-        "name": "external-11",
-        "direction": "Input",
-        "valueType": "Real",
-        "legacyVariableIndex": 11,
-        "samplePeriodNs": 10000000
-      },
-      "visual": {
-        "x": 20,
-        "y": 130,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "tunnel-external-01",
-      "typeId": "connectors.signal_tunnel",
-      "label": "external-01",
-      "properties": {
-        "name": "external-01",
-        "direction": "Input",
-        "valueType": "Real",
-        "legacyVariableIndex": 1,
-        "samplePeriodNs": 10000000
-      },
-      "visual": {
-        "x": 20,
-        "y": 160,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "readout-101",
-      "typeId": "control.probe",
-      "label": "SP",
-      "visual": {
-        "x": 840,
-        "y": 180,
-        "rotation": 0
-      },
-      "properties": {
-        "unit": "mm",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
-      }
-    },
-    {
-      "id": "readout-102",
-      "typeId": "control.probe",
-      "label": "Erro Predição",
-      "visual": {
-        "x": 120,
-        "y": 280,
-        "rotation": 0
-      },
-      "properties": {
-        "unit": "mm",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
-      }
-    },
-    {
-      "id": "readout-103",
-      "typeId": "control.probe",
-      "label": "Espessura_PS",
-      "visual": {
-        "x": 300,
-        "y": 280,
-        "rotation": 0
-      },
-      "properties": {
-        "unit": "mm",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
-      }
-    },
-    {
-      "id": "readout-104",
-      "typeId": "control.probe",
-      "label": "Espessura",
-      "visual": {
-        "x": 480,
-        "y": 280,
-        "rotation": 0
-      },
-      "properties": {
-        "unit": "mm",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
       }
     },
     {
@@ -369,17 +242,147 @@
       },
       "visual": {
         "x": 20,
+        "y": 100,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel-external-80",
+      "typeId": "connectors.signal_tunnel",
+      "label": "external-80",
+      "properties": {
+        "name": "external-80",
+        "direction": "Input",
+        "valueType": "Real",
+        "legacyVariableIndex": 80,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 20,
+        "y": 130,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel-external-82",
+      "typeId": "connectors.signal_tunnel",
+      "label": "external-82",
+      "properties": {
+        "name": "external-82",
+        "direction": "Input",
+        "valueType": "Real",
+        "legacyVariableIndex": 82,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 20,
+        "y": 160,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel-external-97",
+      "typeId": "connectors.signal_tunnel",
+      "label": "external-97",
+      "properties": {
+        "name": "external-97",
+        "direction": "Input",
+        "valueType": "Real",
+        "legacyVariableIndex": 97,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 20,
         "y": 190,
         "rotation": 0
       }
     },
     {
-      "id": "readout-105",
+      "id": "tunnel-external-83",
+      "typeId": "connectors.signal_tunnel",
+      "label": "external-83",
+      "properties": {
+        "name": "external-83",
+        "direction": "Input",
+        "valueType": "Real",
+        "legacyVariableIndex": 83,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 20,
+        "y": 220,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel-external-84",
+      "typeId": "connectors.signal_tunnel",
+      "label": "external-84",
+      "properties": {
+        "name": "external-84",
+        "direction": "Input",
+        "valueType": "Real",
+        "legacyVariableIndex": 84,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 20,
+        "y": 250,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "readout-101",
       "typeId": "control.probe",
-      "label": "CO",
+      "label": "Vazão de Reciclo",
+      "visual": {
+        "x": 480,
+        "y": 680,
+        "rotation": 0
+      },
+      "properties": {
+        "unit": "m3/h",
+        "observerOnly": true,
+        "samplePeriodNs": 10000000
+      }
+    },
+    {
+      "id": "readout-102",
+      "typeId": "control.probe",
+      "label": "Vazão Mássica",
       "visual": {
         "x": 660,
-        "y": 280,
+        "y": 680,
+        "rotation": 0
+      },
+      "properties": {
+        "unit": "ton/h",
+        "observerOnly": true,
+        "samplePeriodNs": 10000000
+      }
+    },
+    {
+      "id": "readout-103",
+      "typeId": "control.probe",
+      "label": "Vazão Saída",
+      "visual": {
+        "x": 840,
+        "y": 680,
+        "rotation": 0
+      },
+      "properties": {
+        "unit": "m3/h",
+        "observerOnly": true,
+        "samplePeriodNs": 10000000
+      }
+    },
+    {
+      "id": "readout-104",
+      "typeId": "control.probe",
+      "label": "Nível",
+      "visual": {
+        "x": 120,
+        "y": 780,
         "rotation": 0
       },
       "properties": {
@@ -389,16 +392,16 @@
       }
     },
     {
-      "id": "readout-106",
+      "id": "readout-105",
       "typeId": "control.probe",
-      "label": "",
+      "label": "Produção",
       "visual": {
-        "x": 840,
-        "y": 280,
+        "x": 300,
+        "y": 780,
         "rotation": 0
       },
       "properties": {
-        "unit": "%",
+        "unit": "ton/h",
         "observerOnly": true,
         "samplePeriodNs": 10000000
       }
@@ -406,14 +409,14 @@
     {
       "id": "readout-107",
       "typeId": "control.probe",
-      "label": "",
+      "label": "Veloc.BP2",
       "visual": {
-        "x": 120,
-        "y": 380,
+        "x": 480,
+        "y": 780,
         "rotation": 0
       },
       "properties": {
-        "unit": "mm",
+        "unit": "rpm",
         "observerOnly": true,
         "samplePeriodNs": 10000000
       }
@@ -431,7 +434,24 @@
       },
       "visual": {
         "x": 1000,
-        "y": 190,
+        "y": 250,
+        "rotation": 180
+      }
+    },
+    {
+      "id": "tunnel-output-01",
+      "typeId": "connectors.signal_tunnel",
+      "label": "output-01",
+      "properties": {
+        "name": "output-01",
+        "direction": "Output",
+        "valueType": "Real",
+        "legacyVariableIndex": 1,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 1000,
+        "y": 280,
         "rotation": 180
       }
     },
@@ -448,7 +468,7 @@
       },
       "visual": {
         "x": 1000,
-        "y": 220,
+        "y": 310,
         "rotation": 180
       }
     },
@@ -465,7 +485,7 @@
       },
       "visual": {
         "x": 1000,
-        "y": 250,
+        "y": 340,
         "rotation": 180
       }
     },
@@ -482,7 +502,7 @@
       },
       "visual": {
         "x": 1000,
-        "y": 280,
+        "y": 370,
         "rotation": 180
       }
     },
@@ -499,7 +519,7 @@
       },
       "visual": {
         "x": 1000,
-        "y": 310,
+        "y": 400,
         "rotation": 180
       }
     },
@@ -516,7 +536,7 @@
       },
       "visual": {
         "x": 1000,
-        "y": 340,
+        "y": 430,
         "rotation": 180
       }
     },
@@ -533,41 +553,7 @@
       },
       "visual": {
         "x": 1000,
-        "y": 370,
-        "rotation": 180
-      }
-    },
-    {
-      "id": "tunnel-output-43",
-      "typeId": "connectors.signal_tunnel",
-      "label": "output-43",
-      "properties": {
-        "name": "output-43",
-        "direction": "Output",
-        "valueType": "Real",
-        "legacyVariableIndex": 43,
-        "samplePeriodNs": 10000000
-      },
-      "visual": {
-        "x": 1000,
-        "y": 400,
-        "rotation": 180
-      }
-    },
-    {
-      "id": "tunnel-output-44",
-      "typeId": "connectors.signal_tunnel",
-      "label": "output-44",
-      "properties": {
-        "name": "output-44",
-        "direction": "Output",
-        "valueType": "Real",
-        "legacyVariableIndex": 44,
-        "samplePeriodNs": 10000000
-      },
-      "visual": {
-        "x": 1000,
-        "y": 430,
+        "y": 460,
         "rotation": 180
       }
     }
@@ -580,7 +566,7 @@
         "id": "wire-1",
         "from": {
           "kind": "port",
-          "componentId": "calc-42",
+          "componentId": "calc-41",
           "pinId": "out"
         },
         "to": {
@@ -594,8 +580,8 @@
         "id": "wire-2",
         "from": {
           "kind": "port",
-          "componentId": "tunnel-external-14",
-          "pinId": "value"
+          "componentId": "process-23",
+          "pinId": "out"
         },
         "to": {
           "kind": "port",
@@ -608,6 +594,34 @@
         "id": "wire-3",
         "from": {
           "kind": "port",
+          "componentId": "process-21",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pid-02",
+          "pinId": "pv"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-4",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel-external--1",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pid-02",
+          "pinId": "sp"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-5",
+        "from": {
+          "kind": "port",
           "componentId": "pid-01",
           "pinId": "out"
         },
@@ -619,43 +633,15 @@
         "vertices": []
       },
       {
-        "id": "wire-4",
-        "from": {
-          "kind": "port",
-          "componentId": "calc-43",
-          "pinId": "out"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "process-22",
-          "pinId": "in"
-        },
-        "vertices": []
-      },
-      {
-        "id": "wire-5",
-        "from": {
-          "kind": "port",
-          "componentId": "process-21",
-          "pinId": "out"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "process-23",
-          "pinId": "in"
-        },
-        "vertices": []
-      },
-      {
         "id": "wire-6",
         "from": {
           "kind": "port",
-          "componentId": "tunnel-external-15",
+          "componentId": "tunnel-external-40",
           "pinId": "value"
         },
         "to": {
           "kind": "port",
-          "componentId": "process-24",
+          "componentId": "process-22",
           "pinId": "in"
         },
         "vertices": []
@@ -664,6 +650,34 @@
         "id": "wire-7",
         "from": {
           "kind": "port",
+          "componentId": "pid-02",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "process-23",
+          "pinId": "in"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-8",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel-external-80",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "process-24",
+          "pinId": "in"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-9",
+        "from": {
+          "kind": "port",
           "componentId": "process-21",
           "pinId": "out"
         },
@@ -675,43 +689,15 @@
         "vertices": []
       },
       {
-        "id": "wire-8",
-        "from": {
-          "kind": "port",
-          "componentId": "process-24",
-          "pinId": "out"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "calc-41",
-          "pinId": "x1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "wire-9",
-        "from": {
-          "kind": "port",
-          "componentId": "calc-41",
-          "pinId": "out"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "calc-42",
-          "pinId": "x0"
-        },
-        "vertices": []
-      },
-      {
         "id": "wire-10",
         "from": {
           "kind": "port",
-          "componentId": "process-23",
-          "pinId": "out"
+          "componentId": "tunnel-external-82",
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-42",
+          "componentId": "calc-41",
           "pinId": "x1"
         },
         "vertices": []
@@ -720,13 +706,13 @@
         "id": "wire-11",
         "from": {
           "kind": "port",
-          "componentId": "process-22",
-          "pinId": "out"
+          "componentId": "tunnel-external-97",
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-43",
-          "pinId": "x0"
+          "componentId": "calc-41",
+          "pinId": "x2"
         },
         "vertices": []
       },
@@ -734,13 +720,13 @@
         "id": "wire-12",
         "from": {
           "kind": "port",
-          "componentId": "calc-42",
+          "componentId": "process-23",
           "pinId": "out"
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-43",
-          "pinId": "x1"
+          "componentId": "calc-41",
+          "pinId": "x3"
         },
         "vertices": []
       },
@@ -748,12 +734,12 @@
         "id": "wire-13",
         "from": {
           "kind": "port",
-          "componentId": "tunnel-external-11",
-          "pinId": "value"
+          "componentId": "process-21",
+          "pinId": "out"
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-44",
+          "componentId": "calc-42",
           "pinId": "x0"
         },
         "vertices": []
@@ -762,12 +748,12 @@
         "id": "wire-14",
         "from": {
           "kind": "port",
-          "componentId": "tunnel-external-01",
+          "componentId": "tunnel-external-83",
           "pinId": "value"
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-44",
+          "componentId": "calc-42",
           "pinId": "x1"
         },
         "vertices": []
@@ -776,8 +762,22 @@
         "id": "wire-15",
         "from": {
           "kind": "port",
-          "componentId": "tunnel-external-14",
+          "componentId": "tunnel-external-84",
           "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-42",
+          "pinId": "x2"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-16",
+        "from": {
+          "kind": "port",
+          "componentId": "pid-01",
+          "pinId": "out"
         },
         "to": {
           "kind": "port",
@@ -787,7 +787,7 @@
         "vertices": []
       },
       {
-        "id": "wire-16",
+        "id": "wire-17",
         "from": {
           "kind": "port",
           "componentId": "calc-41",
@@ -801,29 +801,15 @@
         "vertices": []
       },
       {
-        "id": "wire-17",
+        "id": "wire-18",
         "from": {
           "kind": "port",
-          "componentId": "process-21",
+          "componentId": "process-22",
           "pinId": "out"
         },
         "to": {
           "kind": "port",
           "componentId": "readout-103",
-          "pinId": "in"
-        },
-        "vertices": []
-      },
-      {
-        "id": "wire-18",
-        "from": {
-          "kind": "port",
-          "componentId": "tunnel-external-40",
-          "pinId": "value"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "readout-104",
           "pinId": "in"
         },
         "vertices": []
@@ -837,7 +823,7 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "readout-105",
+          "componentId": "readout-104",
           "pinId": "in"
         },
         "vertices": []
@@ -846,12 +832,12 @@
         "id": "wire-20",
         "from": {
           "kind": "port",
-          "componentId": "pid-01",
+          "componentId": "process-23",
           "pinId": "out"
         },
         "to": {
           "kind": "port",
-          "componentId": "readout-106",
+          "componentId": "readout-105",
           "pinId": "in"
         },
         "vertices": []
@@ -860,8 +846,8 @@
         "id": "wire-21",
         "from": {
           "kind": "port",
-          "componentId": "tunnel-external-40",
-          "pinId": "value"
+          "componentId": "pid-01",
+          "pinId": "out"
         },
         "to": {
           "kind": "port",
@@ -888,6 +874,20 @@
         "id": "wire-23",
         "from": {
           "kind": "port",
+          "componentId": "pid-02",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tunnel-output-01",
+          "pinId": "value"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-24",
+        "from": {
+          "kind": "port",
           "componentId": "process-21",
           "pinId": "out"
         },
@@ -899,7 +899,7 @@
         "vertices": []
       },
       {
-        "id": "wire-24",
+        "id": "wire-25",
         "from": {
           "kind": "port",
           "componentId": "process-22",
@@ -913,7 +913,7 @@
         "vertices": []
       },
       {
-        "id": "wire-25",
+        "id": "wire-26",
         "from": {
           "kind": "port",
           "componentId": "process-23",
@@ -927,7 +927,7 @@
         "vertices": []
       },
       {
-        "id": "wire-26",
+        "id": "wire-27",
         "from": {
           "kind": "port",
           "componentId": "process-24",
@@ -941,7 +941,7 @@
         "vertices": []
       },
       {
-        "id": "wire-27",
+        "id": "wire-28",
         "from": {
           "kind": "port",
           "componentId": "calc-41",
@@ -955,7 +955,7 @@
         "vertices": []
       },
       {
-        "id": "wire-28",
+        "id": "wire-29",
         "from": {
           "kind": "port",
           "componentId": "calc-42",
@@ -967,69 +967,14 @@
           "pinId": "value"
         },
         "vertices": []
-      },
-      {
-        "id": "wire-29",
-        "from": {
-          "kind": "port",
-          "componentId": "calc-43",
-          "pinId": "out"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "tunnel-output-43",
-          "pinId": "value"
-        },
-        "vertices": []
-      },
-      {
-        "id": "wire-30",
-        "from": {
-          "kind": "port",
-          "componentId": "calc-44",
-          "pinId": "out"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "tunnel-output-44",
-          "pinId": "value"
-        },
-        "vertices": []
       }
     ]
   },
   "interface": [
     {
-      "pinId": "external-14",
-      "label": "external-14",
-      "internalTunnel": "external-14",
-      "domain": "signal",
-      "direction": "in",
-      "valueType": "Real",
-      "width": 1
-    },
-    {
-      "pinId": "external-15",
-      "label": "external-15",
-      "internalTunnel": "external-15",
-      "domain": "signal",
-      "direction": "in",
-      "valueType": "Real",
-      "width": 1
-    },
-    {
-      "pinId": "external-11",
-      "label": "external-11",
-      "internalTunnel": "external-11",
-      "domain": "signal",
-      "direction": "in",
-      "valueType": "Real",
-      "width": 1
-    },
-    {
-      "pinId": "external-01",
-      "label": "external-01",
-      "internalTunnel": "external-01",
+      "pinId": "external--1",
+      "label": "external--1",
+      "internalTunnel": "external--1",
       "domain": "signal",
       "direction": "in",
       "valueType": "Real",
@@ -1045,9 +990,63 @@
       "width": 1
     },
     {
+      "pinId": "external-80",
+      "label": "external-80",
+      "internalTunnel": "external-80",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "external-82",
+      "label": "external-82",
+      "internalTunnel": "external-82",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "external-97",
+      "label": "external-97",
+      "internalTunnel": "external-97",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "external-83",
+      "label": "external-83",
+      "internalTunnel": "external-83",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "external-84",
+      "label": "external-84",
+      "internalTunnel": "external-84",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
       "pinId": "output-00",
       "label": "output-00",
       "internalTunnel": "output-00",
+      "domain": "signal",
+      "direction": "out",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "output-01",
+      "label": "output-01",
+      "internalTunnel": "output-01",
       "domain": "signal",
       "direction": "out",
       "valueType": "Real",
@@ -1106,24 +1105,6 @@
       "direction": "out",
       "valueType": "Real",
       "width": 1
-    },
-    {
-      "pinId": "output-43",
-      "label": "output-43",
-      "internalTunnel": "output-43",
-      "domain": "signal",
-      "direction": "out",
-      "valueType": "Real",
-      "width": 1
-    },
-    {
-      "pinId": "output-44",
-      "label": "output-44",
-      "internalTunnel": "output-44",
-      "domain": "signal",
-      "direction": "out",
-      "valueType": "Real",
-      "width": 1
     }
   ],
   "symbolMode": "custom",
@@ -1133,38 +1114,11 @@
     "border": true,
     "pins": [
       {
-        "id": "external-14",
-        "label": "external-14",
+        "id": "external--1",
+        "label": "external--1",
         "kind": "ANALOG_IN",
         "x": 0,
-        "y": 87.27272727272727,
-        "angle": 180,
-        "length": 8
-      },
-      {
-        "id": "external-15",
-        "label": "external-15",
-        "kind": "ANALOG_IN",
-        "x": 0,
-        "y": 130.9090909090909,
-        "angle": 180,
-        "length": 8
-      },
-      {
-        "id": "external-11",
-        "label": "external-11",
-        "kind": "ANALOG_IN",
-        "x": 0,
-        "y": 174.54545454545453,
-        "angle": 180,
-        "length": 8
-      },
-      {
-        "id": "external-01",
-        "label": "external-01",
-        "kind": "ANALOG_IN",
-        "x": 0,
-        "y": 218.18181818181816,
+        "y": 96,
         "angle": 180,
         "length": 8
       },
@@ -1173,7 +1127,52 @@
         "label": "external-40",
         "kind": "ANALOG_IN",
         "x": 0,
-        "y": 261.8181818181818,
+        "y": 144,
+        "angle": 180,
+        "length": 8
+      },
+      {
+        "id": "external-80",
+        "label": "external-80",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 192,
+        "angle": 180,
+        "length": 8
+      },
+      {
+        "id": "external-82",
+        "label": "external-82",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 240,
+        "angle": 180,
+        "length": 8
+      },
+      {
+        "id": "external-97",
+        "label": "external-97",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 288,
+        "angle": 180,
+        "length": 8
+      },
+      {
+        "id": "external-83",
+        "label": "external-83",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 336,
+        "angle": 180,
+        "length": 8
+      },
+      {
+        "id": "external-84",
+        "label": "external-84",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 384,
         "angle": 180,
         "length": 8
       },
@@ -1182,7 +1181,16 @@
         "label": "output-00",
         "kind": "ANALOG_OUT",
         "x": 640,
-        "y": 43.63636363636363,
+        "y": 48,
+        "angle": 0,
+        "length": 8
+      },
+      {
+        "id": "output-01",
+        "label": "output-01",
+        "kind": "ANALOG_OUT",
+        "x": 640,
+        "y": 96,
         "angle": 0,
         "length": 8
       },
@@ -1191,7 +1199,7 @@
         "label": "output-21",
         "kind": "ANALOG_OUT",
         "x": 640,
-        "y": 87.27272727272727,
+        "y": 144,
         "angle": 0,
         "length": 8
       },
@@ -1200,7 +1208,7 @@
         "label": "output-22",
         "kind": "ANALOG_OUT",
         "x": 640,
-        "y": 130.9090909090909,
+        "y": 192,
         "angle": 0,
         "length": 8
       },
@@ -1209,7 +1217,7 @@
         "label": "output-23",
         "kind": "ANALOG_OUT",
         "x": 640,
-        "y": 174.54545454545453,
+        "y": 240,
         "angle": 0,
         "length": 8
       },
@@ -1218,7 +1226,7 @@
         "label": "output-24",
         "kind": "ANALOG_OUT",
         "x": 640,
-        "y": 218.18181818181816,
+        "y": 288,
         "angle": 0,
         "length": 8
       },
@@ -1227,7 +1235,7 @@
         "label": "output-41",
         "kind": "ANALOG_OUT",
         "x": 640,
-        "y": 261.8181818181818,
+        "y": 336,
         "angle": 0,
         "length": 8
       },
@@ -1236,25 +1244,7 @@
         "label": "output-42",
         "kind": "ANALOG_OUT",
         "x": 640,
-        "y": 305.45454545454544,
-        "angle": 0,
-        "length": 8
-      },
-      {
-        "id": "output-43",
-        "label": "output-43",
-        "kind": "ANALOG_OUT",
-        "x": 640,
-        "y": 349.09090909090907,
-        "angle": 0,
-        "length": 8
-      },
-      {
-        "id": "output-44",
-        "label": "output-44",
-        "kind": "ANALOG_OUT",
-        "x": 640,
-        "y": 392.7272727272727,
+        "y": 384,
         "angle": 0,
         "length": 8
       }
@@ -1262,15 +1252,15 @@
     "shapes": [],
     "background": {
       "kind": "image",
-      "asset": "tdps-reference-images/tdps_smith_predictor.png",
+      "asset": "tdps-reference-images/tdps_surge_tank.png",
       "mime": "image/png"
     }
   },
   "exposedComponents": [
     {
       "componentId": "pid-01",
-      "x": 1942.8571428571427,
-      "y": 482.18181818181813,
+      "x": 603.4285714285714,
+      "y": 760.8,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1278,9 +1268,9 @@
       "layer": 0
     },
     {
-      "componentId": "process-21",
-      "x": 2358.8571428571427,
-      "y": 951.2727272727273,
+      "componentId": "pid-02",
+      "x": 1874.2857142857142,
+      "y": 228,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1288,9 +1278,9 @@
       "layer": 1
     },
     {
-      "componentId": "process-22",
-      "x": 2354.285714285714,
-      "y": 1234.9090909090908,
+      "componentId": "process-21",
+      "x": 3259.428571428571,
+      "y": 664.8,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1298,9 +1288,9 @@
       "layer": 2
     },
     {
-      "componentId": "process-23",
-      "x": 2875.428571428571,
-      "y": 1245.8181818181818,
+      "componentId": "process-22",
+      "x": 3035.428571428571,
+      "y": 1243.2,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1308,9 +1298,9 @@
       "layer": 3
     },
     {
-      "componentId": "process-24",
-      "x": 3611.428571428571,
-      "y": 761.4545454545454,
+      "componentId": "process-23",
+      "x": 3003.428571428571,
+      "y": 1168.8,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1318,9 +1308,9 @@
       "layer": 4
     },
     {
-      "componentId": "calc-41",
-      "x": 3611.428571428571,
-      "y": 824.7272727272726,
+      "componentId": "process-24",
+      "x": 3250.285714285714,
+      "y": 585.6,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1328,9 +1318,9 @@
       "layer": 5
     },
     {
-      "componentId": "calc-42",
-      "x": 3556.5714285714284,
-      "y": 1189.090909090909,
+      "componentId": "calc-41",
+      "x": 3401.142857142857,
+      "y": 1166.3999999999999,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1338,9 +1328,9 @@
       "layer": 6
     },
     {
-      "componentId": "calc-43",
-      "x": 854.8571428571428,
-      "y": 1038.5454545454545,
+      "componentId": "calc-42",
+      "x": 3245.7142857142853,
+      "y": 508.79999999999995,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1348,9 +1338,9 @@
       "layer": 7
     },
     {
-      "componentId": "calc-44",
-      "x": 1513.142857142857,
-      "y": 1158.5454545454545,
+      "componentId": "readout-101",
+      "x": 2194.285714285714,
+      "y": 1632,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1358,9 +1348,9 @@
       "layer": 8
     },
     {
-      "componentId": "readout-101",
-      "x": 3840,
-      "y": 392.7272727272727,
+      "componentId": "readout-102",
+      "x": 3017.142857142857,
+      "y": 1632,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1368,9 +1358,9 @@
       "layer": 9
     },
     {
-      "componentId": "readout-102",
-      "x": 548.5714285714286,
-      "y": 610.9090909090909,
+      "componentId": "readout-103",
+      "x": 3840,
+      "y": 1632,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1378,9 +1368,9 @@
       "layer": 10
     },
     {
-      "componentId": "readout-103",
-      "x": 1371.4285714285713,
-      "y": 610.9090909090909,
+      "componentId": "readout-104",
+      "x": 548.5714285714286,
+      "y": 1872,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1388,9 +1378,9 @@
       "layer": 11
     },
     {
-      "componentId": "readout-104",
-      "x": 2194.285714285714,
-      "y": 610.9090909090909,
+      "componentId": "readout-105",
+      "x": 1371.4285714285713,
+      "y": 1872,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1398,38 +1388,19 @@
       "layer": 12
     },
     {
-      "componentId": "readout-105",
-      "x": 3017.142857142857,
-      "y": 610.9090909090909,
+      "componentId": "readout-107",
+      "x": 2194.285714285714,
+      "y": 1872,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
       "scale": 1,
       "layer": 13
-    },
-    {
-      "componentId": "readout-106",
-      "x": 3840,
-      "y": 610.9090909090909,
-      "rotation": 0,
-      "flipH": false,
-      "flipV": false,
-      "scale": 1,
-      "layer": 14
-    },
-    {
-      "componentId": "readout-107",
-      "x": 548.5714285714286,
-      "y": 829.090909090909,
-      "rotation": 0,
-      "flipH": false,
-      "flipV": false,
-      "scale": 1,
-      "layer": 15
     }
   ],
   "exportedPropertyComponentIds": [
     "pid-01",
+    "pid-02",
     "process-21",
     "process-22",
     "process-23",

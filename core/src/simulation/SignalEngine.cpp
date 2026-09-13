@@ -59,7 +59,10 @@ struct InputBinding {
     LinearConversion conversion;
 };
 
-enum class ExpressionOp : uint8_t { Constant, Input, Add, Subtract, Multiply, Divide, Negate };
+// CalcExpression é também a semântica canônica dos blocos de cálculo TDPS.
+// Comparações retornam 0.0/1.0, como no legado, e potência evita transformar
+// uma expressão de processo válida em um valor constante durante a importação.
+enum class ExpressionOp : uint8_t { Constant, Input, Add, Subtract, Multiply, Divide, Power, Greater, Less, Negate };
 struct ExpressionInstruction { ExpressionOp op; double value = 0.0; uint16_t input = 0; };
 
 class ExpressionParser {
@@ -69,7 +72,7 @@ public:
         : m_text(text), m_inputs(inputs), m_code(code) {}
 
     uint16_t parse() {
-        expression();
+        comparison();
         whitespace();
         if (m_position != m_text.size()) fail("token inesperado");
         int depth = 0;
@@ -95,6 +98,14 @@ private:
     }
     void whitespace() { while (m_position < m_text.size() && (m_text[m_position] == ' ' || m_text[m_position] == '\t')) ++m_position; }
     bool consume(char value) { whitespace(); if (m_position < m_text.size() && m_text[m_position] == value) { ++m_position; return true; } return false; }
+    void comparison() {
+        expression();
+        while (true) {
+            if (consume('>')) { expression(); m_code.push_back({ExpressionOp::Greater}); }
+            else if (consume('<')) { expression(); m_code.push_back({ExpressionOp::Less}); }
+            else return;
+        }
+    }
     void expression() {
         term();
         while (true) {
@@ -104,17 +115,21 @@ private:
         }
     }
     void term() {
-        factor();
+        power();
         while (true) {
-            if (consume('*')) { factor(); m_code.push_back({ExpressionOp::Multiply}); }
-            else if (consume('/')) { factor(); m_code.push_back({ExpressionOp::Divide}); }
+            if (consume('*')) { power(); m_code.push_back({ExpressionOp::Multiply}); }
+            else if (consume('/')) { power(); m_code.push_back({ExpressionOp::Divide}); }
             else return;
         }
+    }
+    void power() {
+        factor();
+        if (consume('^')) { power(); m_code.push_back({ExpressionOp::Power}); }
     }
     void factor() {
         whitespace();
         if (consume('-')) { factor(); m_code.push_back({ExpressionOp::Negate}); return; }
-        if (consume('(')) { expression(); if (!consume(')')) fail("')' ausente"); return; }
+        if (consume('(')) { comparison(); if (!consume(')')) fail("')' ausente"); return; }
         if (m_position >= m_text.size()) fail("operando ausente");
         const size_t begin = m_position;
         if ((m_text[m_position] >= '0' && m_text[m_position] <= '9') || m_text[m_position] == '.') {
@@ -635,6 +650,9 @@ void evaluate(const CompiledBlock& block, const std::vector<double>& reals, cons
                 case ExpressionOp::Subtract: stack[top - 2] -= stack[top - 1]; --top; break;
                 case ExpressionOp::Multiply: stack[top - 2] *= stack[top - 1]; --top; break;
                 case ExpressionOp::Divide: stack[top - 2] /= stack[top - 1]; --top; break;
+                case ExpressionOp::Power: stack[top - 2] = std::pow(stack[top - 2], stack[top - 1]); --top; break;
+                case ExpressionOp::Greater: stack[top - 2] = stack[top - 2] > stack[top - 1] ? 1.0 : 0.0; --top; break;
+                case ExpressionOp::Less: stack[top - 2] = stack[top - 2] < stack[top - 1] ? 1.0 : 0.0; --top; break;
                 case ExpressionOp::Negate: stack[top - 1] = -stack[top - 1]; break;
                 }
                 value = stack[0]; break;

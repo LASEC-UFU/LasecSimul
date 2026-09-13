@@ -95,6 +95,20 @@ void invalidBindingsFailOnColdPath() {
     CHECK(rejected, "variavel desconhecida em CalcExpression falha na compilacao");
 }
 
+void tdpsExpressionOperatorsExecuteCanonically() {
+    SignalGraphDefinition definition;
+    auto base = source("base", 3.0);
+    SignalBlockDefinition calc;
+    calc.id = "tdps_calc"; calc.kind = SignalBlockKind::CalcExpression;
+    calc.inputs = {realPort("x")}; calc.output = realPort("out");
+    calc.expression = "x^2 > 8";
+    definition.blocks = {base, calc};
+    definition.connections = {{"base", "out", "tdps_calc", "x", false}};
+    SignalRuntime runtime; runtime.bind(SignalCompiler::compile(definition)); runtime.executeUntil(0);
+    CHECK(runtime.real(runtime.output("tdps_calc")) == 1.0,
+          "potencia e comparacao TDPS usam o mesmo CalcExpression do Signal Graph");
+}
+
 void allPrimitiveBlocksExecuteDeterministically() {
     SignalGraphDefinition definition;
     auto a = source("a", 3.0);
@@ -181,6 +195,7 @@ int main() {
     typedDagUnitsExpressionsAndRates();
     boolIntAndVectorsUseSeparatePools();
     invalidBindingsFailOnColdPath();
+    tdpsExpressionOperatorsExecuteCanonically();
     allPrimitiveBlocksExecuteDeterministically();
     phaseOrdersRateGroupsAtTheSameTimestamp();
     algebraicLoopsNeedPolicyAndAreBounded();

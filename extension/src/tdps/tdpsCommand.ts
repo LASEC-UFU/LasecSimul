@@ -47,7 +47,7 @@ export async function importTdpsSmpCommand(options: { refreshCatalog: () => Prom
       const catalog = loadUnifiedCatalog(extensionPath, currentLasecSimulLanguage());
       const normalized = path.resolve(target.fsPath).toLowerCase();
       const sources = catalog.registeredSources.filter((entry) => !(entry.kind === "subcircuit-file" && path.resolve(entry.filePath).toLowerCase() === normalized));
-      sources.push({ id: `tdps-import-${Date.now()}`, kind: "subcircuit-file", filePath: target.fsPath, folderPath: ["Controle de Processos", "TDPS importado"] });
+      sources.push({ id: `tdps-import-${Date.now()}`, kind: "subcircuit-file", filePath: target.fsPath, folderPath: ["Modelos"] });
       saveRegisteredSources(extensionPath, sources);
       await options.refreshCatalog();
     }

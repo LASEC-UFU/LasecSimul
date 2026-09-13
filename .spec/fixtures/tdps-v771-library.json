@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "corpus": "TDPS v7.71 examples",
+  "note": "Inventario canonico de fontes TDPS, arte de referencia e artefatos LasecSimul. Os arquivos legados nao sao redistribuidos.",
+  "entries": [
+    {"source":"basic flow loop/basic flow loop.smp","bitmap":"basic flow loop/screen.bmp","file":"tdps_basic_flow_loop.lssubcircuit","typeId":"subcircuits.tdps.basic_flow_loop","label":"Vazao Linear Simples"},
+    {"source":"boiler/boiler.smp","bitmap":"boiler/screen.bmp","file":"tdps_boiler.lssubcircuit","typeId":"subcircuits.tdps.boiler","label":"Caldeira Industrial V1 (Boiler)"},
+    {"source":"combustion/cl.smp","bitmap":"combustion/screen cl.bmp","file":"tdps_combustion_cross_limits.lssubcircuit","typeId":"subcircuits.tdps.combustion_cross_limits","label":"Combustao com Limites Cruzados"},
+    {"source":"combustion/dcl.smp","bitmap":"combustion/screen dcl.bmp","file":"tdps_combustion_dynamic_cross_limits.lssubcircuit","typeId":"subcircuits.tdps.combustion_dynamic_cross_limits","label":"Combustao com Limites Cruzados Dinamicos"},
+    {"source":"combustion/ratio.smp","bitmap":"combustion/screen ratio.bmp","file":"tdps_combustion_ratio.lssubcircuit","typeId":"subcircuits.tdps.combustion_ratio","label":"Controle de Razao para Combustao"},
+    {"source":"combustion2fuels/combustion2fuels.smp","bitmap":"combustion2fuels/screen.bmp","file":"tdps_combustion_two_fuels.lssubcircuit","typeId":"subcircuits.tdps.combustion_two_fuels","label":"Queima com Dois Combustiveis"},
+    {"source":"coolingplant/coolingplant.smp","bitmap":"coolingplant/screen.bmp","file":"tdps_cooling_plant.lssubcircuit","typeId":"subcircuits.tdps.cooling_plant","label":"Torre de Resfriamento"},
+    {"source":"course-fine flow loop/course-fine flow loop.smp","bitmap":"course-fine flow loop/screen.bmp","file":"tdps_course_fine_flow_loop.lssubcircuit","typeId":"subcircuits.tdps.course_fine_flow_loop","label":"Controle de Vazao Course-Fine"},
+    {"source":"ethaneplant/ethaneplant.smp","bitmap":"ethaneplant/screen.bmp","file":"tdps_ethane_plant.lssubcircuit","typeId":"subcircuits.tdps.ethane_plant","label":"Torre Deetanizadora"},
+    {"source":"frequency response/frequencyresponse.smp","bitmap":"frequency response/screen.bmp","file":"tdps_frequency_response.lssubcircuit","typeId":"subcircuits.tdps.frequency_response","label":"Laboratorio de Resposta em Frequencia"},
+    {"source":"furnace masterslave/furnace.smp","bitmap":"furnace masterslave/screen.bmp","file":"tdps_furnace_master_slave.lssubcircuit","typeId":"subcircuits.tdps.furnace_master_slave","label":"Forno Mestre-Escravo"},
+    {"source":"furnace/furnace.smp","bitmap":"furnace/screen.bmp","file":"tdps_furnace.lssubcircuit","typeId":"subcircuits.tdps.furnace","label":"Controle de Temperatura de Forno"},
+    {"source":"header pressure with 3 consumers/header pressure with 3 consumers.smp","bitmap":"header pressure with 3 consumers/screen.bmp","file":"tdps_header_pressure_three_consumers.lssubcircuit","typeId":"subcircuits.tdps.header_pressure_three_consumers","label":"Pressao de Header com Tres Consumidores"},
+    {"source":"heat exchanger/heatexchanger.smp","bitmap":"heat exchanger/screen.bmp","file":"tdps_heat_exchanger.lssubcircuit","typeId":"subcircuits.tdps.heat_exchanger","label":"Temperatura com Trocador de Calor V1"},
+    {"source":"Industrial Boiler/Industrial Boiler.smp","bitmap":"Industrial Boiler/screen.bmp","file":"tdps_industrial_boiler.lssubcircuit","typeId":"subcircuits.tdps.industrial_boiler","label":"Caldeira Industrial V1"},
+    {"source":"linearized pH control/Linearized pH control.smp","bitmap":"linearized pH control/screen.bmp","file":"tdps_linearized_ph.lssubcircuit","typeId":"subcircuits.tdps.linearized_ph","label":"Controle pH Linearizado"},
+    {"source":"linearized pH control/pHcontrol.smp","bitmap":"linearized pH control/screen.bmp","file":"tdps_ph_control.lssubcircuit","typeId":"subcircuits.tdps.ph_control","label":"Controle pH Linearizado (Alternativo)"},
+    {"source":"nonlinear flow processes/nonlinear flow processes.smp","bitmap":"nonlinear flow processes/screen.bmp","file":"tdps_nonlinear_flow_processes.lssubcircuit","typeId":"subcircuits.tdps.nonlinear_flow_processes","label":"Processos de Vazao Nao Lineares"},
+    {"source":"processes to model/4processes.smp","bitmap":"processes to model/screen.bmp","file":"tdps_four_linear_processes.lssubcircuit","typeId":"subcircuits.tdps.four_linear_processes","label":"Sistemas Dinamicos Lineares"},
+    {"source":"reactor/reactor.smp","bitmap":"reactor/screen.bmp","file":"tdps_reactor.lssubcircuit","typeId":"subcircuits.tdps.reactor","label":"Controle Regulatorio em Reator"},
+    {"source":"regulatory level/regulatory level.smp","bitmap":"regulatory level/screen.bmp","file":"tdps_regulatory_level.lssubcircuit","typeId":"subcircuits.tdps.regulatory_level","label":"Controle de Nivel V1"},
+    {"source":"Smith predictor/smithpredictor.smp","bitmap":"Smith predictor/screen.bmp","file":"tdps_smith_predictor.lssubcircuit","typeId":"subcircuits.tdps.smith_predictor","label":"Espessura de Camada com Preditor de Smith"},
+    {"source":"splitrange control/splitrange.smp","bitmap":"splitrange control/screen.bmp","file":"tdps_split_range.lssubcircuit","typeId":"subcircuits.tdps.split_range","label":"Controle de Temperatura com Split-Range"},
+    {"source":"surge tank/surge tank.smp","bitmap":"surge tank/screen.bmp","file":"tdps_surge_tank.lssubcircuit","typeId":"subcircuits.tdps.surge_tank","label":"Caixa de Polpa"}
+  ]
+}

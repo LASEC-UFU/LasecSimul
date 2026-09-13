@@ -1,20 +1,20 @@
-# Referências visuais TDPSv771
+# Referencias visuais TDPS v7.71
 
-Cada PNG é uma conversão otimizada (640 px de largura, proporção preservada) do `screen.bmp`
-correspondente em `C:\SourceCode\TDPSv771\examples`. Os PNGs são deliberadamente usados no
-pacote: o formato `.lssubcircuit` declara `symbol.background` como `image/png`, e o catálogo os
-embute como `data:image/png;base64` ao carregar o manifesto. O BMP original não é necessário no
-runtime nem é copiado para o VSIX.
+Cada PNG deste diretório é a tela correspondente de uma fonte TDPS v7.71
+normalizada para 640 px de largura, sem BMPs em runtime. A autoridade de
+origem, identidade estável e vínculo imagem/modelo é
+`.spec/fixtures/tdps-v771-library.json`; ela cobre todas as fontes auditadas
+em `.spec/fixtures/tdps-v771-coverage.json`.
 
-| Subcircuito | Origem TDPS |
-|---|---|
-| `process_fopdt` | `processes to model/screen.bmp` |
-| `tdps_basic_flow_loop` | `basic flow loop/screen.bmp` |
-| `tdps_boiler_drum` | `boiler/screen.bmp` |
-| `tdps_furnace_combustion` | `combustion2fuels/screen.bmp` |
-| `tdps_heat_exchanger` | `heat exchanger/screen.bmp` |
-| `tdps_ph_neutralization` | `linearized pH control/screen.bmp` |
-| `tdps_reactor_temperature` | `reactor/screen.bmp` |
-| `tdps_smith_predictor` | `Smith predictor/screen.bmp` |
-| `tdps_split_range` | `splitrange control/screen.bmp` |
-| `tdps_surge_tank_level` | `surge tank/screen.bmp` |
+Para regenerar localmente, sem redistribuir o corpus proprietário:
+
+```powershell
+./scripts/convert-tdps-reference-images.ps1 -TdpsSourceRoot C:\caminho\para\TDPSv771\examples
+$env:TDPS_SOURCE_ROOT = 'C:\caminho\para\TDPSv771\examples'
+node ./scripts/generate-tdps-process-library.mjs
+```
+
+Os `.lssubcircuit` usam `background.asset` relativo, que é empacotado como
+`data:image/png;base64` pelo catálogo canônico. A imagem é somente a
+referência visual: topologia, pinos e `exposedComponents` permanecem
+declarativos e executados pelo mesmo Signal Graph dos demais processos.

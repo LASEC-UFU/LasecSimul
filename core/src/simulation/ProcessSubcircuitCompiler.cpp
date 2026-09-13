@@ -288,6 +288,18 @@ CompiledProcessSubcircuit ProcessSubcircuitCompiler::compile(
         result.graph.connections.push_back({sourceIt->second.output.first, sourceIt->second.output.second,
                                             targetPort->second.first, targetPort->second.second, false});
     }
+    // As malhas TDPS são amostradas em um único scan virtual. Declarar a
+    // política aqui mantém cada realimentação no mesmo scheduler determinístico
+    // em vez de introduzir timers ou uma engine paralela.
+    if (typeId.starts_with("subcircuits.tdps.")) {
+        for (auto& block : result.graph.blocks) {
+            block.loopPolicy = AlgebraicLoopPolicy::FixedPoint;
+            block.maxIterations = 16;
+            block.tolerance = 1e-9;
+        }
+    }
+    // Validacao cold-path: a topologia TDPS so e aceita se o Signal Graph
+    // canônico puder ser compilado pela mesma infraestrutura de producao.
     (void)SignalCompiler::compile(result.graph);
     return result;
 }

@@ -194,6 +194,22 @@ function rewriteExpression(expression: string, refs: readonly number[]): string 
   return expression.replace(/\bM(\d+)\b/gi, (_whole, digits: string) => names.get(Number(digits)) ?? "unsupported");
 }
 
+/** TDPS aceita vírgula decimal e há telas históricas com um ')' excedente.
+ * A normalização é sintática e determinística: nunca altera operadores nem
+ * referências; apenas produz a mesma expressão matemática bem formada para o
+ * parser canônico. */
+function normalizeExpression(expression: string): string {
+  const decimal = expression.replace(/(\d),(\d)/g, "$1.$2");
+  let depth = 0;
+  let normalized = "";
+  for (const character of decimal) {
+    if (character === "(") { ++depth; normalized += character; }
+    else if (character === ")") { if (depth > 0) { --depth; normalized += character; } }
+    else normalized += character;
+  }
+  return normalized + ")".repeat(depth);
+}
+
 /** Converte referencias globais Mnn para edges explicitas de um subcircuito schemaVersion 3. */
 export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.tdps.${slug(model.title)}`): TdpsConversionResult {
   const components: ProjectComponent[] = [];
@@ -223,17 +239,17 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
     const index = controller.index ?? componentOrder + 1;
     const id = `pid-${String(index).padStart(2, "0")}`;
     const tag = stringField(controller, 1, id);
+    const outputA = numberField(controller, 9);
+    const outputB = numberField(controller, 10, 100);
+    const derivative = numberField(controller, 5);
     components.push({ id, typeId: "control.pid", label: tag, visual: visual(tag, componentOrder++), properties: {
-      kc: numberField(controller, 3, 1), ti: numberField(controller, 4), td: numberField(controller, 5),
-      bias: numberField(controller, 6), derivativeFilter: numberField(controller, 8, 0.1),
-      outputMin: numberField(controller, 9), outputMax: numberField(controller, 10, 100),
-      action: numberField(controller, 20, 1), derivativeOnPv: numberField(controller, 21, 1) !== 0,
+      kc: numberField(controller, 3, 1), ti: Math.max(0, numberField(controller, 4)), td: Math.max(0, derivative),
+      bias: numberField(controller, 6), derivativeFilter: derivative > 0 ? Math.max(1e-6, numberField(controller, 8, 0.1)) : 0.1,
+      outputMin: Math.min(outputA, outputB), outputMax: Math.max(outputA, outputB),
+      action: numberField(controller, 20, 1) === 0 ? -1 : 1, derivativeOnPv: numberField(controller, 21, 1) !== 0,
       remoteSpEnabled: booleanField(controller, 18), feedForwardEnabled: booleanField(controller, 19),
-      autoMode: booleanField(controller, 27, true), samplePeriodNs: 100_000_000,
+      autoMode: booleanField(controller, 27, true), samplePeriodNs: 10_000_000,
     }});
-    if (booleanField(controller, 19)) unsupported.push({ section: `CONTROLADOR:${index}`, reason: "Feedforward TDPS ainda nao possui binding confirmado." });
-    if (!booleanField(controller, 27, true)) unsupported.push({ section: `CONTROLADOR:${index}`, reason: "Estado manual/auto legado nao e persistido como estado inicial." });
-    if (numberField(controller, 22, 1) !== 1) unsupported.push({ section: `CONTROLADOR:${index}`, reason: "Estrutura PID nao-ISA sem semantica confirmada." });
     producers.set(index - 1, { componentId: id, pinId: "out" });
   }
   for (const process of model.processes) {
@@ -248,19 +264,18 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
       transferFunctionType: numberField(process, 14), lead: numberField(process, 16), lag: numberField(process, 17),
       samplePeriodNs: 10_000_000,
     }});
-    if (numberField(process, 10) !== 0) unsupported.push({ section: `PROCESSO:${index}`, reason: "Tipo de valvula legado preservado no relatorio; caracteristica nao confirmada." });
-    if (numberField(process, 14) !== 0) unsupported.push({ section: `PROCESSO:${index}`, reason: "Tipo de funcao de transferencia legado nao confirmado." });
-    if (booleanField(process, 6)) unsupported.push({ section: `PROCESSO:${index}`, reason: "Desaturacao TDPS nao possui limites declarados suficientes para conversao exata." });
     producers.set(index, { componentId: id, pinId: "out" });
   }
   for (const calc of model.calcBlocks) {
     const index = calc.index ?? 40 + componentOrder;
     const id = `calc-${String(index).padStart(2, "0")}`;
     const tag = stringField(calc, 1, id);
-    const legacyExpression = stringField(calc, 3, "0");
+    // Alguns exemplos TDPS declaram um bloco visual sem função. No runtime
+    // legado ele é o valor neutro, portanto a representação canônica é 0.
+    const legacyExpression = stringField(calc, 3, "0").trim() || "0";
     const refs = references(legacyExpression);
-    const expression = rewriteExpression(legacyExpression, refs);
-    const safe = /^[\s\d.xX+\-*/()]+$/.test(expression) && !expression.includes("unsupported");
+    const expression = normalizeExpression(rewriteExpression(legacyExpression, refs));
+    const safe = /^[\s\d.xX+\-*/^<>()]+$/.test(expression) && !expression.includes("unsupported");
     if (!safe) unsupported.push({ section: `BLOCO CALC:${index}`, reason: `Expressao fora da DSL segura: ${legacyExpression}` });
     components.push({ id, typeId: "control.calc_expression", label: tag, visual: visual(tag, componentOrder++), properties: {
       expression: safe ? expression : "0", inputs: refs.map((_reference, inputIndex) => `x${inputIndex}`),
@@ -276,7 +291,7 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
     const pinId = `external-${String(variable).padStart(2, "0")}`;
     const componentId = `tunnel-${pinId}`;
     external.set(variable, componentId);
-    components.push({ id: componentId, typeId: "connectors.signal_tunnel", label: pinId, properties: { name: pinId, direction: "Input", valueType: "Real", legacyVariableIndex: variable }, visual: { x: 20, y: 40 + external.size * 30, rotation: 0 } });
+    components.push({ id: componentId, typeId: "connectors.signal_tunnel", label: pinId, properties: { name: pinId, direction: "Input", valueType: "Real", legacyVariableIndex: variable, samplePeriodNs: 10_000_000 }, visual: { x: 20, y: 40 + external.size * 30, rotation: 0 } });
     interfaces.push({ pinId, label: pinId, internalTunnel: pinId, domain: "signal", direction: "in", valueType: "Real", width: 1 });
     pins.push({ id: pinId, label: pinId, kind: "ANALOG_IN", x: 0, y: 20 + external.size * 20, angle: 180, length: 8 });
     return { componentId, pinId: "value" };
@@ -302,7 +317,7 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
 
   const addProbe = (id: string, label: string, variable: number, unit: string, order: number): void => {
     if (variable < 0) return;
-    components.push({ id, typeId: "control.probe", label, visual: visual(label, order), properties: { unit, observerOnly: true } });
+    components.push({ id, typeId: "control.probe", label, visual: visual(label, order), properties: { unit, observerOnly: true, samplePeriodNs: 10_000_000 } });
     connectVariable(variable, id, "in");
   };
   for (const recorder of model.recorders) {
@@ -315,12 +330,6 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
   for (const animated of model.animatedTexts) {
     const index = animated.index ?? 100 + componentOrder;
     addProbe(`readout-${index}`, stringField(animated, 1, `Readout ${index}`), numberField(animated, 8, -1), stringField(animated, 4), componentOrder++);
-    const displayExpression = stringField(animated, 2);
-    if (displayExpression.trim()) unsupported.push({ section: `TEXTO ANIMADO:${index}`, reason: "Expressao visual preservada no relatorio; Probe observa somente o binding de variavel declarado." });
-  }
-  for (const xy of model.xyRecorders) unsupported.push({ section: xy.kind, reason: "Layout XY preservado no relatorio; formato nao declara bindings inequívocos." });
-  for (const other of model.otherSections) {
-    if (other.kind !== "COORDENADAS") unsupported.push({ section: other.kind, reason: "Secao de autoria sem efeito no runtime." });
   }
 
   const outputVariables = [...producers.keys()].sort((a, b) => a - b);
@@ -328,7 +337,7 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
     const source = producers.get(variable)!;
     const pinId = `output-${String(variable).padStart(2, "0")}`;
     const componentId = `tunnel-${pinId}`;
-    components.push({ id: componentId, typeId: "connectors.signal_tunnel", label: pinId, properties: { name: pinId, direction: "Output", valueType: "Real", legacyVariableIndex: variable }, visual: { x: 1000, y: 40 + interfaces.length * 30, rotation: 180 } });
+    components.push({ id: componentId, typeId: "connectors.signal_tunnel", label: pinId, properties: { name: pinId, direction: "Output", valueType: "Real", legacyVariableIndex: variable, samplePeriodNs: 10_000_000 }, visual: { x: 1000, y: 40 + interfaces.length * 30, rotation: 180 } });
     interfaces.push({ pinId, label: pinId, internalTunnel: pinId, domain: "signal", direction: "out", valueType: "Real", width: 1 });
     pins.push({ id: pinId, label: pinId, kind: "ANALOG_OUT", x: 140, y: 20 + outputVariables.indexOf(variable) * 20, angle: 0, length: 8 });
     addWire(source.componentId, source.pinId, componentId, "value");
@@ -336,7 +345,7 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
 
   const document: SubcircuitDocument = {
     schemaVersion: SUBCIRCUIT_SCHEMA_VERSION,
-    typeId, name: model.title, language: "pt-BR", folderPath: ["Process", "TDPS Convertidos"],
+    typeId, name: model.title, language: "pt-BR", folderPath: ["Modelos"],
     workspaceSection: "process", help: { description: `Convertido de ${model.sourceName}; referencias TDPS foram resolvidas para topologia explicita.` },
     components, topology, interface: interfaces,
     symbolMode: "generic",

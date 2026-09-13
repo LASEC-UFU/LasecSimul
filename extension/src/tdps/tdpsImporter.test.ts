@@ -104,25 +104,31 @@ function listSmpFiles(root: string): string[] {
     assert(second.topology.conductors.length > first.topology.conductors.length, "topologias convertidas devem ser independentes");
   });
 
-  await test("biblioteca de processos TDPS usa schema v3 valido, pasta Process e DSL canonica", () => {
+  await test("biblioteca TDPS declarada no inventario usa schema v3, SignalTunnel e imagens distintas", () => {
     const repositoryRoot = path.resolve(__dirname, "../../../../");
-    for (const name of [
-      "process_fopdt", "tdps_basic_flow_loop", "tdps_smith_predictor", "tdps_split_range",
-      "tdps_surge_tank_level", "tdps_heat_exchanger", "tdps_furnace_combustion", "tdps_boiler_drum",
-      "tdps_reactor_temperature", "tdps_ph_neutralization",
-    ]) {
-      const file = path.join(repositoryRoot, "subcircuits", `${name}.lssubcircuit`);
+    const coverage = JSON.parse(fs.readFileSync(path.join(repositoryRoot, ".spec", "fixtures", "tdps-v771-coverage.json"), "utf8")) as { entries: Array<{ file: string }> };
+    const library = JSON.parse(fs.readFileSync(path.join(repositoryRoot, ".spec", "fixtures", "tdps-v771-library.json"), "utf8")) as {
+      entries: Array<{ source: string; bitmap: string; file: string; typeId: string; label: string }>;
+    };
+    assert(library.entries.length === coverage.entries.length, "inventario da biblioteca deve cobrir cada fonte TDPS auditada");
+    assert(new Set(library.entries.map((entry) => entry.source.toLowerCase())).size === coverage.entries.length, "fontes TDPS precisam de identidade estavel e unica");
+    assert(new Set(library.entries.map((entry) => entry.file)).size === library.entries.length, "cada fonte TDPS precisa gerar um unico arquivo");
+    for (const entry of library.entries) {
+      const file = path.join(repositoryRoot, "subcircuits", entry.file);
       const parsed = parseSubcircuitDocument(JSON.parse(fs.readFileSync(file, "utf8")), path.dirname(file));
-      assert(parsed.ok, `${name} deveria ser um .lssubcircuit schemaVersion 3 parseavel`);
+      assert(parsed.ok, `${entry.file} deveria ser um .lssubcircuit schemaVersion 3 parseavel`);
       if (!parsed.ok) continue;
       const validation = validateSubcircuitDocument(parsed.document);
-      assert(validation.errors.length === 0, `${name}: ${validation.errors.join(" | ")}`);
-      assert(parsed.document.workspaceSection === "process", `${name} deveria estar no workspace Process`);
-      // Reorganização: "Process/TDPS Convertidos" (e o "Process" redundante de process_fopdt) deram
-      // lugar a uma única pasta "Modelos" direto em Processo -- sem nível de pasta intermediário.
-      assert(JSON.stringify(parsed.document.folderPath) === JSON.stringify(["Modelos"]), `${name} deveria estar direto em Processo/Modelos, sem "TDPS Convertidos"/"Process" (folderPath=${JSON.stringify(parsed.document.folderPath)})`);
+      assert(validation.errors.length === 0, `${entry.file}: ${validation.errors.join(" | ")}`);
+      assert(parsed.document.typeId === entry.typeId && parsed.document.name === entry.label, `${entry.file} deve manter identidade e nome do inventario`);
+      assert(parsed.document.workspaceSection === "process", `${entry.file} deveria estar no workspace Process`);
+      assert(JSON.stringify(parsed.document.folderPath) === JSON.stringify(["Modelos"]), `${entry.file} deveria aparecer diretamente em Processo > Modelos`);
+      assert(parsed.document.components.every((component) => component.typeId !== "connectors.tunnel"), `${entry.file} nao pode usar tunel eletrico legado`);
+      assert(parsed.document.components.some((component) => component.typeId === "connectors.signal_tunnel"), `${entry.file} deve usar SignalTunnel`);
+      const image = path.join(repositoryRoot, "subcircuits", "tdps-reference-images", entry.file.replace(/\.lssubcircuit$/, ".png"));
+      assert(fs.existsSync(image), `${entry.file} precisa da imagem de referencia normalizada`);
       for (const component of parsed.document.components.filter((candidate) => candidate.typeId === "control.calc_expression")) {
-        assert(!/\bM\d+\b/i.test(String(component.properties.expression ?? "")), `${name}/${component.id} ainda contem Mnn operacional`);
+        assert(!/\bM\d+\b/i.test(String(component.properties.expression ?? "")), `${entry.file}/${component.id} ainda contem Mnn operacional`);
       }
     }
   });
