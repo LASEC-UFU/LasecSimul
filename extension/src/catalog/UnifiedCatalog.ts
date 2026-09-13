@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { McuSerialPortEntry, PackageDescriptor, PropertySchemaEntry, WebviewComponentCatalogEntry } from "../ui/webview/model";
 import { defaultComponentCatalog } from "../ui/webview/catalog";
+import { controlGraphCatalog } from "./controlGraphCatalog";
 import { sanitizeMcuSerialPorts } from "./catalogMetadata";
 import { WorkspaceSection } from "../ui/webview/workspace";
 
@@ -239,7 +240,12 @@ export function loadUnifiedCatalog(extensionPath: string, requestedLanguage?: st
   const { sourcePath, file } = readUnifiedCatalogFile(extensionPath);
   const baseLanguage = typeof file.language === "string" && file.language.trim() ? file.language : "pt-BR";
   const resolvedItems = resolveLocalizedItems(file.items, requestedLanguage, baseLanguage, file.translations);
-  const catalog = resolvedItems.map(entryToWebview);
+  const loadedCatalog = resolvedItems.map(entryToWebview);
+  // TDPS and the bundled control-block subcircuits use these Core-native
+  // SignalEngine primitives internally. They must be in the visual catalog
+  // even though they are hidden from the placement palette.
+  const known = new Set(loadedCatalog.map((entry) => entry.typeId));
+  const catalog = [...loadedCatalog, ...controlGraphCatalog.filter((entry) => !known.has(entry.typeId))];
   const deviceLibraries = Array.isArray(file.deviceLibraries)
     ? file.deviceLibraries.filter((p): p is string => typeof p === "string" && p.trim().length > 0)
     : DEFAULT_DEVICE_LIBRARIES;

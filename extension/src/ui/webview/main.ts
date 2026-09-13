@@ -278,6 +278,8 @@ const UI_TEXT = {
     zoomFitSelection: "Ajustar zoom à seleção",
     zoomFitAll: "Ajustar zoom a tudo",
     zoomReset: "Zoom 1:1",
+    blocksToDsl: "Converter blocos para DSL",
+    dslToBlocks: "Aplicar DSL aos blocos",
     saveProjectAs: "Salvar Como",
     importCircuit: "Importar Circuito...",
     editingSubcircuit: "Editando:",
@@ -412,6 +414,8 @@ const UI_TEXT = {
     zoomFitSelection: "Zoom to selection",
     zoomFitAll: "Zoom to fit all",
     zoomReset: "Zoom 1:1",
+    blocksToDsl: "Convert blocks to DSL",
+    dslToBlocks: "Apply DSL to blocks",
     saveProjectAs: "Save As",
     importCircuit: "Import Circuit...",
     editingSubcircuit: "Editing:",
@@ -2601,6 +2605,8 @@ function renderAppBar(): HTMLElement {
   const editGroup = document.createElement("div");
   editGroup.className = "appbar__group";
   editGroup.append(
+    renderToolbarButton("blocksToDsl", t("blocksToDsl"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenDslEditor" })),
+    renderToolbarButton("dslToBlocks", t("dslToBlocks"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestApplyDsl" })),
     renderToolbarButton("properties", t("componentProperties"), () => openSelectedProperties(), !getSelectedComponent()),
     renderToolbarButton(
       "delete",
@@ -2648,7 +2654,7 @@ function renderAppBar(): HTMLElement {
   return bar;
 }
 
-type ToolbarIconKind = "open" | "save" | "saveProjectAs" | "start" | "pause" | "stop" | "properties" | "delete" | "zoomFitSelection" | "zoomFitAll" | "zoomReset" | "back" | "createPin" | "selectExposedComponents" | "selectExportedProperties";
+type ToolbarIconKind = "open" | "save" | "saveProjectAs" | "start" | "pause" | "stop" | "properties" | "delete" | "zoomFitSelection" | "zoomFitAll" | "zoomReset" | "blocksToDsl" | "dslToBlocks" | "back" | "createPin" | "selectExposedComponents" | "selectExportedProperties";
 
 function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, "svg");
@@ -2679,6 +2685,12 @@ function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
       break;
     case "properties":
       svg.innerHTML = '<path d="M6 7h12"></path><path d="M6 12h12"></path><path d="M6 17h8"></path><circle cx="16.5" cy="17" r="1.75"></circle>';
+      break;
+    case "blocksToDsl":
+      svg.innerHTML = '<path d="M5 5h14v14H5z"></path><path d="m9 9-2 3 2 3"></path><path d="m15 9 2 3-2 3"></path><path d="M11 16h2"></path>';
+      break;
+    case "dslToBlocks":
+      svg.innerHTML = '<path d="M5 5h14v14H5z"></path><path d="m8 12 2.5 2.5L16 9"></path>';
       break;
     case "delete":
       svg.innerHTML = '<path d="M6 7h12"></path><path d="M9 7V5h6v2"></path><path d="M8 7l1 11h6l1-11"></path><path d="M10 10v5"></path><path d="M14 10v5"></path>';

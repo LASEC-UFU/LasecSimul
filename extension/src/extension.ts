@@ -102,6 +102,7 @@ import {
 } from "./catalog/subcircuitInternals";
 import { initSimulationLog, logSimulation, noteSimulationStatusChange, showSimulationLogChannel } from "./diagnostics/simulationLog";
 import { importTdpsSmpCommand } from "./tdps/tdpsCommand";
+import { controlGraphPinIds } from "./catalog/controlGraphCatalog";
 import { ProjectCustomEditorProvider } from "./ui/panels/ProjectCustomEditorProvider";
 import { SimulideImportCustomEditorProvider } from "./ui/panels/SimulideImportCustomEditorProvider";
 import { IecProjectEditorProvider } from "./plc/IecProjectEditorProvider";
@@ -1013,6 +1014,8 @@ async function chooseFilePropertyCommand(componentId: string, propertyKey: strin
  * `pinIds` estáticos já cadastrados no catálogo pro caso default, sem regressão pros chamadores que
  * não foram atualizados pra passar a instância real. */
 export function pinsForTypeId(typeId: string, properties?: Record<string, unknown>): Array<{ id: string; x: number; y: number }> {
+  const controlPins = controlGraphPinIds(typeId, properties ?? {});
+  if (controlPins) return controlPins.map((id, index) => ({ id, x: 0, y: index * 12 }));
   // `protocol.hart.serial`/`protocol.hart.udp` têm `pinCount: 0` fixo no catálogo -- sem pino
   // elétrico nenhum (ver `HartCommunicationComponent::pins()`). Os únicos pinos de canvas que
   // existem são as portas Signal Graph genéricas derivadas de `hartVariablesJson` (Input/Output),
@@ -1182,6 +1185,14 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     return;
   }
   switch (message.type) {
+    case "requestOpenDslEditor": {
+      void openDslCommand();
+      return;
+    }
+    case "requestApplyDsl": {
+      void commitDslCommand();
+      return;
+    }
     case "selectionChanged": {
       const selected = message.componentId ? state.schematicState.components.find((c) => c.id === message.componentId) : undefined;
       propertyInspectorView?.setSelection(selected);

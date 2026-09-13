@@ -183,6 +183,10 @@ export type HostToWebviewMessage =
 export type WebviewToHostMessage =
   | { version: number; type: "selectionChanged"; componentId: string | null }
   | { version: number; type: "webviewReady" }
+  /** Toolbar conversion actions: the textual DSL is a view of the same
+   * authoring model, never a parallel circuit representation. */
+  | { version: number; type: "requestOpenDslEditor" }
+  | { version: number; type: "requestApplyDsl" }
   | { version: number; type: "projectChanged"; project: WebviewProjectState }
   | { version: number; type: "requestAddComponent"; typeId: string }
   /** `scope` -- em qual cena inserir (`main.ts::subcircuitEditorMode`, traduzido pro vocabulário do
