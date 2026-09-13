@@ -99,6 +99,9 @@ _deps/
 # Saida de build/empacotamento (gerada por scripts/build-all.js e scripts/package-release.js)
 /dist/
 /extension/.vscode-test/
+
+# Perfis temporários criados pelos testes headless da extensão
+.vscode-extension-test-host*/
 /extension/test/e2e/artifacts/
 /packaging/*/obj/
 /packaging/*/bin/
