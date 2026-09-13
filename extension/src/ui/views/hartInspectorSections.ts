@@ -1,5 +1,5 @@
 /** Property Inspector Variables/Commands editors for HART devices
- * (`protocol.hart.serial`/`protocol.hart.udp`, `HartCommunicationComponent`).
+ * (`peripherals.udp`, `HartCommunicationComponent`).
  *
  * Pure, `vscode`-free (Node-testable, same convention as `batchProperties.ts`)
  * -- `PropertyInspectorViewProvider.ts` calls these to build the HTML it

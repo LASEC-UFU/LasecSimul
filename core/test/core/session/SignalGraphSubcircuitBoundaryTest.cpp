@@ -153,7 +153,7 @@ SubcircuitDefinition makeHartOutputWrapperDefinition() {
     def.typeId = "subcircuits.hart_output_wrapper";
     def.name = "HART Output Wrapper";
     def.components = {
-        {"hart", "protocol.hart.serial",
+        {"hart", "protocol.hart.internal",
          R"({"bus":"hart-sub-out","endpoint":"COM40","uniqueId":"DDDDDD","pollingAddress":5,"enabled":true,)"
          R"("hartVariablesJson":"[{\"id\":\"measured\",\"name\":\"Measured\",\"type\":\"Float32\",\"direction\":\"Output\",\"value\":66.0,\"unit\":\"kPa\"}]"})"},
         {"sig_out", "connectors.signal_tunnel", R"({"name":"OUT","direction":"Output","valueType":"Real","unit":"kPa"})"},
@@ -169,7 +169,7 @@ SubcircuitDefinition makeHartInputWrapperDefinition() {
     def.typeId = "subcircuits.hart_input_wrapper";
     def.name = "HART Input Wrapper";
     def.components = {
-        {"hart", "protocol.hart.serial",
+        {"hart", "protocol.hart.internal",
          R"({"bus":"hart-sub-in","endpoint":"COM41","uniqueId":"EEEEEE","pollingAddress":6,"enabled":true,)"
          R"("hartVariablesJson":"[{\"id\":\"setpoint\",\"name\":\"Setpoint\",\"type\":\"Float32\",\"direction\":\"Input\",\"value\":0.0,\"unit\":\"kPa\"}]"})"},
         {"sig_in", "connectors.signal_tunnel", R"({"name":"IN","direction":"Input","valueType":"Real","unit":"kPa"})"},
@@ -180,7 +180,7 @@ SubcircuitDefinition makeHartInputWrapperDefinition() {
 }
 
 void registerHartFactory(SimulationSession& session) {
-    session.components().registerFactory("protocol.hart.serial", [&session](const ComponentParams& p) {
+    session.components().registerFactory("protocol.hart.internal", [&session](const ComponentParams& p) {
         return std::make_unique<protocols::HartCommunicationComponent>(
             protocols::HartCommunicationComponent::Mode::Serial, session.scheduler(), p);
     });

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { state } from "../state.js";
 import { rebuildCoreFromSchematicState } from "../core/coreLifecycle.js";
+import { DslPanel } from "../ui/panels/DslPanel.js";
 import { parseDsl } from "./DslParser.js";
 import { reconcileDsl } from "./DslReconciler.js";
 import { stateToDsl } from "./DslSerializer.js";
@@ -39,19 +40,22 @@ function reportDiagnostics(uri: vscode.Uri, errors: Array<{ message: string; lin
 }
 
 export async function openDslCommand(): Promise<void> {
-  if (!state.schematicPanel) { vscode.window.showInformationMessage("Abra o Esquemático antes de alternar para DSL."); return; }
+  if (DslPanel.current) { DslPanel.createOrShow(state.extensionContext!.extensionUri, "", () => void commitDslCommand(), () => { dslDraftOpenListener?.(false); void vscode.commands.executeCommand("lasecsimul.openSchematicEditor"); }); return; }
+  if (!state.schematicPanel || !state.extensionContext) { vscode.window.showInformationMessage("Abra o Esquemático antes de alternar para DSL."); return; }
   const source = stateToDsl(state.schematicState, state.currentProjectFilePath ? state.currentProjectFilePath.split(/[\\/]/).pop()?.replace(/\.lsproj$/i, "") : "Circuit");
-  setDslDocument(await vscode.workspace.openTextDocument({ language: "lasecsimul-dsl", content: source }));
-  await vscode.window.showTextDocument(dslDocument!, vscode.ViewColumn.One, false);
+  state.schematicPanel.dispose();
+  DslPanel.createOrShow(state.extensionContext.extensionUri, source, () => void commitDslCommand(), () => { dslDraftOpenListener?.(false); void vscode.commands.executeCommand("lasecsimul.openSchematicEditor"); });
+  dslDraftOpenListener?.(true);
 }
 
 export async function commitDslCommand(): Promise<boolean> {
-  const document = dslDocument ?? (vscode.window.activeTextEditor?.document.languageId === "lasecsimul-dsl" ? vscode.window.activeTextEditor.document : undefined);
-  if (!document) { vscode.window.showWarningMessage("Nenhum documento DSL está aberto."); return false; }
-  const parsed = parseDsl(document.getText());
-  if (!parsed.document) { reportDiagnostics(document.uri, parsed.diagnostics); vscode.window.showErrorMessage("DSL inválida: nenhuma alteração foi aplicada."); return false; }
+  const panelSource = DslPanel.current?.source;
+  const document = panelSource === undefined ? dslDocument ?? (vscode.window.activeTextEditor?.document.languageId === "lasecsimul-dsl" ? vscode.window.activeTextEditor.document : undefined) : undefined;
+  if (panelSource === undefined && !document) { vscode.window.showWarningMessage("Nenhum documento DSL está aberto."); return false; }
+  const parsed = parseDsl(panelSource ?? document!.getText());
+  if (!parsed.document) { if (document) reportDiagnostics(document.uri, parsed.diagnostics); vscode.window.showErrorMessage("DSL inválida: nenhuma alteração foi aplicada."); return false; }
   const reconciled = reconcileDsl(parsed.document, state.schematicState, state.schematicState.catalog);
-  reportDiagnostics(document.uri, [...parsed.diagnostics, ...reconciled.diagnostics]);
+  if (document) reportDiagnostics(document.uri, [...parsed.diagnostics, ...reconciled.diagnostics]);
   if (!reconciled.state) { vscode.window.showErrorMessage("DSL inválida: nenhuma alteração foi aplicada."); return false; }
   const previous = state.schematicState;
   state.schematicState = { ...previous, components: reconciled.state.components, topology: reconciled.state.topology, selectedComponentIds: [], selectedWireIds: [] };
@@ -60,14 +64,17 @@ export async function commitDslCommand(): Promise<boolean> {
   state.schematicPanel?.setDirty(true);
   state.schematicPanel?.postMessage({ version: 1, type: "syncState", project: state.schematicState });
   await rebuildCoreFromSchematicState();
+  if (DslPanel.current) DslPanel.current.dispose(false);
+  dslDraftOpenListener?.(false);
+  await vscode.commands.executeCommand("lasecsimul.openSchematicEditor");
   vscode.window.showInformationMessage("DSL aplicada ao modelo de autoria.");
   return true;
 }
 
-export function isDslDocumentOpen(): boolean { return Boolean(dslDocument); }
+export function isDslDocumentOpen(): boolean { return Boolean(dslDocument || DslPanel.current); }
 
 /** Save/Run use this gate so a textual draft can never silently bypass validation. */
 export async function commitOpenDslIfPresent(): Promise<boolean> {
-  if (!dslDocument && vscode.window.activeTextEditor?.document.languageId !== "lasecsimul-dsl") return true;
+  if (!DslPanel.current && !dslDocument && vscode.window.activeTextEditor?.document.languageId !== "lasecsimul-dsl") return true;
   return commitDslCommand();
 }

@@ -144,7 +144,9 @@ const catalog: PaletteRenderableEntry[] = [
   await test("catalogo real expoe Modbus e HART em Process/Protocolos Industriais", () => {
     const processTree = JSON.stringify(buildPaletteTree(defaultComponentCatalog, "", "process"));
     assert(processTree.includes("protocol.modbus.server") && processTree.includes("protocol.modbus.client"), "Processo deveria conter servidor e cliente Modbus");
-    assert(processTree.includes("protocol.hart.transmitter") && processTree.includes("protocol.hart.communicator") && processTree.includes("protocol.hart.serial") && processTree.includes("protocol.hart.udp"), "Processo deveria conter os blocos HART");
+    assert(processTree.includes("protocol.hart.transmitter") && processTree.includes("protocol.hart.communicator"), "Processo deveria conter os blocos HART");
+    const miscTree = JSON.stringify(buildPaletteTree(defaultComponentCatalog, "", "misc"));
+    assert(miscTree.includes("peripherals.udp"), "Miscelâneos deveria conter o UDP");
     for (const typeId of ["protocol.hart.device.smar_ld301", "protocol.hart.device.smar_tt301", "protocol.hart.device.smar_fy301"]) {
       assert(processTree.includes(typeId), `${typeId} deveria aparecer na paleta HART`);
     }

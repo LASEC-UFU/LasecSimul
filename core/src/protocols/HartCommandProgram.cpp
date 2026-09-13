@@ -244,6 +244,13 @@ std::optional<std::span<const uint8_t>> evalExpr(const HartExpr& expr, HartExecu
                     case HartVariableType::Bool:
                         scratch[0] = value.value != 0.0 ? 1 : 0;
                         return std::span<const uint8_t>(scratch.data(), 1);
+                    case HartVariableType::Enum:
+                    case HartVariableType::BitEnum: {
+                        const auto width = std::clamp<size_t>(value.wireWidth, 1, 2);
+                        const auto encoded = HartTypeCodec::encodeUnsignedBE(static_cast<uint32_t>(value.value), width);
+                        std::copy(encoded.begin(), encoded.end(), scratch.begin());
+                        return std::span<const uint8_t>(scratch.data(), encoded.size());
+                    }
                     case HartVariableType::PackedAscii:
                         // A PackedAscii-typed value is textual; `UserVariable`
                         // only carries a numeric `double` today (see

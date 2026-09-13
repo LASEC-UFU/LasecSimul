@@ -227,7 +227,12 @@ struct HartExecutionVariables {
     float loopCurrentZeroTrim = 0.0f;
     float loopCurrentGainTrim = 1.0f;
     uint8_t diagnosticStatus = 0;
-    struct UserVariable { std::string id; double value = 0.0; HartVariableType type = HartVariableType::Float32; };
+    struct UserVariable {
+        std::string id;
+        double value = 0.0;
+        HartVariableType type = HartVariableType::Float32;
+        uint8_t wireWidth = 1;
+    };
     std::span<const UserVariable> userVariables;
     struct DeviceVariable {
         uint8_t code = 0xFF;

@@ -239,10 +239,10 @@ enum class HartVariableRole : uint8_t {
     Internal, DeviceSpecific, VendorSpecific, Custom,
 };
 
-/** Only the types `HartTypeCodec` actually implements today; do not add a type
- * here the codec cannot encode (section 14 rule: no UI type disconnected from
- * a real codec). */
-enum class HartVariableType : uint8_t { Float32, UInt8, UInt16, Int16, PackedAscii, Bool };
+/** Every entry here has an on-wire codec.  Common Table ENUM/BIT_ENUM values
+ * are still numbers on the wire; their table id supplies human presentation
+ * in the authoring UI without turning labels into protocol data. */
+enum class HartVariableType : uint8_t { Float32, UInt8, UInt16, Int16, PackedAscii, Bool, Enum, BitEnum };
 
 /** The only public value-ownership choices for a HART variable. */
 enum class HartVariableDirection : uint8_t { Internal, Input, Output };
@@ -376,6 +376,9 @@ struct HartDevicePlan {
         float minimumTrimDifferential = std::numeric_limits<float>::quiet_NaN();
         float trimAdjustment = 0.0f;
         float factoryTrimAdjustment = 0.0f;
+        /** Kept last to retain aggregate-initializer compatibility for device
+         * profiles/tests. ENUM01 (expanded device type) uses two bytes. */
+        uint8_t wireWidth = 1;
     };
     std::vector<VariableConfiguration> variables;
     /** Packed-ASCII device tag used by command 0x0B tag matching; falls back to

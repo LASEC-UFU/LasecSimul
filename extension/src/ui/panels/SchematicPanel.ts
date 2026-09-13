@@ -116,6 +116,9 @@ export class SchematicPanel {
     this.applyTitle();
   }
 
+  /** Switches the single authoring surface to the DSL panel. */
+  dispose(): void { this.panel.dispose(); }
+
   private applyTitle(): void {
     const base = localizedPanelTitle(this.language);
     this.panel.title = this.dirty ? `${base} ●` : base;

@@ -112,6 +112,7 @@ const ROOT_FOLDER_PRIORITY: Partial<Record<WorkspaceSection, readonly string[]>>
   analog: ["Microcontroladores"],
   // PLC-IEC, Protocolos Industriais, Modelos -- nesta ordem -- dentro de Processo.
   process: ["PLC IEC 61131-3", "Protocolos Industriais", "Modelos"],
+  misc: ["peripherals"],
 };
 
 function applyRootFolderPriority(

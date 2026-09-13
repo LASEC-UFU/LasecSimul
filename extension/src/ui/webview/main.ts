@@ -33,6 +33,7 @@ import { isHighWireVoltage, reconcileWireVoltages } from "./wirePresentation.js"
 import { continuousDialValueFromPointer, steppedDialValue } from "./dialInteraction.js";
 import { contextMenuViewportSize, positionContextSubmenu, positionRootContextMenu } from "./contextMenuPosition.js";
 import { regenerateGenericSubcircuitState } from "./genericSubcircuitPackage.js";
+import { formatHartHex, hartCommonTableForType, hartVariableTypeOptions } from "./hartCommonTables.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FINE_WIRE_STEP = WIRE_GRID_SIZE / 10;
@@ -1118,6 +1119,324 @@ propertyDialog.addEventListener("close", () => {
   activePropertyTarget = undefined;
 });
 
+// The property editor is part of the schematic itself.  It does not depend on
+// VS Code's auxiliary sidebar, so selection and editing remain in one surface.
+const propertyDock = document.createElement("aside");
+propertyDock.className = "property-dock";
+document.body.appendChild(propertyDock);
+let propertyDockWidth = 340;
+// A representação é uma preferência de edição da sessão, não outro valor de
+// dispositivo: o Core continua recebendo sempre o número canônico.  Mantê-la
+// por componente faz o mesmo botão controlar os códigos das variáveis HART e
+// os campos internos do perfil que aparecem na folha acima delas.
+type HartPresentation = "human" | "hex";
+const hartPresentationByComponentId = new Map<string, HartPresentation>();
+function hartPresentationFor(component: WebviewComponentModel): HartPresentation {
+  return hartPresentationByComponentId.get(component.id) ?? "human";
+}
+function toggleHartPresentation(component: WebviewComponentModel): void {
+  hartPresentationByComponentId.set(component.id, hartPresentationFor(component) === "human" ? "hex" : "human");
+  renderPropertyDock();
+  refreshOpenPropertyDialog();
+}
+
+type HartTextWireCodec = "packed8" | "packed16" | "packed24" | "latin1_32" | "deviceId" | "text";
+const hartTextWireCodecByProperty: Readonly<Record<string, HartTextWireCodec>> = {
+  // These four are actual HART on-wire fields, not a cosmetic UTF-8 view.
+  tag: "packed8", message: "packed24", descriptor: "packed16", longTag: "latin1_32",
+  // The device identifier is already persisted as its three-byte hexadecimal
+  // identity. The remaining strings are still reversible byte views so HEX
+  // truly applies to every editable field in the HART group.
+  uniqueId: "deviceId", unit: "text", profileId: "text",
+};
+
+function hartHexBytes(bytes: readonly number[]): string {
+  return bytes.map((byte) => byte.toString(16).toUpperCase().padStart(2, "0")).join(" ");
+}
+function hartParseHexBytes(value: string): number[] | undefined {
+  const normalized = value.trim().replace(/^0x/i, "").replace(/[\s:_-]/g, "");
+  if (!normalized || normalized.length % 2 !== 0 || /[^0-9a-f]/i.test(normalized)) return undefined;
+  const bytes: number[] = [];
+  for (let index = 0; index < normalized.length; index += 2) bytes.push(Number.parseInt(normalized.slice(index, index + 2), 16));
+  return bytes;
+}
+function hartEncodePackedText(text: string, charCount: number): number[] {
+  const six = Array.from({ length: charCount }, (_, index) => {
+    const code = (text[index] ?? " ").toUpperCase().charCodeAt(0);
+    return code >= 0x20 && code <= 0x5F ? code & 0x3F : 0;
+  });
+  const bytes = Array.from({ length: Math.ceil(charCount * 6 / 8) }, () => 0);
+  let bitPos = 0;
+  for (const value of six) for (let bit = 5; bit >= 0; bit -= 1) {
+    if ((value & (1 << bit)) !== 0) bytes[Math.floor(bitPos / 8)]! |= 1 << (7 - (bitPos % 8));
+    bitPos += 1;
+  }
+  return bytes;
+}
+function hartDecodePackedText(bytes: readonly number[]): string {
+  let bitPos = 0;
+  let text = "";
+  for (let index = 0; index < Math.floor(bytes.length * 8 / 6); index += 1) {
+    let six = 0;
+    for (let bit = 0; bit < 6; bit += 1) {
+      six = (six << 1) | ((bytes[Math.floor(bitPos / 8)]! >> (7 - (bitPos % 8))) & 1);
+      bitPos += 1;
+    }
+    text += String.fromCharCode(six < 0x20 ? six + 0x40 : six);
+  }
+  return text.trimEnd();
+}
+function hartTextAsHex(value: unknown, codec: HartTextWireCodec): string {
+  const text = String(value ?? "");
+  if (codec === "deviceId") return `0x${text.replace(/[^0-9a-f]/gi, "").toUpperCase().padStart(6, "0").slice(-6)}`;
+  if (codec === "packed8") return hartHexBytes(hartEncodePackedText(text, 8));
+  if (codec === "packed16") return hartHexBytes(hartEncodePackedText(text, 16));
+  if (codec === "packed24") return hartHexBytes(hartEncodePackedText(text, 24));
+  const maxLength = codec === "latin1_32" ? 32 : undefined;
+  const bytes = Array.from(text, (character) => character.charCodeAt(0) & 0xFF);
+  if (maxLength !== undefined) while (bytes.length < maxLength) bytes.push(0x20);
+  return hartHexBytes(maxLength === undefined ? bytes : bytes.slice(0, maxLength));
+}
+function hartTextFromHex(value: string, codec: HartTextWireCodec): string | undefined {
+  if (codec === "deviceId") {
+    const compact = value.trim().replace(/^0x/i, "").replace(/[\s:_-]/g, "");
+    return /^[0-9a-f]{6}$/i.test(compact) ? compact.toUpperCase() : undefined;
+  }
+  const bytes = hartParseHexBytes(value);
+  if (!bytes) return undefined;
+  if (codec === "packed8" && bytes.length !== 6) return undefined;
+  if (codec === "packed16" && bytes.length !== 12) return undefined;
+  if (codec === "packed24" && bytes.length !== 18) return undefined;
+  if (codec === "packed8" || codec === "packed16" || codec === "packed24") return hartDecodePackedText(bytes);
+  if (codec === "latin1_32" && bytes.length !== 32) return undefined;
+  return String.fromCharCode(...bytes).trimEnd();
+}
+const propertyDockToggle = document.createElement("button");
+propertyDockToggle.type = "button";
+propertyDockToggle.className = "property-dock-toggle";
+propertyDockToggle.textContent = "Properties ‹";
+propertyDockToggle.title = "Show properties";
+propertyDockToggle.addEventListener("click", () => { propertyDockVisible = true; renderPropertyDock(); });
+document.body.appendChild(propertyDockToggle);
+let propertyDockVisible = true;
+
+function renderPropertyDock(): void {
+  propertyDock.replaceChildren();
+  propertyDock.hidden = !propertyDockVisible;
+  propertyDockToggle.hidden = propertyDockVisible;
+  if (!propertyDockVisible) return;
+  const resizeHandle = document.createElement("div");
+  resizeHandle.className = "property-dock__resize";
+  resizeHandle.title = "Drag to resize properties";
+  resizeHandle.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    resizeHandle.setPointerCapture(event.pointerId);
+    const onMove = (move: PointerEvent) => {
+      propertyDockWidth = Math.max(220, Math.min(Math.round(window.innerWidth * 0.65), window.innerWidth - move.clientX));
+      propertyDock.style.width = `${propertyDockWidth}px`;
+    };
+    const onEnd = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onEnd);
+      window.removeEventListener("pointercancel", onEnd);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onEnd, { once: true });
+    window.addEventListener("pointercancel", onEnd, { once: true });
+  });
+  const header = document.createElement("header");
+  header.className = "property-dock__header";
+  const title = document.createElement("strong");
+  title.textContent = "Properties";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.textContent = "›";
+  close.title = "Collapse properties";
+  close.addEventListener("click", () => { propertyDockVisible = false; renderPropertyDock(); });
+  header.append(title, close);
+  propertyDock.append(resizeHandle, header);
+  const components = getSelectedComponents();
+  if (components.length !== 1) {
+    const empty = document.createElement("p");
+    empty.className = "property-dock__empty";
+    empty.textContent = components.length > 1 ? "Select one component to edit its properties." : "Select a component in the schematic.";
+    propertyDock.appendChild(empty);
+    return;
+  }
+  propertyDock.appendChild(renderPropertySheet(components[0]!, {
+    onClose: () => { propertyDockVisible = false; renderPropertyDock(); },
+  }));
+  if (components[0]!.typeId.startsWith("protocol.hart.")) {
+    propertyDock.appendChild(renderHartAuthoringSections(components[0]!));
+  }
+}
+
+/** HART has two structured authoring collections that must remain visible in
+ * the in-schematic inspector.  They travel through the same canonical
+ * requestUpdateProperty path as every ordinary property. */
+function renderHartAuthoringSections(component: WebviewComponentModel): HTMLElement {
+  const shell = document.createElement("section");
+  shell.className = "property-dock__hart";
+  const makeCollection = (title: string, key: "hartVariablesJson" | "hartCommandsJson", empty: string): HTMLElement => {
+    const details = document.createElement("details");
+    details.open = true;
+    const summary = document.createElement("summary");
+    summary.textContent = title;
+    let rows: Array<Record<string, unknown>> = [];
+    try { const parsed = JSON.parse(String(component.properties[key] ?? empty)); if (Array.isArray(parsed)) rows = parsed.filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object")); } catch { /* Core validation reports malformed legacy data. */ }
+    const commit = () => { component.properties[key] = JSON.stringify(rows); send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: key, value: component.properties[key] as string }); };
+    const fields = key === "hartVariablesJson"
+      ? [
+          { key: "id", label: "Identificador", type: "text", readonly: true },
+          { key: "name", label: "Nome", type: "text" },
+          { key: "role", label: "Papel", type: "select", options: ["PV", "SV", "TV", "QV", "Internal", "DeviceSpecific", "VendorSpecific", "Custom"] },
+          { key: "type", label: "Tipo", type: "select", options: hartVariableTypeOptions().map((option) => option.value) },
+          { key: "direction", label: "Direção", type: "select", options: ["Internal", "Input", "Output"] },
+          { key: "unit", label: "Unidade", type: "text" },
+          { key: "value", label: "Valor", type: "number" },
+          { key: "runtimeMutable", label: "Editável durante simulação", type: "checkbox" },
+        ]
+      : [
+          { key: "id", label: "Número do comando", type: "number" },
+          { key: "name", label: "Nome", type: "text" },
+          { key: "enabled", label: "Habilitado", type: "checkbox" },
+        ];
+    const collection = document.createElement("div");
+    collection.className = "property-dock__collection";
+    const appendField = (grid: HTMLElement, row: Record<string, unknown>, field: typeof fields[number]) => {
+      const label = document.createElement("label");
+      label.className = "property-dock__field";
+      const name = document.createElement("span");
+      name.textContent = field.label;
+      const input = field.type === "select" ? document.createElement("select") : document.createElement("input");
+      if (input instanceof HTMLInputElement) {
+        input.type = field.type === "checkbox" ? "checkbox" : field.type;
+        input.readOnly = Boolean(field.readonly);
+        input.checked = field.type === "checkbox" && row[field.key] === true;
+        if (field.type !== "checkbox") input.value = String(row[field.key] ?? "");
+      } else {
+        for (const optionValue of field.options ?? []) {
+          const option = document.createElement("option");
+          option.value = optionValue;
+          option.textContent = field.key === "type" ? (hartVariableTypeOptions().find((option) => option.value === optionValue)?.label ?? optionValue) : optionValue;
+          input.appendChild(option);
+        }
+        input.value = String(row[field.key] ?? field.options?.[0] ?? "");
+      }
+      input.addEventListener("change", () => {
+        if (field.readonly) return;
+        row[field.key] = input instanceof HTMLInputElement && field.type === "checkbox" ? input.checked : field.type === "number" ? Number(input.value) : input.value;
+        commit();
+      });
+      label.append(name, input);
+      grid.appendChild(label);
+    };
+    const drawRows = () => {
+      collection.replaceChildren();
+      const hartPresentation = hartPresentationFor(component);
+      rows.forEach((row, rowIndex) => {
+        const item = document.createElement("section");
+        item.className = "property-dock__item";
+        const itemHeader = document.createElement("div");
+        itemHeader.className = "property-dock__item-header";
+        const itemTitle = document.createElement("strong");
+        itemTitle.textContent = key === "hartVariablesJson" ? String(row.name || row.id || `Variável ${rowIndex + 1}`) : `Comando ${String(row.id ?? rowIndex + 1)}${row.name ? ` — ${String(row.name)}` : ""}`;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "Remover";
+        remove.addEventListener("click", () => { rows.splice(rowIndex, 1); commit(); drawRows(); });
+        itemHeader.append(itemTitle, remove);
+        const grid = document.createElement("div");
+        grid.className = "property-dock__grid";
+        const typeTable = key === "hartVariablesJson" ? hartCommonTableForType(row.type) : undefined;
+        fields.filter((field) => !(typeTable && field.key === "value")).forEach((field) => appendField(grid, row, field));
+        if (key === "hartVariablesJson") {
+          const table = typeTable;
+          if (table) {
+            const presentation = document.createElement("div");
+            presentation.className = "property-dock__enum-value";
+            const label = document.createElement("span"); label.textContent = "Valor";
+            if (hartPresentation === "hex") {
+              const hex = document.createElement("input");
+              hex.value = formatHartHex(row.value, table.width);
+              hex.title = "Código hexadecimal transmitido no protocolo";
+              hex.addEventListener("change", () => {
+                const value = Number.parseInt(hex.value.replace(/^0x/i, ""), 16);
+                if (!Number.isNaN(value)) { row.value = value; commit(); drawRows(); }
+              });
+              presentation.append(label, hex);
+            } else if (table.kind === "enum") {
+              const select = document.createElement("select");
+              const current = typeof row.value === "number" ? Math.trunc(row.value) : 0;
+              const currentKnown = table.values[current] !== undefined;
+              if (!currentKnown) { const option = document.createElement("option"); option.value = String(current); option.textContent = `${formatHartHex(current, table.width)} — Código não catalogado`; select.appendChild(option); }
+              for (const [code, description] of Object.entries(table.values)) { const option = document.createElement("option"); option.value = code; option.textContent = `${formatHartHex(Number(code), table.width)} — ${description}`; select.appendChild(option); }
+              select.value = String(current);
+              select.addEventListener("change", () => { row.value = Number(select.value); commit(); drawRows(); });
+              presentation.append(label, select);
+            } else {
+              const checks = document.createElement("div"); checks.className = "property-dock__bit-checks";
+              const current = typeof row.value === "number" ? Math.trunc(row.value) : 0;
+              for (const [maskText, description] of Object.entries(table.values).filter(([mask]) => Number(mask) !== 0)) {
+                const mask = Number(maskText); const bit = document.createElement("label"); const checkbox = document.createElement("input"); checkbox.type = "checkbox"; checkbox.checked = (current & mask) === mask; checkbox.addEventListener("change", () => { const now = typeof row.value === "number" ? Math.trunc(row.value) : 0; row.value = checkbox.checked ? (now | mask) : (now & ~mask); commit(); drawRows(); }); bit.append(checkbox, document.createTextNode(`${formatHartHex(mask, table.width)} — ${description}`)); checks.appendChild(bit);
+              }
+              presentation.append(label, checks);
+            }
+            grid.appendChild(presentation);
+          }
+        }
+        item.append(itemHeader, grid);
+        if (key === "hartCommandsJson") {
+          const steps = Array.isArray(row.responseSteps) ? row.responseSteps.filter((step): step is Record<string, unknown> => Boolean(step && typeof step === "object")) : [];
+          row.responseSteps = steps;
+          const response = document.createElement("details");
+          response.className = "property-dock__response";
+          const responseTitle = document.createElement("summary");
+          responseTitle.textContent = "Resposta";
+          response.appendChild(responseTitle);
+          const renderSteps = () => {
+            const stepList = document.createElement("div");
+            stepList.className = "property-dock__steps";
+            steps.forEach((step, stepIndex) => {
+              const line = document.createElement("div");
+              line.className = "property-dock__step";
+              const kind = document.createElement("select");
+              ["hex", "variable", "body", "bodySlice"].forEach((value) => { const option = document.createElement("option"); option.value = value; option.textContent = value === "hex" ? "Bytes hexadecimais" : value === "variable" ? "Variável" : value === "body" ? "Corpo da requisição" : "Parte do corpo"; kind.appendChild(option); });
+              kind.value = String(step.kind ?? "hex");
+              const value = document.createElement("input");
+              const stepKind = kind.value;
+              value.type = stepKind === "bodySlice" ? "number" : "text";
+              value.placeholder = stepKind === "hex" ? "Ex.: CAFE" : stepKind === "variable" ? "Variável" : stepKind === "bodySlice" ? "Posição inicial" : "Sem parâmetro";
+              value.disabled = stepKind === "body";
+              value.value = String(stepKind === "hex" ? step.bytes ?? "" : stepKind === "variable" ? step.variable ?? "" : step.offset ?? 0);
+              const updateStep = () => { step.kind = kind.value; if (kind.value === "hex") step.bytes = value.value; else if (kind.value === "variable") step.variable = value.value; else if (kind.value === "bodySlice") step.offset = Number(value.value); commit(); };
+              kind.addEventListener("change", updateStep); value.addEventListener("change", updateStep);
+              const deleteStep = document.createElement("button"); deleteStep.type = "button"; deleteStep.textContent = "−"; deleteStep.title = "Remover etapa"; deleteStep.addEventListener("click", () => { steps.splice(stepIndex, 1); commit(); drawRows(); });
+              line.append(kind, value, deleteStep);
+              if (stepKind === "bodySlice") { const length = document.createElement("input"); length.type = "number"; length.value = String(step.length ?? 1); length.title = "Tamanho"; length.addEventListener("change", () => { step.length = Number(length.value); commit(); }); line.appendChild(length); }
+              stepList.appendChild(line);
+            });
+            const addStep = document.createElement("button"); addStep.type = "button"; addStep.textContent = "+ Adicionar etapa"; addStep.addEventListener("click", () => { steps.push({ kind: "hex", bytes: "" }); commit(); drawRows(); }); stepList.appendChild(addStep);
+            response.replaceChildren(responseTitle, stepList);
+          };
+          renderSteps();
+          item.appendChild(response);
+        }
+        collection.appendChild(item);
+      });
+    };
+    drawRows();
+    const add = document.createElement("button"); add.type = "button"; add.textContent = key === "hartVariablesJson" ? "+ Adicionar variável" : "+ Adicionar comando"; add.addEventListener("click", () => { rows.push(key === "hartVariablesJson" ? { id: `var${rows.length + 1}`, name: "Nova variável", unit: "", value: 0, role: "Internal", type: "Float32", direction: "Internal" } : { id: 128, name: "Novo comando", enabled: true, responseSteps: [] }); commit(); drawRows(); });
+    details.append(summary, collection, add);
+    return details;
+  };
+  shell.append(
+    makeCollection("HART Variables", "hartVariablesJson", "[]"),
+    makeCollection("HART Commands", "hartCommandsJson", "[]"),
+  );
+  return shell;
+}
+
 const contextMenu = document.createElement("div");
 contextMenu.className = "context-menu";
 contextMenu.hidden = true;
@@ -1897,6 +2216,7 @@ function selectOnlyComponent(componentId: string): void {
 function syncPropertyInspectorSelection(): void {
   const componentId = state.selectedComponentIds.length === 1 ? state.selectedComponentIds[0]! : null;
   send({ version: WEBVIEW_MESSAGE_VERSION, type: "selectionChanged", componentId });
+  renderPropertyDock();
 }
 
 function selectOnlyWire(wireId: string, segmentIndex?: number): void {
@@ -2108,9 +2428,8 @@ function handleWireGestureClick(target: WireGestureOrigin): void {
 }
 
 function openSelectedProperties(): void {
-  const components = getSelectedComponents();
-  if (components.length > 1) openBatchPropertyDialog(components);
-  else if (components.length === 1) openPropertyDialog(components[0]!);
+  propertyDockVisible = true;
+  renderPropertyDock();
 }
 
 function openPropertyDialog(component: WebviewComponentModel): void {
@@ -2474,7 +2793,7 @@ function showContextMenu(event: MouseEvent, items: ContextMenuItem[]): void {
   contextMenu.style.top = `${position.top}px`;
 }
 
-function renderToolbarButton(kind: ToolbarIconKind, title: string, onClick: () => void, disabled = false): HTMLButtonElement {
+function renderToolbarButton(kind: ToolbarIconKind, title: string, onClick: () => void, disabled = false, label?: string): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
   button.className = `appbar__button appbar__button--${kind}`;
@@ -2482,6 +2801,12 @@ function renderToolbarButton(kind: ToolbarIconKind, title: string, onClick: () =
   button.setAttribute("aria-label", title);
   button.disabled = disabled;
   button.appendChild(renderIcon(kind));
+  if (label) {
+    const labelElement = document.createElement("span");
+    labelElement.className = "appbar__button-label";
+    labelElement.textContent = label;
+    button.appendChild(labelElement);
+  }
   button.addEventListener("click", onClick);
   return button;
 }
@@ -2605,8 +2930,7 @@ function renderAppBar(): HTMLElement {
   const editGroup = document.createElement("div");
   editGroup.className = "appbar__group";
   editGroup.append(
-    renderToolbarButton("blocksToDsl", t("blocksToDsl"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenDslEditor" })),
-    renderToolbarButton("dslToBlocks", t("dslToBlocks"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestApplyDsl" })),
+    renderToolbarButton("blocksToDsl", t("blocksToDsl"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenDslEditor" }), false, "DSL"),
     renderToolbarButton("properties", t("componentProperties"), () => openSelectedProperties(), !getSelectedComponent()),
     renderToolbarButton(
       "delete",
@@ -3276,6 +3600,7 @@ function render(): void {
 
   // Popups vivem numa camada independente do canvas. Renderizações frequentes do esquemático
   // (telemetria, seleção, fios) não recriam janelas, inputs ou resize handles.
+  renderPropertyDock();
 }
 
 /** Componentes/fios cujas caixas (canvas-local, sem zoom) se sobrepõem ao retângulo do marquee --
@@ -6293,10 +6618,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     persistState();
     render();
     if (event.detail >= 2) {
-      queueMicrotask(() => {
-        const refreshed = liveComponent();
-        if (refreshed) openPropertyDialog(refreshed);
-      });
+      queueMicrotask(openSelectedProperties);
     }
   });
 
@@ -7230,6 +7552,7 @@ interface PropertySheetOptions {
   allowTitleEdit?: boolean;
   showVisibilityToggle?: boolean;
   onPropertyChange?: (key: string, value: string | number | boolean) => void;
+  onClose?: () => void;
 }
 
 /** Valida/normaliza um hex de cor digitado à mão (`#RGB` ou `#RRGGBB`, `#` opcional) pro formato
@@ -7528,7 +7851,7 @@ function renderExternalLabelPropertySheet(component: WebviewComponentModel, kind
   closeButton.type = "button";
   closeButton.className = "property-sheet__window-close";
   closeButton.textContent = "x";
-  closeButton.addEventListener("click", () => propertyDialog.close());
+  closeButton.addEventListener("click", () => options.onClose?.() ?? propertyDialog.close());
   titleBar.append(uid, closeButton);
   const fieldset = document.createElement("fieldset");
   fieldset.className = "property-sheet__group";
@@ -8001,6 +8324,58 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
   caption.className = "property-sheet__field-label";
   caption.textContent = `${field.label}:`;
 
+  // Campos numéricos internos do HART (endereço, código de alarme, data e
+  // número de montagem) compartilham o mesmo modo Human/HEX das variáveis
+  // configuradas abaixo. Em Human, enums exibem a descrição normativa; em
+  // HEX, o usuário edita exatamente o código de fio, sem mudar o valor
+  // canônico persistido.
+  const isHartInternalNumber = component.typeId.startsWith("protocol.hart.") && field.group === "HART" && field.kind === "number";
+  if (isHartInternalNumber) {
+    const presentation = hartPresentationFor(component);
+    const table = field.key === "alarmSelectionCode" ? hartCommonTableForType("ENUM06") : undefined;
+    const width = field.key === "finalAssemblyNumber" ? 3 : 1;
+    if (presentation === "human" && table?.kind === "enum") {
+      const select = document.createElement("select");
+      select.className = "property-sheet__field-input";
+      select.disabled = Boolean(field.readonly);
+      const current = typeof field.value === "number" ? Math.trunc(field.value) : Number(field.value) || 0;
+      if (table.values[current] === undefined) {
+        const unknown = document.createElement("option");
+        unknown.value = String(current);
+        unknown.textContent = `${formatHartHex(current, width)} — Código não catalogado`;
+        select.appendChild(unknown);
+      }
+      for (const [code, description] of Object.entries(table.values)) {
+        const option = document.createElement("option");
+        option.value = code;
+        option.textContent = `${formatHartHex(Number(code), width)} — ${description}`;
+        select.appendChild(option);
+      }
+      select.value = String(current);
+      select.addEventListener("change", () => applyChange(Number(select.value)));
+      row.append(caption, select);
+      return row;
+    }
+    if (presentation === "hex") {
+      const input = document.createElement("input");
+      input.className = "property-sheet__field-input";
+      input.type = "text";
+      input.value = formatHartHex(field.value, width);
+      input.readOnly = Boolean(field.readonly);
+      input.title = "Código hexadecimal HART";
+      if (!input.readOnly) {
+        input.addEventListener("change", () => {
+          const parsed = Number.parseInt(input.value.trim().replace(/^0x/i, ""), 16);
+          if (!Number.isFinite(parsed)) { input.value = formatHartHex(field.value, width); return; }
+          const value = clampNumber(parsed, field.min ?? 0, field.max ?? (2 ** (width * 8) - 1));
+          applyChange(value);
+        });
+      }
+      row.append(caption, input);
+      return row;
+    }
+  }
+
   if (field.kind === "select") {
     const select = document.createElement("select");
     select.className = "property-sheet__field-input";
@@ -8066,6 +8441,52 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
     }
     group.append(swatch, text);
     row.append(caption, group);
+    return row;
+  }
+
+  // A porta COM/TTY é a mesma para UART/QEMU e HART. Quando o usuário escolhe
+  // HART, este seletor aponta a ponte para uma instância já existente (SMAR ou
+  // outro endpoint HART), em vez de criar uma cópia específica do dispositivo.
+  if ((component.typeId === "peripherals.serialport" || component.typeId === "peripherals.serialterm" || component.typeId === "peripherals.udp") && field.key === "hart_device_id") {
+    const select = document.createElement("select");
+    select.className = "property-sheet__field-input";
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "Selecione um dispositivo HART";
+    select.appendChild(empty);
+    for (const candidate of state.components.filter((entry) => entry.typeId.startsWith("protocol.hart.device."))) {
+      const option = document.createElement("option");
+      option.value = candidate.id;
+      option.textContent = candidate.label;
+      select.appendChild(option);
+    }
+    select.value = String(field.value ?? "");
+    select.disabled = Boolean(field.readonly);
+    select.addEventListener("change", () => applyChange(select.value));
+    row.append(caption, select);
+    return row;
+  }
+
+  const hartTextCodec = component.typeId.startsWith("protocol.hart.") && field.group === "HART"
+    ? hartTextWireCodecByProperty[field.key]
+    : undefined;
+  if (field.kind === "text" && hartTextCodec && hartPresentationFor(component) === "hex") {
+    const input = document.createElement("input");
+    input.className = "property-sheet__field-input";
+    input.type = "text";
+    input.value = hartTextAsHex(field.value, hartTextCodec);
+    input.readOnly = Boolean(field.readonly);
+    input.title = hartTextCodec === "deviceId"
+      ? "Identificador HART de três bytes"
+      : "Bytes HART codificados; altere pares hexadecimais";
+    if (!input.readOnly) {
+      input.addEventListener("change", () => {
+        const decoded = hartTextFromHex(input.value, hartTextCodec);
+        if (decoded === undefined) { input.value = hartTextAsHex(field.value, hartTextCodec); return; }
+        applyChange(decoded);
+      });
+    }
+    row.append(caption, input);
     return row;
   }
 
@@ -8181,7 +8602,7 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
   closeButton.type = "button";
   closeButton.className = "property-sheet__window-close";
   closeButton.textContent = "x";
-  closeButton.addEventListener("click", () => propertyDialog.close());
+  closeButton.addEventListener("click", () => options.onClose?.() ?? propertyDialog.close());
   titleBar.append(uid, closeButton);
 
   const toolbar = document.createElement("div");
@@ -8242,6 +8663,18 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
   });
   showLabel.append(showText, showCheckbox);
   toolbarActions.append(helpButton);
+  if (component.typeId.startsWith("protocol.hart.")) {
+    const presentationButton = document.createElement("button");
+    presentationButton.type = "button";
+    presentationButton.className = "property-sheet__button";
+    const presentation = hartPresentationFor(component);
+    presentationButton.textContent = presentation === "human" ? "HEX" : "Human";
+    presentationButton.title = presentation === "human"
+      ? "Mostrar todos os códigos HART em hexadecimal"
+      : "Mostrar os valores HART de forma legível";
+    presentationButton.addEventListener("click", () => toggleHartPresentation(component));
+    toolbarActions.append(presentationButton);
+  }
   if (options.showVisibilityToggle !== false) toolbarActions.append(showLabel);
   // Rótulo de NOME (acima) e de VALOR (aqui) são independentes -- achado real (2026-07-18): o único
   // jeito de ligar `showValue` era o rádio "mostrar no símbolo" por propriedade (abaixo, dentro de
@@ -8326,52 +8759,34 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
 
   const usesSchema = Boolean(catalogEntryFor(component.typeId)?.propertySchema?.length);
   const groups = groupFields(resolvePropertyFields(component));
-  // Schema-driven: ordem das abas = ordem de primeira aparição do grupo no schema (Map preserva
-  // ordem de inserção) -- nunca prefixado por "Principal", que só faz sentido como fallback da
-  // heurística antiga (quando NENHUM grupo real foi declarado).
+  // One shared inspector engine for every component.  Groups are sections in
+  // one scrollable sheet, not navigation tabs: the user can see and expand
+  // Communication, HART, Serial, or any device-specific group in one place.
   const orderedGroupNames = usesSchema ? [...groups.keys()] : [...new Set([t("principal"), ...groups.keys()])];
-  const tabs = document.createElement("div");
-  tabs.className = "property-sheet__tabs";
-  const pages = document.createElement("div");
-  pages.className = "property-sheet__pages";
-  let activeTab = orderedGroupNames.find((name) => groups.get(name)?.length) ?? t("principal");
-
-  const renderPage = (): void => {
-    tabs.innerHTML = "";
-    pages.innerHTML = "";
-
-    for (const groupName of orderedGroupNames) {
-      const fields = groups.get(groupName) ?? [];
-      if (fields.length === 0 && !propertyDialogShowAll) continue;
-      const tab = document.createElement("button");
-      tab.type = "button";
-      tab.className = `property-sheet__tab${groupName === activeTab ? " property-sheet__tab--active" : ""}`;
-      tab.textContent = groupName;
-      tab.addEventListener("click", () => {
-        activeTab = groupName;
-        renderPage();
-      });
-      tabs.appendChild(tab);
-    }
-
+  const sections = document.createElement("div");
+  sections.className = "property-sheet__sections";
+  for (const groupName of orderedGroupNames) {
+    const fields = groups.get(groupName) ?? [];
+    if (fields.length === 0 && !propertyDialogShowAll) continue;
+    const section = document.createElement("details");
+    section.className = "property-sheet__section";
+    section.open = true;
+    const summary = document.createElement("summary");
+    summary.textContent = groupName;
     const fieldset = document.createElement("fieldset");
     fieldset.className = "property-sheet__group";
-    const fields = groups.get(activeTab) ?? [];
     if (fields.length === 0) {
       const empty = document.createElement("p");
       empty.className = "property-sheet__empty";
       empty.textContent = t("noProperties");
       fieldset.appendChild(empty);
-    } else {
-      for (const field of fields) fieldset.appendChild(renderPropertyField(component, field, options));
-    }
-    pages.appendChild(fieldset);
-  };
-
-  renderPage();
+    } else for (const field of fields) fieldset.appendChild(renderPropertyField(component, field, options));
+    section.append(summary, fieldset);
+    sections.appendChild(section);
+  }
   shell.append(titleBar, toolbar, helpPanel);
   if (titleRow) shell.append(titleRow);
-  shell.append(tabs, pages);
+  shell.append(sections);
   if (component.typeId === "digital.generic_fpga") {
     const fpgaPanel = document.createElement("fieldset");
     fpgaPanel.className = "property-sheet__group";

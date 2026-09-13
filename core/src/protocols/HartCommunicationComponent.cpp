@@ -53,6 +53,8 @@ const char* roleName(HartVariableRole role) {
     return "Internal";
 }
 HartVariableType parseType(const std::string& s) {
+    if (s.rfind("BIT_ENUM", 0) == 0) return HartVariableType::BitEnum;
+    if (s.rfind("ENUM", 0) == 0) return HartVariableType::Enum;
     if (s == "UInt8") return HartVariableType::UInt8;
     if (s == "UInt16") return HartVariableType::UInt16;
     if (s == "Int16") return HartVariableType::Int16;
@@ -67,6 +69,8 @@ const char* typeName(HartVariableType type) {
         case HartVariableType::Int16: return "Int16";
         case HartVariableType::PackedAscii: return "PackedAscii";
         case HartVariableType::Bool: return "Bool";
+        case HartVariableType::Enum: return "ENUM";
+        case HartVariableType::BitEnum: return "BIT_ENUM";
         case HartVariableType::Float32: return "Float32";
     }
     return "Float32";
@@ -95,9 +99,18 @@ double HartCommunicationComponent::numberProperty(const registry::ComponentParam
 HartCommunicationComponent::HartCommunicationComponent(Mode mode, simulation::Scheduler& scheduler,
                                                        const registry::ComponentParams& p, const DevicePreset* preset)
     : m_mode(mode),
-      m_typeId(preset && preset->typeId ? preset->typeId : (mode == Mode::Serial ? "protocol.hart.serial" : "protocol.hart.udp")),
+      m_typeId(preset && preset->typeId ? preset->typeId : (mode == Mode::Serial ? "protocol.hart.internal" : "protocol.hart.udp")),
       m_scheduler(scheduler), m_engine(m_profiles),
       m_endpoint(m_engine, HartTransportConfig{mode == Mode::Serial ? HartTransportKind::Serial : HartTransportKind::Udp}) {
+    m_fieldDevice = preset != nullptr;
+    if (m_fieldDevice) {
+        const auto supplied = p.pins<4>();
+        static constexpr std::array<const char*, 4> ids{"sensor_plus", "sensor_minus", "loop_plus", "loop_minus"};
+        for (size_t i = 0; i < m_pins.size(); ++i) {
+            m_pins[i] = supplied[i];
+            if (m_pins[i].id.empty()) m_pins[i].id = ids[i];
+        }
+    }
     m_bus = stringProperty(p, "bus", "hart-1");
     m_endpointName = stringProperty(p, "endpoint", mode == Mode::Serial ? "COM1" : "127.0.0.1");
     m_uniqueId = stringProperty(p, "uniqueId", preset ? preset->uniqueId : m_uniqueId);
@@ -132,6 +145,8 @@ HartCommunicationComponent::HartCommunicationComponent(Mode mode, simulation::Sc
     m_date[2] = static_cast<uint8_t>(std::clamp(numberProperty(p, "dateYear", 0), 0.0, 255.0));
     m_finalAssemblyNumber = static_cast<uint32_t>(std::clamp(numberProperty(p, "finalAssemblyNumber", 0), 0.0, 16777215.0));
     m_loopCurrentModeEnabled = p.property("loopCurrentMode", true);
+    m_sensorLowVolts = numberProperty(p, "sensorLowVolts", 0.0);
+    m_sensorHighVolts = std::max(m_sensorLowVolts + 1e-9, numberProperty(p, "sensorHighVolts", 5.0));
 
     HartReferenceCatalog::registerProfiles(m_profiles);
     m_profileId = stringProperty(p, "profileId", preset ? preset->profileId : m_profileId);
@@ -141,6 +156,23 @@ HartCommunicationComponent::HartCommunicationComponent(Mode mode, simulation::Sc
     config.kind = mode == Mode::Serial ? HartTransportKind::Serial : HartTransportKind::Udp;
     config.bus = m_bus; config.endpoint = m_endpointName; config.baudRate = m_baudRate; config.udpPort = m_udpPort;
     m_endpoint.configure(std::move(config));
+}
+
+void HartCommunicationComponent::stamp(MnaMatrixView& matrix) {
+    if (!m_fieldDevice) return;
+    const double volts = matrix.getNodeVoltage(m_pins[0]) - matrix.getNodeVoltage(m_pins[1]);
+    const HartDevicePlan* plan = m_engine.findDevicePlan(m_deviceId);
+    if (!plan) return;
+    const auto pv = std::find_if(plan->variables.begin(), plan->variables.end(), [](const auto& v) { return v.id == "PV"; });
+    if (pv == plan->variables.end()) return;
+    const double low = std::isfinite(pv->lowerRangeValue) ? pv->lowerRangeValue : 0.0;
+    const double high = std::isfinite(pv->upperRangeValue) && pv->upperRangeValue > low ? pv->upperRangeValue : low + 1.0;
+    const double ratio = std::clamp((volts - m_sensorLowVolts) / (m_sensorHighVolts - m_sensorLowVolts), 0.0, 1.0);
+    const double value = low + ratio * (high - low);
+    m_engine.setVariableInput(m_deviceId, "PV", value);
+    m_loopCurrent = 0.004 + ratio * 0.016;
+    if (m_enabled && m_loopCurrentModeEnabled)
+        matrix.addCurrent(m_pins[2], m_pins[3], m_loopCurrent);
 }
 
 void HartCommunicationComponent::rebuildConfiguredPlan() {
@@ -217,6 +249,12 @@ void HartCommunicationComponent::rebuildConfiguredPlan() {
             variable.value = item.value("value", 0.0);
             variable.role = parseRole(item.value("role", std::string{}));
             variable.type = parseType(item.value("type", std::string{}));
+            const std::string variableType = item.value("type", std::string{});
+            // HCF_SPEC-183: Expanded Device Type (1), Join Process Status
+            // flags (52), and Change Notification flags (60) are 16-bit.
+            // The UI stores table identity in the type string, not a parallel
+            // per-command shadow field.
+            variable.wireWidth = variableType == "ENUM01" || variableType == "BIT_ENUM52" || variableType == "BIT_ENUM60" ? 2 : 1;
             variable.direction = parseDirection(item.value("direction", std::string{}));
             variable.deviceVariableCode = static_cast<uint8_t>(std::clamp(item.value("deviceVariableCode", 255), 0, 255));
             if (variable.deviceVariableCode == 255 && variable.role == HartVariableRole::PrimaryVariable) variable.deviceVariableCode = 246;
@@ -702,7 +740,16 @@ std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode
     auto commandsStatus = readonlySchema("hartCommandsStatus", "Status do compilador", "Diagnostics", "OK"); commandsStatus.flags |= PropertySchemaHidden;
     out.push_back(commandsStatus);
     if (mode == Mode::Serial) out.push_back(numberSchema("baudRate", "Baud rate", "Serial", "baud", 1200, 1200, 1200));
-    else out.push_back(numberSchema("udpPort", "Porta UDP", "UDP", "", 5094, 1, 65535));
+    else {
+        out.push_back(numberSchema("udpPort", "Porta UDP", "UDP", "", 5094, 1, 65535));
+        // UDP is a transport tap, never a second shadow transmitter. The
+        // Extension renders this as a selector of the field device/loop.
+        out.push_back(textSchema("hart_device_id", "Laço HART", "HART", ""));
+    }
+    if (preset) {
+        out.push_back(numberSchema("sensorLowVolts", "Entrada do sensor (mín.)", "Sensor", "V", 0.0, -1000, 1000));
+        out.push_back(numberSchema("sensorHighVolts", "Entrada do sensor (máx.)", "Sensor", "V", 5.0, -1000, 1000));
+    }
     return out;
 }
 

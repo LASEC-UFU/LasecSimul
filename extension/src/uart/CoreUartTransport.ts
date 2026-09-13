@@ -6,8 +6,22 @@ import { IpcError } from "../ipc/protocol";
 export class CoreUartTransport {
   private readonly rxDropped = new Map<string, number>();
   private readonly txDropped = new Map<string, number>();
+  private readonly hartReplies = new Map<string, Uint8Array>();
+
+  private hartTarget(componentId: string): string | undefined {
+    const transport = state.schematicState.components.find((entry) => entry.id === componentId);
+    if (transport?.typeId !== "peripherals.serialterm" || transport.properties.protocol !== "hart") return undefined;
+    const targetId = String(transport.properties.hart_device_id ?? "").trim();
+    const target = state.schematicState.components.find((entry) => entry.id === targetId && entry.typeId.startsWith("protocol.hart.device."));
+    return target ? coreInstanceIdByComponentId.get(target.id) : undefined;
+  }
 
   async read(componentId: string): Promise<{ data: Uint8Array; simulationTimeNs: number; droppedBytes: number }> {
+    if (this.hartTarget(componentId)) {
+      const data = this.hartReplies.get(componentId) ?? new Uint8Array();
+      this.hartReplies.delete(componentId);
+      return { data, simulationTimeNs: 0, droppedBytes: 0 };
+    }
     const client = state.coreClient; const coreId = coreInstanceIdByComponentId.get(componentId);
     if (!client || !coreId) return { data: new Uint8Array(), simulationTimeNs: 0, droppedBytes: 0 };
     const batch = await client.drainUart(coreId);
@@ -29,6 +43,17 @@ export class CoreUartTransport {
 
   async write(componentId: string, data: Uint8Array): Promise<number> {
     const client = state.coreClient; const coreId = coreInstanceIdByComponentId.get(componentId);
+    const hartCoreId = this.hartTarget(componentId);
+    if (hartCoreId) {
+      if (!client) throw new Error("Transmissor HART não está inicializado no Core.");
+      const response = await client.hartTransact(hartCoreId, Buffer.from(data).toString("hex"));
+      const previous = this.hartReplies.get(componentId) ?? new Uint8Array();
+      const reply = Uint8Array.from(Buffer.from(response.frameHex, "hex"));
+      const combined = new Uint8Array(previous.byteLength + reply.byteLength);
+      combined.set(previous); combined.set(reply, previous.byteLength);
+      this.hartReplies.set(componentId, combined);
+      return response.simulationTimeNs;
+    }
     if (!client || !coreId) throw new Error("Dispositivo UART não está inicializado no Core.");
     let offset = 0;
     let simulationTimeNs = 0;

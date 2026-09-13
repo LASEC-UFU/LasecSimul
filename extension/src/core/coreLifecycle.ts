@@ -1299,7 +1299,7 @@ export function pinsForProjectComponent(component: {
     }
     return [];
   }
-  // HART (`protocol.hart.serial`/`protocol.hart.udp`) tem seus pinos de canvas derivados de
+  // HART (`peripherals.udp`) tem seus pinos de canvas derivados de
   // `hartVariablesJson` diretamente dentro de `pinsForTypeId` (mesma assinatura `(typeId,
   // properties)` que já recebe aqui) -- ver o branch lá, não precisa de um segundo aqui.
   const descriptor = state.schematicState.catalog.find((item) => item.typeId === component.typeId);

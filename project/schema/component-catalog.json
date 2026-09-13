@@ -6858,21 +6858,12 @@
       }
     },
     {
-      "typeId": "protocol.hart.serial",
-      "label": "HART Serial",
-      "pinCount": 0,
-      "icon": "terminal",
-      "folderPath": ["Protocolos Industriais", "HART"],
-      "workspaceSection": "process",
-      "defaultProperties": {"bus": "hart-1", "endpoint": "COM1", "enabled": true, "pollingAddress": 0, "uniqueId": "029EB1", "tag": "HART", "unit": "V", "baudRate": 1200}
-    },
-    {
-      "typeId": "protocol.hart.udp",
+      "typeId": "peripherals.udp",
       "label": "HART UDP",
       "pinCount": 0,
       "icon": "globe",
-      "folderPath": ["Protocolos Industriais", "HART"],
-      "workspaceSection": "process",
+      "folderPath": ["peripherals"],
+      "workspaceSection": "misc",
       "defaultProperties": {"bus": "hart-1", "endpoint": "127.0.0.1", "enabled": true, "pollingAddress": 0, "uniqueId": "029EB1", "tag": "HART", "unit": "V", "udpPort": 5094}
     },
     {

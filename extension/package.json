@@ -4,7 +4,7 @@
   "description": "Simulador de circuitos eletrônicos com MCUs emulados via QEMU, inspirado no SimulIDE.",
   "publisher": "josuemoraisgh",
   "license": "GPL-3.0-or-later",
-  "version": "0.0.35",
+  "version": "0.0.36",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -19,8 +19,12 @@
     "languages": [
       {
         "id": "lasecsimul-dsl",
-        "aliases": ["LasecSimul DSL"],
-        "extensions": [".lsdsl"],
+        "aliases": [
+          "LasecSimul DSL"
+        ],
+        "extensions": [
+          ".lsdsl"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -33,13 +37,12 @@
       },
       {
         "command": "lasecsimul.openDslEditor",
-        "title": "LasecSimul: Editar circuito em DSL",
+        "title": "LasecSimul: DSL",
         "icon": "$(code)"
       },
       {
         "command": "lasecsimul.applyDsl",
-        "title": "LasecSimul: Aplicar DSL ao Esquemático",
-        "icon": "$(check)"
+        "title": "LasecSimul: Block"
       },
       {
         "command": "lasecsimul.run",
@@ -163,8 +166,12 @@
         "viewType": "lasecsimul.simulideImportEditor",
         "displayName": "LasecSimul: Importar circuito SimulIDE",
         "selector": [
-          { "filenamePattern": "*.sim1" },
-          { "filenamePattern": "*.sim2" }
+          {
+            "filenamePattern": "*.sim1"
+          },
+          {
+            "filenamePattern": "*.sim2"
+          }
         ],
         "priority": "default"
       },
@@ -186,9 +193,6 @@
           "title": "LasecSimul",
           "icon": "media/activity-icon.svg"
         }
-      ],
-      "secondarySidebar": [
-        { "id": "lasecsimul.properties", "title": "Properties", "icon": "media/activity-icon.svg" }
       ]
     },
     "views": {
@@ -198,9 +202,6 @@
           "name": "Components",
           "type": "webview"
         }
-      ],
-      "lasecsimul.properties": [
-        { "id": "lasecsimul.propertyInspector", "name": "Property Inspector", "type": "webview" }
       ]
     },
     "configuration": {
@@ -299,22 +300,22 @@
           "default": "",
           "description": "Override avançado do executável GHDL. Deixe vazio para usar automaticamente o runtime integrado à extensão."
         },
-          "lasecsimul.network.mode": {
-            "type": "string",
-            "enum": [
-              "disabled",
-              "lab-bridge",
-              "isolated"
-            ],
-            "enumDescriptions": [
-              "Desabilita completamente a rede da ESP32; nenhum dispositivo OpenETH, socket, TAP ou thread de rede é criado.",
-              "Conecta a OpenETH ao gateway central local, que multiplexa todos os QEMUs sobre uma única TAP ligada à bridge física. Cada ESP32 recebe IP próprio do DHCP real.",
-              "Usa libslirp/NAT dentro do QEMU; funciona sem administrador e mantém cada ESP32 isolada da LAN e das demais instâncias."
-            ],
-            "default": "disabled",
-            "scope": "window",
-            "markdownDescription": "Modo de rede da ESP32. `disabled` preserva a emulação sem rede e é o padrão seguro. Se o firmware foi compilado com `CONFIG_ETH_USE_OPENETH=y`, selecione `lab-bridge` (LAN/DHCP real) ou `isolated` (SLIRP/NAT). Recarregue a janela após alterar."
-          },
+        "lasecsimul.network.mode": {
+          "type": "string",
+          "enum": [
+            "disabled",
+            "lab-bridge",
+            "isolated"
+          ],
+          "enumDescriptions": [
+            "Desabilita completamente a rede da ESP32; nenhum dispositivo OpenETH, socket, TAP ou thread de rede é criado.",
+            "Conecta a OpenETH ao gateway central local, que multiplexa todos os QEMUs sobre uma única TAP ligada à bridge física. Cada ESP32 recebe IP próprio do DHCP real.",
+            "Usa libslirp/NAT dentro do QEMU; funciona sem administrador e mantém cada ESP32 isolada da LAN e das demais instâncias."
+          ],
+          "default": "disabled",
+          "scope": "window",
+          "markdownDescription": "Modo de rede da ESP32. `disabled` preserva a emulação sem rede e é o padrão seguro. Se o firmware foi compilado com `CONFIG_ETH_USE_OPENETH=y`, selecione `lab-bridge` (LAN/DHCP real) ou `isolated` (SLIRP/NAT). Recarregue a janela após alterar."
+        },
         "lasecsimul.network.gatewayPort": {
           "type": "integer",
           "default": 9011,
@@ -364,6 +365,13 @@
           "command": "lasecsimul.openSettings",
           "when": "view == lasecsimul.componentPalette",
           "group": "navigation@999"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "lasecsimul.applyDsl",
+          "when": "editorLangId == lasecsimul-dsl",
+          "group": "navigation@1"
         }
       ]
     },

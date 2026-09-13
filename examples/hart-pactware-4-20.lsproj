@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    {
+      "id": "gnd1",
+      "typeId": "other.ground",
+      "properties": {},
+      "visual": { "x": 720, "y": 500, "rotation": 0 }
+    },
+    {
+      "id": "v_sensor",
+      "typeId": "sources.dc_voltage",
+      "properties": { "voltage": 5 },
+      "visual": { "x": 120, "y": 150, "rotation": 0 }
+    },
+    {
+      "id": "pot_sensor",
+      "typeId": "passive.potentiometer",
+      "properties": { "resistance": 10000, "position": 0.5 },
+      "visual": { "x": 300, "y": 180, "rotation": 0 }
+    },
+    {
+      "id": "ld301",
+      "typeId": "protocol.hart.device.smar_ld301",
+      "properties": {
+        "bus": "hart-1",
+        "endpoint": "COM1",
+        "enabled": true,
+        "pollingAddress": 0,
+        "uniqueId": "029EB1",
+        "tag": "LD301",
+        "unit": "kPa",
+        "baudRate": 1200,
+        "profileId": "lasecsimul.hart.smar-ld301",
+        "sensorLowVolts": 0,
+        "sensorHighVolts": 5,
+        "loopCurrentMode": true,
+        "hartVariablesJson": "[{\"id\":\"PV\",\"name\":\"Pressao Diferencial\",\"unit\":\"kPa\",\"value\":0,\"role\":\"PV\",\"type\":\"Float32\",\"direction\":\"Input\",\"classification\":65,\"family\":5,\"writable\":false,\"lowerRangeValue\":0,\"upperRangeValue\":25,\"pressure\":{\"pressureUnitCode\":12}}]"
+      },
+      "visual": { "x": 700, "y": 250, "rotation": 0 }
+    },
+    {
+      "id": "r_load",
+      "typeId": "passive.resistor",
+      "properties": { "resistance": 250 },
+      "visual": { "x": 930, "y": 360, "rotation": 90 }
+    },
+    {
+      "id": "hart_com",
+      "typeId": "peripherals.serialport",
+      "properties": {
+        "port_name": "COM1",
+        "baudrate": 1200,
+        "data_bits": 8,
+        "stop_bits": 1,
+        "parity": "none",
+        "auto_open": true,
+        "protocol": "hart",
+        "hart_device_id": "ld301"
+      },
+      "visual": { "x": 1080, "y": 180, "rotation": 0 }
+    }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [
+      { "id": "n_ground", "position": { "x": 720, "y": 500 } },
+      { "id": "n_sensor_plus", "position": { "x": 500, "y": 180 } },
+      { "id": "n_loop_plus", "position": { "x": 850, "y": 300 } },
+      { "id": "n_loop_minus", "position": { "x": 850, "y": 500 } }
+    ],
+    "conductors": [
+      { "id": "w_v_sensor_plus", "from": { "kind": "port", "componentId": "v_sensor", "pinId": "pin-1" }, "to": { "kind": "port", "componentId": "pot_sensor", "pinId": "pin-1" }, "vertices": [] },
+      { "id": "w_v_sensor_minus", "from": { "kind": "port", "componentId": "v_sensor", "pinId": "pin-2" }, "to": { "kind": "node", "nodeId": "n_ground" }, "vertices": [] },
+      { "id": "w_pot_sensor_return", "from": { "kind": "port", "componentId": "pot_sensor", "pinId": "pin-3" }, "to": { "kind": "node", "nodeId": "n_ground" }, "vertices": [] },
+      { "id": "w_pot_wiper", "from": { "kind": "port", "componentId": "pot_sensor", "pinId": "pin-2" }, "to": { "kind": "node", "nodeId": "n_sensor_plus" }, "vertices": [] },
+      { "id": "w_sensor_plus", "from": { "kind": "port", "componentId": "ld301", "pinId": "sensor_plus" }, "to": { "kind": "node", "nodeId": "n_sensor_plus" }, "vertices": [] },
+      { "id": "w_sensor_minus", "from": { "kind": "port", "componentId": "ld301", "pinId": "sensor_minus" }, "to": { "kind": "node", "nodeId": "n_ground" }, "vertices": [] },
+      { "id": "w_loop_plus", "from": { "kind": "port", "componentId": "ld301", "pinId": "loop_plus" }, "to": { "kind": "node", "nodeId": "n_loop_plus" }, "vertices": [] },
+      { "id": "w_load_plus", "from": { "kind": "port", "componentId": "r_load", "pinId": "pin-1" }, "to": { "kind": "node", "nodeId": "n_loop_plus" }, "vertices": [] },
+      { "id": "w_load_minus", "from": { "kind": "port", "componentId": "r_load", "pinId": "pin-2" }, "to": { "kind": "node", "nodeId": "n_loop_minus" }, "vertices": [] },
+      { "id": "w_loop_minus", "from": { "kind": "port", "componentId": "ld301", "pinId": "loop_minus" }, "to": { "kind": "node", "nodeId": "n_loop_minus" }, "vertices": [] },
+      { "id": "w_loop_return_ground", "from": { "kind": "node", "nodeId": "n_loop_minus" }, "to": { "kind": "node", "nodeId": "n_ground" }, "vertices": [] },
+      { "id": "w_ground", "from": { "kind": "port", "componentId": "gnd1", "pinId": "pin" }, "to": { "kind": "node", "nodeId": "n_ground" }, "vertices": [] }
+    ]
+  },
+  "visual": {
+    "components": [],
+    "wires": [],
+    "viewport": { "x": 0, "y": 0, "zoom": 0.9 }
+  },
+  "simulationSettings": {
+    "frequencyHz": 1000,
+    "timeScale": 1,
+    "paused": false
+  }
+}

@@ -1149,7 +1149,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<std::unordered_map<HartC
             const auto& variable = plan.variables[i];
             const double value = (variable.id == "PV" || variable.id == "primary")
                 ? primaryValue : variable.value;
-            userVariables.push_back({variable.id, value, variable.type});
+            userVariables.push_back({variable.id, value, variable.type, variable.wireWidth});
         }
         vars.userVariables = userVariables;
 

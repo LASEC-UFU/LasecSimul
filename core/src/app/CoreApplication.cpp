@@ -1032,11 +1032,9 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
             std::string{"{\"en\":{\"name\":\""} + englishLabel + "\"}}",
             protocols::HartCommunicationComponent::readoutFormat(), std::nullopt, {});
     };
-    registerHartTransport("protocol.hart.serial", "HART Serial", protocols::HartCommunicationComponent::Mode::Serial, "HART Serial");
     registerHartTransport("protocol.hart.udp", "HART UDP", protocols::HartCommunicationComponent::Mode::Udp, "HART UDP");
 
     // Concrete SMAR HART field devices (FEAT: HART concrete devices). Each is the SAME
-    // HartCommunicationComponent/HartEngine/HartProfileRegistry used by protocol.hart.serial above --
     // no second engine, no per-device C++ subclass -- differing only by the DevicePreset's default
     // property values (profile id, tag, and the Device Variable(s) exposed as Signal Graph ports via
     // hartVariablesJson). Wired transport only (Mode::Serial), matching the real devices'
@@ -1051,7 +1049,8 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         registerBuiltinMetadata(typeId, label,
             protocols::HartCommunicationComponent::propertySchema(protocols::HartCommunicationComponent::Mode::Serial, &preset),
             std::string{"{\"en\":{\"name\":\""} + englishLabel + "\"}}",
-            protocols::HartCommunicationComponent::readoutFormat(), std::nullopt, {});
+            protocols::HartCommunicationComponent::readoutFormat(), std::nullopt,
+            {"sensor_plus", "sensor_minus", "loop_plus", "loop_minus"});
     };
     registerHartDevice("protocol.hart.device.smar_ld301", "SMAR LD301 - Transmissor de Pressao Diferencial",
         protocols::HartCommunicationComponent::smarLd301Preset(),

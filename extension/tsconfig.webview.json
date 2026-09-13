@@ -27,6 +27,8 @@
     "src/ui/webview/wireSpatialIndex.ts",
     "src/ui/webview/valueFormatting.ts",
     "src/ui/webview/serialFormat.ts",
-    "src/ui/webview/contextMenuPosition.ts"
+    "src/ui/webview/contextMenuPosition.ts",
+    "src/ui/webview/hartCommonTables.ts",
+    "src/ui/webview/hartCommonTablesData.ts"
   ]
 }

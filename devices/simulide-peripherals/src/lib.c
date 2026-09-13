@@ -168,6 +168,16 @@ typedef struct {
     uint32_t port_rx_bytes;
     uint32_t port_tx_bytes;
     char     port_error[192];
+    /* A mesma porta COM pode operar como UART comum (QEMU/MCU) ou como
+     * transporte de quadros HART. No segundo caso estes bytes entram numa
+     * fila própria, consumida pela ponte HART do host, sem duplicar um
+     * "dispositivo serial HART" visual. */
+    char     port_protocol[16];
+    char     port_hart_device_id[128];
+    uint8_t  port_hart_rx_ring[UART_RING_CAP];
+    uint32_t port_hart_rx_head, port_hart_rx_tail, port_hart_rx_count;
+    uint32_t port_hart_rx_dropped;
+    char     port_hart_hex[(UART_RING_CAP * 2) + 1];
 #if defined(_WIN32)
     HANDLE   port_handle;
 #else
@@ -188,6 +198,8 @@ typedef struct {
 static uint32_t uart_tx_push(PeriphState *s, uint8_t byte);
 static void uart_start_tx(PeriphState *s);
 static void serial_port_close(PeriphState *s);
+static void port_hart_rx_push(PeriphState *s, uint8_t byte);
+static const char *port_hart_drain_hex(PeriphState *s);
 
 static void port_set_error(PeriphState *s, const char *prefix, uint32_t code) {
     static const char digits[] = "0123456789";
@@ -366,8 +378,12 @@ static void serial_port_pump(PeriphState *s) {
     {
         uint32_t i;
         s->port_tx_bytes += count;
-        for (i = 0; i < count; ++i) uart_tx_push(s, buffer[i]);
-        if (count && !s->uart_tx_active && !s->uart_tx_waiting_stop) uart_start_tx(s);
+        if (!strcmp(s->port_protocol, "hart")) {
+            for (i = 0; i < count; ++i) port_hart_rx_push(s, buffer[i]);
+        } else {
+            for (i = 0; i < count; ++i) uart_tx_push(s, buffer[i]);
+            if (count && !s->uart_tx_active && !s->uart_tx_waiting_stop) uart_start_tx(s);
+        }
     }
     if (s->uart_rx_count) {
         uint32_t contiguous = UART_RING_CAP - s->uart_rx_tail;
@@ -530,6 +546,36 @@ static const char *uart_drain_hex(PeriphState *s) {
     return s->uart_hex;
 }
 
+static void port_hart_rx_push(PeriphState *s, uint8_t byte) {
+    uart_ring_lock_acquire(&s->uart_ring_lock);
+    if (s->port_hart_rx_count == UART_RING_CAP) {
+        s->port_hart_rx_tail = (s->port_hart_rx_tail + 1u) % UART_RING_CAP;
+        s->port_hart_rx_count--;
+        s->port_hart_rx_dropped++;
+    }
+    s->port_hart_rx_ring[s->port_hart_rx_head] = byte;
+    s->port_hart_rx_head = (s->port_hart_rx_head + 1u) % UART_RING_CAP;
+    s->port_hart_rx_count++;
+    uart_ring_lock_release(&s->uart_ring_lock);
+}
+
+static const char *port_hart_drain_hex(PeriphState *s) {
+    static const char digits[] = "0123456789abcdef";
+    uint32_t n = 0;
+    uart_ring_lock_acquire(&s->uart_ring_lock);
+    while (s->port_hart_rx_count && n < UART_RING_CAP) {
+        uint8_t byte = s->port_hart_rx_ring[s->port_hart_rx_tail];
+        s->port_hart_rx_tail = (s->port_hart_rx_tail + 1u) % UART_RING_CAP;
+        s->port_hart_rx_count--;
+        s->port_hart_hex[n * 2] = digits[byte >> 4];
+        s->port_hart_hex[n * 2 + 1] = digits[byte & 15];
+        n++;
+    }
+    s->port_hart_hex[n * 2] = '\0';
+    uart_ring_lock_release(&s->uart_ring_lock);
+    return s->port_hart_hex;
+}
+
 static void uart_start_tx(PeriphState *s) {
     uart_ring_lock_acquire(&s->uart_ring_lock);
     if (s->uart_tx_active || s->uart_tx_waiting_stop || s->uart_tx_count == 0) {
@@ -659,6 +705,8 @@ static void periph_init(LsdnDevice *dev) {
     s->port_stop_bits = (int)cfg_num(s, "stop_bits", 1.0);
     s->port_auto_open = cfg_bool(s, "auto_open", 0);
     s->port_open_requested = s->port_auto_open;
+    strncpy(s->port_protocol, cfg_str(s, "protocol", "uart"), sizeof(s->port_protocol) - 1);
+    strncpy(s->port_hart_device_id, cfg_str(s, "hart_device_id", ""), sizeof(s->port_hart_device_id) - 1);
 #if defined(_WIN32)
     s->port_handle = INVALID_HANDLE_VALUE;
 #else
@@ -944,6 +992,8 @@ static uint32_t periph_get_property(LsdnDevice *dev, const char *name, LsdnPrope
             if (!strcmp(name,"data_bits")) RET_NUM(s->ser_data_bits);
             if (!strcmp(name,"stop_bits")) RET_NUM(s->ser_stop_bits);
             if (!strcmp(name,"parity")) RET_STR(s->ser_parity == 1 ? "even" : s->ser_parity == 2 ? "odd" : "none");
+            if (!strcmp(name,"protocol")) RET_STR(s->port_protocol);
+            if (!strcmp(name,"hart_device_id")) RET_STR(s->port_hart_device_id);
             if (!strcmp(name,"rx_buffer")) RET_STR(s->ser_rx_buf);
             if (!strcmp(name,"tx_bytes"))  RET_STR(s->ser_tx_buf);
             if (!strcmp(name,"uart_tx_hex")) RET_STR("");
@@ -979,6 +1029,9 @@ static uint32_t periph_get_property(LsdnDevice *dev, const char *name, LsdnPrope
             if (!strcmp(name,"port_error")) RET_STR(s->port_error);
             if (!strcmp(name,"port_rx_bytes")) RET_NUM(s->port_rx_bytes);
             if (!strcmp(name,"port_tx_bytes")) RET_NUM(s->port_tx_bytes);
+            if (!strcmp(name,"protocol")) RET_STR(s->port_protocol);
+            if (!strcmp(name,"hart_device_id")) RET_STR(s->port_hart_device_id);
+            if (!strcmp(name,"hart_rx_hex")) RET_STR(port_hart_drain_hex(s));
             break;
         case KIND_SDCARD:
             if (!strcmp(name,"file")) RET_STR(s->sd_file);
@@ -1045,6 +1098,13 @@ static uint32_t periph_set_property(LsdnDevice *dev, const char *name, const Lsd
             if (!strcmp(name,"parity") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
                 s->ser_parity = !strcmp(val->string_value,"even") ? 1 : !strcmp(val->string_value,"odd") ? 2 : 0; return 1;
             }
+            if (!strcmp(name,"protocol") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
+                if (strcmp(val->string_value, "uart") && strcmp(val->string_value, "hart")) return 0;
+                strncpy(s->port_protocol, val->string_value, sizeof(s->port_protocol)-1); return 1;
+            }
+            if (!strcmp(name,"hart_device_id") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
+                strncpy(s->port_hart_device_id, val->string_value, sizeof(s->port_hart_device_id)-1); return 1;
+            }
             if (!strcmp(name,"rx_buffer") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
                 const char *p = val->string_value;
                 strncpy(s->ser_rx_buf, p, sizeof(s->ser_rx_buf)-1);
@@ -1087,12 +1147,28 @@ static uint32_t periph_set_property(LsdnDevice *dev, const char *name, const Lsd
             if (!strcmp(name,"data_bits")) { s->port_data_bits = s->ser_data_bits = (int)n; return 1; }
             if (!strcmp(name,"stop_bits")) { s->port_stop_bits = s->ser_stop_bits = (int)n; return 1; }
             if (!strcmp(name,"auto_open")) { s->port_auto_open = b;            return 1; }
+            if (!strcmp(name,"protocol") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
+                if (strcmp(val->string_value, "uart") && strcmp(val->string_value, "hart")) return 0;
+                strncpy(s->port_protocol, val->string_value, sizeof(s->port_protocol) - 1); return 1;
+            }
+            if (!strcmp(name,"hart_device_id") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
+                strncpy(s->port_hart_device_id, val->string_value, sizeof(s->port_hart_device_id) - 1); return 1;
+            }
+            if (!strcmp(name,"hart_tx_hex") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {
+                const char *p = val->string_value;
+                while (p[0] && p[1]) {
+                    int hi = hex_value(p[0]), lo = hex_value(p[1]);
+                    if (hi < 0 || lo < 0) return 0;
+                    uart_rx_push(s, (uint8_t)((hi << 4) | lo)); p += 2;
+                }
+                return *p == '\0';
+            }
             if (!strcmp(name,"port_open")) {
                 s->port_open_requested = b;
                 if (b) serial_port_open(s); else serial_port_close(s);
                 return 1;
             }
-            if (!strcmp(name,"port_is_open") || !strcmp(name,"port_error") || !strcmp(name,"port_rx_bytes") || !strcmp(name,"port_tx_bytes")) return 1;
+            if (!strcmp(name,"port_is_open") || !strcmp(name,"port_error") || !strcmp(name,"port_rx_bytes") || !strcmp(name,"port_tx_bytes") || !strcmp(name,"hart_rx_hex")) return 1;
             break;
         case KIND_SDCARD:
             if (!strcmp(name,"file") && val->kind == LSDN_PROPERTY_STRING && val->string_value) {

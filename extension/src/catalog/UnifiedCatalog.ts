@@ -125,6 +125,18 @@ export function entryToWebview(item: UnifiedCatalogItem): WebviewComponentCatalo
   const folderPath = sanitizeFolderPath(item.folderPath);
   const category = folderPath[0] ?? item.category ?? "Outros";
   const subcategory = folderPath.length > 1 ? folderPath[1] : item.subcategory;
+  // Palette icons alone are not schematic symbols.  These physical HART
+  // devices ship SVG artwork, so use the same asset on the canvas instead of
+  // silently falling back to the generic empty package rectangle.
+  let symbolSvg = item.symbolSvg;
+  if (!symbolSvg && item.typeId.startsWith("protocol.hart.device.smar_") && item.icon) {
+    try {
+      const asset = path.join(__dirname, "..", "..", "media", "components", "light", `${item.icon}.svg`);
+      symbolSvg = fs.readFileSync(asset, "utf8").replace("<svg ", '<svg width="100%" height="100%" preserveAspectRatio="xMidYMid meet" ');
+    } catch {
+      // Keep the generic fallback if a packaged asset is genuinely absent.
+    }
+  }
   return {
     typeId: item.typeId,
     label: item.label,
@@ -134,7 +146,7 @@ export function entryToWebview(item: UnifiedCatalogItem): WebviewComponentCatalo
     workspaceSection: item.workspaceSection,
     icon: item.icon,
     iconFilePath: item.iconFilePath,
-    symbolSvg: item.symbolSvg,
+    symbolSvg,
     package: item.package,
     boardPackage: item.boardPackage,
     propertySchema: item.propertySchema,

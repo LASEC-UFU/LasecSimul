@@ -6,8 +6,9 @@
   "language": "pt-BR",
   "icon": "serialterm",
   "folderPath": [
-    "Periféricos"
+    "peripherals"
   ],
+  "workspaceSection": "misc",
   "translations": {
     "en": {
       "name": "LasecPlot"

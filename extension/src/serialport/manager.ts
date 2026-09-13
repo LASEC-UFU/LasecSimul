@@ -16,6 +16,9 @@ interface SerialPortStatus {
  * junto do UART simulado, para que bytes do host sejam temporizados pelos pinos TX/RX. */
 export class SerialPortManager implements vscode.Disposable {
   private readonly statusByComponentId = new Map<string, SerialPortStatus>();
+  /** Restos de um quadro HART que chegou fragmentado pela COM/TTY. Quadros
+   * nunca são entregues ao motor antes de estarem completos. */
+  private readonly hartInputByPortId = new Map<string, string>();
   private timer: ReturnType<typeof setInterval> | undefined;
   private polling = false;
 
@@ -42,6 +45,7 @@ export class SerialPortManager implements vscode.Disposable {
   sync(): void {
     const present = new Set(state.schematicState.components.filter((entry) => entry.typeId === TYPE_ID).map((entry) => entry.id));
     for (const id of [...this.statusByComponentId.keys()]) if (!present.has(id)) this.statusByComponentId.delete(id);
+    for (const id of [...this.hartInputByPortId.keys()]) if (!present.has(id)) this.hartInputByPortId.delete(id);
     for (const id of present) {
       const coreId = coreInstanceIdByComponentId.get(id);
       if (coreId && state.simulationStatus !== "stopped") void this.refresh(id, coreId);
@@ -82,6 +86,7 @@ export class SerialPortManager implements vscode.Disposable {
       ]);
       const error = String(errorValue ?? "").trim();
       this.publish(componentId, { opened: Boolean(openedValue), online: true, rxBytes: Number(rxBytesValue) || 0, txBytes: Number(txBytesValue) || 0, ...(error ? { error } : {}) });
+      await this.pumpHart(componentId, coreId);
     } catch (cause) {
       // [FIX] getProperty IPC head-of-line blocking (2026-08-28) -- "busy" is the Scheduler
       // mutex being transiently held, not a real fault: skip this sample silently (no publish()
@@ -92,6 +97,48 @@ export class SerialPortManager implements vscode.Disposable {
     }
   }
 
+  private async pumpHart(componentId: string, portCoreId: string): Promise<void> {
+    const port = state.schematicState.components.find((entry) => entry.id === componentId && entry.typeId === TYPE_ID);
+    if (!port || String(port.properties.protocol ?? "uart") !== "hart") {
+      this.hartInputByPortId.delete(componentId);
+      return;
+    }
+    const currentStatus = this.statusByComponentId.get(componentId);
+    const setBridgeError = (error: string): void => {
+      this.publish(componentId, {
+        opened: currentStatus?.opened ?? false, online: currentStatus?.online ?? true,
+        rxBytes: currentStatus?.rxBytes ?? 0, txBytes: currentStatus?.txBytes ?? 0, error,
+      });
+    };
+    const targetId = String(port.properties.hart_device_id ?? "").trim();
+    const target = state.schematicState.components.find((entry) => entry.id === targetId && entry.typeId.startsWith("protocol.hart."));
+    const targetCoreId = target ? coreInstanceIdByComponentId.get(target.id) : undefined;
+    if (!target || !targetCoreId) {
+      setBridgeError("HART: selecione um transmissor HART para esta porta.");
+      return;
+    }
+    const client = state.coreClient;
+    if (!client || !currentStatus?.opened) return;
+    const received = String(await client.getProperty(portCoreId, "hart_rx_hex") ?? "").replace(/\s+/g, "").toLowerCase();
+    let pending = `${this.hartInputByPortId.get(componentId) ?? ""}${received}`;
+    // O frame semântico HART do Core é: 02 endereço comando tamanho dados checksum.
+    // Faz ressincronização por delimitador e só chama hartTransact com o quadro completo.
+    while (pending.length >= 10) {
+      const start = pending.indexOf("02");
+      if (start < 0) { pending = ""; break; }
+      if (start > 0) pending = pending.slice(start);
+      if (pending.length < 8) break;
+      const payloadSize = Number.parseInt(pending.slice(6, 8), 16);
+      const frameChars = (payloadSize + 5) * 2;
+      if (pending.length < frameChars) break;
+      const frameHex = pending.slice(0, frameChars);
+      pending = pending.slice(frameChars);
+      const response = await client.hartTransact(targetCoreId, frameHex);
+      await client.setProperty(portCoreId, "hart_tx_hex", response.frameHex);
+    }
+    this.hartInputByPortId.set(componentId, pending);
+  }
+
   private publish(componentId: string, status: SerialPortStatus): void {
     const previous = this.statusByComponentId.get(componentId);
     if (previous?.opened === status.opened && previous.online === status.online && previous.rxBytes === status.rxBytes && previous.txBytes === status.txBytes && previous.error === status.error) return;
@@ -99,7 +146,7 @@ export class SerialPortManager implements vscode.Disposable {
     state.schematicPanel?.postMessage({ version: 1, type: "serialPortStatus", componentId, ...status });
   }
 
-  dispose(): void { if (this.timer) clearInterval(this.timer); this.timer = undefined; this.statusByComponentId.clear(); }
+  dispose(): void { if (this.timer) clearInterval(this.timer); this.timer = undefined; this.statusByComponentId.clear(); this.hartInputByPortId.clear(); }
 }
 
 export let serialPortManager: SerialPortManager | undefined;

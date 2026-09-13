@@ -6,8 +6,9 @@
   "language": "pt-BR",
   "icon": "serialport",
   "folderPath": [
-    "Periféricos"
+    "peripherals"
   ],
+  "workspaceSection": "misc",
   "translations": {
     "en": {
       "name": "Serial Port (COM/TTY)",
@@ -288,6 +289,26 @@
       "default": false
     },
     {
+      "id": "protocol",
+      "label": "Protocolo",
+      "group": "Serial",
+      "valueKind": "string",
+      "editor": "select",
+      "default": "uart",
+      "options": [
+        { "label": "UART / QEMU", "value": "uart" },
+        { "label": "HART", "value": "hart" }
+      ]
+    },
+    {
+      "id": "hart_device_id",
+      "label": "Dispositivo HART",
+      "group": "HART",
+      "valueKind": "string",
+      "editor": "text",
+      "default": ""
+    },
+    {
       "id": "port_open",
       "label": "Solicitar abertura",
       "group": "Interno",
@@ -339,6 +360,27 @@
       "default": 0,
       "hidden": true,
       "readOnly": true,
+      "noCopy": true
+    },
+    {
+      "id": "hart_rx_hex",
+      "label": "Quadros HART recebidos",
+      "group": "HART",
+      "valueKind": "string",
+      "editor": "readonly",
+      "default": "",
+      "hidden": true,
+      "readOnly": true,
+      "noCopy": true
+    },
+    {
+      "id": "hart_tx_hex",
+      "label": "Quadros HART enviados",
+      "group": "HART",
+      "valueKind": "string",
+      "editor": "text",
+      "default": "",
+      "hidden": true,
       "noCopy": true
     }
   ],

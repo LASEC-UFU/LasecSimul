@@ -6,8 +6,9 @@
   "language": "pt-BR",
   "icon": "serialterm",
   "folderPath": [
-    "Periféricos"
+    "peripherals"
   ],
+  "workspaceSection": "misc",
   "translations": {
     "en": {
       "name": "Serial Terminal",
@@ -283,6 +284,23 @@
           "value": "odd"
         }
       ]
+    },
+    {
+      "id": "protocol",
+      "label": "Protocolo",
+      "group": "Serial",
+      "valueKind": "string",
+      "editor": "select",
+      "default": "uart",
+      "options": [{ "label": "UART", "value": "uart" }, { "label": "HART", "value": "hart" }]
+    },
+    {
+      "id": "hart_device_id",
+      "label": "Laço HART",
+      "group": "HART",
+      "valueKind": "string",
+      "editor": "text",
+      "default": ""
     },
     {
       "id": "rx_buffer",

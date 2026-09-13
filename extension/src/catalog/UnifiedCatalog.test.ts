@@ -1,4 +1,4 @@
-﻿import { entryToWebview, resolveLocalizedItems, sanitizeStringArray, UnifiedCatalogItem, UnifiedCatalogTranslation } from "./UnifiedCatalog";
+import { entryToWebview, resolveLocalizedItems, sanitizeStringArray, UnifiedCatalogItem, UnifiedCatalogTranslation } from "./UnifiedCatalog";
 
 // â”€â”€ utilitÃ¡rios de teste (mesmo padrÃ£o de ipc/CoreClient.test.ts) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -123,11 +123,14 @@ test("catalogo canonico registra PLC, Modbus e HART nas areas visiveis", () => {
   // mais em Controle -- reorganização que tirou também o nível redundante "Process" de folderPath.
   assert(byTypeId.get("plc.instance")?.workspaceSection === "process", "PLC deve existir na aba Processo");
   assert(byTypeId.get("plc.instance")?.folderPath?.[0] === "PLC IEC 61131-3", "PLC deve ficar na sua própria subseção, direto em Processo");
-  for (const typeId of ["protocol.modbus.server", "protocol.modbus.client", "protocol.hart.transmitter", "protocol.hart.communicator", "protocol.hart.serial", "protocol.hart.udp"]) {
+  for (const typeId of ["protocol.modbus.server", "protocol.modbus.client", "protocol.hart.transmitter", "protocol.hart.communicator"]) {
     const entry = byTypeId.get(typeId);
     assert(entry?.workspaceSection === "process", `${typeId} deve existir na aba Processo`);
     assert(entry?.folderPath?.[0] === "Protocolos Industriais", `${typeId} deve ficar sob Processo/Protocolos Industriais, sem nível redundante "Process"`);
   }
+  const udp = byTypeId.get("peripherals.udp");
+  assert(udp?.workspaceSection === "misc", "peripherals.udp deve existir na aba Miscelâneos");
+  assert(udp?.folderPath?.[0] === "peripherals", "peripherals.udp deve ficar na pasta output");
 });
 
 // Property Inspector editor-kind coverage gate (section 117/120/134 of the

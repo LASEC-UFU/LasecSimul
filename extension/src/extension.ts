@@ -1,4 +1,4 @@
-﻿import * as vscode from "vscode";
+import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { CoreClient } from "./ipc/CoreClient";
@@ -96,6 +96,7 @@ import { initializeLasecPlot, lasecPlotManager } from "./lasecplot/manager";
 import { LasecSimulInteropApi } from "./lasecplot/api";
 import { initializeSerialTerminal, serialTerminalManager } from "./serialterm/manager";
 import { initializeSerialPort, serialPortManager } from "./serialport/manager";
+import { hartUdpManager, initializeHartUdp } from "./hart/udpManager";
 import {
   gatherInternalComponentSnapshots,
   resolveSourceFilePath,
@@ -212,6 +213,7 @@ function syncSchematicPanel(): void {
   lasecPlotManager?.sync();
   serialTerminalManager?.sync();
   serialPortManager?.sync();
+  hartUdpManager?.sync();
   const lastSynced = state.lastSyncedProjectState;
   if (lastSynced &&
       (lastSynced.components !== state.schematicState.components || lastSynced.topology.conductors !== state.schematicState.topology.conductors) &&
@@ -359,6 +361,7 @@ function attachCoreProcessHandlers(proc: CoreProcess, corePath: string): void {
     }
     serialTerminalManager?.updateSimulationState();
     serialPortManager?.updateSimulationState();
+    hartUdpManager?.sync();
   });
 }
 
@@ -1016,13 +1019,13 @@ async function chooseFilePropertyCommand(componentId: string, propertyKey: strin
 export function pinsForTypeId(typeId: string, properties?: Record<string, unknown>): Array<{ id: string; x: number; y: number }> {
   const controlPins = controlGraphPinIds(typeId, properties ?? {});
   if (controlPins) return controlPins.map((id, index) => ({ id, x: 0, y: index * 12 }));
-  // `protocol.hart.serial`/`protocol.hart.udp` têm `pinCount: 0` fixo no catálogo -- sem pino
+  // `peripherals.udp` tem `pinCount: 0` fixo no catálogo -- sem pino
   // elétrico nenhum (ver `HartCommunicationComponent::pins()`). Os únicos pinos de canvas que
   // existem são as portas Signal Graph genéricas derivadas de `hartVariablesJson` (Input/Output),
   // na mesma convenção de `IComponentModel::signalPorts()` (Core). A partir daqui um pino HART é
   // um pino igual a qualquer outro pro resto do pipeline (`connectWire`, gesto de fio do canvas,
   // `pinLocalPosition`'s fallback genérico de zig-zag) -- nenhum caminho de fiação especial.
-  if (typeId === "protocol.hart.serial" || typeId === "protocol.hart.udp") {
+  if (typeId === "peripherals.udp") {
     const hartVariablesJson = typeof properties?.hartVariablesJson === "string" ? properties.hartVariablesJson : "[]";
     const ids = hartSignalGraphPinIds(hartVariablesJson);
     if (ids.length > 0) return ids.map((id, index) => ({ id, x: 0, y: index * 12 }));
@@ -2424,6 +2427,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   const lasecPlot = initializeLasecPlot(context);
   initializeSerialTerminal(context);
   initializeSerialPort(context);
+  initializeHartUdp(context);
   registerMcuDebugTracking(context);
   state.extensionContext = context;
   maybeOfferMachineNetworkSetup(context);
@@ -2472,27 +2476,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     addPaletteComponent,
     (item) => removeRegisteredCatalogItemCommand(item, catalogCommandOptions()),
   );
-  const propertyInspector = new PropertyInspectorViewProvider(context.extensionUri, state.schematicState.catalog,
-    (componentId, name, value) => state.schematicPanel?.postMessage({ version: 1, type: "inspectorUpdateProperty", componentId, name, value }));
-  propertyInspectorView = propertyInspector;
-  state.propertyInspectorView = propertyInspector;
-  // While an unapplied "Lasec DSL" text draft is open, IT is the editing
-  // authority (not the Property Inspector) -- see .spec/features/hart-device-engine.md
-  // "Anexo B" sections 108-110. Without this, editing a property here while a
-  // DSL draft sits open would be silently discarded the next time that draft
-  // is applied (`commitDslCommand` replaces state.schematicState wholesale
-  // from the draft text, unaware of any Inspector edit made in the meantime).
-  onDslDraftOpenChanged((open) => propertyInspectorView?.setDslDraftOpen(open));
   context.subscriptions.push(registerDslDraftCloseTracking());
-  context.subscriptions.push(vscode.window.registerWebviewViewProvider("lasecsimul.propertyInspector", propertyInspector, {
-    webviewOptions: { retainContextWhenHidden: true },
-  }));
-  // The inspector is intentionally on the opposite (secondary) sidebar.
-  // VS Code keeps that sidebar user-controllable afterwards (its native
-  // collapse/expand affordances remain intact), but opening it here prevents
-  // a newly activated LasecSimul workspace from hiding the only property
-  // editing surface behind an undiscovered auxiliary bar.
-  void vscode.commands.executeCommand("workbench.action.focusAuxiliaryBar");
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("lasecsimul.componentPalette", state.paletteViewProvider, {

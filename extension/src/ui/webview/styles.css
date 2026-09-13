@@ -39,6 +39,91 @@ html, body {
   display: none !important;
 }
 
+.property-dock {
+  position: fixed;
+  z-index: 30;
+  top: 41px;
+  right: 0;
+  bottom: 0;
+  width: 340px;
+  min-width: 220px;
+  max-width: 65vw;
+  overflow: auto;
+  border-left: 1px solid var(--line);
+  background: var(--panel-2);
+  box-shadow: -3px 0 12px rgb(0 0 0 / 14%);
+}
+
+.property-dock__header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+  padding: 0 9px;
+  border-bottom: 1px solid var(--line);
+  background: var(--toolbar-bg);
+  color: var(--toolbar-text);
+}
+
+.property-dock__resize {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  width: 8px;
+  cursor: col-resize;
+}
+
+.property-dock__resize:hover { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+
+.property-dock__header button { border: 0; background: transparent; font-size: 22px; color: var(--muted); cursor: pointer; }
+.property-dock__empty { padding: 12px; color: var(--muted); font-size: 12px; }
+.property-dock .property-sheet { padding-top: 0; }
+.property-dock__hart { margin: 0 12px 12px; border-top: 1px solid var(--line); }
+.property-dock__hart details { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.property-dock__hart summary { cursor: pointer; font-weight: 600; }
+.property-dock__collection { display: grid; gap: 8px; margin: 8px 0; }
+.property-dock__item { border: 1px solid var(--line); background: var(--panel); }
+.property-dock__item-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.property-dock__item-header strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.property-dock__item-header button, .property-dock__response button { padding: 2px 6px; font-size: 11px; }
+.property-dock__grid { display: grid; grid-template-columns: minmax(92px, .9fr) minmax(0, 1.25fr); }
+.property-dock__field { display: contents; }
+.property-dock__field > span { padding: 5px 7px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+.property-dock__field > input, .property-dock__field > select { min-width: 0; box-sizing: border-box; padding: 4px 6px; border: 0; border-bottom: 1px solid var(--line); background: var(--panel-2); color: inherit; font: inherit; font-size: 12px; }
+.property-dock__field > input[type="checkbox"] { justify-self: start; width: auto; margin: 7px; }
+.property-dock__response { padding: 6px 8px; }
+.property-dock__response summary { font-size: 11px; color: var(--muted); }
+.property-dock__steps { display: grid; gap: 4px; padding: 6px 0 0; }
+.property-dock__step { display: grid; grid-template-columns: minmax(100px, .8fr) minmax(0, 1fr) auto; gap: 4px; }
+.property-dock__step input, .property-dock__step select { min-width: 0; box-sizing: border-box; }
+.property-dock__enum-value { display: contents; }
+.property-dock__enum-value > span { padding: 5px 7px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+.property-dock__enum-value > input, .property-dock__enum-value > select { min-width: 0; box-sizing: border-box; padding: 4px 6px; border: 0; border-bottom: 1px solid var(--line); background: var(--panel-2); color: inherit; font: inherit; font-size: 12px; }
+.property-dock__bit-checks { display: grid; gap: 4px; padding: 6px; border-bottom: 1px solid var(--line); font-size: 11px; }
+.property-dock__bit-checks label { display: flex; gap: 5px; align-items: center; }
+.property-dock__presentation-toggle { float: right; margin: 5px 0; padding: 2px 7px; font-size: 11px; }
+
+.property-dock-toggle {
+  position: fixed;
+  z-index: 31;
+  top: 112px;
+  right: 0;
+  padding: 8px 5px;
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-radius: 5px 0 0 5px;
+  background: var(--toolbar-bg);
+  color: var(--toolbar-text);
+  cursor: pointer;
+  font-size: 11px;
+  writing-mode: vertical-rl;
+}
+
 .appbar {
   position: sticky;
   top: 0;
@@ -79,6 +164,22 @@ html, body {
   color: #555b64;
   cursor: pointer;
   padding: 0;
+}
+
+/* The DSL conversion controls are deliberately named, not icon-only: the two
+ * directions are different edits and must remain discoverable at a glance. */
+.appbar__button--blocksToDsl,
+.appbar__button--dslToBlocks {
+  display: inline-flex;
+  gap: 4px;
+  width: auto;
+  padding: 0 7px;
+}
+
+.appbar__button-label {
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1;
 }
 
 .appbar__button:hover:not(:disabled) {
@@ -1035,6 +1136,13 @@ rect.meter-expand-button:hover {
   gap: 0;
   margin-top: 4px;
 }
+
+/* The inspector is one continuous property sheet for every device.  Groups
+ * are lightweight disclosure sections, never mutually exclusive tabs. */
+.property-sheet__sections { display: grid; gap: 7px; padding: 7px 0; }
+.property-sheet__section { border: 1px solid var(--line); background: var(--panel); }
+.property-sheet__section > summary { cursor: pointer; padding: 7px 9px; font-weight: 600; color: var(--toolbar-text); background: var(--panel-2); }
+.property-sheet__section > .property-sheet__group { margin: 0; border: 0; }
 
 .property-sheet__tab {
   min-width: 72px;

@@ -812,7 +812,10 @@ int main() {
             R"({"id":"DiagnosticX","name":"Diagnostic X","type":"Float32","direction":"Internal","value":7.0},)"
             R"({"id":"DiagByte","name":"Diag Byte","type":"UInt8","direction":"Internal","value":200},)"
             R"({"id":"DiagSigned","name":"Diag Signed","type":"Int16","direction":"Internal","value":-5},)"
-            R"({"id":"DiagFlag","name":"Diag Flag","type":"Bool","direction":"Internal","value":1}])");
+            R"({"id":"DiagFlag","name":"Diag Flag","type":"Bool","direction":"Internal","value":1},)"
+            R"({"id":"LockMode","name":"Lock mode","type":"ENUM18","direction":"Internal","value":3},)"
+            R"({"id":"StatusFlags","name":"Status flags","type":"BIT_ENUM11","direction":"Internal","value":65},)"
+            R"({"id":"JoinStatus","name":"Join status","type":"BIT_ENUM52","direction":"Internal","value":1025}])");
         // Command 152 (0x98) is deliberately "Vendor Keepalive" -- one of the
         // reference catalog's Device-Specific descriptor ids, which
         // `commandProgramDefinitions()` deliberately leaves unimplemented (no
@@ -829,7 +832,10 @@ int main() {
             R"({"id":151,"name":"Diagnostic X","responseSteps":[{"kind":"variable","variable":"DiagnosticX"}]},)"
             R"({"id":152,"name":"Diag Byte","responseSteps":[{"kind":"variable","variable":"DiagByte"}]},)"
             R"({"id":153,"name":"Diag Signed","responseSteps":[{"kind":"variable","variable":"DiagSigned"}]},)"
-            R"({"id":154,"name":"Diag Flag","responseSteps":[{"kind":"variable","variable":"DiagFlag"}]}])");
+            R"({"id":154,"name":"Diag Flag","responseSteps":[{"kind":"variable","variable":"DiagFlag"}]},)"
+            R"({"id":155,"name":"Lock Mode","responseSteps":[{"kind":"variable","variable":"LockMode"}]},)"
+            R"({"id":156,"name":"Status Flags","responseSteps":[{"kind":"variable","variable":"StatusFlags"}]},)"
+            R"({"id":157,"name":"Join Status","responseSteps":[{"kind":"variable","variable":"JoinStatus"}]}])");
 
         HartCommunicationComponent component(HartCommunicationComponent::Mode::Serial, scheduler, params);
         auto findValue = [&component](const char* id) -> lasecsimul::PropertyValue {
@@ -905,6 +911,15 @@ int main() {
               "component: Int16 user variable (-5) encodes as the correct 2-byte two's-complement big-endian bytes");
         const auto diagFlag = transactCommand(154);
         check(diagFlag.size() == 1 && diagFlag[0] == 1, "component: Bool user variable encodes as exactly 1 byte");
+        const auto lockMode = transactCommand(155);
+        check(lockMode.size() == 1 && lockMode[0] == 3,
+              "component: ENUM18 stores a numeric common-table code and emits its canonical one-byte value");
+        const auto statusFlags = transactCommand(156);
+        check(statusFlags.size() == 1 && statusFlags[0] == 0x41,
+              "component: BIT_ENUM11 combines human-selected flags and emits their canonical ORed byte");
+        const auto joinStatus = transactCommand(157);
+        check(joinStatus.size() == 2 && joinStatus[0] == 0x04 && joinStatus[1] == 0x01,
+              "component: 16-bit BIT_ENUM52 uses the Common Table's exact big-endian wire width");
 
         // Universal Command 17/12 (Write/Read Message) through the REAL
         // production component (not just the bare HartEngine test above):
@@ -1123,7 +1138,7 @@ int main() {
             HartCommunicationComponent::DevicePreset preset = HartCommunicationComponent::smarLd301Preset();
             HartCommunicationComponent ld301(HartCommunicationComponent::Mode::Serial, scheduler, params, &preset);
             check(std::string(ld301.typeId()) == "protocol.hart.device.smar_ld301",
-                  "LD301 component reports its OWN catalog typeId, not a generic protocol.hart.serial (save/reopen identity)");
+                  "LD301 component reports its OWN catalog typeId, not a generic protocol.hart.internal (save/reopen identity)");
             const auto ports = ld301.signalPorts();
             check(ports.size() == 1 && ports.front().id == "PV" && ports.front().direction == lasecsimul::SignalPortDirection::Input,
                   "LD301 exposes exactly one Signal Graph port: PV as Input");

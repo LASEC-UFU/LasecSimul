@@ -23,7 +23,7 @@ public:
      * (FEAT: HART concrete devices -- SMAR LD301/TT301/FY301). `typeId` is what `typeId()` reports
      * (and what gets persisted/reloaded), decoupled from `mode` so a device preset can fix the
      * wired transport (Mode::Serial) while still exposing its own catalog identity instead of
-     * lying as a generic "protocol.hart.serial". The remaining fields become the property
+     * lying as a generic "protocol.hart.internal". The remaining fields become the property
      * schema's `defaultValue` (what a freshly-dropped instance receives via
      * `ComponentParams::properties`, see `CoreApplication.cpp`'s `registerHartDevice`) AND this
      * constructor's own fallback (so a component built with an empty `ComponentParams` -- e.g. a
@@ -44,14 +44,14 @@ public:
     ~HartCommunicationComponent() override = default;
 
     const char* typeId() const override;
-    std::span<Pin> pins() override { return {}; }
+    std::span<Pin> pins() override { return m_fieldDevice ? std::span<Pin>{m_pins} : std::span<Pin>{}; }
     void onAssignedIndex(uint32_t index) override;
     std::vector<SignalPortDescriptor> signalPorts() const override;
     std::string signalBlockId(std::string_view variableId) const;
     bool setSignalInput(std::string_view variableId, double value) noexcept;
     std::optional<double> signalOutput(std::string_view variableId) const noexcept;
     uint32_t extraVariableCount() const override { return 0; }
-    void stamp(MnaMatrixView&) override {}
+    void stamp(MnaMatrixView&) override;
     void postStep(uint64_t) override {}
     size_t getState(uint8_t* out, size_t cap) const override;
     void setState(const uint8_t* in, size_t len) override;
@@ -138,6 +138,12 @@ private:
     std::array<uint8_t, 3> m_date{};
     uint32_t m_finalAssemblyNumber = 0;
     bool m_loopCurrentModeEnabled = true;
+    // Field devices have a real measurement input (S+/S-) and a 4-20 mA
+    // loop (LOOP+/LOOP-). HART frames deliberately have no electrical pins.
+    bool m_fieldDevice = false;
+    std::array<Pin, 4> m_pins{};
+    double m_sensorLowVolts = 0.0, m_sensorHighVolts = 5.0;
+    double m_loopCurrent = 0.004;
     /** "OK" or "ERROR: <compiler message>" -- read-only, shown in the Property
      * Inspector's Diagnostics/Commands section (never a silent failure). */
     std::string m_hartCommandsStatus = "OK";
