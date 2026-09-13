@@ -30,4 +30,17 @@ for (const entry of manifest.entries) {
   fs.writeFileSync(path.join(outputDir, entry.file), `${JSON.stringify(document, null, 2)}\n`, "utf8");
 }
 
+// library.json é a única porta de entrada da biblioteca integrada. Reconstituir
+// a fatia TDPS a partir do mesmo inventário evita itens órfãos ou uma paleta que
+// mostre só parte do corpus depois de regenerar os manifests.
+const libraryPath = path.join(outputDir, "library.json");
+const library = JSON.parse(fs.readFileSync(libraryPath, "utf8"));
+const retained = library.subcircuits.filter((entry) => !String(entry.typeId).startsWith("subcircuits.tdps."));
+const firstTdpsIndex = library.subcircuits.findIndex((entry) => String(entry.typeId).startsWith("subcircuits.tdps."));
+const generated = manifest.entries.map(({ typeId, file }) => ({ typeId, manifest: file }));
+library.subcircuits = firstTdpsIndex < 0
+  ? [...retained, ...generated]
+  : [...retained.slice(0, firstTdpsIndex), ...generated, ...retained.slice(firstTdpsIndex)];
+fs.writeFileSync(libraryPath, `${JSON.stringify(library, null, 2)}\n`, "utf8");
+
 execFileSync(process.execPath, [path.join(repoRoot, "scripts", "apply-tdps-reference-symbols.mjs")], { cwd: repoRoot, stdio: "inherit" });

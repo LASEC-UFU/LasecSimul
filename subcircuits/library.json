@@ -22,6 +22,86 @@
       "manifest": "tdps_basic_flow_loop.lssubcircuit"
     },
     {
+      "typeId": "subcircuits.tdps.boiler",
+      "manifest": "tdps_boiler.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.combustion_cross_limits",
+      "manifest": "tdps_combustion_cross_limits.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.combustion_dynamic_cross_limits",
+      "manifest": "tdps_combustion_dynamic_cross_limits.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.combustion_ratio",
+      "manifest": "tdps_combustion_ratio.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.combustion_two_fuels",
+      "manifest": "tdps_combustion_two_fuels.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.cooling_plant",
+      "manifest": "tdps_cooling_plant.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.course_fine_flow_loop",
+      "manifest": "tdps_course_fine_flow_loop.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.ethane_plant",
+      "manifest": "tdps_ethane_plant.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.frequency_response",
+      "manifest": "tdps_frequency_response.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.furnace_master_slave",
+      "manifest": "tdps_furnace_master_slave.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.furnace",
+      "manifest": "tdps_furnace.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.header_pressure_three_consumers",
+      "manifest": "tdps_header_pressure_three_consumers.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.heat_exchanger",
+      "manifest": "tdps_heat_exchanger.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.industrial_boiler",
+      "manifest": "tdps_industrial_boiler.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.linearized_ph",
+      "manifest": "tdps_linearized_ph.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.ph_control",
+      "manifest": "tdps_ph_control.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.nonlinear_flow_processes",
+      "manifest": "tdps_nonlinear_flow_processes.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.four_linear_processes",
+      "manifest": "tdps_four_linear_processes.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.reactor",
+      "manifest": "tdps_reactor.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.tdps.regulatory_level",
+      "manifest": "tdps_regulatory_level.lssubcircuit"
+    },
+    {
       "typeId": "subcircuits.tdps.smith_predictor",
       "manifest": "tdps_smith_predictor.lssubcircuit"
     },
@@ -30,28 +110,8 @@
       "manifest": "tdps_split_range.lssubcircuit"
     },
     {
-      "typeId": "subcircuits.tdps.surge_tank_level",
-      "manifest": "tdps_surge_tank_level.lssubcircuit"
-    },
-    {
-      "typeId": "subcircuits.tdps.heat_exchanger",
-      "manifest": "tdps_heat_exchanger.lssubcircuit"
-    },
-    {
-      "typeId": "subcircuits.tdps.furnace_combustion",
-      "manifest": "tdps_furnace_combustion.lssubcircuit"
-    },
-    {
-      "typeId": "subcircuits.tdps.boiler_drum",
-      "manifest": "tdps_boiler_drum.lssubcircuit"
-    },
-    {
-      "typeId": "subcircuits.tdps.reactor_temperature",
-      "manifest": "tdps_reactor_temperature.lssubcircuit"
-    },
-    {
-      "typeId": "subcircuits.tdps.ph_neutralization",
-      "manifest": "tdps_ph_neutralization.lssubcircuit"
+      "typeId": "subcircuits.tdps.surge_tank",
+      "manifest": "tdps_surge_tank.lssubcircuit"
     },
     {
       "typeId": "subcircuits.control.gain",

@@ -1211,9 +1211,9 @@ int main() {
         }
 
         // Persistence: destroy the session and reconstruct from the SAVED properties map only (the
-        // real save/reopen path -- see the Gate 12/section 38 persistence pattern used earlier in
-        // this file), not an in-memory round trip. A renamed Tag must not disturb the stable
-        // profile/variable identity (deviceId/variableId survive rename).
+        // real save/reopen path -- same idiom as the "reopen test" above, not an in-memory round
+        // trip), including a Tag rename, which must not disturb the stable profile/variable
+        // identity (deviceId is derived from the component's assigned index, never from the tag).
         {
             lasecsimul::registry::ComponentParams savedParams;
             {
@@ -1221,8 +1221,33 @@ int main() {
                 lasecsimul::registry::ComponentParams freshParams;
                 HartCommunicationComponent original(HartCommunicationComponent::Mode::Serial, scheduler, freshParams, &preset);
                 check(original.setSignalInput("PV", 5.5), "LD301 persistence test: set canonical measurement before saving");
-                original.setPropertyValue2 :: void(); // placeholder removed below
+                for (auto& descriptor : original.propertyDescriptors())
+                    if (descriptor.schema.id == "tag") descriptor.set(std::string("LD-301-B"));
+                for (const auto& descriptor : original.propertyDescriptors()) savedParams.properties[descriptor.schema.id] = descriptor.get();
+                check(std::get<std::string>(savedParams.properties.at("tag")) == "LD-301-B", "LD301 persistence test: renamed Tag captured in the saved snapshot");
+                check(std::get<std::string>(savedParams.properties.at("profileId")) == ld301Profile.id,
+                      "LD301 persistence test: saved snapshot keeps the SMAR profile id (rename must not reset it to the generic profile)");
             }
+            HartCommunicationComponent::DevicePreset preset = HartCommunicationComponent::smarLd301Preset();
+            HartCommunicationComponent reopened(HartCommunicationComponent::Mode::Serial, scheduler, savedParams, &preset);
+            check(std::string(reopened.typeId()) == "protocol.hart.device.smar_ld301", "LD301 persistence test: reopened component keeps its catalog typeId");
+            // The live measurement (5.5, fed by a Signal Graph wire at simulation time) is NOT
+            // expected to survive save/reopen -- it is transient simulation state, exactly like any
+            // other wire's instantaneous value, never a saved property. What must survive is the
+            // CONFIGURATION (Tag/profileId, already checked above) and the variable's STABLE
+            // identity, so re-wiring after reopen resolves the exact same "PV" the pre-rename
+            // instance used -- checked below by feeding a fresh value in and reading it straight back.
+            check(reopened.setSignalInput("PV", 6.0), "LD301 persistence test: Signal Graph wiring (variableId \"PV\") still resolves after a real destroy-and-reopen cycle following a Tag rename");
+            HartFrame request{0, 1, {}};
+            HartResponseBuilder wire(16);
+            check(HartFrameCodec::encode(request, wire), "LD301 persistence test: encode Command 1 request");
+            HartResponseBuilder responseWire(32);
+            check(reopened.transact(wire.bytes(), responseWire), "LD301 persistence test: reopened component transacts Command 1");
+            HartFrame response;
+            const auto expected = HartTypeCodec::encodeFloat32BE(6.0f);
+            check(HartFrameCodec::decode(responseWire.bytes(), response) && response.payload.size() == 5 &&
+                      std::equal(expected.begin(), expected.end(), response.payload.begin() + 1),
+                  "LD301: HART read reflects the freshly re-wired value after a real destroy-and-reopen cycle, proving stable variable identity survives the Tag rename");
         }
     }
 
