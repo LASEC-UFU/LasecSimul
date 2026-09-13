@@ -8,10 +8,10 @@ import {
 (async () => {
   const { test, finish } = createTestRunner("workspace");
 
-  await test("ordem fixa das 4 abas", () => {
+  await test("ordem fixa das 5 abas", () => {
     assert(
-      WORKSPACE_SECTION_ORDER.join(",") === "analog,digital,control,process",
-      "ordem deveria ser Analógico, Digital, Controle, Processo"
+      WORKSPACE_SECTION_ORDER.join(",") === "analog,digital,control,process,misc",
+      "ordem deveria ser Analógico, Digital, Controle, Processo, Miscelâneos"
     );
   });
 
@@ -48,6 +48,12 @@ import {
     assert(workspaceSectionForCatalogEntry({ typeId: "protocol.modbus.server", workspaceSection: "process" }) === "process", "Modbus deveria estar em Processo");
     assert(workspaceSectionForCatalogEntry({ typeId: "protocol.hart.transmitter", workspaceSection: "process" }) === "process", "HART deveria estar em Processo");
     assert(workspaceSectionForCatalogEntry({ typeId: "outputs.hd44780" }) === "analog", "display legado sem workspaceSection deveria ser analógico (só logic./digital. ficam em Digital)");
+  });
+
+  await test("Conectores/Gráficos/Externos migraram de Analógico para Miscelâneos via workspaceSection explícito", () => {
+    assert(workspaceSectionForCatalogEntry({ typeId: "connectors.bus", workspaceSection: "misc" }) === "misc", "Conectores deveria estar em Miscelâneos");
+    assert(workspaceSectionForCatalogEntry({ typeId: "graphics.rectangle", workspaceSection: "misc" }) === "misc", "Gráfico/Gráfica deveria estar em Miscelâneos");
+    assert(workspaceSectionForCatalogEntry({ typeId: "devices.external", workspaceSection: "misc" }) === "misc", "Externos deveria estar em Miscelâneos");
   });
 
   const { failed } = finish();

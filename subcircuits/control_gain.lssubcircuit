@@ -1,23 +1,21 @@
 {
   "schemaVersion": 3,
   "typeId": "subcircuits.control.gain",
-  "name": "Controle - Ganho",
+  "name": "Ganho",
   "language": "pt-BR",
-  "folderPath": [
-    "Control",
-    "SignalEngine"
-  ],
+  "folderPath": [],
   "workspaceSection": "control",
   "help": {
     "description": "Bloco Ganho executado pelo SignalEngine do Core."
   },
   "components": [
     {
-      "id": "in",
-      "typeId": "connectors.tunnel",
+      "id": "in-tunnel",
+      "typeId": "connectors.signal_tunnel",
       "properties": {
         "name": "in",
-        "pinId": "in",
+        "direction": "Input",
+        "valueType": "Real",
         "defaultValue": 0
       },
       "visual": {
@@ -42,10 +40,11 @@
     },
     {
       "id": "out-tunnel",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "properties": {
         "name": "out",
-        "pinId": "out"
+        "direction": "Output",
+        "valueType": "Real"
       },
       "visual": {
         "x": 320,
@@ -63,7 +62,7 @@
         "from": {
           "kind": "port",
           "componentId": "in-tunnel",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -82,7 +81,7 @@
         "to": {
           "kind": "port",
           "componentId": "out-tunnel",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       }

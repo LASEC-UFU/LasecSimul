@@ -156,9 +156,12 @@ export function folderPathFromMalformedJsonText(filePath: string): string[] | un
   }
 }
 
+/** `folderPath: []` EXPLÍCITO no manifesto significa "sem pasta, direto na raiz da aba" (ex.: blocos
+ * SignalEngine direto em Controle) -- distinto de folderPath AUSENTE, que cai no fallback de sempre.
+ * Checar por presença de array (não por tamanho) é o que preserva essa distinção; nenhum manifesto
+ * hoje grava `folderPath: []` esperando o fallback antigo (verificado -- ver auditoria da library). */
 export function resolveFolderPath(source: RegisteredSource, fallback: string[]): string[] {
-  const sourceFolder = sanitizeFolderPathSegments(source.folderPath);
-  if (sourceFolder.length > 0) return sourceFolder;
+  if (Array.isArray(source.folderPath)) return sanitizeFolderPathSegments(source.folderPath);
   return fallback;
 }
 
@@ -331,7 +334,9 @@ function manifestFolderPath(json: Record<string, unknown>): string[] | undefined
 
 function manifestWorkspaceSection(json: Record<string, unknown>): WorkspaceSection | undefined {
   const value = json.workspaceSection;
-  return value === "analog" || value === "digital" || value === "control" || value === "process" ? value : undefined;
+  return value === "analog" || value === "digital" || value === "control" || value === "process" || value === "misc"
+    ? value
+    : undefined;
 }
 
 function manifestIconFields(json: Record<string, unknown>, manifestDir: string): Pick<ParsedSubcircuitManifest, "icon" | "iconSvgInline" | "iconFilePath"> {
@@ -558,7 +563,7 @@ export function resolveRegisteredItem(source: RegisteredSource, extensionPath: s
       ? externalFolderPath("subcircuit", language)
       : resolveFolderPath({
           ...source,
-          folderPath: parsed.folderPath && parsed.folderPath.length > 0 ? parsed.folderPath : source.folderPath,
+          folderPath: Array.isArray(parsed.folderPath) ? parsed.folderPath : source.folderPath,
         }, localizedRegisteredFolder("subcircuit-file", language));
     const category = folderPath[0] ?? localizedRegisteredRoot(language);
     const subcategory = folderPath.length > 1 ? folderPath[1] : undefined;

@@ -1,28 +1,41 @@
 {
   "schemaVersion": 3,
   "typeId": "subcircuits.control.tank",
-  "name": "Controle - Tanque",
+  "name": "Tanque",
   "language": "pt-BR",
-  "folderPath": [
-    "Control",
-    "SignalEngine"
-  ],
+  "folderPath": [],
   "workspaceSection": "control",
   "help": {
     "description": "Bloco Tanque executado pelo SignalEngine do Core."
   },
   "components": [
     {
-      "id": "in",
-      "typeId": "connectors.tunnel",
+      "id": "in-tunnel",
+      "typeId": "connectors.signal_tunnel",
       "properties": {
         "name": "in",
-        "pinId": "in",
+        "direction": "Input",
+        "valueType": "Real",
         "defaultValue": 0
       },
       "visual": {
         "x": 40,
         "y": 70,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "outflow-tunnel",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "outflow",
+        "direction": "Input",
+        "valueType": "Real",
+        "defaultValue": 0
+      },
+      "visual": {
+        "x": 40,
+        "y": 125,
         "rotation": 0
       }
     },
@@ -37,20 +50,21 @@
       },
       "visual": {
         "x": 170,
-        "y": 85,
+        "y": 112,
         "rotation": 0
       }
     },
     {
       "id": "out-tunnel",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "properties": {
         "name": "out",
-        "pinId": "out"
+        "direction": "Output",
+        "valueType": "Real"
       },
       "visual": {
         "x": 320,
-        "y": 95,
+        "y": 122,
         "rotation": 180
       }
     }
@@ -64,12 +78,26 @@
         "from": {
           "kind": "port",
           "componentId": "in-tunnel",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
           "componentId": "stage",
           "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-in-1",
+        "from": {
+          "kind": "port",
+          "componentId": "outflow-tunnel",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "stage",
+          "pinId": "outflow"
         },
         "points": []
       },
@@ -83,7 +111,7 @@
         "to": {
           "kind": "port",
           "componentId": "out-tunnel",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       }
@@ -92,8 +120,17 @@
   "interface": [
     {
       "pinId": "in",
-      "label": "IN",
+      "label": "Vazao de entrada",
       "internalTunnel": "in",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "outflow",
+      "label": "Vazao de saida",
+      "internalTunnel": "outflow",
       "domain": "signal",
       "direction": "in",
       "valueType": "Real",
@@ -112,7 +149,7 @@
   "symbolMode": "generic",
   "symbol": {
     "width": 180,
-    "height": 88,
+    "height": 116,
     "border": true,
     "shapes": [
       {
@@ -133,13 +170,22 @@
         "y": 28,
         "angle": 180,
         "length": 8,
-        "label": "IN"
+        "label": "Vazao de entrada"
+      },
+      {
+        "id": "outflow",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 56,
+        "angle": 180,
+        "length": 8,
+        "label": "Vazao de saida"
       },
       {
         "id": "out",
         "kind": "ANALOG_OUT",
         "x": 180,
-        "y": 42,
+        "y": 56,
         "angle": 0,
         "length": 8,
         "label": "OUT"
@@ -150,7 +196,7 @@
     {
       "componentId": "stage",
       "x": 90,
-      "y": 42,
+      "y": 56,
       "rotation": 0,
       "flipH": false,
       "flipV": false,

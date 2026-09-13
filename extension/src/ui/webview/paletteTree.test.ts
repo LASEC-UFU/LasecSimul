@@ -107,6 +107,40 @@ const catalog: PaletteRenderableEntry[] = [
     assert(buildPaletteTree(catalog, "", "process").length === 0, "Processo deveria iniciar vazia");
   });
 
+  await test("Microcontroladores e sempre a PRIMEIRA subpasta de Analogico, mesmo chegando depois de outras no catalogo", () => {
+    const withMcu: PaletteRenderableEntry[] = [
+      ...catalog, // Fontes/Passivos/Medidores primeiro na lista de entrada, de propósito
+      { typeId: "subcircuits.esp32_devkitc_v4", label: "ESP32 DevKitC", category: "Microcontroladores", folderPath: ["Microcontroladores"], pinCount: 0, defaultProperties: {} },
+    ];
+    const tree = buildPaletteTree(withMcu, "", "analog");
+    assert(tree.length > 1, "deveria haver mais de uma pasta de topo em Analogico neste fixture");
+    const first = tree[0];
+    assert(first?.kind === "folder" && first.label === "Microcontroladores", `a primeira pasta deveria ser Microcontroladores, veio ${first?.kind === "folder" ? first.label : first?.kind}`);
+    // Ordem relativa das DEMAIS pastas permanece intocada (Fontes continua vindo antes de Medidores).
+    const remainingLabels = tree.slice(1).filter((node) => node.kind === "folder").map((node) => node.label);
+    assert(JSON.stringify(remainingLabels) === JSON.stringify(["Fontes", "Passivos", "Medidores"]), `ordem das demais pastas nao deveria mudar, veio ${JSON.stringify(remainingLabels)}`);
+  });
+
+  await test("prioridade de pasta so se aplica dentro da aba configurada (Digital nao e afetado)", () => {
+    const mixed: PaletteRenderableEntry[] = [
+      { typeId: "logic.and_gate", label: "AND", category: "Logicos", folderPath: ["Logicos"], pinCount: 3, defaultProperties: {} },
+      { typeId: "subcircuits.esp32_devkitc_v4", label: "ESP32 DevKitC", category: "Microcontroladores", folderPath: ["Microcontroladores"], workspaceSection: "digital", pinCount: 0, defaultProperties: {} },
+    ];
+    const digitalTree = buildPaletteTree(mixed, "", "digital");
+    const first = digitalTree[0];
+    assert(first?.kind === "folder" && first.label === "Logicos", "Digital nao tem prioridade configurada; ordem de chegada deveria valer normalmente");
+  });
+
+  await test("Conectores/Grafico saem de Analogico e passam a existir só em Miscelaneos (catalogo default)", () => {
+    const analogTree = JSON.stringify(buildPaletteTree(defaultComponentCatalog, "", "analog"));
+    const miscTree = JSON.stringify(buildPaletteTree(defaultComponentCatalog, "", "misc"));
+    for (const typeId of ["connectors.bus", "connectors.tunnel", "connectors.socket", "connectors.header", "graphics.image", "graphics.text", "graphics.rectangle", "graphics.ellipse", "graphics.line"]) {
+      assert(!analogTree.includes(typeId), `${typeId} não deveria mais aparecer em Analógico`);
+      assert(miscTree.includes(typeId), `${typeId} deveria aparecer em Miscelâneos`);
+    }
+    assert(analogTree.includes("passive.resistor"), "Analógico ainda deveria conter componentes eletricamente analógicos, ex. resistor");
+  });
+
   await test("catalogo real expoe Modbus e HART em Process/Protocolos Industriais", () => {
     const processTree = JSON.stringify(buildPaletteTree(defaultComponentCatalog, "", "process"));
     assert(processTree.includes("protocol.modbus.server") && processTree.includes("protocol.modbus.client"), "Processo deveria conter servidor e cliente Modbus");

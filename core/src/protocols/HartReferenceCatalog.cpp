@@ -363,9 +363,45 @@ HartDeviceProfile HartReferenceCatalog::makeProfile(const HartReferenceDeviceDef
     return profile;
 }
 
+namespace {
+HartDeviceProfile makeSmarProfile(std::string_view idSuffix, uint8_t deviceType, uint8_t primaryVariableUnit,
+                                  float lowerRangeValue, float upperRangeValue) {
+    HartDeviceProfile profile = HartReferenceCatalog::makeGenericProfile();
+    profile.id = "lasecsimul.hart.smar-" + std::string(idSuffix);
+    profile.manufacturerId = 0x3E; // Smar -- HCF Manufacturer Identification Code table.
+    profile.deviceType = deviceType;
+    profile.primaryVariableUnit = primaryVariableUnit;
+    profile.lowerRangeValue = lowerRangeValue;
+    profile.upperRangeValue = upperRangeValue;
+    return profile;
+}
+} // namespace
+
+HartDeviceProfile HartReferenceCatalog::makeSmarLd301Profile() {
+    // LD301: differential pressure transmitter. deviceType 0x01, unit 0x0C (kilopascals).
+    // Example 0-25 kPa span -- the real device ships with a selectable capsule range; this is a
+    // configurable starting point, not a claimed factory calibration.
+    return makeSmarProfile("ld301", 0x01, 0x0C, 0.0f, 25.0f);
+}
+
+HartDeviceProfile HartReferenceCatalog::makeSmarTt301Profile() {
+    // TT301: temperature transmitter. deviceType 0x02, unit 0x20 (Celsius). Example -50..200 C
+    // span, a common RTD/thermocouple working range -- again user-editable, not a fixed spec value.
+    return makeSmarProfile("tt301", 0x02, 0x20, -50.0f, 200.0f);
+}
+
+HartDeviceProfile HartReferenceCatalog::makeSmarFy301Profile() {
+    // FY301: valve positioner. deviceType 0x03, unit 0x39 (percent) -- position is the standard
+    // positioner primary variable, 0..100% is not an approximation but the real full travel span.
+    return makeSmarProfile("fy301", 0x03, 0x39, 0.0f, 100.0f);
+}
+
 bool HartReferenceCatalog::registerProfiles(HartProfileRegistry& registry) {
     bool ok = registerGenericProfile(registry);
     for (const auto& definition : deviceDefinitions()) ok = registry.registerProfile(makeProfile(definition)) && ok;
+    ok = registry.registerProfile(makeSmarLd301Profile()) && ok;
+    ok = registry.registerProfile(makeSmarTt301Profile()) && ok;
+    ok = registry.registerProfile(makeSmarFy301Profile()) && ok;
     return ok;
 }
 

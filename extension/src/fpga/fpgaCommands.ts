@@ -1,11 +1,10 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import { nextIndexedLabel } from "../catalog/catalogMerge";
 import { logSimulation } from "../diagnostics/simulationLog";
 import { reportVhdlDiagnostics } from "../diagnostics/fpgaDiagnostics";
 import { coreInstanceIdByComponentId, state } from "../state";
 import { endpointId, endpointPinId, WebviewComponentModel } from "../ui/webview/model";
-import { pushComponentToCore, rebuildCoreFromSchematicState } from "../core/coreLifecycle";
+import { rebuildCoreFromSchematicState } from "../core/coreLifecycle";
 import { buildFpgaPins, FpgaPortSpec } from "./fpgaPins";
 import { ensureGhdlToolchainReady, resolveFpgaToolchainConfig, resolveGhdlBinaryPath } from "./fpgaToolchain";
 
@@ -15,10 +14,6 @@ export interface FpgaCommandOptions {
 }
 
 const FPGA_TYPE_ID = "digital.generic_fpga";
-
-function nextFpgaId(): string {
-  return `component-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
-}
 
 function getComponentById(componentId: string): WebviewComponentModel | undefined {
   return state.schematicState.components.find((component) => component.id === componentId);
@@ -61,42 +56,6 @@ async function promptForTopEntity(defaultValue: string): Promise<string | undefi
     validateInput: (input) => (input.trim() ? undefined : "Informe o nome da entity."),
   });
   return value?.trim() || undefined;
-}
-
-/** Cria o bloco programável imediatamente, ainda sem fonte e sem terminais. O vínculo com VHDL é
- * uma segunda ação deliberada (`configureFpgaCommand`), que só então analisa a entity e materializa
- * seus pinos. */
-export async function addGenericFpgaCommand(options: FpgaCommandOptions): Promise<void> {
-  if (!state.coreClient) {
-    vscode.window.showErrorMessage("O Core não está conectado.");
-    return;
-  }
-
-  const componentId = nextFpgaId();
-  const pins: WebviewComponentModel["pins"] = [];
-  const ok = await pushComponentToCore(componentId, FPGA_TYPE_ID, {}, pins);
-  if (!ok) return; // Core recusou/falhou -- a tela nunca chega a mostrar um componente que o Core não tem.
-
-  const component: WebviewComponentModel = {
-    id: componentId,
-    typeId: FPGA_TYPE_ID,
-    label: nextIndexedLabel(FPGA_TYPE_ID, "FPGA", state.schematicState.components),
-    showValue: false,
-    showDialValue: false,
-    x: 140 + state.schematicState.components.length * 24,
-    y: 140 + state.schematicState.components.length * 24,
-    rotation: 0,
-    pins,
-    properties: {},
-  };
-  state.schematicState = {
-    ...state.schematicState,
-    components: [...state.schematicState.components, component],
-    selectedComponentIds: [componentId],
-    selectedWireIds: [],
-  };
-  options.syncSchematicPanel();
-  logSimulation("info", `Bloco programável "${component.label}" adicionado sem terminais.`, { device: component.label, stage: "fpga" });
 }
 
 /** Recompila+redescobre portas contra o VHDL ATUAL da instância (mesmas `sources`/`top`/`standard`

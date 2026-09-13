@@ -46,11 +46,14 @@ function normalizeSearchText(value: string): string {
     .trim();
 }
 
+/** `folderPath: []` EXPLÍCITO é "sem pasta, componente direto na raiz da aba" -- distinto de
+ * `folderPath` AUSENTE, que cai no fallback category/subcategory de sempre. Checar presença de
+ * array (não tamanho) é o que preserva essa distinção -- ver `registeredSources.ts::resolveFolderPath`
+ * pra a mesma regra do lado da resolução do manifesto. */
 export function resolvePaletteFolderPath(entry: Pick<WebviewComponentCatalogEntry, "folderPath" | "category" | "subcategory">): string[] {
-  const normalized = Array.isArray(entry.folderPath)
-    ? entry.folderPath.map((segment) => segment.trim()).filter((segment) => segment.length > 0)
-    : [];
-  if (normalized.length > 0) return normalized;
+  if (Array.isArray(entry.folderPath)) {
+    return entry.folderPath.map((segment) => segment.trim()).filter((segment) => segment.length > 0);
+  }
   return [entry.category, ...(entry.subcategory ? [entry.subcategory] : [])].filter((segment) => segment.length > 0);
 }
 
@@ -97,6 +100,38 @@ function stripMutableNodes(nodes: Array<MutableFolderNode | PaletteComponentNode
   });
 }
 
+/**
+ * Sem isto, a ordem das pastas de topo dentro de uma aba é só a ordem de PRIMEIRA APARIÇÃO na
+ * lista mesclada de catálogo (estático + devices/subcircuits registrados, ver
+ * `catalogCommands.ts::refreshUnifiedCatalogState`) -- nunca alfabética nem configurável. Pastas
+ * listadas aqui (nesta ordem) vêm sempre antes das demais dentro da mesma aba; a ordem relativa
+ * de todo o resto permanece exatamente a de sempre (sort estável). Ausente == comportamento
+ * legado, sem prioridade nenhuma.
+ */
+const ROOT_FOLDER_PRIORITY: Partial<Record<WorkspaceSection, readonly string[]>> = {
+  analog: ["Microcontroladores"],
+  // PLC-IEC, Protocolos Industriais, Modelos -- nesta ordem -- dentro de Processo.
+  process: ["PLC IEC 61131-3", "Protocolos Industriais", "Modelos"],
+};
+
+function applyRootFolderPriority(
+  roots: Array<MutableFolderNode | PaletteComponentNode>,
+  workspaceSection: WorkspaceSection | undefined
+): Array<MutableFolderNode | PaletteComponentNode> {
+  const priority = workspaceSection ? ROOT_FOLDER_PRIORITY[workspaceSection] : undefined;
+  if (!priority || priority.length === 0) return roots;
+  const prioritized: Array<MutableFolderNode | PaletteComponentNode> = [];
+  const rest: Array<MutableFolderNode | PaletteComponentNode> = [];
+  for (const node of roots) {
+    const isPriorityFolder = node.kind === "folder" && priority.includes(node.label);
+    (isPriorityFolder ? prioritized : rest).push(node);
+  }
+  // Ordem relativa DENTRO do grupo priorizado segue `priority[]`; múltiplas pastas com o mesmo
+  // nome nunca coexistem no mesmo nível (chave única por segmento, ver `createFolderNode`).
+  prioritized.sort((a, b) => priority.indexOf(a.label) - priority.indexOf(b.label));
+  return [...prioritized, ...rest];
+}
+
 export function buildPaletteTree(entries: PaletteRenderableEntry[], rawQuery: string, workspaceSection?: WorkspaceSection): PaletteTreeNode[] {
   const roots: Array<MutableFolderNode | PaletteComponentNode> = [];
   const rootFolders = new Map<string, MutableFolderNode>();
@@ -141,5 +176,5 @@ export function buildPaletteTree(entries: PaletteRenderableEntry[], rawQuery: st
     });
   }
 
-  return stripMutableNodes(roots);
+  return stripMutableNodes(applyRootFolderPriority(roots, workspaceSection));
 }

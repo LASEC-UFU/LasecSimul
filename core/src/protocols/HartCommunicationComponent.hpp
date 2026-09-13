@@ -19,8 +19,28 @@ class HartCommunicationComponent final : public IComponentModel {
 public:
     enum class Mode : uint8_t { Serial, Udp };
 
+    /** Identifies a concrete, pre-configured field device built on top of this SAME class/engine
+     * (FEAT: HART concrete devices -- SMAR LD301/TT301/FY301). `typeId` is what `typeId()` reports
+     * (and what gets persisted/reloaded), decoupled from `mode` so a device preset can fix the
+     * wired transport (Mode::Serial) while still exposing its own catalog identity instead of
+     * lying as a generic "protocol.hart.serial". The remaining fields become the property
+     * schema's `defaultValue` (what a freshly-dropped instance receives via
+     * `ComponentParams::properties`, see `CoreApplication.cpp`'s `registerHartDevice`) AND this
+     * constructor's own fallback (so a component built with an empty `ComponentParams` -- e.g. a
+     * unit test -- still gets the right profile instead of silently falling back to the generic
+     * one). No new engine/dispatcher code: only default configuration data layered on the existing
+     * generic HART engine. */
+    struct DevicePreset {
+        const char* typeId;
+        std::string profileId;
+        std::string tag;
+        std::string uniqueId;
+        std::string unit;
+        std::string hartVariablesJson;
+    };
+
     HartCommunicationComponent(Mode mode, simulation::Scheduler& scheduler,
-                               const registry::ComponentParams& params);
+                               const registry::ComponentParams& params, const DevicePreset* preset = nullptr);
     ~HartCommunicationComponent() override = default;
 
     const char* typeId() const override;
@@ -49,8 +69,16 @@ public:
     }
     const HartTransportCounters& counters() const noexcept { return m_endpoint.counters(); }
 
-    static std::vector<PropertySchema> propertySchema(Mode mode);
+    static std::vector<PropertySchema> propertySchema(Mode mode, const DevicePreset* preset = nullptr);
     static ReadoutFormat readoutFormat() { return {ReadoutKind::Scalar, "", 0}; }
+
+    /** Canonical DevicePreset for each concrete SMAR device (FEAT: HART concrete devices). The
+     * SINGLE source of truth both `CoreApplication.cpp`'s catalog registration and the regression
+     * tests consume, so the registered typeId/profile/default Signal Graph ports can never silently
+     * drift from what is actually tested. */
+    static DevicePreset smarLd301Preset();
+    static DevicePreset smarTt301Preset();
+    static DevicePreset smarFy301Preset();
 
 private:
     static std::string stringProperty(const registry::ComponentParams&, const char*, std::string);
@@ -77,6 +105,7 @@ private:
     void syncPersistedStateFromEngine();
 
     Mode m_mode;
+    std::string m_typeId;
     simulation::Scheduler& m_scheduler;
     HartProfileRegistry m_profiles;
     HartEngine m_engine;

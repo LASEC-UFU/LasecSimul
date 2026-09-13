@@ -1,11 +1,10 @@
 {
   "schemaVersion": 3,
   "typeId": "subcircuits.tdps.basic_flow_loop",
-  "name": "TDPS - Malha Basica de Vazao",
+  "name": "Malha Basica de Vazao",
   "language": "pt-BR",
   "folderPath": [
-    "Process",
-    "TDPS Convertidos"
+    "Modelos"
   ],
   "workspaceSection": "process",
   "help": {

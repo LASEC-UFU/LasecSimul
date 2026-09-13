@@ -1,11 +1,10 @@
 {
   "schemaVersion": 3,
   "typeId": "subcircuits.tdps.smith_predictor",
-  "name": "TDPS - Preditor de Smith",
+  "name": "Preditor de Smith",
   "language": "pt-BR",
   "folderPath": [
-    "Process",
-    "TDPS Convertidos"
+    "Modelos"
   ],
   "workspaceSection": "process",
   "help": {

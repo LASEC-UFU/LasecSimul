@@ -236,6 +236,51 @@ void checkedInProcessLibraryCompilesAndRuns() {
     }
 }
 
+/** Reorganizacao Controle/SignalEngine (2026-09): os 24 blocos control_*.lssubcircuit publicados
+ * por `scripts/generate-control-block-library.mjs` NUNCA tinham sido exercitados por nenhum teste
+ * real -- o bug real que motivou esta cobertura (wire de entrada apontando pro id errado do tunel,
+ * "in-tunnel" vs componente nascido como "in") só quebrava em `loadDeviceLibrary` (Core), nunca em
+ * `npm test` (TypeScript). Depois de corrigir o id E de migrar os tuneis pra `connectors.signal_tunnel`
+ * (domain:"signal" exige o tunel de sinal moderno, exceto em composites `workspaceSection:"process"`
+ * legados -- ver subcircuitValidation.ts), este teste prova que TODOS os 24 blocos compilam via
+ * `ProcessSubcircuitCompiler::compile` E produzem saida numerica finita de verdade -- fechando a
+ * lacuna que nenhum teste TypeScript sozinho consegue: `ports[id].inputs["value"]` (pinId real que
+ * uma wire pra um `connectors.signal_tunnel` de saida precisa usar) só e' validado aqui. */
+void checkedInControlBlockLibraryCompilesAndRuns() {
+    const std::vector<std::string> files{
+        "control_gain.lssubcircuit", "control_bias.lssubcircuit", "control_sum.lssubcircuit",
+        "control_subtract.lssubcircuit", "control_product.lssubcircuit", "control_divide.lssubcircuit",
+        "control_pid.lssubcircuit", "control_integrator.lssubcircuit", "control_filtered_derivative.lssubcircuit",
+        "control_unit_delay.lssubcircuit", "control_dead_time.lssubcircuit", "control_first_order.lssubcircuit",
+        "control_second_order.lssubcircuit", "control_lead_lag.lssubcircuit", "control_fopdt.lssubcircuit",
+        "control_transfer_function.lssubcircuit", "control_tank.lssubcircuit", "control_valve_characteristic.lssubcircuit",
+        "control_saturation.lssubcircuit", "control_deadband.lssubcircuit", "control_hysteresis.lssubcircuit",
+        "control_stiction.lssubcircuit", "control_rate_limiter.lssubcircuit", "control_limiter.lssubcircuit"};
+    for (const std::string& file : files) {
+        try {
+            SubcircuitRegistry registry;
+            const SubcircuitDefinition definition = loadManifest(file);
+            registry.registerDefinition(definition);
+            const auto compiled = ProcessSubcircuitCompiler::compile(registry, definition.typeId);
+            SignalRuntime runtime;
+            runtime.bind(SignalCompiler::compile(compiled.graph));
+            CHECK(!compiled.externalInputs.empty(), (file + ": deveria ter ao menos um input externo").c_str());
+            for (const auto& [pinId, componentId] : compiled.externalInputs) {
+                (void)componentId;
+                runtime.setExternalReal(compiled.externalInputs.at(pinId), 1.0);
+            }
+            runtime.executeUntil(0);
+            advance(runtime, 1'000'000'000ULL, 5'000'000);
+            CHECK(compiled.externalOutputs.count("out") == 1, (file + ": deveria expor a saida externa \"out\"").c_str());
+            const double observed = runtime.real(runtime.output(compiled.externalOutputs.at("out")));
+            CHECK(std::isfinite(observed), (file + ": bloco SignalEngine compila e produz saida numerica finita").c_str());
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "FALHOU: %s -- excecao: %s\n", file.c_str(), e.what());
+            ++failures;
+        }
+    }
+}
+
 } // namespace
 
 int main() {
@@ -244,6 +289,7 @@ int main() {
     legacyMReferencesAreRejectedFromCanonicalRuntime();
     canonicalCalcSupportsConstantsLimitsAndObserverProbes();
     checkedInProcessLibraryCompilesAndRuns();
+    checkedInControlBlockLibraryCompilesAndRuns();
     if (failures == 0) std::puts("ProcessSubcircuitTest: OK");
     return failures == 0 ? 0 : 1;
 }

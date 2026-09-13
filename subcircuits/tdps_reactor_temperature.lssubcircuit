@@ -1,11 +1,10 @@
 {
   "schemaVersion": 3,
   "typeId": "subcircuits.tdps.reactor_temperature",
-  "name": "TDPS - Temperatura de Reator",
+  "name": "Temperatura de Reator",
   "language": "pt-BR",
   "folderPath": [
-    "Process",
-    "TDPS Convertidos"
+    "Modelos"
   ],
   "workspaceSection": "process",
   "help": {
@@ -60,7 +59,7 @@
     {
       "id": "plant",
       "typeId": "control.process",
-      "label": "TDPS - Temperatura de Reator",
+      "label": "Temperatura de Reator",
       "properties": {
         "gain": 2.4,
         "tau1": 35,

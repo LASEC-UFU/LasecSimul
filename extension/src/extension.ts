@@ -80,9 +80,9 @@ import {
   updateExposedComponentPropertyCommand,
 } from "./mcu/mcuCommands";
 import {
-  addGenericFpgaCommand,
   configureFpgaCommand,
   ensureAllFpgasReady,
+  FpgaCommandOptions,
   openFpgaSourceCommand,
   reanalyzeFpgaCommand,
   restartFpgaCommand,
@@ -332,7 +332,7 @@ function mcuCommandOptions(): Parameters<typeof chooseMcuFirmwareCommand>[1] {
   };
 }
 
-function fpgaCommandOptions(): Parameters<typeof addGenericFpgaCommand>[0] {
+function fpgaCommandOptions(): FpgaCommandOptions {
   return { syncSchematicPanel, reportCoreWarning };
 }
 
@@ -1703,9 +1703,6 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestChooseMcuFirmware":
       void chooseMcuFirmwareCommand(message.componentId, mcuCommandOptions());
       return;
-    case "requestAddGenericFpga":
-      void addGenericFpgaCommand(fpgaCommandOptions());
-      return;
     case "requestOpenFpgaSource":
       void openFpgaSourceCommand(message.componentId);
       return;
@@ -2529,7 +2526,6 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     vscode.commands.registerCommand("lasecsimul.palette.addComponent", (typeId: string) => addPaletteComponent(typeId)),
     vscode.commands.registerCommand("lasecsimul.run", () => void runSimulationWithFirmwareCheck()),
     vscode.commands.registerCommand("lasecsimul.debugFirmware", () => void debugMcuFirmwareCommand(mcuCommandOptions())),
-    vscode.commands.registerCommand("lasecsimul.addGenericFpga", () => void addGenericFpgaCommand(fpgaCommandOptions())),
     vscode.commands.registerCommand("lasecsimul.pause", () => pauseSimulation()),
     vscode.commands.registerCommand("lasecsimul.stop", () => stopSimulation()),
     vscode.commands.registerCommand("lasecsimul.saveProject", () => saveActiveSchematicCommand()),

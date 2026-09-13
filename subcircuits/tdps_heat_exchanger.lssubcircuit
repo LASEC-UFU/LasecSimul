@@ -1,11 +1,10 @@
 {
   "schemaVersion": 3,
   "typeId": "subcircuits.tdps.heat_exchanger",
-  "name": "TDPS - Trocador de Calor",
+  "name": "Trocador de Calor",
   "language": "pt-BR",
   "folderPath": [
-    "Process",
-    "TDPS Convertidos"
+    "Modelos"
   ],
   "workspaceSection": "process",
   "help": {
@@ -60,7 +59,7 @@
     {
       "id": "plant",
       "typeId": "control.process",
-      "label": "TDPS - Trocador de Calor",
+      "label": "Trocador de Calor",
       "properties": {
         "gain": 1.1,
         "tau1": 12,

@@ -10,7 +10,7 @@ const scenarios = [
   {
     file: "tdps_split_range.lssubcircuit",
     typeId: "subcircuits.tdps.split_range",
-    name: "TDPS - Controle Split-Range",
+    name: "Controle Split-Range",
     short: "SPLIT\nRANGE",
     inputs: [["command", "Comando", "%"]],
     expression: "x0",
@@ -21,7 +21,7 @@ const scenarios = [
   {
     file: "tdps_surge_tank_level.lssubcircuit",
     typeId: "subcircuits.tdps.surge_tank_level",
-    name: "TDPS - Nivel de Tanque Pulmao",
+    name: "Nivel de Tanque Pulmao",
     short: "SURGE\nLEVEL",
     inputs: [["inflow", "Vazao entrada", "m3/h"], ["outflow", "Vazao saida", "m3/h"]],
     expression: "x0-x1",
@@ -32,7 +32,7 @@ const scenarios = [
   {
     file: "tdps_heat_exchanger.lssubcircuit",
     typeId: "subcircuits.tdps.heat_exchanger",
-    name: "TDPS - Trocador de Calor",
+    name: "Trocador de Calor",
     short: "HEAT\nEXCHANGER",
     inputs: [["steam", "Vapor", "%"], ["inletTemperature", "Temperatura entrada", "degC"]],
     expression: "0.65*x0+0.35*x1",
@@ -43,7 +43,7 @@ const scenarios = [
   {
     file: "tdps_furnace_combustion.lssubcircuit",
     typeId: "subcircuits.tdps.furnace_combustion",
-    name: "TDPS - Fornalha e Combustao",
+    name: "Fornalha e Combustao",
     short: "FURNACE",
     inputs: [["fuel", "Combustivel", "%"], ["air", "Ar", "%"]],
     expression: "x0*x1/100",
@@ -54,7 +54,7 @@ const scenarios = [
   {
     file: "tdps_boiler_drum.lssubcircuit",
     typeId: "subcircuits.tdps.boiler_drum",
-    name: "TDPS - Caldeira e Tubulao",
+    name: "Caldeira e Tubulao",
     short: "BOILER\nDRUM",
     inputs: [["firing", "Queima", "%"], ["feedwater", "Agua alimentacao", "%"]],
     expression: "0.8*x0+0.2*x1",
@@ -65,7 +65,7 @@ const scenarios = [
   {
     file: "tdps_reactor_temperature.lssubcircuit",
     typeId: "subcircuits.tdps.reactor_temperature",
-    name: "TDPS - Temperatura de Reator",
+    name: "Temperatura de Reator",
     short: "REACTOR",
     inputs: [["feed", "Carga termica", "%"], ["cooling", "Resfriamento", "%"]],
     expression: "x0-x1",
@@ -76,7 +76,7 @@ const scenarios = [
   {
     file: "tdps_ph_neutralization.lssubcircuit",
     typeId: "subcircuits.tdps.ph_neutralization",
-    name: "TDPS - Neutralizacao de pH",
+    name: "Neutralizacao de pH",
     short: "pH",
     inputs: [["base", "Base", "%"], ["acid", "Acido", "%"]],
     expression: "7+0.07*(x0-x1)",
@@ -118,7 +118,10 @@ function buildScenario(scenario) {
     typeId: scenario.typeId,
     name: scenario.name,
     language: "pt-BR",
-    folderPath: ["Process", "TDPS Convertidos"],
+    // Sem prefixo "Process"/"TDPS Convertidos": estes modelos entram direto em Processo -> Modelos,
+    // junto com Processo FOPDT e demais modelos convertidos -- ver
+    // `paletteTree.ts::resolvePaletteFolderPath` / `registeredSources.ts::resolveFolderPath`.
+    folderPath: ["Modelos"],
     workspaceSection: "process",
     help: { description: scenario.description },
     components,

@@ -1,11 +1,10 @@
 {
   "schemaVersion": 3,
   "typeId": "subcircuits.tdps.furnace_combustion",
-  "name": "TDPS - Fornalha e Combustao",
+  "name": "Fornalha e Combustao",
   "language": "pt-BR",
   "folderPath": [
-    "Process",
-    "TDPS Convertidos"
+    "Modelos"
   ],
   "workspaceSection": "process",
   "help": {
@@ -60,7 +59,7 @@
     {
       "id": "plant",
       "typeId": "control.process",
-      "label": "TDPS - Fornalha e Combustao",
+      "label": "Fornalha e Combustao",
       "properties": {
         "gain": 9,
         "tau1": 22,

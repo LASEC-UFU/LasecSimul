@@ -85,6 +85,13 @@ _deps/
 # acima só pra esta pasta -- o resto do repo continua nunca versionando artefato de build comum.
 !/devices/qemu-esp32/bin/**
 
+# Backups manuais pontuais de devices/qemu-esp32/bin/ feitos antes de uma promocao de runtime (ex.:
+# bin.backup-20260722-165559/) -- nunca a fonte canonica (essa e' sempre /devices/qemu-esp32/bin/
+# acima), sempre local/descartavel. Achado real: um `bin.backup-*` antigo tinha 15 arquivos de ROM
+# ESP32 rastreados por engano (idênticos aos de bin/, removido nesta faxina) porque a regra acima só
+# cobre o caminho exato "bin/", nao qualquer pasta irma "bin.backup-*".
+/devices/qemu-esp32/bin.backup-*/
+
 # O módulo VPI do GHDL é reproduzível e construído no CI de release; continua ignorado como os
 # demais artefatos de build. `package-release.js` falha se o módulo da plataforma estiver ausente,
 # impedindo que um VSIX anuncie suporte a FPGA sem conter a ponte nativa necessária.

@@ -1,11 +1,13 @@
 // IDs internos ficam em ingles e estaveis; os rotulos em portugues (Analogico/Digital/Controle/
-// Processo) existem so na camada de apresentacao (UI_TEXT em palette.ts).
-export type WorkspaceSection = "analog" | "digital" | "control" | "process";
+// Processo/Miscelaneos) existem so na camada de apresentacao (UI_TEXT em palette.ts).
+export type WorkspaceSection = "analog" | "digital" | "control" | "process" | "misc";
 
-// Fonte unica de verdade pra ordem fixa das 4 abas -- palette.ts itera este array em vez de um
+// Fonte unica de verdade pra ordem fixa das abas -- palette.ts itera este array em vez de um
 // literal local. Nao existe UI de reordenar; a ordem e garantida por vir sempre deste array. As
-// abas filtram só a paleta (FEAT-011); o editor (main.ts) nunca le WorkspaceSection.
-export const WORKSPACE_SECTION_ORDER: readonly WorkspaceSection[] = ["analog", "digital", "control", "process"] as const;
+// abas filtram só a paleta (FEAT-011); o editor (main.ts) nunca le WorkspaceSection. "misc"
+// (Miscelaneos/Miscellaneous) reune subsecoes que nao sao eletricamente "Analogico" de fato
+// (Conectores/Graficos/Externos) -- ver `workspaceSectionForCatalogEntry`.
+export const WORKSPACE_SECTION_ORDER: readonly WorkspaceSection[] = ["analog", "digital", "control", "process", "misc"] as const;
 
 export interface WorkspaceSelection {
   section: WorkspaceSection;

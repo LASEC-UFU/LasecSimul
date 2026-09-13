@@ -1,11 +1,10 @@
 {
   "schemaVersion": 3,
   "typeId": "subcircuits.tdps.split_range",
-  "name": "TDPS - Controle Split-Range",
+  "name": "Controle Split-Range",
   "language": "pt-BR",
   "folderPath": [
-    "Process",
-    "TDPS Convertidos"
+    "Modelos"
   ],
   "workspaceSection": "process",
   "help": {
@@ -45,7 +44,7 @@
     {
       "id": "plant",
       "typeId": "control.process",
-      "label": "TDPS - Controle Split-Range",
+      "label": "Controle Split-Range",
       "properties": {
         "gain": 1,
         "tau1": 1.8,

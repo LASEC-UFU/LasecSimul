@@ -93,14 +93,16 @@ std::string HartCommunicationComponent::stringProperty(const registry::Component
 double HartCommunicationComponent::numberProperty(const registry::ComponentParams& p, const char* n, double d) { return p.property(n, d); }
 
 HartCommunicationComponent::HartCommunicationComponent(Mode mode, simulation::Scheduler& scheduler,
-                                                       const registry::ComponentParams& p)
-    : m_mode(mode), m_scheduler(scheduler), m_engine(m_profiles),
+                                                       const registry::ComponentParams& p, const DevicePreset* preset)
+    : m_mode(mode),
+      m_typeId(preset && preset->typeId ? preset->typeId : (mode == Mode::Serial ? "protocol.hart.serial" : "protocol.hart.udp")),
+      m_scheduler(scheduler), m_engine(m_profiles),
       m_endpoint(m_engine, HartTransportConfig{mode == Mode::Serial ? HartTransportKind::Serial : HartTransportKind::Udp}) {
     m_bus = stringProperty(p, "bus", "hart-1");
     m_endpointName = stringProperty(p, "endpoint", mode == Mode::Serial ? "COM1" : "127.0.0.1");
-    m_uniqueId = stringProperty(p, "uniqueId", m_uniqueId);
-    m_tag = stringProperty(p, "tag", m_tag);
-    m_unit = stringProperty(p, "unit", m_unit);
+    m_uniqueId = stringProperty(p, "uniqueId", preset ? preset->uniqueId : m_uniqueId);
+    m_tag = stringProperty(p, "tag", preset ? preset->tag : m_tag);
+    m_unit = stringProperty(p, "unit", preset ? preset->unit : m_unit);
     m_pollingAddress = static_cast<uint8_t>(std::clamp(numberProperty(p, "pollingAddress", 0), 0.0, 63.0));
     m_baudRate = static_cast<uint32_t>(std::max(1.0, numberProperty(p, "baudRate", 1200)));
     m_udpPort = static_cast<uint16_t>(std::clamp(numberProperty(p, "udpPort", 5094), 1.0, 65535.0));
@@ -110,7 +112,10 @@ HartCommunicationComponent::HartCommunicationComponent(Mode mode, simulation::Sc
     // per `registry::ComponentParams`'s own doc comment) -- without this, a
     // saved device's variables/commands were silently dropped and replaced by
     // an empty "[]" on every reopen (Gate 12/section 38 persistence contract).
-    m_hartVariablesJson = stringProperty(p, "hartVariablesJson", "[]");
+    // A DevicePreset's `hartVariablesJson` is the fallback when `p` carries none (a fresh SMAR
+    // device instance, or a test constructing directly with an empty ComponentParams) -- the
+    // preset's Signal Graph ports/Device Variable roles apply out of the box, never an empty "[]".
+    m_hartVariablesJson = stringProperty(p, "hartVariablesJson", preset ? preset->hartVariablesJson : "[]");
     m_hartCommandsJson = stringProperty(p, "hartCommandsJson", "[]");
     m_hartBurstJson = stringProperty(p, "hartBurstJson", "[]");
     m_hartAdditionalJson = stringProperty(p, "hartAdditionalJson", "{}");
@@ -129,7 +134,7 @@ HartCommunicationComponent::HartCommunicationComponent(Mode mode, simulation::Sc
     m_loopCurrentModeEnabled = p.property("loopCurrentMode", true);
 
     HartReferenceCatalog::registerProfiles(m_profiles);
-    m_profileId = stringProperty(p, "profileId", m_profileId);
+    m_profileId = stringProperty(p, "profileId", preset ? preset->profileId : m_profileId);
     rebuildConfiguredPlan(); // builds the device from every property above (including
                              // variables/commands) and installs the command hook.
     HartTransportConfig config;
@@ -604,7 +609,7 @@ void HartCommunicationComponent::syncPersistedStateFromEngine() {
     }
 }
 
-const char* HartCommunicationComponent::typeId() const { return m_mode == Mode::Serial ? "protocol.hart.serial" : "protocol.hart.udp"; }
+const char* HartCommunicationComponent::typeId() const { return m_typeId.c_str(); }
 
 void HartCommunicationComponent::onAssignedIndex(uint32_t index) {
     m_componentIndex = index;
@@ -642,15 +647,16 @@ std::optional<double> HartCommunicationComponent::signalOutput(std::string_view 
     return m_engine.variableValue(m_deviceId, variableId);
 }
 
-std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode) {
+std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode, const DevicePreset* preset) {
     std::vector<PropertySchema> out{
         textSchema("bus", "Canal HART", "Comunicacao", "hart-1"),
         textSchema("endpoint", mode == Mode::Serial ? "Porta serial" : "Endereco UDP", "Comunicacao", mode == Mode::Serial ? "COM1" : "127.0.0.1"),
         {"enabled", "Habilitado", "Comunicacao", "", PropertyValueKind::Bool, "checkbox", true},
         numberSchema("pollingAddress", "Polling address", "HART", "", 0, 0, 63),
-        textSchema("profileId", "Perfil de dispositivo", "HART", "lasecsimul.hart.process-simul-compatible"),
-        textSchema("uniqueId", "Unique ID", "HART", "029EB1"), textSchema("tag", "Tag", "HART", "HART"),
-        textSchema("unit", "Unidade PV", "HART", "V"),
+        textSchema("profileId", "Perfil de dispositivo", "HART", preset ? preset->profileId : "lasecsimul.hart.process-simul-compatible"),
+        textSchema("uniqueId", "Unique ID", "HART", preset ? preset->uniqueId : "029EB1"),
+        textSchema("tag", "Tag", "HART", preset ? preset->tag : "HART"),
+        textSchema("unit", "Unidade PV", "HART", preset ? preset->unit : "V"),
         numberSchema("alarmSelectionCode", "PV alarm selection code", "HART", "", 251, 0, 255),
         // Universal Command 12/17 (Message), 13/18 (Descriptor/Date), 16/19
         // (Final Assembly Number), 20/22 (Long Tag), 6/7 (Loop Current Mode)
@@ -674,7 +680,7 @@ std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode
     // readable/settable via IPC and via the sidebar, which reads
     // `component.properties` directly rather than iterating visible schemas;
     // `propertyDialogShowAll` remains an escape hatch for debugging.
-    auto hartJson = textSchema("hartVariablesJson", "Variáveis HART", "HART", "[]"); hartJson.flags |= PropertySchemaHidden;
+    auto hartJson = textSchema("hartVariablesJson", "Variáveis HART", "HART", preset ? preset->hartVariablesJson : "[]"); hartJson.flags |= PropertySchemaHidden;
     // AffectsTopology (Input/Output materializa/desmaterializa uma porta Signal Graph -- edição
     // estrutural, ver ARCH-002) + AffectsPinCount: embora `pins()` (linha 27, `HartCommunicationComponent.
     // hpp`) permaneça sempre vazio -- separação deliberada Electrical Pins x Signal Ports, nunca
@@ -698,6 +704,47 @@ std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode
     if (mode == Mode::Serial) out.push_back(numberSchema("baudRate", "Baud rate", "Serial", "baud", 1200, 1200, 1200));
     else out.push_back(numberSchema("udpPort", "Porta UDP", "UDP", "", 5094, 1, 65535));
     return out;
+}
+
+HartCommunicationComponent::DevicePreset HartCommunicationComponent::smarLd301Preset() {
+    // PV's id is literally "PV" -- HartEngine::evaluatePrimary() (the single authority Commands
+    // 1/2/3/9/21/etc. all read through) only recognizes a variable id of "PV" or "primary" as THE
+    // primary variable; any other id would leave those commands reading the unrelated
+    // HartDevicePlan::primaryValue scalar (which nothing here ever writes), silently returning 0
+    // forever regardless of what the Signal Graph feeds in. direction="Input" because the real
+    // process quantity (differential pressure) is produced upstream by the Signal Graph and flows
+    // INTO the transmitter -- the device does not invent it. classification=65 (0x41 Pressure) and
+    // family=5 (0x05 "Pressure" Device Variable Family) are the real HCF Common Table 21/20 codes.
+    return {"protocol.hart.device.smar_ld301", HartReferenceCatalog::makeSmarLd301Profile().id, "LD301", "029EB1", "kPa",
+            R"json([{"id":"PV","name":"Pressao Diferencial","unit":"kPa","value":0.0,"role":"PV","type":"Float32",)json"
+            R"json("direction":"Input","classification":65,"family":5,"writable":false,"lowerRangeValue":0.0,)json"
+            R"json("upperRangeValue":25.0,"pressure":{"pressureUnitCode":12}}])json"};
+}
+
+HartCommunicationComponent::DevicePreset HartCommunicationComponent::smarTt301Preset() {
+    return {"protocol.hart.device.smar_tt301", HartReferenceCatalog::makeSmarTt301Profile().id, "TT301", "029EB1", "C",
+            R"json([{"id":"PV","name":"Temperatura","unit":"C","value":25.0,"role":"PV","type":"Float32",)json"
+            R"json("direction":"Input","classification":64,"family":4,"writable":false,"lowerRangeValue":-50.0,)json"
+            R"json("upperRangeValue":200.0,"temperature":{"probeType":0,"numberOfWires":3}}])json"};
+}
+
+HartCommunicationComponent::DevicePreset HartCommunicationComponent::smarFy301Preset() {
+    // Two variables, not one InOut: "PV" (Input) is the actual measured position fed back by
+    // whatever Signal Graph valve-dynamics chain the user wires downstream (e.g. the existing
+    // Controle-tab rate_limiter/stiction/valve_characteristic blocks -- no new dynamics/timer code
+    // here, per the "reuse the existing SignalEngine" mandate); "setpoint" (Output) is the position
+    // the device/HART host commands, which that SAME dynamics chain consumes as its input. This
+    // mirrors how a real positioner splits target vs. actual travel instead of pretending
+    // output==input. classification=91 (0x5B Valve Actuator) and family=6 (0x06 "Valve / Actuator")
+    // are the real HCF codes; no Valve Positioner Device Family (HCF_SPEC-160.6) commands are wired
+    // here since that family is not implemented in the engine -- FY301 works via Universal/Common
+    // Practice commands alone, per the task's explicit allowance not to invent unimplemented families.
+    return {"protocol.hart.device.smar_fy301", HartReferenceCatalog::makeSmarFy301Profile().id, "FY301", "029EB1", "%",
+            R"json([{"id":"PV","name":"Posicao Real","unit":"%","value":0.0,"role":"PV","type":"Float32",)json"
+            R"json("direction":"Input","classification":91,"family":6,"writable":false,"lowerRangeValue":0.0,)json"
+            R"json("upperRangeValue":100.0},{"id":"setpoint","name":"Setpoint de Posicao","unit":"%","value":0.0,)json"
+            R"json("role":"SV","type":"Float32","direction":"Output","classification":91,"family":6,"writable":true,)json"
+            R"json("lowerRangeValue":0.0,"upperRangeValue":100.0}])json"};
 }
 
 PropertyValue HartCommunicationComponent::propertyValue(const std::string& id) const {

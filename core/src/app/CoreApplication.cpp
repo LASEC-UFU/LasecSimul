@@ -1034,6 +1034,34 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
     };
     registerHartTransport("protocol.hart.serial", "HART Serial", protocols::HartCommunicationComponent::Mode::Serial, "HART Serial");
     registerHartTransport("protocol.hart.udp", "HART UDP", protocols::HartCommunicationComponent::Mode::Udp, "HART UDP");
+
+    // Concrete SMAR HART field devices (FEAT: HART concrete devices). Each is the SAME
+    // HartCommunicationComponent/HartEngine/HartProfileRegistry used by protocol.hart.serial above --
+    // no second engine, no per-device C++ subclass -- differing only by the DevicePreset's default
+    // property values (profile id, tag, and the Device Variable(s) exposed as Signal Graph ports via
+    // hartVariablesJson). Wired transport only (Mode::Serial), matching the real devices'
+    // point-to-point 4-20mA+HART loop (never WirelessHART).
+    const auto registerHartDevice = [&](const char* typeId, const char* label,
+                                        const protocols::HartCommunicationComponent::DevicePreset& preset,
+                                        const char* englishLabel) {
+        reg.registerFactory(typeId, [&scheduler, preset](const ComponentParams& p) {
+            return std::make_unique<protocols::HartCommunicationComponent>(
+                protocols::HartCommunicationComponent::Mode::Serial, scheduler, p, &preset);
+        });
+        registerBuiltinMetadata(typeId, label,
+            protocols::HartCommunicationComponent::propertySchema(protocols::HartCommunicationComponent::Mode::Serial, &preset),
+            std::string{"{\"en\":{\"name\":\""} + englishLabel + "\"}}",
+            protocols::HartCommunicationComponent::readoutFormat(), std::nullopt, {});
+    };
+    registerHartDevice("protocol.hart.device.smar_ld301", "SMAR LD301 - Transmissor de Pressao Diferencial",
+        protocols::HartCommunicationComponent::smarLd301Preset(),
+        "SMAR LD301 - Differential Pressure Transmitter (SIMULATED)");
+    registerHartDevice("protocol.hart.device.smar_tt301", "SMAR TT301 - Transmissor de Temperatura",
+        protocols::HartCommunicationComponent::smarTt301Preset(),
+        "SMAR TT301 - Temperature Transmitter (SIMULATED)");
+    registerHartDevice("protocol.hart.device.smar_fy301", "SMAR FY301 - Posicionador de Valvula",
+        protocols::HartCommunicationComponent::smarFy301Preset(),
+        "SMAR FY301 - Valve Positioner (SIMULATED)");
 }
 
 } // namespace

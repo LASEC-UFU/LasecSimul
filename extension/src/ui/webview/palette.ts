@@ -47,6 +47,7 @@ const UI_TEXT = {
     workspaceDigital: "Digital",
     workspaceControl: "Controle",
     workspaceProcess: "Processo",
+    workspaceMisc: "Miscelâneos",
   },
   en: {
     searchPlaceholder: "Search Components",
@@ -61,6 +62,7 @@ const UI_TEXT = {
     workspaceDigital: "Digital",
     workspaceControl: "Control",
     workspaceProcess: "Process",
+    workspaceMisc: "Miscellaneous",
   },
 } as const;
 
@@ -69,6 +71,7 @@ const WORKSPACE_SECTION_LABEL_KEY: Record<WorkspaceSection, keyof typeof UI_TEXT
   digital: "workspaceDigital",
   control: "workspaceControl",
   process: "workspaceProcess",
+  misc: "workspaceMisc",
 };
 
 function t(key: keyof typeof UI_TEXT["pt-BR"]): string {
@@ -103,6 +106,9 @@ function renderWorkspaceTabIcon(tabSection: WorkspaceSection): SVGSVGElement {
       break;
     case "process":
       svg.innerHTML = '<path d="M6 3h12"></path><path d="M7 3v15a5 5 0 0 0 5 5a5 5 0 0 0 5-5V3"></path><path d="M7 14h10"></path>';
+      break;
+    case "misc":
+      svg.innerHTML = '<circle cx="5" cy="12" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="19" cy="12" r="1.8" fill="currentColor" stroke="none"></circle>';
       break;
   }
 

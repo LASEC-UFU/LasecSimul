@@ -183,7 +183,19 @@ CompiledProcessSubcircuit ProcessSubcircuitCompiler::compile(
         if (component.typeId == "control.second_order") { controlUnary(SignalBlockKind::SecondOrder, {number(properties, "gain", 1.0), number(properties, "omega", 1.0), number(properties, "zeta", 1.0), number(properties, "initial", 0.0), number(properties, "initialDerivative", 0.0)}); continue; }
         if (component.typeId == "control.lead_lag") { controlUnary(SignalBlockKind::LeadLag, {number(properties, "gain", 1.0), number(properties, "leadTau", 0.0), number(properties, "lagTau", 1.0), number(properties, "initial", 0.0)}); continue; }
         if (component.typeId == "control.fopdt") { controlUnary(SignalBlockKind::Fopdt, {number(properties, "gain", 1.0), number(properties, "tau", 1.0), number(properties, "delay", 0.1), number(properties, "initial", 0.0)}); continue; }
-        if (component.typeId == "control.tank") { controlUnary(SignalBlockKind::Tank, {number(properties, "area", 1.0), number(properties, "initial", 0.0)}); continue; }
+        if (component.typeId == "control.tank") {
+            // Bug real corrigido aqui: `Tank` calcula d(nivel)/dt = (entrada - saida) / area (ver
+            // SignalEngine.cpp's execute(), block.inputs[1] = vazao de saida) e
+            // `expectedInputCount(Tank) == 2` -- nunca cabe no helper `controlUnary` de UMA entrada
+            // usado por todos os outros blocos dinamicos aqui. Publicar "Tanque" via `controlUnary`
+            // (como acontecia antes desta correcao) sempre lancava "quantidade de entradas invalida
+            // no bloco dinamico" ao compilar -- nunca chegou a funcionar desde que foi publicado.
+            result.graph.blocks.push_back(realBlock(component.id, SignalBlockKind::Tank, {"in", "outflow"},
+                {number(properties, "area", 1.0), number(properties, "initial", 0.0)}, periodNs));
+            ports[component.id].inputs = {{"in", {component.id, "in"}}, {"outflow", {component.id, "outflow"}}};
+            ports[component.id].output = {component.id, "out"};
+            continue;
+        }
         if (component.typeId == "control.valve_characteristic") { controlUnary(SignalBlockKind::ValveCharacteristic, {number(properties, "coefficient", 1.0), number(properties, "exponent", 1.0)}); continue; }
         if (component.typeId == "control.saturation" || component.typeId == "control.limiter") { controlUnary(component.typeId == "control.limiter" ? SignalBlockKind::Limiter : SignalBlockKind::Saturation, {number(properties, "minimum", 0.0), number(properties, "maximum", 100.0)}); continue; }
         if (component.typeId == "control.deadband") { controlUnary(SignalBlockKind::Deadband, {number(properties, "width", 0.0)}); continue; }
@@ -215,9 +227,16 @@ CompiledProcessSubcircuit ProcessSubcircuitCompiler::compile(
                 for (const auto& input : properties["inputs"]) if (input.is_string()) inputIds.push_back(input.get<std::string>());
             if (component.typeId == "control.bias") inputIds = {"in"};
             else if (inputIds.size() < 2) inputIds = {"in0", "in1"};
+            // Bug real corrigido aqui: a expressao usava os tokens literais "x0"/"x1", mas
+            // CalcExpression resolve variaveis pelo NOME declarado em `inputIds` (ver
+            // SignalEngine.cpp -- nada mapeia posicao pra "x0"/"x1" automaticamente). Como
+            // `inputIds` aqui e' "in"/"in0"+"in1" (nunca "x0"/"x1"), toda instancia de
+            // control.bias/subtract/divide lancava "CalcExpression invalida: entrada desconhecida"
+            // ao compilar -- nunca funcionou desde que esses typeIds foram introduzidos. Monta a
+            // expressao com os nomes REAIS de `inputIds` em vez de literais hardcoded.
             const std::string expression = component.typeId == "control.bias"
-                ? "x0+" + std::to_string(number(properties, "bias", 0.0))
-                : (component.typeId == "control.subtract" ? "x0-x1" : "x0/x1");
+                ? inputIds.at(0) + "+" + std::to_string(number(properties, "bias", 0.0))
+                : (component.typeId == "control.subtract" ? inputIds.at(0) + "-" + inputIds.at(1) : inputIds.at(0) + "/" + inputIds.at(1));
             SignalBlockDefinition calc = realBlock(component.id, SignalBlockKind::CalcExpression, inputIds, {}, periodNs);
             calc.expression = expression;
             result.graph.blocks.push_back(std::move(calc));

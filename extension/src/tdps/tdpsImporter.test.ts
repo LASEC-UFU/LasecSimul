@@ -118,7 +118,9 @@ function listSmpFiles(root: string): string[] {
       const validation = validateSubcircuitDocument(parsed.document);
       assert(validation.errors.length === 0, `${name}: ${validation.errors.join(" | ")}`);
       assert(parsed.document.workspaceSection === "process", `${name} deveria estar no workspace Process`);
-      assert(parsed.document.folderPath?.[0] === "Process", `${name} deveria estar dentro da pasta Process`);
+      // Reorganização: "Process/TDPS Convertidos" (e o "Process" redundante de process_fopdt) deram
+      // lugar a uma única pasta "Modelos" direto em Processo -- sem nível de pasta intermediário.
+      assert(JSON.stringify(parsed.document.folderPath) === JSON.stringify(["Modelos"]), `${name} deveria estar direto em Processo/Modelos, sem "TDPS Convertidos"/"Process" (folderPath=${JSON.stringify(parsed.document.folderPath)})`);
       for (const component of parsed.document.components.filter((candidate) => candidate.typeId === "control.calc_expression")) {
         assert(!/\bM\d+\b/i.test(String(component.properties.expression ?? "")), `${name}/${component.id} ainda contem Mnn operacional`);
       }

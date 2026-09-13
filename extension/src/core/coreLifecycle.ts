@@ -166,8 +166,7 @@ async function pushComponentToCoreNow(
   componentId: string,
   typeId: string,
   properties: Record<string, unknown>,
-  pins: Array<{ id: string; x: number; y: number }>,
-  fpgaOverride?: WebviewComponentModel["fpga"]
+  pins: Array<{ id: string; x: number; y: number }>
 ): Promise<boolean> {
   if (!state.coreClient || !shouldSyncComponentToCore(typeId)) return false;
   try {
@@ -178,10 +177,10 @@ async function pushComponentToCoreNow(
     // `fpga` resolvido FRESCO a cada push -- toolchain (ghdlBinary/vpiModulePath/cacheRootDir)
     // nunca é persistido, sempre lido de `lasecsimul.fpga.*`/caminho vendorizado do VPI (mesma
     // disciplina do QEMU, ver `mcuCommands.ts::resolveDefaultQemuBinaryPath`); sources/top/
-    // standard/ports vêm de `fpgaOverride` (chamador ainda não inseriu o componente em
-    // `state.schematicState.components`, ex: `fpgaCommands.ts::addGenericFpgaCommand`) OU de
-    // `model.fpga` (componente já presente no estado, ex: rebuild/push incremental normal).
-    const fpgaConfig = fpgaOverride ?? model?.fpga;
+    // standard/ports vêm de `model.fpga` (componente já presente no estado -- o bloco programável
+    // só é criado pela paleta normal de Digital -> GHDL, que já insere o componente em
+    // `state.schematicState.components` antes de chamar isto).
+    const fpgaConfig = model?.fpga;
     const fpgaPayload = typeId === "digital.generic_fpga" && fpgaConfig
       ? { ...fpgaConfig, ...resolveFpgaToolchainConfig() }
       : undefined;
@@ -205,10 +204,9 @@ export function pushComponentToCore(
   componentId: string,
   typeId: string,
   properties: Record<string, unknown>,
-  pins: Array<{ id: string; x: number; y: number }>,
-  fpgaOverride?: WebviewComponentModel["fpga"]
+  pins: Array<{ id: string; x: number; y: number }>
 ): Promise<boolean> {
-  return enqueueCoreMutation(() => pushComponentToCoreNow(componentId, typeId, properties, pins, fpgaOverride));
+  return enqueueCoreMutation(() => pushComponentToCoreNow(componentId, typeId, properties, pins));
 }
 
 async function pushWireToCoreNow(wire: WebviewWireModel): Promise<boolean> {

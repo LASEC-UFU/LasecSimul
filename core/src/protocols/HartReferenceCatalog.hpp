@@ -26,6 +26,21 @@ public:
     static std::vector<HartReferenceDeviceDefinition> deviceDefinitions();
     static HartDeviceProfile makeGenericProfile();
     static HartDeviceProfile makeProfile(const HartReferenceDeviceDefinition& definition);
+
+    /** Concrete SMAR field-device profiles (FEAT: HART concrete devices). Device Type/Manufacturer
+     * ID are the real HCF-assigned codes (cross-checked against josuemoraisgh/process_simul's
+     * hart_types_template.dart, which itself mirrors the original Python hrt_enum.py seed table:
+     * table 1 "Device Type Codes" 01=LD301/02=TT301/03=FY301, table 8 "Manufacturer Identification
+     * Codes" 3E=Smar -- the SAME 0x3E already used by every generic profile above). Primary
+     * variable unit codes are the real HCF Common Table 2 codes (0x20=Celsius, 0x0C=kilopascals,
+     * 0x39=percent). Range values are labeled example defaults (user-editable afterwards via the
+     * existing Command 23/1408 write path) since the real factory-calibrated span depends on the
+     * ordered sensor cell/probe option, which this catalog cannot know -- never fabricated as if
+     * they were a fixed spec value. */
+    static HartDeviceProfile makeSmarLd301Profile();
+    static HartDeviceProfile makeSmarTt301Profile();
+    static HartDeviceProfile makeSmarFy301Profile();
+
     static bool registerProfiles(HartProfileRegistry& registry);
     static bool registerGenericProfile(HartProfileRegistry& registry);
     static std::vector<HartDevicePlan> makeDevicePlans(std::string_view bus = "hart-1");

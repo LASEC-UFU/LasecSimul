@@ -1,11 +1,10 @@
 {
   "schemaVersion": 3,
   "typeId": "subcircuits.tdps.surge_tank_level",
-  "name": "TDPS - Nivel de Tanque Pulmao",
+  "name": "Nivel de Tanque Pulmao",
   "language": "pt-BR",
   "folderPath": [
-    "Process",
-    "TDPS Convertidos"
+    "Modelos"
   ],
   "workspaceSection": "process",
   "help": {
@@ -60,7 +59,7 @@
     {
       "id": "plant",
       "typeId": "control.process",
-      "label": "TDPS - Nivel de Tanque Pulmao",
+      "label": "Nivel de Tanque Pulmao",
       "properties": {
         "gain": 0.75,
         "tau1": 18,

@@ -246,7 +246,6 @@ const UI_TEXT = {
     firmwareGroup: "Firmware",
     firmwarePath: "Firmware (.bin/.elf)",
     qemuBinary: "Binario QEMU",
-    fpgaAdd: "Adicionar bloco programável FPGA",
     fpgaLoadCode: "Carregar código VHDL...",
     fpgaUnconfigured: "Nenhum código carregado; o bloco ainda não possui entradas ou saídas.",
     fpgaOpenSource: "Abrir/editar VHDL",
@@ -380,7 +379,6 @@ const UI_TEXT = {
     openSerialMonitor: "Open serial monitor",
     firmwareGroup: "Firmware",
     firmwarePath: "Firmware (.bin/.elf)",
-    fpgaAdd: "Add programmable FPGA block",
     fpgaLoadCode: "Load VHDL code...",
     fpgaUnconfigured: "No code loaded; the block does not have inputs or outputs yet.",
     fpgaOpenSource: "Open/edit VHDL",
@@ -2586,14 +2584,6 @@ function renderAppBar(): HTMLElement {
     ),
   );
 
-  const fpgaGroup = document.createElement("div");
-  fpgaGroup.className = "appbar__group";
-  if (!editingSubcircuit) {
-    fpgaGroup.appendChild(
-      renderToolbarButton("fpga", t("fpgaAdd"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestAddGenericFpga" }))
-    );
-  }
-
   const editGroup = document.createElement("div");
   editGroup.className = "appbar__group";
   editGroup.append(
@@ -2640,11 +2630,11 @@ function renderAppBar(): HTMLElement {
   status.appendChild(mcuRateLabel);
 
   meta.append(selection, status);
-  bar.append(fileGroup, fpgaGroup, simGroup, editGroup, viewGroup, subcircuitGroup, meta);
+  bar.append(fileGroup, simGroup, editGroup, viewGroup, subcircuitGroup, meta);
   return bar;
 }
 
-type ToolbarIconKind = "open" | "save" | "saveProjectAs" | "fpga" | "start" | "pause" | "stop" | "properties" | "delete" | "zoomFitSelection" | "zoomFitAll" | "zoomReset" | "back" | "createPin" | "selectExposedComponents" | "selectExportedProperties";
+type ToolbarIconKind = "open" | "save" | "saveProjectAs" | "start" | "pause" | "stop" | "properties" | "delete" | "zoomFitSelection" | "zoomFitAll" | "zoomReset" | "back" | "createPin" | "selectExposedComponents" | "selectExportedProperties";
 
 function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, "svg");
@@ -2663,9 +2653,6 @@ function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
       // Mesmo disquete de "save", com um asterisco no canto -- convenção comum pra "Salvar Como"
       // (grava sempre num arquivo novo/escolhido, ao contrário de "Salvar" que grava direto).
       svg.innerHTML = '<path d="M5 4h9l3 3v13H5z"></path><path d="M8 4v5h6V4"></path><path d="M9 18h4"></path><path d="M18.5 8.5v4"></path><path d="M16.7 9.5l3.6 2"></path><path d="M20.3 9.5l-3.6 2"></path>';
-      break;
-    case "fpga":
-      svg.innerHTML = '<rect x="5" y="5" width="14" height="14" rx="2"></rect><path d="M9 9h6v6H9z"></path><path d="M2 8h3M2 12h3M2 16h3M19 8h3M19 12h3M19 16h3M8 2v3M12 2v3M16 2v3M8 19v3M12 19v3M16 19v3"></path>';
       break;
     case "start":
       svg.innerHTML = '<path d="M8 5.5 18 12 8 18.5z"></path>';

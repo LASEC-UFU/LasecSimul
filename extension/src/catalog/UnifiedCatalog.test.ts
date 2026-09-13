@@ -119,11 +119,14 @@ test("entryToWebview: pinIds válido sobrevive intacto", () => {
 test("catalogo canonico registra PLC, Modbus e HART nas areas visiveis", () => {
   const catalog = loadUnifiedCatalog(process.cwd(), "pt-BR").catalog;
   const byTypeId = new Map(catalog.map((entry) => [entry.typeId, entry]));
-  assert(byTypeId.get("plc.instance")?.workspaceSection === "control", "PLC deve existir na aba Controle");
+  // PLC-IEC mora em Processo (primeira subseção, ver paletteTree.ts::ROOT_FOLDER_PRIORITY), não
+  // mais em Controle -- reorganização que tirou também o nível redundante "Process" de folderPath.
+  assert(byTypeId.get("plc.instance")?.workspaceSection === "process", "PLC deve existir na aba Processo");
+  assert(byTypeId.get("plc.instance")?.folderPath?.[0] === "PLC IEC 61131-3", "PLC deve ficar na sua própria subseção, direto em Processo");
   for (const typeId of ["protocol.modbus.server", "protocol.modbus.client", "protocol.hart.transmitter", "protocol.hart.communicator", "protocol.hart.serial", "protocol.hart.udp"]) {
     const entry = byTypeId.get(typeId);
     assert(entry?.workspaceSection === "process", `${typeId} deve existir na aba Processo`);
-    assert(entry?.folderPath?.[0] === "Process", `${typeId} deve ficar sob a pasta Process`);
+    assert(entry?.folderPath?.[0] === "Protocolos Industriais", `${typeId} deve ficar sob Processo/Protocolos Industriais, sem nível redundante "Process"`);
   }
 });
 

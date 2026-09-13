@@ -1,11 +1,10 @@
 {
   "schemaVersion": 3,
   "typeId": "subcircuits.tdps.boiler_drum",
-  "name": "TDPS - Caldeira e Tubulao",
+  "name": "Caldeira e Tubulao",
   "language": "pt-BR",
   "folderPath": [
-    "Process",
-    "TDPS Convertidos"
+    "Modelos"
   ],
   "workspaceSection": "process",
   "help": {
@@ -60,7 +59,7 @@
     {
       "id": "plant",
       "typeId": "control.process",
-      "label": "TDPS - Caldeira e Tubulao",
+      "label": "Caldeira e Tubulao",
       "properties": {
         "gain": 1.25,
         "tau1": 28,

@@ -391,7 +391,6 @@
         "protocol.modbus.server": {
           "label": "Modbus Server",
           "folderPath": [
-            "Process",
             "Industrial Protocols",
             "Modbus"
           ]
@@ -399,7 +398,6 @@
         "protocol.modbus.client": {
           "label": "Modbus Client",
           "folderPath": [
-            "Process",
             "Industrial Protocols",
             "Modbus"
           ]
@@ -407,7 +405,6 @@
         "protocol.hart.transmitter": {
           "label": "HART Transmitter",
           "folderPath": [
-            "Process",
             "Industrial Protocols",
             "HART"
           ]
@@ -415,7 +412,6 @@
         "protocol.hart.communicator": {
           "label": "HART Communicator",
           "folderPath": [
-            "Process",
             "Industrial Protocols",
             "HART"
           ]
@@ -5956,7 +5952,8 @@
       "help": {
         "description": "Ponto de junção elétrica entre 3 ou mais fios. Nasce automaticamente ao clicar/terminar sobre um fio existente -- não é colocável manualmente."
       },
-      "category": "Connectors"
+      "category": "Connectors",
+      "workspaceSection": "misc"
     },
     {
       "typeId": "connectors.bus",
@@ -6076,6 +6073,7 @@
         }
       },
       "category": "Connectors",
+      "workspaceSection": "misc",
       "help": {
         "description": "Conector gráfico para agrupar ou organizar linhas de sinal no esquemático."
       }
@@ -6097,7 +6095,8 @@
       "help": {
         "description": "Conecta pinos por nome compartilhado em vez de fio desenhado. Dois túneis com o mesmo nome formam um nó elétrico."
       },
-      "category": "Connectors"
+      "category": "Connectors",
+      "workspaceSection": "misc"
     },
     {
       "typeId": "devices.external",
@@ -6120,7 +6119,8 @@
       "help": {
         "description": "Componente genérico que referencia um arquivo .lsdevice sem registrá-lo permanentemente no catálogo."
       },
-      "category": "Externos"
+      "category": "Externos",
+      "workspaceSection": "misc"
     },
     {
       "typeId": "subcircuits.external",
@@ -6144,7 +6144,8 @@
       "help": {
         "description": "Bloco generico que aponta para um arquivo .lssubcircuit escolhido nas propriedades. Forma, pinos e icone sao assumidos automaticamente do arquivo escolhido."
       },
-      "category": "Externos"
+      "category": "Externos",
+      "workspaceSection": "misc"
     },
     {
       "typeId": "connectors.socket",
@@ -6297,6 +6298,7 @@
         "pin-8"
       ],
       "category": "Connectors",
+      "workspaceSection": "misc",
       "help": {
         "description": "Conector genérico multipino para organizar interfaces de circuito."
       }
@@ -6452,6 +6454,7 @@
         "pin-8"
       ],
       "category": "Connectors",
+      "workspaceSection": "misc",
       "help": {
         "description": "Barra de pinos genérica usada para representar conectores de placas e módulos."
       }
@@ -6497,6 +6500,7 @@
         }
       ],
       "category": "Graphical",
+      "workspaceSection": "misc",
       "help": {
         "description": "Elemento gráfico para inserir uma imagem de referência no esquemático."
       }
@@ -6516,6 +6520,7 @@
         "color": "#1f2937"
       },
       "category": "Graphical",
+      "workspaceSection": "misc",
       "help": {
         "description": "Elemento gráfico de texto livre para anotações no esquemático."
       }
@@ -6538,6 +6543,7 @@
         "strokeStyle": "solid"
       },
       "category": "Graphical",
+      "workspaceSection": "misc",
       "help": {
         "description": "Forma gráfica retangular sem função elétrica."
       }
@@ -6560,6 +6566,7 @@
         "strokeStyle": "solid"
       },
       "category": "Graphical",
+      "workspaceSection": "misc",
       "help": {
         "description": "Forma gráfica elíptica sem função elétrica."
       }
@@ -6579,6 +6586,7 @@
         "strokeStyle": "solid"
       },
       "category": "Graphical",
+      "workspaceSection": "misc",
       "help": {
         "description": "Linha gráfica sem função elétrica, usada para anotações visuais."
       }
@@ -6687,7 +6695,7 @@
       "folderPath": [
         "PLC IEC 61131-3"
       ],
-      "workspaceSection": "control",
+      "workspaceSection": "process",
       "defaultProperties": {
         "plcIecProjectRef": "",
         "plcArtifactRef": "",
@@ -6744,7 +6752,6 @@
       ],
       "icon": "package",
       "folderPath": [
-        "Process",
         "Protocolos Industriais",
         "Modbus"
       ],
@@ -6774,7 +6781,6 @@
       ],
       "icon": "package",
       "folderPath": [
-        "Process",
         "Protocolos Industriais",
         "Modbus"
       ],
@@ -6804,7 +6810,6 @@
       ],
       "icon": "package",
       "folderPath": [
-        "Process",
         "Protocolos Industriais",
         "HART"
       ],
@@ -6833,7 +6838,6 @@
       ],
       "icon": "package",
       "folderPath": [
-        "Process",
         "Protocolos Industriais",
         "HART"
       ],
@@ -6858,7 +6862,7 @@
       "label": "HART Serial",
       "pinCount": 0,
       "icon": "terminal",
-      "folderPath": ["Process", "Protocolos Industriais", "HART"],
+      "folderPath": ["Protocolos Industriais", "HART"],
       "workspaceSection": "process",
       "defaultProperties": {"bus": "hart-1", "endpoint": "COM1", "enabled": true, "pollingAddress": 0, "uniqueId": "029EB1", "tag": "HART", "unit": "V", "baudRate": 1200}
     },
@@ -6867,7 +6871,7 @@
       "label": "HART UDP",
       "pinCount": 0,
       "icon": "globe",
-      "folderPath": ["Process", "Protocolos Industriais", "HART"],
+      "folderPath": ["Protocolos Industriais", "HART"],
       "workspaceSection": "process",
       "defaultProperties": {"bus": "hart-1", "endpoint": "127.0.0.1", "enabled": true, "pollingAddress": 0, "uniqueId": "029EB1", "tag": "HART", "unit": "V", "udpPort": 5094}
     },

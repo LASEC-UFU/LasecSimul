@@ -1,11 +1,10 @@
 {
   "schemaVersion": 3,
   "typeId": "subcircuits.tdps.ph_neutralization",
-  "name": "TDPS - Neutralizacao de pH",
+  "name": "Neutralizacao de pH",
   "language": "pt-BR",
   "folderPath": [
-    "Process",
-    "TDPS Convertidos"
+    "Modelos"
   ],
   "workspaceSection": "process",
   "help": {
@@ -60,7 +59,7 @@
     {
       "id": "plant",
       "typeId": "control.process",
-      "label": "TDPS - Neutralizacao de pH",
+      "label": "Neutralizacao de pH",
       "properties": {
         "gain": 1,
         "tau1": 8,
