@@ -2476,6 +2476,12 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   context.subscriptions.push(vscode.window.registerWebviewViewProvider("lasecsimul.propertyInspector", propertyInspector, {
     webviewOptions: { retainContextWhenHidden: true },
   }));
+  // The inspector is intentionally on the opposite (secondary) sidebar.
+  // VS Code keeps that sidebar user-controllable afterwards (its native
+  // collapse/expand affordances remain intact), but opening it here prevents
+  // a newly activated LasecSimul workspace from hiding the only property
+  // editing surface behind an undiscovered auxiliary bar.
+  void vscode.commands.executeCommand("workbench.action.focusAuxiliaryBar");
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("lasecsimul.componentPalette", state.paletteViewProvider, {

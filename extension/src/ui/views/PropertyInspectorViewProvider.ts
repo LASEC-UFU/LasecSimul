@@ -29,7 +29,7 @@ function escapeAttr(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("\"", "&quot;").replaceAll("<", "&lt;");
 }
 
-/** Persistent right-side inspector. The webview is metadata-driven; mutations are sent back
+/** Persistent, collapsible sidebar inspector. The webview is metadata-driven; mutations are sent back
  * through the schematic panel's normal requestUpdateProperty path, so undo/persistence/Core
  * validation remain single-sourced (the Authoring Model is the source of truth -- this class
  * only renders it and forwards edits, it never keeps a second authoritative copy). */

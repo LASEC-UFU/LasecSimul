@@ -1887,6 +1887,14 @@ function selectOnlyComponent(componentId: string): void {
   send({ version: WEBVIEW_MESSAGE_VERSION, type: "selectionChanged", componentId });
 }
 
+/** Keeps the persistent sidebar in sync with every selection gesture.  The
+ * inspector represents one concrete component, so a wire, label, empty, or
+ * multi-selection deliberately clears it instead of showing stale values. */
+function syncPropertyInspectorSelection(): void {
+  const componentId = state.selectedComponentIds.length === 1 ? state.selectedComponentIds[0]! : null;
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "selectionChanged", componentId });
+}
+
 function selectOnlyWire(wireId: string, segmentIndex?: number): void {
   activeDialComponentId = undefined;
   state.selectedComponentIds = [];
@@ -1894,6 +1902,7 @@ function selectOnlyWire(wireId: string, segmentIndex?: number): void {
   selectedWireSegment = segmentIndex === undefined ? undefined : { wireId, segmentIndex };
   selectedWireCorner = undefined;
   selectedTextLabels = [];
+  syncPropertyInspectorSelection();
 }
 
 function selectOnlyWireCorner(wireId: string, pointIndex: number): void {
@@ -1903,6 +1912,7 @@ function selectOnlyWireCorner(wireId: string, pointIndex: number): void {
   selectedWireSegment = undefined;
   selectedWireCorner = { wireId, pointIndex };
   selectedTextLabels = [];
+  syncPropertyInspectorSelection();
 }
 
 function selectOnlyTextLabel(componentId: string, kind: ExternalLabelKind): void {
@@ -1912,6 +1922,7 @@ function selectOnlyTextLabel(componentId: string, kind: ExternalLabelKind): void
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
   selectedTextLabels = [{ componentId, kind }];
+  syncPropertyInspectorSelection();
 }
 
 /** Shift+click: alterna um componente dentro/fora de uma seleção múltipla já existente — convenção
@@ -1925,6 +1936,7 @@ function toggleComponentSelection(componentId: string): void {
   state.selectedComponentIds = isComponentSelected(componentId)
     ? state.selectedComponentIds.filter((id) => id !== componentId)
     : [...state.selectedComponentIds, componentId];
+  syncPropertyInspectorSelection();
 }
 
 /** Shift/Ctrl+click em fio preserva componentes já selecionados, permitindo mover uma seleção
@@ -1938,6 +1950,7 @@ function toggleWireSelection(wireId: string): void {
   state.selectedWireIds = isWireSelected(wireId)
     ? state.selectedWireIds.filter((id) => id !== wireId)
     : [...state.selectedWireIds, wireId];
+  syncPropertyInspectorSelection();
 }
 
 /** "" (nada) parado/sem amostra; senão "(0.9x)"/"(120%)" -- mesmo espírito de `InfoWidget::setRate()`
@@ -1999,6 +2012,7 @@ function clearSelection(): void {
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
   selectedTextLabels = [];
+  syncPropertyInspectorSelection();
 }
 
 function clearPendingWire(): void {
@@ -3310,6 +3324,7 @@ function applyMarqueeSelection(start: Point, end: Point, additive: boolean): voi
     selectedWireCorner = undefined;
     selectedTextLabels = hitLabelRefs;
   }
+  syncPropertyInspectorSelection();
 }
 
 /** Remove TODOS os componentes e fios selecionados — uma mensagem IPC por item (reaproveita os
@@ -6297,9 +6312,8 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     // lote em vez de esconder "Propriedades" (comportamento antigo -- só o 1º componente era
     // editável, o resto silenciosamente ignorado). Ações de instância única abaixo (submenu de
     // subcircuito exposto, "Abrir Subcircuito") continuam gated por `isGroup`, sem sentido em lote.
-    const propertyMenuItems: ContextMenuItem[] = [
-      { label: t("properties"), icon: "properties", onClick: () => (isGroup ? openBatchPropertyDialog(selectedComponents) : openPropertyDialog(component)) },
-    ];
+    // The persistent, collapsible inspector on the opposite sidebar owns
+    // property editing. A normal selection refreshes it immediately.
     // Menu da instância do subcircuito no circuito principal: ações da própria instância ficam
     // aqui; os componentes internos expostos aparecem em submenus separados.
     const isSubcircuitWithPackage = !isGroup && Boolean(sourceId) && catalogEntry?.registeredSourceKind === "subcircuit-file";
@@ -6424,7 +6438,6 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       { label: t("copy"), icon: "copy", shortcut: "Ctrl+C", onClick: () => copySelectedItems() },
       { label: t("cut"), icon: "cut", shortcut: "Ctrl+X", onClick: () => cutSelectedItems() },
       { label: isGroup ? t("deleteSelectedItems") : t("remove"), icon: "remove", shortcut: "Del", onClick: () => deleteSelectedItems() },
-      ...propertyMenuItems,
       { kind: "separator" },
       { label: t("rotateCw"), icon: "rotateCw", shortcut: "Ctrl+R", onClick: () => rotateSelectedComponents(1) },
       { label: t("rotateCcw"), icon: "rotateCcw", shortcut: "Ctrl+Shift+R", onClick: () => rotateSelectedComponents(-1) },
@@ -9493,6 +9506,7 @@ function selectAll(): void {
   activeDialComponentId = undefined;
   state.selectedComponentIds = activeSceneComponents().filter((component) => !component.hidden && !component.hiddenByUser).map((component) => component.id);
   state.selectedWireIds = state.topology.conductors.map((wire) => wire.id);
+  syncPropertyInspectorSelection();
   persistState();
   render();
 }
