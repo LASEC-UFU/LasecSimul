@@ -1,3 +1,11 @@
+---
+id: AUD-001
+kind: governance
+status: active
+dependsOn: [FEAT-013]
+supersedes: []
+---
+
 # Auditoria independente dos comandos HART
 
 Data: 2026-09-11  
