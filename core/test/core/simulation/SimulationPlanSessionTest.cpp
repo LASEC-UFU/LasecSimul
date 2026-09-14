@@ -90,6 +90,33 @@ void sessionPublishesOnlyAtStoppedBoundaries() {
           "RuntimeState passa a nova geracao somente apos publicacao");
 }
 
+void quietCircuitServicesTelemetryRequests() {
+    plugins::GlobalPluginCache cache;
+    SimulationSession session(cache);
+    registerFactories(session);
+    (void)session.addComponent("sources.rail", {});
+    session.scheduler().runUntil(100);
+    session.scheduler().setMaximumTimeStepNs(0);
+    session.scheduler().start();
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+    uint64_t firstGeneration = 0;
+    uint64_t latestGeneration = 0;
+    while (std::chrono::steady_clock::now() < deadline) {
+        try {
+            const auto frame = session.getTelemetryFrameSnapshot({});
+            if (!firstGeneration) firstGeneration = frame.telemetryGeneration;
+            latestGeneration = frame.telemetryGeneration;
+            if (latestGeneration > firstGeneration) break;
+        } catch (const std::runtime_error&) {}
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    session.scheduler().stop();
+    CHECK(firstGeneration > 0 && latestGeneration > firstGeneration,
+          "quiet circuit refreshes requested telemetry without an electrical event");
+    CHECK(session.scheduler().nowNs() == 100,
+          "telemetry refresh does not advance the electrical clock");
+}
+
 void sessionCompilesAndAdvancesSignalPlan() {
     plugins::GlobalPluginCache cache;
     SimulationSession session(cache);
@@ -175,6 +202,7 @@ void sessionCoordinatesAdaptiveDynamicsAndDiscontinuities() {
 } // namespace
 
 int main() {
+    quietCircuitServicesTelemetryRequests();
     sessionPublishesOnlyAtStoppedBoundaries();
     sessionCompilesAndAdvancesSignalPlan();
     sessionCoordinatesAdaptiveDynamicsAndDiscontinuities();

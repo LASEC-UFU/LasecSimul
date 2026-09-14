@@ -5,6 +5,7 @@
 // tensão real do nó). O adaptador ESP32 vem do plugin real (mcu_abi.h major 2+), não built-in --
 // ver docs/17-pendencias-pos-sessao-qemu-abi.md seção 3.4.
 #include <chrono>
+#include <algorithm>
 #include <atomic>
 #include <cstdlib>
 #include <cstdio>
@@ -86,6 +87,25 @@ int main() {
 
     SimulationSession session(cache);
     session.registerKnownMcuTypes();
+
+    // Authoring metadata can arrive in lexical rather than adapter order.
+    // Every electrical line must retain its semantic ID and coordinates.
+    {
+        auto adapter = session.mcus().create("espressif.esp32");
+        std::vector<Pin> requested;
+        for (const auto& mapping : adapter->pinMap()) {
+            requested.push_back(Pin{mapping.pinId, static_cast<double>(requested.size()), 0.0});
+        }
+        std::reverse(requested.begin(), requested.end());
+        mcu::McuComponent reordered(std::move(adapter), session.scheduler(), requested);
+        bool identitiesPreserved = true;
+        const auto pins = reordered.pins();
+        for (size_t i = 0; i < pins.size(); ++i) {
+            const auto& original = requested[requested.size() - 1 - i];
+            identitiesPreserved &= pins[i].id == original.id && pins[i].x == original.x;
+        }
+        check(identitiesPreserved, "MCU pin identity survives reordered authoring metadata");
+    }
 
     // Pega o GPIO start real declarado pelo próprio plugin (memoryRegions()) -- em vez de assumir
     // uma constante ESP32 hardcoded no teste, já que o adaptador agora é um plugin, não um tipo

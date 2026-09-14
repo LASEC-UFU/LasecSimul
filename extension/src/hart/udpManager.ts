@@ -36,7 +36,7 @@ export class HartUdpManager implements vscode.Disposable {
     const socket = dgram.createSocket("udp4");
     socket.on("message", (frame, remote) => void this.respond(componentId, socket, frame, remote));
     socket.on("error", (error) => {
-      vscode.window.showWarningMessage(`HART UDP ${address}:${port}: ${error.message}`);
+      vscode.window.showWarningMessage(`UDP Port ${address}:${port}: ${error.message}`);
       socket.close();
       this.endpoints.delete(componentId);
     });

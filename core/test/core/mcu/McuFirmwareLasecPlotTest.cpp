@@ -127,13 +127,19 @@ int main() {
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     const bool useVnextB = std::getenv("LASECSIMUL_MCU_TRANSPORT") &&
                            std::string_view(std::getenv("LASECSIMUL_MCU_TRANSPORT")) == "VNEXT_B";
-    session.scheduler().start();
     if (useVnextB) {
         std::fprintf(stderr, "P9 bootstrap: selecting VNEXT_B before firmware launch\n");
         std::fflush(stderr);
         session.beginExecutionIfNeeded();
+    }
+    session.scheduler().start();
+    if (useVnextB) {
         try {
-            session.loadMcuFirmware(esp32, firmware, arena, qemuPath.string());
+            McuDebugOptions debug;
+            debug.startPaused = false;
+            if (const char* port = std::getenv("LASECSIMUL_TEST_GDB_PORT"))
+                debug.gdbPort = static_cast<uint16_t>(std::stoi(port));
+            session.loadMcuFirmware(esp32, firmware, arena, qemuPath.string(), debug);
         } catch (const std::exception& error) {
             std::fprintf(stderr, "P9 bootstrap FAILED: %s\n", error.what());
             session.stopSimulation();
@@ -144,24 +150,65 @@ int main() {
         mcu->loadFirmware(firmware, arena, qemuPath.string());
     }
     std::string accumulatedHex;
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(8);
+    const char* expectedLine = std::getenv("LASECSIMUL_TEST_EXPECTED_LINE");
+    bool previousHigh = false;
+    unsigned gpioEdges = 0;
+    auto lastEdge = std::chrono::steady_clock::time_point{};
+    long long longestEdgeMs = 0;
+    const char* durationEnv = std::getenv("LASECSIMUL_TEST_DURATION_SECONDS");
+    const auto deadline = std::chrono::steady_clock::now() +
+        std::chrono::seconds(durationEnv ? std::stoi(durationEnv) : 8);
     while (std::chrono::steady_clock::now() < deadline && mcu->firmwareRunning()) {
         if (const auto snapshot = session.tryDrainUartRx(plotIndex)) {
             if (!snapshot->dataHex.empty()) accumulatedHex += snapshot->dataHex;
+        }
+        if (expectedLine) {
+          try {
+            const bool high = session.nodeVoltageOfPin(esp32, "GPIO13") > 2.0;
+            if (high != previousHigh) {
+                const auto now = std::chrono::steady_clock::now();
+                if (gpioEdges > 0) longestEdgeMs = std::max(longestEdgeMs,
+                    std::chrono::duration_cast<std::chrono::milliseconds>(now - lastEdge).count());
+                ++gpioEdges;
+                previousHigh = high;
+                lastEdge = now;
+            }
+          } catch (const std::exception&) {
+              // Telemetry is non-blocking: a busy solver defers this sample.
+          }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
 
     const bool stillRunning = mcu->firmwareRunning();
+    const bool transportHealthy = !useVnextB || !mcu->vnextArtifactFatal();
     const std::string logs = mcu->qemuLogs();
     const bool realVnextMmio = useVnextB && logs.find("[VNEXT_PROBE] MMIO ") != std::string::npos;
     const bool realVnextI2c = useVnextB && logs.find("[VNEXT_PROBE] I2C write ") != std::string::npos;
+    const auto measuredSimNs = session.scheduler().nowNs();
     session.scheduler().pause();
     session.stopSimulation();
 
     const std::string text = hexToText(accumulatedHex);
     std::fprintf(stderr, "===== TEXTO DECODIFICADO (%zu bytes) =====\n%s\n===== FIM =====\n",
                  text.size(), text.c_str());
+
+    if (expectedLine && *expectedLine) {
+        unsigned matches = 0, bad = 0;
+        bool appStarted = false;
+        for (size_t pos = 0, nl; (nl = text.find('\n', pos)) != std::string::npos; pos = nl + 1) {
+            std::string line = text.substr(pos, nl - pos);
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (line == expectedLine) { ++matches; appStarted = true; }
+            else if (appStarted && !line.empty()) ++bad;
+        }
+        const bool pass = stillRunning && transportHealthy && matches >= 8 && bad == 0 && gpioEdges >= 8 && longestEdgeMs < 1000;
+        std::fprintf(stderr, "REAL_LED_UART %s lines=%u bad=%u edges=%u max_edge_ms=%lld sim_ns=%llu\n",
+            pass ? "PASS" : "FAIL", matches, bad, gpioEdges, longestEdgeMs,
+            static_cast<unsigned long long>(measuredSimNs));
+        if (!pass) std::fprintf(stderr, "QEMU diagnostics:\n%s\n", logs.c_str());
+        return pass ? 0 : 1;
+    }
 
     // Conta quantas linhas batem exatamente com o formato esperado ">graf:<numero>:<numero>|g" vs.
     // quantas linhas vieram com QUALQUER outra coisa (corrompidas) -- sem regex de proposito, so
@@ -195,7 +242,7 @@ int main() {
     std::fprintf(stderr,
                  "\nResultado: linhas_ok=%d linhas_corrompidas=%d qemu_alive=%s sim_ns=%llu\n",
                  wellFormedLines, malformedLines, stillRunning ? "yes" : "no",
-                  static_cast<unsigned long long>(session.scheduler().nowNs()));
+                  static_cast<unsigned long long>(measuredSimNs));
 
     if (useVnextB && stillRunning && realVnextMmio) {
         std::fprintf(stderr, "P9_REAL_FIRMWARE_VNEXT_EXECUTION OBSERVED\n");

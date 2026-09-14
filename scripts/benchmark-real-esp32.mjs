@@ -32,6 +32,13 @@ for (const required of [projectPath, firmwarePath, corePath, qemuPath, subcircui
 if (!Number.isFinite(durationMs) || durationMs <= 0) throw new Error("Duração deve ser positiva.");
 
 const project = JSON.parse(fs.readFileSync(projectPath, "utf8"));
+const plotDisconnected = process.env.LASECSIMUL_BENCHMARK_DISCONNECT_PLOT === "1";
+if (plotDisconnected) {
+  const removed = new Set(project.components.filter((c) => c.typeId === "peripherals.lasecplot").map((c) => c.id));
+  project.components = project.components.filter((c) => !removed.has(c.id));
+  project.topology.conductors = project.topology.conductors.filter((wire) =>
+    !removed.has(wire.from.componentId) && !removed.has(wire.to.componentId));
+}
 const pipeName = `lasecsimul-real-esp32-${process.pid}-${Date.now()}`;
 // E147 (EVIDENCE.md, 2026-09-10): this used to hard-code LASECSIMUL_NETWORK_MODE=isolated,
 // silently overriding whatever the caller's own environment requested -- a caller comparing
@@ -79,6 +86,10 @@ let displayTelemetryGeneration = 0;
 const probeTraceEnabled = process.env.LASECSIMUL_BENCHMARK_PROBE_TRACE === "1";
 const probeThreshold = Number(process.env.LASECSIMUL_BENCHMARK_PROBE_THRESHOLD ?? 1.65);
 const probeTimeline = [];
+const directProbeTimeline = [];
+const ledVisualTimeline = [];
+let previousLedVisualState;
+let previousDirectProbeDigitalState;
 let probeTimer;
 let probePollInFlight = false;
 let previousProbeDigitalState;
@@ -149,6 +160,9 @@ async function main() {
   const portsByGroup = new Map();
   for (const conductor of conductors) {
     union(endpointKey(conductor.from), endpointKey(conductor.to));
+  }
+  // Roots are stable only AFTER all junctions have been unioned.
+  for (const conductor of conductors) {
     for (const endpoint of [conductor.from, conductor.to]) {
       if (endpoint.kind === "node") continue;
       const root = find(endpointKey(endpoint));
@@ -177,6 +191,10 @@ async function main() {
   const probeEntry = [...instances.entries()].find(([projectId]) =>
     project.components.find((component) => component.id === projectId)?.typeId === "meters.probe");
   const probeId = probeEntry?.[1].instanceId;
+  const ledId = [...instances.entries()].find(([projectId]) =>
+    project.components.find((component) => component.id === projectId)?.typeId === "outputs.led")?.[1].instanceId;
+  const probePinId = probeEntry
+    ? (catalog.pinIdsByTypeId["meters.probe"]?.[0] ?? "in") : undefined;
 
   await client.setSimulationConfig({
     targetStepUs: 0,
@@ -205,12 +223,12 @@ async function main() {
   await client.resetPerformanceMetrics();
   progress("simulacao iniciada");
 
-  if (plotId) {
+  {
     uartTimer = setInterval(() => {
       if (uartPollInFlight) return;
       uartPollInFlight = true;
       void Promise.all([
-        client.drainUart(plotId).catch(() => undefined),
+        plotId ? client.drainUart(plotId).catch(() => undefined) : Promise.resolve(undefined),
         client.getProperty(mcuId, "uart0_tx_monitor_hex").catch(() => ""),
       ])
         .then(([plotBatch, monitorHex]) => {
@@ -271,11 +289,25 @@ async function main() {
     probeTimer = setInterval(() => {
       if (probePollInFlight) return;
       probePollInFlight = true;
-      void client.getTelemetryFrame(
-        { items: [], probes: [{ key: "probe", instanceId: probeId, pinId: "pin-1" }] },
+      void Promise.all([client.getTelemetryFrame(
+        { items: ledId ? [{ key: "led", instanceId: ledId }] : [], probes: [{ key: "probe", instanceId: probeId, pinId: probePinId }] },
         probeTelemetryGeneration,
-      )
-        .then((frame) => {
+      ), client.getNodeVoltage(probeId, probePinId)])
+        .then(([frame, directVoltage]) => {
+          const ledBytes = frame.componentStates.led;
+          if (ledBytes?.length === 8) {
+            const current = ledBytes.readDoubleLE(0);
+            const on = current > 0.0001;
+            if (previousLedVisualState === undefined || on !== previousLedVisualState) {
+              ledVisualTimeline.push({ wallMs: performance.now() - benchmarkWallOrigin, current, on });
+              previousLedVisualState = on;
+            }
+          }
+          const directState = directVoltage > probeThreshold;
+          if (previousDirectProbeDigitalState === undefined || directState !== previousDirectProbeDigitalState) {
+            directProbeTimeline.push({ wallMs: performance.now() - benchmarkWallOrigin, voltage: directVoltage, digitalState: directState });
+            previousDirectProbeDigitalState = directState;
+          }
           probeTelemetryGeneration = frame.telemetryGeneration;
           const voltage = frame.nodeVoltages?.probe;
           if (voltage === undefined) return;
@@ -327,6 +359,7 @@ async function main() {
   while (uartPollInFlight) await new Promise((resolve) => setTimeout(resolve, 5));
   while (displayPollInFlight) await new Promise((resolve) => setTimeout(resolve, 5));
   while (probePollInFlight) await new Promise((resolve) => setTimeout(resolve, 5));
+  const finalTime = await client.getSimulationTime();
   progress("parando simulacao");
   const stopStarted = performance.now();
   await client.stopSimulation();
@@ -354,7 +387,6 @@ async function main() {
     ),
     ...(displayTimelineEnabled ? { timeline: displayTimeline } : {}),
   } : undefined;
-  const finalTime = await client.getSimulationTime();
   const metrics = await client.getPerformanceMetrics();
   const qemuLogs = await client.getMcuLogs(mcuId);
   const allowIncomplete = process.env.LASECSIMUL_BENCHMARK_ALLOW_INCOMPLETE === "1";
@@ -403,6 +435,36 @@ async function main() {
   }
   const directUartSummary = uartSummary(directUartHex);
   const lasecPlotUartSummary = uartSummary(plotUartHex);
+  const expectedLine = process.env.LASECSIMUL_BENCHMARK_EXPECTED_LINE;
+  let ledUartAcceptance;
+  let ledUartAcceptanceFailed = false;
+  if (expectedLine) {
+    const completed = directUartText.slice(0, directUartText.lastIndexOf("\n") + 1)
+      .split("\n").map((line) => line.replace(/\r/g, ""));
+    const first = completed.indexOf(expectedLine);
+    const appLines = first < 0 ? [] : completed.slice(first).filter(Boolean);
+    const edges = probeTimeline.slice(1);
+    const visualEdges = ledVisualTimeline.slice(1);
+    const maximumVisualGapMs = visualEdges.slice(1).reduce((max, entry, index) =>
+      Math.max(max, entry.wallMs - visualEdges[index].wallMs), 0);
+    const maximumEdgeGapMs = edges.slice(1).reduce((max, entry, index) =>
+      Math.max(max, entry.wallMs - edges[index].wallMs), 0);
+    ledUartAcceptance = {
+      lines: appLines.filter((line) => line === expectedLine).length,
+      badLines: appLines.filter((line) => line !== expectedLine).length,
+      edges: edges.length,
+      firstEdgeMs: edges[0]?.wallMs,
+      maximumEdgeGapMs,
+      visualEdges: visualEdges.length,
+      maximumVisualGapMs,
+    };
+    const required = Math.floor(Math.max(8, (durationMs - 5000) / 600));
+    if (ledUartAcceptance.lines < required || ledUartAcceptance.badLines !== 0 ||
+        edges.length < required || visualEdges.length < required ||
+        !(edges[0]?.wallMs < 5000) || maximumEdgeGapMs > 650 || maximumVisualGapMs > 650) {
+      ledUartAcceptanceFailed = true;
+    }
+  }
   if (!allowIncomplete && process.env.LASECSIMUL_BENCHMARK_REQUIRE_TELEMETRY === "1" &&
       directUartSummary.telemetryLines === 0) {
     throw new Error("Firmware não chegou ao loop de telemetria dentro da janela do benchmark.");
@@ -419,6 +481,7 @@ async function main() {
     fixture: {
       projectPath, firmwarePath, boardProjectId, mcuId, durationMs, realTimeRate,
       corePath, qemuPath, subcircuitPath, networkMode, effectiveTransport, effectiveExecutionMode,
+      plotDisconnected,
     },
     rate: {
       average: rates.reduce((sum, value) => sum + value, 0) / rates.length,
@@ -438,6 +501,7 @@ async function main() {
       lasecPlot: lasecPlotUartSummary,
       ...(uartTimelineEnabled ? (compact ? { timelineSummary: uartTimelineSummary } : { timeline: uartTimeline }) : {}),
     },
+    ledUartAcceptance,
     stopLatencyMs,
     hostWallDurationMs: performance.now() - benchmarkWallOrigin,
     virtualWorkCompletedNs: finalTime.mcuVirtualNs !== undefined && initialTime.mcuVirtualNs !== undefined
@@ -448,6 +512,8 @@ async function main() {
         found: !!probeId,
         transitionCount: probeTimeline.length,
         timeline: probeTimeline,
+        directTimeline: directProbeTimeline,
+        ledVisualTimeline,
       },
     } : {}),
     metrics,
@@ -456,10 +522,16 @@ async function main() {
         guruMeditation: /Guru Meditation|panic'ed|CORRUPTED/i.test(qemuLogs + directUartText),
         i2cAckErrors: (qemuLogs.match(/esp32_i2c_event ackERR/g) ?? []).length,
         profile: qemuLogs.match(/\[LasecSimul\]\[PROFILE\][^\r\n]*/g)?.at(-1),
+        ...(process.env.LASECSIMUL_SETTLE_PROVENANCE === "1" ? {
+          provenance: qemuLogs.split(/\r?\n/).filter((line) => /PROVENANCE/.test(line)).slice(-30),
+        } : {}),
       },
     } : { qemuLogs }),
   };
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (ledUartAcceptanceFailed) {
+    throw new Error(`LED/UART acceptance FAILED: ${JSON.stringify(ledUartAcceptance)}`);
+  }
 }
 
 try {

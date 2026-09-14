@@ -159,3 +159,7 @@ __pycache__/
 /vnext_prototype/pacing_investigation/
 /vnext_prototype/startup_barrier/
 qemu_logs_dump.txt
+
+# Arquivos temporarios gerados durante diagnostico local do ESP32/QEMU.
+*.tmp.log
+qemu-system-xtensa.pre-*.exe

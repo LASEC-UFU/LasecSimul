@@ -1,5 +1,14 @@
 # NEXT ACTION
 
+## E148 local ESP32 LED/UART handoff (2026-09-14)
+
+User project acceptance is green on the local development candidate (connected
+120 s, disconnected Plot 30 s; actual visual LED and application-line gates).
+Read `E148_LED_UART.md` and `QEMU_HANDOFF.md` before revisiting this issue.
+Focused final VNEXT_B/MTTCG regression passed 14/14, including 25/25 restarts.
+Next user step: reopen development workspace, F5, then run the original circuit.
+Do not replace the canonical runtime or conflate this with FEAT-013 below.
+
 ## FEAT-013 Real HART specs now local: Universal command gate 17/23, 2 real bugs fixed via spec text (2026-09-11)
 
 Result: **IN_PROGRESS, external blocker RESOLVED — the previous session's

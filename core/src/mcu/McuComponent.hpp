@@ -211,6 +211,8 @@ public:
      * real nem de firmware. Produção sempre usa loadFirmware(), nunca isto direto. */
     void openSyntheticArenaForTesting(const std::string& arenaName);
     qemu::QemuArenaBridge& arenaBridge() { return m_controller.arenaBridge(); }
+    /** Indica que esta instância usa o transporte VNEXT-B em vez da arena legada. */
+    bool vnextBActive() const noexcept { return m_controller.vnextBActive(); }
 
     /** Achado 2026-07-22 (indicador "MCU real-time ratio" sempre em 0%, mesmo com o MCU rodando
      * normalmente): `arena->qemuTime` NUNCA é escrito pelo fork QEMU real (confirmado lendo

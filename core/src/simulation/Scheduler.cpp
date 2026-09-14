@@ -367,6 +367,7 @@ void Scheduler::start() {
         bool pacingCalibrated = false;
         auto pacingWallOrigin = std::chrono::steady_clock::now();
         uint64_t pacingSimOriginNs = nowNs();
+        double pacingRate = m_realTimeRate.load(std::memory_order_relaxed);
 
         while (m_running.load()) {
             if (m_paused.load()) {
@@ -386,6 +387,9 @@ void Scheduler::start() {
                                  !(m_commandPending && m_commandPending());
                 }
                 if (shouldWait) m_workGeneration.wait(observedWork, std::memory_order_acquire);
+                // Paused wall time is deliberately outside the simulation clock.
+                pacingWallOrigin = std::chrono::steady_clock::now();
+                pacingSimOriginNs = nowNs();
                 continue;
             }
 
@@ -486,6 +490,11 @@ void Scheduler::start() {
 
             const double realTimeRate = m_realTimeRate.load(std::memory_order_relaxed);
             const uint64_t cycleSimEndNs = nowNs();
+            if (realTimeRate != pacingRate) {
+                pacingRate = realTimeRate;
+                pacingWallOrigin = std::chrono::steady_clock::now();
+                pacingSimOriginNs = cycleSimEndNs;
+            }
             if (realTimeRate > 0.0 && cycleSimEndNs > cycleSimStartNs) {
                 if (!pacingCalibrated) {
                     // Uma solicitação não nula revela a resolução real do scheduler do SO; em
@@ -509,29 +518,22 @@ void Scheduler::start() {
                     std::chrono::duration<long double, std::nano>(requiredWallNs));
                 const auto actualElapsed = now - pacingWallOrigin;
 
-                if (actualElapsed > requiredElapsed + pacingQuantum) {
-                    // Boot/CPU/QEMU ficou para trás: ancora no estado atual em vez de acelerar a
-                    // 200% para "recuperar" tempo que o usuário não viu.
-                    pacingWallOrigin = now;
-                    pacingSimOriginNs = cycleSimEndNs;
-                } else if (requiredElapsed > actualElapsed && requiredElapsed - actualElapsed >= pacingQuantum) {
+                // Keep the absolute wall anchor when late. Re-anchoring here
+                // discarded every oversleep/boot delay while QEMU's host-paced
+                // clock kept advancing: future MMIO events drifted ever farther
+                // ahead and returning ring credit became progressively slower.
+                // Catch-up still processes every event and respects advanceLimit.
+                if (requiredElapsed > actualElapsed && requiredElapsed - actualElapsed >= pacingQuantum) {
                     const auto deadline = pacingWallOrigin + requiredElapsed;
-                    const auto remaining = requiredElapsed - actualElapsed;
-                    // Usa espera do SO só na parcela que excede a granularidade medida; o trecho
-                    // final usa yield cooperativo. Isso evita tanto busy-wait longo quanto o
-                    // oversleep de um tick inteiro que limitava 1x a aproximadamente 0,6x.
-                    if (remaining >= pacingQuantum * 2) {
-                        std::unique_lock<std::mutex> pacingLock(m_pacingMutex);
-                        m_pacingWake.wait_until(pacingLock, deadline - pacingQuantum, [this] {
-                            return !m_running.load(std::memory_order_acquire) ||
-                                   m_paused.load(std::memory_order_acquire);
-                        });
-                    }
-                    while (m_running.load(std::memory_order_acquire) &&
-                           !m_paused.load(std::memory_order_acquire) &&
-                           std::chrono::steady_clock::now() < deadline) {
-                        std::this_thread::yield();
-                    }
+                    // The guard above already accumulates a host-sized quantum.
+                    // Sleep that whole quantum. yield() is NOT a timed wait: spinning
+                    // through the final quantum consumed a full CPU and competed with
+                    // the artifact whose progress this worker is meant to follow.
+                    std::unique_lock<std::mutex> pacingLock(m_pacingMutex);
+                    m_pacingWake.wait_until(pacingLock, deadline, [this] {
+                        return !m_running.load(std::memory_order_acquire) ||
+                               m_paused.load(std::memory_order_acquire);
+                    });
                 }
             } else if (realTimeRate <= 0.0) {
                 pacingWallOrigin = std::chrono::steady_clock::now();

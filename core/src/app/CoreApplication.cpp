@@ -1032,7 +1032,7 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
             std::string{"{\"en\":{\"name\":\""} + englishLabel + "\"}}",
             protocols::HartCommunicationComponent::readoutFormat(), std::nullopt, {});
     };
-    registerHartTransport("protocol.hart.udp", "HART UDP", protocols::HartCommunicationComponent::Mode::Udp, "HART UDP");
+    registerHartTransport("protocol.hart.udp", "UDP Port", protocols::HartCommunicationComponent::Mode::Udp, "UDP Port");
 
     // Concrete SMAR HART field devices (FEAT: HART concrete devices). Each is the SAME
     // no second engine, no per-device C++ subclass -- differing only by the DevicePreset's default

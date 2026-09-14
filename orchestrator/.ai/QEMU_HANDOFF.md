@@ -1,6 +1,18 @@
 # START HERE - LasecSimul VNEXT_B / ESP32
 
-## CURRENT HANDOFF — E145 closed H143 for Release and shipped a production-path MTTCG capacity guard; two narrow open findings; B12 not attempted (2026-09-09)
+## LOCAL USER-PROJECT HANDOFF — E148 LED/UART acceptance (2026-09-14)
+
+Current local work: repair Arduino 3.3.9 GPIO13/115200 UART on the user's complete
+58-component blink_led.lsproj under VNEXT_B/MTTCG. Read `E148_LED_UART.md` for
+failed controls, source causes, final binary/firmware provenance and acceptance.
+Final local candidate passes connected 120 s and disconnected-Plot 30 s gates,
+including actual visual LED state and exact application lines. PlatformIO and
+the complete F5 prelaunch build succeeded. Focused regression passes 14/14,
+including 25/25 restart cycles and 90 s real-QEMU scheduler synchronization.
+This does not promote QEMU_RUNTIME.json's canonical artifact or close E145's
+separate historical capacity/restart findings. Earlier handoff follows intact.
+
+## HISTORICAL HANDOFF — E145 closed H143 for Release and shipped a production-path MTTCG capacity guard; two narrow open findings; B12 not attempted (2026-09-09)
 
 CURRENT_OBJECTIVE = Decide on two open findings (RESET_WAIT/E131's oracle
 depends on QEMU diagnostics E141 removed; a narrow early-cycle/N=1 timing

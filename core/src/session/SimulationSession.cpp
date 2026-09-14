@@ -2204,13 +2204,38 @@ std::vector<uint8_t> SimulationSession::getComponentState(uint32_t componentInde
     return std::move(*result);
 }
 
-std::vector<uint8_t> SimulationSession::getComponentTelemetryState(uint32_t componentIndex) const {
+std::vector<uint8_t> SimulationSession::getComponentTelemetryState(uint32_t componentIndex) {
     auto states = getComponentTelemetryStates({componentIndex});
     return states.empty() ? std::vector<uint8_t>{} : std::move(states.front());
 }
 
+void SimulationSession::requestTelemetrySnapshotRefresh() {
+    {
+        std::lock_guard<std::mutex> lock(m_telemetrySnapshotMutex);
+        if (m_telemetryRefreshQueued) return;
+        m_telemetryRefreshQueued = true;
+    }
+    try {
+        enqueueCommand([](SimulationSession& self) {
+            {
+                std::lock_guard<std::mutex> lock(self.m_telemetrySnapshotMutex);
+                self.m_telemetryRefreshQueued = false;
+            }
+            // Capture on the owning worker, even when a quiet/capped circuit
+            // has no new electrical step. Never expose an unsettled state.
+            if (self.m_scheduler.dirtySet().empty() && self.m_scheduler.lastSettleConvergedUnlocked()) {
+                self.publishTelemetrySnapshotIfRequested(self.m_scheduler.nowNsUnlocked());
+            }
+        });
+    } catch (...) {
+        std::lock_guard<std::mutex> lock(m_telemetrySnapshotMutex);
+        m_telemetryRefreshQueued = false;
+        throw;
+    }
+}
+
 std::vector<std::vector<uint8_t>> SimulationSession::getComponentTelemetryStates(
-    const std::vector<uint32_t>& componentIndices) const {
+    const std::vector<uint32_t>& componentIndices) {
     if (!m_scheduler.isRunning()) return captureComponentTelemetryStatesUnlocked(componentIndices);
 
     std::shared_ptr<const ComponentTelemetrySnapshot> snapshot;
@@ -2221,6 +2246,7 @@ std::vector<std::vector<uint8_t>> SimulationSession::getComponentTelemetryStates
         snapshot = m_publishedTelemetrySnapshot;
     }
 
+    requestTelemetrySnapshotRefresh();
     std::vector<std::vector<uint8_t>> states;
     states.reserve(componentIndices.size());
     for (uint32_t componentIndex : componentIndices) {
@@ -2232,7 +2258,7 @@ std::vector<std::vector<uint8_t>> SimulationSession::getComponentTelemetryStates
 }
 
 TelemetryFrameSnapshot SimulationSession::getTelemetryFrameSnapshot(
-    const std::vector<uint32_t>& componentIndices) const {
+    const std::vector<uint32_t>& componentIndices) {
     if (!m_scheduler.isRunning()) {
         TelemetryFrameSnapshot frame;
         frame.planGeneration = m_runtimeState.planGeneration;
@@ -2261,6 +2287,7 @@ TelemetryFrameSnapshot SimulationSession::getTelemetryFrameSnapshot(
         ++m_telemetryRequestedGeneration;
         snapshot = m_publishedTelemetrySnapshot;
     }
+    requestTelemetrySnapshotRefresh();
     if (!snapshot) throw std::runtime_error("telemetria ainda nao publicada; tente novamente");
 
     TelemetryFrameSnapshot frame;
@@ -2445,7 +2472,7 @@ mcu::McuComponent* SimulationSession::mcuComponentForTesting(uint32_t componentI
 std::optional<uint64_t> SimulationSession::firstMcuVirtualTimeNs() const {
     for (uint32_t index : m_mcuComponentIndices) {
         auto* mcu = static_cast<mcu::McuComponent*>(m_componentInstances[index].get());
-        if (!mcu->arenaBridge().arena()) continue;
+        if (!mcu->vnextBActive() && !mcu->arenaBridge().arena()) continue;
         // Achado 2026-07-22: `arena->qemuTime` nunca é escrito pelo QEMU real (campo morto, ver
         // comentário de `McuComponent::latestVirtualTimeNs()`) -- lê-lo direto sempre dava 0,
         // fazendo o indicador "MCU real-time ratio" ficar preso em 0% pra sempre, mesmo com o MCU
@@ -2461,7 +2488,7 @@ std::optional<uint64_t> SimulationSession::computeSlowestMcuPositionNs() {
     std::optional<uint64_t> slowest;
     for (uint32_t i : m_mcuComponentIndices) {
         auto* mcu = static_cast<mcu::McuComponent*>(m_componentInstances[i].get());
-        if (!mcu->arenaBridge().arena()) {
+        if (!mcu->vnextBActive() && !mcu->arenaBridge().arena()) {
             m_mcuPositionTracking.erase(i);
             continue;
         }

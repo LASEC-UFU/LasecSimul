@@ -131,13 +131,16 @@ McuComponent::McuComponent(std::unique_ptr<IMcuAdapter> adapter, simulation::Sch
     m_moduleWakeupGeneration.assign(m_modules.size(), 0);
 
     const auto pinMap = m_adapter->pinMap();
-    const bool useRequestedPins = requestedPins.size() == pinMap.size();
     m_pins.reserve(pinMap.size());
     for (size_t index = 0; index < pinMap.size(); ++index) {
-        if (useRequestedPins) {
-            Pin pin = requestedPins[index];
-            if (pin.id.empty()) pin.id = pinMap[index].pinId;
-            m_pins.push_back(std::move(pin));
+        // Metadata and subcircuit endpoints may enumerate pins in a different
+        // order (JSON objects, for example, sort GPIO10 before GPIO2). Modules
+        // are indexed in adapter order: match authoring coordinates by identity,
+        // never rename an adapter line using the same positional index.
+        const auto requested = std::find_if(requestedPins.begin(), requestedPins.end(),
+            [&](const Pin& pin) { return pin.id == pinMap[index].pinId; });
+        if (requested != requestedPins.end()) {
+            m_pins.push_back(*requested);
             continue;
         }
         m_pins.push_back(Pin{pinMap[index].pinId});
@@ -307,10 +310,24 @@ void McuComponent::schedulePollAt(uint64_t timeNs, std::vector<DeferredScheduler
     auto callback = [weakState, generation] {
         const std::shared_ptr<CallbackState> state = weakState.lock();
         if (!state) return;
-        std::lock_guard<std::recursive_mutex> lock(state->mutex);
-        McuComponent* self = state->owner;
-        if (!self || self->m_pollGeneration != generation) return;
-        self->onPollEvent();
+        std::vector<DeferredSchedulerCall> schedulerCalls;
+        {
+            std::lock_guard<std::recursive_mutex> lock(state->mutex);
+            McuComponent* self = state->owner;
+            if (!self || self->m_pollGeneration != generation) return;
+            if (self->m_controller.vnextBActive()) {
+                self->m_pollEventScheduled = false;
+                self->m_pollEventDueNs = UINT64_MAX;
+                // Future VNEXT work is independent of legacy m_polling. Queue
+                // any rearming until outside the lifetime lock: health readers
+                // acquire Scheduler -> lifetime, so the opposite order deadlocks.
+                self->pollAndDispatchPendingEvents(self->m_scheduler.nowNs(), &schedulerCalls);
+                self->m_scheduler.markDirty(self->m_componentIndex);
+            } else {
+                self->onPollEvent();
+            }
+        }
+        for (auto& call : schedulerCalls) call();
     };
     // Same three-way branch as scheduleModuleWakeup()'s established pattern: deferred takes
     // priority (batched, flushed outside the lock later); otherwise schedulerLockHeld selects
@@ -880,6 +897,8 @@ void McuComponent::scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool
     auto callback = [weakState, moduleIndex, generation] {
         const std::shared_ptr<CallbackState> state = weakState.lock();
         if (!state) return;
+        std::vector<DeferredSchedulerCall> schedulerCalls;
+        {
         std::lock_guard<std::recursive_mutex> lock(state->mutex);
         McuComponent* self = state->owner;
         if (!self || moduleIndex >= self->m_moduleWakeupGeneration.size()) return;
@@ -897,16 +916,19 @@ void McuComponent::scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool
         }
         // Este callback já roda com Scheduler::m_mutex liberado (ver
         // Scheduler::processNextEventUntilLocked: unlock -> callback() -> lock) e na própria
-        // thread do Scheduler -- nunca precisa de `deferred` aqui, mesma lógica seguindo direto.
-        self->scheduleModuleWakeup(moduleIndex, nowNs, false);
+        // thread do Scheduler. Mesmo assim, chamadas que adquirem o lock do Scheduler
+        // são deferred até liberar o lock de lifetime do callback (ordem de locks).
+        self->scheduleModuleWakeup(moduleIndex, nowNs, false, &schedulerCalls);
         // Mudança de FIFO/RX ou bit TX repetido não altera o circuito elétrico.
         if (changed) self->m_scheduler.markDirty(self->m_componentIndex);
+        }
+        for (auto& call : schedulerCalls) call();
     };
     if (deferred) {
         // Ver doc-comment de DeferredSchedulerCall no .hpp -- evita inversão de ordem de lock com
         // stamp() quando quem chama é a thread de poll dedicada (segurando m_callbackState->mutex).
-        deferred->push_back([&scheduler = m_scheduler, delayNs, callback = std::move(callback)]() mutable {
-            scheduler.scheduleEvent(delayNs, std::move(callback));
+        deferred->push_back([&scheduler = m_scheduler, targetNs = nowNs + delayNs, callback = std::move(callback)]() mutable {
+            scheduler.scheduleAt(targetNs, std::move(callback));
         });
     } else if (schedulerLockHeld) {
         m_scheduler.scheduleEventUnlocked(delayNs, std::move(callback));
@@ -1155,11 +1177,15 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
             std::memcpy(&value, event.payload + sizeof(address), sizeof(value));
             lasecsimul::simulation::diag::ProvenanceTracker::instance().recordGpioWrite(address);
             if (address >= 0x3ff44000ull && address < 0x3ff45000ull)
-                if (vnextTraceEnabled()) std::fprintf(stderr, "[VNEXT_CORE_GPIO] addr=%llx value=%llx\\n",
-                             static_cast<unsigned long long>(address), static_cast<unsigned long long>(value));
+                if (vnextTraceEnabled()) std::fprintf(stderr, "[VNEXT_CORE_GPIO] addr=%llx value=%llx event_ns=%llu now_ns=%llu wall_ns=%llu\n",
+                             static_cast<unsigned long long>(address), static_cast<unsigned long long>(value),
+                             static_cast<unsigned long long>(vnextEventTimeNs(originNs, event.timestamp_ns)),
+                             static_cast<unsigned long long>(nowNs),
+                             static_cast<unsigned long long>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                 std::chrono::steady_clock::now().time_since_epoch()).count()));
             const uint64_t before = electricalOutputFingerprint();
             if (QemuModule* module = findModule(address)) {
-                module->writeRegisterAt(address, value, event.timestamp_ns);
+                module->writeRegisterAt(address, value, vnextEventTimeNs(originNs, event.timestamp_ns));
             }
             return before != electricalOutputFingerprint();
         };

@@ -1,24 +1,30 @@
 QEMU source: C:\SourceCode\qemu_lasecSimul
 QEMU repository: https://github.com/josuemoraisgh/qemu_lasecSimul
-QEMU HEAD: 92d3b96071d4f3c7756a155536f8bfa0c7fdfd84
-Working-tree source: HEAD plus the event-driven I2C polling and precise Windows
-sub-millisecond timer changes in softmmu/simuliface.c, hw/i2c/esp32_i2c.c and
-util/main-loop.c. This deployed executable was rebuilt from the pre-general-MMIO
-candidate state after that candidate failed its first cold-boot functional gate.
-The source working tree retains the candidate for diagnosis, but it is not the
-deployed runtime. These sources must be committed before a release tag.
+QEMU HEAD: 46aa4db fix(vnext-b): preserve I2C burst continuation and runtime gates
+Working-tree source: current qemu_lasecSimul checkout, including the UART fix
+from 7f77ab5 (defer Core notifications outside the guest MMIO dispatch) and the
+current VNEXT-B/I2C changes plus E148 UART AHB mapping, incremental config retry,
+and first-RUNNING-only handshake notification. Reproduction patch:
+devices/qemu-esp32/patches/0005-vnext-uart-progress.patch.
+This is the executable used by the local LasecSimul development runtime;
+not a promotion of orchestrator/.ai/QEMU_RUNTIME.json's canonical artifact.
 Configure: xtensa-softmmu, gcrypt, slirp (MSYS2 UCRT64)
-Executable SHA-256: 1E23537F6F96096846DF8A5FD17BACAC87632FF9CCE72B2EB339E9956EBE8F5C
-Build date: 2026-08-27
+Executable SHA-256: 64E021AC7CA67E29EC224800FE4A5B18B14EC5BC616F33D7627894E97F0ECC4C
+Build date: 2026-09-14
 Runtime contract: QEMU arena ABI v5, 64-byte TX/32-byte RX I2C burst mailbox,
 continuation routing metadata, named Windows poll doorbell; ABI v3 rollback.
 
-Paired Core-side requirement: McuComponent creates <arena>-doorbell before QEMU
+Paired Core-side requirement for VNEXT_B: shared wait dispatcher, bounded future
+event callbacks, origin-adjusted module timestamps, absolute realtime pacing
+anchor (no lateness time loss), and coalesced worker-owned visual telemetry refresh.
+Evidence and limitations: orchestrator/.ai/E148_LED_UART.md.
+
+Legacy paired Core-side requirement: McuComponent creates <arena>-doorbell before QEMU
 starts, waits on that event plus a local stop event, and falls back to a bounded
 timed wait if the doorbell is unavailable. Native devices serialize mutable
 plugin state per instance without holding McuComponent::CallbackState::mutex.
 
-Measured with the real ESP32/SSD1306 fixture on 2026-08-26 after correcting the
+Historical measurements (not a new E148 claim): real ESP32/SSD1306 on 2026-08-26 after correcting the
 fixture so Adafruit_SSD1306 actually uses each labelled bus clock:
   100 kHz: 109-130 ms per 1024-byte framebuffer
   400 kHz: 38-56 ms per framebuffer

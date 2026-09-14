@@ -390,9 +390,9 @@ public:
      * estado em vez de propriedade — plugins ainda não têm getter de propriedade na ABI (ver
      * NativeDeviceProxy.hpp). Lança se a instância já foi removida (ponteiro nulo). */
     std::vector<uint8_t> getComponentState(uint32_t componentIndex) const;
-    std::vector<uint8_t> getComponentTelemetryState(uint32_t componentIndex) const;
-    std::vector<std::vector<uint8_t>> getComponentTelemetryStates(const std::vector<uint32_t>& componentIndices) const;
-    TelemetryFrameSnapshot getTelemetryFrameSnapshot(const std::vector<uint32_t>& componentIndices) const;
+    std::vector<uint8_t> getComponentTelemetryState(uint32_t componentIndex);
+    std::vector<std::vector<uint8_t>> getComponentTelemetryStates(const std::vector<uint32_t>& componentIndices);
+    TelemetryFrameSnapshot getTelemetryFrameSnapshot(const std::vector<uint32_t>& componentIndices);
     std::vector<double> nodeVoltagesOfPins(
         const std::vector<std::pair<uint32_t, std::string>>& probes) const;
 
@@ -641,6 +641,7 @@ private:
      * quando `m_snapshotTopologyStale` está falso (topologia não mudou desde a última publicação). */
     void publishSnapshot();
     void publishTelemetrySnapshotIfRequested(uint64_t timestampNs);
+    void requestTelemetrySnapshotRefresh();
     std::vector<std::vector<uint8_t>> captureComponentTelemetryStatesUnlocked(
         const std::vector<uint32_t>& componentIndices) const;
     void rebuildTopologyIfNeeded();
@@ -855,6 +856,7 @@ private:
     mutable std::unordered_set<uint32_t> m_telemetrySubscriptions;
     mutable uint64_t m_telemetryRequestedGeneration = 0;
     uint64_t m_telemetryPublishedGeneration = 0;
+    bool m_telemetryRefreshQueued = false;
     mutable std::atomic<uint64_t> m_telemetryFrameGeneration{0};
     std::shared_ptr<const ComponentTelemetrySnapshot> m_publishedTelemetrySnapshot;
 

@@ -6859,7 +6859,7 @@
     },
     {
       "typeId": "peripherals.udp",
-      "label": "HART UDP",
+      "label": "UDP Port",
       "pinCount": 0,
       "icon": "globe",
       "folderPath": ["peripherals"],
