@@ -9,8 +9,9 @@ Final local candidate passes connected 120 s and disconnected-Plot 30 s gates,
 including actual visual LED state and exact application lines. PlatformIO and
 the complete F5 prelaunch build succeeded. Focused regression passes 14/14,
 including 25/25 restart cycles and 90 s real-QEMU scheduler synchronization.
-This does not promote QEMU_RUNTIME.json's canonical artifact or close E145's
-separate historical capacity/restart findings. Earlier handoff follows intact.
+This updates QEMU_RUNTIME.json to the tested release candidate; it does not
+close E145's separate historical capacity/restart findings. Earlier handoff
+follows intact.
 
 ## HISTORICAL HANDOFF — E145 closed H143 for Release and shipped a production-path MTTCG capacity guard; two narrow open findings; B12 not attempted (2026-09-09)
 

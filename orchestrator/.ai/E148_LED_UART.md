@@ -38,4 +38,4 @@ Status: scoped user-project LED/UART acceptance and focused regression complete 
 
 Final focused regression `VNEXT_B_MTTCG_E148_final`: PASS 14/14, exit 0. Includes 25/25 restart cycles (zero failed boots or mid-run stalls), 90 s real-QEMU scheduler synchronization, independent multiple-controller teardown, crash resilience, adapter/arena/process/I2C and drain-cutoff gates. Logs: `vnext_prototype/regression_runs/VNEXT_B_MTTCG_E148_final/`. Independent read-only review found no new scoped blocker. `git diff --check` passed.
 
-Historical multi-reader telemetry subscription ownership findings remain separate from this single-reader project acceptance. No canonical promotion, release, commit or push performed. Preserve canonical runtime and rollback artifact. Do not claim all historical findings closed.
+Historical multi-reader telemetry subscription ownership findings remain separate from this single-reader project acceptance. The corrected QEMU candidate is now the release canonical runtime (`QEMU_RUNTIME.json`, SHA `64E021...F0ECC4C`); the pre-E148 executable remains as a rollback artifact. Do not claim all historical findings closed.

@@ -6,8 +6,8 @@ from 7f77ab5 (defer Core notifications outside the guest MMIO dispatch) and the
 current VNEXT-B/I2C changes plus E148 UART AHB mapping, incremental config retry,
 and first-RUNNING-only handshake notification. Reproduction patch:
 devices/qemu-esp32/patches/0005-vnext-uart-progress.patch.
-This is the executable used by the local LasecSimul development runtime;
-not a promotion of orchestrator/.ai/QEMU_RUNTIME.json's canonical artifact.
+This is the executable used by the local LasecSimul development and release
+runtime; its SHA is also recorded in orchestrator/.ai/QEMU_RUNTIME.json.
 Configure: xtensa-softmmu, gcrypt, slirp (MSYS2 UCRT64)
 Executable SHA-256: 64E021AC7CA67E29EC224800FE4A5B18B14EC5BC616F33D7627894E97F0ECC4C
 Build date: 2026-09-14
