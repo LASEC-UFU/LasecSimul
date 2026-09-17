@@ -82,6 +82,21 @@ Do not make first adapters secretly implement a full ADC/DAC. Later dedicated bl
 - signed/unsigned coding;
 - noise/offset.
 
+> **2026-09-15:** implemented as `logic.adc`/`logic.dac` (`components/logic/AdcDac.hpp`), preserving
+> the typeIds `SimulideComponentMapper.ts` already mapped `.sim1` `adc`/`dac` imports to (previously
+> dead -- no factory existed). Delivers quantization + reference voltage + saturation from this
+> list, at a FIXED 8-bit resolution; sampling time, conversion delay, signed/unsigned coding and
+> noise/offset remain unimplemented. A first version carried the quantized value as a single Signal
+> Graph port (easier to wire to Ctrl-library blocks); the user explicitly asked for the literal
+> SimulIDE encapsulation instead, so the final design is 100% electrical -- one single-terminal
+> analog pin ("in" for the ADC, "out" for the DAC, referenced to the global MNA ground like
+> `sources.fixed_volt`, never a differential pair) plus a literal 8-pin digital bus ("d0".."d7",
+> d0 = LSB, each a real 0V/5V logic level via a Norton-equivalent drive, `kDriveConductance`), NOT a
+> Signal Graph port. Placed in the "Conversores" palette folder per the user's placement request
+> even though it no longer shares the `connectWireUnlocked` signal-domain path with the other six
+> bridges. Gate: `adc_dac_bus_test` (byte-exact encode/decode both directions, saturation at both
+> ends, `vref` property rescaling).
+
 ## 8. Units
 
 - Voltage sensor output default unit: V.

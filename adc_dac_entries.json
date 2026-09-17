@@ -1,0 +1,176 @@
+[
+  {
+    "typeId": "logic.adc",
+    "label": "A/D",
+    "pinCount": 3,
+    "pinIds": [
+      "p",
+      "n",
+      "value"
+    ],
+    "icon": "voltimetro",
+    "graphical": true,
+    "folderPath": [
+      "Conversores"
+    ],
+    "defaultProperties": {
+      "vref": 5,
+      "resolutionBits": 8
+    },
+    "help": {
+      "description": "Conversor Analógico->Digital (ADC): mede a tensão entre P/N como um voltímetro ideal, mas QUANTIZA o valor em 2^resolutionBits degraus entre 0 e vref antes de publicar na porta de sinal \"value\" (pino OUT, à direita) -- diferente de Tensão2Sinal, que não quantiza. Propriedades \"vref\" (tensão de referência, V) e \"resolutionBits\" (resolução, bits) configuráveis."
+    },
+    "package": {
+      "width": 128,
+      "height": 64,
+      "border": false,
+      "shapes": [
+        {
+          "kind": "rect",
+          "x": 8,
+          "y": 8,
+          "w": 112,
+          "h": 48,
+          "fill": "#e0f2fe",
+          "stroke": "#0369a1",
+          "strokeWidth": 1.5
+        },
+        {
+          "kind": "text",
+          "x": 64,
+          "y": 30,
+          "value": "A/D",
+          "fontSize": 12,
+          "textAnchor": "middle",
+          "fill": "#0c4a6e"
+        },
+        {
+          "kind": "text",
+          "x": 64,
+          "y": 44,
+          "value": "MNA -> Sinal (quantizado)",
+          "fontSize": 7,
+          "textAnchor": "middle",
+          "fill": "#0c4a6e"
+        }
+      ],
+      "pins": [
+        {
+          "id": "p",
+          "x": 0,
+          "y": 20,
+          "angle": 180,
+          "length": 8,
+          "label": "P"
+        },
+        {
+          "id": "n",
+          "x": 0,
+          "y": 44,
+          "angle": 180,
+          "length": 8,
+          "label": "N"
+        },
+        {
+          "id": "value",
+          "x": 128,
+          "y": 32,
+          "angle": 0,
+          "length": 8,
+          "label": "OUT",
+          "leadColor": "#ea580c",
+          "labelColor": "#ea580c"
+        }
+      ]
+    },
+    "category": "Conversores",
+    "workspaceSection": "misc"
+  },
+  {
+    "typeId": "logic.dac",
+    "label": "D/A",
+    "pinCount": 3,
+    "pinIds": [
+      "command",
+      "p",
+      "n"
+    ],
+    "icon": "fonte",
+    "graphical": true,
+    "folderPath": [
+      "Conversores"
+    ],
+    "defaultProperties": {
+      "vref": 5,
+      "resolutionBits": 8
+    },
+    "help": {
+      "description": "Conversor Digital->Analógico (DAC): recebe um valor pela porta de sinal \"command\" (pino IN, à esquerda), QUANTIZA em 2^resolutionBits degraus entre 0 e vref, e impõe essa tensão quantizada entre P/N como fonte de tensão ideal -- valores fora de 0..vref saturam no próprio limite. Propriedades \"vref\" (tensão de referência, V) e \"resolutionBits\" (resolução, bits) configuráveis."
+    },
+    "package": {
+      "width": 128,
+      "height": 64,
+      "border": false,
+      "shapes": [
+        {
+          "kind": "rect",
+          "x": 8,
+          "y": 8,
+          "w": 112,
+          "h": 48,
+          "fill": "#e0f2fe",
+          "stroke": "#0369a1",
+          "strokeWidth": 1.5
+        },
+        {
+          "kind": "text",
+          "x": 64,
+          "y": 30,
+          "value": "D/A",
+          "fontSize": 12,
+          "textAnchor": "middle",
+          "fill": "#0c4a6e"
+        },
+        {
+          "kind": "text",
+          "x": 64,
+          "y": 44,
+          "value": "Sinal (quantizado) -> MNA",
+          "fontSize": 7,
+          "textAnchor": "middle",
+          "fill": "#0c4a6e"
+        }
+      ],
+      "pins": [
+        {
+          "id": "command",
+          "x": 0,
+          "y": 32,
+          "angle": 180,
+          "length": 8,
+          "label": "IN",
+          "leadColor": "#ea580c",
+          "labelColor": "#ea580c"
+        },
+        {
+          "id": "p",
+          "x": 128,
+          "y": 20,
+          "angle": 0,
+          "length": 8,
+          "label": "P"
+        },
+        {
+          "id": "n",
+          "x": 128,
+          "y": 44,
+          "angle": 0,
+          "length": 8,
+          "label": "N"
+        }
+      ]
+    },
+    "category": "Conversores",
+    "workspaceSection": "misc"
+  }
+]

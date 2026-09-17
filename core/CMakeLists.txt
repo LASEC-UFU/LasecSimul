@@ -578,6 +578,58 @@ if(NOT WIN32)
 endif()
 add_test(NAME signal_graph_subcircuit_boundary COMMAND signal_graph_subcircuit_boundary_test)
 
+# Blocos `control.*` (biblioteca Ctrl/TDPS) no caminho de execucao REAL: `addSubcircuitInstance`
+# sobre os manifestos de `subcircuits/`, nao `ProcessSubcircuitCompiler` isolado.
+add_executable(control_block_subcircuit_test
+    test/core/session/ControlBlockSubcircuitTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(control_block_subcircuit_test PRIVATE include src)
+target_link_libraries(control_block_subcircuit_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(control_block_subcircuit_test PRIVATE SUBCIRCUIT_LIBRARY_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../subcircuits")
+if(NOT WIN32)
+    target_link_libraries(control_block_subcircuit_test PRIVATE dl)
+endif()
+add_test(NAME control_block_subcircuit COMMAND control_block_subcircuit_test)
+
+# Túnel de domínio duplo (connectors.tunnel serve elétrico E Signal Graph pela mesma instância).
+add_executable(dual_domain_tunnel_test
+    test/core/session/DualDomainTunnelTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(dual_domain_tunnel_test PRIVATE include src)
+target_link_libraries(dual_domain_tunnel_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(dual_domain_tunnel_test PRIVATE dl)
+endif()
+add_test(NAME dual_domain_tunnel COMMAND dual_domain_tunnel_test)
+
+# Conversores MNA<->Signal (bridges.*): já existiam completos no Core, nunca alcançáveis por fio
+# comum nem visíveis na paleta -- mesmo padrão do bug do TDPS.
+add_executable(electrical_signal_bridge_live_test
+    test/core/session/ElectricalSignalBridgeLiveTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(electrical_signal_bridge_live_test PRIVATE include src)
+target_link_libraries(electrical_signal_bridge_live_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(electrical_signal_bridge_live_test PRIVATE dl)
+endif()
+add_test(NAME electrical_signal_bridge_live COMMAND electrical_signal_bridge_live_test)
+
+# ADC/DAC (logic.adc/logic.dac): barramento digital de 8 bits literal (1 pino analógico + 8 pinos
+# digitais independentes), réplica do encapsulamento/fiação do ADC/DAC real do SimulIDE.
+add_executable(adc_dac_bus_test
+    test/core/session/AdcDacBusTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(adc_dac_bus_test PRIVATE include src)
+target_link_libraries(adc_dac_bus_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(adc_dac_bus_test PRIVATE dl)
+endif()
+add_test(NAME adc_dac_bus COMMAND adc_dac_bus_test)
+
 # Componentes "Fontes"/"Medidores" portados do SimulIDE
 add_executable(simulide_sources_meters_test
     test/simulide_sources_meters_test.cpp
@@ -1698,6 +1750,7 @@ set(LASECSIMUL_HERMETIC_TESTS
     logic_family_extension mcu_component mcu_usart_monitor mcu_uart_to_lasecplot
     mcu_component_live_poll_thread mcu_scheduler_pacing_sync pin_change_dispatch plugin_watchdog
     plc_scan_session plc_runtime plc_session_integration industrial_protocols
+    control_block_subcircuit dual_domain_tunnel electrical_signal_bridge_live adc_dac_bus
 )
 set(LASECSIMUL_EXTERNAL_GHDL_TESTS
     ghdl_lockstep_real_ghdl ghdl_backend_real_ghdl fpga_component_real_ghdl

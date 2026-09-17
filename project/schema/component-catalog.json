@@ -6093,9 +6093,805 @@
         "name": "NetA"
       },
       "help": {
-        "description": "Conecta pinos por nome compartilhado em vez de fio desenhado. Dois túneis com o mesmo nome formam um nó elétrico."
+        "description": "Conecta pinos por nome compartilhado em vez de fio desenhado. Serve tanto o circuito elétrico quanto os blocos de sinal (Controle/TDPS) -- o Core decide o domínio pelo que está ligado em cada ponta, igual o par 4-20mA de um transmissor HART: para você é o mesmo túnel, por dentro pode ser elétrico numa ponta e sinal na outra (nunca misturado na mesma ponta)."
       },
       "category": "Connectors",
+      "workspaceSection": "misc"
+    },
+    {
+      "typeId": "bridges.voltage_sensor",
+      "label": "Tensão2Sinal",
+      "pinCount": 3,
+      "pinIds": [
+        "p",
+        "n",
+        "value"
+      ],
+      "icon": "voltimetro",
+      "graphical": true,
+      "folderPath": [
+        "Conversores"
+      ],
+      "defaultProperties": {},
+      "help": {
+        "description": "Converte MNA -> Sinal: mede a tensão elétrica entre os pinos P/N (impedância de entrada praticamente infinita, não carrega o circuito) e publica o valor na porta de sinal \"value\" (pino OUT, à direita), ligável a qualquer bloco Controle/TDPS por fio comum."
+      },
+      "package": {
+        "width": 128,
+        "height": 64,
+        "border": false,
+        "shapes": [
+          {
+            "kind": "rect",
+            "x": 8,
+            "y": 8,
+            "w": 112,
+            "h": 48,
+            "fill": "#e0f2fe",
+            "stroke": "#0369a1",
+            "strokeWidth": 1.5
+          },
+          {
+            "kind": "text",
+            "x": 64,
+            "y": 30,
+            "value": "Tensão2Sinal",
+            "fontSize": 10,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          },
+          {
+            "kind": "text",
+            "x": 64,
+            "y": 44,
+            "value": "MNA -> Sinal",
+            "fontSize": 7,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          }
+        ],
+        "pins": [
+          {
+            "id": "p",
+            "x": 0,
+            "y": 20,
+            "angle": 180,
+            "length": 8,
+            "label": "P"
+          },
+          {
+            "id": "n",
+            "x": 0,
+            "y": 44,
+            "angle": 180,
+            "length": 8,
+            "label": "N"
+          },
+          {
+            "id": "value",
+            "x": 128,
+            "y": 32,
+            "angle": 0,
+            "length": 8,
+            "label": "OUT",
+            "leadColor": "#ea580c",
+            "labelColor": "#ea580c"
+          }
+        ]
+      },
+      "category": "Conversores",
+      "workspaceSection": "misc"
+    },
+    {
+      "typeId": "bridges.current_sensor",
+      "label": "Corrente2Sinal",
+      "pinCount": 3,
+      "pinIds": [
+        "p",
+        "n",
+        "value"
+      ],
+      "icon": "amperimetro",
+      "graphical": true,
+      "folderPath": [
+        "Conversores"
+      ],
+      "defaultProperties": {},
+      "help": {
+        "description": "Converte MNA -> Sinal: mede a corrente elétrica que passa de P para N (impedância de entrada zero, como um amperímetro ideal em série) e publica o valor na porta de sinal \"value\" (pino OUT, à direita)."
+      },
+      "package": {
+        "width": 128,
+        "height": 64,
+        "border": false,
+        "shapes": [
+          {
+            "kind": "rect",
+            "x": 8,
+            "y": 8,
+            "w": 112,
+            "h": 48,
+            "fill": "#e0f2fe",
+            "stroke": "#0369a1",
+            "strokeWidth": 1.5
+          },
+          {
+            "kind": "text",
+            "x": 64,
+            "y": 30,
+            "value": "Corrente2Sinal",
+            "fontSize": 10,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          },
+          {
+            "kind": "text",
+            "x": 64,
+            "y": 44,
+            "value": "MNA -> Sinal",
+            "fontSize": 7,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          }
+        ],
+        "pins": [
+          {
+            "id": "p",
+            "x": 0,
+            "y": 20,
+            "angle": 180,
+            "length": 8,
+            "label": "P"
+          },
+          {
+            "id": "n",
+            "x": 0,
+            "y": 44,
+            "angle": 180,
+            "length": 8,
+            "label": "N"
+          },
+          {
+            "id": "value",
+            "x": 128,
+            "y": 32,
+            "angle": 0,
+            "length": 8,
+            "label": "OUT",
+            "leadColor": "#ea580c",
+            "labelColor": "#ea580c"
+          }
+        ]
+      },
+      "category": "Conversores",
+      "workspaceSection": "misc"
+    },
+    {
+      "typeId": "bridges.digital_input",
+      "label": "Digital2Sinal",
+      "pinCount": 3,
+      "pinIds": [
+        "p",
+        "n",
+        "value"
+      ],
+      "icon": "voltimetro",
+      "graphical": true,
+      "folderPath": [
+        "Conversores"
+      ],
+      "defaultProperties": {},
+      "help": {
+        "description": "Converte MNA -> Sinal (digital): lê a tensão entre P/N com histerese (abaixo de 0.8V = falso, acima de 2V = verdadeiro, mantém o estado entre os dois) e publica um valor booleano na porta de sinal \"value\" (pino OUT, à direita)."
+      },
+      "package": {
+        "width": 128,
+        "height": 64,
+        "border": false,
+        "shapes": [
+          {
+            "kind": "rect",
+            "x": 8,
+            "y": 8,
+            "w": 112,
+            "h": 48,
+            "fill": "#e0f2fe",
+            "stroke": "#0369a1",
+            "strokeWidth": 1.5
+          },
+          {
+            "kind": "text",
+            "x": 64,
+            "y": 30,
+            "value": "Digital2Sinal",
+            "fontSize": 10,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          },
+          {
+            "kind": "text",
+            "x": 64,
+            "y": 44,
+            "value": "MNA -> Sinal",
+            "fontSize": 7,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          }
+        ],
+        "pins": [
+          {
+            "id": "p",
+            "x": 0,
+            "y": 20,
+            "angle": 180,
+            "length": 8,
+            "label": "P"
+          },
+          {
+            "id": "n",
+            "x": 0,
+            "y": 44,
+            "angle": 180,
+            "length": 8,
+            "label": "N"
+          },
+          {
+            "id": "value",
+            "x": 128,
+            "y": 32,
+            "angle": 0,
+            "length": 8,
+            "label": "OUT",
+            "leadColor": "#ea580c",
+            "labelColor": "#ea580c"
+          }
+        ]
+      },
+      "category": "Conversores",
+      "workspaceSection": "misc"
+    },
+    {
+      "typeId": "bridges.controlled_voltage_source",
+      "label": "Sinal2Tensão",
+      "pinCount": 3,
+      "pinIds": [
+        "command",
+        "p",
+        "n"
+      ],
+      "icon": "fonte",
+      "graphical": true,
+      "folderPath": [
+        "Conversores"
+      ],
+      "defaultProperties": {},
+      "help": {
+        "description": "Converte Sinal -> MNA: impõe entre P/N, como fonte de tensão ideal, o valor recebido pela porta de sinal \"command\" (pino IN, à esquerda -- ligue a saída de um bloco Controle/TDPS nele). Sem fio ligado, o comando fica em 0V."
+      },
+      "package": {
+        "width": 128,
+        "height": 64,
+        "border": false,
+        "shapes": [
+          {
+            "kind": "rect",
+            "x": 8,
+            "y": 8,
+            "w": 112,
+            "h": 48,
+            "fill": "#e0f2fe",
+            "stroke": "#0369a1",
+            "strokeWidth": 1.5
+          },
+          {
+            "kind": "text",
+            "x": 64,
+            "y": 30,
+            "value": "Sinal2Tensão",
+            "fontSize": 10,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          },
+          {
+            "kind": "text",
+            "x": 64,
+            "y": 44,
+            "value": "Sinal -> MNA",
+            "fontSize": 7,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          }
+        ],
+        "pins": [
+          {
+            "id": "command",
+            "x": 0,
+            "y": 32,
+            "angle": 180,
+            "length": 8,
+            "label": "IN",
+            "leadColor": "#ea580c",
+            "labelColor": "#ea580c"
+          },
+          {
+            "id": "p",
+            "x": 128,
+            "y": 20,
+            "angle": 0,
+            "length": 8,
+            "label": "P"
+          },
+          {
+            "id": "n",
+            "x": 128,
+            "y": 44,
+            "angle": 0,
+            "length": 8,
+            "label": "N"
+          }
+        ]
+      },
+      "category": "Conversores",
+      "workspaceSection": "misc"
+    },
+    {
+      "typeId": "bridges.controlled_current_source",
+      "label": "Sinal2Corrente",
+      "pinCount": 3,
+      "pinIds": [
+        "command",
+        "p",
+        "n"
+      ],
+      "icon": "fonte",
+      "graphical": true,
+      "folderPath": [
+        "Conversores"
+      ],
+      "defaultProperties": {},
+      "help": {
+        "description": "Converte Sinal -> MNA: injeta de N para P, como fonte de corrente ideal, o valor recebido pela porta de sinal \"command\" (pino IN, à esquerda). Sem fio ligado, o comando fica em 0A."
+      },
+      "package": {
+        "width": 128,
+        "height": 64,
+        "border": false,
+        "shapes": [
+          {
+            "kind": "rect",
+            "x": 8,
+            "y": 8,
+            "w": 112,
+            "h": 48,
+            "fill": "#e0f2fe",
+            "stroke": "#0369a1",
+            "strokeWidth": 1.5
+          },
+          {
+            "kind": "text",
+            "x": 64,
+            "y": 30,
+            "value": "Sinal2Corrente",
+            "fontSize": 10,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          },
+          {
+            "kind": "text",
+            "x": 64,
+            "y": 44,
+            "value": "Sinal -> MNA",
+            "fontSize": 7,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          }
+        ],
+        "pins": [
+          {
+            "id": "command",
+            "x": 0,
+            "y": 32,
+            "angle": 180,
+            "length": 8,
+            "label": "IN",
+            "leadColor": "#ea580c",
+            "labelColor": "#ea580c"
+          },
+          {
+            "id": "p",
+            "x": 128,
+            "y": 20,
+            "angle": 0,
+            "length": 8,
+            "label": "P"
+          },
+          {
+            "id": "n",
+            "x": 128,
+            "y": 44,
+            "angle": 0,
+            "length": 8,
+            "label": "N"
+          }
+        ]
+      },
+      "category": "Conversores",
+      "workspaceSection": "misc"
+    },
+    {
+      "typeId": "bridges.digital_output",
+      "label": "Sinal2Digital",
+      "pinCount": 3,
+      "pinIds": [
+        "command",
+        "p",
+        "n"
+      ],
+      "icon": "fonte",
+      "graphical": true,
+      "folderPath": [
+        "Conversores"
+      ],
+      "defaultProperties": {},
+      "help": {
+        "description": "Converte Sinal -> MNA (digital): impõe 5V entre P/N quando a porta de sinal \"command\" (pino IN, à esquerda) está verdadeira, 0V quando falsa. Sem fio ligado, o comando fica em falso (0V)."
+      },
+      "package": {
+        "width": 128,
+        "height": 64,
+        "border": false,
+        "shapes": [
+          {
+            "kind": "rect",
+            "x": 8,
+            "y": 8,
+            "w": 112,
+            "h": 48,
+            "fill": "#e0f2fe",
+            "stroke": "#0369a1",
+            "strokeWidth": 1.5
+          },
+          {
+            "kind": "text",
+            "x": 64,
+            "y": 30,
+            "value": "Sinal2Digital",
+            "fontSize": 10,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          },
+          {
+            "kind": "text",
+            "x": 64,
+            "y": 44,
+            "value": "Sinal -> MNA",
+            "fontSize": 7,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          }
+        ],
+        "pins": [
+          {
+            "id": "command",
+            "x": 0,
+            "y": 32,
+            "angle": 180,
+            "length": 8,
+            "label": "IN",
+            "leadColor": "#ea580c",
+            "labelColor": "#ea580c"
+          },
+          {
+            "id": "p",
+            "x": 128,
+            "y": 20,
+            "angle": 0,
+            "length": 8,
+            "label": "P"
+          },
+          {
+            "id": "n",
+            "x": 128,
+            "y": 44,
+            "angle": 0,
+            "length": 8,
+            "label": "N"
+          }
+        ]
+      },
+      "category": "Conversores",
+      "workspaceSection": "misc"
+    },
+    {
+      "typeId": "logic.adc",
+      "label": "A/D",
+      "pinCount": 9,
+      "pinIds": [
+        "in",
+        "d0",
+        "d1",
+        "d2",
+        "d3",
+        "d4",
+        "d5",
+        "d6",
+        "d7"
+      ],
+      "icon": "1to3",
+      "graphical": true,
+      "folderPath": [
+        "Conversores"
+      ],
+      "defaultProperties": {
+        "vref": 5
+      },
+      "help": {
+        "description": "Conversor Analógico->Digital (ADC) de 8 bits, réplica do encapsulamento e barramento digital LITERAIS do ADC do SimulIDE: 1 pino analógico de terminal único (\"in\", referenciado ao terra global) e um barramento de 8 pinos digitais independentes (\"d0\"..\"d7\", d0 = LSB, cada um 0V/5V de verdade) que codificam a tensão de \"in\" quantizada em 256 degraus entre 0 e a propriedade \"vref\" (tensão de referência, V)."
+      },
+      "package": {
+        "width": 140,
+        "height": 140,
+        "border": false,
+        "shapes": [
+          {
+            "kind": "rect",
+            "x": 20,
+            "y": 4,
+            "w": 100,
+            "h": 132,
+            "fill": "#e0f2fe",
+            "stroke": "#0369a1",
+            "strokeWidth": 1.5
+          },
+          {
+            "kind": "text",
+            "x": 70,
+            "y": 66.0,
+            "value": "A/D",
+            "fontSize": 13,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          },
+          {
+            "kind": "text",
+            "x": 70,
+            "y": 80.0,
+            "value": "8 bits",
+            "fontSize": 8,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          }
+        ],
+        "pins": [
+          {
+            "id": "in",
+            "x": 0,
+            "y": 70.0,
+            "angle": 180,
+            "length": 20,
+            "label": "IN"
+          },
+          {
+            "id": "d0",
+            "x": 140,
+            "y": 10,
+            "angle": 0,
+            "length": 8,
+            "label": "D0",
+            "labelFontSize": 6
+          },
+          {
+            "id": "d1",
+            "x": 140,
+            "y": 25,
+            "angle": 0,
+            "length": 8,
+            "label": "D1",
+            "labelFontSize": 6
+          },
+          {
+            "id": "d2",
+            "x": 140,
+            "y": 40,
+            "angle": 0,
+            "length": 8,
+            "label": "D2",
+            "labelFontSize": 6
+          },
+          {
+            "id": "d3",
+            "x": 140,
+            "y": 55,
+            "angle": 0,
+            "length": 8,
+            "label": "D3",
+            "labelFontSize": 6
+          },
+          {
+            "id": "d4",
+            "x": 140,
+            "y": 70,
+            "angle": 0,
+            "length": 8,
+            "label": "D4",
+            "labelFontSize": 6
+          },
+          {
+            "id": "d5",
+            "x": 140,
+            "y": 85,
+            "angle": 0,
+            "length": 8,
+            "label": "D5",
+            "labelFontSize": 6
+          },
+          {
+            "id": "d6",
+            "x": 140,
+            "y": 100,
+            "angle": 0,
+            "length": 8,
+            "label": "D6",
+            "labelFontSize": 6
+          },
+          {
+            "id": "d7",
+            "x": 140,
+            "y": 115,
+            "angle": 0,
+            "length": 8,
+            "label": "D7",
+            "labelFontSize": 6
+          }
+        ]
+      },
+      "category": "Conversores",
+      "workspaceSection": "misc"
+    },
+    {
+      "typeId": "logic.dac",
+      "label": "D/A",
+      "pinCount": 9,
+      "pinIds": [
+        "d0",
+        "d1",
+        "d2",
+        "d3",
+        "d4",
+        "d5",
+        "d6",
+        "d7",
+        "out"
+      ],
+      "icon": "3to1",
+      "graphical": true,
+      "folderPath": [
+        "Conversores"
+      ],
+      "defaultProperties": {
+        "vref": 5
+      },
+      "help": {
+        "description": "Conversor Digital->Analógico (DAC) de 8 bits, réplica do encapsulamento e barramento digital LITERAIS do DAC do SimulIDE: um barramento de 8 pinos digitais independentes (\"d0\"..\"d7\", d0 = LSB, entrada) e 1 pino analógico de terminal único (\"out\", referenciado ao terra global) que impõe a tensão correspondente ao código binário lido, entre 0 e a propriedade \"vref\" (tensão de referência, V)."
+      },
+      "package": {
+        "width": 140,
+        "height": 140,
+        "border": false,
+        "shapes": [
+          {
+            "kind": "rect",
+            "x": 20,
+            "y": 4,
+            "w": 100,
+            "h": 132,
+            "fill": "#e0f2fe",
+            "stroke": "#0369a1",
+            "strokeWidth": 1.5
+          },
+          {
+            "kind": "text",
+            "x": 70,
+            "y": 66.0,
+            "value": "D/A",
+            "fontSize": 13,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          },
+          {
+            "kind": "text",
+            "x": 70,
+            "y": 80.0,
+            "value": "8 bits",
+            "fontSize": 8,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          }
+        ],
+        "pins": [
+          {
+            "id": "d0",
+            "x": 0,
+            "y": 10,
+            "angle": 180,
+            "length": 8,
+            "label": "D0",
+            "labelFontSize": 6
+          },
+          {
+            "id": "d1",
+            "x": 0,
+            "y": 25,
+            "angle": 180,
+            "length": 8,
+            "label": "D1",
+            "labelFontSize": 6
+          },
+          {
+            "id": "d2",
+            "x": 0,
+            "y": 40,
+            "angle": 180,
+            "length": 8,
+            "label": "D2",
+            "labelFontSize": 6
+          },
+          {
+            "id": "d3",
+            "x": 0,
+            "y": 55,
+            "angle": 180,
+            "length": 8,
+            "label": "D3",
+            "labelFontSize": 6
+          },
+          {
+            "id": "d4",
+            "x": 0,
+            "y": 70,
+            "angle": 180,
+            "length": 8,
+            "label": "D4",
+            "labelFontSize": 6
+          },
+          {
+            "id": "d5",
+            "x": 0,
+            "y": 85,
+            "angle": 180,
+            "length": 8,
+            "label": "D5",
+            "labelFontSize": 6
+          },
+          {
+            "id": "d6",
+            "x": 0,
+            "y": 100,
+            "angle": 180,
+            "length": 8,
+            "label": "D6",
+            "labelFontSize": 6
+          },
+          {
+            "id": "d7",
+            "x": 0,
+            "y": 115,
+            "angle": 180,
+            "length": 8,
+            "label": "D7",
+            "labelFontSize": 6
+          },
+          {
+            "id": "out",
+            "x": 140,
+            "y": 70.0,
+            "angle": 0,
+            "length": 20,
+            "label": "OUT"
+          }
+        ]
+      },
+      "category": "Conversores",
       "workspaceSection": "misc"
     },
     {

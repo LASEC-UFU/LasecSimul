@@ -31,10 +31,12 @@
 #include "../components/sources/VoltSource.hpp"
 #include "../components/sources/WaveGen.hpp"
 #include "../components/connectors/SignalTunnel.hpp"
+#include "../components/control/SignalMathBlock.hpp"
 #include "../components/connectors/Tunnel.hpp"
 #include "../components/connectors/Bus.hpp"
 #include "../components/logic/Button.hpp"
 #include "../components/bridges/SignalBridges.hpp"
+#include "../components/logic/AdcDac.hpp"
 #include "../components/other/Ground.hpp"
 #include "../components/passive/Capacitor.hpp"
 #include "../components/passive/Inductor.hpp"
@@ -113,6 +115,15 @@ std::array<Pin, 3> makePins3(const ComponentParams& p, const char* a = "pin-1", 
     return {makePinOr(pos[0], a), makePinOr(pos[1], b), makePinOr(pos[2], c)};
 }
 
+/** Layout fixo de 9 pinos do ADC/DAC (`logic.adc`/`logic.dac`, ver `components/logic/AdcDac.hpp`):
+ * `ids[0..8]` na ORDEM exata que a classe espera (ADC: "in","d0".."d7"; DAC: "d0".."d7","out"). */
+std::array<Pin, 9> makePins9(const ComponentParams& p, const std::array<const char*, 9>& ids) {
+    std::array<Pin, 9> pins{};
+    const auto& pinList = p.pinList;
+    for (size_t i = 0; i < 9; ++i) pins[i] = makePinOr(i < pinList.size() ? pinList[i] : Pin{}, ids[i]);
+    return pins;
+}
+
 std::vector<Pin> makePinVector(const ComponentParams& p, size_t count) {
     std::vector<Pin> pins;
     pins.reserve(count);
@@ -122,6 +133,53 @@ std::vector<Pin> makePinVector(const ComponentParams& p, size_t count) {
         pins.push_back(std::move(pin));
     }
     return pins;
+}
+
+/** Nome pt-BR / en de cada bloco de controle, na MESMA ordem e vocabulário de
+ * `SignalMathBlock::signalMathTypeIds()` -- a lista de tipos continua sendo uma só (lá), aqui só o
+ * rótulo de catálogo. */
+const std::unordered_map<std::string_view, std::pair<const char*, const char*>>& controlBlockNames() {
+    static const std::unordered_map<std::string_view, std::pair<const char*, const char*>> kNames{
+        {"control.gain", {"Ganho", "Gain"}},
+        {"control.sum", {"Soma", "Sum"}},
+        {"control.product", {"Produto", "Product"}},
+        {"control.subtract", {"Subtração", "Subtract"}},
+        {"control.divide", {"Divisão", "Divide"}},
+        {"control.bias", {"Bias", "Bias"}},
+        {"control.integrator", {"Integrador", "Integrator"}},
+        {"control.filtered_derivative", {"Derivada Filtrada", "Filtered Derivative"}},
+        {"control.unit_delay", {"Atraso Unitário", "Unit Delay"}},
+        {"control.dead_time", {"Tempo Morto", "Dead Time"}},
+        {"control.first_order", {"Primeira Ordem", "First Order"}},
+        {"control.second_order", {"Segunda Ordem", "Second Order"}},
+        {"control.lead_lag", {"Lead-Lag", "Lead-Lag"}},
+        {"control.fopdt", {"FOPDT", "FOPDT"}},
+        {"control.transfer_function", {"Função de Transferência", "Transfer Function"}},
+        {"control.tank", {"Tanque", "Tank"}},
+        {"control.valve_characteristic", {"Característica de Válvula", "Valve Characteristic"}},
+        {"control.saturation", {"Saturação", "Saturation"}},
+        {"control.limiter", {"Limitador", "Limiter"}},
+        {"control.deadband", {"Banda Morta", "Deadband"}},
+        {"control.hysteresis", {"Histerese", "Hysteresis"}},
+        {"control.stiction", {"Atrito Estático", "Stiction"}},
+        {"control.rate_limiter", {"Limitador de Taxa", "Rate Limiter"}},
+        {"control.pid", {"PID", "PID"}},
+        {"control.calc_expression", {"Expressão de Cálculo", "Calc Expression"}},
+        {"control.probe", {"Ponta de Prova", "Probe"}},
+        {"control.process", {"Processo", "Process"}},
+    };
+    return kNames;
+}
+
+std::string controlBlockDisplayName(std::string_view typeId) {
+    const auto it = controlBlockNames().find(typeId);
+    return it == controlBlockNames().end() ? std::string(typeId) : std::string(it->second.first);
+}
+
+std::string controlBlockTranslationsJson(std::string_view typeId) {
+    const auto it = controlBlockNames().find(typeId);
+    const std::string english = it == controlBlockNames().end() ? std::string(typeId) : std::string(it->second.second);
+    return nlohmann::json{{"en", {{"name", english}}}}.dump();
 }
 
 void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetadataRegistry& metadata,
@@ -221,6 +279,24 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         R"json({"en":{"name":"Signal Tunnel"}})json",
         std::nullopt, std::nullopt, std::vector<std::string>{});
 
+    // Blocos matemáticos do Signal Engine (biblioteca Ctrl/TDPS). Sem estas factories, todo
+    // `.lssubcircuit` que os usa por dentro (`process_fopdt`, `tdps_*`, `control_*`) falhava na
+    // expansão com "Unknown component typeId: control.*" -- a tradução typeId->SignalBlockKind só
+    // existia em `ProcessSubcircuitCompiler`, que nunca foi ligado ao runtime. `pinIds` vazio como
+    // `connectors.signal_tunnel`: um bloco de controle nunca entra no Netlist, só em `signalPorts()`
+    // (ver components/control/SignalMathBlock.hpp). O schema de propriedades de cada instância vem
+    // dos `propertyDescriptors()` dela (derivados da autoria do subcircuito), não de uma segunda
+    // tabela por typeId aqui.
+    for (const std::string_view mathTypeId : components::SignalMathBlock::signalMathTypeIds()) {
+        const std::string typeId(mathTypeId);
+        reg.registerFactory(typeId, [typeId](const ComponentParams& p) {
+            return std::make_unique<components::SignalMathBlock>(typeId, p);
+        });
+        registerBuiltinMetadata(typeId, controlBlockDisplayName(mathTypeId), std::vector<PropertySchema>{},
+                                controlBlockTranslationsJson(mathTypeId), std::nullopt, std::nullopt,
+                                std::vector<std::string>{});
+    }
+
     reg.registerFactory("bridges.voltage_sensor", [](const ComponentParams& p) {
         return std::make_unique<components::SignalVoltageSensor>(makePins2(p, "p", "n"));
     });
@@ -251,6 +327,24 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
     });
     registerBuiltinMetadata("bridges.digital_output", "Saida Digital", {},
                             R"json({"en":{"name":"Digital Output"}})json", std::nullopt, std::nullopt, {"p", "n"});
+    reg.registerFactory("logic.adc", [](const ComponentParams& p) {
+        const auto schema = components::AdcConverter::propertySchema().front();
+        return std::make_unique<components::AdcConverter>(
+            makePins9(p, {"in", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7"}),
+            std::get<double>(propertyOrDefault(p.properties, schema)));
+    });
+    registerBuiltinMetadata("logic.adc", "Conversor A/D", components::AdcConverter::propertySchema(),
+                            R"json({"en":{"name":"ADC","properties":{"vref":{"label":"Reference Voltage","group":"Conversion"}}}})json",
+                            std::nullopt, std::nullopt, {"in", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7"});
+    reg.registerFactory("logic.dac", [](const ComponentParams& p) {
+        const auto schema = components::DacConverter::propertySchema().front();
+        return std::make_unique<components::DacConverter>(
+            makePins9(p, {"d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "out"}),
+            std::get<double>(propertyOrDefault(p.properties, schema)));
+    });
+    registerBuiltinMetadata("logic.dac", "Conversor D/A", components::DacConverter::propertySchema(),
+                            R"json({"en":{"name":"DAC","properties":{"vref":{"label":"Reference Voltage","group":"Conversion"}}}})json",
+                            std::nullopt, std::nullopt, {"d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "out"});
 
     reg.registerFactory("connectors.bus", [](const ComponentParams& p) {
         const auto schemas = components::Bus::propertySchema();

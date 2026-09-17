@@ -6,8 +6,10 @@
 #include <cstring>
 #include <optional>
 #include <stdexcept>
+#include <vector>
 
 #include "lasecsimul/IComponentModel.hpp"
+#include "lasecsimul/PropertyDefinition.hpp"
 
 namespace lasecsimul::components {
 
@@ -27,6 +29,18 @@ public:
     }
     void postStep(uint64_t) override {}
     double measuredValue() const { return m_value; }
+    /** Sensor: entrega a tensão medida pro Signal Graph. Um bloco `control.*` do outro lado do fio
+     * lê essa porta como qualquer outra Output -- o valor é publicado a cada `onStableStepUnlocked`
+     * (ver `SimulationSession::publishElectricalBridgeSensorsToSignalUnlocked`), a mesma disciplina
+     * causal de HART: sensor só publica a solução elétrica JÁ CONVERGIDA, nunca durante o settle.
+     * Unidade DELIBERADAMENTE vazia (não "V"): `SignalCompiler`/`connectSignalWireUnlocked` rejeita
+     * fio entre unidades de dimensão física diferente (ver `unitInfo` em SignalEngine.cpp), e TODO
+     * bloco `control.*` (SignalMathBlock) declara suas portas sem unidade -- "V" aqui tornaria este
+     * sensor incompatível com a biblioteca Ctrl inteira, o consumidor mais comum. O valor continua
+     * sendo Volts; só não é type-checked como tal (mesma convenção adimensional de toda a lib Ctrl). */
+    std::vector<SignalPortDescriptor> signalPorts() const override {
+        return {{"value", SignalPortDirection::Output, SignalValueKind::Analog, ""}};
+    }
     size_t getState(uint8_t* out, size_t cap) const override {
         if (cap < sizeof(m_value)) return 0;
         std::memcpy(out, &m_value, sizeof(m_value)); return sizeof(m_value);
@@ -58,6 +72,9 @@ public:
     void postStep(uint64_t) override {}
     std::optional<double> current() const override { return m_value; }
     double measuredValue() const { return m_value; }
+    std::vector<SignalPortDescriptor> signalPorts() const override {
+        return {{"value", SignalPortDirection::Output, SignalValueKind::Analog, ""}};
+    }
     size_t getState(uint8_t* out, size_t cap) const override {
         if (cap < sizeof(m_value)) return 0;
         std::memcpy(out, &m_value, sizeof(m_value)); return sizeof(m_value);
@@ -91,6 +108,9 @@ public:
     }
     void postStep(uint64_t) override {}
     bool measuredValue() const { return m_value; }
+    std::vector<SignalPortDescriptor> signalPorts() const override {
+        return {{"value", SignalPortDirection::Output, SignalValueKind::Digital, ""}};
+    }
     size_t getState(uint8_t* out, size_t cap) const override {
         if (cap < 1) return 0; out[0] = m_value ? 1 : 0; return 1;
     }
@@ -119,6 +139,14 @@ public:
     }
     double command() const { return m_command; }
     std::optional<double> current() const override { return m_current; }
+    /** Atuador: recebe a tensão-alvo do Signal Graph. Um bloco `control.*` do outro lado dirige
+     * essa porta como qualquer Input -- o valor é lido a cada início de passo, ANTES do stamp
+     * elétrico (ver `SimulationSession::sampleElectricalBridgeActuatorsFromSignalUnlocked`), mesma
+     * fronteira causal "atuador consome o último sinal aceito" já documentada em
+     * `applySignalActuatorsUnlocked`. */
+    std::vector<SignalPortDescriptor> signalPorts() const override {
+        return {{"command", SignalPortDirection::Input, SignalValueKind::Analog, ""}};
+    }
     size_t getState(uint8_t* out, size_t cap) const override {
         if (cap < sizeof(m_command)) return 0;
         std::memcpy(out, &m_command, sizeof(m_command)); return sizeof(m_command);
@@ -144,6 +172,9 @@ public:
     }
     double command() const { return m_command; }
     std::optional<double> current() const override { return -m_command; }
+    std::vector<SignalPortDescriptor> signalPorts() const override {
+        return {{"command", SignalPortDirection::Input, SignalValueKind::Analog, ""}};
+    }
     size_t getState(uint8_t* out, size_t cap) const override {
         if (cap < sizeof(m_command)) return 0;
         std::memcpy(out, &m_command, sizeof(m_command)); return sizeof(m_command);
@@ -167,6 +198,9 @@ public:
     void postStep(uint64_t) override {}
     bool setCommand(bool value) { if (value == m_value) return false; m_value = value; return true; }
     bool command() const { return m_value; }
+    std::vector<SignalPortDescriptor> signalPorts() const override {
+        return {{"command", SignalPortDirection::Input, SignalValueKind::Digital, ""}};
+    }
     size_t getState(uint8_t* out, size_t cap) const override { if (!cap) return 0; out[0] = m_value ? 1 : 0; return 1; }
     void setState(const uint8_t* in, size_t len) override { if (len) m_value = in[0] != 0; }
 private:

@@ -171,14 +171,24 @@ function makeIdFactory(prefix: string): () => string {
     assert(JSON.stringify([...resultA.errors].sort()) === JSON.stringify([...resultB.errors].sort()), "conjunto de erros deveria ser o mesmo independente da ordem de components[]");
   });
 
-  await test("interface signal never accepts an electrical tunnel", () => {
+  await test("TUNNEL_TYPE_ID é de domínio duplo: fronteira signal aceita connectors.tunnel (Core decide o domínio por fio)", () => {
     const doc: SubcircuitDocument = {
       ...emptyDocument(),
-      components: [{ id: "electrical", typeId: TUNNEL_TYPE_ID, properties: { name: "PV" }, visual: { x: 0, y: 0, rotation: 0 } }],
+      components: [{ id: "dual", typeId: TUNNEL_TYPE_ID, properties: { name: "PV" }, visual: { x: 0, y: 0, rotation: 0 } }],
       interface: [{ pinId: "PV", label: "PV", internalTunnel: "PV", domain: "signal", direction: "in", valueType: "Real", width: 1 }],
     };
     const result = validateSubcircuitDocument(doc);
-    assert(result.errors.some((error) => error.includes("connectors.signal_tunnel")), `expected domain separation: ${result.errors.join(" | ")}`);
+    assert(!result.errors.some((error) => error.includes("domínio incompatível")), `expected no domain-mismatch error: ${result.errors.join(" | ")}`);
+  });
+
+  await test("fronteira signal ainda rejeita um túnel de tipo desconhecido (nem TUNNEL_TYPE_ID nem SIGNAL_TUNNEL_TYPE_ID)", () => {
+    const doc: SubcircuitDocument = {
+      ...emptyDocument(),
+      components: [{ id: "other", typeId: "connectors.junction", properties: { name: "PV" }, visual: { x: 0, y: 0, rotation: 0 } }],
+      interface: [{ pinId: "PV", label: "PV", internalTunnel: "PV", domain: "signal", direction: "in", valueType: "Real", width: 1 }],
+    };
+    const result = validateSubcircuitDocument(doc);
+    assert(result.errors.some((error) => error.includes("túnel interno inexistente")), `expected missing-tunnel error: ${result.errors.join(" | ")}`);
   });
 
   const { failed } = finish();

@@ -205,6 +205,15 @@ public:
         if (!newName.empty()) m_tunnelGroups[newName].push_back(slot);
     }
 
+    /** Nome de túnel atualmente associado a `slot`, ou string vazia se nenhum -- fonte de verdade
+     * ao vivo (ver `setTunnelName` acima), diferente de `components::Tunnel::name()` que só reflete
+     * o que foi persistido via `getState`/`setState` (serialização), nunca uma renomeação feita
+     * durante a sessão atual via `SimulationSession::setTunnelName`. */
+    const std::string& tunnelNameOfSlot(uint32_t slot) const {
+        validateSlot(slot, "Netlist::tunnelNameOfSlot");
+        return m_tunnelNameBySlot[slot];
+    }
+
     /** Entrada por nome com precedência menor que fio físico. Diferente de setTunnelName(), este
      * slot não cria um grupo: ele apenas se associa a um grupo de Tunnel real já existente. */
     void setFallbackTunnelName(uint32_t slot, const std::string& newName) {

@@ -142,12 +142,15 @@ export function validateSubcircuitDocument(document: SubcircuitDocument): Subcir
       errors.push(`Interface "${entry.pinId}" referencia o túnel interno inexistente "${entry.internalTunnel}".`);
       continue;
     }
-    const requiredType = entry.domain === "signal" ? SIGNAL_TUNNEL_TYPE_ID : TUNNEL_TYPE_ID;
-    // Checked-in process composites predate SignalTunnel and are executed by the legacy
-    // ProcessSubcircuitCompiler, which deliberately supports that historical representation.
-    // New generic authoring (including TDPS import) must use SignalTunnel and is still rejected.
-    const legacyProcessTunnel = document.workspaceSection === "process" && types?.has(TUNNEL_TYPE_ID);
-    if (types && !types.has(requiredType) && !legacyProcessTunnel) {
+    // `TUNNEL_TYPE_ID` agora é de domínio DUPLO (Core: `components::Tunnel::signalPorts()`,
+    // "a mesma peça, o Core decide por fio, igual ao par 4-20mA de um transmissor HART") -- serve
+    // fronteira elétrica E de sinal. `SIGNAL_TUNNEL_TYPE_ID` continua aceito só pra manifestos já
+    // publicados antes desta mudança (ex: os `control_*`/`tdps_*` existentes), nunca exigido em
+    // autoria nova. Nenhuma combinação fica sem cobertura: elétrico aceita só o duplo; sinal aceita
+    // o duplo OU o legado explícito.
+    const acceptedTypes = entry.domain === "signal" ? [TUNNEL_TYPE_ID, SIGNAL_TUNNEL_TYPE_ID] : [TUNNEL_TYPE_ID];
+    if (types && !acceptedTypes.some((accepted) => types.has(accepted))) {
+      const requiredType = acceptedTypes.join('" ou "');
       errors.push(`Interface "${entry.pinId}" referencia túnel de domínio incompatível; esperado "${requiredType}".`);
     }
   }

@@ -48,6 +48,20 @@ public:
     // não rebuilda topologia. Quem edita o nome de um túnel chama
     // SimulationSession::setTunnelName() diretamente, nunca o caminho genérico — ver .spec, seção 6.1.
 
+    /** Túnel de domínio DUPLO: a mesma peça visual serve tanto pro Netlist elétrico (`pins()`
+     * acima) quanto pro Signal Graph -- igual ao par 4-20mA de um transmissor HART real, onde o
+     * MESMO laço carrega a corrente analógica E o FSK digital superposto. Sempre declarada (não há
+     * como este componente saber de antemão em qual domínio será usado); é
+     * `SimulationSession::connectWireUnlocked` quem decide, por fio, qual dos dois vale -- baseado
+     * no que está do outro lado -- e quem rejeita se as duas pontas de uma mesma instância (ou de
+     * instâncias com o mesmo `name`) acabarem em domínios diferentes (ver
+     * `SimulationSession::commitTunnelDomainUnlocked`). Nunca as duas ao mesmo tempo pro mesmo fio,
+     * então não é uma ponte de conversão de valor -- é a MESMA identidade em um dos dois domínios,
+     * nunca os dois simultaneamente. */
+    std::vector<SignalPortDescriptor> signalPorts() const override {
+        return {{m_pins[0].id, SignalPortDirection::Output, SignalValueKind::Analog, ""}};
+    }
+
 private:
     std::array<Pin, 1> m_pins;
     std::string m_name;

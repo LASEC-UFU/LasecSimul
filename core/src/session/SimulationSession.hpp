@@ -584,6 +584,21 @@ private:
                                                    const std::vector<WireTopologyOperation>& operations);
     void setTunnelNameUnlocked(uint32_t component, const std::string& pinId, const std::string& oldName,
                                 const std::string& newName);
+    /** Domínio efetivo já comprometido por um `connectors.tunnel` (túnel de domínio duplo, ver
+     * `components::Tunnel::signalPorts()`) -- decidido pelo PRIMEIRO fio que o toca (elétrico ou
+     * sinal), nunca reavaliado depois. Lança se um fio novo tentaria comprometer esta instância (ou
+     * outra com o MESMO `name`, ver `m_tunnelDomainByName`) com o domínio OPOSTO do já registrado --
+     * "para o usuário é o mesmo túnel, pro Core são dois" só vale enquanto cada identidade (por
+     * instância e por nome) ficar inteira num domínio só. Simplificação deliberada: uma remoção ou
+     * um rename não libera o nome comprometido (ver `.cpp`) -- reaproveitar o mesmo `name` depois de
+     * apagar todos os túneis que o usavam num domínio pode, raramente, herdar o domínio antigo; não
+     * vale a complexidade de um refcount por nome só pra este caso extremo. */
+    std::string liveTunnelNameUnlocked(uint32_t componentIndex) const;
+    /** Só lança se houver conflito -- NUNCA muta `m_tunnelDomainByComponent`/`m_tunnelDomainByName`.
+     * Chamar pros dois lados de um fio ANTES de `commitTunnelDomainUnlocked` garante que a conexão
+     * inteira fica atômica: nenhum dos dois fica "comprometido" se o outro for rejeitado. */
+    void validateTunnelDomainUnlocked(uint32_t componentIndex, bool signalDomain) const;
+    void commitTunnelDomainUnlocked(uint32_t componentIndex, bool signalDomain);
     void removeComponentUnlocked(uint32_t componentIndex);
     void removeSubcircuitInstanceUnlocked(uint32_t subcircuitInstanceId);
     void sendComponentEventUnlocked(uint32_t componentIndex, const ComponentEvent& event);
@@ -598,6 +613,22 @@ private:
     void rebuildSignalRoutesIfNeeded();
     void acquireSubscribedSignalsUnlocked(uint64_t timestampNs);
     void applySignalActuatorsUnlocked();
+    /** Existe algum `m_signalWires` tocando `(component, portId)` -- como fonte (`asTarget=false`)
+     * ou como alvo (`asTarget=true`)? Usado pelos hooks de bridge abaixo pra nunca pisar num
+     * componente que só é autorado pelo mecanismo ANTIGO (`setElectricalSignalBridges`, nunca
+     * chamado pela Extension mas ainda testado/válido -- ver `SignalBridgeTest.cpp`): os dois
+     * mecanismos coexistem no mesmo `IComponentModel*` sem se conhecerem, então cada um só pode
+     * agir em quem ele mesmo autorou. */
+    bool hasGenericSignalWireUnlocked(uint32_t component, const std::string& portId, bool asTarget) const;
+    /** Amostra `bridges.controlled_voltage_source`/`controlled_current_source`/`digital_output`
+     * (ver `components::SignalBridges.hpp`) -- ao contrário de `applySignalActuatorsUnlocked` (a
+     * lista `m_runtimeState.electricalSignalBridges`, autorada por `setElectricalSignalBridges`,
+     * NUNCA chamada pela Extension), esta varre `signalPorts()` genericamente, o mesmo mecanismo
+     * usado por `Tunnel`/`SignalMathBlock`/HART: qualquer fio comum ligando um bloco `control.*` à
+     * porta "command" já basta, sem nenhuma autoria de binding separada. Mesma fronteira causal:
+     * chamado no MESMO ponto de `applySignalActuatorsUnlocked` (início de passo, antes do stamp
+     * elétrico) -- atuador consome o último sinal ACEITO. */
+    void sampleElectricalBridgeActuatorsFromSignalUnlocked();
     /** Despacha postStep() para `m_dynamicComponentIndices`, mas não a cada passo MNA aceito (que
      * pode acontecer em microssegundos simulados sob passo adaptativo) -- acumula `acceptedDeltaNs`
      * por componente e só chama quando o total atinge `kDynamicComponentTickNs` (~60Hz, mesma
@@ -607,6 +638,12 @@ private:
      * 8-10ms) -- despachar a cada passo MNA geraria uma tempestade de criação de threads. */
     void advanceDynamicComponentsUnlocked(uint64_t acceptedDeltaNs);
     void publishElectricalSensorsToSignalUnlocked();
+    /** Espelho de `publishElectricalSensorsToSignalUnlocked` pela lista genérica `signalPorts()`
+     * (ver comentário de `sampleElectricalBridgeActuatorsFromSignalUnlocked`) -- publica
+     * `bridges.voltage_sensor`/`current_sensor`/`digital_input` na porta "value" a cada passo
+     * estável, mesmo ponto de `publishHartOutputsToSignalUnlocked`: sensor só publica a solução
+     * elétrica JÁ CONVERGIDA, nunca durante o settle. */
+    void publishElectricalBridgeSensorsToSignalUnlocked();
     void onStableStepUnlocked(uint64_t timestampNs);
     void scheduleNextSignalBoundaryUnlocked(uint64_t timestampNs);
     /** F9.5: agenda o PRIMEIRO scan de qualquer instância de PLC com artefato que ainda não tenha
@@ -745,6 +782,11 @@ private:
      * `connectWireUnlocked`/`disconnectWireUnlocked` once they detect both
      * endpoints are Signal Graph ports, never a second, HART-specific list. */
     std::vector<SignalWireDefinition> m_signalWires;
+    /** Domínio comprometido de cada `connectors.tunnel` (túnel de domínio duplo) já tocado por
+     * algum fio, por instância e por `name` -- ver `commitTunnelDomainUnlocked`. `false` = elétrico,
+     * `true` = sinal. Ausência de entrada = ainda indeciso. */
+    std::unordered_map<uint32_t, bool> m_tunnelDomainByComponent;
+    std::unordered_map<std::string, bool> m_tunnelDomainByName;
     simulation::MnaSolver m_mnaSolver;
     simulation::Scheduler m_scheduler;
     python::PythonRuntime m_pythonRuntime;

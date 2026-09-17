@@ -2,6 +2,8 @@
 #include "../protocols/HartCommunicationComponent.hpp"
 #include "../components/bridges/SignalBridges.hpp"
 #include "../components/connectors/SignalTunnel.hpp"
+#include "../components/connectors/Tunnel.hpp"
+#include "../components/control/SignalMathBlock.hpp"
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -113,6 +115,12 @@ registry::ComponentParams paramsFromPropertiesJson(const std::string& properties
         if (value.is_boolean()) params.properties[key] = value.get<bool>();
         else if (value.is_string()) params.properties[key] = value.get<std::string>();
         else if (value.is_number()) params.properties[key] = value.get<double>();
+        // Array preservado como o PRÓPRIO texto JSON (`PropertyValue` só guarda escalar, ver
+        // `ComponentParams`): é o que permite `control.sum`/`control.calc_expression` receberem a
+        // lista `inputs` do `.lssubcircuit` sem inventar uma segunda serialização (ver
+        // `components::SignalMathBlock::declaredInputIds`). Descartá-la aqui fazia todo bloco de N
+        // entradas cair no par default `in0`/`in1` e desalinhar dos fios internos autorados.
+        else if (value.is_array()) params.properties[key] = value.dump();
         // "point" (objeto {x,y}) omitido nesta primeira versão -- nenhum componente built-in tem
         // propriedade desse tipo alimentada por subcircuito ainda.
     }
@@ -213,6 +221,7 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
             // só publicarão a solução elétrica atual em onStableStepUnlocked(). Isso introduz uma
             // fronteira causal de um passo aceito e impede loop algébrico interdomínio incidental.
             applySignalActuatorsUnlocked();
+            sampleElectricalBridgeActuatorsFromSignalUnlocked();
             m_runtimeState.signals.beginContinuousStep(previous, current);
             for (uint32_t i : m_reactiveComponentIndices) {
                 IComponentModel* component = m_componentInstances[i].get();
@@ -1093,6 +1102,7 @@ void SimulationSession::onStableStepUnlocked(uint64_t timestampNs) {
     m_runtimeState.virtualTimeNs = timestampNs;
     publishElectricalSensorsToSignalUnlocked();
     publishHartOutputsToSignalUnlocked();
+    publishElectricalBridgeSensorsToSignalUnlocked();
     m_runtimeState.signals.executeUntil(timestampNs);
     scheduleNextSignalBoundaryUnlocked(timestampNs);
     publishSnapshot();
@@ -1252,6 +1262,60 @@ void SimulationSession::connectWire(uint32_t componentA, const std::string& pinI
     });
 }
 
+namespace {
+/** Lança se `componentIndex` (ou outro túnel com o mesmo `name`) já está preso no domínio OPOSTO
+ * de `signalDomain` -- puramente leitura, nunca muta os mapas. Separado de
+ * `commitTunnelDomain` (que só grava) porque `connectWireUnlocked` pode precisar comprometer DOIS
+ * túneis (`componentA` e `componentB`) na mesma chamada: validar os dois ANTES de gravar qualquer
+ * um evita deixar o primeiro "comprometido" no mapa quando o segundo rejeita -- a conexão inteira
+ * precisa ser atômica (nenhuma mutação de estado sobrevive a uma exceção), mesma garantia que toda
+ * outra falha de `connectWireUnlocked` já preserva. */
+void validateTunnelDomain(const std::unordered_map<uint32_t, bool>& domainByComponent,
+                          const std::unordered_map<std::string, bool>& domainByName,
+                          const std::string& liveName, uint32_t componentIndex, bool signalDomain) {
+    if (const auto existing = domainByComponent.find(componentIndex); existing != domainByComponent.end()) {
+        if (existing->second != signalDomain) {
+            throw std::invalid_argument(
+                "SimulationSession::connectWire: este túnel já está comprometido com o domínio " +
+                std::string(existing->second ? "de sinal" : "elétrico") +
+                " por outro fio -- não pode também ser usado como " +
+                std::string(signalDomain ? "sinal" : "elétrico"));
+        }
+    }
+    if (liveName.empty()) return;
+    if (const auto namedExisting = domainByName.find(liveName);
+        namedExisting != domainByName.end() && namedExisting->second != signalDomain) {
+        throw std::invalid_argument(
+            "SimulationSession::connectWire: outro túnel chamado '" + liveName +
+            "' já está comprometido com o domínio " + std::string(namedExisting->second ? "de sinal" : "elétrico") +
+            " -- todo túnel com este nome precisa ficar no mesmo domínio");
+    }
+}
+} // namespace
+
+/** Nome AO VIVO do túnel nesta instância (`Netlist::tunnelNameOfSlot`, nunca
+ * `components::Tunnel::name()` -- este só reflete o que foi persistido via getState/setState,
+ * fica vazio pra toda renomeação feita durante a sessão atual via `setTunnelName`). String vazia
+ * pra qualquer componente que não seja `connectors.tunnel` (sem pino "pin" no Netlist). */
+std::string SimulationSession::liveTunnelNameUnlocked(uint32_t componentIndex) const {
+    const auto& slots = m_netlist.pinSlotsOf(componentIndex);
+    const auto slot = slots.find("pin");
+    if (slot == slots.end()) return {};
+    return m_netlist.tunnelNameOfSlot(slot->second);
+}
+
+void SimulationSession::validateTunnelDomainUnlocked(uint32_t componentIndex, bool signalDomain) const {
+    validateTunnelDomain(m_tunnelDomainByComponent, m_tunnelDomainByName, liveTunnelNameUnlocked(componentIndex),
+                         componentIndex, signalDomain);
+}
+
+void SimulationSession::commitTunnelDomainUnlocked(uint32_t componentIndex, bool signalDomain) {
+    validateTunnelDomainUnlocked(componentIndex, signalDomain);
+    m_tunnelDomainByComponent.insert_or_assign(componentIndex, signalDomain);
+    const std::string liveName = liveTunnelNameUnlocked(componentIndex);
+    if (!liveName.empty()) m_tunnelDomainByName.insert_or_assign(liveName, signalDomain);
+}
+
 void SimulationSession::connectWireUnlocked(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
                                              const std::string& pinIdB) {
     if (m_scheduler.isRunning()) {
@@ -1263,8 +1327,45 @@ void SimulationSession::connectWireUnlocked(uint32_t componentA, const std::stri
     // como Signal Graph port nunca deveria disparar a exceção elétrica "pin inexistente" só porque
     // não está em `Netlist::pinSlotsOf`. Mesma entrada IPC (`connectWire`/`applyWireTopologyTransaction`)
     // pros dois domínios -- nunca um segundo mecanismo de fiação, ver `SignalWireDefinition`.
-    const std::optional<SignalPortDescriptor> signalPortA = findSignalPortUnlocked(componentA, pinIdA);
-    const std::optional<SignalPortDescriptor> signalPortB = findSignalPortUnlocked(componentB, pinIdB);
+    std::optional<SignalPortDescriptor> signalPortA = findSignalPortUnlocked(componentA, pinIdA);
+    std::optional<SignalPortDescriptor> signalPortB = findSignalPortUnlocked(componentB, pinIdB);
+    // `connectors.tunnel` é de domínio DUPLO (ver `components::Tunnel::signalPorts()`): sempre
+    // declara uma porta de sinal, então sem isto qualquer fio ligando um túnel comum a um pino
+    // elétrico normal (resistor, LED...) cairia direto no erro abaixo -- ele teria virado, na
+    // prática, impossível de usar eletricamente outra vez. Resolve a ambiguidade pelo que está do
+    // OUTRO lado do fio: um lado concreto (não-túnel) decide o domínio do túnel flexível; dois
+    // túneis flexíveis, nenhum ainda comprometido, seguem a convenção antiga (elétrico) -- nunca
+    // quebra autoria já publicada, onde todo par túnel-túnel sempre foi elétrico.
+    const auto isDualDomainTunnel = [this](uint32_t component) {
+        return m_componentInstances.at(component) &&
+               std::string_view(m_componentInstances.at(component)->typeId()) == "connectors.tunnel";
+    };
+    const bool aFlexible = signalPortA.has_value() && isDualDomainTunnel(componentA);
+    const bool bFlexible = signalPortB.has_value() && isDualDomainTunnel(componentB);
+    if (aFlexible || bFlexible) {
+        const auto committedDomain = [this](uint32_t component) -> std::optional<bool> {
+            const auto it = m_tunnelDomainByComponent.find(component);
+            return it == m_tunnelDomainByComponent.end() ? std::nullopt : std::optional<bool>(it->second);
+        };
+        bool wantSignal;
+        if (aFlexible && bFlexible) {
+            wantSignal = committedDomain(componentA).value_or(false) || committedDomain(componentB).value_or(false);
+        } else if (aFlexible) {
+            wantSignal = signalPortB.has_value(); // o lado concreto B decide
+        } else {
+            wantSignal = signalPortA.has_value(); // o lado concreto A decide
+        }
+        // Valida os DOIS lados (sem mutar nada) antes de gravar qualquer um: se A comprometesse
+        // primeiro e B rejeitasse depois, A ficaria "preso" mesmo com o fio inteiro rejeitado --
+        // toda falha de connectWire precisa deixar zero mutação de estado.
+        if (aFlexible)
+            validateTunnelDomainUnlocked(componentA, wantSignal);
+        if (bFlexible)
+            validateTunnelDomainUnlocked(componentB, wantSignal);
+        if (aFlexible) commitTunnelDomainUnlocked(componentA, wantSignal);
+        if (bFlexible) commitTunnelDomainUnlocked(componentB, wantSignal);
+        if (!wantSignal) { signalPortA.reset(); signalPortB.reset(); }
+    }
     if (signalPortA && signalPortB) {
         connectSignalWireUnlocked(componentA, *signalPortA, componentB, *signalPortB);
         return;
@@ -1473,10 +1574,16 @@ void SimulationSession::connectSignalWireUnlocked(uint32_t componentA, const Sig
     // elétrico -- nunca genérica pra qualquer componente comum), o papel efetivo de um endpoint
     // tunnel é o COMPLEMENTAR do outro lado, não sua própria `direction` declarada. Encadear dois
     // tunnels direto um no outro (raro) cai no caso normal abaixo, sem ambiguidade adicional.
-    const bool aIsTunnel = m_componentInstances.at(componentA) &&
-                            std::string_view(m_componentInstances.at(componentA)->typeId()) == "connectors.signal_tunnel";
-    const bool bIsTunnel = m_componentInstances.at(componentB) &&
-                            std::string_view(m_componentInstances.at(componentB)->typeId()) == "connectors.signal_tunnel";
+    // `connectors.tunnel` entra no MESMO papel-coringa quando um fio dele acabou resolvendo pro
+    // domínio de sinal (ver `connectWireUnlocked`'s `isDualDomainTunnel`/`commitTunnelDomainUnlocked`)
+    // -- um túnel de domínio duplo usado como sinal é, pra este relay, indistinguível de um
+    // `connectors.signal_tunnel` comum.
+    const auto isRelayTunnel = [this](uint32_t component) {
+        const std::string_view typeId(m_componentInstances.at(component)->typeId());
+        return typeId == "connectors.signal_tunnel" || typeId == "connectors.tunnel";
+    };
+    const bool aIsTunnel = m_componentInstances.at(componentA) && isRelayTunnel(componentA);
+    const bool bIsTunnel = m_componentInstances.at(componentB) && isRelayTunnel(componentB);
     SignalPortDirection effectiveA = portA.direction;
     SignalPortDirection effectiveB = portB.direction;
     if (aIsTunnel && !bIsTunnel) {
@@ -1561,9 +1668,46 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
             continue;
         wiredInputTargets.insert(signalPortBlockId(wire.targetComponent, wire.targetPort));
     }
+    // Malha de controle é, por definição, um loop algébrico: `SignalCompiler` só aceita um SCC se
+    // TODO bloco dele declarar FixedPoint E compartilhar o mesmo RateGroup. Num `.lssubcircuit`
+    // TDPS o caminho de realimentação passa por relays de `connectors.signal_tunnel`, que por
+    // default nascem no rate genérico (1ns) e sem política -- então o rate/política do bloco de
+    // controle vizinho é propagado por esses relays (só por eles: nenhum produtor/consumidor real,
+    // como HART, tem seu rate alterado por estar perto de um bloco de controle).
+    std::unordered_map<uint32_t, uint64_t> controlRateByComponent;
+    {
+        std::vector<uint32_t> pending;
+        for (uint32_t index : m_activeComponentIndices) {
+            if (const auto* math = dynamic_cast<const components::SignalMathBlock*>(m_componentInstances[index].get())) {
+                controlRateByComponent[index] = math->samplePeriodNs();
+                pending.push_back(index);
+            }
+        }
+        while (!pending.empty()) {
+            const uint32_t current = pending.back();
+            pending.pop_back();
+            const uint64_t rate = controlRateByComponent.at(current);
+            for (const SignalWireDefinition& wire : m_signalWires) {
+                uint32_t neighbor = 0;
+                if (wire.sourceComponent == current) neighbor = wire.targetComponent;
+                else if (wire.targetComponent == current) neighbor = wire.sourceComponent;
+                else continue;
+                if (neighbor >= m_componentInstances.size() || !m_componentInstances[neighbor]) continue;
+                if (std::string_view(m_componentInstances[neighbor]->typeId()) != "connectors.signal_tunnel") continue;
+                if (!controlRateByComponent.emplace(neighbor, rate).second) continue;
+                pending.push_back(neighbor);
+            }
+        }
+    }
+
     for (uint32_t index : m_activeComponentIndices) {
         IComponentModel* component = m_componentInstances[index].get();
+        const auto* mathBlock = dynamic_cast<const components::SignalMathBlock*>(component);
         for (const SignalPortDescriptor& port : component->signalPorts()) {
+            // A porta de SAÍDA de um bloco de controle não vira relay: quem publica
+            // `signalPortBlockId(index, "out")` é o próprio bloco de cálculo (ver `computeGraph`),
+            // então o consumidor externo lê o resultado, não uma cópia com um passo de atraso.
+            if (mathBlock && port.direction == SignalPortDirection::Output) continue;
             const std::string blockId = signalPortBlockId(index, port.id);
             if (!ids.insert(blockId).second)
                 throw std::invalid_argument("Signal Graph: id de bloco colide com porta genérica: " + blockId);
@@ -1590,8 +1734,25 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
                 if (scalar == simulation::SignalScalarType::Real) block.realParameters = {0.0};
                 else block.boolParameters = {0};
             }
+            if (const auto controlRate = controlRateByComponent.find(index); controlRate != controlRateByComponent.end()) {
+                block.rate = {controlRate->second, 0, 0};
+                block.loopPolicy = simulation::AlgebraicLoopPolicy::FixedPoint;
+                block.maxIterations = 16;
+            }
             result.blocks.push_back(std::move(block));
         }
+        if (!mathBlock) continue;
+        // Os blocos de cálculo da instância entram no MESMO grafo de todo o resto -- é isso que faz
+        // uma malha fechar tanto dentro de um `.lssubcircuit` quanto montada bloco a bloco no
+        // canvas, sem nenhuma fronteira de compilação própria (ADR-0008).
+        simulation::SignalGraphDefinition compute = mathBlock->computeGraph(index);
+        for (simulation::SignalBlockDefinition& block : compute.blocks) {
+            if (!ids.insert(block.id).second)
+                throw std::invalid_argument("Signal Graph: id de bloco de controle duplicado: " + block.id);
+            result.blocks.push_back(std::move(block));
+        }
+        for (simulation::SignalConnectionDefinition& connection : compute.connections)
+            result.connections.push_back(std::move(connection));
     }
     // `m_signalWires` é autoria genérica (Visual/DSL, ver `connectSignalWireUnlocked`) -- nunca
     // específica de HART. Um endpoint que não resolve mais (componente/porta removido desde que o
@@ -1663,6 +1824,66 @@ void SimulationSession::publishHartOutputsToSignalUnlocked() {
     }
 }
 
+bool SimulationSession::hasGenericSignalWireUnlocked(uint32_t component, const std::string& portId, bool asTarget) const {
+    for (const SignalWireDefinition& wire : m_signalWires) {
+        if (asTarget ? (wire.targetComponent == component && wire.targetPort == portId)
+                     : (wire.sourceComponent == component && wire.sourcePort == portId))
+            return true;
+    }
+    return false;
+}
+
+void SimulationSession::publishElectricalBridgeSensorsToSignalUnlocked() {
+    // Só publica quem tem de fato um fio comum saindo de "value" -- caso contrário nada lê esse
+    // relay mesmo (a autoria antiga por `setElectricalSignalBridges`/binding nunca usa este id, ver
+    // `hasGenericSignalWireUnlocked`), então não há necessidade nem risco em pular.
+    for (uint32_t index : m_activeComponentIndices) {
+        IComponentModel* component = m_componentInstances[index].get();
+        if (!hasGenericSignalWireUnlocked(index, "value", false)) continue;
+        try {
+            if (auto* sensor = dynamic_cast<const components::SignalVoltageSensor*>(component)) {
+                m_runtimeState.signals.setExternalReal(signalPortBlockId(index, "value"), sensor->measuredValue());
+            } else if (auto* current = dynamic_cast<const components::SignalCurrentSensor*>(component)) {
+                m_runtimeState.signals.setExternalReal(signalPortBlockId(index, "value"), current->measuredValue());
+            } else if (auto* digital = dynamic_cast<const components::SignalDigitalInput*>(component)) {
+                m_runtimeState.signals.setExternalBool(signalPortBlockId(index, "value"), digital->measuredValue());
+            }
+        } catch (...) { }
+    }
+}
+
+void SimulationSession::sampleElectricalBridgeActuatorsFromSignalUnlocked() {
+    const auto realCommandOr = [this](uint32_t index, double fallback) -> double {
+        try {
+            return m_runtimeState.signals.real(m_runtimeState.signals.output(signalPortBlockId(index, "command")));
+        } catch (...) { return fallback; }
+    };
+    const auto boolCommandOr = [this](uint32_t index, bool fallback) -> bool {
+        try {
+            return m_runtimeState.signals.boolean(m_runtimeState.signals.output(signalPortBlockId(index, "command")));
+        } catch (...) { return fallback; }
+    };
+    for (uint32_t index : m_activeComponentIndices) {
+        // CRÍTICO: só age em quem tem um fio comum de verdade dirigindo "command" -- sem isto, este
+        // hook lê o relay AUTO-GERADO (`ExternalInput` default 0.0 pra todo `signalPorts()`
+        // declarado, mesmo sem fio nenhum) e SOBRESCREVE o comando de quem ainda usa a autoria
+        // antiga (`setElectricalSignalBridges`, ver `SignalBridgeTest.cpp`) -- os dois mecanismos
+        // convivem no mesmo componente sem saber um do outro, então cada um só pode tocar quem
+        // efetivamente autorou por ELE.
+        if (!hasGenericSignalWireUnlocked(index, "command", true)) continue;
+        IComponentModel* component = m_componentInstances[index].get();
+        bool changed = false;
+        if (auto* voltage = dynamic_cast<components::SignalControlledVoltageSource*>(component)) {
+            changed = voltage->setCommand(realCommandOr(index, voltage->command()));
+        } else if (auto* current = dynamic_cast<components::SignalControlledCurrentSource*>(component)) {
+            changed = current->setCommand(realCommandOr(index, current->command()));
+        } else if (auto* digital = dynamic_cast<components::SignalDigitalOutput*>(component)) {
+            changed = digital->setCommand(boolCommandOr(index, digital->command()));
+        }
+        if (changed) m_scheduler.dirtySet().insert(index);
+    }
+}
+
 std::optional<std::string> SimulationSession::setPropertyUnlocked(uint32_t component, const std::string& propertyName,
                                                                   const PropertyValue& value) {
     if (component >= m_componentInstances.size()) {
@@ -1721,6 +1942,19 @@ std::optional<std::string> SimulationSession::setPropertyUnlocked(uint32_t compo
         simulation::PlanDomain executionChanges = refreshComponentExecutionLists(component);
         if (std::binary_search(m_signalSubscribers.begin(), m_signalSubscribers.end(), component)) {
             // A lista pode continuar contendo o mesmo observer enquanto suas sources/channels mudam.
+            executionChanges = executionChanges | simulation::PlanDomain::Signal;
+        }
+        // Bug real encontrado 2026-09-15: um `control.*`/`bridges.*`/`logic.adc`|`logic.dac` com
+        // `AffectsTopology` (ex: "bias" de um `control.bias`, "vref"/"resolutionBits" de um ADC/DAC)
+        // invalidava só `Electrical` -- `SignalMathBlock::computeGraph()` embute o valor NOVO da
+        // propriedade dentro do `SignalBlockDefinition`/expressão gerada a cada recompilação, então
+        // editar DEPOIS que o Signal Plan já foi compilado uma vez (o caso comum: usuário ajusta um
+        // ganho entre duas rodadas) nunca surtia efeito -- o plano velho continuava rodando com o
+        // valor antigo até algum OUTRO evento invalidar Signal por acidente. Qualquer componente que
+        // participa do Signal Graph (`signalPorts()` não-vazio) precisa recompilar esse domínio
+        // também, sempre que uma propriedade sua que afeta topologia/pinos muda.
+        if ((schema.flags & (PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount)) != 0 &&
+            !instance->signalPorts().empty()) {
             executionChanges = executionChanges | simulation::PlanDomain::Signal;
         }
 

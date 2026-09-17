@@ -24,6 +24,10 @@ inline PropertyValue jsonToPropertyValue(const nlohmann::json& value) {
     if (value.is_object() && value.contains("x") && value.contains("y")) {
         return PropertyPoint{value.value("x", 0.0), value.value("y", 0.0)};
     }
+    // Array preservado como o próprio texto JSON, mesma convenção de `paramsFromPropertiesJson`
+    // (`PropertyValue` só guarda escalar): é assim que a lista `inputs` de um bloco de N entradas
+    // atravessa o IPC. Sem isto, `get<double>()` lançava type error e derrubava o `addComponent`.
+    if (value.is_array()) return value.dump();
     return value.get<double>();
 }
 
