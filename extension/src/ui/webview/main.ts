@@ -3494,6 +3494,7 @@ function render(): void {
   // que lhe pertence).
   const visibleWireIds = new Set<string>();
   for (const wire of subcircuitEditorMode === "circuit" ? state.topology.conductors : []) {
+    if (wire.hidden) continue;
     const points = wirePolylinePoints(wire);
     if (points.length < 2) continue;
     const spatialSignature = points.map((point) => `${point.x},${point.y}`).join(";");
@@ -3628,6 +3629,7 @@ function applyMarqueeSelection(start: Point, end: Point, additive: boolean): voi
     .map((component) => component.id);
 
   const hitWireIds = state.topology.conductors
+    .filter((wire) => !wire.hidden)
     .filter((wire) => wireIntersectsRect(wire, left, top, right, bottom))
     .map((wire) => wire.id);
 

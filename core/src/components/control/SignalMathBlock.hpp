@@ -71,7 +71,7 @@ public:
             "control.fopdt", "control.transfer_function", "control.tank", "control.valve_characteristic",
             "control.saturation", "control.limiter", "control.deadband", "control.hysteresis",
             "control.stiction", "control.rate_limiter", "control.pid", "control.calc_expression",
-            "control.probe", "control.process",
+            "control.probe", "control.observer", "control.process",
         };
         return {kIds, std::size(kIds)};
     }
@@ -305,7 +305,7 @@ private:
         if (m_typeId == "control.stiction") return Kind::Stiction;
         if (m_typeId == "control.rate_limiter") return Kind::RateLimiter;
         if (m_typeId == "control.pid") return Kind::Pid;
-        if (m_typeId == "control.probe") return Kind::Probe;
+        if (m_typeId == "control.probe" || m_typeId == "control.observer") return Kind::Probe;
         if (m_typeId == "control.transfer_function") return transferFunctionKind();
         throw std::invalid_argument("tipo de bloco de controle nao suportado: " + m_typeId);
     }

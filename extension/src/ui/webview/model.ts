@@ -191,6 +191,7 @@ export interface WebviewWireModel {
   from: CanonicalEndpoint;
   to: CanonicalEndpoint;
   points?: WebviewPoint[];
+  hidden?: boolean;
 }
 
 export interface PropertySchemaOptionEntry {

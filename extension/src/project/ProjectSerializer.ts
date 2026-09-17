@@ -208,7 +208,7 @@ function validateTopology(value: unknown, componentIds: ReadonlySet<string>): Pr
       if (endpoint.kind === "node" && !nodeIds.has(endpoint.nodeId)) throw new Error(`conductor ${id} referencia nó inexistente`);
       if (endpoint.kind === "port" && !componentIds.has(endpoint.componentId)) throw new Error(`conductor ${id} referencia componente inexistente`);
     }
-    return { id, from, to, vertices };
+    return { id, from, to, vertices, hidden: entry.hidden === true };
   }) : [];
   if (new Set(conductors.map((c) => c.id)).size !== conductors.length) throw new Error("topology contém condutores duplicados");
   return { revision: asNumber(value.revision) ?? 0, nodes, conductors };

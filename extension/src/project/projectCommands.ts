@@ -162,6 +162,7 @@ function projectToWebviewState(project: ProjectDocument, projectDir?: string): W
         id: conductor.id,
         from: conductor.from,
         to: conductor.to,
+        ...(conductor.hidden ? { hidden: true } : {}),
         ...(points && points.length > 0 ? { points } : {}),
       };
     }),

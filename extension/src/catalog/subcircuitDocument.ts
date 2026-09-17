@@ -160,7 +160,7 @@ function parseTopologyConductor(raw: unknown): ProjectTopology["conductors"][num
     (point): point is { x: number; y: number } =>
       typeof point === "object" && point !== null && typeof (point as { x?: unknown }).x === "number" && typeof (point as { y?: unknown }).y === "number"
   );
-  return { id, from: entry.from as ProjectTopologyEndpoint, to: entry.to as ProjectTopologyEndpoint, vertices };
+  return { id, from: entry.from as ProjectTopologyEndpoint, to: entry.to as ProjectTopologyEndpoint, vertices, hidden: entry.hidden === true };
 }
 
 function parseTopology(raw: unknown): ProjectTopology {
@@ -239,7 +239,7 @@ export function serializeSubcircuitDocument(document: SubcircuitDocument): Recor
       revision: document.topology.revision,
       nodes: document.topology.nodes,
       // `points`, não `vertices` -- convenção de arquivo do `.lssubcircuit` (ver `parseTopologyConductor`).
-      conductors: document.topology.conductors.map(({ id, from, to, vertices }) => ({ id, from, to, points: vertices })),
+      conductors: document.topology.conductors.map(({ id, from, to, vertices, hidden }) => ({ id, from, to, points: vertices, ...(hidden ? { hidden: true } : {}) })),
     },
     interface: document.interface,
     ...(document.symbolMode ? { symbolMode: document.symbolMode } : {}),

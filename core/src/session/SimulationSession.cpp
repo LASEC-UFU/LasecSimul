@@ -2307,7 +2307,7 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
             // elétrico -- ver `SignalTunnel.hpp`.
             const auto signalTunnelIt = std::find_if(
                 def->components.begin(), def->components.end(), [&](const registry::SubcircuitComponentDef& c) {
-                    return c.typeId == "connectors.signal_tunnel" &&
+                    return (c.typeId == "connectors.signal_tunnel" || c.typeId == "connectors.tunnel") &&
                            tunnelNameFromPropertiesJson(c.propertiesJson) == ifaceDef.internalTunnel;
                 });
             if (signalTunnelIt == def->components.end()) {
@@ -2315,15 +2315,20 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
                                           "' referencia signal tunnel interno inexistente: " + ifaceDef.internalTunnel);
             }
             const uint32_t signalTunnelIndex = componentIndexByLocalId.at(signalTunnelIt->id);
+            const bool isDualDomainTunnel = signalTunnelIt->typeId == "connectors.tunnel";
+            const std::string signalPortId = isDualDomainTunnel ? "pin" : std::string(components::SignalTunnel::kPortId);
             // `ifaceDef.direction` é só metadado de CATÁLOGO (permite a Extension desenhar a seta do
             // pino de fronteira sem instanciar nada) -- a fonte real de verdade é sempre a própria
             // instância `SignalTunnel` (ver doc de `exposedSignalPins`). Uma declaração "in"/"out"
             // que diverge da instância real é rejeitada aqui, na hora da expansão -- nunca
             // silenciosamente ignorada, o que deixaria o catálogo mentindo pro usuário sobre o
             // sentido do fio.
-            if (ifaceDef.direction == "in" || ifaceDef.direction == "out") {
+            // O Tunnel de domínio duplo não carrega direction própria: sua porta começa como
+            // Output e o fio de cada lado determina o papel efetivo no relay. A direção da
+            // interface continua sendo validada para SignalTunnel, que possui direction fixa.
+            if (!isDualDomainTunnel && (ifaceDef.direction == "in" || ifaceDef.direction == "out")) {
                 const std::optional<SignalPortDescriptor> resolvedPort =
-                    findSignalPortUnlocked(signalTunnelIndex, std::string(components::SignalTunnel::kPortId));
+                    findSignalPortUnlocked(signalTunnelIndex, signalPortId);
                 // Convenção deliberada: `direction:"in"` (de fora pra dentro do subcircuito) exige
                 // que o `SignalTunnel` interno seja ele próprio um Input (é ele quem tem uma entrada
                 // a preencher, dirigida por quem estiver do lado de fora). `direction:"out"` é o
@@ -2338,7 +2343,7 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
                 }
             }
             exposedSignalPins[ifaceDef.pinId] =
-                SubcircuitExposedPin{signalTunnelIndex, std::string(components::SignalTunnel::kPortId)};
+                SubcircuitExposedPin{signalTunnelIndex, signalPortId};
             continue;
         }
         const auto tunnelCompIt = std::find_if(

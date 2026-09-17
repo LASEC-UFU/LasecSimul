@@ -30,13 +30,22 @@ function packageFor(label: string, pins: readonly string[]): PackageDescriptor {
     pins: [...inputPins, ...output] };
 }
 
+function observerPackage(label: string): PackageDescriptor {
+  return { width: 112, height: 48, border: false,
+    shapes: [{ kind: "rect", x: 8, y: 4, w: 96, h: 40, fill: "#e0f2fe", stroke: "#0369a1", strokeWidth: 1.5 }, { kind: "text", x: 56, y: 20, value: label, fontSize: 10, textAnchor: "middle", fill: "#0c4a6e" }],
+    pins: [{ id: "in", x: 0, y: 24, angle: 180, length: 8, label: "IN" }] };
+}
+
 function entry(definition: ControlDefinition): WebviewComponentCatalogEntry {
   const [typeId, label, pins, defaults = {}] = definition;
-  return { typeId, label, category: "Controle", folderPath: ["Controle"], workspaceSection: "process", icon: "package", hidden: true, graphical: true,
+  // Blocos de controle ficam ocultos apenas da paleta quando eram auxiliares do runtime. No editor
+  // de subcircuito eles são o conteúdo principal e precisam ser renderizados junto dos túneis.
+  return { typeId, label, category: "Controle", folderPath: ["Controle"], workspaceSection: "process", icon: "package", hidden: false, graphical: true,
     pinCount: pins.length, pinIds: [...pins], defaultProperties: { ...defaults }, package: packageFor(label, pins) };
 }
 
 export const controlGraphCatalog: WebviewComponentCatalogEntry[] = [
+  { typeId: "control.observer", label: "Sonda", category: "Controle", folderPath: ["Controle"], workspaceSection: "process", icon: "package", hidden: false, graphical: true, pinCount: 1, pinIds: ["in"], defaultProperties: { observerOnly: true }, package: observerPackage("Sonda") },
   { typeId: "connectors.signal_tunnel", label: "Túnel de sinal", category: "Conectores", folderPath: ["Conectores"], workspaceSection: "process", icon: "tunel", hidden: true, graphical: true, pinCount: 1, pinIds: ["value"], defaultProperties: { name: "signal", direction: "Input", valueType: "Real" }, package: packageFor("SINAL", ["value"]) },
   ...unary.map(entry), ...multi.map(entry),
 ];

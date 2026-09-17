@@ -34,6 +34,8 @@ export interface ProjectTopology {
     from: ProjectTopologyEndpoint;
     to: ProjectTopologyEndpoint;
     vertices: Array<{ x: number; y: number }>;
+    /** Mantém a conexão no Core, mas permite diagramas de subcircuito por túneis sem linha visível. */
+    hidden?: boolean;
   }>;
 }
 

@@ -221,12 +221,23 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
   const external = new Map<number, string>();
   const unsupported: TdpsConversionReport["unsupported"] = [];
   let wire = 0;
+  const componentPosition = (componentId: string): { x: number; y: number } => {
+    const component = components.find((candidate) => candidate.id === componentId);
+    return { x: component?.visual?.x ?? 0, y: component?.visual?.y ?? 0 };
+  };
+  const orthogonalVertices = (fromComponentId: string, toComponentId: string): Array<{ x: number; y: number }> => {
+    const from = componentPosition(fromComponentId);
+    const to = componentPosition(toComponentId);
+    if (from.x === to.x || from.y === to.y) return [];
+    const bendX = Math.round((from.x + to.x) / 2);
+    return [{ x: bendX, y: from.y }, { x: bendX, y: to.y }];
+  };
   const addWire = (fromComponentId: string, fromPinId: string, toComponentId: string, toPinId: string): void => {
     topology.conductors.push({
       id: `wire-${++wire}`,
       from: { kind: "port", componentId: fromComponentId, pinId: fromPinId },
       to: { kind: "port", componentId: toComponentId, pinId: toPinId },
-      vertices: [],
+      vertices: orthogonalVertices(fromComponentId, toComponentId),
     });
   };
   const visual = (tag: string, fallbackIndex: number): ProjectComponent["visual"] => {
@@ -291,10 +302,10 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
     const pinId = `external-${String(variable).padStart(2, "0")}`;
     const componentId = `tunnel-${pinId}`;
     external.set(variable, componentId);
-    components.push({ id: componentId, typeId: "connectors.signal_tunnel", label: pinId, properties: { name: pinId, direction: "Input", valueType: "Real", legacyVariableIndex: variable, samplePeriodNs: 10_000_000 }, visual: { x: 20, y: 40 + external.size * 30, rotation: 0 } });
+    components.push({ id: componentId, typeId: "connectors.tunnel", label: pinId, properties: { name: pinId, pinId, direction: "Input", valueType: "Real", legacyVariableIndex: variable, samplePeriodNs: 10_000_000 }, visual: { x: 20, y: 40 + external.size * 30, rotation: 0 } });
     interfaces.push({ pinId, label: pinId, internalTunnel: pinId, domain: "signal", direction: "in", valueType: "Real", width: 1 });
     pins.push({ id: pinId, label: pinId, kind: "ANALOG_IN", x: 0, y: 20 + external.size * 20, angle: 180, length: 8 });
-    return { componentId, pinId: "value" };
+    return { componentId, pinId: "pin" };
   };
   const connectVariable = (variable: number, targetComponentId: string, targetPinId: string): void => {
     const source = producers.get(variable) ?? ensureExternal(variable);
@@ -317,7 +328,7 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
 
   const addProbe = (id: string, label: string, variable: number, unit: string, order: number): void => {
     if (variable < 0) return;
-    components.push({ id, typeId: "control.probe", label, visual: visual(label, order), properties: { unit, observerOnly: true, samplePeriodNs: 10_000_000 } });
+    components.push({ id, typeId: "control.observer", label, visual: visual(label, order), properties: { unit, observerOnly: true, samplePeriodNs: 10_000_000 } });
     connectVariable(variable, id, "in");
   };
   for (const recorder of model.recorders) {
@@ -332,15 +343,127 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
     addProbe(`readout-${index}`, stringField(animated, 1, `Readout ${index}`), numberField(animated, 8, -1), stringField(animated, 4), componentOrder++);
   }
 
+  // Cada ligação recebe um par de túneis com o mesmo nome, um em cada lado do bloco. Os
+  // condutores continuam no modelo semântico do Core, mas a apresentação do diagrama usa os
+  // túneis nomeados e não uma linha atravessando a cena inteira.
+  const tunnelEndpoints = new Set<string>();
+  for (const conductor of topology.conductors) {
+    for (const side of ["from", "to"] as const) {
+      const endpoint = conductor[side];
+      if (endpoint.kind !== "port") continue;
+      const componentId = endpoint.componentId;
+      const component = components.find((candidate) => candidate.id === componentId);
+      if (!component || component.typeId === "connectors.tunnel") continue;
+      const tunnelId = `tunnel-${conductor.id}-${side}`;
+      if (tunnelEndpoints.has(tunnelId)) continue;
+      tunnelEndpoints.add(tunnelId);
+      const direction = side === "from" ? 1 : -1;
+      components.push({
+        id: tunnelId,
+        typeId: "connectors.tunnel",
+        label: conductor.id,
+        properties: { name: conductor.id },
+        visual: { x: (component.visual?.x ?? 0) + direction * 48, y: component.visual?.y ?? 0, rotation: direction > 0 ? 0 : 180 },
+      });
+    }
+  }
+
   const outputVariables = [...producers.keys()].sort((a, b) => a - b);
   for (const variable of outputVariables) {
     const source = producers.get(variable)!;
     const pinId = `output-${String(variable).padStart(2, "0")}`;
     const componentId = `tunnel-${pinId}`;
-    components.push({ id: componentId, typeId: "connectors.signal_tunnel", label: pinId, properties: { name: pinId, direction: "Output", valueType: "Real", legacyVariableIndex: variable, samplePeriodNs: 10_000_000 }, visual: { x: 1000, y: 40 + interfaces.length * 30, rotation: 180 } });
+    components.push({ id: componentId, typeId: "connectors.tunnel", label: pinId, properties: { name: pinId, pinId, direction: "Output", valueType: "Real", legacyVariableIndex: variable, samplePeriodNs: 10_000_000 }, visual: { x: 1000, y: 40 + interfaces.length * 30, rotation: 180 } });
     interfaces.push({ pinId, label: pinId, internalTunnel: pinId, domain: "signal", direction: "out", valueType: "Real", width: 1 });
     pins.push({ id: pinId, label: pinId, kind: "ANALOG_OUT", x: 140, y: 20 + outputVariables.indexOf(variable) * 20, angle: 0, length: 8 });
-    addWire(source.componentId, source.pinId, componentId, "value");
+    addWire(source.componentId, source.pinId, componentId, "pin");
+  }
+
+  // Divide cada ligação em dois trechos locais: porta -> túnel e túnel -> porta.
+  // O nome comum dos túneis substitui a linha longa sem perder a conectividade do Core.
+  const componentById = new Map(components.map((component) => [component.id, component]));
+  for (const conductor of topology.conductors) {
+    const endpointTunnelName = (endpoint: typeof conductor.from): string | undefined => {
+      if (endpoint.kind !== "port") return undefined;
+      const candidate = componentById.get(endpoint.componentId);
+      if (!candidate || candidate.typeId !== "connectors.tunnel") return undefined;
+      const value = candidate.properties.pinId ?? candidate.properties.name;
+      return typeof value === "string" && value.trim() ? value.trim() : undefined;
+    };
+    const tunnelName = endpointTunnelName(conductor.from) ?? endpointTunnelName(conductor.to) ?? conductor.id;
+    if (endpointTunnelName(conductor.from) || endpointTunnelName(conductor.to)) continue;
+    for (const side of ["from", "to"] as const) {
+      const endpoint = conductor[side];
+      if (endpoint.kind !== "port") continue;
+      const component = componentById.get(endpoint.componentId);
+      if (!component || component.typeId === "connectors.tunnel") continue;
+      const tunnelId = `tunnel-${conductor.id}-${side}`;
+      if (componentById.has(tunnelId)) continue;
+      const direction = side === "from" ? 1 : -1;
+      const tunnel: ProjectComponent = {
+        id: tunnelId,
+        typeId: "connectors.tunnel",
+        label: tunnelName,
+        properties: { name: tunnelName },
+        visual: { x: (component.visual?.x ?? 0) + direction * 48, y: component.visual?.y ?? 0, rotation: direction > 0 ? 0 : 180 },
+      };
+      components.push(tunnel);
+      componentById.set(tunnelId, tunnel);
+    }
+  }
+  topology.conductors = topology.conductors.flatMap((conductor) => {
+    const fromComponent = conductor.from.kind === "port" ? componentById.get(conductor.from.componentId) : undefined;
+    const toComponent = conductor.to.kind === "port" ? componentById.get(conductor.to.componentId) : undefined;
+    if (fromComponent?.typeId === "connectors.tunnel" || toComponent?.typeId === "connectors.tunnel") {
+      return [{ ...conductor, vertices: [] }];
+    }
+    const local: ProjectTopology["conductors"] = [];
+    for (const side of ["from", "to"] as const) {
+      const endpoint = conductor[side];
+      if (endpoint.kind !== "port") continue;
+      const component = componentById.get(endpoint.componentId);
+      if (!component || component.typeId === "connectors.tunnel") continue;
+      const tunnelId = `tunnel-${conductor.id}-${side}`;
+      const tunnelEndpoint = { kind: "port" as const, componentId: tunnelId, pinId: "pin" };
+      local.push(side === "from"
+        ? { id: `${conductor.id}-from`, from: endpoint, to: tunnelEndpoint, vertices: [] }
+        : { id: `${conductor.id}-to`, from: tunnelEndpoint, to: endpoint, vertices: [] });
+    }
+    return local;
+  });
+  const sourceGroups = new Map<string, Array<{ conductor: ProjectTopology["conductors"][number]; tunnel: ProjectComponent; baseId: string }>>();
+  for (const conductor of topology.conductors) {
+    if (!conductor.id.endsWith("-from") || conductor.from.kind !== "port" || conductor.to.kind !== "port") continue;
+    const source = componentById.get(conductor.from.componentId);
+    const tunnel = componentById.get(conductor.to.componentId);
+    if (!source || tunnel?.typeId !== "connectors.tunnel") continue;
+    const key = `${conductor.from.componentId}:${conductor.from.pinId}`;
+    const group = sourceGroups.get(key) ?? [];
+    group.push({ conductor, tunnel, baseId: conductor.id.slice(0, -5) });
+    sourceGroups.set(key, group);
+  }
+  const removedComponentIds = new Set<string>();
+  const removedConductorIds = new Set<string>();
+  for (const [key, group] of sourceGroups) {
+    const netName = key.replace(":", ".");
+    for (let index = 0; index < group.length; ++index) {
+      const item = group[index]!;
+      item.tunnel.label = netName;
+      item.tunnel.properties = { name: netName };
+      const destination = componentById.get(`tunnel-${item.baseId}-to`);
+      if (destination) {
+        destination.label = netName;
+        destination.properties = { name: netName };
+      }
+      if (index > 0) {
+        removedComponentIds.add(item.tunnel.id);
+        removedConductorIds.add(item.conductor.id);
+      }
+    }
+  }
+  topology.conductors = topology.conductors.filter((conductor) => !removedConductorIds.has(conductor.id));
+  for (let index = components.length - 1; index >= 0; --index) {
+    if (removedComponentIds.has(components[index]!.id)) components.splice(index, 1);
   }
 
   const document: SubcircuitDocument = {

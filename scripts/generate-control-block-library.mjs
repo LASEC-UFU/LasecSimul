@@ -56,12 +56,12 @@ function makeBlock([slug, name, typeId, inputDefs, properties]) {
   // exata (`ports[id].inputs[portId]` com `portId="value"` pra signal_tunnel); errar esse pinId
   // faria o wire compilar mas falhar depois, em tempo de simulacao ("wire de processo referencia
   // input inexistente"), silenciosamente distante do load da library.
-  const inputs = inputDefs.map((input, index) => ({ id: `${input.id}-tunnel`, typeId: "connectors.signal_tunnel", properties: { name: input.id, direction: "Input", valueType: "Real", defaultValue: 0 }, visual: { x: 40, y: 70 + index * 55, rotation: 0 } }));
+  const inputs = inputDefs.map((input, index) => ({ id: `${input.id}-tunnel`, typeId: "connectors.tunnel", properties: { name: input.id, pinId: input.id, direction: "Input", valueType: "Real", defaultValue: 0 }, visual: { x: 40, y: 70 + index * 55, rotation: 0 } }));
   const outputId = "out";
-  const output = { id: "out-tunnel", typeId: "connectors.signal_tunnel", properties: { name: outputId, direction: "Output", valueType: "Real" }, visual: { x: 320, y: 95 + Math.max(0, inputDefs.length - 1) * 27, rotation: 180 } };
+  const output = { id: "out-tunnel", typeId: "connectors.tunnel", properties: { name: outputId, pinId: outputId, direction: "Output", valueType: "Real" }, visual: { x: 320, y: 95 + Math.max(0, inputDefs.length - 1) * 27, rotation: 180 } };
   const component = { id: "stage", typeId, label: name, properties: { ...properties, samplePeriodNs: 10000000 }, visual: { x: 170, y: 85 + Math.max(0, inputDefs.length - 1) * 27, rotation: 0 } };
-  const conductors = inputDefs.map((input, index) => ({ id: `wire-in-${index}`, from: { kind: "port", componentId: `${input.id}-tunnel`, pinId: "value" }, to: { kind: "port", componentId: "stage", pinId: input.id }, points: [] }));
-  conductors.push({ id: "wire-out", from: { kind: "port", componentId: "stage", pinId: "out" }, to: { kind: "port", componentId: "out-tunnel", pinId: "value" }, points: [] });
+  const conductors = inputDefs.map((input, index) => ({ id: `wire-in-${index}`, from: { kind: "port", componentId: `${input.id}-tunnel`, pinId: "pin" }, to: { kind: "port", componentId: "stage", pinId: input.id }, points: [] }));
+  conductors.push({ id: "wire-out", from: { kind: "port", componentId: "stage", pinId: "out" }, to: { kind: "port", componentId: "out-tunnel", pinId: "pin" }, points: [] });
   const interfaceEntries = [...inputDefs.map((input) => ({ pinId: input.id, label: input.label, internalTunnel: input.id, domain: "signal", direction: "in", valueType: "Real", width: 1 })), { pinId: outputId, label: "OUT", internalTunnel: outputId, domain: "signal", direction: "out", valueType: "Real", width: 1 }];
   const pins = [...inputDefs.map((input, index) => ({ id: input.id, kind: "ANALOG_IN", x: 0, y: 28 + index * 28, angle: 180, length: 8, label: input.label })), { id: outputId, kind: "ANALOG_OUT", x: 180, y: 42 + Math.max(0, inputDefs.length - 1) * 14, angle: 0, length: 8, label: "OUT" }];
   // `name` e' SOMENTE apresentacao (label do catalogo) -- typeId (`subcircuits.control.<slug>`)

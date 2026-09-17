@@ -10,7 +10,7 @@ import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, d
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { createInitialWebviewState } from "./ui/webview/catalog";
 import { CanonicalTopologyDocument, JUNCTION_TYPE_ID, PackageDescriptor, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, portEndpoint } from "./ui/webview/model";
-import { connectEndpointToNode, normalizeWireGeometry, removeOrphanNodes, splitSegmentAtPoint } from "./ui/webview/wireTopology";
+import { connectEndpointToNode, normalizeWireGeometry, removeOrphanNodes, splitSegmentAtPoint, wirePolylinePoints } from "./ui/webview/wireTopology";
 import { assertTopologyInvariants } from "./ui/webview/topologyDocument";
 import { WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
@@ -2036,12 +2036,22 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
   const document = parsed.document;
 
   const internalComponents: WebviewComponentModel[] = document.components.map((component) => projectComponentToWebviewComponent(component, state.schematicState.catalog));
-  const internalWires: WebviewWireModel[] = document.topology.conductors.map((conductor) => ({
+  const rawInternalWires: WebviewWireModel[] = document.topology.conductors.map((conductor) => ({
     id: conductor.id,
     from: conductor.from,
     to: conductor.to,
+    ...(conductor.hidden ? { hidden: true } : {}),
     ...(conductor.vertices.length > 0 ? { points: conductor.vertices } : {}),
   }));
+  // Manifestos TDPS antigos guardavam somente as extremidades e deixavam o renderer desenhar uma
+  // reta diagonal. Materializa uma rota ortogonal usando a mesma geometria dos pinos da Webview;
+  // a rota fica persistível no próximo save e não depende de um cálculo diferente por viewport.
+  const internalWires: WebviewWireModel[] = rawInternalWires.map((wire) => {
+    if (wire.points && wire.points.length > 0) return wire;
+    const fullPath = wirePolylinePoints(internalComponents, wire);
+    const points = fullPath.length > 2 ? fullPath.slice(1, -1) : undefined;
+    return points && points.length > 0 ? { ...wire, points } : wire;
+  });
   // Autocorreção defensiva (junção órfã/duplicada, fio de comprimento zero) -- roda ANTES de virar a
   // baseline "não-alterada" da sessão (`initialComponents`/`initialWires`), pra um arquivo recém-
   // autocurado não abrir já marcado como sujo.
@@ -2193,7 +2203,7 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
     topology: {
       revision: state.schematicState.topology.revision,
       nodes: state.schematicState.topology.nodes,
-      conductors: state.schematicState.topology.conductors.map((wire) => ({ id: wire.id, from: wire.from, to: wire.to, vertices: wire.points ?? [] })),
+      conductors: state.schematicState.topology.conductors.map((wire) => ({ id: wire.id, from: wire.from, to: wire.to, vertices: wire.points ?? [], ...(wire.hidden ? { hidden: true } : {}) })),
     },
     interface: [], // re-derivado abaixo por finalizeSubcircuitDocumentForSave, nunca hand-authored
     symbolMode: state.schematicState.symbolMode ?? "custom",

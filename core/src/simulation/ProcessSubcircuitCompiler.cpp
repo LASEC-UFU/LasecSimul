@@ -159,7 +159,7 @@ CompiledProcessSubcircuit ProcessSubcircuitCompiler::compile(
             continue;
         }
 
-        if (component.typeId == "control.probe") {
+        if (component.typeId == "control.probe" || component.typeId == "control.observer") {
             result.graph.blocks.push_back(realBlock(component.id, SignalBlockKind::Probe, {"in"}, {}, periodNs));
             ports[component.id].inputs["in"] = {component.id, "in"};
             ports[component.id].output = {component.id, "out"};

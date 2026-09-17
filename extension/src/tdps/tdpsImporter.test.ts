@@ -89,7 +89,8 @@ function listSmpFiles(root: string): string[] {
     const calc = converted.document.components.find((component) => component.id === "calc-41");
     assert(calc?.properties.expression === "x0+x1", `expressao canonica inesperada: ${String(calc?.properties.expression)}`);
     assert(JSON.stringify(calc?.properties).match(/\bM\d+\b/i) === null, "propriedades operacionais nao podem manter Mnn");
-    assert(converted.document.topology.conductors.some((wire) => wire.from.kind === "port" && wire.from.componentId === "process-21" && wire.to.kind === "port" && wire.to.componentId === "calc-41" && wire.to.pinId === "x0"), "M21 deveria virar edge process-21 -> calc-41.x0");
+    assert(converted.document.topology.conductors.some((wire) => wire.from.kind === "port" && wire.from.componentId === "process-21" && wire.to.kind === "port" && wire.to.componentId.startsWith("tunnel-wire-")), "M21 deveria ligar a porta do processo ao Tunnel");
+    assert(converted.document.topology.conductors.some((wire) => wire.from.kind === "port" && wire.from.componentId.startsWith("tunnel-wire-") && wire.to.kind === "port" && wire.to.componentId === "calc-41" && wire.to.pinId === "x0"), "M21 deveria ligar o Tunnel ao pino x0 do calculo");
     assert(converted.report.externalVariables.includes(14) && converted.report.externalVariables.includes(81), "referencias sem produtor deveriam virar inputs externos explicitos");
     const validation = validateSubcircuitDocument(converted.document);
     assert(validation.errors.length === 0, `documento convertido deveria ser valido: ${validation.errors.join(" | ")}`);
@@ -125,8 +126,9 @@ function listSmpFiles(root: string): string[] {
       assert(parsed.document.typeId === entry.typeId && parsed.document.name === entry.label, `${entry.file} deve manter identidade e nome do inventario`);
       assert(parsed.document.workspaceSection === "process", `${entry.file} deveria estar no workspace Process`);
       assert(JSON.stringify(parsed.document.folderPath) === JSON.stringify(["Modelos"]), `${entry.file} deveria aparecer diretamente em Processo > Modelos`);
-      assert(parsed.document.components.every((component) => component.typeId !== "connectors.tunnel"), `${entry.file} nao pode usar tunel eletrico legado`);
-      assert(parsed.document.components.some((component) => component.typeId === "connectors.signal_tunnel"), `${entry.file} deve usar SignalTunnel`);
+      assert(parsed.document.components.some((component) => component.typeId === "connectors.tunnel"), `${entry.file} deve usar tunnel interno`);
+      assert(parsed.document.components.every((component) => component.typeId !== "connectors.signal_tunnel"), `${entry.file} nao deve usar signal_tunnel legado`);
+      assert(parsed.document.components.some((component) => component.typeId === "connectors.tunnel"), `${entry.file} deve representar as conexões com túneis`);
       for (const component of parsed.document.components) {
         assert(knownVisualTypes.has(component.typeId), `${entry.file}/${component.id}: ${component.typeId} precisa de entrada visual no catálogo`);
       }
