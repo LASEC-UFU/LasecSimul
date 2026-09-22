@@ -695,7 +695,19 @@ function exposedReadableItemsForSource(sourceId: string): InternalComponentSnaps
   let cached = boardOverlayExposedItemsBySourceId.get(sourceId);
   if (!cached) {
     const items = gatherInternalComponentSnapshots(sourceId) ?? [];
-    cached = items.filter((item) => item.exposed && item.graphical && isReadableInstrument(item.typeId));
+    // Um elemento gráfico de supervisório (`graphics.*`) NUNCA tem leitura própria -- ele projeta a
+    // de outro componente interno (`bindSource`, normalmente uma sonda do processo, que não é
+    // exposta no símbolo). Sem incluir essas fontes aqui, a tela de processo desenhada sobre a
+    // instância ficaria congelada no valor estático enquanto a simulação roda.
+    const bindingSources = new Set(
+      items
+        .filter((item) => item.exposed && item.typeId.startsWith("graphics."))
+        .map((item) => item.properties?.bindSource)
+        .filter((value): value is string => typeof value === "string" && value.length > 0)
+    );
+    cached = items.filter((item) =>
+      isReadableInstrument(item.typeId) && ((item.exposed && item.graphical) || bindingSources.has(item.id))
+    );
     boardOverlayExposedItemsBySourceId.set(sourceId, cached);
   }
   return cached;

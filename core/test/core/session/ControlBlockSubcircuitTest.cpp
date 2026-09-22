@@ -18,6 +18,7 @@
 #include <nlohmann/json.hpp>
 
 #include "components/connectors/SignalTunnel.hpp"
+#include "components/connectors/Tunnel.hpp"
 #include "components/control/SignalMathBlock.hpp"
 #include "plugins/GlobalPluginCache.hpp"
 #include "registry/SubcircuitRegistry.hpp"
@@ -40,6 +41,14 @@ void check(bool ok, const char* label) {
 void registerControlFactories(SimulationSession& session) {
     session.components().registerFactory("connectors.signal_tunnel", [](const ComponentParams& p) {
         return std::make_unique<components::SignalTunnel>(p);
+    });
+    // O túnel ELÉTRICO legado também e' usado como relay de sinal pelos manifestos publicados (ver
+    // `ProcessSubcircuitCompiler`, que aceita os dois) -- sem esta factory, 48 dos 49 manifestos da
+    // biblioteca falhavam a instanciação aqui com "Unknown component typeId: connectors.tunnel", e
+    // o caso (3) media cobertura de 1/49 sem que ninguém percebesse.
+    session.components().registerFactory("connectors.tunnel", [](const ComponentParams& p) {
+        const auto pos = p.pins<1>();
+        return std::make_unique<components::Tunnel>(Pin{pos[0].id.empty() ? "pin" : pos[0].id, pos[0].x, pos[0].y});
     });
     for (const std::string_view mathTypeId : components::SignalMathBlock::signalMathTypeIds()) {
         const std::string typeId(mathTypeId);

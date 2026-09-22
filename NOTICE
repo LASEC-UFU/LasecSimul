@@ -1,0 +1,18 @@
+LasecSimul
+Copyright © LasecSimul contributors.
+
+This repository contains components under multiple licenses. See LICENSE,
+LICENSE-POLICY.md, THIRD-PARTY-LICENSES.md, and the licenses/ directory.
+
+Includes software derived from IPD Studio.
+IPD Studio Copyright © 2026 Praharsh Nagpure. All rights reserved.
+
+Required Notice: Copyright © 2026 Praharsh Nagpure (https://github.com/Coldbari/IPD-Studio)
+
+Identified current-IPD portions are licensed under the PolyForm Noncommercial
+License 1.0.0. The exact upstream LICENSE and NOTICE are preserved under
+licenses/ipd-studio/.
+
+Identified OpenPLC/STruCpp portions retain their GPL-3.0 notices and the
+applicable runtime exception. The historical IPD router port retains its
+AGPL-3.0-only source notice.

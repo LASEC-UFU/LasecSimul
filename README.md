@@ -1,5 +1,15 @@
 # LasecSimul
 
+## Licenciamento
+
+O aplicativo contém componentes sob licenças diferentes. O código historicamente GPL do
+LasecSimul/OpenPLC continua sob GPL-3.0-or-later; os portes identificados do IPD Studio permanecem
+sob PolyForm Noncommercial 1.0.0 e conservam o aviso autoral upstream. Consulte
+[`LICENSE-POLICY.md`](LICENSE-POLICY.md), [`NOTICE`](NOTICE) e
+[`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md). A intenção do projeto é uso educacional,
+científico e não comercial, mas essa intenção não retira direitos já concedidos pela GPL sobre as
+partes GPL.
+
 ## Objetivo
 
 LasecSimul é um simulador eletrônico para VSCode inspirado no SimulIDE-dev, mas com arquitetura própria: UI em TypeScript na Extension e simulação em um processo Core nativo C++ separado.

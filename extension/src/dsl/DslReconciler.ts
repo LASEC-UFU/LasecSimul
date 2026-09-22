@@ -11,7 +11,10 @@ export function reconcileDsl(document: DslDocument, previous: WebviewProjectStat
     if (ids.has(source.id)) errors.push(diag(`ID duplicado '${source.id}'`)); ids.add(source.id);
     const descriptor = catalogByType.get(source.typeId); if (!descriptor) { errors.push(diag(`tipo de componente desconhecido '${source.typeId}'`)); continue; }
     const old = oldById.get(source.id); const knownProperties = new Set((descriptor.propertySchema ?? []).map((p) => p.id));
-    for (const property of Object.keys(source.properties)) if (descriptor.propertySchema && !knownProperties.has(property) && !(property in (descriptor.defaultProperties ?? {}))) errors.push(diag(`propriedade desconhecida '${source.id}.${property}'`));
+    // `__`-prefixadas são estado de AUTORIA/UI da Webview (ex: `__ui_group` do agrupamento,
+    // `__symbolShapeOrder` do editor de Símbolo) -- nunca fazem parte do schema publicado do
+    // componente, mas precisam sobreviver ao round-trip pelo DSL em vez de virar erro.
+    for (const property of Object.keys(source.properties)) if (!property.startsWith("__") && descriptor.propertySchema && !knownProperties.has(property) && !(property in (descriptor.defaultProperties ?? {}))) errors.push(diag(`propriedade desconhecida '${source.id}.${property}'`));
     const pins = descriptor.pinIds?.map((id, index) => ({ id, x: 0, y: index * 12 })) ?? Array.from({ length: descriptor.pinCount }, (_, index) => ({ id: `pin-${index + 1}`, x: 0, y: index * 12 }));
     components.push({ ...(old ?? { id: source.id, x: 100 + components.length * 80, y: 100 + components.length * 60, rotation: 0 as const }), id: source.id, typeId: source.typeId, pins, properties: { ...(descriptor.defaultProperties ?? {}), ...source.properties } as Record<string, string | number | boolean>, label: old?.label ?? source.id });
   }
@@ -42,7 +45,7 @@ export function reconcileDsl(document: DslDocument, previous: WebviewProjectStat
   for (const wire of document.wires) {
     if (ids.has(wire.id)) errors.push(diag(`ID duplicado '${wire.id}'`)); ids.add(wire.id);
     if (!validEndpoint(wire.from, "from") || !validEndpoint(wire.to, "to")) { errors.push(diag(`endpoint inválido na conexão '${wire.id}'`)); continue; }
-    const from = endpoint(wire.from, "from")!; const to = endpoint(wire.to, "to")!; const old = oldWires.get(wire.id); conductors.push({ id: wire.id, from, to, ...(old && JSON.stringify([old.from, old.to]) === JSON.stringify([from, to]) ? { points: old.points } : {}) });
+    const from = endpoint(wire.from, "from")!; const to = endpoint(wire.to, "to")!; const old = oldWires.get(wire.id); const unchanged = old && JSON.stringify([old.from, old.to]) === JSON.stringify([from, to]); conductors.push({ id: wire.id, from, to, ...(unchanged ? { points: old.points, lineClass: old.lineClass, hidden: old.hidden } : {}) });
   }
   if (errors.length) return { diagnostics: errors };
   const oldNodes = new Map(previous.topology.nodes.map((n) => [n.id, n]));

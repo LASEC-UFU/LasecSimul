@@ -163,6 +163,7 @@ function projectToWebviewState(project: ProjectDocument, projectDir?: string): W
         from: conductor.from,
         to: conductor.to,
         ...(conductor.hidden ? { hidden: true } : {}),
+        ...(conductor.lineClass ? { lineClass: conductor.lineClass } : {}),
         ...(points && points.length > 0 ? { points } : {}),
       };
     }),
@@ -402,7 +403,14 @@ async function writeProjectToFile(filePath: string): Promise<boolean> {
   const canonicalTopology: ProjectTopology = {
     revision: state.schematicState.topology.revision,
     nodes: state.schematicState.topology.nodes,
-    conductors: state.schematicState.topology.conductors.map((wire) => ({ id: wire.id, from: wire.from, to: wire.to, vertices: wire.points ?? [] })),
+    conductors: state.schematicState.topology.conductors.map((wire) => ({
+      id: wire.id,
+      from: wire.from,
+      to: wire.to,
+      vertices: wire.points ?? [],
+      ...(wire.hidden ? { hidden: true } : {}),
+      ...(wire.lineClass ? { lineClass: wire.lineClass } : {}),
+    })),
   };
   try {
     assertTopologyInvariants(

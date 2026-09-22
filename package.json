@@ -2,6 +2,7 @@
   "name": "lasecsimul-workspace",
   "private": true,
   "version": "0.0.12",
+  "license": "GPL-3.0-or-later",
   "description": "Scripts agregados para build/test da Extension (TypeScript) e do Core (C++ nativo) do LasecSimul. Não é o manifest da extensão VSCode -- esse é extension/package.json.",
   "scripts": {
     "build": "node scripts/build-all.js",
@@ -25,7 +26,8 @@
     "benchmark:wires": "npm run build:extension && node scripts/benchmark-wire-topology.mjs",
     "benchmark:shared-host": "node scripts/shared-host-capacity.js",
     "spec:check": "node .spec/governance/check-specs.mjs",
-    "spec:status": "node .spec/governance/generate-status.mjs"
+    "spec:status": "node .spec/governance/generate-status.mjs",
+    "license:check-ipd": "node scripts/check-ipd-license-snapshot.mjs"
   },
   "engines": {
     "node": ">=18.0.0"

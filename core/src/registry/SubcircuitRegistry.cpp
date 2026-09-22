@@ -1,6 +1,7 @@
 #include "SubcircuitRegistry.hpp"
 
 #include <algorithm>
+#include <unordered_set>
 #include <iomanip>
 #include <sstream>
 #include <string_view>
@@ -43,6 +44,27 @@ void SubcircuitRegistry::registerDefinition(SubcircuitDefinition def, bool allow
     if (def.typeId.empty()) throw std::invalid_argument("subcircuito sem typeId");
     if (!allowReplace && contains(def.typeId)) {
         throw std::invalid_argument("subcircuito duplicado: " + def.typeId);
+    }
+    // A camada de supervisório (`graphics.*`) é autoria/Extension, nunca runtime: FEAT-008 decide
+    // que assets e bindings pertencem à autoria e que o Core apenas publica valores. Um tanque, um
+    // rótulo ou uma válvula desenhada não tem -- e não deve ter -- factory de componente; deixar
+    // esses filhos na definição faria `expandSubcircuit` falhar com "Unknown component typeId" ao
+    // instanciar qualquer processo que tenha tela.
+    //
+    // O corte vive AQUI, e não em quem lê o manifesto, porque este é o único ponto por onde TODA
+    // definição passa (carga de biblioteca, registro ad-hoc e testes que montam a definição à mão).
+    // Wires que tocariam um elemento visual também saem junto -- um objeto de tela nunca participa
+    // de topologia elétrica nem de grafo de sinal.
+    const auto isVisualOnly = [](const std::string& typeId) { return typeId.rfind("graphics.", 0) == 0; };
+    std::unordered_set<std::string> visualIds;
+    for (const auto& component : def.components) if (isVisualOnly(component.typeId)) visualIds.insert(component.id);
+    if (!visualIds.empty()) {
+        def.components.erase(std::remove_if(def.components.begin(), def.components.end(),
+            [&](const SubcircuitComponentDef& component) { return isVisualOnly(component.typeId); }), def.components.end());
+        def.wires.erase(std::remove_if(def.wires.begin(), def.wires.end(),
+            [&](const SubcircuitWireDef& wire) {
+                return visualIds.count(wire.fromComponentId) > 0 || visualIds.count(wire.toComponentId) > 0;
+            }), def.wires.end());
     }
     m_byTypeId[def.typeId] = std::move(def);
     // Um replacement pode alterar qualquer hash transitivo. A quantidade de definições é pequena

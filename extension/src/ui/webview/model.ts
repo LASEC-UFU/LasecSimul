@@ -1,4 +1,5 @@
 import type { WorkspaceSection } from "./workspace";
+import type { IpdLineClass } from "./ipdLineStyle";
 
 export interface WebviewPinModel {
   id: string;
@@ -192,6 +193,8 @@ export interface WebviewWireModel {
   to: CanonicalEndpoint;
   points?: WebviewPoint[];
   hidden?: boolean;
+  /** Optional ISA/IPD visual class. Undefined preserves native electrical voltage styling. */
+  lineClass?: IpdLineClass;
 }
 
 export interface PropertySchemaOptionEntry {
@@ -366,6 +369,12 @@ export interface PackageShape {
    * propriedades de estado e nunca escolhe cores ou textos específicos do dispositivo. */
   stateFill?: SimulidePaintStateFill;
   stateText?: SimulidePaintStateText;
+  /** Mostra/esconde a forma conforme propriedades da instância -- MESMA regra que `PackagePin`
+   * já usa (`componentSymbols.ts::stateVisibleMatches`). É o que permite um símbolo PARAMÉTRICO
+   * (ex: válvula de controle com atuador diafragma/pistão/motor) existir como UMA entrada de
+   * catálogo com N variantes de desenho, em vez de N typeIds quase iguais. Ausente == sempre
+   * visível, comportamento de sempre. */
+  stateVisible?: SimulidePaintStateVisible;
   transform?: string;
   fontFamily?: string;
   fontWeight?: string | number;
@@ -599,6 +608,14 @@ export interface SimulidePaintSpec {
   version: 1;
   source?: SimulidePaintSource;
   bounds: SimulidePaintBounds;
+  /**
+   * `fixed` preserves the authored silhouette when the package is resized. The design-space
+   * coordinates are first mapped to `referenceSize` and every later resize uses one uniform
+   * factor, centered in the available box. `variable` keeps the legacy independent X/Y mapping
+   * required by elastic connectors, pipes and responsive labels.
+   */
+  aspect?: "fixed" | "variable";
+  referenceSize?: { width: number; height: number };
   defaultStroke?: string;
   defaultFill?: string;
   defaultStrokeWidth?: number;
@@ -815,9 +832,29 @@ export interface ComponentViewSpec {
  * Quando presente, o renderizador da Webview desenha o corpo e posiciona cada pino na coordenada
  * REAL declarada — nunca o algoritmo genérico esquerda/direita usado para built-ins sem `package`
  * (ver `componentSymbols.ts`, Épico G do roadmap de pendências). */
+export interface PackageProvenance {
+  source?: string;
+  sourceCommit?: string;
+  sourceFiles?: string[];
+  sourceStencil?: string;
+  sourceNames?: string[];
+  adaptation?: string;
+  license?: string;
+  licenseUrl?: string;
+  requiredNotice?: string;
+  conceptualReference?: string;
+  conceptualReferenceCommit?: string;
+  conceptualReferenceFiles?: string[];
+  conceptualReferenceTopics?: string[];
+  conceptualReferenceReuse?: string;
+}
+
 export interface PackageDescriptor {
   width: number;
   height: number;
+  /** Origem auditável de geometria/código portado. Este bloco não altera a licença do conteúdo:
+   * ele a acompanha durante carga, catálogo, save/reopen e geração de artefatos. */
+  provenance?: PackageProvenance;
   /** `simulide-local`: pinos, labels e `simulidePaint.primitives` compartilham as coordenadas locais
    * reais do QGraphicsItem. `simulidePaint.bounds` (`m_area`) é a única origem usada para converter
    * todos eles para a caixa de exibição. Ausente preserva packages autorados em 0..width/height. */
@@ -830,6 +867,11 @@ export interface PackageDescriptor {
   schematicWidth?: number;
   schematicHeight?: number;
   initialTransform?: { rotateDeg?: number; cx?: number; cy?: number };
+  /** `"fixed"`: a proporção do desenho é parte do símbolo e as alças de redimensionar a travam
+   * (`main.ts::renderResizeHandles`). Espelha `SimulidePaintSpec.aspect` para os packages que
+   * desenham por `shapes[]` em vez de `simulidePaint` -- caso dos símbolos P&ID portados, onde
+   * esticar um eixo só deforma o desenho. Ausente == `"variable"` (comportamento de sempre). */
+  aspect?: "fixed" | "variable";
   border?: boolean;
   background?: PackageBackground;
   /** Projeção genérica do estado binário vivo (`getComponentState`) sobre o package. */
@@ -858,6 +900,8 @@ export interface PackageDescriptor {
 export interface WebviewComponentCatalogEntry {
   typeId: string;
   label: string;
+  /** Licença/origem acompanha o item até a Webview; não é descartada na projeção do catálogo. */
+  provenance?: PackageProvenance;
   /** Categoria de topo, usando o nome EXATO da taxonomia do SimulIDE (ex: "Medidores", "Fontes",
    * "Interruptores", "Passivos") — ver docs/15-taxonomia-paleta.md. Nunca inventar uma categoria
    * nova se o SimulIDE já tem uma equivalente. */
@@ -924,6 +968,14 @@ export interface WebviewComponentCatalogEntry {
    * porém desabilitado); o diálogo de propriedades cai pra inferência nesse caso. */
   propertySchema?: PropertySchemaEntry[];
   hidden?: boolean;
+  /** Some SÓ da paleta (`paletteTree.ts::buildPaletteTree`), sem nada do efeito de `hidden` sobre
+   * as INSTÂNCIAS -- `hidden` do catálogo vira `WebviewComponentModel.hidden` (`extension.ts::
+   * requestAddComponent`/`projectCommands.ts::projectComponentToWebviewComponent`) e apaga o
+   * componente do render/hit-test onde quer que ele esteja. Os primitivos `control.*` usados
+   * dentro dos modelos TDPS e dos 24 blocos de Controle precisam exatamente da diferença: são o
+   * conteúdo visível do editor de subcircuito, mas não itens colocáveis da paleta (lá quem
+   * aparece é o bloco `subcircuits.control.*` equivalente). */
+  paletteHidden?: boolean;
   /** Quando true, o item aparece na paleta mas não pode ser inserido no circuito. */
   disabled?: boolean;
   /** Motivo da indisponibilidade, mostrado no tooltip do item desabilitado. */

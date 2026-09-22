@@ -790,6 +790,459 @@
         "y": 464,
         "rotation": 180
       }
+    },
+    {
+      "id": "scr-001",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 460,
+        "height": 24,
+        "text": "Controle pH Linearizado",
+        "fontSize": 15,
+        "align": "start",
+        "stroke": "#0f172a",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 16,
+        "y": 914,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-002",
+      "typeId": "graphics.equipment",
+      "label": "equipment",
+      "properties": {
+        "width": 150,
+        "height": 76,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "AT01",
+        "labelSize": 12
+      },
+      "visual": {
+        "x": 20,
+        "y": 1042,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-003",
+      "typeId": "graphics.pipe",
+      "label": "pipe",
+      "properties": {
+        "width": 18,
+        "height": 16,
+        "fill": "#cbd5e1",
+        "stroke": "currentColor",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "showFlow": false,
+        "flowDirection": "forward",
+        "showFlanges": false,
+        "value": 100,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1,
+        "bindThreshold": 1,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 164,
+        "y": 1114,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-004",
+      "typeId": "graphics.pipe",
+      "label": "pipe",
+      "properties": {
+        "width": 310,
+        "height": 16,
+        "fill": "#cbd5e1",
+        "stroke": "currentColor",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "showFlow": true,
+        "flowDirection": "forward",
+        "showFlanges": false,
+        "value": 100,
+        "bindSource": "readout-101",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1,
+        "bindThreshold": 1,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 180,
+        "y": 1114,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-005",
+      "typeId": "graphics.instrument",
+      "label": "instrument",
+      "properties": {
+        "width": 64,
+        "height": 64,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "tag": "FT",
+        "tagNumber": "101",
+        "housing": "circle",
+        "location": "field",
+        "showValue": true,
+        "value": 0,
+        "bindSource": "readout-101",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 200,
+        "bindUnit": "L/min",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 230,
+        "y": 1016,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-006",
+      "typeId": "graphics.signal_line",
+      "label": "signal_line",
+      "properties": {
+        "height": 10,
+        "stroke": "currentColor",
+        "strokeWidth": 1.4,
+        "opacity": 1,
+        "dash": "solid",
+        "width": 42
+      },
+      "visual": {
+        "x": 241,
+        "y": 1096,
+        "rotation": 90
+      }
+    },
+    {
+      "id": "scr-007",
+      "typeId": "graphics.signal_line",
+      "label": "signal_line",
+      "properties": {
+        "width": 212,
+        "height": 10,
+        "stroke": "currentColor",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "dash": "dashed"
+      },
+      "visual": {
+        "x": 294,
+        "y": 1042,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-008",
+      "typeId": "graphics.controller_faceplate",
+      "label": "controller_faceplate",
+      "properties": {
+        "width": 66,
+        "height": 106,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "tag": "AIC01",
+        "setpoint": 50,
+        "barColor": "#0284c7",
+        "showValue": true,
+        "value": 0,
+        "bindSource": "pid-01",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 506,
+        "y": 1000,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-009",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Vazão Reagente",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-101",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 200,
+        "bindUnit": "L/min",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 20,
+        "y": 1210,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-010",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Vazão Produto",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-102",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 200,
+        "bindUnit": "L/min",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 172,
+        "y": 1210,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-011",
+      "typeId": "graphics.status_lamp",
+      "label": "status_lamp",
+      "properties": {
+        "width": 30,
+        "height": 38,
+        "stroke": "currentColor",
+        "fill": "#94a3b8",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "onColor": "#22c55e",
+        "offColor": "#94a3b8",
+        "label": "",
+        "value": 0,
+        "bindSource": "readout-105",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 1,
+        "bindUnit": "mS/cm",
+        "bindDecimals": 0,
+        "bindThreshold": 0.5,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 328,
+        "y": 1212,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-012",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 106,
+        "height": 18,
+        "text": "Condutividade",
+        "fontSize": 10,
+        "align": "start",
+        "stroke": "#0f172a",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 362,
+        "y": 1220,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-013",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "MV",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-106",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 20,
+        "y": 1268,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-014",
+      "typeId": "graphics.status_lamp",
+      "label": "status_lamp",
+      "properties": {
+        "width": 30,
+        "height": 38,
+        "stroke": "currentColor",
+        "fill": "#94a3b8",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "onColor": "#22c55e",
+        "offColor": "#94a3b8",
+        "label": "",
+        "value": 0,
+        "bindSource": "readout-107",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 1,
+        "bindUnit": "Desligado/Ligado",
+        "bindDecimals": 0,
+        "bindThreshold": 0.5,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 176,
+        "y": 1270,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-015",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 106,
+        "height": 18,
+        "text": "#107",
+        "fontSize": 10,
+        "align": "start",
+        "stroke": "#0f172a",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 210,
+        "y": 1278,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-016",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "CO",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-108",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 324,
+        "y": 1268,
+        "rotation": 0
+      }
     }
   ],
   "topology": {
@@ -1441,7 +1894,7 @@
   "symbolMode": "custom",
   "symbol": {
     "width": 640,
-    "height": 480,
+    "height": 438,
     "border": true,
     "pins": [
       {
@@ -1609,16 +2062,14 @@
     ],
     "shapes": [],
     "background": {
-      "kind": "image",
-      "asset": "tdps-reference-images/tdps_linearized_ph.png",
-      "mime": "image/png"
+      "kind": "none"
     }
   },
   "exposedComponents": [
     {
-      "componentId": "pid-01",
-      "x": 2084.5714285714284,
-      "y": 1118,
+      "componentId": "scr-001",
+      "x": 16,
+      "y": 14,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1626,9 +2077,9 @@
       "layer": 0
     },
     {
-      "componentId": "process-21",
-      "x": 1430.857142857143,
-      "y": 888,
+      "componentId": "scr-002",
+      "x": 20,
+      "y": 142,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1636,9 +2087,9 @@
       "layer": 1
     },
     {
-      "componentId": "process-22",
-      "x": 1883.4285714285713,
-      "y": 326,
+      "componentId": "scr-003",
+      "x": 164,
+      "y": 214,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1646,9 +2097,9 @@
       "layer": 2
     },
     {
-      "componentId": "process-23",
-      "x": 1220.5714285714284,
-      "y": 940,
+      "componentId": "scr-004",
+      "x": 180,
+      "y": 214,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1656,9 +2107,9 @@
       "layer": 3
     },
     {
-      "componentId": "process-24",
-      "x": 1225.142857142857,
-      "y": 990,
+      "componentId": "scr-005",
+      "x": 230,
+      "y": 116,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1666,19 +2117,19 @@
       "layer": 4
     },
     {
-      "componentId": "calc-41",
-      "x": 1609.142857142857,
-      "y": 938,
-      "rotation": 0,
+      "componentId": "scr-006",
+      "x": 241,
+      "y": 196,
+      "rotation": 90,
       "flipH": false,
       "flipV": false,
       "scale": 1,
       "layer": 5
     },
     {
-      "componentId": "calc-42",
-      "x": 1888,
-      "y": 274,
+      "componentId": "scr-007",
+      "x": 294,
+      "y": 142,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1686,9 +2137,9 @@
       "layer": 6
     },
     {
-      "componentId": "calc-43",
-      "x": 2194.285714285714,
-      "y": 360,
+      "componentId": "scr-008",
+      "x": 506,
+      "y": 100,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1696,9 +2147,9 @@
       "layer": 7
     },
     {
-      "componentId": "readout-101",
-      "x": 3017.142857142857,
-      "y": 360,
+      "componentId": "scr-009",
+      "x": 20,
+      "y": 310,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1706,9 +2157,9 @@
       "layer": 8
     },
     {
-      "componentId": "readout-102",
-      "x": 3840,
-      "y": 360,
+      "componentId": "scr-010",
+      "x": 172,
+      "y": 310,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1716,9 +2167,9 @@
       "layer": 9
     },
     {
-      "componentId": "readout-105",
-      "x": 548.5714285714286,
-      "y": 560,
+      "componentId": "scr-011",
+      "x": 328,
+      "y": 312,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1726,9 +2177,9 @@
       "layer": 10
     },
     {
-      "componentId": "readout-106",
-      "x": 1371.4285714285713,
-      "y": 560,
+      "componentId": "scr-012",
+      "x": 362,
+      "y": 320,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1736,9 +2187,9 @@
       "layer": 11
     },
     {
-      "componentId": "readout-107",
-      "x": 2194.285714285714,
-      "y": 560,
+      "componentId": "scr-013",
+      "x": 20,
+      "y": 368,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1746,14 +2197,34 @@
       "layer": 12
     },
     {
-      "componentId": "readout-108",
-      "x": 3017.142857142857,
-      "y": 560,
+      "componentId": "scr-014",
+      "x": 176,
+      "y": 370,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
       "scale": 1,
       "layer": 13
+    },
+    {
+      "componentId": "scr-015",
+      "x": 210,
+      "y": 378,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 14
+    },
+    {
+      "componentId": "scr-016",
+      "x": 324,
+      "y": 368,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 15
     }
   ],
   "exportedPropertyComponentIds": [

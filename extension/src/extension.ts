@@ -111,6 +111,7 @@ import { newIecProjectCommand } from "./plc/plcCommands";
 import { parseIecProject } from "./plc/iecProject";
 import { readPlcNativeModule } from "./plc/artifact";
 import { maybeOfferMachineNetworkSetup, registerMachineNetworkSetupCommand } from "./network/machineNetworkSetup";
+import { resolveNetworkMode } from "./network/networkMode";
 import { commitDslCommand, commitOpenDslIfPresent, onDslDraftOpenChanged, openDslCommand, registerDslDraftCloseTracking } from "./dsl/dslCommands";
 
 let propertyInspectorView: PropertyInspectorViewProvider | undefined;
@@ -408,6 +409,22 @@ function launchCoreProcess(extensionPath: string): { corePath: string; pipeName:
   const networkConfiguration = vscode.workspace.getConfiguration("lasecsimul.network");
   const configuredNetworkNamespace = networkConfiguration.get<number>("namespace", -1);
   const configuredNetworkMode = networkConfiguration.get<string>("mode", "disabled");
+  const networkMode = resolveNetworkMode(configuredNetworkMode);
+  // `isolated` was the pre-FEAT-014 lab-network backend. Keep old settings
+  // loadable, but route them through the new shared lab-router backend and
+  // persist the migration once per VS Code profile.
+  if (networkMode.migratedLegacyIsolated) {
+    const migrationKey = "lasecsimul.network.isolatedMigratedToLabRouter";
+    if (!state.extensionContext?.globalState.get<boolean>(migrationKey)) {
+      logSimulation(
+        "warning",
+        "O modo de rede legado \"isolated\" foi migrado para \"lab-router\".",
+        { stage: "network-setup", notify: true },
+      );
+      void networkConfiguration.update("mode", "lab-router", vscode.ConfigurationTarget.Workspace)
+        .then(() => state.extensionContext?.globalState.update(migrationKey, true));
+    }
+  }
   const configuredGatewayPort = networkConfiguration.get<number>("gatewayPort", 9011);
   const coreEnv: NodeJS.ProcessEnv = {
     // Prevent shared-memory arena collisions between thin-client instances.
@@ -416,9 +433,7 @@ function launchCoreProcess(extensionPath: string): { corePath: string; pipeName:
     LASECSIMUL_MCU_TRANSPORT: "VNEXT_B",
     LASECSIMUL_ESP32_EXECUTION_MODE: "mttcg",
     LASECSIMUL_NETWORK_MODE:
-      configuredNetworkMode === "lab-bridge" || configuredNetworkMode === "isolated"
-        ? configuredNetworkMode
-        : "disabled",
+      networkMode.effectiveMode,
     LASECSIMUL_GATEWAY_PORT: String(configuredGatewayPort),
     // Achado 2026-07-22: cache em disco da calibração do `-icount shift` (ver
     // QemuIcountCalibrator.hpp) -- diretório gerenciado pelo próprio VS Code, por extensão/usuário,
@@ -1853,6 +1868,7 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
     internalPinId: string;
     isFromInside: boolean;
     wireId: string;
+    lineClass?: WebviewWireModel["lineClass"];
   }
   const tunnels: TunnelEntry[] = boundaryWires.map((wire, i) => {
     const pinName = `P${i + 1}`;
@@ -1866,6 +1882,7 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
       internalPinId: fromIn ? endpointPinId(wire.from) : endpointPinId(wire.to),
       isFromInside: fromIn,
       wireId: wire.id,
+      lineClass: wire.lineClass,
     };
   });
 
@@ -1888,10 +1905,12 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
     from: { componentId: endpointId(w.from), pinId: endpointPinId(w.from) },
     to: { componentId: endpointId(w.to), pinId: endpointPinId(w.to) },
     ...(w.points ? { points: w.points } : {}),
+    ...(w.lineClass ? { lineClass: w.lineClass } : {}),
   }));
   const stubWireObjects = tunnels.map((t) => ({
     from: { componentId: t.id, pinId: "pin" },
     to: { componentId: t.internalComponentId, pinId: t.internalPinId },
+    ...(t.lineClass ? { lineClass: t.lineClass } : {}),
   }));
   const interfaceEntries = tunnels.map((t) => ({
     pinId: t.name,
@@ -1913,6 +1932,7 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
         from: { kind: "port", ...wire.from },
         to: { kind: "port", ...wire.to },
         vertices: "points" in wire ? wire.points ?? [] : [],
+        ...(wire.lineClass ? { lineClass: wire.lineClass } : {}),
       })),
     },
     interface: interfaceEntries,
@@ -1974,6 +1994,7 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
       id: nextId("wire"),
       from: portEndpoint(newCompId, t.name),
       to: externalEndpoint,
+      ...(original.lineClass ? { lineClass: original.lineClass } : {}),
     };
   });
 
@@ -2041,6 +2062,7 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
     from: conductor.from,
     to: conductor.to,
     ...(conductor.hidden ? { hidden: true } : {}),
+    ...(conductor.lineClass ? { lineClass: conductor.lineClass } : {}),
     ...(conductor.vertices.length > 0 ? { points: conductor.vertices } : {}),
   }));
   // Manifestos TDPS antigos guardavam somente as extremidades e deixavam o renderer desenhar uma
@@ -2203,7 +2225,14 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
     topology: {
       revision: state.schematicState.topology.revision,
       nodes: state.schematicState.topology.nodes,
-      conductors: state.schematicState.topology.conductors.map((wire) => ({ id: wire.id, from: wire.from, to: wire.to, vertices: wire.points ?? [], ...(wire.hidden ? { hidden: true } : {}) })),
+      conductors: state.schematicState.topology.conductors.map((wire) => ({
+        id: wire.id,
+        from: wire.from,
+        to: wire.to,
+        vertices: wire.points ?? [],
+        ...(wire.hidden ? { hidden: true } : {}),
+        ...(wire.lineClass ? { lineClass: wire.lineClass } : {}),
+      })),
     },
     interface: [], // re-derivado abaixo por finalizeSubcircuitDocumentForSave, nunca hand-authored
     symbolMode: state.schematicState.symbolMode ?? "custom",

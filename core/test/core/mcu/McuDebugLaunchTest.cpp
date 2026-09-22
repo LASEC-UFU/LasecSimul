@@ -53,8 +53,18 @@ int main() {
     assert(normal.args.front() == "lasecsimul-mcu-1234-7");
     assert(std::find(normal.args.begin(), normal.args.end(), "-gdb") == normal.args.end());
     assert(std::find(normal.args.begin(), normal.args.end(),
-                     "user,model=open_eth,mac=02:4c:7c:7d:b8:e4,net=10.42.7.0/24,host=10.42.7.2,dhcpstart=10.42.7.15,dns=10.42.7.3") !=
+                     "user,model=open_eth,mac=02:4c:2a:07:b8:e4,net=10.42.7.0/24,host=10.42.7.2,dhcpstart=10.42.7.15,dns=10.42.7.3") !=
            normal.args.end());
+
+#ifdef _WIN32
+    _putenv_s("LASECSIMUL_NETWORK_MODE", "lab-router");
+#else
+    setenv("LASECSIMUL_NETWORK_MODE", "lab-router", 1);
+#endif
+    const QemuLaunchSpec routed = controller.buildLaunchSpec("firmware.bin", "lasecsimul-mcu-1234-7");
+    const std::string expectedRouter =
+        "socket,model=open_eth,mac=02:4c:2a:07:b8:e4,connect=127.0.0.1:9011";
+    assert(std::find(routed.args.begin(), routed.args.end(), expectedRouter) != routed.args.end());
 
 #ifdef _WIN32
     _putenv_s("LASECSIMUL_NETWORK_MODE", "lab-bridge");
@@ -64,7 +74,7 @@ int main() {
     const QemuLaunchSpec bridged = controller.buildLaunchSpec(
         "firmware.bin", "lasecsimul-mcu-1234-7");
     const std::string expectedBridge =
-        "socket,model=open_eth,mac=02:4c:7c:7d:b8:e4,connect=127.0.0.1:9011";
+        "socket,model=open_eth,mac=02:4c:2a:07:b8:e4,connect=127.0.0.1:9011";
     assert(std::find(bridged.args.begin(), bridged.args.end(), expectedBridge) != bridged.args.end());
 
     const QemuLaunchSpec debug = controller.buildLaunchSpec(
@@ -134,7 +144,7 @@ int main() {
     unsetenv("LASECSIMUL_QEMU_TCG_THREAD");
     unsetenv("LASECSIMUL_ESP32_EXECUTION_MODE");
 #endif
-    std::puts("OK: QEMU launch defaults to no NIC and supports opt-in isolated/lab-bridge; debug args preserved.");
+    std::puts("OK: QEMU launch supports disabled, lab-router, lab-bridge and internal isolated fallback; debug args preserved.");
 
     // PLAN_MTTCG_VNEXT_B_CAUSALITY.md section 7.2: execution mode and transport must be
     // unambiguous in the diagnostics, inspected via buildLaunchSpec()/args alone -- no real

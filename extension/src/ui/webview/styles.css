@@ -341,6 +341,23 @@ html, body {
   background-size: 8px 8px;
 }
 
+.canvas:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 /** Viewport fixo (`.canvas`) nunca se move/escala; este wrapper recebe `translate()`+`scale()` via JS
  * (zoom por scroll, ver `main.ts`) -- todo conteÃºdo do esquemÃ¡tico mora aqui, nÃ£o direto em `.canvas`. */
 .canvas-content {
@@ -398,6 +415,58 @@ html, body {
   pointer-events: none;
 }
 
+/* Classes ISA/IPD explícitas. O fio sem `lineClass` continua usando exatamente as regras elétricas
+ * acima (inclusive coloração por tensão); estas regras só entram quando o operador escolhe um
+ * estilo no menu do fio. As larguras/padrões correspondem ao `canvas/lineStyle.ts` do IPD. */
+.wire-layer__wire--ipd {
+  stroke: var(--muted);
+  stroke-width: var(--ipd-line-width, 1.25);
+  stroke-dasharray: none;
+}
+
+.wire-layer__wire--process-major { --ipd-line-width: 2.5; }
+.wire-layer__wire--process-minor { --ipd-line-width: 1.25; }
+.wire-layer__wire--process-impulse { --ipd-line-width: 1; }
+.wire-layer__wire--signal-electric { --ipd-line-width: 1.25; stroke-dasharray: 4 3; }
+.wire-layer__wire--signal-pneumatic { --ipd-line-width: 1.25; }
+.wire-layer__wire--signal-hydraulic { --ipd-line-width: 1.25; }
+.wire-layer__wire--signal-capillary { --ipd-line-width: 1.25; }
+.wire-layer__wire--signal-data { --ipd-line-width: 1.25; }
+.wire-layer__wire--signal-software { --ipd-line-width: 1.25; stroke-dasharray: 4 3; }
+.wire-layer__wire--link-internal { --ipd-line-width: 1; stroke-dasharray: 2 2; }
+.wire-layer__wire--signal-em { --ipd-line-width: 1.25; }
+.wire-layer__wire--pipe-jacketed {
+  --ipd-line-width: 2.5;
+  stroke: var(--vscode-editor-background, #fff);
+}
+.wire-layer__wire--pipe-traced { --ipd-line-width: 1.25; stroke-dasharray: 8 3 2 3 2 3; }
+.wire-layer__wire--pipe-existing { --ipd-line-width: 0.75; }
+.wire-layer__wire--pipe-underground { --ipd-line-width: 1.25; stroke-dasharray: 12 6; }
+.wire-layer__wire--pipe-battery-limit { --ipd-line-width: 2.5; stroke-dasharray: 12 4 3 4; }
+
+.wire-layer__wire--jacket-outline {
+  stroke: var(--muted);
+  stroke-width: 5.5;
+  stroke-dasharray: none;
+}
+
+.wire-layer__line-glyphs {
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.wire-layer__line-glyphs path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.25;
+}
+
+.wire-layer__line-glyphs circle {
+  fill: var(--vscode-editor-background, #fff);
+  stroke: currentColor;
+  stroke-width: 1.25;
+}
+
 .wire-layer__segment-handle {
   stroke: transparent;
   stroke-width: 16;
@@ -453,6 +522,27 @@ html, body {
   cursor: grabbing;
 }
 
+/* Alças de redimensionar da seleção única (`main.ts::renderResizeHandles`). Vivem em
+   `canvasContent`, ou seja já herdam o transform de zoom/pan; `translate(-50%,-50%)` centra a alça
+   exatamente no canto/meio de lado, e o quadrado fica pequeno de propósito para não esconder o
+   desenho embaixo. */
+.resize-handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  background: var(--vscode-editor-background, #fff);
+  border: 1.5px solid var(--accent, #0284c7);
+  border-radius: 2px;
+  z-index: 5;
+  touch-action: none;
+}
+
+.resize-handle:hover {
+  background: var(--accent, #0284c7);
+}
+
 .component--push,
 .component--switch,
 .component--fixed-volt {
@@ -462,9 +552,19 @@ html, body {
 /** Overlay de Modo Placa (botão EN/BOOT etc. desenhados sobre a foto do package no circuito
  * PRINCIPAL, ver `main.ts::renderBoardOverlaysFor`) -- não arrastável (não faz parte do circuito do
  * usuário, só espelha um componente interno do subcircuito), sempre por cima da foto da placa. */
+/* Projeção do que o subcircuito expõe no próprio símbolo. É VISUALIZAÇÃO: não recebe ponteiro, a
+   não ser nos itens operáveis (botão/chave/controle HMI, marcados por `--interactive` em
+   `main.ts::renderBoardOverlaysFor`). Sem isto, um sinótico de processo inteiro cobre a instância
+   do subcircuito e não dá nem para selecioná-la no canvas -- muito menos abrir "Abrir
+   Subcircuito", que é onde a tela de fato se edita. */
 .component--board-overlay {
-  cursor: pointer;
+  pointer-events: none;
   z-index: 5;
+}
+
+.component--board-overlay--interactive {
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .component--exposed-projection {
@@ -627,6 +727,48 @@ html, body {
   opacity: 0;
   pointer-events: all;
   r: 4.5;
+}
+
+/* IPD-style magnetic docking feedback. Pins remain visually quiet during
+   ordinary editing; while a connection is active, compatible targets become
+   discoverable and the nearest target gets an unambiguous magnetic halo. */
+.canvas.wire-docking .pin-terminal--compatible {
+  fill: rgba(59, 130, 246, 0.16);
+  stroke: rgba(37, 99, 235, 0.9);
+  stroke-width: 1.5;
+  opacity: 1;
+  r: 6;
+}
+
+.canvas.wire-docking .pin-terminal--dock-target {
+  fill: rgba(34, 197, 94, 0.34);
+  stroke: #16a34a;
+  stroke-width: 2.5;
+  opacity: 1;
+  r: 8;
+  filter: drop-shadow(0 0 3px rgba(34, 197, 94, 0.85));
+}
+
+.component--hmi-operator-run {
+  cursor: pointer;
+}
+
+.component--hmi-operator-run[data-type-id="graphics.slider"] {
+  cursor: ew-resize;
+}
+
+.component--hmi-operator-run.component--hmi-operator-unconfigured {
+  cursor: not-allowed;
+  filter: saturate(0.45);
+}
+
+.component--hmi-operator-run.component--operator-active .component__symbol {
+  filter: brightness(0.88);
+  transform: translate(1px, 1px);
+}
+
+.component--hmi-operator-edit .component__symbol {
+  cursor: move;
 }
 
 .meter-lcd {
@@ -808,6 +950,7 @@ rect.meter-expand-button:hover {
    de contexto próprio (`pointer-events` normal, herdado de `.component-floating-label` -- upgrade
    2026-07-18 do Tier 1 puramente visual original). */
 .component-floating-label--board-overlay {
+  pointer-events: none;
   z-index: 6;
 }
 

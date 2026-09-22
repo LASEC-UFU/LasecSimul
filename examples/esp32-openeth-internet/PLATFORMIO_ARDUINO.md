@@ -233,8 +233,8 @@ No `settings.json` do VS Code:
 
 ```json
 {
-  "lasecsimul.network.mode": "lab-bridge",
-  "lasecsimul.network.namespace": 1,
+  "lasecsimul.network.mode": "lab-router",
+  "lasecsimul.network.namespace": 42,
   "lasecsimul.network.gatewayPort": 9011
 }
 ```
@@ -242,13 +242,17 @@ No `settings.json` do VS Code:
 Cada aluno deve ter um namespace exclusivo. Depois da alteração, execute
 `Developer: Reload Window`.
 
+O `lab-router` Ã© configurado no LasecSimul, nÃ£o no `platformio.ini`. No firmware,
+mantenha `CONFIG_ETH_USE_OPENETH=y` e inicialize `esp_eth`/`esp_netif`; o instalador
+cria a TAP roteada e o gateway fornece DHCP no segmento privado.
+
 ## Resultado esperado
 
 No monitor UART:
 
 ```text
 Iniciando OpenETH...
-DHCP: IP=192.168.x.x mascara=255.255.255.0 gateway=192.168.x.1
+DHCP: IP=10.42.1.15 mascara=255.255.0.0 gateway=10.42.0.1
 ```
 
 No modo `lab-bridge`, o endereço é fornecido pelo DHCP real do laboratório. Ele

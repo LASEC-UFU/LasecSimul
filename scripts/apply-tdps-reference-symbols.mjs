@@ -1,3 +1,15 @@
+/**
+ * OBSOLETO -- nao use.
+ *
+ * Este script gravava a tela de processo TDPS como BITMAP de fundo do simbolo
+ * (`symbol.background = { kind: "image", asset: "<png>" }`), com os blocos de controle projetados
+ * por cima. Foi substituido por `generate-tdps-process-screens.mjs`, que monta a mesma tela com
+ * objetos graficos nativos e editaveis da biblioteca de supervisorio (`graphics.*`), ligados a
+ * simulacao por binding -- ver `docs/45-biblioteca-grafica-supervisorio-implementacao.md`.
+ *
+ * Mantido apenas como referencia historica do formato antigo. Rodar isto REINTRODUZ os bitmaps e
+ * derruba o gate `extension/src/tdps/tdpsProcessScreens.test.ts`.
+ */
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

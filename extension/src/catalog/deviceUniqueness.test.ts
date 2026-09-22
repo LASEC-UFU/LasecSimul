@@ -83,6 +83,49 @@ import { checkDeviceIdUniqueness, DeviceIdOwner, formatDeviceIdConflict } from "
   });
 
   fs.rmSync(tmpDir, { recursive: true, force: true });
+  await test("repositorio real: nenhum typeId e' declarado em duas fontes", () => {
+    // Os testes acima exercitam a FUNCAO. Este exercita os DADOS, que e' onde o defeito estava:
+    // `logic.adc` e `logic.dac` existiam ao mesmo tempo como item estatico do
+    // `component-catalog.json` e como manifesto em `devices/simulide-logic/*.lsdevice`, e a unica
+    // coisa que denunciava isso era um popup de erro ao abrir o editor.
+    //
+    // A convencao do repositorio e' inequivoca e foi confirmada contando: dos 80 dispositivos de
+    // `devices/library.json`, os outros 78 NAO aparecem no catalogo estatico. Um dispositivo de
+    // biblioteca pertence ao seu manifesto; o catalogo estatico so' declara o que nao tem manifesto.
+    const repoRoot = [path.resolve(process.cwd(), ".."), process.cwd()]
+      .find((candidate) => fs.existsSync(path.join(candidate, "project", "schema", "component-catalog.json")));
+    assert(Boolean(repoRoot), "raiz do repositorio nao encontrada");
+
+    const catalog = JSON.parse(fs.readFileSync(path.join(repoRoot!, "project", "schema", "component-catalog.json"), "utf8")) as
+      { items: Array<{ typeId: string }> };
+    const owners: DeviceIdOwner[] = catalog.items.map((item) => ({
+      typeId: item.typeId,
+      sourceFile: path.join(repoRoot!, "project", "schema", "component-catalog.json"),
+    }));
+
+    for (const libraryDir of ["devices", "subcircuits"]) {
+      const libraryPath = path.join(repoRoot!, libraryDir, "library.json");
+      if (!fs.existsSync(libraryPath)) continue;
+      const library = JSON.parse(fs.readFileSync(libraryPath, "utf8")) as
+        { devices?: Array<{ typeId: string; manifest: string }>; subcircuits?: Array<{ typeId: string; manifest: string }> };
+      for (const declared of [...(library.devices ?? []), ...(library.subcircuits ?? [])]) {
+        owners.push({ typeId: declared.typeId, sourceFile: path.join(repoRoot!, libraryDir, declared.manifest) });
+      }
+    }
+
+    const conflicts = checkDeviceIdUniqueness(owners);
+    assert(conflicts.length === 0,
+      `typeId duplicado entre fontes:\n${conflicts.map((conflict) => `  ${conflict.typeId}: ${conflict.firstSource} vs ${conflict.conflictingSource}`).join("\n")}`);
+
+    // O catalogo estatico tambem nao pode repetir um typeId dentro de si mesmo -- isso nao geraria
+    // conflito entre FONTES e passaria despercebido pela verificacao acima.
+    const seen = new Set<string>();
+    for (const item of catalog.items) {
+      assert(!seen.has(item.typeId), `typeId repetido dentro do proprio component-catalog.json: ${item.typeId}`);
+      seen.add(item.typeId);
+    }
+  });
+
   const { failed } = finish();
   process.exitCode = failed > 0 ? 1 : 0;
 })();

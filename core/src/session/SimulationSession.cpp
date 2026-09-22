@@ -1151,6 +1151,10 @@ void SimulationSession::onStableStepUnlocked(uint64_t timestampNs) {
 
 std::vector<std::vector<uint8_t>> SimulationSession::captureComponentTelemetryStatesUnlocked(
     const std::vector<uint32_t>& componentIndices) const {
+    // Blocos de controle não guardam a própria saída (o valor vive em slots densos do
+    // `SignalRuntime`); refrescar aqui é o que os torna legíveis pela mesma telemetria de qualquer
+    // instrumento -- e só para os componentes de fato assinados, nunca o projeto inteiro.
+    const_cast<SimulationSession*>(this)->sampleSignalMathOutputsUnlocked(componentIndices);
     std::vector<std::vector<uint8_t>> states;
     states.reserve(componentIndices.size());
     for (uint32_t componentIndex : componentIndices) {
@@ -1643,6 +1647,24 @@ bool SimulationSession::disconnectSignalWireUnlocked(uint32_t componentA, const 
     return true;
 }
 
+namespace {
+/**
+ * Os dois túneis que funcionam como RELAY do Signal Graph.
+ *
+ * `connectors.signal_tunnel` é o relay nativo; `connectors.tunnel` é o túnel ELÉTRICO legado, que
+ * a biblioteca Ctrl/TDPS publicada usa como relay de sinal -- exatamente a mesma equivalência que
+ * `ProcessSubcircuitCompiler` já assume ("Legacy process documents used the electrical tunnel as a
+ * signal relay"). Nos dois casos a `direction` declarada descreve apenas o papel de FRONTEIRA (quem
+ * de fora pode dirigir o túnel), nunca se o BLOCO precisa de uma entrada: `Tunnel::signalPorts()`
+ * devolve `Output` fixo, então tratar só o relay nativo como relay fazia todo túnel elétrico
+ * alimentado por um fio nascer como `ExternalInput` sem porta `"in"` -- e a conexão correspondente
+ * falhava com "porta de entrada inexistente: sig.N.pin.in" ao compilar o SignalPlan.
+ */
+bool isRelayTunnelTypeId(std::string_view typeId) {
+    return typeId == "connectors.signal_tunnel" || typeId == "connectors.tunnel";
+}
+} // namespace
+
 simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnlocked(
     const simulation::SignalGraphDefinition& definition) const {
     simulation::SignalGraphDefinition result = definition;
@@ -1668,9 +1690,58 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
             continue;
         wiredInputTargets.insert(signalPortBlockId(wire.targetComponent, wire.targetPort));
     }
+    // Túneis de relay com o MESMO nome são a MESMA rede. No domínio elétrico o `Netlist` já funde
+    // por nome (passada 1, união por grupo de túnel); no domínio de SINAL essa fusão não existia --
+    // cada túnel virava um bloco isolado, então o valor simplesmente não atravessava o PAR de
+    // túneis que a biblioteca Ctrl/TDPS usa para ligar um bloco ao seguinte
+    // (`pid-01.out` -> túnel "pid-01.out" ... túnel "pid-01.out" -> `process-21.in`). O efeito era
+    // silencioso e total: o Signal Plan compilava, a simulação rodava, e toda sonda a jusante do
+    // primeiro túnel lia 0 para sempre.
+    //
+    // Semântica da rede, deliberadamente conservadora (ARCH-006: "fan-in exige semântica explícita
+    // do domínio/bloco e nunca implica soma automática"):
+    //  - exatamente UM membro alvo de fio (o que é dirigido por uma saída) = driver da rede;
+    //  - os demais membros passam a LER o driver, em vez de nascerem `ExternalInput` com 0;
+    //  - zero drivers (fronteira externa do subcircuito, ex. `external-40`) fica como estava --
+    //    `ExternalInput` com default, que é exatamente "sem valor upstream ainda";
+    //  - dois ou mais drivers seria fan-in sem semântica declarada: a rede é deixada intocada, sem
+    //    inventar soma nem eleger um vencedor arbitrário.
+    const auto relaySignalBlockIdOf = [&](uint32_t index) -> std::string {
+        const std::vector<SignalPortDescriptor> ports = m_componentInstances[index]->signalPorts();
+        return ports.empty() ? std::string{} : signalPortBlockId(index, ports.front().id);
+    };
+    std::unordered_map<std::string, std::vector<uint32_t>> relayTunnelsByName;
+    for (uint32_t index : m_activeComponentIndices) {
+        if (!m_componentInstances[index] || !isRelayTunnelTypeId(m_componentInstances[index]->typeId())) continue;
+        const std::string name = liveTunnelNameUnlocked(index);
+        if (!name.empty()) relayTunnelsByName[name].push_back(index);
+    }
+    // blockId do leitor -> blockId do driver que o alimenta.
+    std::unordered_map<std::string, std::string> tunnelNetSourceByReader;
+    // Componentes que compartilham rede de túnel, para propagar rate/política de loop junto.
+    std::unordered_map<uint32_t, std::vector<uint32_t>> tunnelNetPeers;
+    for (const auto& [name, indices] : relayTunnelsByName) {
+        if (indices.size() < 2) continue;
+        for (uint32_t index : indices)
+            for (uint32_t peer : indices)
+                if (peer != index) tunnelNetPeers[index].push_back(peer);
+        std::vector<uint32_t> drivers;
+        for (uint32_t index : indices) {
+            const std::string blockId = relaySignalBlockIdOf(index);
+            if (!blockId.empty() && wiredInputTargets.count(blockId) != 0) drivers.push_back(index);
+        }
+        if (drivers.size() != 1) continue;
+        const std::string driverBlockId = relaySignalBlockIdOf(drivers.front());
+        for (uint32_t index : indices) {
+            if (index == drivers.front()) continue;
+            const std::string readerBlockId = relaySignalBlockIdOf(index);
+            if (!readerBlockId.empty()) tunnelNetSourceByReader.emplace(readerBlockId, driverBlockId);
+        }
+    }
+
     // Malha de controle é, por definição, um loop algébrico: `SignalCompiler` só aceita um SCC se
     // TODO bloco dele declarar FixedPoint E compartilhar o mesmo RateGroup. Num `.lssubcircuit`
-    // TDPS o caminho de realimentação passa por relays de `connectors.signal_tunnel`, que por
+    // TDPS o caminho de realimentação passa por relays de túnel (ver `isRelayTunnelTypeId`), que por
     // default nascem no rate genérico (1ns) e sem política -- então o rate/política do bloco de
     // controle vizinho é propagado por esses relays (só por eles: nenhum produtor/consumidor real,
     // como HART, tem seu rate alterado por estar perto de um bloco de controle).
@@ -1693,9 +1764,19 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
                 else if (wire.targetComponent == current) neighbor = wire.sourceComponent;
                 else continue;
                 if (neighbor >= m_componentInstances.size() || !m_componentInstances[neighbor]) continue;
-                if (std::string_view(m_componentInstances[neighbor]->typeId()) != "connectors.signal_tunnel") continue;
+                if (!isRelayTunnelTypeId(m_componentInstances[neighbor]->typeId())) continue;
                 if (!controlRateByComponent.emplace(neighbor, rate).second) continue;
                 pending.push_back(neighbor);
+            }
+            // A rede de túnel (mesmo NOME) é continuação do mesmo caminho de realimentação, mas não
+            // tem fio que a represente -- sem propagar por ela, os dois lados do par cairiam em
+            // RateGroups diferentes e o `SignalCompiler` recusaria o SCC da malha.
+            if (const auto peers = tunnelNetPeers.find(current); peers != tunnelNetPeers.end()) {
+                for (uint32_t peer : peers->second) {
+                    if (peer >= m_componentInstances.size() || !m_componentInstances[peer]) continue;
+                    if (!controlRateByComponent.emplace(peer, rate).second) continue;
+                    pending.push_back(peer);
+                }
             }
         }
     }
@@ -1717,15 +1798,21 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
                 ? simulation::SignalScalarType::Bool : simulation::SignalScalarType::Real;
             block.output = {"out", {scalar, 1}, port.unit};
             block.rate = {1, 0, 0};
-            // `connectors.signal_tunnel` é um relay (ver comentário em `connectSignalWireUnlocked`):
+            // Túnel de relay (nativo OU elétrico legado, ver `isRelayTunnelTypeId`):
             // sua declared `direction` só descreve o papel de FRONTEIRA (quem de fora pode dirigi-lo),
             // nunca decide sozinha se o BLOCO precisa de um `"in"` -- é `wiredInputTargets` (o fato de
             // ALGUÉM, dentro ou fora do subcircuito, já apontar um fio pra ele) que decide isso pra um
             // tunnel. Pra qualquer componente NORMAL (produtor/consumidor real, nunca um relay), a
             // regra continua a original: só um Input DECLARADO vira Probe.
-            const bool isSignalTunnel = std::string_view(component->typeId()) == "connectors.signal_tunnel";
-            const bool isWiredInput = wiredInputTargets.count(blockId) != 0 &&
-                                       (isSignalTunnel || port.direction == SignalPortDirection::Input);
+            const bool isRelayTunnel = isRelayTunnelTypeId(component->typeId());
+            const auto netSource = tunnelNetSourceByReader.find(blockId);
+            const bool readsTunnelNet = netSource != tunnelNetSourceByReader.end();
+            const bool isWiredInput = readsTunnelNet ||
+                                      (wiredInputTargets.count(blockId) != 0 &&
+                                       (isRelayTunnel || port.direction == SignalPortDirection::Input));
+            if (readsTunnelNet) {
+                result.connections.push_back({netSource->second, "out", blockId, "in", false});
+            }
             if (isWiredInput) {
                 block.kind = simulation::SignalBlockKind::Probe;
                 block.inputs.push_back({"in", {scalar, 1}, port.unit});
@@ -1786,6 +1873,23 @@ std::optional<std::vector<uint8_t>> SimulationSession::hartTransact(uint32_t com
         if (!component->transact(request, response)) return std::nullopt;
         return std::vector<uint8_t>(response.bytes().begin(), response.bytes().end());
     });
+}
+
+void SimulationSession::sampleSignalMathOutputsUnlocked(const std::vector<uint32_t>& componentIndices) {
+    for (uint32_t index : componentIndices) {
+        if (index >= m_componentInstances.size() || !m_componentInstances[index]) continue;
+        auto* block = dynamic_cast<components::SignalMathBlock*>(m_componentInstances[index].get());
+        if (!block) continue;
+        try {
+            // `signalPortBlockId(index, "out")` é publicado pelo PRÓPRIO bloco de cálculo (ver
+            // `SignalMathBlock::computeGraph`), então este é o resultado real do passo, não um relay
+            // com um passo de atraso.
+            block->setLastOutput(m_runtimeState.signals.real(m_runtimeState.signals.output(signalPortBlockId(index, "out"))));
+        } catch (...) {
+            // Plano ainda não compilado/bloco fora do grafo: mantém a última leitura publicada em vez
+            // de derrubar a captura de telemetria dos demais componentes.
+        }
+    }
 }
 
 void SimulationSession::sampleHartInputsFromSignalUnlocked() {

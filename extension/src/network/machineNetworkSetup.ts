@@ -222,7 +222,7 @@ async function installMachineNetworkInfra(context: vscode.ExtensionContext, vers
       if (result.code === UNSAFE_STATIC_IPV4_EXIT_CODE) {
         throw new Error(
           "A placa da rota padrão usa IPv4 estático. A bridge foi recusada antes de alterar a rede " +
-            "para evitar que o computador perca o IP. Use o modo \"isolated\" ou configure a bridge manualmente."
+            "para evitar que o computador perca o IP. Use o modo \"lab-router\" ou configure a bridge manualmente."
         );
       }
       if (result.code !== 0) {
@@ -248,11 +248,10 @@ async function offerInstall(context: vscode.ExtensionContext, version: string, o
   const buttons = options.allowDismiss ? [install, later, dontAskAgain] : [install, later];
 
   const choice = await vscode.window.showInformationMessage(
-    `O LasecSimul pode instalar o suporte opcional ao modo de rede "lab-bridge": driver TAP-Windows6, ` +
-      `Windows Network Bridge e gateway central. Deseja baixar e instalar agora ` +
+    `O LasecSimul pode instalar o suporte ao modo de rede "lab-router": driver TAP-Windows6, TAP roteada privada, NAT e gateway central. Deseja baixar e instalar agora ` +
       `(lasecsimul-${version}-win32-x64-setup.exe, a partir da release v${version} no GitHub)? ` +
       `Isso exige elevação administrativa (UAC). Sem isso, a extensão continua funcionando ` +
-      `normalmente no modo "isolated".`,
+      `normalmente no modo "disabled" até a infraestrutura ser instalada.`,
     ...buttons
   );
 

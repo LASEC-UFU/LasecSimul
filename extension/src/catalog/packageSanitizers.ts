@@ -78,6 +78,9 @@ export function sanitizePackageShape(value: unknown): PackageShape | undefined {
     partId: typeof shape.partId === "string" && shape.partId.trim() ? shape.partId.trim() : undefined,
     stateFill: sanitizeSimulidePaintStateFill(shape.stateFill),
     stateText: shape.kind === "text" ? sanitizeSimulidePaintStateText(shape.stateText) : undefined,
+    // Sem isto, um símbolo PARAMÉTRICO (uma forma por combinação de opções, filtrada por
+    // `stateVisible`) perdia o filtro na carga do catálogo e desenhava TODAS as variantes juntas.
+    stateVisible: sanitizeSimulidePaintStateVisible(shape.stateVisible),
     ...(statePath ? { statePath } : {}),
     logicGateBody,
   };
@@ -366,6 +369,14 @@ export function sanitizeSimulidePaintSpec(value: unknown): SimulidePaintSpec | u
     .map(sanitizeSimulidePaintPrimitive)
     .filter((primitive): primitive is SimulidePaintPrimitive => Boolean(primitive));
   if (primitives.length === 0) return undefined;
+  const referenceRaw = typeof raw.referenceSize === "object" && raw.referenceSize !== null
+    ? raw.referenceSize as Record<string, unknown>
+    : undefined;
+  const referenceWidth = finiteNumber(referenceRaw?.width);
+  const referenceHeight = finiteNumber(referenceRaw?.height);
+  const referenceSize = referenceWidth !== undefined && referenceHeight !== undefined && referenceWidth > 0 && referenceHeight > 0
+    ? { width: referenceWidth, height: referenceHeight }
+    : undefined;
   const sourceRaw = typeof raw.source === "object" && raw.source !== null ? raw.source as Record<string, unknown> : undefined;
   return {
     version: 1,
@@ -378,6 +389,8 @@ export function sanitizeSimulidePaintSpec(value: unknown): SimulidePaintSpec | u
         }
       : undefined,
     bounds: { x, y, w, h },
+    ...(raw.aspect === "fixed" || raw.aspect === "variable" ? { aspect: raw.aspect } : {}),
+    ...(referenceSize ? { referenceSize } : {}),
     ...(sanitizeOptionalString(raw.defaultStroke) ? { defaultStroke: sanitizeOptionalString(raw.defaultStroke) } : {}),
     ...(sanitizeOptionalString(raw.defaultFill) ? { defaultFill: sanitizeOptionalString(raw.defaultFill) } : {}),
     ...(finiteNumber(raw.defaultStrokeWidth) !== undefined ? { defaultStrokeWidth: finiteNumber(raw.defaultStrokeWidth) } : {}),
@@ -980,6 +993,7 @@ export function sanitizePackage(value: unknown, assetBasePath?: string): Package
   if (typeof value !== "object" || value === null) return undefined;
   const raw = value as Record<string, unknown>;
   if (typeof raw.width !== "number" || typeof raw.height !== "number") return undefined;
+  const packageAspect = raw.aspect === "fixed" || raw.aspect === "variable" ? raw.aspect : undefined;
   const dynamicLayout = sanitizeDynamicLayout(raw.dynamicLayout);
   const rawPins = Array.isArray(raw.pins) ? raw.pins : [];
 
@@ -1031,6 +1045,30 @@ export function sanitizePackage(value: unknown, assetBasePath?: string): Package
 
   const background = sanitizePackageBackground(raw.background, assetBasePath);
   const runtimeState = sanitizeRuntimeState(raw.runtimeState);
+  const provenanceRaw = typeof raw.provenance === "object" && raw.provenance !== null
+    ? raw.provenance as Record<string, unknown>
+    : undefined;
+  const provenanceArray = (value: unknown): string[] | undefined => {
+    if (!Array.isArray(value)) return undefined;
+    const items = value.filter((item): item is string => typeof item === "string" && Boolean(item.trim()));
+    return items.length > 0 ? items : undefined;
+  };
+  const provenance = provenanceRaw ? {
+    source: sanitizeOptionalString(provenanceRaw.source),
+    sourceCommit: sanitizeOptionalString(provenanceRaw.sourceCommit),
+    sourceFiles: provenanceArray(provenanceRaw.sourceFiles),
+    sourceStencil: sanitizeOptionalString(provenanceRaw.sourceStencil),
+    sourceNames: provenanceArray(provenanceRaw.sourceNames),
+    adaptation: sanitizeOptionalString(provenanceRaw.adaptation),
+    license: sanitizeOptionalString(provenanceRaw.license),
+    licenseUrl: sanitizeOptionalString(provenanceRaw.licenseUrl),
+    requiredNotice: sanitizeOptionalString(provenanceRaw.requiredNotice),
+    conceptualReference: sanitizeOptionalString(provenanceRaw.conceptualReference),
+    conceptualReferenceCommit: sanitizeOptionalString(provenanceRaw.conceptualReferenceCommit),
+    conceptualReferenceFiles: provenanceArray(provenanceRaw.conceptualReferenceFiles),
+    conceptualReferenceTopics: provenanceArray(provenanceRaw.conceptualReferenceTopics),
+    conceptualReferenceReuse: sanitizeOptionalString(provenanceRaw.conceptualReferenceReuse),
+  } : undefined;
 
   // Um descritor sem pino algum ainda é válido quando tem OUTRO conteúdo visual real (shapes/
   // background/viewSpec) -- o Ícone do subcircuito (Modo Ícone) NUNCA tem pinos por definição
@@ -1044,6 +1082,7 @@ export function sanitizePackage(value: unknown, assetBasePath?: string): Package
   return {
     width: raw.width,
     height: raw.height,
+    provenance,
     coordinateSpace: raw.coordinateSpace === "simulide-local" ? raw.coordinateSpace : undefined,
     schematicWidth: typeof raw.schematicWidth === "number" ? raw.schematicWidth : undefined,
     schematicHeight: typeof raw.schematicHeight === "number" ? raw.schematicHeight : undefined,
@@ -1055,6 +1094,7 @@ export function sanitizePackage(value: unknown, assetBasePath?: string): Package
         }
       : undefined,
     border: typeof raw.border === "boolean" ? raw.border : undefined,
+    ...(packageAspect ? { aspect: packageAspect } : {}),
     background,
     runtimeState,
     pinMarker: raw.pinMarker === "packagePin" ? "packagePin" : undefined,

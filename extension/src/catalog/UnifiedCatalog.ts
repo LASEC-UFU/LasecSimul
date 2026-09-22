@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { McuSerialPortEntry, PackageDescriptor, PropertySchemaEntry, WebviewComponentCatalogEntry } from "../ui/webview/model";
+import { McuSerialPortEntry, PackageDescriptor, PackageProvenance, PropertySchemaEntry, WebviewComponentCatalogEntry } from "../ui/webview/model";
 import { defaultComponentCatalog } from "../ui/webview/catalog";
 import { controlGraphCatalog } from "./controlGraphCatalog";
 import { sanitizeMcuSerialPorts } from "./catalogMetadata";
@@ -27,6 +27,7 @@ export interface UnifiedCatalogItem {
   iconFilePath?: string;
   symbolSvg?: string;
   package?: PackageDescriptor;
+  provenance?: PackageProvenance;
   propertySchema?: PropertySchemaEntry[];
   help?: { description?: string; url?: string; file?: string };
   folderPath?: string[];
@@ -140,6 +141,7 @@ export function entryToWebview(item: UnifiedCatalogItem): WebviewComponentCatalo
   return {
     typeId: item.typeId,
     label: item.label,
+    provenance: item.provenance,
     category,
     subcategory,
     folderPath,

@@ -1,7 +1,7 @@
 ---
 id: FEAT-008
 kind: feature
-status: deferred
+status: active
 dependsOn: [FEAT-001, ARCH-005, FEAT-011]
 supersedes: []
 ---
@@ -9,6 +9,20 @@ supersedes: []
 # Visualização animada de processo
 
 Visualização é projeção de telemetria, não participante do solver. Assets e bindings pertencem à autoria/Extension; o Core publica valores por slots/handles compilados.
+
+## Estado da implementação (v0.0.13)
+
+A camada gráfica de supervisório está implementada e ativa: `Miscelâneos → Gráfico` publica 28
+símbolos industriais como componentes normais de catálogo (`graphics.*`, `pinCount: 0`, portanto
+fora do solver por construção), com binding genérico de telemetria por id estável e as 24 telas de
+processo TDPS reconstruídas sem bitmap. Ver `docs/44-biblioteca-grafica-supervisorio-fase0.md`
+(auditoria/arquitetura) e `docs/45-biblioteca-grafica-supervisorio-implementacao.md`
+(implementação, cobertura, testes e lacunas).
+
+Continua **não implementado** desta spec: animação declarativa com eixo de tempo (a projeção é
+amostrada pela telemetria existente, ~300 ms, sem interpolação) e política própria de FPS/descarte
+de frame. Bindings inválidos hoje degradam para o valor autorado e marcam `missing` no desenho, em
+vez de falharem na compilação/autoria.
 
 ## Shell de navegação já disponível
 

@@ -36,16 +36,25 @@ function observerPackage(label: string): PackageDescriptor {
     pins: [{ id: "in", x: 0, y: 24, angle: 180, length: 8, label: "IN" }] };
 }
 
+/** Os únicos primitivos que os modelos TDPS instanciam DIRETO e que não têm um bloco
+ * `subcircuits.control.*` equivalente (ver `scripts/generate-control-block-library.mjs`): só estes
+ * aparecem na paleta, na RAIZ da aba Controle (`folderPath: []`), junto dos 24 blocos da
+ * biblioteca. Todo o resto de `control.*` é a implementação interna desses 24 blocos (o "stage"
+ * de cada `.lssubcircuit`) -- duplicar isso na paleta era justamente a subseção "Controle" que
+ * aparecia dentro de Processo. */
+const PALETTE_VISIBLE_TYPE_IDS = new Set(["control.observer", "control.calc_expression", "control.process"]);
+
 function entry(definition: ControlDefinition): WebviewComponentCatalogEntry {
   const [typeId, label, pins, defaults = {}] = definition;
-  // Blocos de controle ficam ocultos apenas da paleta quando eram auxiliares do runtime. No editor
-  // de subcircuito eles são o conteúdo principal e precisam ser renderizados junto dos túneis.
-  return { typeId, label, category: "Controle", folderPath: ["Controle"], workspaceSection: "process", icon: "package", hidden: false, graphical: true,
+  // `paletteHidden` (só a paleta), nunca `hidden` (que apagaria a INSTÂNCIA do render): no editor de
+  // subcircuito estes blocos são o conteúdo principal e precisam aparecer junto dos túneis.
+  return { typeId, label, category: "Controle", folderPath: [], workspaceSection: "control", icon: "package", hidden: false,
+    paletteHidden: !PALETTE_VISIBLE_TYPE_IDS.has(typeId), graphical: true,
     pinCount: pins.length, pinIds: [...pins], defaultProperties: { ...defaults }, package: packageFor(label, pins) };
 }
 
 export const controlGraphCatalog: WebviewComponentCatalogEntry[] = [
-  { typeId: "control.observer", label: "Sonda", category: "Controle", folderPath: ["Controle"], workspaceSection: "process", icon: "package", hidden: false, graphical: true, pinCount: 1, pinIds: ["in"], defaultProperties: { observerOnly: true }, package: observerPackage("Sonda") },
+  { typeId: "control.observer", label: "Sonda", category: "Controle", folderPath: [], workspaceSection: "control", icon: "package", hidden: false, graphical: true, pinCount: 1, pinIds: ["in"], defaultProperties: { observerOnly: true }, package: observerPackage("Sonda") },
   { typeId: "connectors.signal_tunnel", label: "Túnel de sinal", category: "Conectores", folderPath: ["Conectores"], workspaceSection: "process", icon: "tunel", hidden: true, graphical: true, pinCount: 1, pinIds: ["value"], defaultProperties: { name: "signal", direction: "Input", valueType: "Real" }, package: packageFor("SINAL", ["value"]) },
   ...unary.map(entry), ...multi.map(entry),
 ];

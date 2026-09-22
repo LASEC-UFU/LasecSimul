@@ -139,7 +139,7 @@ export function buildPaletteTree(entries: PaletteRenderableEntry[], rawQuery: st
   const query = normalizeSearchText(rawQuery);
 
   for (const entry of entries) {
-    if (entry.hidden || (workspaceSection && workspaceSectionForCatalogEntry(entry) !== workspaceSection) || !entryMatchesQuery(entry, query)) continue;
+    if (entry.hidden || entry.paletteHidden || (workspaceSection && workspaceSectionForCatalogEntry(entry) !== workspaceSection) || !entryMatchesQuery(entry, query)) continue;
     const pathSegments = resolvePaletteFolderPath(entry);
 
     let targetChildren = roots;

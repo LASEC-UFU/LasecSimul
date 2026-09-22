@@ -19,7 +19,6 @@
 import {
   Point,
   WIRE_GRID_SIZE,
-  buildOrthogonalPath,
   nearestSnappedPointOnOrthogonalSegment,
   normalizeOrthogonalPath,
   samePoint,
@@ -27,7 +26,13 @@ import {
 } from "./wireGeometry.js";
 import { CanonicalEndpoint, TopologyNode, WebviewComponentModel, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint } from "./model.js";
 import { componentBox, componentLocalOrigin, pinLocalPosition } from "./componentSymbols.js";
-import { localToScene } from "./componentGeometry.js";
+import { localToScene, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
+import {
+  ConnectionDirection,
+  ConnectionRect,
+  orthogonalizeConnectionWaypoints,
+  routeOrthogonalConnection,
+} from "./connectionEngine.js";
 
 export interface TopologySnapshot {
   components: WebviewComponentModel[];
@@ -66,13 +71,89 @@ export function endpointScenePosition(components: WebviewComponentModel[], endpo
   return pinScenePosition(components, endpointId(endpoint), endpointPinId(endpoint), nodes);
 }
 
+function componentSceneRect(component: WebviewComponentModel): ConnectionRect {
+  const size = componentBox(component.typeId, component.properties);
+  const bounds = transformedLocalBounds({
+    size,
+    rotation: component.rotation,
+    flipH: Boolean(component.flipH),
+    flipV: Boolean(component.flipV),
+    origin: componentLocalOrigin(component.typeId, component.properties),
+  });
+  return { x: component.x + bounds.x, y: component.y + bounds.y, width: bounds.width, height: bounds.height };
+}
+
+/**
+ * Port exit direction derived from the authored pin position and the same
+ * affine transform used by the renderer. Package pins normally sit on a box
+ * edge; generic fallback pins do too. This adds routing metadata without
+ * changing any stable pin ID or simulation semantics.
+ */
+export function pinSceneDirection(component: WebviewComponentModel, pinId: string): ConnectionDirection | undefined {
+  const pinIndex = component.pins.findIndex((pin) => pin.id === pinId);
+  if (pinIndex < 0) return undefined;
+  const size = componentBox(component.typeId, component.properties);
+  const point = pinLocalPosition(pinId, pinIndex, component.pins.length, component.typeId, component.properties);
+  const candidates: Array<{ direction: ConnectionDirection; distance: number; vector: Point }> = [
+    { direction: "left", distance: Math.abs(point.x), vector: { x: -1, y: 0 } },
+    { direction: "right", distance: Math.abs(size.width - point.x), vector: { x: 1, y: 0 } },
+    { direction: "top", distance: Math.abs(point.y), vector: { x: 0, y: -1 } },
+    { direction: "bottom", distance: Math.abs(size.height - point.y), vector: { x: 0, y: 1 } },
+  ];
+  candidates.sort((a, b) => a.distance - b.distance);
+  const localDirection = candidates[0]!;
+  const transform = {
+    size,
+    rotation: component.rotation,
+    flipH: Boolean(component.flipH),
+    flipV: Boolean(component.flipV),
+    origin: componentLocalOrigin(component.typeId, component.properties),
+  };
+  const transformedPoint = transformLocalPoint(point, transform);
+  const transformedVectorEnd = transformLocalPoint({ x: point.x + localDirection.vector.x, y: point.y + localDirection.vector.y }, transform);
+  const dx = transformedVectorEnd.x - transformedPoint.x;
+  const dy = transformedVectorEnd.y - transformedPoint.y;
+  if (Math.abs(dx) >= Math.abs(dy)) return dx < 0 ? "left" : "right";
+  return dy < 0 ? "top" : "bottom";
+}
+
 /** Polilinha completa do fio (com as duas extremidades reais resolvidas), ou `[]` se algum dos dois
  * pinos não existir mais (referência órfã -- ver `normalizeWireGeometry`). */
 export function wirePolylinePoints(components: WebviewComponentModel[], wire: WebviewWireModel, nodes: TopologyNode[] = []): Point[] {
   const fromPos = endpointScenePosition(components, wire.from, nodes);
   const toPos = endpointScenePosition(components, wire.to, nodes);
   if (!fromPos || !toPos) return [];
-  return buildOrthogonalPath([fromPos, ...(wire.points ?? []), toPos]);
+  const fromComponentId = wire.from.kind === "port" ? wire.from.componentId : undefined;
+  const toComponentId = wire.to.kind === "port" ? wire.to.componentId : undefined;
+  const fromComponent = fromComponentId ? components.find((entry) => entry.id === fromComponentId) : undefined;
+  const toComponent = toComponentId ? components.find((entry) => entry.id === toComponentId) : undefined;
+  const endpointComponentIds = new Set([fromComponent?.id, toComponent?.id].filter((id): id is string => Boolean(id)));
+  const obstacles = components
+    .filter((component) => !endpointComponentIds.has(component.id) && !component.hidden && !component.hiddenByUser)
+    .map(componentSceneRect);
+
+  // Persisted points are authored/manual waypoints. Their coordinates remain
+  // authoritative; the engine only inserts an orthogonal elbow when two
+  // consecutive authored anchors are diagonal.
+  if (wire.points && wire.points.length > 0) {
+    return orthogonalizeConnectionWaypoints([fromPos, ...wire.points, toPos], obstacles);
+  }
+
+  const endpointBoxes = [fromComponent, toComponent]
+    .filter((component): component is WebviewComponentModel => Boolean(component))
+    .map(componentSceneRect);
+  return routeOrthogonalConnection(
+    {
+      ...fromPos,
+      direction: fromComponent && wire.from.kind === "port" ? pinSceneDirection(fromComponent, wire.from.pinId) : undefined,
+    },
+    {
+      ...toPos,
+      direction: toComponent && wire.to.kind === "port" ? pinSceneDirection(toComponent, wire.to.pinId) : undefined,
+    },
+    obstacles,
+    endpointBoxes
+  );
 }
 
 /** Quantos fios distintos tocam `nodeOrComponentId` (como `from` ou `to`) -- a base de tudo
@@ -179,12 +260,16 @@ export function splitSegmentAtPoint(snapshot: TopologySnapshot, wireId: string, 
     from: wire.from,
     to: nodeEndpoint(junctionId),
     points: split.first.length > 0 ? split.first : undefined,
+    ...(wire.hidden ? { hidden: true } : {}),
+    ...(wire.lineClass ? { lineClass: wire.lineClass } : {}),
   };
   const secondWire: WebviewWireModel = {
     id: ids.secondWireId,
     from: nodeEndpoint(junctionId),
     to: wire.to,
     points: split.second.length > 0 ? split.second : undefined,
+    ...(wire.hidden ? { hidden: true } : {}),
+    ...(wire.lineClass ? { lineClass: wire.lineClass } : {}),
   };
   return { node, firstWire, secondWire };
 }
@@ -310,6 +395,9 @@ export function removeOrphanNodes(snapshot: TopologySnapshot): TopologySnapshot 
 
       // grau exatamente 2: funde as duas metades num único fio contínuo, removendo o nó.
       const [wireA, wireB] = touching as [WebviewWireModel, WebviewWireModel];
+      // Uma junção de grau 2 também pode representar uma transição visual entre duas classes ISA.
+      // Colapsá-la escolheria arbitrariamente um dos estilos e perderia informação persistida.
+      if (wireA.lineClass !== wireB.lineClass) continue;
       const aEndsAtNode = endpointId(wireA.to) === nodeId;
       const bEndsAtNode = endpointId(wireB.to) === nodeId;
       const outerFrom = aEndsAtNode ? wireA.from : wireA.to;
@@ -327,6 +415,8 @@ export function removeOrphanNodes(snapshot: TopologySnapshot): TopologySnapshot 
         from: outerFrom,
         to: outerTo,
         points: mergedPoints.length > 0 ? mergedPoints : undefined,
+        ...(wireA.hidden && wireB.hidden ? { hidden: true } : {}),
+        ...(wireA.lineClass ? { lineClass: wireA.lineClass } : {}),
       };
 
       wires = [mergedWire, ...wires.filter((wire) => wire.id !== wireA.id && wire.id !== wireB.id)];

@@ -1,0 +1,6045 @@
+{
+  "generatedAt": "2026-09-21T14:42:25.869Z",
+  "upstream": "https://github.com/jgraph/drawio",
+  "commit": "744cb5420fdf126efd7a09b1d7082ca3e12c0841",
+  "stencilRoot": "src/main/webapp/stencils/pid",
+  "policy": "Reference-only audit. No draw.io stencil XML or geometry is shipped by LasecSimul.",
+  "fileCount": 24,
+  "symbolCount": 478,
+  "files": [
+    {
+      "source": "src/main/webapp/stencils/pid/agitators.xml",
+      "category": "Mixers and agitators",
+      "symbolCount": 10,
+      "symbols": [
+        {
+          "id": "agitators.xml:1",
+          "name": "Agitator, Stirrer",
+          "width": 80,
+          "height": 120,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "agitators.xml:2",
+          "name": "Agitator (Anchor)",
+          "width": 80,
+          "height": 120,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "arc"
+          ]
+        },
+        {
+          "id": "agitators.xml:3",
+          "name": "Agitator (Cross-Beam)",
+          "width": 80,
+          "height": 120,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "agitators.xml:4",
+          "name": "Agitator (Disc)",
+          "width": 80,
+          "height": 135,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "agitators.xml:5",
+          "name": "Agitator (Flate-Blade Paddle)",
+          "width": 80,
+          "height": 140,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "agitators.xml:6",
+          "name": "Agitator (Gat Paddle)",
+          "width": 80,
+          "height": 120,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "agitators.xml:7",
+          "name": "Agitator (Helical)",
+          "width": 80,
+          "height": 130,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "agitators.xml:8",
+          "name": "Agitator (Impeller)",
+          "width": 80,
+          "height": 130,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "arc"
+          ]
+        },
+        {
+          "id": "agitators.xml:9",
+          "name": "Agitator (Propeller)",
+          "width": 92.74,
+          "height": 132.12,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "agitators.xml:10",
+          "name": "Agitator (Turbine)",
+          "width": 80,
+          "height": 135,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/apparatus_elements.xml",
+      "category": "Other P&ID",
+      "symbolCount": 6,
+      "symbols": [
+        {
+          "id": "apparatus_elements.xml:1",
+          "name": "Manhole",
+          "width": 100,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "apparatus_elements.xml:2",
+          "name": "Socket, Connection Nozzle",
+          "width": 30,
+          "height": 40,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "apparatus_elements.xml:3",
+          "name": "Support Bracket",
+          "width": 10,
+          "height": 10,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "apparatus_elements.xml:4",
+          "name": "Support Leg",
+          "width": 25,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "apparatus_elements.xml:5",
+          "name": "Support Ring",
+          "width": 100,
+          "height": 25,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "apparatus_elements.xml:6",
+          "name": "Support Skirt",
+          "width": 100,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/centrifuges.xml",
+      "category": "Other P&ID",
+      "symbolCount": 8,
+      "symbols": [
+        {
+          "id": "centrifuges.xml:1",
+          "name": "Centrifuge, Decanter (Screw, Solid Shell)",
+          "width": 110,
+          "height": 100,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "centrifuges.xml:2",
+          "name": "Centrifuge (High Speed)",
+          "width": 100,
+          "height": 110,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "centrifuges.xml:3",
+          "name": "Centrifuge (Perforated Shell)",
+          "width": 100,
+          "height": 110,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "centrifuges.xml:4",
+          "name": "Centrifuge (Pusher)",
+          "width": 110,
+          "height": 100,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "centrifuges.xml:5",
+          "name": "Centrifuge (Screw, Perforated Shell)",
+          "width": 110,
+          "height": 100,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "centrifuges.xml:6",
+          "name": "Centrifuge (Separator Disc)",
+          "width": 100,
+          "height": 110,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "centrifuges.xml:7",
+          "name": "Centrifuge (Skimmer)",
+          "width": 110,
+          "height": 100,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "centrifuges.xml:8",
+          "name": "Centrifuge (Solid Shell)",
+          "width": 100,
+          "height": 110,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/compressors.xml",
+      "category": "Rotating equipment",
+      "symbolCount": 9,
+      "symbols": [
+        {
+          "id": "compressors.xml:1",
+          "name": "AC Air Compressor",
+          "width": 101.88,
+          "height": 68,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "compressors.xml:2",
+          "name": "Centrifugal Compressor",
+          "width": 70,
+          "height": 67,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "arc"
+          ]
+        },
+        {
+          "id": "compressors.xml:3",
+          "name": "Centrifugal Compressor - Turbine Driven",
+          "width": 98,
+          "height": 67,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "compressors.xml:4",
+          "name": "Compressor",
+          "width": 100,
+          "height": 100,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "compressors.xml:5",
+          "name": "Compressor and Silencers",
+          "width": 90,
+          "height": 80.56,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "compressors.xml:6",
+          "name": "Liquid Ring Compressor",
+          "width": 90,
+          "height": 90,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "arc",
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "compressors.xml:7",
+          "name": "Reciprocating Compressor",
+          "width": 98,
+          "height": 40,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "compressors.xml:8",
+          "name": "Reciprocating Compressor 2",
+          "width": 50,
+          "height": 65,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "compressors.xml:9",
+          "name": "Rotary Compressor",
+          "width": 42,
+          "height": 91,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "close"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/compressors_iso.xml",
+      "category": "Rotating equipment",
+      "symbolCount": 11,
+      "symbols": [
+        {
+          "id": "compressors_iso.xml:1",
+          "name": "Blower, Fan",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "compressors_iso.xml:2",
+          "name": "Compressor, Vacuum Pump",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "compressors_iso.xml:3",
+          "name": "Compressor (Centrifugal)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "compressors_iso.xml:4",
+          "name": "Compressor (Diaphragm)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "compressors_iso.xml:5",
+          "name": "Compressor (Ejector)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "compressors_iso.xml:6",
+          "name": "Compressor (Piston)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "compressors_iso.xml:7",
+          "name": "Compressor (Ring)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "compressors_iso.xml:8",
+          "name": "Compressor (Roller Vane)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "compressors_iso.xml:9",
+          "name": "Compressor (Rotary)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "compressors_iso.xml:10",
+          "name": "Compressor (Screw)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "compressors_iso.xml:11",
+          "name": "Compressor (Turbo)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/crushers_grinding.xml",
+      "category": "Other P&ID",
+      "symbolCount": 13,
+      "symbols": [
+        {
+          "id": "crushers_grinding.xml:1",
+          "name": "Crusher",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "crushers_grinding.xml:2",
+          "name": "Crusher (Cone)",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "crushers_grinding.xml:3",
+          "name": "Crusher (Hammer)",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "crushers_grinding.xml:4",
+          "name": "Crusher (Impact)",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "crushers_grinding.xml:5",
+          "name": "Crusher (Jaw)",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "crushers_grinding.xml:6",
+          "name": "Crusher (Roller)",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "crushers_grinding.xml:7",
+          "name": "Crushing, Grinding Machine",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "crushers_grinding.xml:8",
+          "name": "Mill, Pulverizer",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "crushers_grinding.xml:9",
+          "name": "Mill, Pulverizer (Hammer)",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "crushers_grinding.xml:10",
+          "name": "Mill, Pulverizer (Impact)",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "crushers_grinding.xml:11",
+          "name": "Mill (Roller)",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "crushers_grinding.xml:12",
+          "name": "Mill (Vibration)",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "crushers_grinding.xml:13",
+          "name": "Mill (Vibration)2",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/driers.xml",
+      "category": "Other P&ID",
+      "symbolCount": 8,
+      "symbols": [
+        {
+          "id": "driers.xml:1",
+          "name": "Drier",
+          "width": 100,
+          "height": 140,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "driers.xml:2",
+          "name": "Drier (Fluidized Bed)",
+          "width": 100,
+          "height": 140,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "driers.xml:3",
+          "name": "Drier (Roller Conveyor Belt)",
+          "width": 100,
+          "height": 140,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "driers.xml:4",
+          "name": "Drying Oven, Drying Chamber, Shelf Dryer",
+          "width": 100,
+          "height": 140,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "driers.xml:5",
+          "name": "Heat Consumer",
+          "width": 100,
+          "height": 100,
+          "connections": 1,
+          "primitives": [
+            "ellipse"
+          ]
+        },
+        {
+          "id": "driers.xml:6",
+          "name": "Rotary Drum Drier, Tumbling Drier",
+          "width": 100,
+          "height": 140,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "driers.xml:7",
+          "name": "Spray Drier",
+          "width": 100,
+          "height": 140,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "driers.xml:8",
+          "name": "Turbo Drier, Disc Drier, Moving Shelf Drier",
+          "width": 100,
+          "height": 140,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/engines.xml",
+      "category": "Motors and drives",
+      "symbolCount": 8,
+      "symbols": [
+        {
+          "id": "engines.xml:1",
+          "name": "Electric Motor",
+          "width": 100,
+          "height": 100,
+          "connections": 4,
+          "primitives": [
+            "ellipse"
+          ]
+        },
+        {
+          "id": "engines.xml:2",
+          "name": "Electric Motor (AC)",
+          "width": 100,
+          "height": 100,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "arc",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "engines.xml:3",
+          "name": "Electric Motor (DC)",
+          "width": 100,
+          "height": 100,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "engines.xml:4",
+          "name": "Gear",
+          "width": 100,
+          "height": 100,
+          "connections": 4,
+          "primitives": [
+            "rect"
+          ]
+        },
+        {
+          "id": "engines.xml:5",
+          "name": "Generator",
+          "width": 100,
+          "height": 100,
+          "connections": 4,
+          "primitives": [
+            "ellipse"
+          ]
+        },
+        {
+          "id": "engines.xml:6",
+          "name": "Generator (AC)",
+          "width": 100,
+          "height": 100,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "arc",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "engines.xml:7",
+          "name": "Generator (DC)",
+          "width": 100,
+          "height": 100,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "engines.xml:8",
+          "name": "Turbine",
+          "width": 70,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/feeders.xml",
+      "category": "Other P&ID",
+      "symbolCount": 5,
+      "symbols": [
+        {
+          "id": "feeders.xml:1",
+          "name": "Feeder (Rotary Table)",
+          "width": 104.65,
+          "height": 100,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "arc"
+          ]
+        },
+        {
+          "id": "feeders.xml:2",
+          "name": "Proportional Feeder",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "feeders.xml:3",
+          "name": "Proportional Feeder (Metering)",
+          "width": 300,
+          "height": 50,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "feeders.xml:4",
+          "name": "Proportional Feeder (Rotary Valve)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "feeders.xml:5",
+          "name": "Spray Nozzle",
+          "width": 100,
+          "height": 50,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/filters.xml",
+      "category": "Process equipment",
+      "symbolCount": 16,
+      "symbols": [
+        {
+          "id": "filters.xml:1",
+          "name": "Filter",
+          "width": 50,
+          "height": 50,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "filters.xml:2",
+          "name": "Gas Filter",
+          "width": 50,
+          "height": 100,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "filters.xml:3",
+          "name": "Gas Filter (Bag, Candle, Cartridge)",
+          "width": 50,
+          "height": 100,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "filters.xml:4",
+          "name": "Gas Filter (Belt, Roll)",
+          "width": 50,
+          "height": 100,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "filters.xml:5",
+          "name": "Gas Filter (Fixed Bed)",
+          "width": 50,
+          "height": 100,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "filters.xml:6",
+          "name": "Gas Filter (HEPA)",
+          "width": 50,
+          "height": 100,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "filters.xml:7",
+          "name": "Liquid Filter",
+          "width": 50,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "filters.xml:8",
+          "name": "Liquid Filter (Bag, Candle, Cartridge)",
+          "width": 50,
+          "height": 100,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "filters.xml:9",
+          "name": "Liquid Filter (Belt, Roll)",
+          "width": 50,
+          "height": 100,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "filters.xml:10",
+          "name": "Liquid Filter (Biological)",
+          "width": 50,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "filters.xml:11",
+          "name": "Liquid Filter (Fixed Bed)",
+          "width": 50,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "filters.xml:12",
+          "name": "Liquid Filter (Ion Exchanger)",
+          "width": 50,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "filters.xml:13",
+          "name": "Liquid Filter (Rotary, Drum or Disc)",
+          "width": 50,
+          "height": 100,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "filters.xml:14",
+          "name": "Liquid Filter (Rotary, Drum or Disc, Scraper)",
+          "width": 55,
+          "height": 100,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "filters.xml:15",
+          "name": "Press Filter",
+          "width": 100,
+          "height": 50,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "filters.xml:16",
+          "name": "Suction Filter",
+          "width": 50,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/fittings.xml",
+      "category": "Other P&ID",
+      "symbolCount": 35,
+      "symbols": [
+        {
+          "id": "fittings.xml:1",
+          "name": "Blind Disc",
+          "width": 40,
+          "height": 140,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "fittings.xml:2",
+          "name": "Blind Disc2",
+          "width": 40,
+          "height": 140,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "fittings.xml:3",
+          "name": "Breakthrough",
+          "width": 38,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "fittings.xml:4",
+          "name": "Breakthrough2",
+          "width": 38,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "fittings.xml:5",
+          "name": "Clamped Flange Coupling",
+          "width": 50,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "fittings.xml:6",
+          "name": "Compensator",
+          "width": 40,
+          "height": 80,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "fittings.xml:7",
+          "name": "Coupling",
+          "width": 50,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "fittings.xml:8",
+          "name": "Flame Arrestor",
+          "width": 50,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "fittings.xml:9",
+          "name": "Flame Arrestor (Detonation-Proof)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "fittings.xml:10",
+          "name": "Flame Arrestor (Explosion-Proof)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "fittings.xml:11",
+          "name": "Flame Arrestor (Fire-Resistant)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "fittings.xml:12",
+          "name": "Flame Arrestor (Fire-Resistant, Detonation-Proof)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "fittings.xml:13",
+          "name": "Flanged Connection",
+          "width": 20,
+          "height": 50,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "fittings.xml:14",
+          "name": "Flanged Dummy Cover",
+          "width": 85,
+          "height": 50,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "fittings.xml:15",
+          "name": "Funnel",
+          "width": 80,
+          "height": 140,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "fittings.xml:16",
+          "name": "Hose",
+          "width": 180,
+          "height": 30,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "arc"
+          ]
+        },
+        {
+          "id": "fittings.xml:17",
+          "name": "Injector",
+          "width": 80,
+          "height": 40,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "fittings.xml:18",
+          "name": "Interchangeable Disc (Blind Disc)",
+          "width": 40,
+          "height": 140,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "fittings.xml:19",
+          "name": "Interchangeable Disc (Blind Disc)2",
+          "width": 40,
+          "height": 140,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "fittings.xml:20",
+          "name": "Interchangeable Disc (Open Disc In Function)",
+          "width": 40,
+          "height": 140,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "fittings.xml:21",
+          "name": "Interchangeable Disc (Open Disc In Function)2",
+          "width": 40,
+          "height": 140,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "fittings.xml:22",
+          "name": "Open Disc",
+          "width": 40,
+          "height": 140,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "fittings.xml:23",
+          "name": "Orifice Plate",
+          "width": 40,
+          "height": 140,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "fittings.xml:24",
+          "name": "Orifice Plate2",
+          "width": 40,
+          "height": 140,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "fittings.xml:25",
+          "name": "Reducer",
+          "width": 70,
+          "height": 50,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "fittings.xml:26",
+          "name": "Rupture Disc",
+          "width": 50,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect"
+          ]
+        },
+        {
+          "id": "fittings.xml:27",
+          "name": "Self-Operating Release Valve",
+          "width": 104.97,
+          "height": 104.92,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "arc",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "fittings.xml:28",
+          "name": "Self-Operating Release Valve2",
+          "width": 104.97,
+          "height": 104.92,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "arc",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "fittings.xml:29",
+          "name": "Silencer",
+          "width": 140,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "fittings.xml:30",
+          "name": "Single Flange",
+          "width": 5,
+          "height": 50,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "fittings.xml:31",
+          "name": "Strainer",
+          "width": 40,
+          "height": 80,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "fittings.xml:32",
+          "name": "Strainer (Cone)",
+          "width": 40,
+          "height": 80,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "fittings.xml:33",
+          "name": "Vent",
+          "width": 80,
+          "height": 140,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "fittings.xml:34",
+          "name": "Viewing Glass",
+          "width": 100,
+          "height": 50,
+          "connections": 2,
+          "primitives": [
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "fittings.xml:35",
+          "name": "Viewing Glass (Lighting)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/flow_sensors.xml",
+      "category": "Instrumentation",
+      "symbolCount": 16,
+      "symbols": [
+        {
+          "id": "flow_sensors.xml:1",
+          "name": "Averging Pitot Tube",
+          "width": 50,
+          "height": 50,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "flow_sensors.xml:2",
+          "name": "Coriolis",
+          "width": 50,
+          "height": 50,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "flow_sensors.xml:3",
+          "name": "Flow Nozzle",
+          "width": 50,
+          "height": 25,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "flow_sensors.xml:4",
+          "name": "Flume",
+          "width": 50,
+          "height": 50,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "flow_sensors.xml:5",
+          "name": "Magnetic",
+          "width": 50,
+          "height": 50,
+          "connections": 3,
+          "primitives": [
+            "rect"
+          ]
+        },
+        {
+          "id": "flow_sensors.xml:6",
+          "name": "Pitot Tube",
+          "width": 50,
+          "height": 50,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "flow_sensors.xml:7",
+          "name": "Positive Displacement",
+          "width": 50,
+          "height": 30,
+          "connections": 3,
+          "primitives": [
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "flow_sensors.xml:8",
+          "name": "Rotameter",
+          "width": 75,
+          "height": 50,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "flow_sensors.xml:9",
+          "name": "Target",
+          "width": 50,
+          "height": 50,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "flow_sensors.xml:10",
+          "name": "Turbine",
+          "width": 50,
+          "height": 50,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "flow_sensors.xml:11",
+          "name": "Ultrasonic",
+          "width": 50,
+          "height": 50,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "arc",
+            "rect"
+          ]
+        },
+        {
+          "id": "flow_sensors.xml:12",
+          "name": "V-cone",
+          "width": 50,
+          "height": 50,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "flow_sensors.xml:13",
+          "name": "Venturi",
+          "width": 50,
+          "height": 40,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "flow_sensors.xml:14",
+          "name": "Vortex",
+          "width": 50,
+          "height": 50,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "flow_sensors.xml:15",
+          "name": "Wedge",
+          "width": 50,
+          "height": 50,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "flow_sensors.xml:16",
+          "name": "Weir",
+          "width": 50,
+          "height": 50,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/heat_exchangers.xml",
+      "category": "Process equipment",
+      "symbolCount": 23,
+      "symbols": [
+        {
+          "id": "heat_exchangers.xml:1",
+          "name": "Condenser",
+          "width": 80,
+          "height": 80,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:2",
+          "name": "Double Pipe Heat Exchanger",
+          "width": 90,
+          "height": 50,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:3",
+          "name": "Electric Heater",
+          "width": 140,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:4",
+          "name": "Fixed Straight Tubes Heat Exchanger",
+          "width": 100,
+          "height": 40,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:5",
+          "name": "Hairpin Exchanger",
+          "width": 91.75,
+          "height": 30,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:6",
+          "name": "Heater",
+          "width": 80,
+          "height": 80,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:7",
+          "name": "Heat Exchanger (Coil Tubes)",
+          "width": 100,
+          "height": 30,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:8",
+          "name": "Heat Exchanger (Finned Tubes)",
+          "width": 100,
+          "height": 30,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:9",
+          "name": "Heat Exchanger (Finned Tubes, Fan)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:10",
+          "name": "Heat Exchanger (Floating Head)",
+          "width": 100,
+          "height": 30,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:11",
+          "name": "Heat Exchanger (Plate)",
+          "width": 100,
+          "height": 30,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:12",
+          "name": "Heat Exchanger (Spiral)",
+          "width": 100,
+          "height": 100,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:13",
+          "name": "Heat Exchanger (Straight Tubes)",
+          "width": 100,
+          "height": 30,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:14",
+          "name": "Plate and Frame Heat Exchanger",
+          "width": 100,
+          "height": 120,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:15",
+          "name": "Reboiler",
+          "width": 91.5,
+          "height": 33,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:16",
+          "name": "Shell and Tube Heat Exchanger 1",
+          "width": 60,
+          "height": 60,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:17",
+          "name": "Shell and Tube Heat Exchanger 2",
+          "width": 60,
+          "height": 60,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:18",
+          "name": "Shell and Tube Heat Exchanger 3",
+          "width": 60,
+          "height": 60,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:19",
+          "name": "Single Pass Heat Exchanger",
+          "width": 90,
+          "height": 30,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:20",
+          "name": "Spiral Heat Exchanger",
+          "width": 100,
+          "height": 95,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:21",
+          "name": "Thin-Film Evaporator",
+          "width": 80,
+          "height": 120,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:22",
+          "name": "U-Tube Heat Exchanger",
+          "width": 91.75,
+          "height": 30,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "heat_exchangers.xml:23",
+          "name": "U Shaped Tubes Heat Exchanger",
+          "width": 100,
+          "height": 30,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/instruments.xml",
+      "category": "Instrumentation",
+      "symbolCount": 24,
+      "symbols": [
+        {
+          "id": "instruments.xml:1",
+          "name": "Analyzer Transmitter",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:2",
+          "name": "Flow Element",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:3",
+          "name": "Flow Indicator",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:4",
+          "name": "Flow Recorder",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:5",
+          "name": "Flow Transmitter",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:6",
+          "name": "Level Alarm",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:7",
+          "name": "Level Controller 1",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:8",
+          "name": "Level Controller 2",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:9",
+          "name": "Level Gauge",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:10",
+          "name": "Level Indicator",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:11",
+          "name": "Level Recorder",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:12",
+          "name": "Level Transmitter 1",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:13",
+          "name": "Level Transmitter 2",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:14",
+          "name": "Pressure Controller",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:15",
+          "name": "Pressure Indicating Controller",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:16",
+          "name": "Pressure Indicator",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:17",
+          "name": "Pressure Recorder",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:18",
+          "name": "Pressure Recording Controller",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:19",
+          "name": "Pressure Transmitter 1",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:20",
+          "name": "Pressure Transmitter 2",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:21",
+          "name": "Temperature Element",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:22",
+          "name": "Temperature Indicator",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:23",
+          "name": "Temperature Recorder",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "ellipse"
+          ]
+        },
+        {
+          "id": "instruments.xml:24",
+          "name": "Temperature Transmitter",
+          "width": 96,
+          "height": 96,
+          "connections": 8,
+          "primitives": [
+            "ellipse"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/misc.xml",
+      "category": "Process equipment",
+      "symbolCount": 82,
+      "symbols": [
+        {
+          "id": "misc.xml:1",
+          "name": "Aerator With Sparger",
+          "width": 35,
+          "height": 97.4,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:2",
+          "name": "Air Cooler",
+          "width": 70,
+          "height": 20,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:3",
+          "name": "Air Filter",
+          "width": 40,
+          "height": 65,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:4",
+          "name": "Air Separator",
+          "width": 65.5,
+          "height": 106,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:5",
+          "name": "Back Draft Damper",
+          "width": 62,
+          "height": 32,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:6",
+          "name": "Back Draft Damper2",
+          "width": 62,
+          "height": 32,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:7",
+          "name": "Bag Filling Machine",
+          "width": 80,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:8",
+          "name": "Bag Filling Machine2",
+          "width": 80,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:9",
+          "name": "Belt Skimmer",
+          "width": 70,
+          "height": 98,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:10",
+          "name": "Bin",
+          "width": 100,
+          "height": 65,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:11",
+          "name": "Boiler (Dome)",
+          "width": 100,
+          "height": 120,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "arc",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:12",
+          "name": "Boiler (Dome, Hot Liquid)",
+          "width": 100,
+          "height": 120,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:13",
+          "name": "Box Truck",
+          "width": 120,
+          "height": 80,
+          "connections": 0,
+          "primitives": [
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:14",
+          "name": "Bucket Elevator",
+          "width": 65,
+          "height": 200,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:15",
+          "name": "Chiller",
+          "width": 156.69,
+          "height": 115.5,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:16",
+          "name": "Combustion Chamber",
+          "width": 130,
+          "height": 100,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:17",
+          "name": "Conveyor",
+          "width": 200,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:18",
+          "name": "Conveyor2",
+          "width": 200,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:19",
+          "name": "Conveyor (Belt)",
+          "width": 200,
+          "height": 50,
+          "connections": 2,
+          "primitives": [
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:20",
+          "name": "Conveyor (Belt, Closed)",
+          "width": 240,
+          "height": 80,
+          "connections": 2,
+          "primitives": [
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:21",
+          "name": "Conveyor (Belt, Closed, Reversible)",
+          "width": 240,
+          "height": 80,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:22",
+          "name": "Conveyor (Belt, Closed, Reversible)2",
+          "width": 240,
+          "height": 80,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:23",
+          "name": "Conveyor (Chain, Closed)",
+          "width": 240,
+          "height": 80,
+          "connections": 2,
+          "primitives": [
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:24",
+          "name": "Conveyor (Screw, Closed)",
+          "width": 220,
+          "height": 80,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:25",
+          "name": "Conveyor (Vibrating, Closed)",
+          "width": 240,
+          "height": 80,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:26",
+          "name": "Conveyor (Vibrating, Closed)2",
+          "width": 240,
+          "height": 80,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:27",
+          "name": "Cooler",
+          "width": 85,
+          "height": 90,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "misc.xml:28",
+          "name": "Cooling Tower",
+          "width": 100,
+          "height": 120,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:29",
+          "name": "Cooling Tower (Dry, Forced Draught)",
+          "width": 100,
+          "height": 120,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:30",
+          "name": "Cooling Tower (Dry, Induced Draught)",
+          "width": 100,
+          "height": 120,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:31",
+          "name": "Cooling Tower (Dry, Natural Draught)",
+          "width": 100,
+          "height": 120,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:32",
+          "name": "Cooling Tower (Wet, Forced Draught)",
+          "width": 100,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:33",
+          "name": "Cooling Tower (Wet, Induced Draught)",
+          "width": 100,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:34",
+          "name": "Cooling Tower (Wet, Natural Draught)",
+          "width": 100,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:35",
+          "name": "Cooling Tower (Wet-Dry, Natural Draught)",
+          "width": 100,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:36",
+          "name": "Covered Gas Vent",
+          "width": 80,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "misc.xml:37",
+          "name": "Crane",
+          "width": 100,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:38",
+          "name": "Curved Gas Vent",
+          "width": 30,
+          "height": 70,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc"
+          ]
+        },
+        {
+          "id": "misc.xml:39",
+          "name": "Cyclone",
+          "width": 100,
+          "height": 80,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:40",
+          "name": "Dryer",
+          "width": 80,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:41",
+          "name": "Elevator (Bucket)",
+          "width": 160,
+          "height": 250,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:42",
+          "name": "Elevator (Bucket, Z-Form)",
+          "width": 430,
+          "height": 250,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:43",
+          "name": "Fan",
+          "width": 100,
+          "height": 100,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:44",
+          "name": "Fan 2",
+          "width": 58,
+          "height": 8,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:45",
+          "name": "Filter",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:46",
+          "name": "Filter 2",
+          "width": 100,
+          "height": 100,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:47",
+          "name": "Firing System, Burner",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:48",
+          "name": "Flame Arrestor",
+          "width": 100,
+          "height": 40,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:49",
+          "name": "Flexible Pipe",
+          "width": 60,
+          "height": 16,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "arc"
+          ]
+        },
+        {
+          "id": "misc.xml:50",
+          "name": "Forced Flow Air Cooler",
+          "width": 70,
+          "height": 30,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:51",
+          "name": "Forklift (Manual)",
+          "width": 140,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:52",
+          "name": "Forklift (Truck)",
+          "width": 140,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:53",
+          "name": "Funnel",
+          "width": 40,
+          "height": 80,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "misc.xml:54",
+          "name": "Gas Flare",
+          "width": 60,
+          "height": 100,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:55",
+          "name": "Induced Flow Air Cooler",
+          "width": 92.8,
+          "height": 30,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:56",
+          "name": "Industrial Truck",
+          "width": 120,
+          "height": 20,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "misc.xml:57",
+          "name": "Lift",
+          "width": 100,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:58",
+          "name": "Loading Arm",
+          "width": 120,
+          "height": 80,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "misc.xml:59",
+          "name": "Mixer",
+          "width": 80,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:60",
+          "name": "Palletizer",
+          "width": 80,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:61",
+          "name": "Palletizer2",
+          "width": 80,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:62",
+          "name": "Protective Palette Covering",
+          "width": 80,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:63",
+          "name": "Roller Conveyor",
+          "width": 160,
+          "height": 20,
+          "connections": 0,
+          "primitives": [
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:64",
+          "name": "Rolling Bin",
+          "width": 100,
+          "height": 65,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "misc.xml:65",
+          "name": "Rotary Screen",
+          "width": 100,
+          "height": 65,
+          "connections": 0,
+          "primitives": [
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:66",
+          "name": "Screening Device, Sieve, Strainer",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:67",
+          "name": "Screening Device, Sieve, Strainer (Basket Reel)",
+          "width": 80,
+          "height": 180,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:68",
+          "name": "Screening Device, Sieve, Strainer (Coarse and Fine Screens)",
+          "width": 80,
+          "height": 120,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:69",
+          "name": "Screening Device, Sieve, Strainer (Coarse Rake)",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:70",
+          "name": "Screening Device, Sieve, Strainer (Fine Rake)",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:71",
+          "name": "Screening Device, Sieve, Strainer (Rotating Drum)",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:72",
+          "name": "Screening Device, Sieve, Strainer (Vibrating)",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:73",
+          "name": "Screening Device, Sieve, Strainer (Vibrating)2",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:74",
+          "name": "Ship",
+          "width": 105,
+          "height": 60,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:75",
+          "name": "Silencer",
+          "width": 100,
+          "height": 30,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:76",
+          "name": "Spraying Device",
+          "width": 60,
+          "height": 20,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "misc.xml:77",
+          "name": "Spray Cooler",
+          "width": 100,
+          "height": 120,
+          "connections": 5,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "misc.xml:78",
+          "name": "Stack, Chimney",
+          "width": 60,
+          "height": 100,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:79",
+          "name": "Steam Trap",
+          "width": 52.48,
+          "height": 52.48,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "arc",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:80",
+          "name": "Steam Trap2",
+          "width": 52.48,
+          "height": 52.48,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "arc",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:81",
+          "name": "Tank Car, Tank Wagon",
+          "width": 126.67,
+          "height": 80,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "misc.xml:82",
+          "name": "Viewing Glass",
+          "width": 80,
+          "height": 50,
+          "connections": 2,
+          "primitives": [
+            "ellipse",
+            "rect"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/mixers.xml",
+      "category": "Mixers and agitators",
+      "symbolCount": 4,
+      "symbols": [
+        {
+          "id": "mixers.xml:1",
+          "name": "In-Line Rotary Mixer",
+          "width": 190,
+          "height": 100,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "mixers.xml:2",
+          "name": "In-Line Static Mixer",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "mixers.xml:3",
+          "name": "Kneader",
+          "width": 170,
+          "height": 100,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "mixers.xml:4",
+          "name": "Mixing Path",
+          "width": 260,
+          "height": 100,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/piping.xml",
+      "category": "Piping and fittings",
+      "symbolCount": 43,
+      "symbols": [
+        {
+          "id": "piping.xml:1",
+          "name": "Basket Strainer",
+          "width": 50,
+          "height": 45,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "piping.xml:2",
+          "name": "Blank",
+          "width": 20,
+          "height": 60,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "piping.xml:3",
+          "name": "Blank2",
+          "width": 20,
+          "height": 60,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "piping.xml:4",
+          "name": "Breather",
+          "width": 50,
+          "height": 30,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "piping.xml:5",
+          "name": "Cap",
+          "width": 10,
+          "height": 20,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "piping.xml:6",
+          "name": "Closed Figure 8 Blind",
+          "width": 20,
+          "height": 80,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "piping.xml:7",
+          "name": "Closed Figure 8 Blind2",
+          "width": 20,
+          "height": 80,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "piping.xml:8",
+          "name": "Concentric Reducer",
+          "width": 20,
+          "height": 20,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "piping.xml:9",
+          "name": "Cone Strainer",
+          "width": 30,
+          "height": 30,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "piping.xml:10",
+          "name": "Damper",
+          "width": 50,
+          "height": 20,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "piping.xml:11",
+          "name": "Damper2",
+          "width": 50,
+          "height": 20,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "piping.xml:12",
+          "name": "Desuper Heater",
+          "width": 50,
+          "height": 50,
+          "connections": 2,
+          "primitives": [
+            "rect"
+          ]
+        },
+        {
+          "id": "piping.xml:13",
+          "name": "Detonation Arrestor",
+          "width": 50,
+          "height": 19,
+          "connections": 2,
+          "primitives": [
+            "rect"
+          ]
+        },
+        {
+          "id": "piping.xml:14",
+          "name": "Diverter Valve",
+          "width": 50,
+          "height": 34,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "piping.xml:15",
+          "name": "Double Flange",
+          "width": 5,
+          "height": 20,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "piping.xml:16",
+          "name": "Duplex Strainer",
+          "width": 50,
+          "height": 40,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "piping.xml:17",
+          "name": "Eccentric Reducer",
+          "width": 20,
+          "height": 15,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "piping.xml:18",
+          "name": "Excess Flow Valve",
+          "width": 50,
+          "height": 24.5,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "piping.xml:19",
+          "name": "Excess Flow Valve2",
+          "width": 50,
+          "height": 24.5,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "piping.xml:20",
+          "name": "Exhaust Head",
+          "width": 50,
+          "height": 40,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "piping.xml:21",
+          "name": "Expansion Joint",
+          "width": 50,
+          "height": 20,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "piping.xml:22",
+          "name": "Flame Arrestor",
+          "width": 50,
+          "height": 19,
+          "connections": 2,
+          "primitives": [
+            "rect"
+          ]
+        },
+        {
+          "id": "piping.xml:23",
+          "name": "Flange",
+          "width": 5,
+          "height": 20,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "piping.xml:24",
+          "name": "Flange In",
+          "width": 8.5,
+          "height": 20,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "piping.xml:25",
+          "name": "Flexible Hose",
+          "width": 50,
+          "height": 23.04,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc"
+          ]
+        },
+        {
+          "id": "piping.xml:26",
+          "name": "Hose Connection",
+          "width": 20,
+          "height": 20,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "piping.xml:27",
+          "name": "In-Line Mixer",
+          "width": 50,
+          "height": 10,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "piping.xml:28",
+          "name": "In-Line Silencer",
+          "width": 50,
+          "height": 19,
+          "connections": 2,
+          "primitives": [
+            "rect"
+          ]
+        },
+        {
+          "id": "piping.xml:29",
+          "name": "Open Figure 8 Blind",
+          "width": 20,
+          "height": 80,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "piping.xml:30",
+          "name": "Open Figure 8 Blind2",
+          "width": 20,
+          "height": 80,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "piping.xml:31",
+          "name": "Orifice (Quick Change)",
+          "width": 10,
+          "height": 50,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "piping.xml:32",
+          "name": "Plug",
+          "width": 10,
+          "height": 10,
+          "connections": 2,
+          "primitives": [
+            "rect"
+          ]
+        },
+        {
+          "id": "piping.xml:33",
+          "name": "Pulsation Dampener",
+          "width": 50,
+          "height": 150,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "piping.xml:34",
+          "name": "Removable Spool",
+          "width": 50,
+          "height": 30,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "piping.xml:35",
+          "name": "Rotary Valve",
+          "width": 50,
+          "height": 20,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "piping.xml:36",
+          "name": "Spacer",
+          "width": 20,
+          "height": 60,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "piping.xml:37",
+          "name": "Steam Trap",
+          "width": 50,
+          "height": 50,
+          "connections": 2,
+          "primitives": [
+            "rect"
+          ]
+        },
+        {
+          "id": "piping.xml:38",
+          "name": "T-Type Strainer",
+          "width": 20,
+          "height": 34,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "piping.xml:39",
+          "name": "Temporary Strainer",
+          "width": 30,
+          "height": 30,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "piping.xml:40",
+          "name": "Vent Silencer",
+          "width": 19,
+          "height": 80,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "piping.xml:41",
+          "name": "Welded Connection",
+          "width": 50,
+          "height": 20,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "piping.xml:42",
+          "name": "Welded Connection2",
+          "width": 50,
+          "height": 20,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "piping.xml:43",
+          "name": "Y-Type Strainer",
+          "width": 50,
+          "height": 34,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/pumps.xml",
+      "category": "Pumps",
+      "symbolCount": 18,
+      "symbols": [
+        {
+          "id": "pumps.xml:1",
+          "name": "Cavity Pump",
+          "width": 123.77,
+          "height": 35,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "pumps.xml:2",
+          "name": "Centrifugal Pump 1",
+          "width": 70,
+          "height": 67,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "arc"
+          ]
+        },
+        {
+          "id": "pumps.xml:3",
+          "name": "Centrifugal Pump 2",
+          "width": 62.09,
+          "height": 77,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "arc"
+          ]
+        },
+        {
+          "id": "pumps.xml:4",
+          "name": "Centrifugal Pump 3",
+          "width": 70,
+          "height": 67,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "arc"
+          ]
+        },
+        {
+          "id": "pumps.xml:5",
+          "name": "Feed Pump",
+          "width": 100,
+          "height": 40,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "pumps.xml:6",
+          "name": "Gas Blower",
+          "width": 72.31,
+          "height": 67,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "pumps.xml:7",
+          "name": "Gas Compressor",
+          "width": 100,
+          "height": 55,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "pumps.xml:8",
+          "name": "Gear Pump",
+          "width": 57,
+          "height": 91,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "pumps.xml:9",
+          "name": "Horizontal Pump",
+          "width": 155.27,
+          "height": 111.77,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "pumps.xml:10",
+          "name": "Injector",
+          "width": 80,
+          "height": 40,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "pumps.xml:11",
+          "name": "Peristaltic",
+          "width": 60,
+          "height": 69,
+          "connections": 1,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "pumps.xml:12",
+          "name": "Screw Pump",
+          "width": 70,
+          "height": 66.97,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "arc"
+          ]
+        },
+        {
+          "id": "pumps.xml:13",
+          "name": "Screw Pump 2",
+          "width": 123.77,
+          "height": 40,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "pumps.xml:14",
+          "name": "Submersible Pump",
+          "width": 103.54,
+          "height": 74,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "pumps.xml:15",
+          "name": "Sump Pump",
+          "width": 103.54,
+          "height": 186.77,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "pumps.xml:16",
+          "name": "Turbine",
+          "width": 98,
+          "height": 60,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "pumps.xml:17",
+          "name": "Vacuum Pump",
+          "width": 99,
+          "height": 49.94,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "pumps.xml:18",
+          "name": "Vertical Pump",
+          "width": 120,
+          "height": 146.77,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/pumps_din.xml",
+      "category": "Pumps",
+      "symbolCount": 10,
+      "symbols": [
+        {
+          "id": "pumps_din.xml:1",
+          "name": "Centrifugal",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "pumps_din.xml:2",
+          "name": "Diaphragm",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "pumps_din.xml:3",
+          "name": "Eccentric Worm",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "curve",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "pumps_din.xml:4",
+          "name": "Electromagnetic",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "pumps_din.xml:5",
+          "name": "Gear",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "pumps_din.xml:6",
+          "name": "Hydraulic",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "pumps_din.xml:7",
+          "name": "Liquid Jet",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "pumps_din.xml:8",
+          "name": "Reciprocating",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "pumps_din.xml:9",
+          "name": "Rotary Piston",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "pumps_din.xml:10",
+          "name": "Screw",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/pumps_iso.xml",
+      "category": "Pumps",
+      "symbolCount": 9,
+      "symbols": [
+        {
+          "id": "pumps_iso.xml:1",
+          "name": "Jet Pump (Liquid)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "pumps_iso.xml:2",
+          "name": "Pump (Centrifugal)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "pumps_iso.xml:3",
+          "name": "Pump (Diaphragm)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "pumps_iso.xml:4",
+          "name": "Pump (Gear)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "pumps_iso.xml:5",
+          "name": "Pump (Liquid)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "pumps_iso.xml:6",
+          "name": "Pump (Positive Displacement)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "pumps_iso.xml:7",
+          "name": "Pump (Progressive Cavity)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "pumps_iso.xml:8",
+          "name": "Pump (Reciprocating Piston)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "pumps_iso.xml:9",
+          "name": "Pump (Screw)",
+          "width": 100,
+          "height": 100,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/separators.xml",
+      "category": "Process equipment",
+      "symbolCount": 18,
+      "symbols": [
+        {
+          "id": "separators.xml:1",
+          "name": "Gravity Separator, Settling Chamber",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "separators.xml:2",
+          "name": "Gravity Separator, Settling Chamber2",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "separators.xml:3",
+          "name": "Impact Separator",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "separators.xml:4",
+          "name": "Separator, Sifter",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "separators.xml:5",
+          "name": "Separator, Sifter2",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "separators.xml:6",
+          "name": "Separator (Cyclone)",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "separators.xml:7",
+          "name": "Separator (Cyclone)2",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "separators.xml:8",
+          "name": "Separator (Electromagnetic)",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "separators.xml:9",
+          "name": "Separator (Electrostatic Precipitator)",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "separators.xml:10",
+          "name": "Separator (Electrostatic Precipitator, Wet)",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "separators.xml:11",
+          "name": "Separator (Permanent Magnet)",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "separators.xml:12",
+          "name": "Separator (Permanent Magnet)2",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "separators.xml:13",
+          "name": "Separator (Venturi Scrubber)",
+          "width": 80,
+          "height": 120,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "separators.xml:14",
+          "name": "Separator (Wet Scrubber)",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "separators.xml:15",
+          "name": "Separator (Wet Scrubber)2",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "separators.xml:16",
+          "name": "Solidifier (Closed)",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "separators.xml:17",
+          "name": "Solidifier (Open)",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "separators.xml:18",
+          "name": "Spray Scrubber",
+          "width": 80,
+          "height": 120,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/shaping_machines.xml",
+      "category": "Other P&ID",
+      "symbolCount": 7,
+      "symbols": [
+        {
+          "id": "shaping_machines.xml:1",
+          "name": "Extruder (Piston)",
+          "width": 110,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "shaping_machines.xml:2",
+          "name": "Extruder (Screw)",
+          "width": 110,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "shaping_machines.xml:3",
+          "name": "Pelletizing Disc",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "shaping_machines.xml:4",
+          "name": "Press (Piston)",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "shaping_machines.xml:5",
+          "name": "Press (Roller)",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "shaping_machines.xml:6",
+          "name": "Shaping Machine (Horizontal)",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "shaping_machines.xml:7",
+          "name": "Shaping Machine (Vertical)",
+          "width": 100,
+          "height": 60,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/valves.xml",
+      "category": "Valves",
+      "symbolCount": 32,
+      "symbols": [
+        {
+          "id": "valves.xml:1",
+          "name": "Angle",
+          "width": 79,
+          "height": 79,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:2",
+          "name": "Back Pressure Regulator 1",
+          "width": 98,
+          "height": 94,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:3",
+          "name": "Back Pressure Regulator 2",
+          "width": 98,
+          "height": 94,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:4",
+          "name": "Ball Valve",
+          "width": 98,
+          "height": 60,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:5",
+          "name": "Bleeder Valve 1",
+          "width": 25,
+          "height": 75,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:6",
+          "name": "Bleeder Valve 2",
+          "width": 68.4,
+          "height": 71.8,
+          "connections": 5,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:7",
+          "name": "Butterfly Valve 1",
+          "width": 98,
+          "height": 60,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "valves.xml:8",
+          "name": "Butterfly Valve 2",
+          "width": 98,
+          "height": 60,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:9",
+          "name": "Check Valve 1",
+          "width": 98.5,
+          "height": 62,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:10",
+          "name": "Check Valve 2",
+          "width": 98.5,
+          "height": 62,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:11",
+          "name": "Diaphragm",
+          "width": 98,
+          "height": 60,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:12",
+          "name": "Four Way Valve",
+          "width": 98,
+          "height": 98,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:13",
+          "name": "Gate Valve",
+          "width": 98,
+          "height": 60,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:14",
+          "name": "Gauge",
+          "width": 65,
+          "height": 90,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:15",
+          "name": "Globe Valve",
+          "width": 98,
+          "height": 60,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:16",
+          "name": "Hydraulic Valve",
+          "width": 98,
+          "height": 89,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:17",
+          "name": "Knife Valve",
+          "width": 100,
+          "height": 85,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:18",
+          "name": "Manual Operated Valve",
+          "width": 98,
+          "height": 65,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:19",
+          "name": "Motor Operated Valve",
+          "width": 98,
+          "height": 89,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:20",
+          "name": "Needle",
+          "width": 98,
+          "height": 60,
+          "connections": 5,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:21",
+          "name": "Orifice",
+          "width": 50,
+          "height": 60,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "valves.xml:22",
+          "name": "Pinch Valve",
+          "width": 98,
+          "height": 60,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:23",
+          "name": "Plug",
+          "width": 98,
+          "height": 60,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:24",
+          "name": "Pneumatic Operated",
+          "width": 98,
+          "height": 79,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:25",
+          "name": "Pneumatic Operated Butterfly Valve",
+          "width": 60,
+          "height": 80,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:26",
+          "name": "Pressure Reducing Valve",
+          "width": 70,
+          "height": 60,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:27",
+          "name": "Relief PRV",
+          "width": 40,
+          "height": 59,
+          "connections": 2,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:28",
+          "name": "Rotameter",
+          "width": 75,
+          "height": 60,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse"
+          ]
+        },
+        {
+          "id": "valves.xml:29",
+          "name": "Safety PSV 1",
+          "width": 55.5,
+          "height": 94.5,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:30",
+          "name": "Safety PSV 2",
+          "width": 55.5,
+          "height": 94.5,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:31",
+          "name": "Solenoid Valve Closed",
+          "width": 98,
+          "height": 89,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "valves.xml:32",
+          "name": "Three-Way Valve",
+          "width": 98,
+          "height": 79,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "src/main/webapp/stencils/pid/vessels.xml",
+      "category": "Tanks and vessels",
+      "symbolCount": 63,
+      "symbols": [
+        {
+          "id": "vessels.xml:1",
+          "name": "Bag",
+          "width": 50,
+          "height": 95,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:2",
+          "name": "Bag (ISO)",
+          "width": 50,
+          "height": 95,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:3",
+          "name": "Barrel, Drum",
+          "width": 62,
+          "height": 100,
+          "connections": 4,
+          "primitives": [
+            "rect"
+          ]
+        },
+        {
+          "id": "vessels.xml:4",
+          "name": "Barrel, Drum (ISO)",
+          "width": 60,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "vessels.xml:5",
+          "name": "Bunker (Conical Bottom)",
+          "width": 100,
+          "height": 100,
+          "connections": 3,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "vessels.xml:6",
+          "name": "Concrete Tank",
+          "width": 160,
+          "height": 75,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:7",
+          "name": "Container, Tank, Cistern",
+          "width": 100,
+          "height": 70,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "vessels.xml:8",
+          "name": "Container, Tank, Cistern (Boot)",
+          "width": 100,
+          "height": 80,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "vessels.xml:9",
+          "name": "Container, Tank, Cistern (Bottom)",
+          "width": 100,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "vessels.xml:10",
+          "name": "Container, Tank, Cistern (Legs)",
+          "width": 100,
+          "height": 105,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "vessels.xml:11",
+          "name": "Container (Solids, Liquids, Gases)",
+          "width": 150,
+          "height": 50,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "vessels.xml:12",
+          "name": "Double Concrete Tank",
+          "width": 160,
+          "height": 75,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:13",
+          "name": "Drum or Condenser",
+          "width": 91.54,
+          "height": 30,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:14",
+          "name": "Forced-Draft Cooling Tower",
+          "width": 99,
+          "height": 99,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:15",
+          "name": "Furnace",
+          "width": 80,
+          "height": 99,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:16",
+          "name": "Furnace2",
+          "width": 80,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:17",
+          "name": "Gas Bottle",
+          "width": 35,
+          "height": 95,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:18",
+          "name": "Gas Holder",
+          "width": 70,
+          "height": 95,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc"
+          ]
+        },
+        {
+          "id": "vessels.xml:19",
+          "name": "Half Pipe Mixing Vessel",
+          "width": 100,
+          "height": 173,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:20",
+          "name": "Induced-Draft Cooling Tower",
+          "width": 98,
+          "height": 70,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:21",
+          "name": "Jacketed Mixing Vessel",
+          "width": 100.17,
+          "height": 174.5,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:22",
+          "name": "Knock-out Drum",
+          "width": 51,
+          "height": 95.38,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:23",
+          "name": "Mixer",
+          "width": 20,
+          "height": 88.4,
+          "connections": 6,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:24",
+          "name": "Mixing Reactor",
+          "width": 50,
+          "height": 96.4,
+          "connections": 4,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:25",
+          "name": "Open Bulk Storage",
+          "width": 100,
+          "height": 50,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:26",
+          "name": "Pressurized Vessel",
+          "width": 100,
+          "height": 200,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:27",
+          "name": "Prop Agitator",
+          "width": 20,
+          "height": 88.4,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "ellipse",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:28",
+          "name": "Reactor",
+          "width": 40,
+          "height": 95.38,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:29",
+          "name": "Settling Tank",
+          "width": 100,
+          "height": 80,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "vessels.xml:30",
+          "name": "Spray Drier",
+          "width": 100,
+          "height": 80,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:31",
+          "name": "Storage Sphere",
+          "width": 80,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "vessels.xml:32",
+          "name": "Tank, Vessel",
+          "width": 100,
+          "height": 70,
+          "connections": 0,
+          "primitives": [
+            "rect"
+          ]
+        },
+        {
+          "id": "vessels.xml:33",
+          "name": "Tank",
+          "width": 40,
+          "height": 95.38,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:34",
+          "name": "Tank (Boot)",
+          "width": 100,
+          "height": 91,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:35",
+          "name": "Tank (Concrete Base)",
+          "width": 120,
+          "height": 91,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "rect"
+          ]
+        },
+        {
+          "id": "vessels.xml:36",
+          "name": "Tank (Conical Bottom)",
+          "width": 100,
+          "height": 100,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:37",
+          "name": "Tank (Conical Roof)",
+          "width": 100,
+          "height": 90,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:38",
+          "name": "Tank (Conical Roof and Bottom)",
+          "width": 101,
+          "height": 150,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:39",
+          "name": "Tank (Covered)",
+          "width": 100,
+          "height": 75,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "vessels.xml:40",
+          "name": "Tank (Covered, Boot)",
+          "width": 100,
+          "height": 85,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line"
+          ]
+        },
+        {
+          "id": "vessels.xml:41",
+          "name": "Tank (Dished Roof)",
+          "width": 100,
+          "height": 95.46,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:42",
+          "name": "Tank (Dished Roof, Conical Bottom)",
+          "width": 100,
+          "height": 125.46,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:43",
+          "name": "Tank (False Bottom)",
+          "width": 40,
+          "height": 112.69,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:44",
+          "name": "Tank (Floating Roof)",
+          "width": 100,
+          "height": 70,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:45",
+          "name": "Tank (Floating Roof, Boot)",
+          "width": 100,
+          "height": 80,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:46",
+          "name": "Tower",
+          "width": 14,
+          "height": 97,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:47",
+          "name": "Tower With Packing",
+          "width": 14,
+          "height": 97,
+          "connections": 8,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:48",
+          "name": "Turbine Agitator",
+          "width": 36,
+          "height": 93.4,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:49",
+          "name": "Vent (Bent)",
+          "width": 10,
+          "height": 20,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc"
+          ]
+        },
+        {
+          "id": "vessels.xml:50",
+          "name": "Vent (Cover)",
+          "width": 10,
+          "height": 20,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:51",
+          "name": "Vessel (Different Diameters)",
+          "width": 50,
+          "height": 97.5,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:52",
+          "name": "Vessel (Dished Bottom, Surface Indication)",
+          "width": 40,
+          "height": 87.69,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:53",
+          "name": "Vessel (Dished Ends, Brackets)",
+          "width": 60,
+          "height": 95.38,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:54",
+          "name": "Vessel (Dished Ends, Electrical Heating)",
+          "width": 50,
+          "height": 95.38,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:55",
+          "name": "Vessel (Dished Ends, Heating-Cooling Jacket)",
+          "width": 52,
+          "height": 95.38,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:56",
+          "name": "Vessel (Dished Ends, Legs)",
+          "width": 40,
+          "height": 122.69,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:57",
+          "name": "Vessel (Dished Ends, Ring)",
+          "width": 52,
+          "height": 95.38,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "rect",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:58",
+          "name": "Vessel (Dished Ends, Skirts)",
+          "width": 40,
+          "height": 122.69,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:59",
+          "name": "Vessel (Dished Ends, Thermal Insulation)",
+          "width": 52,
+          "height": 95.38,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:60",
+          "name": "Vessel (Dome)",
+          "width": 95.38,
+          "height": 55,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:61",
+          "name": "Vessel (Full-Tube Heating-Cooling Coil)",
+          "width": 120,
+          "height": 70,
+          "connections": 0,
+          "primitives": [
+            "ellipse",
+            "rect"
+          ]
+        },
+        {
+          "id": "vessels.xml:62",
+          "name": "Vessel (Pit)",
+          "width": 95.38,
+          "height": 55,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "line",
+            "arc",
+            "close"
+          ]
+        },
+        {
+          "id": "vessels.xml:63",
+          "name": "Vessel (Semi-Tube Heating-Cooling Coil)",
+          "width": 110,
+          "height": 70,
+          "connections": 0,
+          "primitives": [
+            "move",
+            "arc",
+            "rect",
+            "close"
+          ]
+        }
+      ]
+    }
+  ]
+}

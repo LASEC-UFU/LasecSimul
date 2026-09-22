@@ -1,3 +1,5 @@
+import type { IpdLineClass } from "../ui/webview/ipdLineStyle";
+
 export const LS_PROJ_SCHEMA_VERSION = 2 as const;
 
 export interface ProjectSimulationSettings {
@@ -36,6 +38,8 @@ export interface ProjectTopology {
     vertices: Array<{ x: number; y: number }>;
     /** Mantém a conexão no Core, mas permite diagramas de subcircuito por túneis sem linha visível. */
     hidden?: boolean;
+    /** Classe visual ISA/IPD opcional; ausência mantém o fio elétrico nativo. */
+    lineClass?: IpdLineClass;
   }>;
 }
 

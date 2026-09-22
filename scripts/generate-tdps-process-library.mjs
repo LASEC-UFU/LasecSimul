@@ -43,4 +43,8 @@ library.subcircuits = firstTdpsIndex < 0
   : [...retained.slice(0, firstTdpsIndex), ...generated, ...retained.slice(firstTdpsIndex)];
 fs.writeFileSync(libraryPath, `${JSON.stringify(library, null, 2)}\n`, "utf8");
 
-execFileSync(process.execPath, [path.join(repoRoot, "scripts", "apply-tdps-reference-symbols.mjs")], { cwd: repoRoot, stdio: "inherit" });
+// Telas de processo NATIVAS (biblioteca grafica `graphics.*`), nunca mais o bitmap de referencia:
+// `apply-tdps-reference-symbols.mjs` gravava `symbol.background = {kind:"image", asset:"<png>"}` e
+// foi substituido por este compositor -- ver docs/45-biblioteca-grafica-supervisorio-implementacao.md.
+// Reapontar aqui e' o que impede uma regeneracao da biblioteca de reintroduzir os bitmaps.
+execFileSync(process.execPath, [path.join(repoRoot, "scripts", "generate-tdps-process-screens.mjs")], { cwd: repoRoot, stdio: "inherit" });

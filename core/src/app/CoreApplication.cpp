@@ -292,8 +292,13 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         reg.registerFactory(typeId, [typeId](const ComponentParams& p) {
             return std::make_unique<components::SignalMathBlock>(typeId, p);
         });
+        // `readoutFormat` escalar: a saída do bloco vira leitura de telemetria normal (o mesmo
+        // caminho do voltímetro/sonda), que é o que permite à camada gráfica de supervisório
+        // (`graphics.*`) mostrar nível/PV/saída de PID sem nenhum canal novo de IPC. Ver
+        // `SignalMathBlock::readoutFormat` e `SimulationSession::sampleSignalMathOutputsUnlocked`.
         registerBuiltinMetadata(typeId, controlBlockDisplayName(mathTypeId), std::vector<PropertySchema>{},
-                                controlBlockTranslationsJson(mathTypeId), std::nullopt, std::nullopt,
+                                controlBlockTranslationsJson(mathTypeId),
+                                components::SignalMathBlock::readoutFormat(), std::nullopt,
                                 std::vector<std::string>{});
     }
 
@@ -1342,6 +1347,11 @@ RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesyste
         registry::SubcircuitComponentDef comp;
         comp.id = requiredString(compJson, "id", "components[]");
         comp.typeId = requiredString(compJson, "typeId", "components[]");
+        // Camada de supervisório (`graphics.*`) é autoria/Extension, nunca runtime: FEAT-008 diz
+        // que assets e bindings pertencem à autoria e que o Core só publica valores. Um tanque ou
+        // um rótulo não tem factory (nem deve ter) -- filtrar aqui é o mesmo tratamento que
+        // `connectors.junction` já recebe logo abaixo, e mantém o Core sem nenhum conceito visual.
+        if (comp.typeId.rfind("graphics.", 0) == 0) continue;
         if (!componentIds.insert(comp.id).second) throw std::runtime_error("id de componente duplicado no subcircuito: " + comp.id);
         if (compJson.contains("properties") && !compJson["properties"].is_object()) {
             throw std::runtime_error("properties de componente deve ser objeto: " + comp.id);

@@ -1236,6 +1236,569 @@
         "y": 1096,
         "rotation": 180
       }
+    },
+    {
+      "id": "scr-001",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 460,
+        "height": 24,
+        "text": "Combustao com Limites Cruzados",
+        "fontSize": 15,
+        "align": "start",
+        "stroke": "#0f172a",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 16,
+        "y": 914,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-002",
+      "typeId": "graphics.heat_exchanger",
+      "label": "heat_exchanger",
+      "properties": {
+        "width": 160,
+        "height": 106,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1
+      },
+      "visual": {
+        "x": 20,
+        "y": 1032,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-003",
+      "typeId": "graphics.pipe",
+      "label": "pipe",
+      "properties": {
+        "width": 18,
+        "height": 16,
+        "fill": "#cbd5e1",
+        "stroke": "currentColor",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "showFlow": false,
+        "flowDirection": "forward",
+        "showFlanges": false,
+        "value": 100,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1,
+        "bindThreshold": 1,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 174,
+        "y": 1114,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-004",
+      "typeId": "graphics.pipe",
+      "label": "pipe",
+      "properties": {
+        "width": 300,
+        "height": 16,
+        "fill": "#cbd5e1",
+        "stroke": "currentColor",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "showFlow": true,
+        "flowDirection": "forward",
+        "showFlanges": false,
+        "value": 100,
+        "bindSource": "readout-103",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1,
+        "bindThreshold": 1,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 190,
+        "y": 1114,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-005",
+      "typeId": "graphics.instrument",
+      "label": "instrument",
+      "properties": {
+        "width": 64,
+        "height": 64,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "tag": "FT",
+        "tagNumber": "103",
+        "housing": "circle",
+        "location": "field",
+        "showValue": true,
+        "value": 0,
+        "bindSource": "readout-103",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 200,
+        "bindUnit": "Nm3/h",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 238,
+        "y": 1016,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-006",
+      "typeId": "graphics.signal_line",
+      "label": "signal_line",
+      "properties": {
+        "height": 10,
+        "stroke": "currentColor",
+        "strokeWidth": 1.4,
+        "opacity": 1,
+        "dash": "solid",
+        "width": 42
+      },
+      "visual": {
+        "x": 249,
+        "y": 1096,
+        "rotation": 90
+      }
+    },
+    {
+      "id": "scr-007",
+      "typeId": "graphics.signal_line",
+      "label": "signal_line",
+      "properties": {
+        "width": 204,
+        "height": 10,
+        "stroke": "currentColor",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "dash": "dashed"
+      },
+      "visual": {
+        "x": 302,
+        "y": 1042,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-008",
+      "typeId": "graphics.controller_faceplate",
+      "label": "controller_faceplate",
+      "properties": {
+        "width": 66,
+        "height": 106,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "tag": "REL_AR_GAS",
+        "setpoint": 50,
+        "barColor": "#0284c7",
+        "showValue": true,
+        "value": 0,
+        "bindSource": "pid-01",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 506,
+        "y": 1000,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-009",
+      "typeId": "graphics.controller_faceplate",
+      "label": "controller_faceplate",
+      "properties": {
+        "width": 66,
+        "height": 106,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "tag": "FIC102",
+        "setpoint": 50,
+        "barColor": "#0284c7",
+        "showValue": true,
+        "value": 0,
+        "bindSource": "pid-02",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 580,
+        "y": 1000,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-010",
+      "typeId": "graphics.controller_faceplate",
+      "label": "controller_faceplate",
+      "properties": {
+        "width": 66,
+        "height": 106,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "tag": "FIC103",
+        "setpoint": 50,
+        "barColor": "#0284c7",
+        "showValue": true,
+        "value": 0,
+        "bindSource": "pid-03",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 654,
+        "y": 1000,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-011",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Valor Medido",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "recorder-201-3",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 20,
+        "y": 1210,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-012",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Valor Teórico",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "recorder-201-5",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 172,
+        "y": 1210,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-013",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "MV",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-101",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 324,
+        "y": 1210,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-014",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "MV",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-102",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 20,
+        "y": 1268,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-015",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Vazão de Ar",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-103",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 200,
+        "bindUnit": "Nm3/h",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 172,
+        "y": 1268,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-016",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Vazão de Gás",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-104",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 200,
+        "bindUnit": "Nm3/h",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 324,
+        "y": 1268,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-017",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Temperatura Câmara",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-105",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 400,
+        "bindUnit": "oC",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 20,
+        "y": 1326,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-018",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Relação Ar/Gás Medi…",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-106",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 172,
+        "y": 1326,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-019",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "SP de Gás",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-108",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 200,
+        "bindUnit": "Nm3/h",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 324,
+        "y": 1326,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-020",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "SP de Ar",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-109",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 200,
+        "bindUnit": "Nm3/h",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 20,
+        "y": 1384,
+        "rotation": 0
+      }
     }
   ],
   "topology": {
@@ -2203,8 +2766,8 @@
   ],
   "symbolMode": "custom",
   "symbol": {
-    "width": 640,
-    "height": 480,
+    "width": 744,
+    "height": 554,
     "border": true,
     "pins": [
       {
@@ -2381,16 +2944,14 @@
     ],
     "shapes": [],
     "background": {
-      "kind": "image",
-      "asset": "tdps-reference-images/tdps_combustion_cross_limits.png",
-      "mime": "image/png"
+      "kind": "none"
     }
   },
   "exposedComponents": [
     {
-      "componentId": "pid-01",
-      "x": 13.714285714285714,
-      "y": 5.142857142857142,
+      "componentId": "scr-001",
+      "x": 16,
+      "y": 14,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2398,9 +2959,9 @@
       "layer": 0
     },
     {
-      "componentId": "pid-02",
-      "x": 1389.7142857142856,
-      "y": 92.57142857142857,
+      "componentId": "scr-002",
+      "x": 20,
+      "y": 132,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2408,9 +2969,9 @@
       "layer": 1
     },
     {
-      "componentId": "pid-03",
-      "x": 2029.7142857142856,
-      "y": 94.28571428571428,
+      "componentId": "scr-003",
+      "x": 174,
+      "y": 214,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2418,9 +2979,9 @@
       "layer": 2
     },
     {
-      "componentId": "process-21",
-      "x": 3131.428571428571,
-      "y": 654.8571428571428,
+      "componentId": "scr-004",
+      "x": 190,
+      "y": 214,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2428,9 +2989,9 @@
       "layer": 3
     },
     {
-      "componentId": "process-22",
-      "x": 109.71428571428571,
-      "y": 1020,
+      "componentId": "scr-005",
+      "x": 238,
+      "y": 116,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2438,19 +2999,19 @@
       "layer": 4
     },
     {
-      "componentId": "process-23",
-      "x": 521.1428571428571,
-      "y": 663.4285714285714,
-      "rotation": 0,
+      "componentId": "scr-006",
+      "x": 249,
+      "y": 196,
+      "rotation": 90,
       "flipH": false,
       "flipV": false,
       "scale": 1,
       "layer": 5
     },
     {
-      "componentId": "process-24",
-      "x": 109.71428571428571,
-      "y": 980.5714285714286,
+      "componentId": "scr-007",
+      "x": 302,
+      "y": 142,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2458,9 +3019,9 @@
       "layer": 6
     },
     {
-      "componentId": "calc-41",
-      "x": 2194.285714285714,
-      "y": 308.57142857142856,
+      "componentId": "scr-008",
+      "x": 506,
+      "y": 100,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2468,9 +3029,9 @@
       "layer": 7
     },
     {
-      "componentId": "calc-42",
-      "x": 3017.142857142857,
-      "y": 308.57142857142856,
+      "componentId": "scr-009",
+      "x": 580,
+      "y": 100,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2478,9 +3039,9 @@
       "layer": 8
     },
     {
-      "componentId": "calc-43",
-      "x": 3840,
-      "y": 308.57142857142856,
+      "componentId": "scr-010",
+      "x": 654,
+      "y": 100,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2488,9 +3049,9 @@
       "layer": 9
     },
     {
-      "componentId": "calc-44",
-      "x": 548.5714285714286,
-      "y": 480,
+      "componentId": "scr-011",
+      "x": 20,
+      "y": 310,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2498,9 +3059,9 @@
       "layer": 10
     },
     {
-      "componentId": "calc-45",
-      "x": 1371.4285714285713,
-      "y": 480,
+      "componentId": "scr-012",
+      "x": 172,
+      "y": 310,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2508,9 +3069,9 @@
       "layer": 11
     },
     {
-      "componentId": "recorder-201-3",
-      "x": 2194.285714285714,
-      "y": 480,
+      "componentId": "scr-013",
+      "x": 324,
+      "y": 310,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2518,9 +3079,9 @@
       "layer": 12
     },
     {
-      "componentId": "recorder-201-5",
-      "x": 3017.142857142857,
-      "y": 480,
+      "componentId": "scr-014",
+      "x": 20,
+      "y": 368,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2528,9 +3089,9 @@
       "layer": 13
     },
     {
-      "componentId": "readout-101",
-      "x": 3017.142857142857,
-      "y": 651.4285714285714,
+      "componentId": "scr-015",
+      "x": 172,
+      "y": 368,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2538,9 +3099,9 @@
       "layer": 14
     },
     {
-      "componentId": "readout-102",
-      "x": 3840,
-      "y": 651.4285714285714,
+      "componentId": "scr-016",
+      "x": 324,
+      "y": 368,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2548,9 +3109,9 @@
       "layer": 15
     },
     {
-      "componentId": "readout-103",
-      "x": 548.5714285714286,
-      "y": 822.8571428571428,
+      "componentId": "scr-017",
+      "x": 20,
+      "y": 426,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2558,9 +3119,9 @@
       "layer": 16
     },
     {
-      "componentId": "readout-104",
-      "x": 1371.4285714285713,
-      "y": 822.8571428571428,
+      "componentId": "scr-018",
+      "x": 172,
+      "y": 426,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2568,9 +3129,9 @@
       "layer": 17
     },
     {
-      "componentId": "readout-105",
-      "x": 2194.285714285714,
-      "y": 822.8571428571428,
+      "componentId": "scr-019",
+      "x": 324,
+      "y": 426,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2578,34 +3139,14 @@
       "layer": 18
     },
     {
-      "componentId": "readout-106",
-      "x": 3017.142857142857,
-      "y": 822.8571428571428,
+      "componentId": "scr-020",
+      "x": 20,
+      "y": 484,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
       "scale": 1,
       "layer": 19
-    },
-    {
-      "componentId": "readout-108",
-      "x": 3840,
-      "y": 822.8571428571428,
-      "rotation": 0,
-      "flipH": false,
-      "flipV": false,
-      "scale": 1,
-      "layer": 20
-    },
-    {
-      "componentId": "readout-109",
-      "x": 548.5714285714286,
-      "y": 994.2857142857142,
-      "rotation": 0,
-      "flipH": false,
-      "flipV": false,
-      "scale": 1,
-      "layer": 21
     }
   ],
   "exportedPropertyComponentIds": [

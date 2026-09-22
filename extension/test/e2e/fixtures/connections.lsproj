@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    { "id": "source", "typeId": "sources.clock", "label": "SOURCE", "properties": { "voltage": 5, "freqHz": 1, "alwaysOn": true }, "visual": { "x": 100, "y": 130, "rotation": 0 } },
+    { "id": "obstacle", "typeId": "passive.resistor", "label": "OBSTACLE", "properties": { "resistance": 1000 }, "visual": { "x": 310, "y": 120, "rotation": 90 } },
+    { "id": "target", "typeId": "meters.oscope", "label": "TARGET", "properties": { "tunnels": ",,," }, "visual": { "x": 560, "y": 130, "rotation": 0 } },
+    { "id": "operator", "typeId": "graphics.hmi_toggle", "label": "OPERATOR", "properties": { "width": 78, "height": 38, "value": 0, "actionTarget": "source", "actionProperty": "voltage", "actionMode": "toggle", "actionValue": "0", "actionReleaseValue": "5", "actionStep": 1, "actionMin": 0, "actionMax": 5, "bindSource": "", "bindChannel": 0, "bindScale": 1, "bindOffset": 0, "bindMin": 0, "bindMax": 100, "bindUnit": "", "bindDecimals": 0, "bindThreshold": 50, "bindInvert": false }, "visual": { "x": 100, "y": 420, "rotation": 0 } }
+  ],
+  "topology": { "revision": 0, "nodes": [], "conductors": [] },
+  "visual": { "components": [], "wires": [], "viewport": { "x": 0, "y": 0, "zoom": 1 } },
+  "simulationSettings": { "frequencyHz": 1000, "timeScale": 1, "paused": false }
+}

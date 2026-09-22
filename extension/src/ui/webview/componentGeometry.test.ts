@@ -1,4 +1,4 @@
-import { localToScene, sceneToLocal, snapScenePoint, svgLocalTransform, transformedLocalBounds, transformLocalPoint } from "./componentGeometry.js";
+import { localToScene, resizedComponentSize, sceneToLocal, snapScenePoint, svgLocalTransform, transformedLocalBounds, transformLocalPoint } from "./componentGeometry.js";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -52,6 +52,23 @@ async function main(): Promise<void> {
   await test("snap ao grid só acontece no espaço de cena", () => {
     const snapped = snapScenePoint({ x: 14.1, y: -5.9 }, 4);
     assert(snapped.x === 16 && snapped.y === -4, JSON.stringify(snapped));
+  });
+
+  await test("resize proporcional preserva a silhueta do dispositivo", () => {
+    const resized = resizedComponentSize({
+      startWidth: 64, startHeight: 76, deltaWidth: 32, deltaHeight: 4,
+      widthEdge: 1, heightEdge: 1, minSize: 8, preserveAspect: true,
+    });
+    assert(near(resized.width / resized.height, 64 / 76), `aspecto deformado: ${JSON.stringify(resized)}`);
+    assert(resized.width === 96 && resized.height === 114, `eixo dominante incorreto: ${JSON.stringify(resized)}`);
+  });
+
+  await test("resize elastico continua independente para tubos e linhas", () => {
+    const resized = resizedComponentSize({
+      startWidth: 120, startHeight: 12, deltaWidth: 80, deltaHeight: 20,
+      widthEdge: 1, heightEdge: 0, minSize: 8, preserveAspect: false,
+    });
+    assert(resized.width === 200 && resized.height === 12, `resize elastico: ${JSON.stringify(resized)}`);
   });
 
   console.log(`\nResultado: ${passed} passaram, 0 falharam\n`);

@@ -1,6 +1,7 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
 import { buildPaletteTree, resolvePaletteFolderPath, PaletteRenderableEntry } from "./paletteTree";
 import { defaultComponentCatalog } from "./catalog";
+import { controlGraphCatalog } from "../../catalog/controlGraphCatalog";
 
 const catalog: PaletteRenderableEntry[] = [
   {
@@ -151,6 +152,26 @@ const catalog: PaletteRenderableEntry[] = [
       assert(processTree.includes(typeId), `${typeId} deveria aparecer na paleta HART`);
     }
     assert(processTree.includes("Protocolos Industriais"), "protocolos deveriam ficar sob Process/Protocolos Industriais");
+  });
+
+  await test("primitivos control.* somem da paleta de Processo e so os 3 usados pelos modelos aparecem na raiz de Controle", () => {
+    const processTree = JSON.stringify(buildPaletteTree(controlGraphCatalog, "", "process"));
+    assert(!processTree.includes("Controle"), "Processo nao deveria mais ter a subsecao Controle");
+    assert(!processTree.includes("control."), "nenhum primitivo control.* deveria aparecer em Processo");
+
+    const controlTree = buildPaletteTree(controlGraphCatalog, "", "control");
+    const typeIds = controlTree.map((node) => (node.kind === "component" ? node.typeId : `folder:${node.label}`)).sort();
+    assert(
+      JSON.stringify(typeIds) === JSON.stringify(["control.calc_expression", "control.observer", "control.process"]),
+      `Controle deveria expor so Sonda/Expressao/Processo na raiz, sem subpasta -- veio ${JSON.stringify(typeIds)}`
+    );
+
+    // `paletteHidden` some SO da paleta: `hidden` apagaria a instancia do render (ver
+    // `model.ts::WebviewComponentCatalogEntry.paletteHidden`) e os modelos TDPS/os 24 blocos de
+    // Controle ficariam com o conteudo invisivel no editor de subcircuito.
+    for (const entry of controlGraphCatalog.filter((item) => item.typeId.startsWith("control."))) {
+      assert(entry.hidden !== true, `${entry.typeId} nunca pode ser hidden -- e o conteudo visivel do editor de subcircuito`);
+    }
   });
 
   const { failed } = finish();

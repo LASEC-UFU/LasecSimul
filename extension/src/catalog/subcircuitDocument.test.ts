@@ -114,6 +114,15 @@ function fullDocument(): SubcircuitDocument {
     }
   });
 
+  await test("topology.conductors[].lineClass ISA/IPD sobrevive ao round-trip", () => {
+    const original = fullDocument();
+    original.topology.conductors[0]!.lineClass = "pipe.jacketed";
+    const raw = serializeSubcircuitDocument(original);
+    const reparsed = parseSubcircuitDocument(raw, "/tmp");
+    assert(reparsed.ok === true, "documento com classe de linha deveria parsear");
+    if (reparsed.ok) assert(reparsed.document.topology.conductors[0]?.lineClass === "pipe.jacketed", "classe deveria sobreviver intacta");
+  });
+
   await test("serialize é independente da ordem de inserção das chaves do objeto de entrada (parse não depende de ordem)", () => {
     const original = fullDocument();
     const raw = serializeSubcircuitDocument(original);

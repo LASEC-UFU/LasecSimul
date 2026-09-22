@@ -111,6 +111,64 @@ function portWire(id: string, fromComponentId: string, toComponentId: string, pi
     assert(wirePolylinePoints(snapshot.components, orphanWire, snapshot.nodes).length === 0, "endpoint inexistente deveria devolver polilinha vazia");
   });
 
+  await test("wirePolylinePoints integra rota automática, obstáculo e reroteamento ao mover endpoint", () => {
+    const endpointPackage: PackageDescriptor = {
+      width: 40,
+      height: 40,
+      pins: [
+        { id: "in", x: -8, y: 20, angle: 180, length: 8, label: "IN" },
+        { id: "out", x: 48, y: 20, angle: 0, length: 8, label: "OUT" },
+      ],
+    };
+    registerPackage("test.routeEndpoint", endpointPackage);
+    registerPackage("test.routeObstacle", { width: 60, height: 80, pins: [] });
+    const makeEndpoint = (id: string, x: number, y: number): WebviewComponentModel => ({
+      id,
+      typeId: "test.routeEndpoint",
+      label: id,
+      x,
+      y,
+      rotation: 0,
+      pins: [{ id: "in", x: 0, y: 0 }, { id: "out", x: 0, y: 0 }],
+      properties: {},
+    });
+    const source = makeEndpoint("source", 0, 0);
+    const target = makeEndpoint("target", 220, 0);
+    const obstacle: WebviewComponentModel = {
+      id: "obstacle",
+      typeId: "test.routeObstacle",
+      label: "obstacle",
+      x: 100,
+      y: -20,
+      rotation: 0,
+      pins: [],
+      properties: {},
+    };
+    const wire: WebviewWireModel = {
+      id: "auto",
+      from: portEndpoint(source.id, "out"),
+      to: portEndpoint(target.id, "in"),
+    };
+    const routeBefore = wirePolylinePoints([source, obstacle, target], wire);
+    assert(routeBefore.length >= 4, "rota integrada deveria contornar o componente intermediário");
+    for (let index = 0; index + 1 < routeBefore.length; index += 1) {
+      assert(routeBefore[index]!.x === routeBefore[index + 1]!.x || routeBefore[index]!.y === routeBefore[index + 1]!.y,
+        `segmento integrado ${index} deveria permanecer ortogonal`);
+    }
+    target.y = 120;
+    const routeAfter = wirePolylinePoints([source, obstacle, target], wire);
+    const targetPosition = pinScenePosition([source, obstacle, target], target.id, "in")!;
+    const last = routeAfter[routeAfter.length - 1]!;
+    assert(last.x === targetPosition.x && last.y === targetPosition.y, "rota deveria continuar ancorada no endpoint movido");
+    assert(JSON.stringify(routeAfter) !== JSON.stringify(routeBefore), "mover endpoint deveria recalcular a rota automática");
+    for (let index = 0; index + 1 < routeAfter.length; index += 1) {
+      assert(routeAfter[index]!.x === routeAfter[index + 1]!.x || routeAfter[index]!.y === routeAfter[index + 1]!.y,
+        `segmento reroteado ${index} deveria permanecer ortogonal`);
+    }
+    registerPackage("test.routeEndpoint", undefined);
+    registerPackage("test.routeObstacle", undefined);
+  });
+
   await test("WireSpatialIndex: upsertWire indexa os segmentos, removeWire tira do índice (mesmo espírito da antiga cobertura via findAtPosition, removido por ser código morto -- ver .spec seção 25.10; classe continua em uso real por maybeAutoJunctionForDraggedComponents)", () => {
     const index = new WireSpatialIndex(32);
     index.upsertWire("w1", [{ x: 0, y: 0 }, { x: 100, y: 0 }]);
@@ -196,6 +254,14 @@ function portWire(id: string, fromComponentId: string, toComponentId: string, pi
     assert(result!.node === undefined, "não deveria criar um nó novo quando já existe um no ponto");
     assert(endpointId(result!.firstWire.to) === "existing", "metade deveria apontar pro nó reusado");
     assert(endpointId(result!.secondWire.from) === "existing", "outra metade deveria apontar pro nó reusado");
+  });
+
+  await test("splitSegmentAtPoint preserva a classe visual nas duas metades", () => {
+    const snapshot = baseSnapshot();
+    snapshot.wires[0]!.lineClass = "pipe.jacketed";
+    const result = splitSegmentAtPoint(snapshot, "w1", { x: 48, y: 0 }, { junctionId: "j-style", firstWireId: "w1a", secondWireId: "w1b" });
+    assert(result?.firstWire.lineClass === "pipe.jacketed", "primeira metade deveria preservar a classe");
+    assert(result?.secondWire.lineClass === "pipe.jacketed", "segunda metade deveria preservar a classe");
   });
 
   await test("splitSegmentAtPoint devolve undefined quando o ponto não projeta sobre o fio", () => {
@@ -309,6 +375,20 @@ function portWire(id: string, fromComponentId: string, toComponentId: string, pi
     const merged = result.wires[0]!;
     const endpoints = [endpointId(merged.from), endpointId(merged.to)].sort();
     assert(endpoints[0] === "a" && endpoints[1] === "b", "o fio mesclado deveria ligar diretamente 'a' a 'b'");
+  });
+
+  await test("removeOrphanNodes preserva nó de grau 2 que marca transição entre estilos", () => {
+    const snapshot: TopologySnapshot = {
+      components: [resistorComponent("a", 0, 0), resistorComponent("b", 100, 0)],
+      nodes: [topologyNode("j", 50, 0)],
+      wires: [
+        { id: "w1", from: portEndpoint("a", "pin-1"), to: nodeEndpoint("j"), lineClass: "process.major" },
+        { id: "w2", from: nodeEndpoint("j"), to: portEndpoint("b", "pin-1"), lineClass: "signal.electric" },
+      ],
+    };
+    const result = removeOrphanNodes(snapshot);
+    assert(result.nodes.some((node) => node.id === "j"), "transição visual não deveria ser apagada");
+    assert(result.wires.length === 2, "as duas classes distintas deveriam permanecer representáveis");
   });
 
   await test("removeOrphanNodes: grau 3+ permanece intocado", () => {

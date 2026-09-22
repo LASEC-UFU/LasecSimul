@@ -1007,6 +1007,662 @@
         "y": 584,
         "rotation": 180
       }
+    },
+    {
+      "id": "scr-001",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 460,
+        "height": 24,
+        "text": "Forno Mestre-Escravo",
+        "fontSize": 15,
+        "align": "start",
+        "stroke": "#0f172a",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 16,
+        "y": 914,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-002",
+      "typeId": "graphics.heat_exchanger",
+      "label": "heat_exchanger",
+      "properties": {
+        "width": 160,
+        "height": 106,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1
+      },
+      "visual": {
+        "x": 20,
+        "y": 1032,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-003",
+      "typeId": "graphics.pipe",
+      "label": "pipe",
+      "properties": {
+        "width": 18,
+        "height": 16,
+        "fill": "#cbd5e1",
+        "stroke": "currentColor",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "showFlow": false,
+        "flowDirection": "forward",
+        "showFlanges": false,
+        "value": 100,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1,
+        "bindThreshold": 1,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 174,
+        "y": 1114,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-004",
+      "typeId": "graphics.pipe",
+      "label": "pipe",
+      "properties": {
+        "width": 300,
+        "height": 16,
+        "fill": "#cbd5e1",
+        "stroke": "currentColor",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "showFlow": true,
+        "flowDirection": "forward",
+        "showFlanges": false,
+        "value": 100,
+        "bindSource": "readout-106",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1,
+        "bindThreshold": 1,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 190,
+        "y": 1114,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-005",
+      "typeId": "graphics.instrument",
+      "label": "instrument",
+      "properties": {
+        "width": 64,
+        "height": 64,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "tag": "FT",
+        "tagNumber": "106",
+        "housing": "circle",
+        "location": "field",
+        "showValue": true,
+        "value": 0,
+        "bindSource": "readout-106",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 200,
+        "bindUnit": "L/min",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 238,
+        "y": 1016,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-006",
+      "typeId": "graphics.signal_line",
+      "label": "signal_line",
+      "properties": {
+        "height": 10,
+        "stroke": "currentColor",
+        "strokeWidth": 1.4,
+        "opacity": 1,
+        "dash": "solid",
+        "width": 42
+      },
+      "visual": {
+        "x": 249,
+        "y": 1096,
+        "rotation": 90
+      }
+    },
+    {
+      "id": "scr-007",
+      "typeId": "graphics.signal_line",
+      "label": "signal_line",
+      "properties": {
+        "width": 204,
+        "height": 10,
+        "stroke": "currentColor",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "dash": "dashed"
+      },
+      "visual": {
+        "x": 302,
+        "y": 1042,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-008",
+      "typeId": "graphics.hmi.valve",
+      "label": "hmi.valve",
+      "properties": {
+        "width": 60,
+        "height": 86,
+        "stroke": "#4a4a4a",
+        "fill": "#c2c2c2",
+        "opacity": 1,
+        "throttle": true,
+        "tag": "Abertura…",
+        "value": 0,
+        "bindSource": "readout-101",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1,
+        "bindThreshold": 2,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 388,
+        "y": 1076,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-009",
+      "typeId": "graphics.controller_faceplate",
+      "label": "controller_faceplate",
+      "properties": {
+        "width": 66,
+        "height": 106,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "tag": "TIC01",
+        "setpoint": 50,
+        "barColor": "#0284c7",
+        "showValue": true,
+        "value": 0,
+        "bindSource": "pid-01",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 506,
+        "y": 1000,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-010",
+      "typeId": "graphics.controller_faceplate",
+      "label": "controller_faceplate",
+      "properties": {
+        "width": 66,
+        "height": 106,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "tag": "FIC01",
+        "setpoint": 50,
+        "barColor": "#0284c7",
+        "showValue": true,
+        "value": 0,
+        "bindSource": "pid-02",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 580,
+        "y": 1000,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-011",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "PV filtrada",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "recorder-202-3",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 20,
+        "y": 1210,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-012",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "PV Original",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "recorder-202-5",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 172,
+        "y": 1210,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-013",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "#202-7",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "recorder-202-7",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 324,
+        "y": 1210,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-014",
+      "typeId": "graphics.level_bar",
+      "label": "level_bar",
+      "properties": {
+        "width": 26,
+        "height": 52,
+        "stroke": "currentColor",
+        "fill": "#ffffff",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "barColor": "#f59e0b",
+        "highLimit": 90,
+        "lowLimit": 10,
+        "showLimits": false,
+        "showValue": false,
+        "value": 0,
+        "bindSource": "readout-101",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 22,
+        "y": 1264,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-015",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 112,
+        "height": 44,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Abertura Válvula",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-101",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 52,
+        "y": 1268,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-016",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "CO",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-102",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 172,
+        "y": 1268,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-017",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Temp Interna",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-103",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 400,
+        "bindUnit": "oC",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 324,
+        "y": 1268,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-018",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Temperatura",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-104",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 400,
+        "bindUnit": "oC",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 20,
+        "y": 1326,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-019",
+      "typeId": "graphics.status_lamp",
+      "label": "status_lamp",
+      "properties": {
+        "width": 30,
+        "height": 38,
+        "stroke": "currentColor",
+        "fill": "#94a3b8",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "onColor": "#22c55e",
+        "offColor": "#94a3b8",
+        "label": "",
+        "value": 0,
+        "bindSource": "readout-105",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 1,
+        "bindUnit": "Fechada/Aberta",
+        "bindDecimals": 0,
+        "bindThreshold": 0.5,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 176,
+        "y": 1328,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-020",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 106,
+        "height": 18,
+        "text": "Porta",
+        "fontSize": 10,
+        "align": "start",
+        "stroke": "#0f172a",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 210,
+        "y": 1336,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-021",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Vazão Combustível",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-106",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 200,
+        "bindUnit": "L/min",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 324,
+        "y": 1326,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-022",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Malha Interna",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-107",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 20,
+        "y": 1384,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-023",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Setpoint Vazão",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-108",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 200,
+        "bindUnit": "L/min",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 172,
+        "y": 1384,
+        "rotation": 0
+      }
     }
   ],
   "topology": {
@@ -1769,8 +2425,8 @@
   ],
   "symbolMode": "custom",
   "symbol": {
-    "width": 640,
-    "height": 480,
+    "width": 670,
+    "height": 554,
     "border": true,
     "pins": [
       {
@@ -1938,16 +2594,14 @@
     ],
     "shapes": [],
     "background": {
-      "kind": "image",
-      "asset": "tdps-reference-images/tdps_furnace_master_slave.png",
-      "mime": "image/png"
+      "kind": "none"
     }
   },
   "exposedComponents": [
     {
-      "componentId": "pid-01",
-      "x": 2560,
-      "y": 490.9090909090909,
+      "componentId": "scr-001",
+      "x": 16,
+      "y": 14,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1955,9 +2609,9 @@
       "layer": 0
     },
     {
-      "componentId": "pid-02",
-      "x": 1010.2857142857142,
-      "y": 1551.2727272727273,
+      "componentId": "scr-002",
+      "x": 20,
+      "y": 132,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1965,9 +2619,9 @@
       "layer": 1
     },
     {
-      "componentId": "process-21",
-      "x": 3506.285714285714,
-      "y": 2.1818181818181817,
+      "componentId": "scr-003",
+      "x": 174,
+      "y": 214,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1975,9 +2629,9 @@
       "layer": 2
     },
     {
-      "componentId": "process-22",
-      "x": 3190.8571428571427,
-      "y": 1167.2727272727273,
+      "componentId": "scr-004",
+      "x": 190,
+      "y": 214,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1985,9 +2639,9 @@
       "layer": 3
     },
     {
-      "componentId": "process-23",
-      "x": 3190.8571428571427,
-      "y": 1224,
+      "componentId": "scr-005",
+      "x": 238,
+      "y": 116,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -1995,19 +2649,19 @@
       "layer": 4
     },
     {
-      "componentId": "process-24",
-      "x": 420.57142857142856,
-      "y": 637.090909090909,
-      "rotation": 0,
+      "componentId": "scr-006",
+      "x": 249,
+      "y": 196,
+      "rotation": 90,
       "flipH": false,
       "flipV": false,
       "scale": 1,
       "layer": 5
     },
     {
-      "componentId": "calc-41",
-      "x": 2806.8571428571427,
-      "y": 1171.6363636363635,
+      "componentId": "scr-007",
+      "x": 302,
+      "y": 142,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2015,9 +2669,9 @@
       "layer": 6
     },
     {
-      "componentId": "calc-42",
-      "x": 3506.285714285714,
-      "y": 124.36363636363636,
+      "componentId": "scr-008",
+      "x": 388,
+      "y": 176,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2025,9 +2679,9 @@
       "layer": 7
     },
     {
-      "componentId": "calc-43",
-      "x": 2843.428571428571,
-      "y": 48,
+      "componentId": "scr-009",
+      "x": 506,
+      "y": 100,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2035,9 +2689,9 @@
       "layer": 8
     },
     {
-      "componentId": "recorder-202-3",
-      "x": 3840,
-      "y": 392.7272727272727,
+      "componentId": "scr-010",
+      "x": 580,
+      "y": 100,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2045,9 +2699,9 @@
       "layer": 9
     },
     {
-      "componentId": "recorder-202-5",
-      "x": 548.5714285714286,
-      "y": 610.9090909090909,
+      "componentId": "scr-011",
+      "x": 20,
+      "y": 310,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2055,9 +2709,9 @@
       "layer": 10
     },
     {
-      "componentId": "recorder-202-7",
-      "x": 1371.4285714285713,
-      "y": 610.9090909090909,
+      "componentId": "scr-012",
+      "x": 172,
+      "y": 310,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2065,9 +2719,9 @@
       "layer": 11
     },
     {
-      "componentId": "readout-101",
-      "x": 2194.285714285714,
-      "y": 610.9090909090909,
+      "componentId": "scr-013",
+      "x": 324,
+      "y": 310,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2075,9 +2729,9 @@
       "layer": 12
     },
     {
-      "componentId": "readout-102",
-      "x": 3017.142857142857,
-      "y": 610.9090909090909,
+      "componentId": "scr-014",
+      "x": 22,
+      "y": 364,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2085,9 +2739,9 @@
       "layer": 13
     },
     {
-      "componentId": "readout-103",
-      "x": 3840,
-      "y": 610.9090909090909,
+      "componentId": "scr-015",
+      "x": 52,
+      "y": 368,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2095,9 +2749,9 @@
       "layer": 14
     },
     {
-      "componentId": "readout-104",
-      "x": 548.5714285714286,
-      "y": 829.090909090909,
+      "componentId": "scr-016",
+      "x": 172,
+      "y": 368,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2105,9 +2759,9 @@
       "layer": 15
     },
     {
-      "componentId": "readout-105",
-      "x": 1371.4285714285713,
-      "y": 829.090909090909,
+      "componentId": "scr-017",
+      "x": 324,
+      "y": 368,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2115,9 +2769,9 @@
       "layer": 16
     },
     {
-      "componentId": "readout-106",
-      "x": 2194.285714285714,
-      "y": 829.090909090909,
+      "componentId": "scr-018",
+      "x": 20,
+      "y": 426,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2125,9 +2779,9 @@
       "layer": 17
     },
     {
-      "componentId": "readout-107",
-      "x": 3017.142857142857,
-      "y": 829.090909090909,
+      "componentId": "scr-019",
+      "x": 176,
+      "y": 428,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2135,14 +2789,44 @@
       "layer": 18
     },
     {
-      "componentId": "readout-108",
-      "x": 3840,
-      "y": 829.090909090909,
+      "componentId": "scr-020",
+      "x": 210,
+      "y": 436,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
       "scale": 1,
       "layer": 19
+    },
+    {
+      "componentId": "scr-021",
+      "x": 324,
+      "y": 426,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 20
+    },
+    {
+      "componentId": "scr-022",
+      "x": 20,
+      "y": 484,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 21
+    },
+    {
+      "componentId": "scr-023",
+      "x": 172,
+      "y": 484,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 22
     }
   ],
   "exportedPropertyComponentIds": [

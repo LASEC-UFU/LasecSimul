@@ -718,6 +718,11 @@ private:
         const simulation::SignalGraphDefinition& definition) const;
     void publishHartOutputsToSignalUnlocked();
     void sampleHartInputsFromSignalUnlocked();
+    /** Copia a saída atual de cada bloco de controle (`control.*`) do `SignalRuntime` para dentro da
+     * própria instância, de onde `getState()` a publica como leitura escalar normal. Mesmo padrão
+     * (e mesmo motivo) de `sampleHartInputsFromSignalUnlocked`: quem conhece o slot compilado é a
+     * sessão, não o componente. Roda junto da captura de telemetria, nunca por passo. */
+    void sampleSignalMathOutputsUnlocked(const std::vector<uint32_t>& componentIndices);
     simulation::PlanDomain refreshComponentExecutionLists(uint32_t componentIndex);
     void invalidatePlan(simulation::PlanDomain domains);
 

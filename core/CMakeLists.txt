@@ -1013,6 +1013,20 @@ target_include_directories(mcu_debug_launch_test PRIVATE include src)
 target_link_libraries(mcu_debug_launch_test PRIVATE nlohmann_json::nlohmann_json)
 add_test(NAME mcu_debug_launch COMMAND mcu_debug_launch_test)
 
+add_executable(mcu_network_launch_test
+    test/core/mcu/McuNetworkLaunchTest.cpp
+    src/mcu/McuController.cpp
+    src/mcu/qemu/QemuProcessManager.cpp
+    src/mcu/qemu/QemuArenaBridge.cpp
+    src/mcu/qemu/QemuIcountCalibrator.cpp
+    src/mcu/qemu/VnextBAttachment.cpp
+    src/mcu/qemu/VnextBWaitDispatcher.cpp
+    src/mcu/qemu/VnextBArbiter.cpp
+)
+target_include_directories(mcu_network_launch_test PRIVATE include src)
+target_link_libraries(mcu_network_launch_test PRIVATE nlohmann_json::nlohmann_json)
+add_test(NAME mcu_network_launch COMMAND mcu_network_launch_test)
+
 add_executable(qemu_arena_bridge_test
     test/core/mcu/QemuArenaBridgeTest.cpp
     src/mcu/qemu/QemuArenaBridge.cpp

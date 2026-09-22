@@ -27,6 +27,48 @@ export interface SceneTransform extends LocalTransform {
   position: Point;
 }
 
+export interface ResizeSizeInput {
+  startWidth: number;
+  startHeight: number;
+  deltaWidth: number;
+  deltaHeight: number;
+  widthEdge: -1 | 0 | 1;
+  heightEdge: -1 | 0 | 1;
+  minSize: number;
+  preserveAspect: boolean;
+}
+
+/**
+ * Shared resize rule for the editor. Fixed-aspect devices use one scale factor, selected from the
+ * pointer axis that moved proportionally farther. This keeps circles circular and preserves every
+ * authored angle/curve. Elastic graphics retain independent width/height resizing.
+ */
+export function resizedComponentSize(input: ResizeSizeInput): GeometrySize {
+  const startWidth = Math.max(1e-9, input.startWidth);
+  const startHeight = Math.max(1e-9, input.startHeight);
+  if (!input.preserveAspect) {
+    return {
+      width: Math.round(input.widthEdge === 0
+        ? input.startWidth
+        : Math.max(input.minSize, input.startWidth + input.deltaWidth * input.widthEdge)),
+      height: Math.round(input.heightEdge === 0
+        ? input.startHeight
+        : Math.max(input.minSize, input.startHeight + input.deltaHeight * input.heightEdge)),
+    };
+  }
+
+  const widthChange = input.widthEdge === 0 ? 0 : input.deltaWidth * input.widthEdge / startWidth;
+  const heightChange = input.heightEdge === 0 ? 0 : input.deltaHeight * input.heightEdge / startHeight;
+  const dominantChange = Math.abs(widthChange) >= Math.abs(heightChange) ? widthChange : heightChange;
+  const minimumScale = Math.max(input.minSize / startWidth, input.minSize / startHeight);
+  const scale = Math.max(minimumScale, 1 + dominantChange);
+  const roundGeometry = (value: number) => Math.round(value * 1000) / 1000;
+  return {
+    width: roundGeometry(input.startWidth * scale),
+    height: roundGeometry(input.startHeight * scale),
+  };
+}
+
 export function transformOrigin(transform: LocalTransform): Point {
   return transform.origin ?? { x: transform.size.width / 2, y: transform.size.height / 2 };
 }

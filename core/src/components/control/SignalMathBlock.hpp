@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstring>
 #include <cstdint>
 #include <limits>
 #include <span>
@@ -80,8 +81,36 @@ public:
     std::span<Pin> pins() override { return {}; }
     void stamp(MnaMatrixView&) override {}
     void postStep(uint64_t) override {}
-    size_t getState(uint8_t*, size_t) const override { return 0; }
-    void setState(const uint8_t*, size_t) override {}
+
+    /** Leitura escalar publicada por `getState()` -- é o valor da porta de SAÍDA deste bloco no
+     * último passo, empurrado pela sessão (`SimulationSession::sampleSignalMathOutputsUnlocked`,
+     * mesmo padrão de `hart->setSignalInput`). O bloco não consulta o `SignalRuntime` sozinho: quem
+     * conhece o `SignalSlotHandle` é a sessão, e ler fora do passo não seria seguro.
+     *
+     * Sem isto, NENHUM valor de processo (nível, PV, saída de PID, sonda) existia do lado da
+     * Extension -- `getState()` devolvia 0 byte. É o que alimenta a biblioteca gráfica de
+     * supervisório (`graphics.*`) pelo caminho de telemetria JÁ existente
+     * (`pollInstrumentReadouts` -> `componentReadout` -> binding), sem canal novo de IPC. */
+    void setLastOutput(double value) { m_lastOutput = value; }
+    double lastOutput() const { return m_lastOutput; }
+
+    /** `scalar` = 1 double, exatamente o formato que `decodeComponentReadout` (Extension) já lê
+     * para voltímetro/amperímetro/sonda -- nenhum formato novo. */
+    static ReadoutFormat readoutFormat() {
+        ReadoutFormat format;
+        format.kind = ReadoutKind::Scalar;
+        format.unit = "";
+        return format;
+    }
+
+    size_t getState(uint8_t* buffer, size_t capacity) const override {
+        if (!buffer || capacity < sizeof(double)) return 0;
+        std::memcpy(buffer, &m_lastOutput, sizeof(double));
+        return sizeof(double);
+    }
+    void setState(const uint8_t* buffer, size_t size) override {
+        if (buffer && size >= sizeof(double)) std::memcpy(&m_lastOutput, buffer, sizeof(double));
+    }
 
     std::vector<SignalPortDescriptor> signalPorts() const override {
         std::vector<SignalPortDescriptor> ports;
@@ -401,6 +430,8 @@ private:
         std::string text = std::to_string(value);
         return value < 0.0 ? "(" + text + ")" : text;
     }
+
+    double m_lastOutput = 0.0;
 
     double number(std::string_view key, double fallback) const {
         const auto it = m_properties.find(std::string(key));

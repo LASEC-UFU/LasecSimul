@@ -1138,6 +1138,732 @@
         "y": 944,
         "rotation": 180
       }
+    },
+    {
+      "id": "scr-001",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 460,
+        "height": 24,
+        "text": "Pressao de Header com Tres Consumidores",
+        "fontSize": 15,
+        "align": "start",
+        "stroke": "#0f172a",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 16,
+        "y": 914,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-002",
+      "typeId": "graphics.equipment",
+      "label": "equipment",
+      "properties": {
+        "width": 150,
+        "height": 76,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "PT101",
+        "labelSize": 12
+      },
+      "visual": {
+        "x": 20,
+        "y": 1042,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-003",
+      "typeId": "graphics.pipe",
+      "label": "pipe",
+      "properties": {
+        "width": 18,
+        "height": 16,
+        "fill": "#cbd5e1",
+        "stroke": "currentColor",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "showFlow": false,
+        "flowDirection": "forward",
+        "showFlanges": false,
+        "value": 100,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1,
+        "bindThreshold": 1,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 164,
+        "y": 1114,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-004",
+      "typeId": "graphics.pipe",
+      "label": "pipe",
+      "properties": {
+        "width": 310,
+        "height": 16,
+        "fill": "#cbd5e1",
+        "stroke": "currentColor",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "showFlow": true,
+        "flowDirection": "forward",
+        "showFlanges": false,
+        "value": 100,
+        "bindSource": "readout-106",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1,
+        "bindThreshold": 1,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 180,
+        "y": 1114,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-005",
+      "typeId": "graphics.instrument",
+      "label": "instrument",
+      "properties": {
+        "width": 64,
+        "height": 64,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "tag": "FT",
+        "tagNumber": "106",
+        "housing": "circle",
+        "location": "field",
+        "showValue": true,
+        "value": 0,
+        "bindSource": "readout-106",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 200,
+        "bindUnit": "L/min",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 230,
+        "y": 1016,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-006",
+      "typeId": "graphics.signal_line",
+      "label": "signal_line",
+      "properties": {
+        "height": 10,
+        "stroke": "currentColor",
+        "strokeWidth": 1.4,
+        "opacity": 1,
+        "dash": "solid",
+        "width": 42
+      },
+      "visual": {
+        "x": 241,
+        "y": 1096,
+        "rotation": 90
+      }
+    },
+    {
+      "id": "scr-007",
+      "typeId": "graphics.signal_line",
+      "label": "signal_line",
+      "properties": {
+        "width": 212,
+        "height": 10,
+        "stroke": "currentColor",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "dash": "dashed"
+      },
+      "visual": {
+        "x": 294,
+        "y": 1042,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-008",
+      "typeId": "graphics.hmi.valve",
+      "label": "hmi.valve",
+      "properties": {
+        "width": 60,
+        "height": 86,
+        "stroke": "#4a4a4a",
+        "fill": "#c2c2c2",
+        "opacity": 1,
+        "throttle": true,
+        "tag": "Abert FCV…",
+        "value": 0,
+        "bindSource": "readout-101",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1,
+        "bindThreshold": 2,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 385,
+        "y": 1076,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-009",
+      "typeId": "graphics.hmi.pump",
+      "label": "hmi.pump",
+      "properties": {
+        "width": 72,
+        "height": 108,
+        "stroke": "#4a4a4a",
+        "fill": "#c2c2c2",
+        "opacity": 1,
+        "tag": "Veloc Bomba",
+        "tripped": false,
+        "outOfService": false,
+        "value": 0,
+        "bindSource": "readout-104",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 3600,
+        "bindUnit": "rpm",
+        "bindDecimals": 1,
+        "bindThreshold": 1,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 34,
+        "y": 1140,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-010",
+      "typeId": "graphics.controller_faceplate",
+      "label": "controller_faceplate",
+      "properties": {
+        "width": 66,
+        "height": 106,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "tag": "PIC101",
+        "setpoint": 50,
+        "barColor": "#0284c7",
+        "showValue": true,
+        "value": 0,
+        "bindSource": "pid-01",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 30,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 506,
+        "y": 1000,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-011",
+      "typeId": "graphics.controller_faceplate",
+      "label": "controller_faceplate",
+      "properties": {
+        "width": 66,
+        "height": 106,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "tag": "FIC111",
+        "setpoint": 50,
+        "barColor": "#0284c7",
+        "showValue": true,
+        "value": 0,
+        "bindSource": "pid-02",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 580,
+        "y": 1000,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-012",
+      "typeId": "graphics.controller_faceplate",
+      "label": "controller_faceplate",
+      "properties": {
+        "width": 66,
+        "height": 106,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "tag": "FIC121",
+        "setpoint": 50,
+        "barColor": "#0284c7",
+        "showValue": true,
+        "value": 0,
+        "bindSource": "pid-03",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 654,
+        "y": 1000,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-013",
+      "typeId": "graphics.level_bar",
+      "label": "level_bar",
+      "properties": {
+        "width": 26,
+        "height": 52,
+        "stroke": "currentColor",
+        "fill": "#ffffff",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "barColor": "#f59e0b",
+        "highLimit": 90,
+        "lowLimit": 10,
+        "showLimits": false,
+        "showValue": false,
+        "value": 0,
+        "bindSource": "readout-101",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 22,
+        "y": 1244,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-014",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 112,
+        "height": 44,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Abert FCV111",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-101",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 52,
+        "y": 1248,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-015",
+      "typeId": "graphics.level_bar",
+      "label": "level_bar",
+      "properties": {
+        "width": 26,
+        "height": 52,
+        "stroke": "currentColor",
+        "fill": "#ffffff",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "barColor": "#f59e0b",
+        "highLimit": 90,
+        "lowLimit": 10,
+        "showLimits": false,
+        "showValue": false,
+        "value": 0,
+        "bindSource": "readout-102",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 174,
+        "y": 1244,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-016",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 112,
+        "height": 44,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Aberta/Fechada",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-102",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 204,
+        "y": 1248,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-017",
+      "typeId": "graphics.status_lamp",
+      "label": "status_lamp",
+      "properties": {
+        "width": 30,
+        "height": 38,
+        "stroke": "currentColor",
+        "fill": "#94a3b8",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "onColor": "#22c55e",
+        "offColor": "#94a3b8",
+        "label": "",
+        "value": 0,
+        "bindSource": "readout-103",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 1,
+        "bindUnit": "Fechada/Aberta",
+        "bindDecimals": 0,
+        "bindThreshold": 0.5,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 328,
+        "y": 1250,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-018",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 106,
+        "height": 18,
+        "text": "Posição",
+        "fontSize": 10,
+        "align": "start",
+        "stroke": "#0f172a",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 362,
+        "y": 1258,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-019",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Veloc Bomba",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-104",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 3600,
+        "bindUnit": "rpm",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 20,
+        "y": 1306,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-020",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Pressão",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-105",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 20,
+        "bindUnit": "bar",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 172,
+        "y": 1306,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-021",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Vazão 2",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-106",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 200,
+        "bindUnit": "L/min",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 324,
+        "y": 1306,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-022",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Vazão 3",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-107",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 200,
+        "bindUnit": "L/min",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 20,
+        "y": 1364,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-023",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 144,
+        "height": 46,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Vazão 1",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-108",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 200,
+        "bindUnit": "L/min",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 172,
+        "y": 1364,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-024",
+      "typeId": "graphics.level_bar",
+      "label": "level_bar",
+      "properties": {
+        "width": 26,
+        "height": 52,
+        "stroke": "currentColor",
+        "fill": "#ffffff",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "barColor": "#f59e0b",
+        "highLimit": 90,
+        "lowLimit": 10,
+        "showLimits": false,
+        "showValue": false,
+        "value": 0,
+        "bindSource": "readout-109",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 326,
+        "y": 1360,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-025",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 112,
+        "height": 44,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Abert FCV121",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "readout-109",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 356,
+        "y": 1364,
+        "rotation": 0
+      }
     }
   ],
   "topology": {
@@ -2006,8 +2732,8 @@
   ],
   "symbolMode": "custom",
   "symbol": {
-    "width": 640,
-    "height": 480,
+    "width": 744,
+    "height": 536,
     "border": true,
     "pins": [
       {
@@ -2211,16 +2937,14 @@
     ],
     "shapes": [],
     "background": {
-      "kind": "image",
-      "asset": "tdps-reference-images/tdps_header_pressure_three_consumers.png",
-      "mime": "image/png"
+      "kind": "none"
     }
   },
   "exposedComponents": [
     {
-      "componentId": "pid-01",
-      "x": 850.2857142857142,
-      "y": 154.28571428571428,
+      "componentId": "scr-001",
+      "x": 16,
+      "y": 14,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2228,9 +2952,9 @@
       "layer": 0
     },
     {
-      "componentId": "pid-02",
-      "x": 45.71428571428571,
-      "y": 560.5714285714286,
+      "componentId": "scr-002",
+      "x": 20,
+      "y": 142,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2238,9 +2962,9 @@
       "layer": 1
     },
     {
-      "componentId": "pid-03",
-      "x": 891.4285714285713,
-      "y": 567.4285714285714,
+      "componentId": "scr-003",
+      "x": 164,
+      "y": 214,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2248,9 +2972,9 @@
       "layer": 2
     },
     {
-      "componentId": "process-21",
-      "x": 502.85714285714283,
-      "y": 642.8571428571428,
+      "componentId": "scr-004",
+      "x": 180,
+      "y": 214,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2258,9 +2982,9 @@
       "layer": 3
     },
     {
-      "componentId": "process-22",
-      "x": 2409.142857142857,
-      "y": 70.28571428571428,
+      "componentId": "scr-005",
+      "x": 230,
+      "y": 116,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2268,19 +2992,19 @@
       "layer": 4
     },
     {
-      "componentId": "process-23",
-      "x": 2477.714285714286,
-      "y": 505.71428571428567,
-      "rotation": 0,
+      "componentId": "scr-006",
+      "x": 241,
+      "y": 196,
+      "rotation": 90,
       "flipH": false,
       "flipV": false,
       "scale": 1,
       "layer": 5
     },
     {
-      "componentId": "process-24",
-      "x": 1750.8571428571427,
-      "y": 864,
+      "componentId": "scr-007",
+      "x": 294,
+      "y": 142,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2288,9 +3012,9 @@
       "layer": 6
     },
     {
-      "componentId": "process-25",
-      "x": 493.71428571428567,
-      "y": 553.7142857142857,
+      "componentId": "scr-008",
+      "x": 385,
+      "y": 176,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2298,9 +3022,9 @@
       "layer": 7
     },
     {
-      "componentId": "process-26",
-      "x": 2715.428571428571,
-      "y": 267.4285714285714,
+      "componentId": "scr-009",
+      "x": 34,
+      "y": 240,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2308,9 +3032,9 @@
       "layer": 8
     },
     {
-      "componentId": "calc-41",
-      "x": 2715.428571428571,
-      "y": 267.4285714285714,
+      "componentId": "scr-010",
+      "x": 506,
+      "y": 100,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2318,9 +3042,9 @@
       "layer": 9
     },
     {
-      "componentId": "calc-42",
-      "x": 493.71428571428567,
-      "y": 553.7142857142857,
+      "componentId": "scr-011",
+      "x": 580,
+      "y": 100,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2328,9 +3052,9 @@
       "layer": 10
     },
     {
-      "componentId": "calc-43",
-      "x": 2788.5714285714284,
-      "y": 72,
+      "componentId": "scr-012",
+      "x": 654,
+      "y": 100,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2338,9 +3062,9 @@
       "layer": 11
     },
     {
-      "componentId": "readout-101",
-      "x": 2194.285714285714,
-      "y": 480,
+      "componentId": "scr-013",
+      "x": 22,
+      "y": 344,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2348,9 +3072,9 @@
       "layer": 12
     },
     {
-      "componentId": "readout-102",
-      "x": 3017.142857142857,
-      "y": 480,
+      "componentId": "scr-014",
+      "x": 52,
+      "y": 348,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2358,9 +3082,9 @@
       "layer": 13
     },
     {
-      "componentId": "readout-103",
-      "x": 3840,
-      "y": 480,
+      "componentId": "scr-015",
+      "x": 174,
+      "y": 344,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2368,9 +3092,9 @@
       "layer": 14
     },
     {
-      "componentId": "readout-104",
-      "x": 548.5714285714286,
-      "y": 651.4285714285714,
+      "componentId": "scr-016",
+      "x": 204,
+      "y": 348,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2378,9 +3102,9 @@
       "layer": 15
     },
     {
-      "componentId": "readout-105",
-      "x": 1371.4285714285713,
-      "y": 651.4285714285714,
+      "componentId": "scr-017",
+      "x": 328,
+      "y": 350,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2388,9 +3112,9 @@
       "layer": 16
     },
     {
-      "componentId": "readout-106",
-      "x": 2194.285714285714,
-      "y": 651.4285714285714,
+      "componentId": "scr-018",
+      "x": 362,
+      "y": 358,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2398,9 +3122,9 @@
       "layer": 17
     },
     {
-      "componentId": "readout-107",
-      "x": 3017.142857142857,
-      "y": 651.4285714285714,
+      "componentId": "scr-019",
+      "x": 20,
+      "y": 406,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2408,9 +3132,9 @@
       "layer": 18
     },
     {
-      "componentId": "readout-108",
-      "x": 3840,
-      "y": 651.4285714285714,
+      "componentId": "scr-020",
+      "x": 172,
+      "y": 406,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
@@ -2418,14 +3142,54 @@
       "layer": 19
     },
     {
-      "componentId": "readout-109",
-      "x": 548.5714285714286,
-      "y": 822.8571428571428,
+      "componentId": "scr-021",
+      "x": 324,
+      "y": 406,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
       "scale": 1,
       "layer": 20
+    },
+    {
+      "componentId": "scr-022",
+      "x": 20,
+      "y": 464,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 21
+    },
+    {
+      "componentId": "scr-023",
+      "x": 172,
+      "y": 464,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 22
+    },
+    {
+      "componentId": "scr-024",
+      "x": 326,
+      "y": 460,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 23
+    },
+    {
+      "componentId": "scr-025",
+      "x": 356,
+      "y": 464,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 24
     }
   ],
   "exportedPropertyComponentIds": [

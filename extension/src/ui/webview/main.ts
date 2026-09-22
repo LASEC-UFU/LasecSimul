@@ -1,8 +1,11 @@
 import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
 import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PackagePin, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
-import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage, runtimeSurfaceImageHref } from "./componentSymbols.js";
+import { reorderedZOrder, zOrderModeForKey, type ZOrderMode } from "./zOrder";
+import { graphicalRuntimeProperties, isGraphicalTypeId } from "./graphicsBinding.js";
+import { GraphicalActionPhase, GraphicalActionValue, graphicalActionConfig, isGraphicalActionTypeId, resolveGraphicalActionValue } from "./graphicsAction.js";
+import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage, resolvedPackageFor, runtimeSurfaceImageHref } from "./componentSymbols.js";
 import { ExternalLabelKind, SYMBOL_PIN_LABEL_ALIGN_KEY, formatProbeVoltage, genericExternalLabelFontSize, isExternalProbeReadout, labelPropertyKey, nextLabelRotation, resolveDefaultExternalLabelOffset, resolveExternalLabelColor, symbolPinLabelPackageFields } from "./componentLabels.js";
-import { svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
+import { resizedComponentSize, svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
 import { detectChannelTrigger, digitalStepPath, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import { analogSampleHoldPath, clampInstrumentWindow, decodeInstrumentState, encodeInstrumentState, panInstrumentTime, zoomInstrumentTimeAt } from "./instrumentViewport.js";
 import {
@@ -24,14 +27,19 @@ import {
   wireCornerIndexNearSegmentPoint,
 } from "./wireGeometry.js";
 import { formatEngineeringValue, defaultSiPrefixFactor, SI_PREFIXES } from "./valueFormatting.js";
-import { isJunctionVisible, movableTopologyNodeIds, endpointScenePosition as resolveEndpointScenePosition } from "./wireTopology.js";
+import { isJunctionVisible, movableTopologyNodeIds, endpointScenePosition as resolveEndpointScenePosition, wirePolylinePoints as resolveWirePolylinePoints } from "./wireTopology.js";
 import { WireSpatialIndex } from "./wireSpatialIndex.js";
+import { DockPort, PortDockIndex, buildPortDockIndex, findMagneticDock, magneticDockRadius } from "./connectionEngine.js";
 import { BatchPropertyPatch, PropertyField, PropertyFieldKind, SharedFieldValue, SharedPropertyField, computeGenericInstanceFields, computeSharedPropertyFields, planBatchPropertyChange, propertyFieldKindFromEditor } from "./batchProperties.js";
 import { parseSerialInput, serialFormatBytes, SerialFormat } from "./serialFormat.js";
 import { shouldRenderSimulationSnapshot, simulationControlModel } from "./simulationControls.js";
 import { isHighWireVoltage, reconcileWireVoltages } from "./wirePresentation.js";
 import { continuousDialValueFromPointer, steppedDialValue } from "./dialInteraction.js";
 import { contextMenuViewportSize, positionContextSubmenu, positionRootContextMenu } from "./contextMenuPosition.js";
+import { IpdAlignMode, IpdAlignmentNode, alignIpdNodes, distributeIpdNodes } from "./ipdAlignment.js";
+import { IpdNavigationItem, describeIpdNavigationSelection, ipdNavigationOrder, stepIpdNavigation } from "./ipdKeyboardNavigation.js";
+import { cleanIpdWireVertices } from "./ipdVertexClean.js";
+import { IPD_LINE_CLASSES, IPD_LINE_GLYPHS, IpdLineClass, ipdGlyphStations, ipdLineClassCssSuffix, ipdLineClassLabel, ipdLineStroke } from "./ipdLineStyle.js";
 import { regenerateGenericSubcircuitState } from "./genericSubcircuitPackage.js";
 import { formatHartHex, hartCommonTableForType, hartVariableTypeOptions } from "./hartCommonTables.js";
 
@@ -143,7 +151,7 @@ resetUndoHistory(mainUndoHistory);
  * Componentes também são cacheados por id para preservar listeners e estado de interação. */
 const componentElementsById = new Map<string, HTMLElement>();
 /** `${outerComponentId}:${innerComponentId}` -> `<svg>` do item exposto no overlay de Modo Placa
- * (`renderBoardOverlaysFor`) -- permite `patchBoardOverlayLedFills` atualizar SÓ o preenchimento do
+ * (`renderBoardOverlaysFor`) -- permite `patchBoardOverlayRuntimeVisuals` atualizar SÓ o desenho do
  * LED a cada tick de telemetria (~300ms) sem chamar `render()` (que reconstrói o esquemático
  * INTEIRO). Diferente de `componentElementsById`, os `<div>` do overlay são recriados a CADA
  * `render()` (não reaproveitados entre chamadas) -- por isso este Map é limpo e repovoado no início
@@ -164,18 +172,30 @@ const boardOverlayElementsByOuterId = new Map<string, HTMLElement[]>();
  * (`renderWireSegmentHandles`/`renderWireCornerHandles`) continuam recriadas -- têm listener próprio
  * capturando `points`/`index` da chamada atual, mexer nisso é um risco de interação bem maior pra um
  * ganho bem menor (poucas alças por fio vs. potencialmente centenas de fios). */
+/** Alças de redimensionar ATUALMENTE no DOM (ver `renderResizeHandles`). Existe pelos dois mesmos
+ * motivos de `boardOverlayElementsByOuterId`: elas são desenhadas por FORA do `<div>` do componente,
+ * como elementos irmãos, então (a) precisam ser removidas explicitamente a cada `render()` -- não
+ * são alcançadas por `componentElementsById`, e (b) precisam acompanhar o arrasto pelo MESMO delta,
+ * senão ficam paradas na posição antiga até o `pointerup`. */
+let resizeHandleElements: HTMLElement[] = [];
 const wirePolylineElementsById = new Map<string, SVGPolylineElement>();
+/** Segundo traço, atrás do principal, usado somente por `pipe.jacketed` do IPD. */
+const wireOutlineElementsById = new Map<string, SVGPolylineElement>();
 const wireSpatialIndex = new WireSpatialIndex(64);
 const wireSpatialSignatures = new Map<string, string>();
 let appBarElement: HTMLElement | undefined;
 let canvasElement: HTMLDivElement | undefined;
 let canvasContentElement: HTMLDivElement | undefined;
 let wireLayerElement: SVGSVGElement | undefined;
+let canvasAnnouncerElement: HTMLParagraphElement | undefined;
+let canvasKeyboardCurrentId: string | undefined;
+let lastCanvasAnnouncement = "";
 
 const UI_TEXT = {
   "pt-BR": {
     nothingSelected: "Nada selecionado",
     wireLabel: "Fio",
+    canvasAriaLabel: "Diagrama editável. Use Tab para percorrer objetos e Escape para sair do percurso.",
     openProject: "Abrir projeto",
     saveProject: "Salvar projeto",
     runSimulation: "Iniciar simulação",
@@ -215,6 +235,15 @@ const UI_TEXT = {
     alignVertical: "Alinhar verticalmente pelo primeiro item",
     distributeHorizontal: "Distribuir igualmente na horizontal",
     distributeVertical: "Distribuir igualmente na vertical",
+    ipdGeometryAlignment: "Componentes: geometria visual (IPD)",
+    ipdAlignLeft: "Alinhar bordas à esquerda",
+    ipdAlignRight: "Alinhar bordas à direita",
+    ipdAlignTop: "Alinhar bordas superiores",
+    ipdAlignBottom: "Alinhar bordas inferiores",
+    ipdAlignCenterHorizontal: "Centralizar no eixo horizontal",
+    ipdAlignCenterVertical: "Centralizar no eixo vertical",
+    ipdDistributeHorizontal: "Distribuir centros na horizontal",
+    ipdDistributeVertical: "Distribuir centros na vertical",
     help: "Ajuda",
     show: "Mostrar",
     title: "Título:",
@@ -241,6 +270,11 @@ const UI_TEXT = {
     unmarkAsPackageShape: "Desmarcar como elemento do Package",
     bringPackageShapeForward: "Trazer para frente",
     sendPackageShapeBackward: "Enviar para trás",
+    bringToFront: "Trazer para a frente de tudo",
+    groupSelection: "Agrupar",
+    ungroupSelection: "Desagrupar",
+    sendToBack: "Enviar para o fundo",
+    zOrderGroup: "Ordem de sobreposição",
     cleanupDuplicatePackage: "Corrigir Package/pinos duplicados",
     loadFirmware: "Carregar firmware",
     openSerialMonitor: "Abrir monitor serial",
@@ -312,6 +346,7 @@ const UI_TEXT = {
   en: {
     nothingSelected: "Nothing selected",
     wireLabel: "Wire",
+    canvasAriaLabel: "Editable diagram. Use Tab to walk objects and Escape to leave the object walk.",
     openProject: "Open project",
     saveProject: "Save project",
     runSimulation: "Run simulation",
@@ -351,6 +386,15 @@ const UI_TEXT = {
     alignVertical: "Align vertically to first item",
     distributeHorizontal: "Distribute evenly horizontally",
     distributeVertical: "Distribute evenly vertically",
+    ipdGeometryAlignment: "Components: visual geometry (IPD)",
+    ipdAlignLeft: "Align left edges",
+    ipdAlignRight: "Align right edges",
+    ipdAlignTop: "Align top edges",
+    ipdAlignBottom: "Align bottom edges",
+    ipdAlignCenterHorizontal: "Center on horizontal axis",
+    ipdAlignCenterVertical: "Center on vertical axis",
+    ipdDistributeHorizontal: "Distribute centers horizontally",
+    ipdDistributeVertical: "Distribute centers vertically",
     help: "Help",
     show: "Show",
     title: "Title:",
@@ -377,6 +421,11 @@ const UI_TEXT = {
     unmarkAsPackageShape: "Unmark as Package element",
     bringPackageShapeForward: "Bring forward",
     sendPackageShapeBackward: "Send backward",
+    bringToFront: "Bring to front",
+    groupSelection: "Group",
+    ungroupSelection: "Ungroup",
+    sendToBack: "Send to back",
+    zOrderGroup: "Z-order",
     cleanupDuplicatePackage: "Fix duplicate Package/pins",
     loadFirmware: "Load firmware",
     openSerialMonitor: "Open serial monitor",
@@ -491,6 +540,8 @@ let boardOverlayReadoutsByKey: Record<string, ComponentReadoutValue> = {};
 let pendingWirePreviewTarget: Point | undefined;
 let pendingWireRoute: Point[] = [];
 let pendingWireBendLengths: number[] = [];
+let pendingWireDockTarget: DockPort | undefined;
+let pendingWireDockIndex: PortDockIndex | undefined;
 let wireSegmentDrag:
   | {
       wireId: string;
@@ -1580,6 +1631,61 @@ function fallbackBoardVisualPosition(packageBox: ComponentBox, index: number): {
   return { x: packageBox.width + 16, y: 8 + index * 64 };
 }
 
+/**
+ * Aplica uma ação de operador de um controle HMI que vive DENTRO de um subcircuito e aparece
+ * projetado sobre a instância (`renderBoardOverlaysFor`).
+ *
+ * É o irmão de `applyGraphicalOperatorAction`, com uma única diferença que importa: tanto o
+ * controle quanto o alvo são componentes INTERNOS do `.lssubcircuit`, então a escrita não pode ir
+ * por `requestUpdateProperty` (que endereça o circuito principal) e sim por
+ * `requestUpdateBoardOverlayProperty` -- o mesmo caminho que o botão/chave exposto já usava, que
+ * resolve o filho no Core (`setSubcircuitChildProperty`) e persiste no manifesto.
+ *
+ * Sem isto, um slider/setpoint/botão desenhado numa tela de processo era visível e clicável mas
+ * não escrevia em lugar nenhum: operar só funcionava para um controle solto no canvas principal.
+ */
+function applyBoardOverlayOperatorAction(
+  outerComponentId: string,
+  items: InternalComponentSnapshot[],
+  item: InternalComponentSnapshot,
+  phase: GraphicalActionPhase,
+  inputValue?: GraphicalActionValue,
+): boolean {
+  const config = graphicalActionConfig(item.properties);
+  if (!config) return false;
+  const target = items.find((candidate) => candidate.id === config.targetId);
+  if (!target) return false;
+  const nextValue = resolveGraphicalActionValue(config, target.properties[config.property], phase, inputValue);
+  if (nextValue === undefined) return false;
+
+  target.properties = { ...target.properties, [config.property]: nextValue };
+  send({
+    version: WEBVIEW_MESSAGE_VERSION,
+    type: "requestUpdateBoardOverlayProperty",
+    outerComponentId,
+    innerComponentId: target.id,
+    name: config.property,
+    value: nextValue,
+  });
+
+  // Mesmo princípio do canvas: o controle sem binding continua legível pelo próprio `value`; com
+  // binding, `graphicalRuntimeProperties` projeta a leitura por cima deste valor persistido.
+  const displayValue = typeof nextValue === "boolean" ? (nextValue ? 100 : 0) : typeof nextValue === "number" ? nextValue : undefined;
+  if (displayValue !== undefined) {
+    item.properties = { ...item.properties, value: displayValue };
+    send({
+      version: WEBVIEW_MESSAGE_VERSION,
+      type: "requestUpdateBoardOverlayProperty",
+      outerComponentId,
+      innerComponentId: item.id,
+      name: "value",
+      value: displayValue,
+    });
+  }
+  patchBoardOverlayRuntimeVisuals();
+  return true;
+}
+
 function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[] {
   const items = boardOverlayDataByComponentId.get(component.id);
   if (!items || items.length === 0) return [];
@@ -1631,9 +1737,27 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
       const colorName = typeof properties.color === "string" ? properties.color : "Yellow";
       properties = { ...properties, __led_fill: ledFillForReadout(colorName, typeof readout === "number" ? readout : undefined) };
     }
+    // Elemento gráfico de supervisório exposto no símbolo: o `bindSource` dele é o id de OUTRO
+    // componente INTERNO do mesmo subcircuito (ex: a sonda que mede o nível), então a leitura vive
+    // em `boardOverlayReadoutsByKey` sob a chave `${instanciaExterna}:${idInterno}` -- nunca em
+    // `readoutsByComponentId`, que só conhece componentes do circuito principal. Mesmo resolvedor de
+    // binding do editor (`graphicsBinding.ts`), só trocando de onde vem a leitura: é isso que faz a
+    // tela de processo animar na INSTÂNCIA colocada, e não apenas dentro do editor do subcircuito.
+    if (isGraphicalTypeId(item.typeId)) {
+      properties = {
+        ...properties,
+        ...graphicalRuntimeProperties(properties, (sourceId) => boardOverlayReadoutsByKey[`${component.id}:${sourceId}`]),
+      };
+    }
     const box = componentBox(item.typeId, properties, boardVariant);
     const el = document.createElement("div");
-    el.className = "component component--board-overlay";
+    // Item OPERAVEL (botao/chave/controle HMI) continua recebendo ponteiro; o resto do sinotico e'
+    // puramente visual e NAO pode capturar clique -- senao a instancia do subcircuito embaixo fica
+    // inalcancavel e nao da nem para seleciona-la, nem abrir "Abrir Subcircuito". Ver
+    // `.component--board-overlay` em styles.css.
+    const overlayInteractive = interactionKindFor(item.typeId) !== "none" || item.typeId.startsWith("graphics.hmi_")
+      || item.typeId === "graphics.slider" || item.typeId === "graphics.setpoint" || item.typeId === "graphics.numeric_input";
+    el.className = `component component--board-overlay${overlayInteractive ? " component--board-overlay--interactive" : ""}`;
     el.style.left = `${component.x + boardOffsetX + boardVisual.x}px`;
     el.style.top = `${component.y + boardOffsetY + boardVisual.y}px`;
     el.style.width = `${box.width}px`;
@@ -1647,83 +1771,98 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
     svg.classList.add("component__symbol");
     svg.innerHTML = packageSymbolSvg(item.typeId, properties, item.id, boardVariant) ?? componentSymbolSvg(item.typeId, properties);
     el.appendChild(svg);
-    if (item.typeId === "outputs.led" || item.typeId === "outputs.led_bar") {
+    // Qualquer item cujo desenho dependa de telemetria precisa do `<svg>` registrado aqui -- é o que
+    // permite o patch PONTUAL a cada tick (`patchBoardOverlayRuntimeVisuals`) em vez de um
+    // `render()` do esquemático inteiro.
+    if (item.typeId === "outputs.led" || item.typeId === "outputs.led_bar" || isGraphicalTypeId(item.typeId)) {
       boardOverlaySvgByKey.set(`${component.id}:${item.id}`, svg);
     }
 
     const isPushButton = interactionKindFor(item.typeId) === "momentary";
 
-    // Arrastar (move/persiste boardVisual) vs apertar/segurar (switches.push) são o MESMO gesto de
-    // pointerdown -- pressiona IMEDIATAMENTE (mesma sensação de "segurar" de sempre), mas cancela o
-    // aperto se detectar movimento além do limiar e vira arrasto (mesmo princípio de qualquer
-    // drag-vs-click, só que aqui o "click" já tem efeito colateral próprio que precisa ser desfeito).
-    el.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const startClientX = event.clientX;
-      const startClientY = event.clientY;
-      const startLeft = component.x + boardOffsetX + boardVisual.x;
-      const startTop = component.y + boardOffsetY + boardVisual.y;
-      let dragging = false;
-      let pressed = false;
-      const DRAG_THRESHOLD_PX = 4;
+    // Operar é permitido aqui; EDITAR não. Mover o item deixou de acontecer no canvas principal:
+    // reposicionar o que aparece no símbolo é autoria e pertence a "Abrir Subcircuito" -> Modo
+    // Símbolo (`renderExposedComponentProjections`). Antes, arrastar aqui reescrevia
+    // `exposedComponents[].x/y` do `.lssubcircuit` direto, sem o usuário ter entrado em modo de
+    // edição nenhum -- com um sinótico inteiro exposto, isso vira edição acidental do arquivo.
+    if (overlayInteractive && sourceId) {
+      const items = boardOverlayDataByComponentId.get(component.id) ?? [];
+      const isHmiOperator = isGraphicalActionTypeId(item.typeId);
+      const actionConfig = isHmiOperator ? graphicalActionConfig(item.properties) : undefined;
 
-      // Estado aberto/fechado vem de `stateFill`/`stateVisible` no `package.simulidePaint` (quando
-      // registrado) -- reconstrói o SVG a cada aperto/soltura em vez de só alternar uma classe CSS,
-      // senão a primitiva certa (aberta/fechada) nunca troca pro overlay de Modo Placa.
-      const setPressed = (value: boolean): void => {
-        if (pressed === value) return;
-        pressed = value;
-        const pressedProperties = { ...properties, closed: value };
-        // `boardVariant` aqui também -- SEM ele, este `packageSymbolSvg` (regenerado a cada aperto/
-        // soltura) reconstrói o SVG SEM `hidePins`, e os leads/rótulos de pino escondidos (ver
-        // `packageBodySvg`) VOLTAM a aparecer a cada clique -- bug real relatado ("os terminais
-        // aparecem indevidamente ao clicar", somem só no próximo `render()` completo porque a linha
-        // 1026 acima, essa sim com `boardVariant`, os esconde de novo).
-        svg.innerHTML = packageSymbolSvg(item.typeId, pressedProperties, item.id, boardVariant) ?? componentSymbolSvg(item.typeId, pressedProperties);
-        send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateBoardOverlayProperty", outerComponentId: component.id, innerComponentId: item.id, name: "closed", value });
-      };
-      if (isPushButton) setPressed(true);
+      el.addEventListener("pointerdown", (event) => {
+        if (!(event instanceof PointerEvent) || event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        el.classList.add("component--operator-active");
 
-      const onMove = (moveEvent: PointerEvent): void => {
-        const zoom = state.viewport.zoom || 1;
-        const dx = (moveEvent.clientX - startClientX) / zoom;
-        const dy = (moveEvent.clientY - startClientY) / zoom;
-        if (!dragging && Math.hypot(moveEvent.clientX - startClientX, moveEvent.clientY - startClientY) > DRAG_THRESHOLD_PX) {
-          dragging = true;
-          el.classList.add("dragging");
-          isDraggingComponent = true;
-          setPressed(false); // movimento detectado -- isto era arrasto, não aperto, desfaz o efeito
+        // Slider/setpoint: o valor sai da posição do ponteiro dentro da caixa do controle, igual
+        // ao caminho do canvas -- a diferença é só para ONDE a escrita vai.
+        if (actionConfig && (item.typeId === "graphics.slider" || item.typeId === "graphics.setpoint")) {
+          el.setPointerCapture(event.pointerId);
+          const applyPointer = (pointer: PointerEvent): void => {
+            const rect = el.getBoundingClientRect();
+            const ratio = Math.max(0, Math.min(1, (pointer.clientX - rect.left) / Math.max(1, rect.width)));
+            const minimum = actionConfig.minimum ?? 0;
+            const maximum = actionConfig.maximum ?? 100;
+            applyBoardOverlayOperatorAction(component.id, items, item, "input", minimum + ratio * (maximum - minimum));
+          };
+          applyPointer(event);
+          const onMove = (moveEvent: PointerEvent): void => applyPointer(moveEvent);
+          const finish = (upEvent: PointerEvent): void => {
+            el.removeEventListener("pointermove", onMove);
+            el.removeEventListener("pointerup", finish);
+            el.removeEventListener("pointercancel", finish);
+            el.classList.remove("component--operator-active");
+            applyPointer(upEvent);
+          };
+          el.addEventListener("pointermove", onMove);
+          el.addEventListener("pointerup", finish);
+          el.addEventListener("pointercancel", finish);
+          return;
         }
-        if (dragging) {
-          el.style.left = `${startLeft + dx}px`;
-          el.style.top = `${startTop + dy}px`;
+
+        if (actionConfig) {
+          if (actionConfig.mode === "momentary") applyBoardOverlayOperatorAction(component.id, items, item, "press");
+          const finishAction = (): void => {
+            el.removeEventListener("pointerup", finishAction);
+            el.removeEventListener("pointercancel", finishAction);
+            el.classList.remove("component--operator-active");
+            applyBoardOverlayOperatorAction(component.id, items, item, actionConfig.mode === "momentary" ? "release" : "activate");
+          };
+          el.addEventListener("pointerup", finishAction);
+          el.addEventListener("pointercancel", finishAction);
+          return;
         }
-      };
-      const finish = (moveEvent: PointerEvent): void => {
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", finish);
-        window.removeEventListener("pointercancel", finish);
-        el.classList.remove("dragging");
-        isDraggingComponent = false;
-        setPressed(false);
-        if (!dragging) return;
-        const zoom = state.viewport.zoom || 1;
-        const dx = (moveEvent.clientX - startClientX) / zoom;
-        const dy = (moveEvent.clientY - startClientY) / zoom;
-        const newX = boardVisual.x + dx;
-        const newY = boardVisual.y + dy;
-        const cached = boardOverlayDataByComponentId.get(component.id);
-        const cachedItem = cached?.find((entry) => entry.id === item.id);
-        if (cachedItem) cachedItem.boardVisual = { x: newX, y: newY, rotation: boardVisual.rotation, flipH: boardVisual.flipH, flipV: boardVisual.flipV };
-        if (sourceId) send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateBoardOverlayVisual", sourceId, innerComponentId: item.id, x: newX, y: newY });
-        render();
-      };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", finish);
-      window.addEventListener("pointercancel", finish);
-    });
+
+        // Botão/chave nativos do catálogo (`switches.push`): aperta a propriedade `closed`.
+        const setPressed = (value: boolean) => {
+          send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateBoardOverlayProperty", outerComponentId: component.id, innerComponentId: item.id, name: "closed", value });
+        };
+        if (isPushButton) setPressed(true);
+        const finish = () => {
+          window.removeEventListener("pointerup", finish);
+          window.removeEventListener("pointercancel", finish);
+          el.classList.remove("component--operator-active");
+          if (isPushButton) setPressed(false);
+        };
+        window.addEventListener("pointerup", finish);
+        window.addEventListener("pointercancel", finish);
+      });
+
+      // Duplo clique num campo numérico/setpoint: digitar o valor, como no canvas.
+      if (actionConfig && (item.typeId === "graphics.numeric_input" || item.typeId === "graphics.setpoint")) {
+        el.addEventListener("dblclick", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const answer = window.prompt(item.typeId === "graphics.setpoint" ? "Novo setpoint:" : "Novo valor:", String(item.properties.value ?? ""));
+          if (answer === null) return;
+          const numeric = Number(answer.replace(",", "."));
+          if (!Number.isFinite(numeric)) return;
+          applyBoardOverlayOperatorAction(component.id, items, item, "input", numeric);
+        });
+      }
+    }
 
     elements.push(el);
 
@@ -1837,20 +1976,28 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
  * existente (`boardOverlaySvgByKey`, populado em `renderBoardOverlaysFor`) e regenera só o
  * innerHTML dele -- mesma técnica que `setPressed` já usa pro clique de um push button no overlay,
  * só disparada por telemetria em vez de clique. */
-function patchBoardOverlayLedFills(): void {
+function patchBoardOverlayRuntimeVisuals(): void {
   for (const [outerComponentId, items] of boardOverlayDataByComponentId) {
     for (const item of items) {
-      if (item.typeId !== "outputs.led" && item.typeId !== "outputs.led_bar") continue;
+      const isLed = item.typeId === "outputs.led" || item.typeId === "outputs.led_bar";
+      const isGraphical = isGraphicalTypeId(item.typeId);
+      if (!isLed && !isGraphical) continue;
       const key = `${outerComponentId}:${item.id}`;
       const svg = boardOverlaySvgByKey.get(key);
       if (!svg) continue;
-      const readout = boardOverlayReadoutsByKey[key];
-      const colorName = typeof item.properties.color === "string" ? item.properties.color : "Yellow";
-      const properties: Record<string, string | number | boolean> = {
-        closed: false,
-        ...item.properties,
-        __led_fill: ledFillForReadout(colorName, typeof readout === "number" ? readout : undefined),
-      };
+      let properties: Record<string, string | number | boolean> = { closed: false, ...item.properties };
+      if (isLed) {
+        const readout = boardOverlayReadoutsByKey[key];
+        const colorName = typeof item.properties.color === "string" ? item.properties.color : "Yellow";
+        properties = { ...properties, __led_fill: ledFillForReadout(colorName, typeof readout === "number" ? readout : undefined) };
+      } else {
+        // Mesma resolução do primeiro desenho (`renderBoardOverlaysFor`) -- a fonte do binding é um
+        // componente INTERNO, logo a chave leva o id da instância externa junto.
+        properties = {
+          ...properties,
+          ...graphicalRuntimeProperties(properties, (sourceId) => boardOverlayReadoutsByKey[`${outerComponentId}:${sourceId}`]),
+        } as Record<string, string | number | boolean>;
+      }
       svg.innerHTML = packageSymbolSvg(item.typeId, properties, item.id, "board") ?? componentSymbolSvg(item.typeId, properties);
     }
   }
@@ -2200,9 +2347,68 @@ function getSelectedComponent(): WebviewComponentModel | undefined {
   return getSelectedComponents()[0];
 }
 
+/**
+ * Agrupamento: `properties.__group` guarda o id do grupo. É propriedade normal do componente, então
+ * já sobrevive a salvar/reabrir, copiar/colar e undo/redo sem nenhum campo novo no modelo nem no
+ * formato de arquivo -- e um projeto salvo por uma versão anterior simplesmente não tem a chave.
+ *
+ * O grupo é de SELEÇÃO: mover/girar/apagar já operam sobre a seleção inteira, então expandir a
+ * seleção é a implementação completa -- nada vira "um componente composto" (isso é subcircuito,
+ * que já existe e tem semântica elétrica própria).
+ */
+// Prefixo `__ui_`: contrato JÁ existente de "propriedade que nunca vai ao Core"
+// (`coreLifecycle.ts::isUiOnlyRuntimeProperty`) -- agrupar componentes ELÉTRICOS não pode tentar
+// gravar uma propriedade desconhecida no Core e gerar aviso.
+const GROUP_PROPERTY = "__ui_group";
+
+function groupIdOf(component: WebviewComponentModel): string | undefined {
+  const raw = component.properties[GROUP_PROPERTY];
+  return typeof raw === "string" && raw.length > 0 ? raw : undefined;
+}
+
+/** Ids de `componentIds` mais todo companheiro de grupo, sem duplicar e preservando a ordem. */
+function expandSelectionToGroups(componentIds: string[]): string[] {
+  const components = activeSceneComponents();
+  const groups = new Set<string>();
+  for (const id of componentIds) {
+    const groupId = groupIdOf(components.find((candidate) => candidate.id === id) ?? ({ properties: {} } as WebviewComponentModel));
+    if (groupId) groups.add(groupId);
+  }
+  if (groups.size === 0) return componentIds;
+  const out = [...componentIds];
+  for (const component of components) {
+    const groupId = groupIdOf(component);
+    if (groupId && groups.has(groupId) && !out.includes(component.id)) out.push(component.id);
+  }
+  return out;
+}
+
+function groupSelectedComponents(): void {
+  const selected = getSelectedComponents();
+  if (selected.length < 2) return;
+  const groupId = `g-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+  for (const component of selected) {
+    component.properties[GROUP_PROPERTY] = groupId;
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: GROUP_PROPERTY, value: groupId });
+  }
+  persistState();
+  render();
+}
+
+function ungroupSelectedComponents(): void {
+  const selected = getSelectedComponents().filter((component) => groupIdOf(component));
+  if (selected.length === 0) return;
+  for (const component of selected) {
+    delete component.properties[GROUP_PROPERTY];
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: GROUP_PROPERTY, value: "" });
+  }
+  persistState();
+  render();
+}
+
 function selectOnlyComponent(componentId: string): void {
   activeDialComponentId = undefined;
-  state.selectedComponentIds = [componentId];
+  state.selectedComponentIds = expandSelectionToGroups([componentId]);
   state.selectedWireIds = [];
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
@@ -2257,9 +2463,10 @@ function toggleComponentSelection(componentId: string): void {
   activeDialComponentId = undefined;
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
+  const groupIds = expandSelectionToGroups([componentId]);
   state.selectedComponentIds = isComponentSelected(componentId)
-    ? state.selectedComponentIds.filter((id) => id !== componentId)
-    : [...state.selectedComponentIds, componentId];
+    ? state.selectedComponentIds.filter((id) => !groupIds.includes(id))
+    : [...state.selectedComponentIds, ...groupIds.filter((id) => !state.selectedComponentIds.includes(id))];
   syncPropertyInspectorSelection();
 }
 
@@ -2344,6 +2551,9 @@ function clearPendingWire(): void {
   pendingWirePreviewTarget = undefined;
   pendingWireRoute = [];
   pendingWireBendLengths = [];
+  pendingWireDockTarget = undefined;
+  pendingWireDockIndex = undefined;
+  syncPendingWireDockVisuals();
 }
 
 /** Ponto único de cancelamento da ferramenta ativa (derivação de fio EM ANDAMENTO ou posicionamento
@@ -2367,6 +2577,55 @@ function beginWireDraft(origin: NonNullable<WebviewProjectState["pendingConnecti
   state.pendingConnection = origin;
   pendingWireRoute = [];
   pendingWireBendLengths = [];
+  rebuildPendingWireDockIndex();
+  syncPendingWireDockVisuals();
+}
+
+function pendingWireSourcePort(): Pick<DockPort, "ownerId" | "portId" | "kind"> | undefined {
+  const pending = state.pendingConnection;
+  return pending && pending.kind !== "wire"
+    ? { ownerId: pending.componentId, portId: pending.pinId, kind: "electrical" }
+    : undefined;
+}
+
+/** Resolve all visible real ports once when a gesture starts. Pointermove then
+ * searches a compact spatial hash instead of rescanning every component. */
+function rebuildPendingWireDockIndex(): void {
+  const ports: DockPort[] = [];
+  for (const component of activeSceneComponents()) {
+    if (component.hidden || component.hiddenByUser) continue;
+    for (const pin of component.pins) {
+      if (!hasRealPinPosition(component.typeId, pin.id, component.properties)) continue;
+      const point = pinScenePosition(component, pin.id);
+      if (point) ports.push({ ownerId: component.id, portId: pin.id, point, kind: "electrical" });
+    }
+  }
+  pendingWireDockIndex = buildPortDockIndex(ports);
+}
+
+function syncPendingWireDockVisuals(): void {
+  const canvas = document.querySelector<HTMLElement>(".canvas");
+  canvas?.classList.toggle("wire-docking", Boolean(state.pendingConnection));
+  for (const element of Array.from(document.querySelectorAll<SVGCircleElement>(".pin-terminal"))) {
+    const sameOwner = element.dataset.componentId === pendingWireSourcePort()?.ownerId;
+    element.classList.toggle("pin-terminal--compatible", Boolean(state.pendingConnection) && !sameOwner);
+    element.classList.toggle(
+      "pin-terminal--dock-target",
+      element.dataset.componentId === pendingWireDockTarget?.ownerId && element.dataset.pinId === pendingWireDockTarget?.portId
+    );
+  }
+}
+
+function updatePendingWireDock(point: Point): void {
+  if (!state.pendingConnection) return;
+  if (!pendingWireDockIndex) rebuildPendingWireDockIndex();
+  const dock = pendingWireDockIndex
+    ? findMagneticDock(point, pendingWireDockIndex, magneticDockRadius(state.viewport.zoom || 1), pendingWireSourcePort())
+    : undefined;
+  pendingWireDockTarget = dock?.port;
+  pendingWirePreviewTarget = dock?.port.point ?? point;
+  syncPendingWireDockVisuals();
+  refreshPendingWirePreview();
 }
 
 type WireGestureOrigin =
@@ -2425,6 +2684,64 @@ function handleWireGestureClick(target: WireGestureOrigin): void {
   clearPendingWire();
   storeWebviewState();
   render();
+}
+
+/**
+ * Drag-to-connect path layered on top of the existing click-click workflow.
+ * The draft stays transient until a compatible magnetic target is reached;
+ * one pointerup then commits through the same atomic host transaction used by
+ * clicks, so runtime topology and undo semantics remain unchanged.
+ */
+function startPinConnectionDrag(event: PointerEvent, component: WebviewComponentModel, pinId: string): void {
+  if (event.button !== 0 || placingTypeId || state.pendingConnection) return;
+  event.stopPropagation();
+  const startClientX = event.clientX;
+  const startClientY = event.clientY;
+  let dragging = false;
+
+  const onMove = (moveEvent: PointerEvent): void => {
+    if (!dragging && Math.hypot(moveEvent.clientX - startClientX, moveEvent.clientY - startClientY) < 4) return;
+    const canvas = document.querySelector<HTMLDivElement>(".canvas");
+    if (!canvas) return;
+    if (!dragging) {
+      dragging = true;
+      beginWireDraft({ kind: "pin", componentId: component.id, pinId });
+      selectOnlyComponent(component.id);
+      persistState();
+      render();
+    }
+    updatePendingWireDock(eventToCanvasPoint(moveEvent, canvas));
+  };
+
+  const finish = (): void => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", finish);
+    window.removeEventListener("pointercancel", cancel);
+    if (!dragging) return;
+    const dock = pendingWireDockTarget;
+    if (dock) {
+      handleWireGestureClick({ kind: "pin", componentId: dock.ownerId, pinId: dock.portId, point: dock.point });
+      suppressNextWireInteractionClick = true;
+    } else {
+      suppressNextWireInteractionClick = true;
+      clearPendingWire();
+      persistState();
+      render();
+    }
+  };
+  const cancel = (): void => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", finish);
+    window.removeEventListener("pointercancel", cancel);
+    if (dragging) {
+      suppressNextWireInteractionClick = true;
+      clearPendingWire();
+      render();
+    }
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", finish, { once: true });
+  window.addEventListener("pointercancel", cancel, { once: true });
 }
 
 function openSelectedProperties(): void {
@@ -2629,7 +2946,8 @@ function refreshOpenPropertyDialog(): void {
   );
 }
 
-type ContextMenuIconKind = "copy" | "cut" | "remove" | "properties" | "rotateCw" | "rotateCcw" | "rotate180" | "flipHorizontal" | "flipVertical";
+type ContextMenuIconKind = "copy" | "cut" | "remove" | "properties" | "rotateCw" | "rotateCcw" | "rotate180" | "flipHorizontal" | "flipVertical"
+  | "bringToFront" | "bringForward" | "sendBackward" | "sendToBack";
 
 type ContextMenuItem =
   | { kind: "separator" }
@@ -2675,6 +2993,18 @@ function renderContextMenuIcon(kind?: ContextMenuIconKind): HTMLSpanElement {
       break;
     case "flipVertical":
       svg.innerHTML = '<path d="M4 12h16"></path><path d="M12 4v16"></path><path d="m8 8 4-4 4 4"></path><path d="m8 16 4 4 4-4"></path>';
+      break;
+    case "bringToFront":
+      svg.innerHTML = '<rect x="3" y="3" width="11" height="11" rx="1.5" stroke-dasharray="2.5 2"></rect><rect x="10" y="10" width="11" height="11" rx="1.5" fill="currentColor" fill-opacity="0.25"></rect><path d="M16 8V3"></path><path d="m13.5 5.5 2.5-2.5 2.5 2.5"></path>';
+      break;
+    case "bringForward":
+      svg.innerHTML = '<rect x="3" y="3" width="11" height="11" rx="1.5" stroke-dasharray="2.5 2"></rect><rect x="10" y="10" width="11" height="11" rx="1.5" fill="currentColor" fill-opacity="0.25"></rect><path d="M17 8V4"></path><path d="m15.2 5.8 1.8-1.8 1.8 1.8"></path>';
+      break;
+    case "sendBackward":
+      svg.innerHTML = '<rect x="10" y="10" width="11" height="11" rx="1.5" stroke-dasharray="2.5 2"></rect><rect x="3" y="3" width="11" height="11" rx="1.5" fill="currentColor" fill-opacity="0.25"></rect><path d="M17 16v4"></path><path d="m15.2 18.2 1.8 1.8 1.8-1.8"></path>';
+      break;
+    case "sendToBack":
+      svg.innerHTML = '<rect x="10" y="10" width="11" height="11" rx="1.5" stroke-dasharray="2.5 2"></rect><rect x="3" y="3" width="11" height="11" rx="1.5" fill="currentColor" fill-opacity="0.25"></rect><path d="M16 16v5"></path><path d="m13.5 18.5 2.5 2.5 2.5-2.5"></path>';
       break;
   }
 
@@ -3050,11 +3380,41 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
   let marqueeStartScreen: Point | undefined;
   let marqueeRectEl: HTMLElement | undefined;
   let marqueeJustFinished = false;
+  let keyboardNavigationReleased = false;
+
+  canvas.addEventListener("focus", () => {
+    keyboardNavigationReleased = false;
+  });
+  canvas.addEventListener("keydown", (event) => {
+    if (document.activeElement !== canvas) return;
+    if (event.key === "Tab") {
+      const hasSelection = state.selectedComponentIds.length + state.selectedWireIds.length > 0;
+      if (keyboardNavigationReleased && !hasSelection) return;
+      event.preventDefault();
+      stepCanvasKeyboardSelection(event.shiftKey ? -1 : 1);
+      return;
+    }
+    if (event.key === "Escape") {
+      keyboardNavigationReleased = true;
+      canvasKeyboardCurrentId = undefined;
+      if (state.selectedComponentIds.length + state.selectedWireIds.length > 0) {
+        clearSelection();
+        persistState();
+        render();
+      }
+      return;
+    }
+    // Com nada selecionado, uma seta é a entrada suave usada pelo IPD: escolhe o primeiro objeto;
+    // com seleção, o handler global existente continua responsável pelo nudge de 8/0,8 px.
+    if (event.key.startsWith("Arrow") && state.selectedComponentIds.length + state.selectedWireIds.length === 0) {
+      event.preventDefault();
+      stepCanvasKeyboardSelection(1);
+    }
+  });
 
   canvas.addEventListener("pointermove", (event) => {
     if (!state.pendingConnection) return;
-    pendingWirePreviewTarget = eventToCanvasPoint(event, canvas);
-    refreshPendingWirePreview();
+    updatePendingWireDock(eventToCanvasPoint(event, canvas));
   });
   canvas.addEventListener("click", (event) => {
     hideContextMenu();
@@ -3338,6 +3698,71 @@ function zoomReset(): void {
   persistState();
 }
 
+function canvasKeyboardNavigationItems(): IpdNavigationItem[] {
+  const items: IpdNavigationItem[] = activeSceneComponents()
+    .filter((component) => !component.hidden && !component.hiddenByUser)
+    .map((component) => ({
+      id: component.id,
+      x: component.x,
+      y: component.y,
+      kind: "component" as const,
+      label: component.label?.trim() || component.typeId,
+      rotation: component.rotation,
+    }));
+  if (subcircuitEditorMode !== "circuit") return items;
+  for (const wire of state.topology.conductors) {
+    if (wire.hidden) continue;
+    const anchor = wirePolylinePoints(wire)[0] ?? { x: 0, y: 0 };
+    items.push({ id: wire.id, x: anchor.x, y: anchor.y, kind: "wire", label: `${t("wireLabel")} ${wire.id}` });
+  }
+  return items;
+}
+
+function ensureCanvasKeyboardItemVisible(item: IpdNavigationItem): void {
+  if (!canvasElement) return;
+  const zoom = state.viewport.zoom || 1;
+  const screenX = state.viewport.x + item.x * zoom;
+  const screenY = state.viewport.y + item.y * zoom;
+  const margin = 48;
+  if (
+    screenX >= margin && screenX <= canvasElement.clientWidth - margin &&
+    screenY >= margin && screenY <= canvasElement.clientHeight - margin
+  ) return;
+  state.viewport.x = canvasElement.clientWidth / 2 - item.x * zoom;
+  state.viewport.y = canvasElement.clientHeight / 2 - item.y * zoom;
+}
+
+function stepCanvasKeyboardSelection(direction: 1 | -1): void {
+  const items = canvasKeyboardNavigationItems();
+  const order = ipdNavigationOrder(items);
+  const selectedIds = [...state.selectedComponentIds, ...state.selectedWireIds];
+  const selectedCurrent = selectedIds.length === 1 ? selectedIds[0] : undefined;
+  const current = canvasKeyboardCurrentId && selectedIds.includes(canvasKeyboardCurrentId)
+    ? canvasKeyboardCurrentId
+    : selectedCurrent;
+  const nextId = stepIpdNavigation(order, current, direction);
+  if (!nextId) return;
+  const next = items.find((item) => item.id === nextId);
+  if (!next) return;
+  canvasKeyboardCurrentId = nextId;
+  if (next.kind === "component") selectOnlyComponent(nextId);
+  else selectOnlyWire(nextId);
+  ensureCanvasKeyboardItemVisible(next);
+  persistState();
+  render();
+}
+
+function updateCanvasKeyboardAnnouncement(): void {
+  if (!canvasAnnouncerElement) return;
+  const items = canvasKeyboardNavigationItems();
+  const navigableIds = new Set(items.map((item) => item.id));
+  const selection = [...state.selectedComponentIds, ...state.selectedWireIds].filter((id) => navigableIds.has(id));
+  const announcement = describeIpdNavigationSelection(items, selection, state.locale === "pt-BR" ? "pt-BR" : "en");
+  if (announcement === lastCanvasAnnouncement) return;
+  lastCanvasAnnouncement = announcement;
+  canvasAnnouncerElement.textContent = announcement;
+}
+
 function ensureRenderShell(): { canvas: HTMLDivElement; canvasContent: HTMLDivElement; wireLayer: SVGSVGElement } | undefined {
   if (!app) return undefined;
 
@@ -3349,6 +3774,17 @@ function ensureRenderShell(): { canvas: HTMLDivElement; canvasContent: HTMLDivEl
   if (!canvasElement || !canvasContentElement || !wireLayerElement) {
     canvasElement = document.createElement("div");
     canvasElement.className = "canvas";
+    canvasElement.tabIndex = 0;
+    canvasElement.setAttribute("role", "application");
+    canvasElement.setAttribute("aria-label", t("canvasAriaLabel"));
+
+    canvasAnnouncerElement = document.createElement("p");
+    canvasAnnouncerElement.id = "canvas-selection-announcer";
+    canvasAnnouncerElement.className = "sr-only";
+    canvasAnnouncerElement.setAttribute("role", "status");
+    canvasAnnouncerElement.setAttribute("aria-live", "polite");
+    canvasElement.setAttribute("aria-describedby", canvasAnnouncerElement.id);
+    canvasElement.appendChild(canvasAnnouncerElement);
 
     canvasContentElement = document.createElement("div");
     canvasContentElement.className = "canvas-content";
@@ -3377,7 +3813,11 @@ function clearEphemeralCanvasChildren(canvasContent: HTMLDivElement): void {
       child.classList.contains("component--board-overlay") ||
       child.classList.contains("component-floating-label") ||
       child.classList.contains("component--exposed-projection") ||
-      child.classList.contains("component--symbol-canvas-background")
+      child.classList.contains("component--symbol-canvas-background") ||
+      // Sem isto as alças acumulavam: `renderResizeHandles` cria um jogo novo a cada `render()` e
+      // nada apagava o anterior, então mover um componente selecionado deixava um rastro de
+      // quadradinhos nas posições por onde ele passou ("quando eu movimento fica um ruído").
+      child.classList.contains("resize-handle")
     ) {
       child.remove();
     }
@@ -3484,7 +3924,10 @@ function render(): void {
   // Alças de segmento/canto E o preview de fio pendente (`renderPendingWirePreview`, sempre recriado
   // do zero, nunca reaproveitado) são removidos aqui -- só os `<polyline>` REAIS rastreados em
   // `wirePolylineElementsById` (ver abaixo) sobrevivem entre renders.
-  const trackedPolylines = new Set<SVGPolylineElement>(wirePolylineElementsById.values());
+  const trackedPolylines = new Set<SVGPolylineElement>([
+    ...wirePolylineElementsById.values(),
+    ...wireOutlineElementsById.values(),
+  ]);
   for (const child of Array.from(wireLayer.children)) {
     if (!(child instanceof SVGPolylineElement) || !trackedPolylines.has(child)) child.remove();
   }
@@ -3503,6 +3946,23 @@ function render(): void {
       wireSpatialSignatures.set(wire.id, spatialSignature);
     }
     visibleWireIds.add(wire.id);
+    const stroke = wire.lineClass ? ipdLineStroke(wire.lineClass) : undefined;
+    if (stroke?.double) {
+      let outline = wireOutlineElementsById.get(wire.id);
+      if (!outline) {
+        outline = document.createElementNS(SVG_NS, "polyline");
+        outline.dataset.wireId = wire.id;
+        outline.style.pointerEvents = "none";
+        wireOutlineElementsById.set(wire.id, outline);
+      }
+      setPolylinePoints(outline, points);
+      outline.setAttribute("class", wireClass(wire, true));
+      wireLayer.appendChild(outline);
+    } else {
+      const obsoleteOutline = wireOutlineElementsById.get(wire.id);
+      obsoleteOutline?.remove();
+      wireOutlineElementsById.delete(wire.id);
+    }
     let polyline = wirePolylineElementsById.get(wire.id);
     if (!polyline) {
       polyline = document.createElementNS(SVG_NS, "polyline");
@@ -3511,8 +3971,9 @@ function render(): void {
       wirePolylineElementsById.set(wire.id, polyline);
     }
     setPolylinePoints(polyline, points);
-    polyline.setAttribute("class", wireClass(wire.id));
+    polyline.setAttribute("class", wireClass(wire));
     wireLayer.appendChild(polyline); // reordena pro fim (no-op se já era o último) -- mantém a ordem de state.topology.conductors
+    renderWireLineGlyphs(wireLayer, wire, points);
     renderWireSegmentHandles(wireLayer, wire, points);
     renderWireCornerHandles(wireLayer, wire, points);
   }
@@ -3522,6 +3983,11 @@ function render(): void {
     wirePolylineElementsById.delete(id);
     wireSpatialIndex.removeWire(id);
     wireSpatialSignatures.delete(id);
+  }
+  for (const [id, outline] of wireOutlineElementsById) {
+    if (visibleWireIds.has(id)) continue;
+    outline.remove();
+    wireOutlineElementsById.delete(id);
   }
   if (subcircuitEditorMode === "circuit") renderPendingWirePreview(wireLayer);
 
@@ -3564,6 +4030,7 @@ function render(): void {
   }
 
   renderExposedComponentProjections(canvasContent);
+  renderResizeHandles(canvasContent);
 
   for (const component of visibleComponents) {
     const embedsOwnIdLabel = component.typeId === TUNNEL_TYPE_ID &&
@@ -3601,7 +4068,9 @@ function render(): void {
 
   // Popups vivem numa camada independente do canvas. Renderizações frequentes do esquemático
   // (telemetria, seleção, fios) não recriam janelas, inputs ou resize handles.
+  syncPendingWireDockVisuals();
   renderPropertyDock();
+  updateCanvasKeyboardAnnouncement();
 }
 
 /** Componentes/fios cujas caixas (canvas-local, sem zoom) se sobrepõem ao retângulo do marquee --
@@ -3842,16 +4311,54 @@ function pasteClipboardItems(): void {
   render();
 }
 
-function wireClass(wireId: string): string {
+function wireClass(wire: WebviewWireModel, outline = false): string {
   const classNames = ["wire-layer__wire"];
-  const voltage = voltagesByWireId[wireId];
-  if (voltage !== undefined) {
-    classNames.push(isHighWireVoltage(voltage) ? "wire-layer__wire--high" : "wire-layer__wire--low");
+  if (wire.lineClass) {
+    classNames.push("wire-layer__wire--ipd", `wire-layer__wire--${ipdLineClassCssSuffix(wire.lineClass)}`);
+    if (outline) classNames.push("wire-layer__wire--jacket-outline");
+  } else {
+    const voltage = voltagesByWireId[wire.id];
+    if (voltage !== undefined) {
+      classNames.push(isHighWireVoltage(voltage) ? "wire-layer__wire--high" : "wire-layer__wire--low");
+    }
   }
-  if (isWireSelected(wireId) && selectedWireSegment?.wireId !== wireId) {
+  if (isWireSelected(wire.id) && selectedWireSegment?.wireId !== wire.id) {
     classNames.push("wire-layer__wire--selected");
   }
   return classNames.join(" ");
+}
+
+function setSelectedWireLineClass(lineClass: IpdLineClass | undefined): void {
+  const selected = new Set(state.selectedWireIds);
+  if (selected.size === 0) return;
+  for (const wire of state.topology.conductors) {
+    if (!selected.has(wire.id)) continue;
+    if (lineClass) wire.lineClass = lineClass;
+    else delete wire.lineClass;
+  }
+  persistState();
+  render();
+}
+
+function wireLineStyleMenu(wire: WebviewWireModel): ContextMenuItem {
+  const locale = state.locale ?? "pt-BR";
+  const isPortuguese = locale.toLowerCase().startsWith("pt");
+  return {
+    label: isPortuguese ? "Estilo de linha (IPD)" : "Line style (IPD)",
+    items: [
+      {
+        label: isPortuguese ? "Fio elétrico padrão" : "Default electrical wire",
+        checked: wire.lineClass === undefined,
+        onClick: () => setSelectedWireLineClass(undefined),
+      },
+      { kind: "separator" },
+      ...IPD_LINE_CLASSES.map((lineClass): ContextMenuItem => ({
+        label: ipdLineClassLabel(lineClass, locale),
+        checked: wire.lineClass === lineClass,
+        onClick: () => setSelectedWireLineClass(lineClass),
+      })),
+    ],
+  };
 }
 
 function normalizeSelectedWireSegment(): void {
@@ -4002,15 +4509,36 @@ function setPolylinePoints(polyline: SVGPolylineElement, points: Point[]): void 
   polyline.setAttribute("points", points.map((point) => `${point.x},${point.y}`).join(" "));
 }
 
+function renderWireLineGlyphs(wireLayer: SVGSVGElement, wire: WebviewWireModel, points: Point[]): void {
+  const spec = wire.lineClass ? IPD_LINE_GLYPHS[wire.lineClass] : null;
+  if (!spec) return;
+  const group = document.createElementNS(SVG_NS, "g");
+  group.dataset.wireId = wire.id;
+  group.setAttribute("class", "wire-layer__line-glyphs");
+  for (const station of ipdGlyphStations(points, spec.spacing)) {
+    const glyph = spec.glyph.kind === "path"
+      ? (() => {
+          const path = document.createElementNS(SVG_NS, "path");
+          path.setAttribute("d", spec.glyph.d);
+          return path;
+        })()
+      : (() => {
+          const circle = document.createElementNS(SVG_NS, "circle");
+          circle.setAttribute("r", String(spec.glyph.radius));
+          return circle;
+        })();
+    glyph.setAttribute("transform", `translate(${station.x} ${station.y}) rotate(${station.angle})`);
+    group.appendChild(glyph);
+  }
+  wireLayer.appendChild(group);
+}
+
 function wirePolylinePoints(wire: WebviewWireModel): Point[] {
   // Resolução porta-ou-nó de topologia é SEMPRE a mesma regra (`wireTopology.ts::pinScenePosition`,
   // fonte única) -- antes desta rodada, main.ts reimplementava essa distinção à mão, uma 3ª cópia
   // independente da mesma lógica (`electricalEdgesForProject`/`voltageProbesForProject` já tinham
   // cada uma a sua, ver `docs/27-analise-critica-fios-vs-auditoria-2026-07-11.md`).
-  const fromPos = resolveEndpointScenePosition(state.components, wire.from, state.topology.nodes);
-  const toPos = resolveEndpointScenePosition(state.components, wire.to, state.topology.nodes);
-  if (!fromPos || !toPos) return [];
-  return buildOrthogonalPath([fromPos, ...(wire.points ?? []), toPos]);
+  return resolveWirePolylinePoints(state.components, wire, state.topology.nodes);
 }
 
 function updateWireFromFullPath(wire: WebviewWireModel, fullPoints: Point[]): void {
@@ -4018,6 +4546,42 @@ function updateWireFromFullPath(wire: WebviewWireModel, fullPoints: Point[]): vo
   const internal = normalized.slice(1, -1).map((point) => ({ x: point.x, y: point.y }));
   if (internal.length > 0) wire.points = internal;
   else delete wire.points;
+}
+
+/** Finaliza uma rota manual com a mesma limpeza de vértices do IPD Studio: encaixa os pontos na
+ * grade, adota eixos de portas fora da grade quando estão suficientemente próximos e remove
+ * microcotovelos/duplicatas. Executar somente ao FIM do gesto preserva o feedback contínuo durante
+ * o arrasto e evita gravar deformações residuais de poucos pixels. */
+function cleanWireVerticesAfterGesture(wireId: string): void {
+  const wire = state.topology.conductors.find((entry) => entry.id === wireId);
+  if (!wire?.points?.length) return;
+  const source = resolveEndpointScenePosition(state.components, wire.from, state.topology.nodes) ?? null;
+  const target = resolveEndpointScenePosition(state.components, wire.to, state.topology.nodes) ?? null;
+  const cleaned = cleanIpdWireVertices(wire.points, source, target);
+  if (cleaned.length > 0) wire.points = cleaned;
+  else delete wire.points;
+  normalizeSelectedWireSegment();
+  normalizeSelectedWireCorner();
+  updateWireVisual(wireId);
+}
+
+function resetWireToAutomaticRoute(wire: WebviewWireModel): void {
+  delete wire.points;
+  selectedWireCorner = undefined;
+  selectedWireSegment = undefined;
+  persistState();
+  render();
+}
+
+function removeWireRoutePoint(wire: WebviewWireModel, pointIndex: number): void {
+  if (!wire.points?.length) return;
+  const full = wirePolylinePoints(wire);
+  if (pointIndex <= 0 || pointIndex >= full.length - 1) return;
+  full.splice(pointIndex, 1);
+  updateWireFromFullPath(wire, buildOrthogonalPath(full));
+  selectedWireCorner = undefined;
+  persistState();
+  render();
 }
 
 /** "Ramo" de fio (canto ou segmento) capturado no início de um arrasto de GRUPO -- move junto com
@@ -4231,7 +4795,13 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
       if (!isWireSelected(wire.id) || !isWireCornerSelected(wire.id, index)) selectOnlyWireCorner(wire.id, index);
       persistState();
       render();
-      showContextMenu(event, [{ label: t("deleteSelectedItems"), onClick: () => deleteSelectedItems() }]);
+      showContextMenu(event, [
+        { label: "Remover ponto de rota", onClick: () => removeWireRoutePoint(wire, index), disabled: !wire.points?.length },
+        { label: "Redefinir rota automática", onClick: () => resetWireToAutomaticRoute(wire), disabled: !wire.points?.length },
+        wireLineStyleMenu(wire),
+        { kind: "separator" },
+        { label: t("deleteSelectedItems"), onClick: () => deleteSelectedItems() },
+      ]);
     });
     handle.addEventListener("pointerdown", (event) => {
       if (event.button !== 0 || state.pendingConnection) return;
@@ -4292,6 +4862,7 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
         const drag = wireCornerDrag;
         wireCornerDrag = undefined;
         if (drag?.moved) {
+          cleanWireVerticesAfterGesture(wire.id);
           persistState();
           suppressNextWireInteractionClick = true;
         }
@@ -4353,7 +4924,12 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
       if (!isWireSelected(wire.id) || !isWireSegmentSelected(wire.id, index)) selectOnlyWire(wire.id, index);
       persistState();
       render();
-      showContextMenu(event, [{ label: t("deleteSelectedItems"), onClick: () => deleteSelectedItems() }]);
+      showContextMenu(event, [
+        { label: "Redefinir rota automática", onClick: () => resetWireToAutomaticRoute(wire), disabled: !wire.points?.length },
+        wireLineStyleMenu(wire),
+        { kind: "separator" },
+        { label: t("deleteSelectedItems"), onClick: () => deleteSelectedItems() },
+      ]);
     });
     handle.addEventListener("pointerdown", (event) => {
       if (event.button !== 0 || state.pendingConnection) return;
@@ -4410,6 +4986,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
           const drag = wireCornerDrag;
           wireCornerDrag = undefined;
           if (drag?.moved) {
+            cleanWireVerticesAfterGesture(wire.id);
             persistState();
             suppressNextWireInteractionClick = true;
           }
@@ -4469,6 +5046,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
         const drag = wireSegmentDrag;
         wireSegmentDrag = undefined;
         if (drag?.moved) {
+          cleanWireVerticesAfterGesture(wire.id);
           persistState();
           suppressNextWireInteractionClick = true;
         }
@@ -4546,6 +5124,10 @@ function undoPendingWireBend(): void {
 function pendingWirePointsForTarget(target: Point): Point[] {
   const anchor = pendingWireAnchor();
   if (!anchor) return [];
+  // No authored bend means automatic routing. Persisting the preview's
+  // incidental L elbow would freeze the route and prevent obstacle-aware
+  // rerouting when either component moves.
+  if (pendingWireRoute.length === 0) return [];
   const points = pendingWireRoute.map((point) => ({ ...point }));
   const segment = orthogonalSegmentPoints(anchor, target);
   for (const routePoint of segment.slice(1, -1)) appendPoint(points, routePoint);
@@ -4742,8 +5324,13 @@ function updateWiresTouchingComponent(componentId: string): void {
     if (!polyline) continue;
     const points = wirePolylinePoints(wire);
     if (points.length < 2) continue;
+    const outline = wireOutlineElementsById.get(wire.id);
+    if (outline) {
+      setPolylinePoints(outline, points);
+      outline.setAttribute("class", wireClass(wire, true));
+    }
     setPolylinePoints(polyline, points);
-    polyline.setAttribute("class", wireClass(wire.id));
+    polyline.setAttribute("class", wireClass(wire));
   }
 }
 
@@ -4768,8 +5355,26 @@ function updateWireVisual(wireId: string): void {
 
   const polyline = wirePolylineElementsById.get(wireId);
   if (points.length < 2 || !polyline) return;
+  const stroke = wire.lineClass ? ipdLineStroke(wire.lineClass) : undefined;
+  let outline = wireOutlineElementsById.get(wireId);
+  if (stroke?.double) {
+    if (!outline) {
+      outline = document.createElementNS(SVG_NS, "polyline");
+      outline.dataset.wireId = wire.id;
+      outline.style.pointerEvents = "none";
+      wireOutlineElementsById.set(wireId, outline);
+    }
+    setPolylinePoints(outline, points);
+    outline.setAttribute("class", wireClass(wire, true));
+    wireLayer.insertBefore(outline, polyline);
+  } else if (outline) {
+    outline.remove();
+    wireOutlineElementsById.delete(wireId);
+    outline = undefined;
+  }
   setPolylinePoints(polyline, points);
-  polyline.setAttribute("class", wireClass(wireId));
+  polyline.setAttribute("class", wireClass(wire));
+  renderWireLineGlyphs(wireLayer, wire, points);
   renderWireSegmentHandles(wireLayer, wire, points);
   renderWireCornerHandles(wireLayer, wire, points);
 }
@@ -5053,6 +5658,19 @@ function usesEmbeddedValueLabel(typeId: string): boolean {
 }
 
 /** Componentes cujo SVG muda com `__readout`, mesmo quando o valor textual fica fora do símbolo. */
+/** Quais componentes precisam ter o SVG regenerado neste tick de telemetria. Dois casos, e só
+ * dois: o instrumento que desenha a própria leitura dentro do símbolo, e o elemento gráfico de
+ * supervisório, que desenha a leitura de OUTRO componente (`bindSource`). Sem o segundo caso um
+ * tanque/indicador ligado a uma sonda nunca repintaria -- o id dele jamais aparece em
+ * `readoutsByComponentId`, porque elemento gráfico não é instrumento. Continua sendo patch
+ * PONTUAL (nunca `render()` global): só entra quem de fato depende de uma leitura que chegou. */
+function componentNeedsReadoutRepaint(component: WebviewComponentModel, readouts: Record<string, ComponentReadoutValue>): boolean {
+  if (usesRuntimeSymbolReadout(component.typeId)) return component.id in readouts;
+  if (!isGraphicalTypeId(component.typeId)) return false;
+  const source = component.properties.bindSource;
+  return typeof source === "string" && source.length > 0 && source in readouts;
+}
+
 function usesRuntimeSymbolReadout(typeId: string): boolean {
   if (catalogEntryFor(typeId)?.readoutFormat) return true;
   return typeId === "instruments.voltmeter" || typeId.startsWith("meters.");
@@ -5082,6 +5700,13 @@ function voltmeterReadoutText(component: WebviewComponentModel): string {
 }
 
 function runtimeSymbolProperties(component: WebviewComponentModel): Record<string, unknown> {
+  // Biblioteca de supervisório: UM resolvedor genérico (`graphicsBinding.ts`) para todos os
+  // símbolos, em vez de um ramo por typeId aqui. Sai cedo porque um elemento gráfico nunca tem
+  // leitura própria (`pinCount: 0` o mantém fora do Core): ele só PROJETA a leitura de outro
+  // componente, resolvida por id estável em `readoutsByComponentId`.
+  if (isGraphicalTypeId(component.typeId)) {
+    return { ...component.properties, ...graphicalRuntimeProperties(component.properties, (id) => readoutsByComponentId[id]) };
+  }
   const readout = readoutsByComponentId[component.id];
   const scopeHistory = scopeHistoryByComponentId[component.id];
   const logicHistory = logicHistoryByComponentId[component.id];
@@ -6310,6 +6935,177 @@ function rotateComponent(component: WebviewComponentModel): void {
 /** Girar componentes E rótulos externos (id/value) selecionados numa SÓ ação (pedido real: "isso
  * deve valer pra tudo, o label poder ser girado") -- Ctrl+R/menu de contexto gira o que estiver
  * selecionado, dos dois tipos ao mesmo tempo se a seleção for mista. */
+// ---------------------------------------------------------------------------
+// Alças de redimensionamento
+// ---------------------------------------------------------------------------
+
+/** Quanto do lado arrastado cabe na menor dimensão antes de o símbolo virar um borrão. */
+const MIN_RESIZE_SIZE = 8;
+
+/**
+ * Um componente é redimensionável quando o próprio catálogo declara `width` E `height` como
+ * propriedades NUMÉRICAS -- critério genérico, nunca uma lista de typeIds: hoje atende a biblioteca
+ * gráfica de supervisório (`graphics.*`) e as figuras de autoria de Símbolo, e um device futuro que
+ * declare as mesmas duas propriedades ganha as alças de graça.
+ */
+function isResizableComponent(component: WebviewComponentModel): boolean {
+  return typeof component.properties.width === "number" && typeof component.properties.height === "number";
+}
+
+/** As 8 alças: cantos + meios de lado. `dx`/`dy` dizem QUAL borda cada uma move. */
+const RESIZE_HANDLES: ReadonlyArray<{ id: string; dx: -1 | 0 | 1; dy: -1 | 0 | 1; cursor: string }> = [
+  { id: "nw", dx: -1, dy: -1, cursor: "nwse-resize" },
+  { id: "n", dx: 0, dy: -1, cursor: "ns-resize" },
+  { id: "ne", dx: 1, dy: -1, cursor: "nesw-resize" },
+  { id: "e", dx: 1, dy: 0, cursor: "ew-resize" },
+  { id: "se", dx: 1, dy: 1, cursor: "nwse-resize" },
+  { id: "s", dx: 0, dy: 1, cursor: "ns-resize" },
+  { id: "sw", dx: -1, dy: 1, cursor: "nesw-resize" },
+  { id: "w", dx: -1, dy: 0, cursor: "ew-resize" },
+];
+
+/**
+ * Alças de redimensionar da seleção Única. Desenhadas DEPOIS dos componentes (ficam por cima) e
+ * recriadas a cada `render()` -- mesmo ciclo de vida das alças de vértice de fio
+ * (`renderWireCornerHandles`), inclusive o motivo: o listener nunca pode capturar um `component`
+ * obsoleto.
+ *
+ * Só seleção de UM componente: com vários, "qual é a caixa" e "o que escala junto" deixam de ter
+ * resposta óbvia, e arrastar continua movendo o grupo como sempre.
+ */
+function renderResizeHandles(canvasContent: HTMLElement): void {
+  // Os elementos em si já foram removidos do DOM por `clearEphemeralCanvasChildren`; aqui só o
+  // registro é zerado, ANTES de qualquer `return` cedo, pra nunca sobrar referência a alça morta.
+  resizeHandleElements = [];
+  if (state.selectedComponentIds.length !== 1) return;
+  const component = activeSceneComponents().find((candidate) => candidate.id === state.selectedComponentIds[0]);
+  if (!component || component.locked || !isResizableComponent(component)) return;
+
+  // `aspect` pode vir do package inteiro (símbolos que desenham por `shapes[]`, ex: a biblioteca
+  // P&ID portada) ou do spec de pintura (biblioteca nativa) -- as duas dizem a mesma coisa.
+  const resolvedSource = resolvedPackageFor(component.typeId, runtimeSymbolProperties(component))?.source;
+  const preserveAspect = (resolvedSource?.aspect ?? resolvedSource?.simulidePaint?.aspect) === "fixed";
+  const box = componentBox(component.typeId, runtimeSymbolProperties(component));
+  const rotated = rotatedComponentLocalBox(box, component.rotation, Boolean(component.flipH), Boolean(component.flipV),
+    componentLocalOrigin(component.typeId, component.properties));
+  const left = component.x + rotated.x;
+  const top = component.y + rotated.y;
+
+  // Device silhouettes expose only corner handles. Side handles imply independent axis scaling,
+  // which would turn ISA bubbles into ellipses and deform pumps, valves and vessel heads.
+  const handles = preserveAspect ? RESIZE_HANDLES.filter((handle) => handle.dx !== 0 && handle.dy !== 0) : RESIZE_HANDLES;
+  for (const handle of handles) {
+    const el = document.createElement("div");
+    el.className = "resize-handle";
+    el.style.cursor = handle.cursor;
+    el.style.left = `${left + ((handle.dx + 1) / 2) * rotated.width}px`;
+    el.style.top = `${top + ((handle.dy + 1) / 2) * rotated.height}px`;
+    el.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const startClientX = event.clientX;
+      const startClientY = event.clientY;
+      const startWidth = component.properties.width as number;
+      const startHeight = component.properties.height as number;
+      const startX = component.x;
+      const startY = component.y;
+      // A caixa gira junto com o componente (`rotatedComponentLocalBox`), mas `width`/`height` são
+      // sempre do desenho CANÔNICO (rotation=0) -- em 90°/270° o eixo da tela troca com o do
+      // desenho, senão arrastar a alça lateral engordaria o símbolo na direção errada.
+      const swapped = component.rotation === 90 || component.rotation === 270;
+
+      const apply = (moveEvent: PointerEvent, commit: boolean) => {
+        const zoom = state.viewport.zoom || 1;
+        const rawX = (moveEvent.clientX - startClientX) / zoom;
+        const rawY = (moveEvent.clientY - startClientY) / zoom;
+        const alongWidth = swapped ? rawY : rawX;
+        const alongHeight = swapped ? rawX : rawY;
+        const widthEdge = swapped ? handle.dy : handle.dx;
+        const heightEdge = swapped ? handle.dx : handle.dy;
+
+        const { width, height } = resizedComponentSize({
+          startWidth,
+          startHeight,
+          deltaWidth: alongWidth,
+          deltaHeight: alongHeight,
+          widthEdge,
+          heightEdge,
+          minSize: MIN_RESIZE_SIZE,
+          preserveAspect,
+        });
+
+        // Arrastar a borda esquerda/topo tem que mover a ORIGEM junto, senão a borda oposta é que
+        // andaria -- a borda sob o cursor precisa ficar onde o cursor está.
+        component.properties.width = width;
+        component.properties.height = height;
+        component.x = handle.dx < 0 ? startX + (startWidth - width) : startX;
+        component.y = handle.dy < 0 ? startY + (startHeight - height) : startY;
+
+        const el = componentElementsById.get(component.id);
+        if (el) updateComponentElement(el, component);
+        if (commit) {
+          // Mesmo caminho de qualquer edição de propriedade: o host persiste e (quando o typeId
+          // existe no Core) repassa. Elemento gráfico tem `pinCount: 0` e nunca chega ao Core.
+          send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: "width", value: width });
+          send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: "height", value: height });
+          persistState();
+          render();
+        }
+      };
+
+      const onMove = (moveEvent: PointerEvent) => apply(moveEvent, false);
+      const onUp = (upEvent: PointerEvent) => {
+        el.removeEventListener("pointermove", onMove);
+        el.removeEventListener("pointerup", onUp);
+        el.removeEventListener("pointercancel", onUp);
+        isDraggingComponent = false;
+        apply(upEvent, true);
+      };
+      isDraggingComponent = true;
+      el.setPointerCapture(event.pointerId);
+      el.addEventListener("pointermove", onMove);
+      el.addEventListener("pointerup", onUp, { once: true });
+      el.addEventListener("pointercancel", onUp, { once: true });
+    });
+    canvasContent.appendChild(el);
+    resizeHandleElements.push(el);
+  }
+}
+
+/**
+ * Z-order da cena. A ordem de empilhamento É a ordem do array de componentes (quem vem depois
+ * desenha por cima, ver `render()`), e essa ordem JÁ é preservada na serialização
+ * (`ProjectSerializer`/`subcircuitDocument` gravam `components[]` na ordem) -- por isso reordenar o
+ * array é a implementação inteira, sem nenhum campo `zIndex` novo no modelo nem no arquivo.
+ *
+ * Telas de processo dependem disso: casco do tanque -> líquido -> tubo -> válvula -> instrumento ->
+ * texto é uma pilha, não um conjunto.
+ *
+ * `splice` no MESMO array (nunca `state.components = [...]`) porque `activeSceneComponents()`
+ * devolve a referência viva da cena ativa (circuito/Símbolo/Ícone) -- trocar o objeto quebraria
+ * quem guardou a referência.
+ */
+function reorderSelectedComponents(mode: ZOrderMode): void {
+  const components = activeSceneComponents();
+  const nextOrder = reorderedZOrder(
+    components.map((component) => component.id),
+    new Set(state.selectedComponentIds),
+    mode,
+  );
+  // `undefined` == nada mudou (já está na ponta da pilha, seleção vazia, tudo selecionado). Sair
+  // aqui evita gravar o projeto e repintar à toa -- segurar `Ctrl+]` no topo vira no-op de verdade.
+  if (!nextOrder) return;
+
+  const byId = new Map(components.map((component) => [component.id, component]));
+  // `splice` no MESMO array, nunca `state.components = [...]`: `activeSceneComponents()` devolve a
+  // referência viva da cena ativa (circuito/Símbolo/Ícone) e trocar o objeto quebraria quem guardou
+  // essa referência.
+  components.splice(0, components.length, ...nextOrder.map((id) => byId.get(id)!));
+  persistState();
+  render();
+}
+
 function rotateSelectedComponents(steps: 1 | -1 | 2): void {
   const components = getSelectedComponents();
   const labels = getSelectedTextLabels();
@@ -6468,6 +7264,78 @@ function distributeSelectedItemsVertically(): void {
   render();
 }
 
+/**
+ * Converte a seleção de componentes na representação geométrica do IPD. O `bounds` é a caixa local
+ * realmente transformada pelo mesmo pivô/rotação/espelhamento do SVG; isto evita alinhar a âncora
+ * invisível quando um túnel ou símbolo assimétrico ocupa outra região depois de girado.
+ */
+function selectedIpdAlignmentNodes(): IpdAlignmentNode[] {
+  return selectedComponentsInSelectionOrder().map((component) => {
+    const box = componentBox(component.typeId, component.properties);
+    const bounds = rotatedComponentLocalBox(
+      box,
+      component.rotation,
+      Boolean(component.flipH),
+      Boolean(component.flipV),
+      componentLocalOrigin(component.typeId, component.properties),
+    );
+    return {
+      id: component.id,
+      x: component.x,
+      y: component.y,
+      width: box.width,
+      height: box.height,
+      rotation: component.rotation,
+      bounds,
+    };
+  });
+}
+
+function applyIpdNodeMoves(moves: Array<{ id: string; x: number; y: number }>): void {
+  const byId = new Map(moves.map((move) => [move.id, move]));
+  for (const component of activeSceneComponents()) {
+    const move = byId.get(component.id);
+    if (!move) continue;
+    component.x = move.x;
+    component.y = move.y;
+  }
+  persistState();
+  render();
+}
+
+function alignSelectedComponentsByIpdGeometry(mode: IpdAlignMode): void {
+  const nodes = selectedIpdAlignmentNodes();
+  if (nodes.length < 2) return;
+  applyIpdNodeMoves(alignIpdNodes(nodes, mode));
+}
+
+function distributeSelectedComponentsByIpdGeometry(axis: "h" | "v"): void {
+  const nodes = selectedIpdAlignmentNodes();
+  if (nodes.length < 3) return;
+  applyIpdNodeMoves(distributeIpdNodes(nodes, axis));
+}
+
+/** Mantém os comandos legados visíveis e agrupa a semântica espacial do IPD num submenu próprio. */
+function ipdGeometryMenuItems(selectedComponentCount: number): ContextMenuItem[] {
+  if (selectedComponentCount < 2) return [];
+  const items: ContextMenuItem[] = [
+    { label: t("ipdAlignLeft"), onClick: () => alignSelectedComponentsByIpdGeometry("left") },
+    { label: t("ipdAlignRight"), onClick: () => alignSelectedComponentsByIpdGeometry("right") },
+    { label: t("ipdAlignTop"), onClick: () => alignSelectedComponentsByIpdGeometry("top") },
+    { label: t("ipdAlignBottom"), onClick: () => alignSelectedComponentsByIpdGeometry("bottom") },
+    { label: t("ipdAlignCenterHorizontal"), onClick: () => alignSelectedComponentsByIpdGeometry("center-h") },
+    { label: t("ipdAlignCenterVertical"), onClick: () => alignSelectedComponentsByIpdGeometry("center-v") },
+  ];
+  if (selectedComponentCount >= 3) {
+    items.push(
+      { kind: "separator" },
+      { label: t("ipdDistributeHorizontal"), onClick: () => distributeSelectedComponentsByIpdGeometry("h") },
+      { label: t("ipdDistributeVertical"), onClick: () => distributeSelectedComponentsByIpdGeometry("v") },
+    );
+  }
+  return [{ label: t("ipdGeometryAlignment"), items }];
+}
+
 interface ComponentVisualFlags {
   catalogEntry: WebviewComponentCatalogEntry | undefined;
   isPushButton: boolean;
@@ -6515,6 +7383,172 @@ function componentVisualFlags(component: WebviewComponentModel): ComponentVisual
   };
 }
 
+function graphicalActionTarget(component: WebviewComponentModel): {
+  config: NonNullable<ReturnType<typeof graphicalActionConfig>>;
+  target: WebviewComponentModel;
+} | undefined {
+  const config = graphicalActionConfig(component.properties);
+  if (!config) return undefined;
+  const target = state.components.find((entry) => entry.id === config.targetId);
+  return target ? { config, target } : undefined;
+}
+
+/**
+ * Commits an operator action through the existing property authority. The
+ * graphical widget never writes to the Core directly and never creates a
+ * parallel variable namespace: it addresses a stable component id and one of
+ * that component's ordinary properties.
+ */
+function applyGraphicalOperatorAction(
+  component: WebviewComponentModel,
+  phase: GraphicalActionPhase,
+  inputValue?: GraphicalActionValue,
+  preview = false,
+): boolean {
+  const resolved = graphicalActionTarget(component);
+  if (!resolved) return false;
+  const currentValue = resolved.target.properties[resolved.config.property];
+  const nextValue = resolveGraphicalActionValue(resolved.config, currentValue, phase, inputValue);
+  if (nextValue === undefined) return false;
+
+  resolved.target.properties[resolved.config.property] = nextValue;
+  send({
+    version: WEBVIEW_MESSAGE_VERSION,
+    type: preview ? "requestPreviewProperty" : "requestUpdateProperty",
+    componentId: resolved.target.id,
+    name: resolved.config.property,
+    value: nextValue,
+  });
+
+  // Keep an unbound operator readable while editing/running. A configured
+  // binding remains authoritative because runtimeSymbolProperties projects it
+  // over this persisted fallback value.
+  const displayValue = typeof nextValue === "boolean" ? (nextValue ? 100 : 0) : typeof nextValue === "number" ? nextValue : undefined;
+  if (displayValue !== undefined) {
+    component.properties.value = displayValue;
+    if (!preview) {
+      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: "value", value: displayValue });
+    }
+  }
+
+  const targetElement = componentElementsById.get(resolved.target.id);
+  if (targetElement) updateComponentElement(targetElement, resolved.target);
+  const operatorElement = componentElementsById.get(component.id);
+  if (operatorElement) updateComponentElement(operatorElement, component);
+  if (!preview) persistState();
+  return true;
+}
+
+function attachGraphicalOperatorInteraction(
+  el: HTMLElement,
+  liveComponent: () => WebviewComponentModel | undefined,
+): void {
+  const typeId = el.dataset.typeId ?? "";
+  if (!isGraphicalActionTypeId(typeId)) return;
+
+  const consumeInRun = (event: Event): WebviewComponentModel | undefined => {
+    if (simulationStatus !== "running") return undefined;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return liveComponent();
+  };
+
+  if (typeId === "graphics.numeric_input" || typeId === "graphics.setpoint") {
+    el.addEventListener("pointerdown", (event) => {
+      if (simulationStatus === "running" && event.button === 0) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    }, { capture: true });
+    el.addEventListener("dblclick", (event) => {
+      const component = consumeInRun(event);
+      if (!component) return;
+      const resolved = graphicalActionTarget(component);
+      if (!resolved) return;
+      const initial = component.properties.value ?? resolved.target.properties[resolved.config.property] ?? "";
+      const answer = window.prompt(component.typeId === "graphics.setpoint" ? "Novo setpoint:" : "Novo valor:", String(initial));
+      if (answer === null) return;
+      const numeric = Number(answer.replace(",", "."));
+      if (!Number.isFinite(numeric)) return;
+      applyGraphicalOperatorAction(component, "input", numeric);
+    }, { capture: true });
+    return;
+  }
+
+  el.addEventListener("pointerdown", (event) => {
+    if (!(event instanceof PointerEvent) || event.button !== 0) return;
+    const component = consumeInRun(event);
+    if (!component) return;
+    const resolved = graphicalActionTarget(component);
+    if (!resolved) return;
+    el.classList.add("component--operator-active");
+    el.setPointerCapture(event.pointerId);
+
+    if (typeId === "graphics.slider") {
+      const initialTargetValue = resolved.target.properties[resolved.config.property];
+      const initialDisplayValue = component.properties.value;
+      const applyPointer = (pointer: PointerEvent, preview: boolean): void => {
+        const rect = el.getBoundingClientRect();
+        const ratio = Math.max(0, Math.min(1, (pointer.clientX - rect.left) / Math.max(1, rect.width)));
+        const minimum = resolved.config.minimum ?? 0;
+        const maximum = resolved.config.maximum ?? 100;
+        const value = minimum + ratio * (maximum - minimum);
+        applyGraphicalOperatorAction(component, "input", value, preview);
+        el.classList.add("component--operator-active");
+      };
+      applyPointer(event, true);
+      const onMove = (moveEvent: PointerEvent): void => applyPointer(moveEvent, true);
+      const finish = (upEvent: PointerEvent): void => {
+        el.removeEventListener("pointermove", onMove);
+        el.removeEventListener("pointerup", finish);
+        el.removeEventListener("pointercancel", cancel);
+        el.classList.remove("component--operator-active");
+        applyPointer(upEvent, false);
+      };
+      const cancel = (): void => {
+        el.removeEventListener("pointermove", onMove);
+        el.removeEventListener("pointerup", finish);
+        el.removeEventListener("pointercancel", cancel);
+        el.classList.remove("component--operator-active");
+        // Preview is intentionally transient. If the pointer gesture is
+        // cancelled, restore both local models so the next paint cannot leave
+        // a value on screen that was never committed to the project/Core.
+        if (initialTargetValue === undefined) delete resolved.target.properties[resolved.config.property];
+        else resolved.target.properties[resolved.config.property] = initialTargetValue;
+        if (initialDisplayValue === undefined) delete component.properties.value;
+        else component.properties.value = initialDisplayValue;
+        const targetElement = componentElementsById.get(resolved.target.id);
+        if (targetElement) updateComponentElement(targetElement, resolved.target);
+        updateComponentElement(el, component);
+      };
+      el.addEventListener("pointermove", onMove);
+      el.addEventListener("pointerup", finish);
+      el.addEventListener("pointercancel", cancel);
+      return;
+    }
+
+    if (resolved.config.mode === "momentary") {
+      applyGraphicalOperatorAction(component, "press");
+      el.classList.add("component--operator-active");
+    }
+    const finish = (): void => {
+      el.removeEventListener("pointerup", finish);
+      el.removeEventListener("pointercancel", cancel);
+      el.classList.remove("component--operator-active");
+      if (resolved.config.mode === "momentary") applyGraphicalOperatorAction(component, "release");
+      else applyGraphicalOperatorAction(component, "activate");
+    };
+    const cancel = (): void => {
+      el.removeEventListener("pointerup", finish);
+      el.removeEventListener("pointercancel", cancel);
+      el.classList.remove("component--operator-active");
+      if (resolved.config.mode === "momentary") applyGraphicalOperatorAction(component, "release");
+    };
+    el.addEventListener("pointerup", finish);
+    el.addEventListener("pointercancel", cancel);
+  }, { capture: true });
+}
+
 /** Cria o elemento `.component` UMA VEZ por id (reaproveitado entre renders, ver
  * `componentElementsById`) -- registra aqui SÓ os listeners de longa duração (clique/seleção,
  * duplo-clique, menu de contexto, arrastar, popup de instrumento). Reconciliação incremental
@@ -6537,6 +7571,8 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
   const liveComponent = (): WebviewComponentModel | undefined =>
     activeSceneComponents().find((entry) => entry.id === componentId);
   let suppressNextDialComponentClick = false;
+
+  attachGraphicalOperatorInteraction(el, liveComponent);
 
   // ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): isPushButton vem de interactionKind (genérico);
   // isToggleClickable é o conceito genérico de "clicar no toggle-hit-zone alterna `closed`" -- cobre
@@ -6765,6 +7801,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
                 { label: t("distributeVertical"), onClick: () => distributeSelectedItemsVertically() },
               ] satisfies ContextMenuItem[]
             : []),
+          ...ipdGeometryMenuItems(selectedComponents.length),
         ]
       : [];
     const menuItems: ContextMenuItem[] = [
@@ -6781,6 +7818,13 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       { label: t("flipHorizontal"), icon: "flipHorizontal", shortcut: "Ctrl+L", onClick: () => flipSelectedComponents("horizontal") },
       { label: t("flipVertical"), icon: "flipVertical", shortcut: "Ctrl+Shift+L", onClick: () => flipSelectedComponents("vertical") },
       ...(alignDistributeMenuItems.length > 0 ? [{ kind: "separator" } satisfies ContextMenuItem, ...alignDistributeMenuItems] : []),
+      ...(selectedComponents.length > 1 ? [{ label: t("groupSelection"), onClick: () => groupSelectedComponents() } satisfies ContextMenuItem] : []),
+      ...(selectedComponents.some((candidate) => groupIdOf(candidate)) ? [{ label: t("ungroupSelection"), onClick: () => ungroupSelectedComponents() } satisfies ContextMenuItem] : []),
+      { kind: "separator" },
+      { label: t("bringToFront"), icon: "bringToFront", shortcut: "Ctrl+Shift+]", onClick: () => reorderSelectedComponents("front") },
+      { label: t("bringPackageShapeForward"), icon: "bringForward", shortcut: "Ctrl+]", onClick: () => reorderSelectedComponents("forward") },
+      { label: t("sendPackageShapeBackward"), icon: "sendBackward", shortcut: "Ctrl+[", onClick: () => reorderSelectedComponents("backward") },
+      { label: t("sendToBack"), icon: "sendToBack", shortcut: "Ctrl+Shift+[", onClick: () => reorderSelectedComponents("back") },
       ...mcuMenuItems,
       ...fpgaMenuItems,
       ...createSubcircuitMenuItems,
@@ -6801,12 +7845,14 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     startY: number;
     offsetX: number;
     offsetY: number;
-    /** Overlay de Modo Placa (corpo + rótulos dos itens expostos, ver `renderBoardOverlaysFor`) desta
-     * instância, capturado na posição de TELA no início do arrasto -- fix real 2026-07-18 ("os
-     * elementos expostos não movimentam junto, só quando solta o mouse"): sem isto, o `onMove` só
+    /** Elementos desenhados FORA do `<div>` do componente, como irmãos no DOM, que precisam andar
+     * pelo MESMO delta: o overlay de Modo Placa (corpo + rótulos dos itens expostos, ver
+     * `renderBoardOverlaysFor`) e as alças de redimensionar (`renderResizeHandles`). Capturados na
+     * posição de TELA no início do arrasto -- fix real 2026-07-18 ("os elementos expostos não
+     * movimentam junto, só quando solta o mouse"): sem isto, o `onMove` só
      * movia o `<div>` do PRÓPRIO componente; o overlay (elementos irmãos, fora dele no DOM) ficava
      * parado até o `pointerup` disparar `render()` completo. */
-    boardOverlayChildren: Array<{ el: HTMLElement; startLeft: number; startTop: number }>;
+    siblingElements: Array<{ el: HTMLElement; startLeft: number; startTop: number }>;
   }> = [];
   let groupWireDragTarget: GroupWireDragTarget | undefined;
   let groupWireMoveTargets: GroupMoveWireTargets | undefined;
@@ -6856,12 +7902,20 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     dragStartY = event.clientY;
     dragTargets = (dialHitZone ? [] : getSelectedComponents()).map((selected) => {
       const offset = componentDivOffset(selected);
-      const boardOverlayChildren = (boardOverlayElementsByOuterId.get(selected.id) ?? []).map((child) => ({
+      const movingSiblings = [
+        ...(boardOverlayElementsByOuterId.get(selected.id) ?? []),
+        // `renderResizeHandles` só desenha na seleção de UM componente, e esse componente é
+        // justamente este alvo -- nunca há alça de outro item nesta lista.
+        ...(state.selectedComponentIds.length === 1 && state.selectedComponentIds[0] === selected.id
+          ? resizeHandleElements
+          : []),
+      ];
+      const siblingElements = movingSiblings.map((child) => ({
         el: child,
         startLeft: parseFloat(child.style.left) || 0,
         startTop: parseFloat(child.style.top) || 0,
       }));
-      return { component: selected, startX: selected.x, startY: selected.y, offsetX: offset.x, offsetY: offset.y, boardOverlayChildren };
+      return { component: selected, startX: selected.x, startY: selected.y, offsetX: offset.x, offsetY: offset.y, siblingElements };
     });
     // "Selecionar um ramo de fio + um dispositivo e mover juntos": se um canto/segmento de fio
     // também estava selecionado (marquee, ou clique anterior no ramo), ele acompanha o(s)
@@ -7256,8 +8310,10 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           dragTargets = duplicated.map((dup) => {
             const offset = componentDivOffset(dup);
             // Duplicata recém-criada nunca tem overlay de Modo Placa AINDA (precisaria de um
-            // `requestBoardOverlayData` novo, que só chega depois -- ver `ensureBoardOverlayData`).
-            return { component: dup, startX: dup.x, startY: dup.y, offsetX: offset.x, offsetY: offset.y, boardOverlayChildren: [] };
+            // `requestBoardOverlayData` novo, que só chega depois -- ver `ensureBoardOverlayData`)
+            // nem alça de redimensionar (as alças ainda apontam para o ORIGINAL até o próximo
+            // `render()`, e arrastá-las junto com a cópia as deixaria na posição errada).
+            return { component: dup, startX: dup.x, startY: dup.y, offsetX: offset.x, offsetY: offset.y, siblingElements: [] };
           });
           send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: currentElementScope(), components: duplicated, wires: duplicatedWires });
           if (newTunnels.length > 0) send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: "schematic", components: newTunnels, wires: [] });
@@ -7283,9 +8339,9 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           targetEl.style.left = `${target.component.x + target.offsetX}px`;
           targetEl.style.top = `${target.component.y + target.offsetY}px`;
         }
-        // Overlay de Modo Placa acompanha pelo MESMO delta -- fix real 2026-07-18, ver comentário na
-        // declaração de `dragTargets`.
-        for (const child of target.boardOverlayChildren) {
+        // Overlay de Modo Placa e alças de redimensionar acompanham pelo MESMO delta -- fix real
+        // 2026-07-18, ver comentário na declaração de `dragTargets`.
+        for (const child of target.siblingElements) {
           child.el.style.left = `${child.startLeft + dx}px`;
           child.el.style.top = `${child.startTop + dy}px`;
         }
@@ -7383,16 +8439,27 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
   // `viewBox`) passa a acompanhar a rotação, então nenhuma posição de pino/fio muda.
   const rotatedBox = rotatedComponentLocalBox(box, component.rotation, Boolean(component.flipH), Boolean(component.flipV), localOrigin);
 
-  el.className = `component ${isComponentSelected(component.id) ? "selected" : ""} ${hasPackageVisual ? "component--package" : ""} ${isVoltmeter ? "component--voltmeter" : ""} ${isPushButton ? "component--push" : ""} ${isSwitchToggle ? "component--switch" : ""} ${isFixedVolt ? "component--fixed-volt" : ""} ${isRail ? "component--rail" : ""} ${isTunnel ? "component--tunnel" : ""} ${meterClass} ${isMissingSubcircuitRef || isMissingDeviceRef ? "component--subcircuit-missing" : ""} ${isUnknownComponent ? "component--unknown" : ""}`;
+  const isHmiOperator = isGraphicalActionTypeId(component.typeId);
+  const operatorClass = isHmiOperator
+    ? `component--hmi-operator ${simulationStatus === "running" ? "component--hmi-operator-run" : "component--hmi-operator-edit"} ${graphicalActionTarget(component) ? "" : "component--hmi-operator-unconfigured"}`
+    : "";
+  el.className = `component ${isComponentSelected(component.id) ? "selected" : ""} ${hasPackageVisual ? "component--package" : ""} ${isVoltmeter ? "component--voltmeter" : ""} ${isPushButton ? "component--push" : ""} ${isSwitchToggle ? "component--switch" : ""} ${isFixedVolt ? "component--fixed-volt" : ""} ${isRail ? "component--rail" : ""} ${isTunnel ? "component--tunnel" : ""} ${meterClass} ${operatorClass} ${isMissingSubcircuitRef || isMissingDeviceRef ? "component--subcircuit-missing" : ""} ${isUnknownComponent ? "component--unknown" : ""}`;
   el.style.left = `${component.x + rotatedBox.x}px`;
   el.style.top = `${component.y + rotatedBox.y}px`;
   el.style.width = `${rotatedBox.width}px`;
   el.style.height = `${rotatedBox.height}px`;
+  // Opacidade por INSTÂNCIA -- propriedade genérica (`properties.opacity`), não um campo novo do
+  // modelo nem algo exclusivo de um typeId: hoje quem declara é a biblioteca de supervisório
+  // (`graphics.*`), mas qualquer device pode. Ausente/inválida/1 == opaco, exatamente como antes.
+  const instanceOpacity = symbolProperties.opacity;
+  el.style.opacity = typeof instanceOpacity === "number" && Number.isFinite(instanceOpacity) && instanceOpacity >= 0 && instanceOpacity < 1
+    ? String(instanceOpacity)
+    : "";
   el.title = isMissingSubcircuitRef || isMissingDeviceRef
     ? `${component.label} -- ${isMissingDeviceRef ? t("locateDeviceFile") : t("locateSubcircuitFile")}\n${component.deviceRef?.path ?? component.subcircuitRef?.path ?? ""}`
     : isUnknownComponent
       ? `${component.label} -- ${t("unknownComponent")}\n${component.typeId}`
-      : `${component.label} (${component.typeId})`;
+      : `${component.label} (${component.typeId})${isHmiOperator && !graphicalActionTarget(component) ? " — configure Alvo e Propriedade na seção Ação" : ""}`;
 
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.classList.add("component__symbol");
@@ -7528,6 +8595,8 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
     circle.setAttribute("cy", String(local.y));
     circle.setAttribute("r", String(PIN_RADIUS));
     circle.setAttribute("class", `pin-terminal ${isActive ? "pin-terminal--active" : ""}`);
+    circle.dataset.componentId = component.id;
+    circle.dataset.pinId = pin.id;
     const titleEl = document.createElementNS(SVG_NS, "title");
     titleEl.textContent = pin.id;
     circle.appendChild(titleEl);
@@ -7539,6 +8608,7 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
       const point = pinScenePosition(component, pin.id)!;
       handleWireGestureClick({ kind: "pin", componentId: component.id, pinId: pin.id, point });
     });
+    circle.addEventListener("pointerdown", (event) => startPinConnectionDrag(event, component, pin.id));
     svg.appendChild(circle);
   });
 
@@ -9251,7 +10321,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       // rótulo de valor FORA do SVG (`refreshReadouts`, texto simples), bem mais barato que um
       // `render()` completo do canvas -- sem isto, `refreshReadouts` nunca era chamado (função morta).
       for (const component of state.components) {
-        if (!usesRuntimeSymbolReadout(component.typeId) || !(component.id in message.readoutsByComponentId)) continue;
+        if (!componentNeedsReadoutRepaint(component, message.readoutsByComponentId)) continue;
         const el = componentElementsById.get(component.id);
         if (el) updateComponentElement(el, component);
       }
@@ -9316,9 +10386,9 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     boardOverlayReadoutsByKey = message.readoutsByKey;
     // Fix real 2026-07-18 ("Parar" ficava sem resposta durante a simulação): NUNCA `render()` aqui
     // -- reconstruiria o esquemático INTEIRO a cada ~300ms só pra atualizar o brilho de 1 LED.
-    // `patchBoardOverlayLedFills` faz o patch pontual (mesmo princípio de `componentReadout`/
+    // `patchBoardOverlayRuntimeVisuals` faz o patch pontual (mesmo princípio de `componentReadout`/
     // `wireVoltages` abaixo, que já evitavam `render()` incondicional por este MESMO motivo).
-    if (!isInteractiveGestureInProgress()) patchBoardOverlayLedFills();
+    if (!isInteractiveGestureInProgress()) patchBoardOverlayRuntimeVisuals();
   }
 
   if (message.type === "wireVoltages") {
@@ -9330,7 +10400,10 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     );
     if (!isInteractiveGestureInProgress()) {
       for (const [wireId, polyline] of wirePolylineElementsById) {
-        polyline.setAttribute("class", wireClass(wireId));
+        const wire = state.topology.conductors.find((entry) => entry.id === wireId);
+        if (!wire) continue;
+        polyline.setAttribute("class", wireClass(wire));
+        wireOutlineElementsById.get(wireId)?.setAttribute("class", wireClass(wire, true));
       }
     }
   }
@@ -9845,6 +10918,7 @@ function renderExternalLabel(component: WebviewComponentModel, kind: ExternalLab
                   { label: t("distributeVertical"), onClick: () => distributeSelectedItemsVertically() },
                 ] satisfies ContextMenuItem[]
               : []),
+            ...ipdGeometryMenuItems(getSelectedComponents().length),
           ]
         : []),
     ]);
@@ -9951,6 +11025,21 @@ window.addEventListener("keydown", (event) => {
   // `contributes.keybindings` (when: activeWebviewPanelId == 'lasecsimul.schematic') + comando que
   // manda `requestRotateSelection` (ver handler de mensagem abaixo e `.spec` seção 13.4) -- tratar
   // aqui TAMBÉM rotacionaria em dobro nos casos em que o evento ainda chega na Webview.
+
+  // Z-ORDER: `Ctrl+]`/`Ctrl+[` movem um passo; com `Shift`, vão até o fim da pilha. Convenção de
+  // Figma/Illustrator/PowerPoint. Não conflita com o VSCode: `editor.action.indentLines` usa as
+  // MESMAS teclas, mas com `when: editorTextFocus`, que é falso dentro de um painel de Webview --
+  // diferente de `Ctrl+R`, que o VSCode captura antes e por isso precisa de `contributes.keybindings`.
+  //
+  // O casamento é pelo GLIFO, não por `event.code`: com Shift o layout US entrega `}` no lugar de
+  // `]`, e no ABNT2 os colchetes não ficam na posição física `BracketLeft`/`BracketRight`. Aceitar
+  // os quatro glifos cobre os dois layouts sem depender da geometria do teclado.
+  const zOrderMode = ctrl ? zOrderModeForKey(event.key, event.shiftKey) : undefined;
+  if (zOrderMode) {
+    event.preventDefault();
+    reorderSelectedComponents(zOrderMode);
+    return;
+  }
 
   if (ctrl && event.key.toLowerCase() === "a") {
     event.preventDefault();

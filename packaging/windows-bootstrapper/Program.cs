@@ -14,6 +14,7 @@ internal static class Program
 {
     private const string TapName = "LasecSimul TAP";
     private const int GatewayPort = 9011;
+    private const int DefaultNetworkNamespace = 42;
     private const int UnsafeStaticIpv4ExitCode = 20;
     private const string GatewayTaskName = "LasecSimul Network Gateway";
     private const string ExtensionId = "josuemoraisgh.lasecsimul";
@@ -66,7 +67,7 @@ internal static class Program
             var machineStatus = CheckMachineInstallation();
             if (machineStatus.Healthy)
             {
-                Console.WriteLine("Infraestrutura global já instalada e saudável; etapa TAP/bridge/gateway ignorada.");
+                Console.WriteLine("Infraestrutura global já instalada e saudável; etapa TAP/roteamento/gateway ignorada.");
                 Console.WriteLine("A remoção da extensão deste usuário não altera os componentes globais.");
                 return extensionReady ? 0 : 1;
             }
@@ -74,15 +75,15 @@ internal static class Program
             Console.WriteLine($"Infraestrutura global ausente ou incompleta: {machineStatus.Details}");
             if (!ShouldProvisionTapInfrastructure(args))
             {
-                Console.WriteLine("Instalação do driver TAP, da bridge de rede e do gateway recusada pelo usuário; etapa de rede ignorada.");
-                Console.WriteLine("A extensão continua funcionando no modo de rede 'isolated' (sem TAP nem administrador); veja \"lasecsimul.network.mode\".");
+                Console.WriteLine("Instalação do driver TAP, do roteamento e do gateway recusada pelo usuário; etapa de rede ignorada.");
+                Console.WriteLine("A extensão continua funcionando no modo de rede 'disabled' (sem TAP nem administrador); veja \"lasecsimul.network.mode\".");
                 return extensionReady ? 0 : 1;
             }
 
             Console.WriteLine("A instalação/reparação da máquina requer elevação administrativa.");
             var exitCode = IsAdministrator() ? ProvisionNetwork(args) : RunElevated(args, "--provision-network");
             if (exitCode != 0) return exitCode;
-            Console.WriteLine("LasecSimul, TAP, bridge e gateway instalados com sucesso para todos os usuários.");
+            Console.WriteLine("LasecSimul, TAP, roteamento e gateway instalados com sucesso para todos os usuários.");
             return extensionReady ? 0 : 1;
         }
         catch (Exception ex)
@@ -102,11 +103,11 @@ internal static class Program
             return true;
 
         Console.WriteLine();
-        Console.WriteLine("O LasecSimul pode instalar o driver TAP-Windows6, criar uma Windows Network Bridge e");
-        Console.WriteLine("registrar um gateway de rede para o modo 'lab-bridge' (a ESP32 simulada aparece na LAN");
-        Console.WriteLine("física com IP próprio, via DHCP real). Isso requer elevação administrativa.");
-        Console.WriteLine("Sem esses componentes, a extensão continua funcionando normalmente no modo 'isolated'");
-        Console.WriteLine("(NAT local por processo, sem TAP nem administrador).");
+        Console.WriteLine("O LasecSimul pode instalar o driver TAP-Windows6, uma TAP roteada privada e");
+        Console.WriteLine("registrar um gateway de rede para o modo 'lab-router' (a ESP32 acessa o host e a internet");
+        Console.WriteLine("por NAT, sem expor múltiplos MACs na interface física). Isso requer elevação administrativa.");
+        Console.WriteLine("Sem esses componentes, a extensão continua funcionando normalmente no modo 'disabled'");
+        Console.WriteLine("(sem NIC OpenETH, sem TAP nem administrador).");
         Console.Write("Deseja instalar o driver TAP e a infraestrutura de rede agora? (s/N): ");
         var response = Console.ReadLine()?.Trim() ?? string.Empty;
         return response.Equals("s", StringComparison.OrdinalIgnoreCase) ||
@@ -148,6 +149,7 @@ internal static class Program
             var gatewayPath = Path.Combine(MachineInstallDirectory(), "LasecSimul.NetworkGateway.exe");
             var uninstallerPath = Path.Combine(MachineInstallDirectory(), "LasecSimul.MachineSetup.exe");
             var failures = new List<string>();
+            var configuredMode = "lab-router";
 
             if (!File.Exists(configPath)) failures.Add("network.json ausente");
             else
@@ -162,6 +164,11 @@ internal static class Program
                         failures.Add("porta global incompatível");
                     if (!root.TryGetProperty("tapInterface", out var tap) || tap.GetString() != TapName)
                         failures.Add("TAP global incompatível");
+                    if (root.TryGetProperty("mode", out var mode) && mode.ValueKind == JsonValueKind.String)
+                        configuredMode = mode.GetString() ?? "lab-router";
+                    if (configuredMode.Equals("lab-router", StringComparison.OrdinalIgnoreCase) &&
+                        (!root.TryGetProperty("networkNamespace", out var ns) || ns.GetInt32() != DefaultNetworkNamespace))
+                        failures.Add("namespace roteado incompatível");
                     if (!root.TryGetProperty("productVersion", out var productVersion) ||
                         !string.Equals(productVersion.GetString(), CurrentVersion(), StringComparison.OrdinalIgnoreCase))
                         failures.Add("versão do payload global incompatível");
@@ -174,9 +181,22 @@ internal static class Program
 
             var task = Run("schtasks.exe", new[] { "/Query", "/TN", GatewayTaskName }, capture: true, acceptFailure: true);
             if (task.ExitCode != 0) failures.Add("tarefa do gateway ausente");
-            var bridge = Run("netsh.exe", new[] { "bridge", "show", "adapter" }, capture: true, acceptFailure: true);
-            if (bridge.ExitCode != 0 || !bridge.Output.Contains(TapName, StringComparison.OrdinalIgnoreCase))
-                failures.Add("TAP não pertence à bridge");
+            if (configuredMode.Equals("lab-router", StringComparison.OrdinalIgnoreCase))
+            {
+                var routed = RunPowerShell(
+                    $"$ip=Get-NetIPAddress -InterfaceAlias '{PsLiteral(TapName)}' -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object {{$_.IPAddress -eq '10.{DefaultNetworkNamespace}.0.1'}}; if($ip){{exit 0}}; exit 2",
+                    true);
+                if (routed.ExitCode != 0) failures.Add("endereço da TAP roteada ausente");
+                var bridge = Run("netsh.exe", new[] { "bridge", "show", "adapter" }, capture: true, acceptFailure: true);
+                if (bridge.ExitCode == 0 && bridge.Output.Contains(TapName, StringComparison.OrdinalIgnoreCase))
+                    failures.Add("TAP roteada ainda pertence a uma bridge");
+            }
+            else
+            {
+                var bridge = Run("netsh.exe", new[] { "bridge", "show", "adapter" }, capture: true, acceptFailure: true);
+                if (bridge.ExitCode != 0 || !bridge.Output.Contains(TapName, StringComparison.OrdinalIgnoreCase))
+                    failures.Add("TAP não pertence à bridge");
+            }
             using (var key = Registry.LocalMachine.OpenSubKey(UninstallRegistryPath))
             {
                 if (key is null) failures.Add("registro de desinstalação global ausente");
@@ -191,7 +211,9 @@ internal static class Program
             if (failures.Count == 0 && !CanConnectToGateway())
                 failures.Add("gateway não responde em 127.0.0.1:9011");
             return failures.Count == 0
-                ? new MachineStatus(true, "TAP, bridge, gateway e desinstalador global encontrados")
+                ? new MachineStatus(true, configuredMode.Equals("lab-router", StringComparison.OrdinalIgnoreCase)
+                    ? "TAP roteada, gateway e desinstalador global encontrados"
+                    : "TAP, bridge, gateway e desinstalador global encontrados")
                 : new MachineStatus(false, string.Join("; ", failures));
         }
         catch (Exception ex)
@@ -219,17 +241,22 @@ internal static class Program
             return 5;
         }
 
-        var requestedPhysical = ValueAfter(args, "--bridge-interface") ?? Environment.GetEnvironmentVariable("LASECSIMUL_BRIDGE_INTERFACE");
-        var physical = SelectPhysicalAdapter(requestedPhysical);
-        if (!PhysicalAdapterUsesDhcp(physical))
+        var networkMode = RequestedNetworkMode(args);
+        PhysicalAdapter? physical = null;
+        if (networkMode == "lab-bridge")
         {
-            Console.Error.WriteLine(
-                $"A interface '{physical.Name}' usa IPv4 estático. A criação automática da Windows Network Bridge foi cancelada antes de alterar a rede.");
-            Console.Error.WriteLine(
-                "O Windows não transfere essa configuração de forma confiável para a bridge; isso poderia desativar o IP e a rota padrão da máquina.");
-            Console.Error.WriteLine(
-                "Use por enquanto lasecsimul.network.mode='isolated'. Para lab-bridge, configure a interface/bridge manualmente ou habilite DHCP antes de repetir.");
-            return UnsafeStaticIpv4ExitCode;
+            var requestedPhysical = ValueAfter(args, "--bridge-interface") ?? Environment.GetEnvironmentVariable("LASECSIMUL_BRIDGE_INTERFACE");
+            physical = SelectPhysicalAdapter(requestedPhysical);
+            if (!PhysicalAdapterUsesDhcp(physical.Value))
+            {
+                Console.Error.WriteLine(
+                    $"A interface '{physical.Value.Name}' usa IPv4 estático. A criação automática da Windows Network Bridge foi cancelada antes de alterar a rede.");
+                Console.Error.WriteLine(
+                    "O Windows não transfere essa configuração de forma confiável para a bridge; isso poderia desativar o IP e a rota padrão da máquina.");
+                Console.Error.WriteLine(
+                    "Configure a bridge manualmente ou habilite DHCP antes de repetir.");
+                return UnsafeStaticIpv4ExitCode;
+            }
         }
 
         // Repair/update is idempotent: release the TAP before replacing the driver or gateway.
@@ -266,10 +293,24 @@ internal static class Program
         BridgeInfo? bridge = null;
         try
         {
-            bridge = ConfigureBridge(physical, TapName);
-            if (!WaitForUsableHostNetwork(TimeSpan.FromSeconds(60)))
-                throw new InvalidOperationException(
-                    "A bridge não recuperou um endereço IPv4 e uma rota padrão utilizáveis em 60 segundos.");
+            if (networkMode == "lab-router")
+            {
+                // Migrate an older LasecSimul-owned bridge without touching a
+                // bridge administered by the user. The routed mode must own
+                // the TAP directly so Windows can assign 10.42.0.1/16.
+                var oldBridgeGuid = FindBridgeGuid();
+                if (oldBridgeGuid is not null && PreviouslyOwnedBridgeGuid() is string oldOwnedGuid &&
+                    oldOwnedGuid.Equals(oldBridgeGuid, StringComparison.OrdinalIgnoreCase))
+                    RollBackBridge(new BridgeInfo(oldBridgeGuid, true), TapName);
+                ConfigureRoutedTap(TapName, DefaultNetworkNamespace);
+            }
+            else
+            {
+                bridge = ConfigureBridge(physical!.Value, TapName);
+                if (!WaitForUsableHostNetwork(TimeSpan.FromSeconds(60)))
+                    throw new InvalidOperationException(
+                        "A bridge não recuperou um endereço IPv4 e uma rota padrão utilizáveis em 60 segundos.");
+            }
         }
         catch
         {
@@ -296,13 +337,15 @@ internal static class Program
         {
             schemaVersion = 2,
             productVersion = CurrentVersion(),
-            mode = "lab-bridge",
+            mode = networkMode,
             tapInterface = TapName,
-            physicalInterface = physical.Name,
-            physicalIfIndex = physical.IfIndex,
+            physicalInterface = physical?.Name,
+            physicalIfIndex = physical?.IfIndex,
             tapDeviceInstanceId,
-            bridgeGuid = bridge.Value.Guid,
-            bridgeCreatedByLasecSimul = bridge.Value.CreatedByLasecSimul,
+            bridgeGuid = bridge?.Guid,
+            bridgeCreatedByLasecSimul = bridge?.CreatedByLasecSimul ?? false,
+            networkNamespace = DefaultNetworkNamespace,
+            tapAddress = $"10.{DefaultNetworkNamespace}.0.1/16",
             gatewayAddress = "127.0.0.1",
             gatewayPort = GatewayPort,
             driver = "TAP-Windows6 9.27.0",
@@ -422,6 +465,17 @@ internal static class Program
         return result.ExitCode == 0;
     }
 
+    private static string RequestedNetworkMode(string[] args)
+    {
+        var requested = ValueAfter(args, "--network-mode") ??
+                        Environment.GetEnvironmentVariable("LASECSIMUL_NETWORK_MODE") ??
+                        "lab-router";
+        if (!requested.Equals("lab-router", StringComparison.OrdinalIgnoreCase) &&
+            !requested.Equals("lab-bridge", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("--network-mode deve ser 'lab-router' ou 'lab-bridge'.");
+        return requested.ToLowerInvariant();
+    }
+
     private static bool WaitForUsableHostNetwork(TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
@@ -508,6 +562,56 @@ internal static class Program
                 RollBackBridge(new BridgeInfo(bridgeGuid, created), tapName);
             throw;
         }
+    }
+
+    private static void ConfigureRoutedTap(string tapName, int networkNamespace)
+    {
+        if (!TryGetAdapterIfIndex(tapName, out var tapIndex))
+            throw new InvalidOperationException($"Não foi possível obter o ifIndex de '{tapName}'.");
+
+        var tapAddress = $"10.{networkNamespace}.0.1";
+        var prefix = $"10.{networkNamespace}.0.0/16";
+        var tap = PsLiteral(tapName);
+        var firewallIn = PsLiteral("LasecSimul mDNS TAP In");
+        var firewallOut = PsLiteral("LasecSimul mDNS TAP Out");
+        var command =
+            "$ErrorActionPreference='Stop'; " +
+            $"$tap='{tap}'; $ip='{tapAddress}'; " +
+            "if(-not (Get-NetIPAddress -InterfaceAlias $tap -AddressFamily IPv4 -ErrorAction SilentlyContinue | " +
+            "Where-Object {$_.IPAddress -eq $ip})){ New-NetIPAddress -InterfaceAlias $tap -IPAddress $ip -PrefixLength 16 -Type Unicast | Out-Null }; " +
+            "$profile=Get-NetConnectionProfile -InterfaceAlias $tap -ErrorAction SilentlyContinue | Select-Object -First 1; " +
+            "if($profile){ Set-NetConnectionProfile -InterfaceAlias $tap -NetworkCategory Private }; " +
+            $"Set-NetIPInterface -InterfaceIndex {tapIndex} -AddressFamily IPv4 -Forwarding Enabled; " +
+            "$uplinks=Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | " +
+            "Where-Object {$_.ifIndex -ne " + tapIndex + "} | Select-Object -ExpandProperty ifIndex -Unique; " +
+            "foreach($index in $uplinks){Set-NetIPInterface -InterfaceIndex $index -AddressFamily IPv4 -Forwarding Enabled}; " +
+            $"if(-not (Get-NetFirewallRule -DisplayName '{firewallIn}' -ErrorAction SilentlyContinue)){{" +
+            $"New-NetFirewallRule -DisplayName '{firewallIn}' -Direction Inbound -Action Allow -Protocol UDP -LocalPort 5353 -InterfaceAlias $tap -Profile Any | Out-Null}}; " +
+            $"if(-not (Get-NetFirewallRule -DisplayName '{firewallOut}' -ErrorAction SilentlyContinue)){{" +
+            $"New-NetFirewallRule -DisplayName '{firewallOut}' -Direction Outbound -Action Allow -Protocol UDP -LocalPort 5353 -InterfaceAlias $tap -Profile Any | Out-Null}}; " +
+            "$nat=Get-NetNat -Name 'LasecSimulNat' -ErrorAction SilentlyContinue; " +
+            $"if(-not $nat){{try{{New-NetNat -Name 'LasecSimulNat' -InternalIPInterfaceAddressPrefix '{prefix}' | Out-Null}}catch{{Write-Output 'LASECSIMUL_NAT_CONFLICT'}}}} " +
+            $"elseif($nat.InternalIPInterfaceAddressPrefix -ne '{prefix}'){{Write-Output 'LASECSIMUL_NAT_CONFLICT'}}";
+        var result = RunPowerShell(command, true);
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"Falha ao configurar a TAP roteada: {result.Output}");
+        if (result.Output.Contains("LASECSIMUL_NAT_CONFLICT", StringComparison.OrdinalIgnoreCase))
+            Console.WriteLine("Aviso: WinNAT já está ocupado por outra rede (Docker/WSL/Hyper-V); a TAP continua funcional sem NAT. Configure ICS ou libere uma instância WinNAT para habilitar internet na ESP32.");
+        Console.WriteLine($"TAP roteada configurada: {tapName}={tapAddress}/16; namespace={networkNamespace}");
+    }
+
+    private static void RemoveRoutedTap(string tapName, int networkNamespace)
+    {
+        var tap = PsLiteral(tapName);
+        var address = PsLiteral($"10.{networkNamespace}.0.1");
+        var prefix = PsLiteral($"10.{networkNamespace}.0.0/16");
+        var command =
+            $"$a=Get-NetIPAddress -InterfaceAlias '{tap}' -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object {{$_.IPAddress -eq '{address}'}}; " +
+            "if($a){$a | Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue}; " +
+            "Remove-NetFirewallRule -DisplayName 'LasecSimul mDNS TAP In' -ErrorAction SilentlyContinue; " +
+            "Remove-NetFirewallRule -DisplayName 'LasecSimul mDNS TAP Out' -ErrorAction SilentlyContinue; " +
+            $"$nat=Get-NetNat -Name 'LasecSimulNat' -ErrorAction SilentlyContinue; if($nat -and $nat.InternalIPInterfaceAddressPrefix -eq '{prefix}'){{Remove-NetNat -Name 'LasecSimulNat' -Confirm:$false -ErrorAction SilentlyContinue}}";
+        RunPowerShell(command, true);
     }
 
     private static void RollBackBridge(BridgeInfo bridge, string tapName)
@@ -654,6 +758,8 @@ internal static class Program
             catch (Exception ex) { Console.Error.WriteLine($"Aviso: network.json inválido: {ex.Message}"); }
         }
         tapDeviceInstanceId ??= GetAdapterPnpDeviceId(TapName);
+        if (bridgeGuid is null)
+            RemoveRoutedTap(TapName, DefaultNetworkNamespace);
 
         if (!string.IsNullOrWhiteSpace(bridgeGuid))
         {
@@ -720,6 +826,8 @@ internal static class Program
             info.ArgumentList.Add("--quiet");
         var physical = ValueAfter(originalArgs, "--bridge-interface");
         if (physical is not null) { info.ArgumentList.Add("--bridge-interface"); info.ArgumentList.Add(physical); }
+        var networkMode = ValueAfter(originalArgs, "--network-mode");
+        if (networkMode is not null) { info.ArgumentList.Add("--network-mode"); info.ArgumentList.Add(networkMode); }
         using var process = Process.Start(info) ?? throw new InvalidOperationException("Não foi possível iniciar o provisionamento elevado.");
         process.WaitForExit();
         return process.ExitCode;

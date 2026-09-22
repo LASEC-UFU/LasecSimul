@@ -11,6 +11,7 @@
 // e encerrar tudo de volta sem travar nem vazar processo/handle. NÃO prova que o GPIO funciona de
 // ponta a ponta -- isso exige firmware real. Pula (sai com 0) se o binário real do QEMU ou o
 // adapter.dll do plugin não estiverem presentes no caminho esperado.
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <cstdio>
@@ -83,9 +84,9 @@ int main() {
     // This test deliberately exercises the enabled/SLIRP path. Separate launch tests assert that
     // the product default is disabled and contains no -nic.
 #ifdef _WIN32
-    _putenv_s("LASECSIMUL_NETWORK_MODE", "isolated");
+    _putenv_s("LASECSIMUL_NETWORK_MODE", "lab-router");
 #else
-    setenv("LASECSIMUL_NETWORK_MODE", "isolated", 1);
+    setenv("LASECSIMUL_NETWORK_MODE", "lab-router", 1);
 #endif
 
 #ifndef QEMU_REAL_BINARY_PATH
@@ -141,6 +142,13 @@ int main() {
         }
         const QemuLaunchSpec identitySpec = controller.buildLaunchSpec(
             flashPath, arenaName, {}, {}, expectedIdentity);
+        const auto routerNic = std::find_if(
+            identitySpec.args.begin(), identitySpec.args.end(),
+            [](const std::string& argument) {
+                return argument.find("socket,model=open_eth,mac=02:4c:") != std::string::npos;
+            });
+        TEST_ASSERT(routerNic != identitySpec.args.end(),
+                    "lab-router monta o backend socket com MAC OpenETH decodificável pelo gateway");
         TEST_ASSERT(identitySpec.runtimeIdentity.sessionExecutionId == expectedIdentity.sessionExecutionId,
                     "QemuLaunchSpec preserva sessionExecutionId");
         TEST_ASSERT(identitySpec.runtimeIdentity.runtimeInstanceId == expectedIdentity.runtimeInstanceId,
@@ -190,10 +198,10 @@ int main() {
                       "subcase=legacy_gateway_tap_fallback reason=transport_vnext_b\n");
     } else {
 #ifdef _WIN32
-        _putenv_s("LASECSIMUL_NETWORK_MODE", "lab-bridge");
+        _putenv_s("LASECSIMUL_NETWORK_MODE", "lab-router");
         _putenv_s("LASECSIMUL_GATEWAY_PORT", "65534");
 #else
-        setenv("LASECSIMUL_NETWORK_MODE", "lab-bridge", 1);
+        setenv("LASECSIMUL_NETWORK_MODE", "lab-router", 1);
         setenv("LASECSIMUL_GATEWAY_PORT", "65534", 1);
 #endif
         bool fallbackStarted = false;

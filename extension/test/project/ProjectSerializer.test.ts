@@ -54,7 +54,7 @@ import { resolveProjectSourcePaths } from "../../src/project/projectPathPolicy";
     revision: 7,
     nodes: [{ id: "n1", position: { x: 40, y: 24 } }],
     conductors: [
-      { id: "w1", from: { kind: "port", componentId: "a", pinId: "out" }, to: { kind: "node", nodeId: "n1" }, vertices: [] },
+      { id: "w1", from: { kind: "port", componentId: "a", pinId: "out" }, to: { kind: "node", nodeId: "n1" }, vertices: [], lineClass: "process.major" },
       { id: "w2", from: { kind: "node", nodeId: "n1" }, to: { kind: "port", componentId: "b", pinId: "in" }, vertices: [{ x: 60, y: 24 }] },
     ],
   };
@@ -63,6 +63,8 @@ import { resolveProjectSourcePaths } from "../../src/project/projectPathPolicy";
   const junctionFreeRaw = JSON.parse(await fs.readFile(junctionFreePath, "utf8"));
   assert.strictEqual(junctionFreeRaw.components.some((component: { typeId?: string }) => component.typeId === "connectors.junction"), false);
   assert.strictEqual(junctionFreeRaw.topology.nodes[0].id, "n1");
+  const junctionFreeRoundTrip = await serializer.load(junctionFreePath);
+  assert.strictEqual(junctionFreeRoundTrip.topology.conductors[0]?.lineClass, "process.major", "classe de linha IPD deveria sobreviver ao .lsproj");
 
   // Regressão: label/showId/showValue precisam sobreviver a um ciclo save→load (ver Épico E do
   // roadmap de pendências — `validateComponent` já dropou esses campos no passado).

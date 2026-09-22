@@ -148,7 +148,7 @@
       },
       {
         "command": "lasecsimul.network.installMachineSetup",
-        "title": "LasecSimul: Install Network Bridge (TAP Driver)"
+        "title": "LasecSimul: Install Routed Network (TAP Driver)"
       }
     ],
     "customEditors": [
@@ -275,7 +275,7 @@
         },
         "lasecsimul.simulation.absoluteTolerance": {
           "type": "number",
-          "default": 1e-9,
+          "default": 1e-09,
           "exclusiveMinimum": 0
         },
         "lasecsimul.simulation.telemetryRateHz": {
@@ -304,17 +304,18 @@
           "type": "string",
           "enum": [
             "disabled",
-            "lab-bridge",
-            "isolated"
+            "lab-router",
+            "lab-bridge"
           ],
           "enumDescriptions": [
             "Desabilita completamente a rede da ESP32; nenhum dispositivo OpenETH, socket, TAP ou thread de rede é criado.",
+            "Modo recomendado: conecta todas as ESP32 ao segmento roteado da TAP local; oferece acesso do host, mDNS e internet via NAT sem expor MACs na LAN física.",
             "Conecta a OpenETH ao gateway central local, que multiplexa todos os QEMUs sobre uma única TAP ligada à bridge física. Cada ESP32 recebe IP próprio do DHCP real.",
-            "Usa libslirp/NAT dentro do QEMU; funciona sem administrador e mantém cada ESP32 isolada da LAN e das demais instâncias."
+            "Compatibilidade para configurações antigas: o valor `isolated` é migrado automaticamente para `lab-router`."
           ],
           "default": "disabled",
           "scope": "window",
-          "markdownDescription": "Modo de rede da ESP32. `disabled` preserva a emulação sem rede e é o padrão seguro. Se o firmware foi compilado com `CONFIG_ETH_USE_OPENETH=y`, selecione `lab-bridge` (LAN/DHCP real) ou `isolated` (SLIRP/NAT). Recarregue a janela após alterar."
+          "markdownDescription": "Modo de rede da ESP32. `lab-router` é o modo recomendado para firmware com `CONFIG_ETH_USE_OPENETH=y`: a ESP32 compartilha a TAP roteada com o host e acessa a internet por NAT, sem bridge na interface física. `lab-bridge` continua disponível para expor a ESP32 diretamente à LAN. `disabled` permanece o padrão seguro para firmwares sem OpenETH. Projetos/configurações antigas com `isolated` são migrados para `lab-router`. Recarregue a janela após alterar."
         },
         "lasecsimul.network.gatewayPort": {
           "type": "integer",
@@ -330,7 +331,7 @@
           "minimum": -1,
           "maximum": 255,
           "scope": "window",
-          "markdownDescription": "Identificador desta instância/aluno. `-1` seleciona automaticamente; de `0` a `255`, use um valor exclusivo no mesmo domínio de broadcast. No modo `isolated`, forma a rede `10.<namespace>.<instância>.0/24`. No modo `lab-bridge`, namespace e instância geram um MAC local estável `02:4c:<hash-32-bits>`; o IP é entregue pelo DHCP real da LAN. Recarregue a janela após alterar."
+          "markdownDescription": "Identificador desta instância/aluno. `-1` usa o namespace padrão do roteador local (`42`) no modo `lab-router`; de `0` a `255`, use um valor explícito se houver mais de um domínio roteado. O gateway entrega `10.<namespace>.<instância>.15/16` por DHCP. No modo `lab-bridge`, namespace e instância geram um MAC local estável e o IP é entregue pelo DHCP real da LAN. Recarregue a janela após alterar."
         },
         "lasecsimul.ui.showComponentIds": {
           "type": "boolean",
@@ -423,13 +424,18 @@
     "compile": "node scripts/compile.js",
     "watch": "tsc -p ./ -w",
     "watch:webview": "tsc -p ./tsconfig.webview.json -w",
-    "pretest": "npm run compile && tsc -p ./tsconfig.test.json && node out-test/src/core/coreExecutable.test.js && node out-test/src/network/machineNetworkState.test.js && node out-test/src/core/voltageTelemetry.test.js && node out-test/src/core/coreLifecycle.test.js && node out-test/src/ui/webview/wirePresentation.test.js && node out-test/src/ui/webview/dialInteraction.test.js && node out-test/src/lasecplot/manifest.test.js && node out-test/src/lasecplot/broker.test.js && node out-test/src/ui/webview/serialFormat.test.js && node out-test/src/project/savePolicy.test.js && node out-test/src/catalog/catalogGeometryAudit.test.js",
-    "test": "node out-test/test/project/ProjectSerializer.test.js && node out-test/src/ipc/CoreClient.test.js && node out-test/src/uart/CoreUartTransport.test.js && node out-test/src/catalog/UnifiedCatalog.test.js && node out-test/src/catalog/registeredSources.test.js && node out-test/src/catalog/catalogCommands.test.js && node out-test/src/catalog/externalComponents.test.js && node out-test/src/catalog/deviceUniqueness.test.js && node out-test/src/catalog/catalogMerge.test.js && node out-test/src/catalog/simulideGraphicalCatalog.test.js && node out-test/src/language.test.js && node out-test/src/fpga/fpgaPins.test.js && node out-test/src/ui/webview/simulationControls.test.js && node out-test/src/ui/webview/workspace.test.js && node out-test/src/ui/webview/paletteTree.test.js && node out-test/src/ui/webview/contextMenuPosition.test.js && node out-test/src/ui/webview/wireGeometry.test.js && node out-test/src/ui/webview/componentGeometry.test.js && node out-test/src/ui/webview/wireTopology.test.js && node out-test/src/ui/webview/topologyDocument.test.js && node out-test/src/ui/webview/valueFormatting.test.js && node out-test/src/ui/webview/componentSymbols.test.js && node out-test/src/ui/webview/genericSubcircuitPackage.test.js && node out-test/src/ui/webview/componentLabels.test.js && node out-test/src/ui/webview/batchProperties.test.js && node out-test/src/ui/views/hartInspectorSections.test.js && node out-test/src/ui/webview/instrumentTrigger.test.js && node out-test/src/ui/webview/instrumentViewport.test.js && node out-test/src/trust/trustDecision.test.js && node out-test/src/catalog/subcircuitDocument.test.js && node out-test/src/catalog/subcircuitPinModel.test.js && node out-test/src/catalog/subcircuitExposedComponents.test.js && node out-test/src/catalog/subcircuitValidation.test.js && node out-test/src/catalog/subcircuitSymbolScene.test.js && node out-test/src/catalog/subcircuitLibraryLoad.test.js && node out-test/src/catalog/hartSmarDevices.test.js && node out-test/src/tdps/tdpsImporter.test.js && node out-test/src/dsl/DslReconciler.test.js && node out-test/src/dsl/HartCommandDsl.test.js && node out-test/src/core/schematicModel.test.js && node out-test/src/import/simulide/SimulideToLasecConverter.test.js",
-    "posttest": "node out-test/src/plc/iecProject.test.js",
+    "pretest": "npm run compile && tsc -p ./tsconfig.test.json && node out-test/src/core/coreExecutable.test.js && node out-test/src/network/machineNetworkState.test.js && node out-test/src/network/networkMode.test.js && node out-test/src/core/voltageTelemetry.test.js && node out-test/src/core/coreLifecycle.test.js && node out-test/src/ui/webview/wirePresentation.test.js && node out-test/src/ui/webview/dialInteraction.test.js && node out-test/src/lasecplot/manifest.test.js && node out-test/src/lasecplot/broker.test.js && node out-test/src/ui/webview/serialFormat.test.js && node out-test/src/project/savePolicy.test.js && node out-test/src/catalog/catalogGeometryAudit.test.js",
+    "test": "node out-test/test/project/ProjectSerializer.test.js && node out-test/src/ipc/CoreClient.test.js && node out-test/src/uart/CoreUartTransport.test.js && node out-test/src/catalog/UnifiedCatalog.test.js && node out-test/src/catalog/registeredSources.test.js && node out-test/src/catalog/catalogCommands.test.js && node out-test/src/catalog/externalComponents.test.js && node out-test/src/catalog/deviceUniqueness.test.js && node out-test/src/catalog/catalogMerge.test.js && node out-test/src/catalog/simulideGraphicalCatalog.test.js && node out-test/src/language.test.js && node out-test/src/fpga/fpgaPins.test.js && node out-test/src/ui/webview/simulationControls.test.js && node out-test/src/ui/webview/workspace.test.js && node out-test/src/ui/webview/paletteTree.test.js && node out-test/src/ui/webview/graphicsBinding.test.js && node out-test/src/ui/webview/graphicsAction.test.js && node out-test/src/ui/webview/zOrder.test.js && node out-test/src/ui/webview/contextMenuPosition.test.js && node out-test/src/ui/webview/ipdAlignment.test.js && node out-test/src/ui/webview/connectionEngine.test.js && node out-test/src/ui/webview/wireGeometry.test.js && node out-test/src/ui/webview/componentGeometry.test.js && node out-test/src/ui/webview/wireTopology.test.js && node out-test/src/ui/webview/topologyDocument.test.js && node out-test/src/ui/webview/valueFormatting.test.js && node out-test/src/ui/webview/componentSymbols.test.js && node out-test/src/ui/webview/genericSubcircuitPackage.test.js && node out-test/src/ui/webview/componentLabels.test.js && node out-test/src/ui/webview/batchProperties.test.js && node out-test/src/ui/views/hartInspectorSections.test.js && node out-test/src/ui/webview/instrumentTrigger.test.js && node out-test/src/ui/webview/instrumentViewport.test.js && node out-test/src/trust/trustDecision.test.js && node out-test/src/catalog/subcircuitDocument.test.js && node out-test/src/catalog/graphicsLibrary.test.js && node out-test/src/catalog/subcircuitPinModel.test.js && node out-test/src/catalog/subcircuitExposedComponents.test.js && node out-test/src/catalog/subcircuitValidation.test.js && node out-test/src/catalog/subcircuitSymbolScene.test.js && node out-test/src/catalog/subcircuitLibraryLoad.test.js && node out-test/src/catalog/hartSmarDevices.test.js && node out-test/src/tdps/tdpsImporter.test.js && node out-test/src/tdps/tdpsProcessScreens.test.js && node out-test/src/dsl/DslReconciler.test.js && node out-test/src/dsl/graphicsDslRoundTrip.test.js && node out-test/src/dsl/HartCommandDsl.test.js && node out-test/src/core/schematicModel.test.js && node out-test/src/import/simulide/SimulideToLasecConverter.test.js",
+    "posttest": "node out-test/src/ui/webview/ipdKeyboardNavigation.test.js && node out-test/src/ui/webview/ipdVertexClean.test.js && node out-test/src/ui/webview/ipdLineStyle.test.js && node out-test/src/plc/iecProject.test.js",
     "test:tdps-reference": "tsc -p ./tsconfig.test.json && node out-test/src/tdps/tdpsImporter.test.js",
     "test:plc": "tsc -p ./tsconfig.test.json && node out-test/src/plc/iecProject.test.js",
     "test:e2e": "npm run compile && node test/e2e/run-webview-e2e.cjs",
-    "test:e2e:update": "npm run compile && set UPDATE_SNAPSHOTS=1&& node test/e2e/run-webview-e2e.cjs"
+    "test:e2e:update": "npm run compile && set UPDATE_SNAPSHOTS=1&& node test/e2e/run-webview-e2e.cjs",
+    "test:connections:visual": "tsc -p ./tsconfig.test.json && node test/e2e/render-connection-engine.cjs",
+    "test:line-styles:visual": "tsc -p ./tsconfig.test.json && node test/e2e/render-ipd-line-style-gallery.cjs",
+    "test:connections:e2e": "npm run compile && node test/e2e/run-connection-e2e.cjs",
+    "test:connections:performance": "tsc -p ./tsconfig.test.json && node test/performance/benchmark-connection-engine.cjs",
+    "test:hmi:visual": "tsc -p ./tsconfig.test.json && node test/e2e/render-hmi-widget-sheet.cjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

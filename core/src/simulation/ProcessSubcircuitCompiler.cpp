@@ -85,6 +85,14 @@ CompiledProcessSubcircuit ProcessSubcircuitCompiler::compile(
     };
 
     for (const auto& component : definition->components) {
+        // Camada de supervisorio (`graphics.*`): puramente visual, sem nenhuma semantica de sinal.
+        // Ela PROJETA telemetria ja publicada (ver FEAT-008 e `ui/webview/graphicsBinding.ts`) e
+        // nunca participa do grafo -- por isso e' ignorada aqui em vez de cair no
+        // "tipo nao suportado" la embaixo, que existe para pegar bloco de CONTROLE desconhecido.
+        // Do lado da Extension a mesma garantia e' estrutural: `pinCount: 0` impede que a instancia
+        // chegue ao Core (`coreLifecycle.ts::shouldSyncComponentToCore`).
+        if (component.typeId.rfind("graphics.", 0) == 0) continue;
+
         Json properties = Json::parse(component.propertiesJson);
         applyOverrides(properties, component.id, parameterOverrides);
         const uint64_t periodNs = static_cast<uint64_t>(std::max(1.0, number(properties, "samplePeriodNs", 100'000'000.0)));

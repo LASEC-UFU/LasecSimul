@@ -19,12 +19,26 @@ function round(value: number): number {
 }
 
 function transformFor(spec: SimulidePaintSpec, width: number, height: number): PaintTransform {
-  const sx = width / Math.max(1e-9, spec.bounds.w);
-  const sy = height / Math.max(1e-9, spec.bounds.h);
+  const referenceWidth = Math.max(1e-9, spec.referenceSize?.width ?? spec.bounds.w);
+  const referenceHeight = Math.max(1e-9, spec.referenceSize?.height ?? spec.bounds.h);
+  const preserveAspect = spec.aspect === "fixed";
+  const uniformScale = preserveAspect
+    ? Math.min(Math.abs(width) / referenceWidth, Math.abs(height) / referenceHeight)
+    : 1;
+  // A reference size records the symbol's approved default silhouette. It may intentionally have
+  // a different ratio from the raw design coordinates inherited from a stencil/paint routine.
+  const sx = preserveAspect
+    ? (referenceWidth / Math.max(1e-9, spec.bounds.w)) * uniformScale
+    : width / Math.max(1e-9, spec.bounds.w);
+  const sy = preserveAspect
+    ? (referenceHeight / Math.max(1e-9, spec.bounds.h)) * uniformScale
+    : height / Math.max(1e-9, spec.bounds.h);
+  const offsetX = preserveAspect ? (width - referenceWidth * uniformScale) / 2 : 0;
+  const offsetY = preserveAspect ? (height - referenceHeight * uniformScale) / 2 : 0;
   const strokeScale = (Math.abs(sx) + Math.abs(sy)) / 2;
   return {
-    x: (value) => round((value - spec.bounds.x) * sx),
-    y: (value) => round((value - spec.bounds.y) * sy),
+    x: (value) => round(offsetX + (value - spec.bounds.x) * sx),
+    y: (value) => round(offsetY + (value - spec.bounds.y) * sy),
     sx: (value) => round(value * sx),
     sy: (value) => round(value * sy),
     sw: (value) => value === undefined ? undefined : round(value * strokeScale),
@@ -209,9 +223,15 @@ function styleFor(
 ): Partial<PackageShape> {
   const projectedFill = stateFillFor(primitive, properties);
   const projectedStroke = primitive.stateFill?.applyToStroke ? projectedFill : undefined;
+  // A projection used as a dynamic pen must not override an explicitly authored brush. This is
+  // especially important for open P&ID paths (`fill: "none"`): filling them closes the path and
+  // creates large wedges/blobs that do not exist in the vector symbol.
+  const resolvedFill = primitive.stateFill?.applyToStroke && primitive.fill !== undefined
+    ? primitive.fill
+    : projectedFill ?? (gradientId ? `url(#${gradientId})` : primitive.fill ?? spec.defaultFill ?? "none");
   return {
     stroke: projectedStroke ?? primitive.stroke ?? spec.defaultStroke ?? "currentColor",
-    fill: projectedFill ?? (gradientId ? `url(#${gradientId})` : primitive.fill ?? spec.defaultFill ?? "none"),
+    fill: resolvedFill,
     strokeWidth: transform.sw(primitive.strokeWidth ?? spec.defaultStrokeWidth ?? 1),
     strokeLinecap: primitive.strokeLinecap,
     strokeLinejoin: primitive.strokeLinejoin,
@@ -400,7 +420,12 @@ export function simulidePaintToPackageShapes(
           fontSize: activeTransform.sw(numericValue(primitive.fontSize, properties, context, 11)),
           textAnchor: primitive.textAnchor,
           dominantBaseline: primitive.dominantBaseline,
-          color: primitive.fill ?? primitive.stroke ?? spec.defaultStroke ?? "currentColor",
+          // Texto é a Única primitiva cuja cor sai por `color` (e não por `fill`, ver
+          // `componentSymbols.ts::packageShapeSvg`), então o `stateFill` já resolvido por `styleFor`
+          // precisa ser aplicado aqui explicitamente -- sem isto, cor de texto vinda de propriedade
+          // (`stateFill.raw`) ou de estado (`map`/`numeric`) era silenciosamente ignorada, enquanto
+          // funcionava em rect/ellipse/path. Sem `stateFill` o resultado é exatamente o de antes.
+          color: stateFillFor(primitive, properties) ?? primitive.fill ?? primitive.stroke ?? spec.defaultStroke ?? "currentColor",
           fontFamily: primitive.fontFamily,
           fontWeight: primitive.fontWeight,
           ...style,

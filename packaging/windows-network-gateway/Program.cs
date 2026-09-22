@@ -98,9 +98,19 @@ internal static class Program
         await WriteQemuFrame(a.GetStream(), frame);
         var received = await ReadQemuFrame(b.GetStream()).WaitAsync(TimeSpan.FromSeconds(3));
         var passed = frame.SequenceEqual(received);
+        var dhcpDiscover = BuildDhcpDiscoverForSelfTest();
+        var dhcpReply = TryBuildDhcpReply(dhcpDiscover, out var dhcpResponse);
+        var dhcpPassed = dhcpReply &&
+                         dhcpResponse.Length >= 14 + 20 + 8 + 240 &&
+                         dhcpResponse[14 + 20 + 8 + 16] == 10 &&
+                         dhcpResponse[14 + 20 + 8 + 17] == 42 &&
+                         dhcpResponse[14 + 20 + 8 + 18] == 7 &&
+                         dhcpResponse[14 + 20 + 8 + 19] == 15;
         a.Dispose(); b.Dispose(); listener.Stop();
-        Console.WriteLine(passed ? "SELF-TEST OK: framing QEMU e switch multi-cliente" : "SELF-TEST FALHOU");
-        return passed ? 0 : 1;
+        Console.WriteLine(passed && dhcpPassed
+            ? "SELF-TEST OK: framing QEMU, switch multi-cliente e DHCP lab-router"
+            : "SELF-TEST FALHOU");
+        return passed && dhcpPassed ? 0 : 1;
     }
 
     private static async Task WriteQemuFrame(Stream stream, byte[] frame)
@@ -193,6 +203,15 @@ internal static class Program
         var destinationMac = Mac(frame, 0);
         MacTable[sourceMac] = source;
 
+        // DHCP crosses the QEMU socket/TAP boundary at layer 3. Intercepting it
+        // here avoids binding UDP/67 on the Windows host and lets every client
+        // receive the deterministic address encoded by its OpenETH MAC.
+        if (TryBuildDhcpReply(frame, out var dhcpReply))
+        {
+            await source.Send(dhcpReply);
+            return;
+        }
+
         QemuClient? target = null;
         var localDestination = !IsGroup(frame[0]) && MacTable.TryGetValue(destinationMac, out target);
         if (localDestination && target is not null && !ReferenceEquals(target, source))
@@ -240,6 +259,172 @@ internal static class Program
     }
 
     private static bool IsGroup(byte firstOctet) => (firstOctet & 1) != 0;
+
+    private static bool TryBuildDhcpReply(byte[] frame, out byte[] reply)
+    {
+        reply = Array.Empty<byte>();
+        if (frame.Length < 14 + 20 + 8 + 240 ||
+            frame[12] != 0x08 || frame[13] != 0x00 ||
+            frame[6] != 0x02 || frame[7] != 0x4c)
+            return false;
+
+        var ip = 14;
+        var versionAndIhl = frame[ip];
+        var ipHeaderLength = (versionAndIhl & 0x0f) * 4;
+        if ((versionAndIhl >> 4) != 4 || ipHeaderLength < 20 || frame.Length < ip + ipHeaderLength + 8)
+            return false;
+        if (frame[ip + 9] != 17) return false; // UDP
+
+        var udp = ip + ipHeaderLength;
+        if (ReadUInt16(frame, udp) != 68 || ReadUInt16(frame, udp + 2) != 67)
+            return false;
+        var udpLength = ReadUInt16(frame, udp + 4);
+        if (udpLength < 8 + 240 || udp + udpLength > frame.Length)
+            return false;
+
+        var bootp = udp + 8;
+        if (frame[bootp] != 1 || frame[bootp + 1] != 1 || frame[bootp + 2] != 6)
+            return false;
+        if (frame[bootp + 236] != 0x63 || frame[bootp + 237] != 0x82 ||
+            frame[bootp + 238] != 0x53 || frame[bootp + 239] != 0x63)
+            return false;
+        if (Mac(frame, 6) != ReadMac(frame, bootp + 28)) return false;
+
+        var messageType = ReadDhcpMessageType(frame, bootp + 240, udp + udpLength);
+        if (messageType is not (1 or 3)) return false; // DISCOVER or REQUEST
+
+        var networkNamespace = frame[8];
+        var slot = frame[9];
+        var yiaddr = new byte[] { 10, networkNamespace, slot, 15 };
+        var gateway = new byte[] { 10, networkNamespace, 0, 1 };
+        var broadcast = (ReadUInt16(frame, bootp + 10) & 0x8000) != 0 || messageType == 1;
+        var destinationMac = broadcast ? new byte[] { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } : frame[6..12];
+        var gatewayMac = new byte[] { 0x02, 0x4c, networkNamespace, 0xff, 0xff, 0x01 };
+
+        var options = new List<byte>();
+        AddDhcpOption(options, 53, new[] { (byte)(messageType == 1 ? 2 : 5) });
+        AddDhcpOption(options, 54, gateway);
+        AddDhcpOption(options, 51, new byte[] { 0, 1, 0, 0 }); // 65536 seconds
+        AddDhcpOption(options, 1, new byte[] { 255, 255, 0, 0 });
+        AddDhcpOption(options, 3, gateway);
+        AddDhcpOption(options, 6, gateway);
+        options.Add(255);
+
+        var payloadLength = 240 + options.Count;
+        var ipLength = 20;
+        var udpLengthOut = 8 + payloadLength;
+        reply = new byte[14 + ipLength + udpLengthOut];
+        destinationMac.CopyTo(reply, 0);
+        gatewayMac.CopyTo(reply, 6);
+        reply[12] = 0x08; reply[13] = 0x00;
+
+        var outputIp = 14;
+        reply[outputIp] = 0x45;
+        reply[outputIp + 8] = 64;
+        reply[outputIp + 9] = 17;
+        WriteUInt16(reply, outputIp + 2, (ushort)(ipLength + udpLengthOut));
+        gateway.CopyTo(reply, outputIp + 12);
+        (broadcast ? new byte[] { 255, 255, 255, 255 } : yiaddr).CopyTo(reply, outputIp + 16);
+        WriteUInt16(reply, outputIp + 10, InternetChecksum(reply, outputIp, ipLength));
+
+        var outputUdp = outputIp + ipLength;
+        WriteUInt16(reply, outputUdp, 67);
+        WriteUInt16(reply, outputUdp + 2, 68);
+        WriteUInt16(reply, outputUdp + 4, (ushort)udpLengthOut);
+
+        var outputBootp = outputUdp + 8;
+        reply[outputBootp] = 2;
+        reply[outputBootp + 1] = 1;
+        reply[outputBootp + 2] = 6;
+        Array.Copy(frame, bootp + 4, reply, outputBootp + 4, 8); // xid, secs, flags
+        yiaddr.CopyTo(reply, outputBootp + 16);
+        Array.Copy(frame, bootp + 28, reply, outputBootp + 28, 16); // chaddr + padding
+        reply[outputBootp + 236] = 0x63;
+        reply[outputBootp + 237] = 0x82;
+        reply[outputBootp + 238] = 0x53;
+        reply[outputBootp + 239] = 0x63;
+        options.CopyTo(reply, outputBootp + 240);
+        WriteUInt16(reply, outputUdp + 6, UdpChecksum(reply, outputIp, outputUdp, udpLengthOut));
+        return true;
+    }
+
+    private static byte[] BuildDhcpDiscoverForSelfTest()
+    {
+        var clientMac = new byte[] { 0x02, 0x4c, 42, 7, 0xaa, 0x55 };
+        var payload = new byte[240 + 3 + 1];
+        payload[0] = 1; payload[1] = 1; payload[2] = 6;
+        payload[4] = 0x12; payload[5] = 0x34; payload[6] = 0x56; payload[7] = 0x78;
+        clientMac.CopyTo(payload, 28);
+        payload[236] = 0x63; payload[237] = 0x82; payload[238] = 0x53; payload[239] = 0x63;
+        payload[240] = 53; payload[241] = 1; payload[242] = 1; payload[243] = 255;
+        var frame = new byte[14 + 20 + 8 + payload.Length];
+        Array.Fill<byte>(frame, 0xff, 0, 6);
+        clientMac.CopyTo(frame, 6);
+        frame[12] = 0x08; frame[13] = 0x00;
+        var ip = 14; frame[ip] = 0x45; frame[ip + 8] = 64; frame[ip + 9] = 17;
+        WriteUInt16(frame, ip + 2, (ushort)(20 + 8 + payload.Length));
+        WriteUInt16(frame, ip + 10, InternetChecksum(frame, ip, 20));
+        var udp = ip + 20; WriteUInt16(frame, udp, 68); WriteUInt16(frame, udp + 2, 67);
+        WriteUInt16(frame, udp + 4, (ushort)(8 + payload.Length));
+        payload.CopyTo(frame, udp + 8);
+        return frame;
+    }
+
+    private static int ReadDhcpMessageType(byte[] frame, int offset, int end)
+    {
+        while (offset < end)
+        {
+            var tag = frame[offset++];
+            if (tag == 255) break;
+            if (tag == 0) continue;
+            if (offset >= end) return 0;
+            var length = frame[offset++];
+            if (offset + length > end) return 0;
+            if (tag == 53 && length == 1) return frame[offset];
+            offset += length;
+        }
+        return 0;
+    }
+
+    private static void AddDhcpOption(List<byte> options, byte tag, byte[] value)
+    {
+        options.Add(tag); options.Add((byte)value.Length); options.AddRange(value);
+    }
+
+    private static ulong ReadMac(byte[] bytes, int offset) =>
+        ((ulong)bytes[offset] << 40) | ((ulong)bytes[offset + 1] << 32) |
+        ((ulong)bytes[offset + 2] << 24) | ((ulong)bytes[offset + 3] << 16) |
+        ((ulong)bytes[offset + 4] << 8) | bytes[offset + 5];
+
+    private static ushort ReadUInt16(byte[] bytes, int offset) =>
+        (ushort)((bytes[offset] << 8) | bytes[offset + 1]);
+
+    private static void WriteUInt16(byte[] bytes, int offset, ushort value)
+    {
+        bytes[offset] = (byte)(value >> 8); bytes[offset + 1] = (byte)value;
+    }
+
+    private static ushort InternetChecksum(byte[] bytes, int offset, int length)
+    {
+        uint sum = 0;
+        for (var index = 0; index < length - 1; index += 2) sum += ReadUInt16(bytes, offset + index);
+        if ((length & 1) != 0) sum += (uint)(bytes[offset + length - 1] << 8);
+        while ((sum >> 16) != 0) sum = (sum & 0xffff) + (sum >> 16);
+        return (ushort)~sum;
+    }
+
+    private static ushort UdpChecksum(byte[] bytes, int ipOffset, int udpOffset, int udpLength)
+    {
+        uint sum = 0;
+        for (var index = 12; index < 20; index += 2) sum += ReadUInt16(bytes, ipOffset + index);
+        sum += 17;
+        sum += (uint)udpLength;
+        for (var index = 0; index < udpLength - 1; index += 2) sum += ReadUInt16(bytes, udpOffset + index);
+        if ((udpLength & 1) != 0) sum += (uint)(bytes[udpOffset + udpLength - 1] << 8);
+        while ((sum >> 16) != 0) sum = (sum & 0xffff) + (sum >> 16);
+        var checksum = (ushort)~sum;
+        return checksum == 0 ? (ushort)0xffff : checksum;
+    }
 
     private static async Task ReadExactly(Stream stream, byte[] buffer)
     {

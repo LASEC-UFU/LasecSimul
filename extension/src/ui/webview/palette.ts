@@ -101,11 +101,16 @@ function renderWorkspaceTabIcon(tabSection: WorkspaceSection): SVGSVGElement {
     case "digital":
       svg.innerHTML = '<path d="M2 16h4V8h4v8h4V8h4v8h4"></path>';
       break;
+    // Controle: resposta ao degrau com overshoot assentando no setpoint (tracejado) -- o par
+    // Analogico(senoide)/Digital(onda quadrada) ja usa a forma de onda como identidade da aba, e
+    // estas duas seguem a mesma linguagem em vez dos simbolos genericos anteriores (seta circular
+    // e erlenmeyer, que nao diziam nada sobre malha de controle nem sobre planta industrial).
     case "control":
-      svg.innerHTML = '<path d="M18 8a7 7 0 1 0 1 5"></path><path d="M19 3v5h-5"></path><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"></circle>';
+      svg.innerHTML = '<path d="M3 9h18" stroke-dasharray="2.5 2.5" opacity="0.6"></path><path d="M3 19h3c3 0 2-15 6-15 3 0 2 9 5 9h4"></path>';
       break;
+    // Processo: tanque com nivel e tubulacao de entrada/saida (leitura P&ID de planta).
     case "process":
-      svg.innerHTML = '<path d="M6 3h12"></path><path d="M7 3v15a5 5 0 0 0 5 5a5 5 0 0 0 5-5V3"></path><path d="M7 14h10"></path>';
+      svg.innerHTML = '<path d="M12 2v6"></path><rect x="5" y="8" width="13" height="12" rx="1.5"></rect><path d="M5 13h13"></path><path d="M18 17h4"></path>';
       break;
     case "misc":
       svg.innerHTML = '<circle cx="5" cy="12" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="19" cy="12" r="1.8" fill="currentColor" stroke="none"></circle>';

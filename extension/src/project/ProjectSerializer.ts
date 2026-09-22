@@ -13,6 +13,7 @@ import {
   ProjectWire,
   createEmptyProject,
 } from "./ProjectTypes";
+import { isIpdLineClass } from "../ui/webview/ipdLineStyle";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -208,7 +209,14 @@ function validateTopology(value: unknown, componentIds: ReadonlySet<string>): Pr
       if (endpoint.kind === "node" && !nodeIds.has(endpoint.nodeId)) throw new Error(`conductor ${id} referencia nó inexistente`);
       if (endpoint.kind === "port" && !componentIds.has(endpoint.componentId)) throw new Error(`conductor ${id} referencia componente inexistente`);
     }
-    return { id, from, to, vertices, hidden: entry.hidden === true };
+    return {
+      id,
+      from,
+      to,
+      vertices,
+      hidden: entry.hidden === true,
+      ...(isIpdLineClass(entry.lineClass) ? { lineClass: entry.lineClass } : {}),
+    };
   }) : [];
   if (new Set(conductors.map((c) => c.id)).size !== conductors.length) throw new Error("topology contém condutores duplicados");
   return { revision: asNumber(value.revision) ?? 0, nodes, conductors };

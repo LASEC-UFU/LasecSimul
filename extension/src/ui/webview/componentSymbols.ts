@@ -372,11 +372,29 @@ export type PackageVariant = "board";
  * (guarda mais frouxa que `pkg`/`logicSymbolPkg`) -- ao contrário do esquemático, o Modo Placa nunca
  * desenha fio/terminal, então uma aparência puramente decorativa (0 pinos) é o caso normal, não uma
  * entrada malformada. */
+/** Um package de esquemático com ZERO pino só é legítimo quando ele existe pra DESENHAR alguma
+ * coisa -- é o caso dos símbolos de supervisório (`graphics.*`, ver
+ * `docs/44-biblioteca-grafica-supervisorio-fase0.md`), que são puramente visuais e por isso nascem
+ * com `pinCount: 0` (o que também os mantém fora do Core, ver
+ * `coreLifecycle.ts::shouldSyncComponentToCore`). Sem conteúdo desenhável E sem pino, o descriptor
+ * é malformado (device pela metade) e continua sendo descartado como sempre -- o fallback genérico
+ * de `componentSymbolSvg` desenha melhor do que uma caixa vazia registrada. Verificado ao
+ * introduzir esta condição: nenhum item do catálogo tinha package sem pino, então ela não muda
+ * NENHUM símbolo existente. */
+function packageHasDrawableContent(pkg: PackageDescriptor): boolean {
+  return Boolean(pkg.simulidePaint?.primitives?.length || pkg.shapes?.length || pkg.viewSpec?.paint?.length
+    || (pkg.background && pkg.background.kind !== "none"));
+}
+
+function packageIsRegistrable(pkg: PackageDescriptor): boolean {
+  return pkg.pins.length > 0 || Boolean(pkg.dynamicLayout?.pinGroups?.length) || packageHasDrawableContent(pkg);
+}
+
 export function registerPackage(typeId: string, pkg: PackageDescriptor | undefined, logicSymbolPkg?: PackageDescriptor, boardPkg?: PackageDescriptor): void {
-  if (pkg && (pkg.pins.length > 0 || pkg.dynamicLayout?.pinGroups?.length)) PACKAGE_BY_TYPE_ID.set(typeId, pkg);
+  if (pkg && packageIsRegistrable(pkg)) PACKAGE_BY_TYPE_ID.set(typeId, pkg);
   else PACKAGE_BY_TYPE_ID.delete(typeId);
 
-  if (logicSymbolPkg && (logicSymbolPkg.pins.length > 0 || logicSymbolPkg.dynamicLayout?.pinGroups?.length)) LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID.set(typeId, logicSymbolPkg);
+  if (logicSymbolPkg && packageIsRegistrable(logicSymbolPkg)) LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID.set(typeId, logicSymbolPkg);
   else LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID.delete(typeId);
 
   if (boardPkg) BOARD_PACKAGE_BY_TYPE_ID.set(typeId, boardPkg);
@@ -1620,12 +1638,12 @@ function packageBodySvg(resolved: ResolvedPackage, componentId?: string, propert
     markup += simulideQtWidgetSvg(pkg.qtWidget, effectiveProperties, scopeId);
   } else if (hasViewSpec && pkg.viewSpec?.overlayPaint === true && (pkg.shapes?.length ?? 0) > 0) {
     // Migração incremental: preserva o corpo legado e sobrepõe somente o widget/interação nova.
-    for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape, undefined, effectiveProperties, { width: pkg.width, height: pkg.height });
+    for (const shape of pkg.shapes ?? []) { if (!stateVisibleMatches(shape.stateVisible, effectiveProperties)) continue; markup += packageShapeSvg(shape, undefined, effectiveProperties, { width: pkg.width, height: pkg.height }); }
     markup += viewSpecBodySvg(pkg, componentId!, effectiveProperties, true) ?? "";
   } else if (hasViewSpec) {
     markup += viewSpecBodySvg(pkg, componentId!, effectiveProperties) ?? "";
   } else {
-    for (const shape of pkg.shapes ?? []) markup += packageShapeSvg(shape, undefined, effectiveProperties, { width: pkg.width, height: pkg.height });
+    for (const shape of pkg.shapes ?? []) { if (!stateVisibleMatches(shape.stateVisible, effectiveProperties)) continue; markup += packageShapeSvg(shape, undefined, effectiveProperties, { width: pkg.width, height: pkg.height }); }
   }
   if (hasViewSpec && (pkg.simulidePaint || pkg.qtWidget)) {
     markup += viewSpecBodySvg(pkg, componentId!, effectiveProperties, pkg.viewSpec?.overlayPaint === true) ?? "";

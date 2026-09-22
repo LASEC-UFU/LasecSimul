@@ -68,14 +68,21 @@ unsigned automaticNetworkNamespace(std::string_view arenaName) {
 
 std::string openEthMacAddress(unsigned networkNamespace, unsigned componentSlot,
                               std::string_view arenaName) {
+    // lab-router needs to recover the namespace and slot from an Ethernet frame so
+    // that its in-process DHCP server can assign a deterministic address without a
+    // lease database. Keep the locally-administered prefix and reserve bytes 2/3
+    // for the two routing coordinates; only the low 16 bits remain an identity
+    // discriminator. The arena name is still part of the hash when no explicit
+    // namespace was supplied, preserving uniqueness between automatically named
+    // instances while keeping the routing bytes stable.
     const std::string stableIdentity = configuredNetworkNamespace().has_value()
         ? std::to_string(networkNamespace) + ":" + std::to_string(componentSlot)
         : std::string(arenaName);
-    const uint32_t identityHash = fnv1a(stableIdentity);
+    const uint16_t identityHash = static_cast<uint16_t>(fnv1a(stableIdentity) & 0xffffu);
     std::ostringstream mac;
     mac << std::hex << std::setfill('0')
-        << "02:4c:" << std::setw(2) << ((identityHash >> 24u) & 0xffu)
-        << ':' << std::setw(2) << ((identityHash >> 16u) & 0xffu)
+        << "02:4c:" << std::setw(2) << (networkNamespace & 0xffu)
+        << ':' << std::setw(2) << (componentSlot & 0xffu)
         << ':' << std::setw(2) << ((identityHash >> 8u) & 0xffu)
         << ':' << std::setw(2) << (identityHash & 0xffu);
     return mac.str();
@@ -151,11 +158,25 @@ std::string labBridgeOpenEthArgument(std::string_view arenaName) {
            ",connect=127.0.0.1:" + std::to_string(gatewayPort);
 }
 
+std::string labRouterOpenEthArgument(std::string_view arenaName) {
+    // Both routed and bridged lab modes use the QEMU socket backend. The
+    // distinction is entirely on the host side: lab-router terminates the
+    // segment on a routed TAP instead of attaching it to the physical LAN.
+    // 42 is the machine-wide default provisioned by the Windows setup. Users
+    // running more than one routed domain select another value explicitly via
+    // LASECSIMUL_NETWORK_NAMESPACE.
+    constexpr unsigned kDefaultRoutedNamespace = 42;
+    const unsigned networkNamespace = configuredNetworkNamespace().value_or(kDefaultRoutedNamespace);
+    const unsigned componentSlot = componentNetworkSlot(arenaName);
+    return "socket,model=open_eth,mac=" + openEthMacAddress(networkNamespace, componentSlot, arenaName) +
+           ",connect=127.0.0.1:" + std::to_string(configuredGatewayPort());
+}
+
 void configureNetwork(QemuLaunchSpec& spec, std::string_view arenaName) {
     const std::string mode = environmentValue("LASECSIMUL_NETWORK_MODE", "disabled");
-    if (mode != "disabled" && mode != "lab-bridge" && mode != "isolated") {
+    if (mode != "disabled" && mode != "lab-router" && mode != "lab-bridge" && mode != "isolated") {
         throw std::invalid_argument(
-            "LASECSIMUL_NETWORK_MODE must be 'disabled', 'lab-bridge' or 'isolated'");
+            "LASECSIMUL_NETWORK_MODE must be 'disabled', 'lab-router', 'lab-bridge' or 'isolated'");
     }
 
     // Rede e' opt-in. O adapter descreve apenas CPU/maquina/flash; assim um Blink sem rede
@@ -169,6 +190,7 @@ void configureNetwork(QemuLaunchSpec& spec, std::string_view arenaName) {
 
     spec.args.push_back("-nic");
     spec.args.push_back(mode == "lab-bridge" ? labBridgeOpenEthArgument(arenaName)
+                      : mode == "lab-router" ? labRouterOpenEthArgument(arenaName)
                                                : isolatedOpenEthArgument(arenaName));
     spec.diagnostics += "[LasecSimul] network=" + mode + "; OpenETH backend enabled\n";
 }
@@ -438,7 +460,8 @@ void McuController::start(const std::filesystem::path& firmwarePath, const std::
     // O backend socket legado do QEMU encerra qemu_init() quando connect() recebe ECONNREFUSED.
     // Detecte antes de criar a CPU e degrade para SLIRP: firmware OpenETH continua tendo a mesma
     // NIC/MMIO, enquanto um gateway/TAP ausente nunca derruba GPIO, timers ou o processo inteiro.
-    if (environmentValue("LASECSIMUL_NETWORK_MODE", "disabled") == "lab-bridge" &&
+    const std::string networkMode = environmentValue("LASECSIMUL_NETWORK_MODE", "disabled");
+    if ((networkMode == "lab-bridge" || networkMode == "lab-router") &&
         !gatewayAcceptingConnections(configuredGatewayPort())) {
         for (std::string& arg : spec.args) {
             if (arg.find("socket,model=open_eth") != std::string::npos) {
