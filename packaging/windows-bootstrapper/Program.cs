@@ -25,6 +25,8 @@ internal static class Program
     {
         try
         {
+            if (args.Contains("--provision-network", StringComparer.OrdinalIgnoreCase))
+                ResetSetupLog(args);
             if (args.Contains("--verify-payload", StringComparer.OrdinalIgnoreCase))
                 return VerifyPayload();
             if (args.Contains("--machine-status", StringComparer.OrdinalIgnoreCase))
@@ -88,6 +90,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
+            AppendSetupLog($"FALHA: {ex}");
             Console.Error.WriteLine($"Falha no instalador: {ex.Message}");
             return 1;
         }
@@ -286,8 +289,11 @@ internal static class Program
         if (driverInstall.ExitCode is not (0 or 259 or 3010))
             throw new InvalidOperationException($"pnputil falhou ({driverInstall.ExitCode}): {driverInstall.Output}");
         if (driverInstall.ExitCode == 259)
+        {
+            AppendSetupLog("pnputil retornou 259: o pacote do driver TAP ja estava instalado; continuando para a etapa do adaptador.");
             Console.WriteLine("O driver TAP já estava instalado e atualizado; continuando a reparação.");
 
+        }
         var tapExistedBeforeProvisioning = !string.IsNullOrWhiteSpace(GetAdapterPnpDeviceId(TapName));
         var tapDeviceInstanceId = EnsureTapAdapter(infPath, devconPath, TapName);
         BridgeInfo? bridge = null;
@@ -375,9 +381,12 @@ internal static class Program
             Thread.Sleep(500);
         }
         if (string.IsNullOrWhiteSpace(createdId))
+        {
+            AppendSetupLog($"DevCon nao criou um novo adaptador TAP; dispositivos TAP antes={previousIds.Count}; saida={install.Output.Trim()}");
             throw new InvalidOperationException(
                 $"O DevCon concluiu, mas o novo adaptador TAP não apareceu. Saída: {install.Output.Trim()}");
 
+        }
         try
         {
             var id = PsLiteral(createdId);
@@ -808,6 +817,30 @@ internal static class Program
     private static string MachineProgramDataDirectory() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "LasecSimul");
 
+    private static string SetupLogPath() => Path.Combine(MachineProgramDataDirectory(), "setup.log");
+
+    private static void ResetSetupLog(string[] args)
+    {
+        try
+        {
+            var path = SetupLogPath();
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, $"{DateTimeOffset.Now:O} BEGIN: {string.Join(" ", args)}{Environment.NewLine}");
+        }
+        catch { }
+    }
+
+    private static void AppendSetupLog(string message)
+    {
+        try
+        {
+            var path = SetupLogPath();
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.AppendAllText(path, $"{DateTimeOffset.Now:O} {message}{Environment.NewLine}");
+        }
+        catch { }
+    }
+
     private static string CurrentVersion() =>
         Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 
@@ -841,10 +874,12 @@ internal static class Program
     private static CommandResult Run(string executable, IEnumerable<string> arguments, bool capture, bool acceptFailure = false)
     {
         var info = new ProcessStartInfo { FileName = executable, UseShellExecute = false, RedirectStandardOutput = capture, RedirectStandardError = capture, CreateNoWindow = capture };
-        foreach (var argument in arguments) info.ArgumentList.Add(argument);
+        var argumentList = arguments.ToArray();
+        foreach (var argument in argumentList) info.ArgumentList.Add(argument);
         using var process = Process.Start(info) ?? throw new InvalidOperationException($"Não foi possível iniciar {executable}.");
         var output = capture ? process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd() : string.Empty;
         process.WaitForExit();
+        AppendSetupLog($"COMMAND: {executable} {string.Join(" ", argumentList)}; exit={process.ExitCode}{Environment.NewLine}{output.Trim()}");
         if (!acceptFailure && process.ExitCode != 0 && !capture) throw new InvalidOperationException($"{executable} falhou com código {process.ExitCode}.");
         return new CommandResult(process.ExitCode, output);
     }

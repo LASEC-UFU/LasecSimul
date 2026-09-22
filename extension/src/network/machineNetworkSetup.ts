@@ -42,6 +42,19 @@ function machineProgramDataConfigPath(): string {
   return path.join(process.env.ProgramData ?? "C:\\ProgramData", "LasecSimul", "network.json");
 }
 
+function machineProgramDataSetupLogPath(): string {
+  return path.join(process.env.ProgramData ?? "C:\\ProgramData", "LasecSimul", "setup.log");
+}
+
+function readMachineSetupLogTail(maxCharacters = 12000): string {
+  try {
+    const log = fs.readFileSync(machineProgramDataSetupLogPath(), "utf8").trim();
+    return log.length > maxCharacters ? log.slice(-maxCharacters) : log;
+  } catch {
+    return "";
+  }
+}
+
 /** Checagem leve (sem elevação, sem `netsh`/`schtasks`) só pra decidir se vale a pena OFERECER a
  * instalação -- não substitui a verificação completa que `LasecSimul.Setup.exe --machine-status` faz
  * (TAP, bridge, tarefa agendada, registro). Desde a v0.0.14 exige também a versão exata do produto:
@@ -226,6 +239,13 @@ async function installMachineNetworkInfra(context: vscode.ExtensionContext, vers
         );
       }
       if (result.code !== 0) {
+        const setupLog = readMachineSetupLogTail();
+        if (setupLog) {
+          result.stderr = [
+            result.stderr,
+            `Diagnóstico do instalador (${machineProgramDataSetupLogPath()}):\n${setupLog}`,
+          ].filter(Boolean).join("\n");
+        }
         throw new Error(result.stderr || `LasecSimul.Setup.exe --provision-network retornou código ${result.code}.`);
       }
       logSimulation(
