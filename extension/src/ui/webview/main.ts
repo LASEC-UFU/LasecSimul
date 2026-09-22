@@ -1,6 +1,6 @@
 import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
 import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PackagePin, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
-import { reorderedZOrder, zOrderModeForKey, type ZOrderMode } from "./zOrder";
+import { reorderedZOrder, zOrderModeForKey, type ZOrderMode } from "./zOrder.js";
 import { graphicalRuntimeProperties, isGraphicalTypeId } from "./graphicsBinding.js";
 import { GraphicalActionPhase, GraphicalActionValue, graphicalActionConfig, isGraphicalActionTypeId, resolveGraphicalActionValue } from "./graphicsAction.js";
 import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage, resolvedPackageFor, runtimeSurfaceImageHref } from "./componentSymbols.js";
@@ -76,24 +76,47 @@ function createEmptyState(): WebviewProjectState {
  * `selectedComponentId?: string` singular, não array) — sem normalizar, `.includes()`/`.filter()`
  * num `undefined` quebraria na primeira interação. Migração unidirecional, sem perda de dados real
  * (seleção não é algo que precise sobreviver a uma atualização da extensão). */
-function normalizeProjectState(raw: WebviewProjectState): WebviewProjectState {
-  const legacy = raw as WebviewProjectState & { selectedComponentId?: string; selectedWireId?: string };
+function normalizeProjectState(raw: unknown): WebviewProjectState {
+  const candidate = raw && typeof raw === "object"
+    ? raw as Partial<WebviewProjectState> & { selectedComponentId?: string; selectedWireId?: string }
+    : {};
+  const legacy = candidate;
+  const topology = candidate.topology && typeof candidate.topology === "object"
+    ? candidate.topology as Partial<WebviewProjectState["topology"]>
+    : {} as Partial<WebviewProjectState["topology"]>;
+  const viewport = candidate.viewport && typeof candidate.viewport === "object"
+    ? candidate.viewport as Partial<WebviewProjectState["viewport"]>
+    : {} as Partial<WebviewProjectState["viewport"]>;
   return {
-    ...raw,
-    selectedComponentIds: Array.isArray(raw.selectedComponentIds)
-      ? raw.selectedComponentIds
+    ...createEmptyState(),
+    ...candidate,
+    locale: candidate.locale === "en" ? "en" : "pt-BR",
+    catalog: Array.isArray(candidate.catalog) ? candidate.catalog : [],
+    components: Array.isArray(candidate.components) ? candidate.components : [],
+    topology: {
+      revision: typeof topology.revision === "number" ? topology.revision : 0,
+      nodes: Array.isArray(topology.nodes) ? topology.nodes : [],
+      conductors: Array.isArray(topology.conductors) ? topology.conductors : [],
+    },
+    viewport: {
+      x: typeof viewport.x === "number" ? viewport.x : 0,
+      y: typeof viewport.y === "number" ? viewport.y : 0,
+      zoom: typeof viewport.zoom === "number" && viewport.zoom > 0 ? viewport.zoom : 1,
+    },
+    selectedComponentIds: Array.isArray(candidate.selectedComponentIds)
+      ? candidate.selectedComponentIds
       : legacy.selectedComponentId
         ? [legacy.selectedComponentId]
         : [],
-    selectedWireIds: Array.isArray(raw.selectedWireIds)
-      ? raw.selectedWireIds
+    selectedWireIds: Array.isArray(candidate.selectedWireIds)
+      ? candidate.selectedWireIds
       : legacy.selectedWireId
         ? [legacy.selectedWireId]
         : [],
-    symbolElements: Array.isArray(raw.symbolElements) ? raw.symbolElements : [],
-    iconElements: Array.isArray(raw.iconElements) ? raw.iconElements : [],
-    exposedComponents: Array.isArray(raw.exposedComponents) ? raw.exposedComponents : [],
-    exportedPropertyComponentIds: Array.isArray(raw.exportedPropertyComponentIds) ? raw.exportedPropertyComponentIds : [],
+    symbolElements: Array.isArray(candidate.symbolElements) ? candidate.symbolElements : [],
+    iconElements: Array.isArray(candidate.iconElements) ? candidate.iconElements : [],
+    exposedComponents: Array.isArray(candidate.exposedComponents) ? candidate.exposedComponents : [],
+    exportedPropertyComponentIds: Array.isArray(candidate.exportedPropertyComponentIds) ? candidate.exportedPropertyComponentIds : [],
   };
 }
 
@@ -101,6 +124,7 @@ function normalizeProjectState(raw: WebviewProjectState): WebviewProjectState {
  * importado uma vez, sobrevive a troca de `state`) -- precisa ser re-sincronizado toda vez que o
  * catálogo chega de novo (Épico G: cada item registrado pode trazer um `package` real). */
 function syncPackageRegistry(catalog: WebviewProjectState["catalog"]): void {
+  if (!Array.isArray(catalog)) return;
   for (const entry of catalog) registerPackage(entry.typeId, entry.package, entry.logicSymbolPackage, entry.boardPackage);
 }
 
