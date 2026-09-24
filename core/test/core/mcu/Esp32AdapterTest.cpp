@@ -114,8 +114,9 @@ int main() {
     TEST_ASSERT(containsArg(launch, "esp32-simul"), "launch args include esp32-simul machine");
     TEST_ASSERT(containsArg(launch, "-display") && containsArg(launch, "none"),
                 "QEMU runs headless and does not depend on a packaged keymap");
-    TEST_ASSERT(containsArg(launch, "file=build/blink.bin,if=mtd,format=raw"),
-                "launch args include firmware drive");
+    TEST_ASSERT(containsArg(launch, "file=build/blink.bin,if=mtd,format=raw,snapshot=on"),
+                "launch args include firmware drive with snapshot overlay (guest flash writes "
+                "stay in a discarded overlay, never modifying the user's firmware .bin)");
     TEST_ASSERT(!containsArg(launch, "-nic"),
                 "adapter base launch is network-neutral; Core adds OpenETH only when explicitly enabled");
     TEST_ASSERT(containsArgPair(launch, "-accel", "tcg,thread=multi"),
