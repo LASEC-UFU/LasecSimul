@@ -2,14 +2,15 @@
   "schema_version": 1,
   "source_repo": "C:\\SourceCode\\qemu_lasecSimul",
   "branch": "main",
-  "head": "46aa4db41fe3c5854f4efef7c98e431d72b552bc",
-  "source_dirty": true,
+  "head": "4de50cbfa81c95bd0e81ef1d9d45dc60b6d25280",
+  "source_dirty": false,
   "build_dir": "C:\\SourceCode\\qemu_lasecSimul\\build-ucrt64",
   "build_executable": "C:\\SourceCode\\qemu_lasecSimul\\build-ucrt64\\qemu-system-xtensa.exe",
   "canonical_runtime_dir": "C:\\SourceCode\\LasecSimul\\vnext_prototype\\dev_qemu_runtime",
   "canonical_executable": "C:\\SourceCode\\LasecSimul\\vnext_prototype\\dev_qemu_runtime\\qemu-system-xtensa.exe",
-  "canonical_executable_sha256": "64E021AC7CA67E29EC224800FE4A5B18B14EC5BC616F33D7627894E97F0ECC4C",
-  "canonical_executable_timestamp": "2026-09-14T13:00:00-03:00",
+  "canonical_executable_sha256": "BB77A55DEB9385B47C77C866AC6D530730CE12B35396398C1155952D92E571AE",
+  "canonical_executable_timestamp": "2026-09-24T16:30:00-03:00",
+  "promotion_note_v0043": "2026-09-24: promoted the transparent-Wi-Fi build (qemu_lasecSimul main 4de50cb) to canonical for the v0.0.43 release. This binary folds in every fix the prior canonical (64E021AC..., E146) carried and adds the docs/47 transparent esp32_wifi model (SPI flash-write + DPORT clock fixes, ignore-sta-password hook, per-instance eFuse MAC, snapshot=on). VERIFIED: docs/47 Definition of Done with a password (WL_CONNECTED, DHCP/DNS/HTTP 200/HTTPS), 100/100 reconnects, two simultaneous instances with distinct MAC/lease, host->guest inbound TCP, Core real-QEMU single+multi-instance tests, and 7 QEMU unit-test binaries (dport/efuse/timg x2/vnext x2/wifi-link) with zero regressions. NOT RE-RUN: the formal VNEXT_B N<=8 MTTCG capacity/regression campaign (B11, capacity-guard 64/64, run_regression 14/14) that certified 64E021AC under E146 -- the certified_release_session_limit below is inherited, not re-measured against this binary. Re-run that campaign before relying on the N<=8 capacity guarantee in production.",
   "certified_release_session_limit": 8,
   "certified_release_session_limit_note": "E146 (EVIDENCE.md, 2026-09-09): this promotion is certified ONLY for N<=8 simultaneous VNEXT_B+MTTCG sessions (core/src/mcu/qemu/VnextBCapacityGuard.hpp::kVnextBCertifiedReleaseSessionLimit). The raw host-topology ceiling this runtime's own capacity guard computes can be higher (13 on the 32-logical-processor host this episode measured), but that number was never validated end-to-end and must not be treated as certified capacity -- see that header's own comment. N=9 through N=16 are explicitly NOT certified by this promotion; a later episode may raise this limit, but only alongside fresh B11 evidence at the higher N, in the same commit that raises kVnextBCertifiedReleaseSessionLimit.",
   "runtime_requirements": [
@@ -24,6 +25,6 @@
   "last_validated_at": "2026-09-09T00:00:00-03:00",
   "build_toolchain": "MSYS2 UCRT64 at C:\\SourceCode\\tools\\msys64, GCC 16.2.0, binutils 2.47, ninja 1.13.2, meson 1.12.0",
   "build_command": "ninja -j 8 qemu-system-xtensa.exe   (capped parallelism, see DECISION-010; invoked via PowerShell, not Bash, in this environment -- see NEXT_ACTION.md's environment note)",
-  "previous_executable_sha256": "B375A9E830705F673800C703A450871D2B3616D06938365671ABD6A3DFDD936E",
-  "previous_executable_rollback_copy": "C:\\SourceCode\\LasecSimul\\vnext_prototype\\mttcg_causality\\E146-production-release-n8-certification_20260909_140900\\preflight_canonical_snapshot\\dev_qemu_runtime_backup\\qemu-system-xtensa.exe"
+  "previous_executable_sha256": "64E021AC7CA67E29EC224800FE4A5B18B14EC5BC616F33D7627894E97F0ECC4C",
+  "previous_executable_rollback_copy": "C:\\SourceCode\\LasecSimul\\devices\\qemu-esp32\\bin\\qemu-system-xtensa.pre-wifi.exe"
 }
