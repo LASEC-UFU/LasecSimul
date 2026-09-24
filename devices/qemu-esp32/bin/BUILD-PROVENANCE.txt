@@ -1,34 +1,20 @@
 QEMU source: C:\SourceCode\qemu_lasecSimul
 QEMU repository: https://github.com/josuemoraisgh/qemu_lasecSimul
-QEMU HEAD: 46aa4db fix(vnext-b): preserve I2C burst continuation and runtime gates
-Working-tree source: current qemu_lasecSimul checkout, including the UART fix
-from 7f77ab5 (defer Core notifications outside the guest MMIO dispatch) and the
-current VNEXT-B/I2C changes plus E148 UART AHB mapping, incremental config retry,
-and first-RUNNING-only handshake notification. Reproduction patch:
-devices/qemu-esp32/patches/0005-vnext-uart-progress.patch.
-This is the executable used by the local LasecSimul development and release
-runtime; its SHA is also recorded in orchestrator/.ai/QEMU_RUNTIME.json.
-Configure: xtensa-softmmu, gcrypt, slirp (MSYS2 UCRT64)
-Executable SHA-256: 64E021AC7CA67E29EC224800FE4A5B18B14EC5BC616F33D7627894E97F0ECC4C
-Build date: 2026-09-14
-Runtime contract: QEMU arena ABI v5, 64-byte TX/32-byte RX I2C burst mailbox,
-continuation routing metadata, named Windows poll doorbell; ABI v3 rollback.
+QEMU branch: feat/wifi-transparent
+QEMU commit: 4de50cbfa81c95bd0e81ef1d9d45dc60b6d25280
+Build directory: C:\SourceCode\qemu_lasecSimul\build-ucrt64 (MSYS2 UCRT64, ninja -j6)
+Configure: xtensa-softmmu, gcrypt, slirp
+Executable SHA-256: BB77A55DEB9385B47C77C866AC6D530730CE12B35396398C1155952D92E571AE
+Build date: 2026-09-24
 
-Paired Core-side requirement for VNEXT_B: shared wait dispatcher, bounded future
-event callbacks, origin-adjusted module timestamps, absolute realtime pacing
-anchor (no lateness time loss), and coalesced worker-owned visual telemetry refresh.
-Evidence and limitations: orchestrator/.ai/E148_LED_UART.md.
+Feature: transparent ESP32 Wi-Fi (docs/47). A plain Arduino WiFi.begin(ssid,
+password) reaches the network backend with no OpenETH in the firmware. The
+esp32_wifi model defaults to direct-uplink=on and ignore-sta-password=on. The
+Core selects it via LASECSIMUL_NETWORK_FRONTEND=wifi (default); set =openeth for
+the legacy Ethernet rollback. Includes the SPI flash-write and DPORT clock fixes
+that unblock esp_wifi, and per-instance eFuse MAC programming for multi-ESP32.
 
-Legacy paired Core-side requirement: McuComponent creates <arena>-doorbell before QEMU
-starts, waits on that event plus a local stop event, and falls back to a bounded
-timed wait if the doorbell is unavailable. Native devices serialize mutable
-plugin state per instance without holding McuComponent::CallbackState::mutex.
-
-Historical measurements (not a new E148 claim): real ESP32/SSD1306 on 2026-08-26 after correcting the
-fixture so Adafruit_SSD1306 actually uses each labelled bus clock:
-  100 kHz: 109-130 ms per 1024-byte framebuffer
-  400 kHz: 38-56 ms per framebuffer
-  800 kHz: 21-23 ms per framebuffer
-UART direct/plot streams matched exactly; no I2C ACK error or Guru Meditation;
-display state was enabled and populated. Set LASECSIMUL_QEMU_COARSE_SUBMS_WAIT=1
-to roll back the Windows cooperative sub-ms polling optimization.
+Verified: docs/47 Definition of Done with a password (WL_CONNECTED, DHCP, DNS,
+HTTP 200, HTTPS, WebServer/UDP/mDNS/OTA), 100/100 reconnects, two simultaneous
+instances with distinct MAC/lease, host->guest inbound TCP via hostfwd, and the
+Core real-QEMU single/multi-instance integration tests.

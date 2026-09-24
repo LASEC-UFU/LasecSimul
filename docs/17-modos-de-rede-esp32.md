@@ -1,9 +1,21 @@
-# Modos de rede da ESP32/OpenETH
+# Modos de rede da ESP32
 
-O LasecSimul oferece dois backends para a interface OpenETH da ESP32, além do modo `disabled`.
-`disabled` é o padrão: não cria NIC, socket ou thread de rede e deve ser usado por firmwares
-comuns (como Blink). Para firmware compilado com `CONFIG_ETH_USE_OPENETH=y`, selecione
-explicitamente `lab-bridge` ou `isolated`.
+A rede da ESP32 tem duas dimensões independentes:
+
+- **modo** (`LASECSIMUL_NETWORK_MODE`): `disabled` (padrão), `lab-bridge`, `lab-router` ou
+  `isolated` — decide o backend/host (sem rede, TAP/LAN, TAP roteada ou SLIRP/NAT).
+- **frontend** (`LASECSIMUL_NETWORK_FRONTEND`): qual NIC emulada o firmware enxerga.
+  - `wifi` (padrão): modelo `esp32_wifi` transparente (ver
+    [`47-plano-wifi-transparente-esp32-qemu.md`](47-plano-wifi-transparente-esp32-qemu.md)). Um
+    firmware Arduino comum com `#include <WiFi.h>` e `WiFi.begin(ssid, senha)` alcança a rede sem
+    OpenETH, sem `sdkconfig` especial e sem `WiFiCompat.h`. SSID/senha são ignorados (o simulador
+    não modela segurança Wi-Fi) e a saída passa pela pilha lwIP normal do firmware.
+  - `openeth`: rollback temporário para o MAC Ethernet legado; exige firmware compilado com
+    `CONFIG_ETH_USE_OPENETH=y` e inicialização via `esp_eth`/`esp_netif`.
+
+`disabled` é o padrão do **modo**: não cria NIC, socket ou thread de rede e serve a firmwares
+comuns (como Blink). Para habilitar rede, selecione `lab-bridge`, `lab-router` ou `isolated`; o
+frontend `wifi` é usado automaticamente salvo se `LASECSIMUL_NETWORK_FRONTEND=openeth`.
 
 ## `disabled` (padrão)
 
@@ -67,10 +79,15 @@ entrada direta em servidores da ESP32 não funcionam sem mecanismos adicionais.
 
 ## Requisitos do firmware
 
-Ambos os modos transportam Ethernet, não o rádio Wi-Fi da ESP32. O firmware deve ser compilado com
-`CONFIG_ETH_USE_OPENETH=y` e inicializar `esp_eth`/`esp_netif`. A pilha lwIP, DHCP, DNS, TCP, UDP,
-TLS, HTTP, MQTT e mDNS permanecem dentro do firmware. `WiFi.begin()`/`esp_wifi` não selecionam a
-OpenETH e ainda exigiriam a emulação do controlador MAC Wi-Fi proprietário.
+Com o frontend padrão `wifi`, **nenhum requisito especial**: um firmware Arduino comum com
+`#include <WiFi.h>` e `WiFi.begin(...)` funciona sem `CONFIG_ETH_USE_OPENETH`. A pilha lwIP, DHCP,
+DNS, TCP, UDP, TLS, HTTP, MQTT e mDNS permanecem dentro do firmware; o modelo `esp32_wifi` converte
+os quadros 802.11 do driver em Ethernet para o backend do QEMU. Ver
+[`../examples/esp32-wifi-transparent/`](../examples/esp32-wifi-transparent/).
+
+Com o frontend de rollback `openeth`, os modos transportam Ethernet (não o rádio Wi-Fi): o firmware
+deve ser compilado com `CONFIG_ETH_USE_OPENETH=y` e inicializar `esp_eth`/`esp_netif`. Nesse caso
+`WiFi.begin()`/`esp_wifi` não selecionam a OpenETH.
 
 ## Instalação e limites operacionais
 

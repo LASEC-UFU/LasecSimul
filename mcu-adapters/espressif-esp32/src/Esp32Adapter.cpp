@@ -2143,8 +2143,13 @@ LsdnQemuLaunchSpec buildLaunchArgs(LsdnMcuAdapter* adapter, const char* firmware
         "none",
         "-L",
         state->romDir,
+        // snapshot=on: the guest can now genuinely write flash (NVS, Wi-Fi PHY
+        // calibration, esp_wifi_init), so run the firmware image copy-on-write in
+        // a discarded temporary overlay. Writes succeed and are visible to the
+        // guest for the session, but the user's firmware .bin is never modified.
         "-drive",
-        "file=" + std::string(firmwarePath ? firmwarePath : "") + ",if=mtd,format=raw",
+        "file=" + std::string(firmwarePath ? firmwarePath : "") +
+            ",if=mtd,format=raw,snapshot=on",
     };
     state->launchArgStorage.push_back("-accel");
     state->launchArgStorage.push_back(

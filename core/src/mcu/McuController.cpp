@@ -66,7 +66,7 @@ unsigned automaticNetworkNamespace(std::string_view arenaName) {
     return fnv1a(hostPart) & 0xffu;
 }
 
-std::string openEthMacAddress(unsigned networkNamespace, unsigned componentSlot,
+std::string deterministicNicMacAddress(unsigned networkNamespace, unsigned componentSlot,
                               std::string_view arenaName) {
     // lab-router needs to recover the namespace and slot from an Ethernet frame so
     // that its in-process DHCP server can assign a deterministic address without a
@@ -88,13 +88,16 @@ std::string openEthMacAddress(unsigned networkNamespace, unsigned componentSlot,
     return mac.str();
 }
 
+std::string networkModel();  // defined below; selects open_eth vs esp32_wifi
+
 std::string isolatedOpenEthArgument(std::string_view arenaName) {
     const unsigned networkNamespace = configuredNetworkNamespace().value_or(
         automaticNetworkNamespace(arenaName));
     const unsigned componentSlot = componentNetworkSlot(arenaName);
     const std::string prefix = "10." + std::to_string(networkNamespace) + "." +
                                std::to_string(componentSlot);
-    return "user,model=open_eth,mac=" + openEthMacAddress(networkNamespace, componentSlot, arenaName) +
+    return "user,model=" + networkModel() + ",mac=" +
+           deterministicNicMacAddress(networkNamespace, componentSlot, arenaName) +
            ",net=" + prefix + ".0/24,host=" + prefix +
            ".2,dhcpstart=" + prefix + ".15,dns=" + prefix + ".3";
 }
@@ -102,6 +105,27 @@ std::string isolatedOpenEthArgument(std::string_view arenaName) {
 std::string environmentValue(const char* name, std::string_view fallback) {
     const char* value = std::getenv(name);
     return value && *value ? std::string(value) : std::string(fallback);
+}
+
+// Network "frontend" = which emulated NIC the guest firmware talks to, chosen
+// independently of the network "mode" (disabled/lab-router/lab-bridge/isolated).
+// `wifi` is the transparent ESP32 Wi-Fi model (docs/47): a plain Arduino
+// WiFi.begin() reaches the backend with no OpenETH in the firmware. `openeth`
+// is the legacy Ethernet MAC, kept as a temporary rollback via
+// LASECSIMUL_NETWORK_FRONTEND=openeth.
+std::string networkFrontend() {
+    const std::string frontend = environmentValue("LASECSIMUL_NETWORK_FRONTEND", "wifi");
+    if (frontend != "wifi" && frontend != "openeth") {
+        throw std::invalid_argument(
+            "LASECSIMUL_NETWORK_FRONTEND must be 'wifi' or 'openeth'");
+    }
+    return frontend;
+}
+
+// QEMU NIC model name for the selected frontend. Both frontends share the same
+// deterministic MAC, backends and MMIO wiring; only the device model differs.
+std::string networkModel() {
+    return networkFrontend() == "openeth" ? "open_eth" : "esp32_wifi";
 }
 
 unsigned configuredGatewayPort() {
@@ -154,7 +178,8 @@ std::string labBridgeOpenEthArgument(std::string_view arenaName) {
         automaticNetworkNamespace(arenaName));
     const unsigned componentSlot = componentNetworkSlot(arenaName);
     const unsigned gatewayPort = configuredGatewayPort();
-    return "socket,model=open_eth,mac=" + openEthMacAddress(networkNamespace, componentSlot, arenaName) +
+    return "socket,model=" + networkModel() + ",mac=" +
+           deterministicNicMacAddress(networkNamespace, componentSlot, arenaName) +
            ",connect=127.0.0.1:" + std::to_string(gatewayPort);
 }
 
@@ -168,7 +193,8 @@ std::string labRouterOpenEthArgument(std::string_view arenaName) {
     constexpr unsigned kDefaultRoutedNamespace = 42;
     const unsigned networkNamespace = configuredNetworkNamespace().value_or(kDefaultRoutedNamespace);
     const unsigned componentSlot = componentNetworkSlot(arenaName);
-    return "socket,model=open_eth,mac=" + openEthMacAddress(networkNamespace, componentSlot, arenaName) +
+    return "socket,model=" + networkModel() + ",mac=" +
+           deterministicNicMacAddress(networkNamespace, componentSlot, arenaName) +
            ",connect=127.0.0.1:" + std::to_string(configuredGatewayPort());
 }
 
@@ -192,7 +218,8 @@ void configureNetwork(QemuLaunchSpec& spec, std::string_view arenaName) {
     spec.args.push_back(mode == "lab-bridge" ? labBridgeOpenEthArgument(arenaName)
                       : mode == "lab-router" ? labRouterOpenEthArgument(arenaName)
                                                : isolatedOpenEthArgument(arenaName));
-    spec.diagnostics += "[LasecSimul] network=" + mode + "; OpenETH backend enabled\n";
+    spec.diagnostics += "[LasecSimul] network mode=" + mode + " frontend=" + networkFrontend() +
+                        " (model=" + networkModel() + ")\n";
 }
 
 void setAccelProperty(QemuLaunchSpec& spec, std::string_view key, std::string value) {
@@ -463,8 +490,9 @@ void McuController::start(const std::filesystem::path& firmwarePath, const std::
     const std::string networkMode = environmentValue("LASECSIMUL_NETWORK_MODE", "disabled");
     if ((networkMode == "lab-bridge" || networkMode == "lab-router") &&
         !gatewayAcceptingConnections(configuredGatewayPort())) {
+        const std::string socketPrefix = "socket,model=" + networkModel();
         for (std::string& arg : spec.args) {
-            if (arg.find("socket,model=open_eth") != std::string::npos) {
+            if (arg.find(socketPrefix) != std::string::npos) {
                 arg = isolatedOpenEthArgument(arenaName);
                 spec.diagnostics +=
                     "[LasecSimul] warning: lab gateway unavailable; falling back to isolated SLIRP\n";

@@ -61,23 +61,48 @@ int main() {
     FakeAdapter adapter;
     mcu::McuController controller(adapter);
 
+    // Default frontend is the transparent Wi-Fi model (docs/47): the guest's
+    // WiFi.begin() reaches the backend with no OpenETH in the firmware. The
+    // deterministic MAC is shared with the OpenETH rollback, so only the model
+    // name changes between frontends.
     const std::string explicitNamespace = findNic(
         controller.buildLaunchSpec("firmware.bin", "lasecsimul-mcu-1234-7"));
     require(explicitNamespace ==
-                "socket,model=open_eth,mac=02:4c:2a:07:b8:e4,connect=127.0.0.1:9011",
-            "lab-router codifica namespace 42 e slot 7 no MAC OpenETH");
+                "socket,model=esp32_wifi,mac=02:4c:2a:07:b8:e4,connect=127.0.0.1:9011",
+            "lab-router (frontend wifi padrao) codifica namespace 42 e slot 7 no MAC");
 
     setEnvironment("LASECSIMUL_NETWORK_NAMESPACE", "99");
     const std::string boundaryNamespace = findNic(
         controller.buildLaunchSpec("firmware.bin", "lasecsimul-mcu-1234-255"));
-    require(boundaryNamespace.rfind("socket,model=open_eth,mac=02:4c:63:ff:", 0) == 0,
+    require(boundaryNamespace.rfind("socket,model=esp32_wifi,mac=02:4c:63:ff:", 0) == 0,
             "lab-router preserva os bytes de namespace e slot nos limites 99/255");
 
     clearEnvironment("LASECSIMUL_NETWORK_NAMESPACE");
     const std::string defaultNamespace = findNic(
         controller.buildLaunchSpec("firmware.bin", "lasecsimul-mcu-1234-7"));
-    require(defaultNamespace.rfind("socket,model=open_eth,mac=02:4c:2a:07:", 0) == 0,
+    require(defaultNamespace.rfind("socket,model=esp32_wifi,mac=02:4c:2a:07:", 0) == 0,
             "lab-router usa o namespace provisionado 42 quando nenhum valor foi configurado");
+
+    // Isolated mode with the default Wi-Fi frontend uses the SLIRP user backend
+    // with the namespaced subnet, still model=esp32_wifi.
+    setEnvironment("LASECSIMUL_NETWORK_MODE", "isolated");
+    setEnvironment("LASECSIMUL_NETWORK_NAMESPACE", "42");
+    const std::string isolatedWifi = findNic(
+        controller.buildLaunchSpec("firmware.bin", "lasecsimul-mcu-1234-7"));
+    require(isolatedWifi.rfind("user,model=esp32_wifi,mac=02:4c:2a:07:", 0) == 0 &&
+                isolatedWifi.find(",net=10.42.7.0/24,") != std::string::npos &&
+                isolatedWifi.find(",dhcpstart=10.42.7.15,") != std::string::npos,
+            "isolated (frontend wifi) usa SLIRP com a sub-rede do namespace");
+
+    // OpenETH rollback: same MAC/backends, only the model name reverts.
+    setEnvironment("LASECSIMUL_NETWORK_FRONTEND", "openeth");
+    setEnvironment("LASECSIMUL_NETWORK_MODE", "lab-router");
+    const std::string rollback = findNic(
+        controller.buildLaunchSpec("firmware.bin", "lasecsimul-mcu-1234-7"));
+    require(rollback ==
+                "socket,model=open_eth,mac=02:4c:2a:07:b8:e4,connect=127.0.0.1:9011",
+            "LASECSIMUL_NETWORK_FRONTEND=openeth reverte apenas o modelo, MAC identico");
+    clearEnvironment("LASECSIMUL_NETWORK_FRONTEND");
 
     setEnvironment("LASECSIMUL_NETWORK_MODE", "disabled");
     const QemuLaunchSpec disabled = controller.buildLaunchSpec(
@@ -88,6 +113,6 @@ int main() {
     clearEnvironment("LASECSIMUL_NETWORK_MODE");
     clearEnvironment("LASECSIMUL_NETWORK_NAMESPACE");
     clearEnvironment("LASECSIMUL_GATEWAY_PORT");
-    std::cout << "OK: OpenETH codifica namespace/slot e disabled permanece sem NIC.\n";
+    std::cout << "OK: frontend wifi padrao, rollback openeth e disabled sem NIC.\n";
     return 0;
 }

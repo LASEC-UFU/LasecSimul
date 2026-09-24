@@ -145,10 +145,10 @@ int main() {
         const auto routerNic = std::find_if(
             identitySpec.args.begin(), identitySpec.args.end(),
             [](const std::string& argument) {
-                return argument.find("socket,model=open_eth,mac=02:4c:") != std::string::npos;
+                return argument.find("socket,model=esp32_wifi,mac=02:4c:") != std::string::npos;
             });
         TEST_ASSERT(routerNic != identitySpec.args.end(),
-                    "lab-router monta o backend socket com MAC OpenETH decodificável pelo gateway");
+                    "lab-router monta o backend socket com MAC decodificável pelo gateway (frontend wifi padrão)");
         TEST_ASSERT(identitySpec.runtimeIdentity.sessionExecutionId == expectedIdentity.sessionExecutionId,
                     "QemuLaunchSpec preserva sessionExecutionId");
         TEST_ASSERT(identitySpec.runtimeIdentity.runtimeInstanceId == expectedIdentity.runtimeInstanceId,
@@ -179,10 +179,10 @@ int main() {
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     std::fprintf(stderr, "  [info] isRunning() antes do stop(): %s\n", controller.isRunning() ? "true" : "false");
-    const bool sawOpenEthNic = waitForLogSubstring(controller, "model=open_eth");
+    const bool sawOpenEthNic = waitForLogSubstring(controller, "model=esp32_wifi");
     std::fprintf(stderr, "  [info] qemuLogs(): %s\n", controller.qemuLogs().c_str());
-    TEST_ASSERT(controller.isRunning(), "QEMU real permanece vivo com flash MTD valida e OpenETH/SLIRP inicializados");
-    TEST_ASSERT(sawOpenEthNic, "logs do processo integrado registram a configuracao OpenETH");
+    TEST_ASSERT(controller.isRunning(), "QEMU real permanece vivo com flash MTD valida e NIC/SLIRP inicializados");
+    TEST_ASSERT(sawOpenEthNic, "logs do processo integrado registram a NIC esp32_wifi (frontend padrão)");
 
     controller.stop();
     TEST_ASSERT(!controller.isRunning(), "primeiro processo QEMU encerra apos stop()");
@@ -216,11 +216,11 @@ int main() {
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         const bool sawFallbackWarning = waitForLogSubstring(controller, "gateway unavailable; falling back to isolated SLIRP");
-        const bool sawFallbackOpenEthNic = waitForLogSubstring(controller, "user,model=open_eth");
+        const bool sawFallbackOpenEthNic = waitForLogSubstring(controller, "user,model=esp32_wifi");
         TEST_ASSERT(fallbackStarted && controller.isRunning(),
                     "QEMU continua executando quando gateway/TAP esta indisponivel");
         TEST_ASSERT(sawFallbackWarning, "log explica claramente o fallback de backend indisponivel");
-        TEST_ASSERT(sawFallbackOpenEthNic, "fallback preserva a NIC OpenETH usando SLIRP");
+        TEST_ASSERT(sawFallbackOpenEthNic, "fallback preserva a NIC (esp32_wifi) usando SLIRP");
     }
     controller.stop();
     if (ownsFlashPath && !flashPath.empty()) {
