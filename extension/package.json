@@ -303,19 +303,20 @@
         "lasecsimul.network.mode": {
           "type": "string",
           "enum": [
+            "isolated",
             "disabled",
             "lab-router",
             "lab-bridge"
           ],
           "enumDescriptions": [
-            "Desabilita completamente a rede da ESP32; nenhum dispositivo OpenETH, socket, TAP ou thread de rede é criado.",
-            "Modo recomendado: conecta todas as ESP32 ao segmento roteado da TAP local; oferece acesso do host, mDNS e internet via NAT sem expor MACs na LAN física.",
-            "Conecta a OpenETH ao gateway central local, que multiplexa todos os QEMUs sobre uma única TAP ligada à bridge física. Cada ESP32 recebe IP próprio do DHCP real.",
-            "Compatibilidade para configurações antigas: o valor `isolated` é migrado automaticamente para `lab-router`."
+            "Padrão transparente: a ESP32 conecta à internet automaticamente por um uplink SLIRP/NAT por processo, sem administrador, sem TAP e sem configuração. Um firmware Arduino com WiFi.begin() simplesmente conecta (DNS, HTTP, TLS, MQTT e entrada por porta via hostfwd).",
+            "Sem rede: nenhum dispositivo de rede, socket, TAP ou thread é criado. Um firmware que usa WiFi apenas não conecta (não trava a simulação).",
+            "Laboratório roteado: conecta todas as ESP32 ao segmento da TAP local; oferece acesso do host, descoberta mDNS entre dispositivos e internet via NAT sem expor MACs na LAN física. Exige provisionamento da TAP (administrador).",
+            "Laboratório em bridge: conecta ao gateway central, que multiplexa os QEMUs sobre uma única TAP ligada à bridge física; cada ESP32 recebe IP do DHCP real da LAN. Exige provisionamento da TAP (administrador)."
           ],
-          "default": "disabled",
+          "default": "isolated",
           "scope": "window",
-          "markdownDescription": "Modo de rede da ESP32. `lab-router` é o modo recomendado para firmware com `CONFIG_ETH_USE_OPENETH=y`: a ESP32 compartilha a TAP roteada com o host e acessa a internet por NAT, sem bridge na interface física. `lab-bridge` continua disponível para expor a ESP32 diretamente à LAN. `disabled` permanece o padrão seguro para firmwares sem OpenETH. Projetos/configurações antigas com `isolated` são migrados para `lab-router`. Recarregue a janela após alterar."
+          "markdownDescription": "Modo de rede da ESP32. `isolated` (padrão) é transparente e não exige nada do usuário: `WiFi.begin()` conecta à internet por SLIRP/NAT por processo, sem administrador nem TAP. `disabled` desliga a rede (a simulação não trava; firmware Wi‑Fi apenas não conecta). `lab-router`/`lab-bridge` são para laboratório com acesso à LAN real e descoberta mDNS a partir do host — exigem provisionamento de TAP com administrador. Recarregue a janela após alterar."
         },
         "lasecsimul.network.gatewayPort": {
           "type": "integer",

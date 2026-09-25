@@ -408,23 +408,12 @@ function launchCoreProcess(extensionPath: string): { corePath: string; pipeName:
   const pipeName = CoreProcess.defaultPipeName();
   const networkConfiguration = vscode.workspace.getConfiguration("lasecsimul.network");
   const configuredNetworkNamespace = networkConfiguration.get<number>("namespace", -1);
-  const configuredNetworkMode = networkConfiguration.get<string>("mode", "disabled");
+  // Transparent default: when unset, the ESP32 uses the no-admin SLIRP uplink
+  // (`isolated`) so a plain WiFi.begin() firmware connects to the internet with
+  // zero configuration. `isolated` is a first-class mode again (no longer
+  // migrated to the admin-provisioned lab-router).
+  const configuredNetworkMode = networkConfiguration.get<string>("mode", "isolated");
   const networkMode = resolveNetworkMode(configuredNetworkMode);
-  // `isolated` was the pre-FEAT-014 lab-network backend. Keep old settings
-  // loadable, but route them through the new shared lab-router backend and
-  // persist the migration once per VS Code profile.
-  if (networkMode.migratedLegacyIsolated) {
-    const migrationKey = "lasecsimul.network.isolatedMigratedToLabRouter";
-    if (!state.extensionContext?.globalState.get<boolean>(migrationKey)) {
-      logSimulation(
-        "warning",
-        "O modo de rede legado \"isolated\" foi migrado para \"lab-router\".",
-        { stage: "network-setup", notify: true },
-      );
-      void networkConfiguration.update("mode", "lab-router", vscode.ConfigurationTarget.Workspace)
-        .then(() => state.extensionContext?.globalState.update(migrationKey, true));
-    }
-  }
   const configuredGatewayPort = networkConfiguration.get<number>("gatewayPort", 9011);
   const coreEnv: NodeJS.ProcessEnv = {
     // Prevent shared-memory arena collisions between thin-client instances.

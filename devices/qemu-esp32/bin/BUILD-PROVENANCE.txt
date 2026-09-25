@@ -1,20 +1,19 @@
 QEMU source: C:\SourceCode\qemu_lasecSimul
 QEMU repository: https://github.com/josuemoraisgh/qemu_lasecSimul
-QEMU branch: feat/wifi-transparent
-QEMU commit: 4de50cbfa81c95bd0e81ef1d9d45dc60b6d25280
-Build directory: C:\SourceCode\qemu_lasecSimul\build-ucrt64 (MSYS2 UCRT64, ninja -j6)
+QEMU branch: main
+QEMU commit: 99f8406544341b55694c6f92d236efd360970cad
+Build directory: build-ucrt64 (MSYS2 UCRT64, ninja -j6)
 Configure: xtensa-softmmu, gcrypt, slirp
-Executable SHA-256: BB77A55DEB9385B47C77C866AC6D530730CE12B35396398C1155952D92E571AE
-Build date: 2026-09-24
+Executable SHA-256: F3194F15535F768DB8E61252FC56E95631106990D2EC6B65FB045FA9412273CD
+Build date: 2026-09-25
 
-Feature: transparent ESP32 Wi-Fi (docs/47). A plain Arduino WiFi.begin(ssid,
-password) reaches the network backend with no OpenETH in the firmware. The
-esp32_wifi model defaults to direct-uplink=on and ignore-sta-password=on. The
-Core selects it via LASECSIMUL_NETWORK_FRONTEND=wifi (default); set =openeth for
-the legacy Ethernet rollback. Includes the SPI flash-write and DPORT clock fixes
-that unblock esp_wifi, and per-instance eFuse MAC programming for multi-ESP32.
+v0.0.44: transparent ESP32 Wi-Fi that just works. Adds the Wi-Fi-register stub so
+a Wi-Fi firmware no longer panics (LoadStorePIFAddrError at 0x60033c00) when the
+network is disabled; combined with the extension defaulting network mode to the
+no-admin SLIRP uplink ('isolated'), a plain WiFi.begin() connects to the internet
+with zero configuration. Includes everything from v0.0.43 (transparent esp32_wifi
+model, ignore-sta-password, snapshot=on, per-instance eFuse MAC).
 
-Verified: docs/47 Definition of Done with a password (WL_CONNECTED, DHCP, DNS,
-HTTP 200, HTTPS, WebServer/UDP/mDNS/OTA), 100/100 reconnects, two simultaneous
-instances with distinct MAC/lease, host->guest inbound TCP via hostfwd, and the
-Core real-QEMU single/multi-instance integration tests.
+Verified: capacity campaign re-run against this binary PASSED (run_regression
+VNEXT_B+MTTCG 14/14, B11 N=8 PASS, negative N=9 CAPACITY_REJECTED_AS_DESIGNED);
+the Wi-Fi crash reproduced and confirmed fixed both with and without a NIC.

@@ -1,4 +1,4 @@
-export type SupportedNetworkMode = "disabled" | "lab-router" | "lab-bridge";
+export type SupportedNetworkMode = "disabled" | "isolated" | "lab-router" | "lab-bridge";
 
 export interface NetworkModeResolution {
   effectiveMode: SupportedNetworkMode;
@@ -7,16 +7,17 @@ export interface NetworkModeResolution {
 
 /** Resolve o modo que deve ser enviado ao Core.
  *
- * `isolated` permanece aceito apenas como compatibilidade de leitura para projetos
- * antigos. A configuração efetiva passa a ser `lab-router`, permitindo que a camada
- * de ativação persista a migração uma única vez.
+ * Padrão transparente: quando nada é configurado, a ESP32 usa `isolated` (uplink
+ * SLIRP transparente), então um firmware Arduino com `WiFi.begin()` conecta à
+ * internet automaticamente, sem exigir TAP/administrador nem qualquer toggle.
+ * `disabled` continua sendo a opção explícita de "sem rede"; `lab-router`/
+ * `lab-bridge` permanecem para acesso à LAN real e descoberta mDNS a partir do
+ * host (exigem provisionamento de TAP).
  */
 export function resolveNetworkMode(configured: string | undefined): NetworkModeResolution {
-  if (configured === "isolated") {
-    return { effectiveMode: "lab-router", migratedLegacyIsolated: true };
-  }
-  if (configured === "lab-router" || configured === "lab-bridge") {
+  if (configured === "disabled" || configured === "isolated" ||
+      configured === "lab-router" || configured === "lab-bridge") {
     return { effectiveMode: configured, migratedLegacyIsolated: false };
   }
-  return { effectiveMode: "disabled", migratedLegacyIsolated: false };
+  return { effectiveMode: "isolated", migratedLegacyIsolated: false };
 }
