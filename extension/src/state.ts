@@ -22,6 +22,11 @@ import { SubcircuitDocument } from "./catalog/subcircuitDocument";
 export const state = {
   coreProc: undefined as CoreProcess | undefined,
   coreClient: undefined as CoreClient | undefined,
+  /** Responder mDNS host-side para o modo de rede "isolated" (SLIRP): resolve
+   * `<host>.local` -> 127.0.0.1 no mesmo PC quando o ESP32 fica atrás do NAT do
+   * QEMU. `undefined` fora do modo isolado (ou se os sockets não subiram). Ver
+   * `network/mdnsResponder.ts`. É recriado a cada `launchCoreProcess`. */
+  mdnsResponder: undefined as import("./network/mdnsResponder").MdnsResponderHandle | undefined,
   /** Resolve quando o carregamento inicial das bibliotecas de dispositivo no Core (ver
    * `extension.ts::activate`, `refreshUnifiedCatalogState(true, ...)`) termina -- inclui subcircuitos
    * empacotados como `subcircuits.esp32_devkitc_v4` (`subcircuits/library.json`). `activate()` dispara

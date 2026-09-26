@@ -112,6 +112,7 @@ import { parseIecProject } from "./plc/iecProject";
 import { readPlcNativeModule } from "./plc/artifact";
 import { maybeOfferMachineNetworkSetup, registerMachineNetworkSetupCommand } from "./network/machineNetworkSetup";
 import { resolveNetworkMode } from "./network/networkMode";
+import { startIsolatedMdnsResponder } from "./network/mdnsResponder";
 import { commitDslCommand, commitOpenDslIfPresent, onDslDraftOpenChanged, openDslCommand, registerDslDraftCloseTracking } from "./dsl/dslCommands";
 
 let propertyInspectorView: PropertyInspectorViewProvider | undefined;
@@ -431,6 +432,22 @@ function launchCoreProcess(extensionPath: string): { corePath: string; pipeName:
   };
   if (Number.isInteger(configuredNetworkNamespace) && configuredNetworkNamespace >= 0 && configuredNetworkNamespace <= 255) {
     coreEnv.LASECSIMUL_NETWORK_NAMESPACE = String(configuredNetworkNamespace);
+  }
+
+  // Isolated (SLIRP) mode only: the guest is behind QEMU's NAT, so `<host>.local`
+  // never reaches the OS resolver on the same PC. Run a host-side mDNS responder
+  // that answers learned names -> 127.0.0.1 (where hostfwd exposes the guest's
+  // services), and tell QEMU to feed it the hostname it sees the guest advertise.
+  // lab-router/lab-bridge use a real TAP where ordinary mDNS already works.
+  state.mdnsResponder?.dispose();
+  state.mdnsResponder = undefined;
+  if (process.platform === "win32" && networkMode.effectiveMode === "isolated") {
+    const responder = startIsolatedMdnsResponder();
+    if (responder) {
+      state.mdnsResponder = responder;
+      coreEnv.LASECSIMUL_ESP32_MDNS_REFLECT = "1";
+      coreEnv.LASECSIMUL_ESP32_MDNS_FEED_PORT = String(responder.feedPort);
+    }
   }
 
   state.coreProc = new CoreProcess({ executablePath: corePath, pipeName, env: coreEnv });
@@ -2633,4 +2650,6 @@ export async function deactivate(): Promise<void> {
   stopVoltageReadoutPolling();
   await state.coreClient?.stop().catch(() => {});
   state.coreProc?.kill(); // force-kill de segurança caso shutdown IPC não tenha chegado
+  state.mdnsResponder?.dispose();
+  state.mdnsResponder = undefined;
 }
