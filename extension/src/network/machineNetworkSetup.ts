@@ -8,6 +8,7 @@ import { spawn } from "child_process";
 import { fileExists, readJsonFile } from "../pathUtils";
 import { logSimulation } from "../diagnostics/simulationLog";
 import { isMachineNetworkConfigCurrent, shouldOfferMachineNetworkSetup } from "./machineNetworkState";
+import { resolveNetworkMode } from "./networkMode";
 
 /** Instala sob demanda (a partir da própria Extension, já rodando via Marketplace) o driver
  * TAP-Windows6, a Windows Network Bridge e o `LasecSimul.NetworkGateway.exe` que o modo de rede
@@ -299,6 +300,13 @@ async function offerInstall(context: vscode.ExtensionContext, version: string, o
 export function maybeOfferMachineNetworkSetup(context: vscode.ExtensionContext): void {
   if (process.platform !== "win32") return;
   const networkConfig = vscode.workspace.getConfiguration("lasecsimul.network");
+  // Only lab-router / lab-bridge need the TAP driver + bridge + gateway. The
+  // transparent default (`isolated`, SLIRP) and `disabled` need none of it, so
+  // never nag those users with the admin TAP install (and never let them trigger
+  // the elevated provisioning by accident). A user opts in by first choosing a
+  // lab mode; the offer then appears.
+  const effectiveMode = resolveNetworkMode(networkConfig.get<string>("mode", "isolated")).effectiveMode;
+  if (effectiveMode !== "lab-router" && effectiveMode !== "lab-bridge") return;
   const gatewayPort = networkConfig.get<number>("gatewayPort", 9011);
   const version = extensionVersion(context);
   const shouldOffer = shouldOfferMachineNetworkSetup({

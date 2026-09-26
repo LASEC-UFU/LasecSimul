@@ -871,14 +871,47 @@ internal static class Program
     private static string PsLiteral(string value) => value.Replace("'", "''");
     private static CommandResult RunPowerShell(string command, bool capture) => Run("powershell.exe", new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command }, capture);
 
-    private static CommandResult Run(string executable, IEnumerable<string> arguments, bool capture, bool acceptFailure = false)
+    // Provisioning steps shell out to netsh / New-NetNat / Set-NetIPInterface /
+    // devcon. Any of those can hang indefinitely on a broken host (WinNAT held by
+    // Docker/WSL/Hyper-V, a stuck driver install, an adapter mid-reset), and a
+    // plain WaitForExit() would then block the whole elevated installer forever
+    // (observed: ~40 min "continuando a reparação" with no error). Bound every
+    // command: on timeout, kill the process tree, log it, and fail fast with a
+    // diagnostic instead of hanging.
+    private const int DefaultCommandTimeoutSeconds = 120;
+
+    private static CommandResult Run(string executable, IEnumerable<string> arguments, bool capture, bool acceptFailure = false, int timeoutSeconds = DefaultCommandTimeoutSeconds)
     {
         var info = new ProcessStartInfo { FileName = executable, UseShellExecute = false, RedirectStandardOutput = capture, RedirectStandardError = capture, CreateNoWindow = capture };
         var argumentList = arguments.ToArray();
         foreach (var argument in argumentList) info.ArgumentList.Add(argument);
         using var process = Process.Start(info) ?? throw new InvalidOperationException($"Não foi possível iniciar {executable}.");
-        var output = capture ? process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd() : string.Empty;
-        process.WaitForExit();
+
+        var outputBuilder = new System.Text.StringBuilder();
+        if (capture)
+        {
+            // Drain both pipes asynchronously so a full stderr buffer cannot
+            // deadlock the wait, and so we still capture partial output on timeout.
+            process.OutputDataReceived += (_, e) => { if (e.Data != null) lock (outputBuilder) outputBuilder.AppendLine(e.Data); };
+            process.ErrorDataReceived += (_, e) => { if (e.Data != null) lock (outputBuilder) outputBuilder.AppendLine(e.Data); };
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+        }
+
+        var timeoutMs = timeoutSeconds > 0 ? timeoutSeconds * 1000 : -1;
+        if (!process.WaitForExit(timeoutMs))
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            try { process.WaitForExit(5000); } catch { }
+            string partial;
+            lock (outputBuilder) partial = outputBuilder.ToString().Trim();
+            AppendSetupLog($"COMMAND: {executable} {string.Join(" ", argumentList)}; TIMEOUT após {timeoutSeconds}s (processo encerrado){Environment.NewLine}{partial}");
+            if (acceptFailure) return new CommandResult(-1, partial);
+            throw new InvalidOperationException(
+                $"{executable} não respondeu em {timeoutSeconds}s e foi encerrado (provável travamento de rede: WinNAT ocupado por Docker/WSL/Hyper-V, driver TAP preso ou adaptador em reset). Veja {Path.Combine(Environment.GetEnvironmentVariable("ProgramData") ?? "C:\\ProgramData", "LasecSimul", "setup.log")}.");
+        }
+        string output;
+        lock (outputBuilder) output = outputBuilder.ToString();
         AppendSetupLog($"COMMAND: {executable} {string.Join(" ", argumentList)}; exit={process.ExitCode}{Environment.NewLine}{output.Trim()}");
         if (!acceptFailure && process.ExitCode != 0 && !capture) throw new InvalidOperationException($"{executable} falhou com código {process.ExitCode}.");
         return new CommandResult(process.ExitCode, output);
