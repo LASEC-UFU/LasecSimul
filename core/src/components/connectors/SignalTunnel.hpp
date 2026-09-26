@@ -23,10 +23,8 @@ namespace lasecsimul::components {
  * `Tunnel::name()`/`tunnelNameFromPropertiesJson`) quando resolve um `SubcircuitInterfaceDef` com
  * `domain == "signal"`, e expõe seu único `signalPorts()` (id fixo `"value"`) como
  * `SubcircuitExposedPin` em `SubcircuitExpansionResult::exposedSignalPins` -- NUNCA em
- * `exposedPins` (que continua 100% elétrico). `direction`/`valueType`/`unit` são fixados na
- * criação (mesmo espírito de `Tunnel` não expor `propertyDescriptors()` pra "name": mudar a
- * direção/tipo de uma porta de fronteira já publicada é uma edição estrutural que passa por
- * recriar o componente via o editor de subcircuito, não por edição de propriedade em runtime).
+ * `exposedPins` (que continua 100% elétrico). Nome, direção, tipo e unidade podem ser editados
+ * como propriedades estruturais; a sessão recompila o Signal Plan após cada alteração.
  */
 class SignalTunnel final : public IComponentModel {
 public:
@@ -51,6 +49,8 @@ public:
     void setState(const uint8_t* in, size_t len) override { m_name.assign(in, in + len); }
 
     const std::string& name() const { return m_name; }
+    void setNamespace(std::string prefix) { m_namespace = std::move(prefix); }
+    std::string runtimeName() const { return m_namespace + m_name; }
 
     /** Porta id fixo (uma única porta por instância -- ao contrário de HART, que multiplexa várias
      * variáveis por componente via `hartVariablesJson`, um `SignalTunnel` É uma única porta). */
@@ -58,6 +58,41 @@ public:
 
     std::vector<SignalPortDescriptor> signalPorts() const override {
         return {{std::string(kPortId), m_direction, m_kind, m_unit}};
+    }
+
+    std::vector<PropertyDescriptor> propertyDescriptors() override {
+        const auto makeString = [this](std::string id, std::string label, std::string value,
+                                       auto assign) {
+            PropertySchema schema;
+            schema.id = id;
+            schema.label = label;
+            schema.group = "Sinal";
+            schema.valueKind = PropertyValueKind::String;
+            schema.editor = "text";
+            schema.defaultValue = value;
+            schema.flags = PropertySchemaAffectsTopology;
+            PropertyDescriptor descriptor;
+            descriptor.name = id;
+            descriptor.schema = schema;
+            descriptor.get = [this, id]() -> PropertyValue {
+                if (id == "name") return m_name;
+                if (id == "direction") return std::string(m_direction == SignalPortDirection::Output ? "Output" : "Input");
+                if (id == "valueType") return std::string(m_kind == SignalValueKind::Digital ? "Bool" :
+                                                           m_kind == SignalValueKind::Unsigned ? "Int64" : "Real");
+                return m_unit;
+            };
+            descriptor.set = [assign](const PropertyValue& next) { assign(std::get<std::string>(next)); };
+            return descriptor;
+        };
+        return {
+            makeString("name", "Nome", m_name, [this](const std::string& value) { m_name = value; }),
+            makeString("direction", "Direção", m_direction == SignalPortDirection::Output ? "Output" : "Input",
+                [this](const std::string& value) { m_direction = value == "Output" ? SignalPortDirection::Output : SignalPortDirection::Input; }),
+            makeString("valueType", "Tipo", m_kind == SignalValueKind::Digital ? "Bool" :
+                m_kind == SignalValueKind::Unsigned ? "Int64" : "Real",
+                [this](const std::string& value) { m_kind = kindFromValueType(value); }),
+            makeString("unit", "Unidade", m_unit, [this](const std::string& value) { m_unit = value; }),
+        };
     }
 
 private:
@@ -74,6 +109,7 @@ private:
     }
 
     std::string m_name;
+    std::string m_namespace;
     SignalPortDirection m_direction;
     SignalValueKind m_kind;
     std::string m_unit;

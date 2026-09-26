@@ -38,6 +38,72 @@ std::string hexHash(uint64_t hash) {
     return output.str();
 }
 
+// Existing schema v3 documents may have used the electrical tunnel as a signal
+// relay. Classify those relays from control wires and signal interfaces before
+// the definition reaches the runtime. The electrical Tunnel remains electrical.
+void migrateLegacySignalTunnels(SubcircuitDefinition& def) {
+    std::unordered_map<std::string, size_t> componentById;
+    std::unordered_map<std::string, std::vector<size_t>> tunnelsByName;
+    for (size_t index = 0; index < def.components.size(); ++index) {
+        const auto& component = def.components[index];
+        componentById.emplace(component.id, index);
+        if (component.typeId != "connectors.tunnel") continue;
+        const auto properties = nlohmann::json::parse(component.propertiesJson);
+        if (properties.contains("name") && properties["name"].is_string())
+            tunnelsByName[properties["name"].get<std::string>()].push_back(index);
+    }
+    std::unordered_set<size_t> signalTunnels;
+    for (const auto& iface : def.interfaceDefs) {
+        if (iface.domain != "signal") continue;
+        if (const auto found = tunnelsByName.find(iface.internalTunnel); found != tunnelsByName.end())
+            signalTunnels.insert(found->second.begin(), found->second.end());
+    }
+    bool changed;
+    do {
+        changed = false;
+        for (const auto& wire : def.wires) {
+            const auto from = componentById.find(wire.fromComponentId);
+            const auto to = componentById.find(wire.toComponentId);
+            if (from == componentById.end() || to == componentById.end()) continue;
+            const auto isSignal = [&](size_t index) {
+                const auto& component = def.components[index];
+                return component.typeId.rfind("control.", 0) == 0 ||
+                       component.typeId == "connectors.signal_tunnel" || signalTunnels.contains(index);
+            };
+            if (def.components[from->second].typeId == "connectors.tunnel" && isSignal(to->second))
+                changed |= signalTunnels.insert(from->second).second;
+            if (def.components[to->second].typeId == "connectors.tunnel" && isSignal(from->second))
+                changed |= signalTunnels.insert(to->second).second;
+        }
+        for (const auto& [name, members] : tunnelsByName) {
+            const bool active = std::any_of(members.begin(), members.end(),
+                [&](size_t index) { return signalTunnels.contains(index); });
+            if (!active) continue;
+            for (size_t index : members) changed |= signalTunnels.insert(index).second;
+        }
+    } while (changed);
+    if (signalTunnels.empty()) return;
+
+    for (auto& iface : def.interfaceDefs) {
+        const auto found = tunnelsByName.find(iface.internalTunnel);
+        if (found == tunnelsByName.end() || !signalTunnels.contains(found->second.front())) continue;
+        iface.domain = "signal";
+        if (iface.direction == "inout") {
+            const auto properties = nlohmann::json::parse(def.components[found->second.front()].propertiesJson);
+            iface.direction = properties.value("direction", std::string{}) == "Output" ? "out" : "in";
+        }
+    }
+    for (size_t index : signalTunnels) def.components[index].typeId = "connectors.signal_tunnel";
+    for (auto& wire : def.wires) {
+        if (const auto found = componentById.find(wire.fromComponentId);
+            found != componentById.end() && signalTunnels.contains(found->second) && wire.fromPinId == "pin")
+            wire.fromPinId = "value";
+        if (const auto found = componentById.find(wire.toComponentId);
+            found != componentById.end() && signalTunnels.contains(found->second) && wire.toPinId == "pin")
+            wire.toPinId = "value";
+    }
+}
+
 } // namespace
 
 void SubcircuitRegistry::registerDefinition(SubcircuitDefinition def, bool allowReplace) {
@@ -66,6 +132,7 @@ void SubcircuitRegistry::registerDefinition(SubcircuitDefinition def, bool allow
                 return visualIds.count(wire.fromComponentId) > 0 || visualIds.count(wire.toComponentId) > 0;
             }), def.wires.end());
     }
+    migrateLegacySignalTunnels(def);
     m_byTypeId[def.typeId] = std::move(def);
     // Um replacement pode alterar qualquer hash transitivo. A quantidade de definições é pequena
     // no cold path; invalidar tudo é determinístico e evita um grafo reverso só para cache.

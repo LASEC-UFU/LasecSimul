@@ -20,9 +20,13 @@ export interface SubcircuitValidationResult {
   autoFixed?: SubcircuitDocument;
 }
 
-function tunnelPinId(component: { typeId: string; properties: Record<string, unknown> }): string | undefined {
+function tunnelPinId(component: { typeId: string; properties: Record<string, unknown> },
+                     interfaceTunnelNames: Set<string>): string | undefined {
   if (component.typeId !== TUNNEL_TYPE_ID && component.typeId !== SIGNAL_TUNNEL_TYPE_ID) return undefined;
-  const value = component.typeId === SIGNAL_TUNNEL_TYPE_ID ? component.properties.name : component.properties.pinId;
+  const explicit = component.properties.pinId;
+  const value = typeof explicit === "string" && explicit.trim() ? explicit
+    : component.typeId === SIGNAL_TUNNEL_TYPE_ID && interfaceTunnelNames.has(String(component.properties.name ?? ""))
+      ? component.properties.name : undefined;
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
@@ -142,13 +146,9 @@ export function validateSubcircuitDocument(document: SubcircuitDocument): Subcir
       errors.push(`Interface "${entry.pinId}" referencia o túnel interno inexistente "${entry.internalTunnel}".`);
       continue;
     }
-    // `TUNNEL_TYPE_ID` agora é de domínio DUPLO (Core: `components::Tunnel::signalPorts()`,
-    // "a mesma peça, o Core decide por fio, igual ao par 4-20mA de um transmissor HART") -- serve
-    // fronteira elétrica E de sinal. `SIGNAL_TUNNEL_TYPE_ID` continua aceito só pra manifestos já
-    // publicados antes desta mudança (ex: os `control_*`/`tdps_*` existentes), nunca exigido em
-    // autoria nova. Nenhuma combinação fica sem cobertura: elétrico aceita só o duplo; sinal aceita
-    // o duplo OU o legado explícito.
-    const acceptedTypes = entry.domain === "signal" ? [TUNNEL_TYPE_ID, SIGNAL_TUNNEL_TYPE_ID] : [TUNNEL_TYPE_ID];
+    // Cada túnel pertence a um único domínio. O parser converte documentos antigos
+    // com túnel duplo antes desta validação.
+    const acceptedTypes = entry.domain === "signal" ? [SIGNAL_TUNNEL_TYPE_ID] : [TUNNEL_TYPE_ID];
     if (types && !acceptedTypes.some((accepted) => types.has(accepted))) {
       const requiredType = acceptedTypes.join('" ou "');
       errors.push(`Interface "${entry.pinId}" referencia túnel de domínio incompatível; esperado "${requiredType}".`);
@@ -158,7 +158,7 @@ export function validateSubcircuitDocument(document: SubcircuitDocument): Subcir
   // Pino sem nenhum túnel correspondente.
   const tunnelsByPinId = new Map<string, number>();
   for (const component of document.components) {
-    const pinId = tunnelPinId(component);
+    const pinId = tunnelPinId(component, interfaceTunnelNames);
     if (!pinId) continue;
     tunnelsByPinId.set(pinId, (tunnelsByPinId.get(pinId) ?? 0) + 1);
   }
@@ -170,7 +170,7 @@ export function validateSubcircuitDocument(document: SubcircuitDocument): Subcir
 
   // Túnel apontando pra um pino inexistente.
   for (const component of document.components) {
-    const pinId = tunnelPinId(component);
+    const pinId = tunnelPinId(component, interfaceTunnelNames);
     if (pinId && !pinIds.has(pinId)) {
       errors.push(`Túnel "${component.id}" referencia o pino "${pinId}", que não existe no Símbolo.`);
     }

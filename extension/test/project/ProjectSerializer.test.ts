@@ -322,6 +322,24 @@ import { resolveProjectSourcePaths } from "../../src/project/projectPathPolicy";
   assert.strictEqual(legacyLoaded.components[0]?.showId, undefined);
   assert.strictEqual(legacyLoaded.components[0]?.showValue, undefined);
 
+  const dualTunnelPath = path.join(tmpDir, "legacy-dual-tunnel.lsproj");
+  await fs.writeFile(dualTunnelPath, JSON.stringify({
+    ...createEmptyProject(),
+    components: [
+      { id: "gain", typeId: "control.gain", properties: { gain: 2 } },
+      { id: "signal", typeId: "connectors.tunnel", properties: { name: "PV" } },
+      { id: "electric", typeId: "connectors.tunnel", properties: { name: "GND" } },
+    ],
+    topology: { revision: 0, nodes: [], conductors: [
+      { id: "s", from: { kind: "port", componentId: "signal", pinId: "pin" },
+        to: { kind: "port", componentId: "gain", pinId: "in" }, vertices: [] },
+    ] },
+  }), "utf8");
+  const migratedTunnelProject = await serializer.load(dualTunnelPath);
+  assert.strictEqual(migratedTunnelProject.components.find((component) => component.id === "signal")?.typeId, "connectors.signal_tunnel");
+  assert.strictEqual(migratedTunnelProject.components.find((component) => component.id === "electric")?.typeId, "connectors.tunnel");
+  assert.strictEqual(migratedTunnelProject.wires[0]?.from.pinId, "value");
+
   // Batch headless de todo .lsproj em test/fixtures/projects/ (Épico I do roadmap de pendências):
   // qualquer fixture nova adicionada ali já é coberta automaticamente, sem precisar editar este
   // arquivo -- convenção de nome decide a expectativa ("invalid" no nome == deveria rejeitar).

@@ -176,6 +176,8 @@ void everyPublishedControlLibrarySubcircuitInstantiates() {
     check(manifests.size() >= 20, "(3) a biblioteca publicada de blocos/processos foi encontrada no repositorio");
 
     size_t compiled = 0;
+    size_t tdpsManifests = 0;
+    size_t tdpsWithSubMillisecondEvent = 0;
     for (const std::string& fileName : manifests) {
         GlobalPluginCache cache;
         SimulationSession session(cache);
@@ -188,11 +190,22 @@ void everyPublishedControlLibrarySubcircuitInstantiates() {
             const auto plan = session.simulationPlan();
             if (plan != nullptr && plan->signal && plan->signal->engine) ++compiled;
             else std::fprintf(stderr, "  %s: instanciou mas o Signal Plan nao compilou\n", typeId.c_str());
+            if (fileName.rfind("tdps_", 0) == 0) {
+                ++tdpsManifests;
+                const auto nextSignalEvent = session.signalRuntime().nextEventNs();
+                if (nextSignalEvent && *nextSignalEvent < 1'000'000ull) {
+                    ++tdpsWithSubMillisecondEvent;
+                    std::fprintf(stderr, "  %s: proximo evento TDPS em %llu ns\n", typeId.c_str(),
+                                 static_cast<unsigned long long>(*nextSignalEvent));
+                }
+            }
         } catch (const std::exception& error) {
             std::fprintf(stderr, "  %s: %s\n", typeId.c_str(), error.what());
         }
     }
     check(compiled == manifests.size(), "(3) todo manifesto Ctrl/TDPS publicado instancia E compila o Signal Plan");
+    check(tdpsManifests >= 20 && tdpsWithSubMillisecondEvent == 0,
+          "(3) nenhum manifesto TDPS agenda eventos de sinal abaixo de 1 ms");
     std::printf("  (3) %zu/%zu manifestos\n", compiled, manifests.size());
 }
 

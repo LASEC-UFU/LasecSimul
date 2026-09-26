@@ -255,7 +255,7 @@
     },
     {
       "id": "tunnel-external-16",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "external-16",
       "properties": {
         "name": "external-16",
@@ -273,7 +273,7 @@
     },
     {
       "id": "tunnel-external-40",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "external-40",
       "properties": {
         "name": "external-40",
@@ -291,7 +291,7 @@
     },
     {
       "id": "tunnel-external-15",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "external-15",
       "properties": {
         "name": "external-15",
@@ -309,7 +309,7 @@
     },
     {
       "id": "tunnel-external-97",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "external-97",
       "properties": {
         "name": "external-97",
@@ -327,7 +327,7 @@
     },
     {
       "id": "tunnel-external-89",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "external-89",
       "properties": {
         "name": "external-89",
@@ -345,7 +345,7 @@
     },
     {
       "id": "tunnel-external-90",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "external-90",
       "properties": {
         "name": "external-90",
@@ -363,7 +363,7 @@
     },
     {
       "id": "tunnel-external-88",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "external-88",
       "properties": {
         "name": "external-88",
@@ -381,7 +381,7 @@
     },
     {
       "id": "tunnel-external-01",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "external-01",
       "properties": {
         "name": "external-01",
@@ -399,7 +399,7 @@
     },
     {
       "id": "tunnel-external-11",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "external-11",
       "properties": {
         "name": "external-11",
@@ -552,7 +552,7 @@
     },
     {
       "id": "tunnel-external-10",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "external-10",
       "properties": {
         "name": "external-10",
@@ -600,7 +600,7 @@
     },
     {
       "id": "tunnel-output-00",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "output-00",
       "properties": {
         "name": "output-00",
@@ -618,7 +618,7 @@
     },
     {
       "id": "tunnel-output-21",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "output-21",
       "properties": {
         "name": "output-21",
@@ -636,7 +636,7 @@
     },
     {
       "id": "tunnel-output-22",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "output-22",
       "properties": {
         "name": "output-22",
@@ -654,7 +654,7 @@
     },
     {
       "id": "tunnel-output-25",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "output-25",
       "properties": {
         "name": "output-25",
@@ -672,7 +672,7 @@
     },
     {
       "id": "tunnel-output-26",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "output-26",
       "properties": {
         "name": "output-26",
@@ -690,7 +690,7 @@
     },
     {
       "id": "tunnel-output-41",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "output-41",
       "properties": {
         "name": "output-41",
@@ -708,7 +708,7 @@
     },
     {
       "id": "tunnel-output-42",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "output-42",
       "properties": {
         "name": "output-42",
@@ -726,7 +726,7 @@
     },
     {
       "id": "tunnel-output-43",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "output-43",
       "properties": {
         "name": "output-43",
@@ -744,7 +744,7 @@
     },
     {
       "id": "tunnel-output-44",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "output-44",
       "properties": {
         "name": "output-44",
@@ -762,7 +762,7 @@
     },
     {
       "id": "tunnel-output-45",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "output-45",
       "properties": {
         "name": "output-45",
@@ -780,7 +780,7 @@
     },
     {
       "id": "tunnel-wire-1-from",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "calc-41.out",
       "properties": {
         "name": "calc-41.out"
@@ -793,7 +793,7 @@
     },
     {
       "id": "tunnel-wire-1-to",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "calc-41.out",
       "properties": {
         "name": "calc-41.out"
@@ -806,7 +806,7 @@
     },
     {
       "id": "tunnel-wire-3-from",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "process-21.out",
       "properties": {
         "name": "process-21.out"
@@ -819,7 +819,7 @@
     },
     {
       "id": "tunnel-wire-3-to",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "process-21.out",
       "properties": {
         "name": "process-21.out"
@@ -832,7 +832,7 @@
     },
     {
       "id": "tunnel-wire-4-from",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "calc-44.out",
       "properties": {
         "name": "calc-44.out"
@@ -845,7 +845,7 @@
     },
     {
       "id": "tunnel-wire-4-to",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "calc-44.out",
       "properties": {
         "name": "calc-44.out"
@@ -858,7 +858,7 @@
     },
     {
       "id": "tunnel-wire-11-from",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "process-25.out",
       "properties": {
         "name": "process-25.out"
@@ -871,7 +871,7 @@
     },
     {
       "id": "tunnel-wire-11-to",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "process-25.out",
       "properties": {
         "name": "process-25.out"
@@ -884,7 +884,7 @@
     },
     {
       "id": "tunnel-wire-12-to",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "process-21.out",
       "properties": {
         "name": "process-21.out"
@@ -897,7 +897,7 @@
     },
     {
       "id": "tunnel-wire-13-from",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "process-26.out",
       "properties": {
         "name": "process-26.out"
@@ -910,7 +910,7 @@
     },
     {
       "id": "tunnel-wire-13-to",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "process-26.out",
       "properties": {
         "name": "process-26.out"
@@ -923,7 +923,7 @@
     },
     {
       "id": "tunnel-wire-15-from",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "process-22.out",
       "properties": {
         "name": "process-22.out"
@@ -936,7 +936,7 @@
     },
     {
       "id": "tunnel-wire-15-to",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "process-22.out",
       "properties": {
         "name": "process-22.out"
@@ -949,7 +949,7 @@
     },
     {
       "id": "tunnel-wire-19-from",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "calc-43.out",
       "properties": {
         "name": "calc-43.out"
@@ -962,7 +962,7 @@
     },
     {
       "id": "tunnel-wire-19-to",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "calc-43.out",
       "properties": {
         "name": "calc-43.out"
@@ -975,7 +975,7 @@
     },
     {
       "id": "tunnel-wire-20-to",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "calc-41.out",
       "properties": {
         "name": "calc-41.out"
@@ -988,7 +988,7 @@
     },
     {
       "id": "tunnel-wire-22-from",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "pid-01.out",
       "properties": {
         "name": "pid-01.out"
@@ -1001,7 +1001,7 @@
     },
     {
       "id": "tunnel-wire-22-to",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "pid-01.out",
       "properties": {
         "name": "pid-01.out"
@@ -1014,7 +1014,7 @@
     },
     {
       "id": "tunnel-wire-23-to",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "process-25.out",
       "properties": {
         "name": "process-25.out"
@@ -1027,7 +1027,7 @@
     },
     {
       "id": "tunnel-wire-24-to",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "calc-43.out",
       "properties": {
         "name": "calc-43.out"
@@ -1040,7 +1040,7 @@
     },
     {
       "id": "tunnel-wire-25-to",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "pid-01.out",
       "properties": {
         "name": "pid-01.out"
@@ -1053,7 +1053,7 @@
     },
     {
       "id": "tunnel-wire-26-to",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "pid-01.out",
       "properties": {
         "name": "pid-01.out"
@@ -1066,7 +1066,7 @@
     },
     {
       "id": "tunnel-wire-27-to",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "pid-01.out",
       "properties": {
         "name": "pid-01.out"
@@ -1079,7 +1079,7 @@
     },
     {
       "id": "tunnel-wire-29-from",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "calc-42.out",
       "properties": {
         "name": "calc-42.out"
@@ -1092,7 +1092,7 @@
     },
     {
       "id": "tunnel-wire-29-to",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "calc-42.out",
       "properties": {
         "name": "calc-42.out"
@@ -1105,7 +1105,7 @@
     },
     {
       "id": "tunnel-wire-30-to",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "label": "calc-44.out",
       "properties": {
         "name": "calc-44.out"
@@ -1723,7 +1723,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-wire-1-from",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -1732,7 +1732,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-wire-1-to",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -1746,7 +1746,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-external-16",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -1765,7 +1765,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-wire-3-from",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -1774,7 +1774,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-wire-3-to",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -1793,7 +1793,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-wire-4-from",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -1802,7 +1802,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-wire-4-to",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -1816,7 +1816,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-external-40",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -1830,7 +1830,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-external-40",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -1844,7 +1844,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-external-15",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -1858,7 +1858,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-external-97",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -1872,7 +1872,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-external-89",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -1886,7 +1886,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-external-90",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -1905,7 +1905,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-wire-11-from",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -1914,7 +1914,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-wire-11-to",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -1928,7 +1928,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-wire-12-to",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -1947,7 +1947,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-wire-13-from",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -1956,7 +1956,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-wire-13-to",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -1970,7 +1970,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-external-16",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -1989,7 +1989,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-wire-15-from",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -1998,7 +1998,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-wire-15-to",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -2012,7 +2012,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-external-88",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -2026,7 +2026,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-external-01",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -2040,7 +2040,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-external-11",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -2059,7 +2059,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-wire-19-from",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -2068,7 +2068,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-wire-19-to",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -2082,7 +2082,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-wire-20-to",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -2096,7 +2096,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-external-40",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -2115,7 +2115,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-wire-22-from",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -2124,7 +2124,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-wire-22-to",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -2138,7 +2138,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-wire-23-to",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -2152,7 +2152,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-wire-24-to",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -2166,7 +2166,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-wire-25-to",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -2180,7 +2180,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-wire-26-to",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -2194,7 +2194,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-wire-27-to",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -2208,7 +2208,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-external-10",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -2227,7 +2227,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-wire-29-from",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -2236,7 +2236,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-wire-29-to",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -2250,7 +2250,7 @@
         "from": {
           "kind": "port",
           "componentId": "tunnel-wire-30-to",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -2269,7 +2269,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-output-00",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -2283,7 +2283,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-output-21",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -2297,7 +2297,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-output-22",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -2311,7 +2311,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-output-25",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -2325,7 +2325,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-output-26",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -2339,7 +2339,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-output-41",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -2353,7 +2353,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-output-42",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -2367,7 +2367,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-output-43",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -2381,7 +2381,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-output-44",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       },
@@ -2395,7 +2395,7 @@
         "to": {
           "kind": "port",
           "componentId": "tunnel-output-45",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       }

@@ -14,6 +14,7 @@ import {
   createEmptyProject,
 } from "./ProjectTypes";
 import { isIpdLineClass } from "../ui/webview/ipdLineStyle";
+import { migrateLegacySignalTunnels } from "../catalog/legacySignalTunnelMigration";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -233,16 +234,17 @@ export class ProjectSerializer {
     const components = Array.isArray(parsed.components) ? parsed.components.map(validateComponent) : [];
     const componentIds = new Set(components.map((c) => c.id));
     const topology = validateTopology(parsed.topology, componentIds);
-    const wires: ProjectWire[] = topology.conductors.map((conductor) => ({
+    const migrated = migrateLegacySignalTunnels(components, topology);
+    const wires: ProjectWire[] = migrated.topology.conductors.map((conductor) => ({
       id: conductor.id,
       from: conductor.from.kind === "port" ? conductor.from : { componentId: conductor.from.nodeId, pinId: "pin-1" },
       to: conductor.to.kind === "port" ? conductor.to : { componentId: conductor.to.nodeId, pinId: "pin-1" },
     }));
     return {
       schemaVersion: LS_PROJ_SCHEMA_VERSION,
-      components,
+      components: migrated.components,
       wires,
-      topology,
+      topology: migrated.topology,
       visual: isObject(parsed.visual)
         ? {
             wires: Array.isArray(parsed.visual.wires)

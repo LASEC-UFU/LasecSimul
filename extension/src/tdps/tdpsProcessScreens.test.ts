@@ -165,7 +165,7 @@ const documents = manifest.entries.map((entry) => ({
     for (const { entry, raw } of documents) {
       const control = raw.components.filter((component) => component.typeId.startsWith("control."));
       assert(control.length > 0, `${entry.file} perdeu os blocos de controle`);
-      const tunnels = raw.components.filter((component) => component.typeId === "connectors.tunnel");
+      const tunnels = raw.components.filter((component) => component.typeId === "connectors.signal_tunnel");
       assert(tunnels.length > 0, `${entry.file} perdeu os tuneis de interface`);
     }
   });

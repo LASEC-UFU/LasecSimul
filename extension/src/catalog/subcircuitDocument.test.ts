@@ -200,6 +200,30 @@ function fullDocument(): SubcircuitDocument {
     }
   });
 
+  await test("parser converte túneis de sinal de subcircuitos antigos sem alterar túneis elétricos", () => {
+    const old = {
+      ...fullDocument(),
+      components: [
+        { id: "gain", typeId: "control.gain", properties: { gain: 2 }, visual: { x: 0, y: 0, rotation: 0 } },
+        { id: "signal", typeId: "connectors.tunnel", properties: { name: "PV", direction: "Input" }, visual: { x: 0, y: 0, rotation: 0 } },
+        tunnel("electric", "GND"),
+      ],
+      topology: { revision: 0, nodes: [], conductors: [
+        { id: "signal-wire", from: { kind: "port", componentId: "signal", pinId: "pin" }, to: { kind: "port", componentId: "gain", pinId: "in" }, vertices: [] },
+      ] },
+      interface: [
+        { pinId: "PV", label: "PV", internalTunnel: "PV", domain: "signal", direction: "in" },
+        { pinId: "GND", label: "GND", internalTunnel: "GND" },
+      ],
+    };
+    const parsed = parseSubcircuitDocument(old, "/tmp");
+    assert(parsed.ok, "subcircuito antigo deve continuar abrindo");
+    if (!parsed.ok) return;
+    assert(parsed.document.components.find((component) => component.id === "signal")?.typeId === "connectors.signal_tunnel", "túnel de sinal convertido");
+    assert(parsed.document.components.find((component) => component.id === "electric")?.typeId === "connectors.tunnel", "túnel elétrico preservado");
+    assert(parsed.document.topology.conductors[0]?.from.kind === "port" && parsed.document.topology.conductors[0].from.pinId === "value", "fio convertido para porta value");
+  });
+
   const { failed } = finish();
   process.exitCode = failed > 0 ? 1 : 0;
 })();

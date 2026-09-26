@@ -126,9 +126,8 @@ function listSmpFiles(root: string): string[] {
       assert(parsed.document.typeId === entry.typeId && parsed.document.name === entry.label, `${entry.file} deve manter identidade e nome do inventario`);
       assert(parsed.document.workspaceSection === "process", `${entry.file} deveria estar no workspace Process`);
       assert(JSON.stringify(parsed.document.folderPath) === JSON.stringify(["Modelos"]), `${entry.file} deveria aparecer diretamente em Processo > Modelos`);
-      assert(parsed.document.components.some((component) => component.typeId === "connectors.tunnel"), `${entry.file} deve usar tunnel interno`);
-      assert(parsed.document.components.every((component) => component.typeId !== "connectors.signal_tunnel"), `${entry.file} nao deve usar signal_tunnel legado`);
-      assert(parsed.document.components.some((component) => component.typeId === "connectors.tunnel"), `${entry.file} deve representar as conexões com túneis`);
+      assert(parsed.document.components.some((component) => component.typeId === "connectors.signal_tunnel"), `${entry.file} deve usar túnel de sinal`);
+      assert(parsed.document.components.every((component) => component.typeId !== "connectors.tunnel"), `${entry.file} não deve misturar túnel elétrico`);
       for (const component of parsed.document.components) {
         assert(knownVisualTypes.has(component.typeId), `${entry.file}/${component.id}: ${component.typeId} precisa de entrada visual no catálogo`);
       }

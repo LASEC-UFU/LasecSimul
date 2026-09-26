@@ -584,21 +584,7 @@ private:
                                                    const std::vector<WireTopologyOperation>& operations);
     void setTunnelNameUnlocked(uint32_t component, const std::string& pinId, const std::string& oldName,
                                 const std::string& newName);
-    /** Domínio efetivo já comprometido por um `connectors.tunnel` (túnel de domínio duplo, ver
-     * `components::Tunnel::signalPorts()`) -- decidido pelo PRIMEIRO fio que o toca (elétrico ou
-     * sinal), nunca reavaliado depois. Lança se um fio novo tentaria comprometer esta instância (ou
-     * outra com o MESMO `name`, ver `m_tunnelDomainByName`) com o domínio OPOSTO do já registrado --
-     * "para o usuário é o mesmo túnel, pro Core são dois" só vale enquanto cada identidade (por
-     * instância e por nome) ficar inteira num domínio só. Simplificação deliberada: uma remoção ou
-     * um rename não libera o nome comprometido (ver `.cpp`) -- reaproveitar o mesmo `name` depois de
-     * apagar todos os túneis que o usavam num domínio pode, raramente, herdar o domínio antigo; não
-     * vale a complexidade de um refcount por nome só pra este caso extremo. */
     std::string liveTunnelNameUnlocked(uint32_t componentIndex) const;
-    /** Só lança se houver conflito -- NUNCA muta `m_tunnelDomainByComponent`/`m_tunnelDomainByName`.
-     * Chamar pros dois lados de um fio ANTES de `commitTunnelDomainUnlocked` garante que a conexão
-     * inteira fica atômica: nenhum dos dois fica "comprometido" se o outro for rejeitado. */
-    void validateTunnelDomainUnlocked(uint32_t componentIndex, bool signalDomain) const;
-    void commitTunnelDomainUnlocked(uint32_t componentIndex, bool signalDomain);
     void removeComponentUnlocked(uint32_t componentIndex);
     void removeSubcircuitInstanceUnlocked(uint32_t subcircuitInstanceId);
     void sendComponentEventUnlocked(uint32_t componentIndex, const ComponentEvent& event);
@@ -787,11 +773,6 @@ private:
      * `connectWireUnlocked`/`disconnectWireUnlocked` once they detect both
      * endpoints are Signal Graph ports, never a second, HART-specific list. */
     std::vector<SignalWireDefinition> m_signalWires;
-    /** Domínio comprometido de cada `connectors.tunnel` (túnel de domínio duplo) já tocado por
-     * algum fio, por instância e por `name` -- ver `commitTunnelDomainUnlocked`. `false` = elétrico,
-     * `true` = sinal. Ausência de entrada = ainda indeciso. */
-    std::unordered_map<uint32_t, bool> m_tunnelDomainByComponent;
-    std::unordered_map<std::string, bool> m_tunnelDomainByName;
     simulation::MnaSolver m_mnaSolver;
     simulation::Scheduler m_scheduler;
     python::PythonRuntime m_pythonRuntime;

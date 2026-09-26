@@ -1498,6 +1498,15 @@ RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesyste
 
     subcircuits.registerDefinition(std::move(def), true);
     if (!returnPayload) return {typeId, nlohmann::json::object()};
+    // A registry pode migrar túneis de sinal de arquivos antigos. O payload
+    // precisa anunciar a interface já normalizada que o runtime vai executar.
+    exportedInterface = nlohmann::json::array();
+    for (const auto& iface : subcircuits.find(typeId)->interfaceDefs) {
+        exportedInterface.push_back({{"pinId", iface.pinId}, {"label", iface.label},
+                                     {"internalTunnel", iface.internalTunnel}, {"domain", iface.domain},
+                                     {"direction", iface.direction}, {"valueType", iface.valueType},
+                                     {"width", iface.width}, {"unit", iface.unit}});
+    }
 
     nlohmann::json payload{
         {"status", replacing ? "reloaded" : "registered"},

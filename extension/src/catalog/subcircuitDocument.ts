@@ -3,6 +3,7 @@ import { WorkspaceSection } from "../ui/webview/workspace";
 import { ProjectComponent, ProjectTopology, ProjectTopologyEndpoint } from "../project/ProjectTypes";
 import { sanitizePackage } from "./packageSanitizers";
 import { isIpdLineClass } from "../ui/webview/ipdLineStyle";
+import { migrateLegacySignalTunnels } from "./legacySignalTunnelMigration";
 
 /** Refatoração completa do editor de subcircuitos (Subcircuito/Símbolo/Ícone) -- substitui o modelo
  * anterior (`other.package`/`other.package_pin` como objetos ocultos dentro de `components[]`, ver
@@ -227,7 +228,13 @@ export function parseSubcircuitDocument(raw: unknown, manifestDir: string): Pars
       ? (obj.exportedPropertyComponentIds as unknown[]).filter((id): id is string => typeof id === "string" && id.trim().length > 0)
       : [],
   };
-  return { ok: true, document };
+    const migrated = migrateLegacySignalTunnels(document.components, document.topology, document.interface);
+    return { ok: true, document: {
+      ...document,
+      components: migrated.components,
+      topology: migrated.topology,
+      interface: migrated.interfaceEntries,
+    } };
 }
 
 /** Serializa de volta pro shape de arquivo -- determinístico (mesma ordem de chaves sempre),

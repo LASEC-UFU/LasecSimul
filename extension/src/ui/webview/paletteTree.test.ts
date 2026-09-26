@@ -142,6 +142,17 @@ const catalog: PaletteRenderableEntry[] = [
     assert(analogTree.includes("passive.resistor"), "Analógico ainda deveria conter componentes eletricamente analógicos, ex. resistor");
   });
 
+  await test("túnel elétrico e túnel de sinal ficam juntos em Miscelâneos > Conectores", () => {
+    const tree = buildPaletteTree([...defaultComponentCatalog, ...controlGraphCatalog], "", "misc");
+    const connectors = tree.find((node) => node.kind === "folder" && node.label === "Conectores");
+    assert(connectors?.kind === "folder", "pasta Conectores não encontrada");
+    if (connectors?.kind === "folder") {
+      const types = connectors.children.filter((node) => node.kind === "component").map((node) => node.typeId);
+      assert(types.includes("connectors.tunnel") && types.includes("connectors.signal_tunnel"),
+        `ambos os túneis devem estar em Conectores: ${types.join(", ")}`);
+    }
+  });
+
   await test("catalogo real expoe Modbus e HART em Process/Protocolos Industriais", () => {
     const processTree = JSON.stringify(buildPaletteTree(defaultComponentCatalog, "", "process"));
     assert(processTree.includes("protocol.modbus.server") && processTree.includes("protocol.modbus.client"), "Processo deveria conter servidor e cliente Modbus");

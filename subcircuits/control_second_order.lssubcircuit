@@ -11,7 +11,7 @@
   "components": [
     {
       "id": "in-tunnel",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "properties": {
         "name": "in",
         "pinId": "in",
@@ -45,7 +45,7 @@
     },
     {
       "id": "out-tunnel",
-      "typeId": "connectors.tunnel",
+      "typeId": "connectors.signal_tunnel",
       "properties": {
         "name": "out",
         "pinId": "out",
@@ -68,7 +68,7 @@
         "from": {
           "kind": "port",
           "componentId": "in-tunnel",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
@@ -87,7 +87,7 @@
         "to": {
           "kind": "port",
           "componentId": "out-tunnel",
-          "pinId": "pin"
+          "pinId": "value"
         },
         "points": []
       }

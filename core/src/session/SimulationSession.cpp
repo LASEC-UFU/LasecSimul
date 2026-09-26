@@ -1266,37 +1266,6 @@ void SimulationSession::connectWire(uint32_t componentA, const std::string& pinI
     });
 }
 
-namespace {
-/** Lança se `componentIndex` (ou outro túnel com o mesmo `name`) já está preso no domínio OPOSTO
- * de `signalDomain` -- puramente leitura, nunca muta os mapas. Separado de
- * `commitTunnelDomain` (que só grava) porque `connectWireUnlocked` pode precisar comprometer DOIS
- * túneis (`componentA` e `componentB`) na mesma chamada: validar os dois ANTES de gravar qualquer
- * um evita deixar o primeiro "comprometido" no mapa quando o segundo rejeita -- a conexão inteira
- * precisa ser atômica (nenhuma mutação de estado sobrevive a uma exceção), mesma garantia que toda
- * outra falha de `connectWireUnlocked` já preserva. */
-void validateTunnelDomain(const std::unordered_map<uint32_t, bool>& domainByComponent,
-                          const std::unordered_map<std::string, bool>& domainByName,
-                          const std::string& liveName, uint32_t componentIndex, bool signalDomain) {
-    if (const auto existing = domainByComponent.find(componentIndex); existing != domainByComponent.end()) {
-        if (existing->second != signalDomain) {
-            throw std::invalid_argument(
-                "SimulationSession::connectWire: este túnel já está comprometido com o domínio " +
-                std::string(existing->second ? "de sinal" : "elétrico") +
-                " por outro fio -- não pode também ser usado como " +
-                std::string(signalDomain ? "sinal" : "elétrico"));
-        }
-    }
-    if (liveName.empty()) return;
-    if (const auto namedExisting = domainByName.find(liveName);
-        namedExisting != domainByName.end() && namedExisting->second != signalDomain) {
-        throw std::invalid_argument(
-            "SimulationSession::connectWire: outro túnel chamado '" + liveName +
-            "' já está comprometido com o domínio " + std::string(namedExisting->second ? "de sinal" : "elétrico") +
-            " -- todo túnel com este nome precisa ficar no mesmo domínio");
-    }
-}
-} // namespace
-
 /** Nome AO VIVO do túnel nesta instância (`Netlist::tunnelNameOfSlot`, nunca
  * `components::Tunnel::name()` -- este só reflete o que foi persistido via getState/setState,
  * fica vazio pra toda renomeação feita durante a sessão atual via `setTunnelName`). String vazia
@@ -1306,18 +1275,6 @@ std::string SimulationSession::liveTunnelNameUnlocked(uint32_t componentIndex) c
     const auto slot = slots.find("pin");
     if (slot == slots.end()) return {};
     return m_netlist.tunnelNameOfSlot(slot->second);
-}
-
-void SimulationSession::validateTunnelDomainUnlocked(uint32_t componentIndex, bool signalDomain) const {
-    validateTunnelDomain(m_tunnelDomainByComponent, m_tunnelDomainByName, liveTunnelNameUnlocked(componentIndex),
-                         componentIndex, signalDomain);
-}
-
-void SimulationSession::commitTunnelDomainUnlocked(uint32_t componentIndex, bool signalDomain) {
-    validateTunnelDomainUnlocked(componentIndex, signalDomain);
-    m_tunnelDomainByComponent.insert_or_assign(componentIndex, signalDomain);
-    const std::string liveName = liveTunnelNameUnlocked(componentIndex);
-    if (!liveName.empty()) m_tunnelDomainByName.insert_or_assign(liveName, signalDomain);
 }
 
 void SimulationSession::connectWireUnlocked(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
@@ -1331,45 +1288,8 @@ void SimulationSession::connectWireUnlocked(uint32_t componentA, const std::stri
     // como Signal Graph port nunca deveria disparar a exceção elétrica "pin inexistente" só porque
     // não está em `Netlist::pinSlotsOf`. Mesma entrada IPC (`connectWire`/`applyWireTopologyTransaction`)
     // pros dois domínios -- nunca um segundo mecanismo de fiação, ver `SignalWireDefinition`.
-    std::optional<SignalPortDescriptor> signalPortA = findSignalPortUnlocked(componentA, pinIdA);
-    std::optional<SignalPortDescriptor> signalPortB = findSignalPortUnlocked(componentB, pinIdB);
-    // `connectors.tunnel` é de domínio DUPLO (ver `components::Tunnel::signalPorts()`): sempre
-    // declara uma porta de sinal, então sem isto qualquer fio ligando um túnel comum a um pino
-    // elétrico normal (resistor, LED...) cairia direto no erro abaixo -- ele teria virado, na
-    // prática, impossível de usar eletricamente outra vez. Resolve a ambiguidade pelo que está do
-    // OUTRO lado do fio: um lado concreto (não-túnel) decide o domínio do túnel flexível; dois
-    // túneis flexíveis, nenhum ainda comprometido, seguem a convenção antiga (elétrico) -- nunca
-    // quebra autoria já publicada, onde todo par túnel-túnel sempre foi elétrico.
-    const auto isDualDomainTunnel = [this](uint32_t component) {
-        return m_componentInstances.at(component) &&
-               std::string_view(m_componentInstances.at(component)->typeId()) == "connectors.tunnel";
-    };
-    const bool aFlexible = signalPortA.has_value() && isDualDomainTunnel(componentA);
-    const bool bFlexible = signalPortB.has_value() && isDualDomainTunnel(componentB);
-    if (aFlexible || bFlexible) {
-        const auto committedDomain = [this](uint32_t component) -> std::optional<bool> {
-            const auto it = m_tunnelDomainByComponent.find(component);
-            return it == m_tunnelDomainByComponent.end() ? std::nullopt : std::optional<bool>(it->second);
-        };
-        bool wantSignal;
-        if (aFlexible && bFlexible) {
-            wantSignal = committedDomain(componentA).value_or(false) || committedDomain(componentB).value_or(false);
-        } else if (aFlexible) {
-            wantSignal = signalPortB.has_value(); // o lado concreto B decide
-        } else {
-            wantSignal = signalPortA.has_value(); // o lado concreto A decide
-        }
-        // Valida os DOIS lados (sem mutar nada) antes de gravar qualquer um: se A comprometesse
-        // primeiro e B rejeitasse depois, A ficaria "preso" mesmo com o fio inteiro rejeitado --
-        // toda falha de connectWire precisa deixar zero mutação de estado.
-        if (aFlexible)
-            validateTunnelDomainUnlocked(componentA, wantSignal);
-        if (bFlexible)
-            validateTunnelDomainUnlocked(componentB, wantSignal);
-        if (aFlexible) commitTunnelDomainUnlocked(componentA, wantSignal);
-        if (bFlexible) commitTunnelDomainUnlocked(componentB, wantSignal);
-        if (!wantSignal) { signalPortA.reset(); signalPortB.reset(); }
-    }
+    const std::optional<SignalPortDescriptor> signalPortA = findSignalPortUnlocked(componentA, pinIdA);
+    const std::optional<SignalPortDescriptor> signalPortB = findSignalPortUnlocked(componentB, pinIdB);
     if (signalPortA && signalPortB) {
         connectSignalWireUnlocked(componentA, *signalPortA, componentB, *signalPortB);
         return;
@@ -1578,13 +1498,9 @@ void SimulationSession::connectSignalWireUnlocked(uint32_t componentA, const Sig
     // elétrico -- nunca genérica pra qualquer componente comum), o papel efetivo de um endpoint
     // tunnel é o COMPLEMENTAR do outro lado, não sua própria `direction` declarada. Encadear dois
     // tunnels direto um no outro (raro) cai no caso normal abaixo, sem ambiguidade adicional.
-    // `connectors.tunnel` entra no MESMO papel-coringa quando um fio dele acabou resolvendo pro
-    // domínio de sinal (ver `connectWireUnlocked`'s `isDualDomainTunnel`/`commitTunnelDomainUnlocked`)
-    // -- um túnel de domínio duplo usado como sinal é, pra este relay, indistinguível de um
-    // `connectors.signal_tunnel` comum.
     const auto isRelayTunnel = [this](uint32_t component) {
         const std::string_view typeId(m_componentInstances.at(component)->typeId());
-        return typeId == "connectors.signal_tunnel" || typeId == "connectors.tunnel";
+        return typeId == "connectors.signal_tunnel";
     };
     const bool aIsTunnel = m_componentInstances.at(componentA) && isRelayTunnel(componentA);
     const bool bIsTunnel = m_componentInstances.at(componentB) && isRelayTunnel(componentB);
@@ -1648,20 +1564,9 @@ bool SimulationSession::disconnectSignalWireUnlocked(uint32_t componentA, const 
 }
 
 namespace {
-/**
- * Os dois túneis que funcionam como RELAY do Signal Graph.
- *
- * `connectors.signal_tunnel` é o relay nativo; `connectors.tunnel` é o túnel ELÉTRICO legado, que
- * a biblioteca Ctrl/TDPS publicada usa como relay de sinal -- exatamente a mesma equivalência que
- * `ProcessSubcircuitCompiler` já assume ("Legacy process documents used the electrical tunnel as a
- * signal relay"). Nos dois casos a `direction` declarada descreve apenas o papel de FRONTEIRA (quem
- * de fora pode dirigir o túnel), nunca se o BLOCO precisa de uma entrada: `Tunnel::signalPorts()`
- * devolve `Output` fixo, então tratar só o relay nativo como relay fazia todo túnel elétrico
- * alimentado por um fio nascer como `ExternalInput` sem porta `"in"` -- e a conexão correspondente
- * falhava com "porta de entrada inexistente: sig.N.pin.in" ao compilar o SignalPlan.
- */
+/** Apenas o túnel de sinal participa do Signal Graph. */
 bool isRelayTunnelTypeId(std::string_view typeId) {
-    return typeId == "connectors.signal_tunnel" || typeId == "connectors.tunnel";
+    return typeId == "connectors.signal_tunnel";
 }
 } // namespace
 
@@ -1684,11 +1589,14 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
     // silenciosamente pulada lá embaixo -- reproduzindo exatamente o mesmo "entrada sem conexao" que
     // esta materialização existe pra evitar.
     std::unordered_set<std::string> wiredInputTargets;
+    std::unordered_set<uint32_t> wiredSignalComponents;
     for (const SignalWireDefinition& wire : m_signalWires) {
         if (!findSignalPortUnlocked(wire.sourceComponent, wire.sourcePort) ||
             !findSignalPortUnlocked(wire.targetComponent, wire.targetPort))
             continue;
         wiredInputTargets.insert(signalPortBlockId(wire.targetComponent, wire.targetPort));
+        wiredSignalComponents.insert(wire.sourceComponent);
+        wiredSignalComponents.insert(wire.targetComponent);
     }
     // Túneis de relay com o MESMO nome são a MESMA rede. No domínio elétrico o `Netlist` já funde
     // por nome (passada 1, união por grupo de túnel); no domínio de SINAL essa fusão não existia --
@@ -1713,7 +1621,7 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
     std::unordered_map<std::string, std::vector<uint32_t>> relayTunnelsByName;
     for (uint32_t index : m_activeComponentIndices) {
         if (!m_componentInstances[index] || !isRelayTunnelTypeId(m_componentInstances[index]->typeId())) continue;
-        const std::string name = liveTunnelNameUnlocked(index);
+        const std::string name = static_cast<const components::SignalTunnel*>(m_componentInstances[index].get())->runtimeName();
         if (!name.empty()) relayTunnelsByName[name].push_back(index);
     }
     // blockId do leitor -> blockId do driver que o alimenta.
@@ -1737,6 +1645,15 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
             const std::string readerBlockId = relaySignalBlockIdOf(index);
             if (!readerBlockId.empty()) tunnelNetSourceByReader.emplace(readerBlockId, driverBlockId);
         }
+    }
+
+    // Um SignalTunnel ainda solto no canvas nao tem efeito no grafo. Materializa-lo como
+    // ExternalInput criaria um evento a cada 1 ns sem nenhuma simulacao util.
+    std::unordered_set<uint32_t> activeSignalTunnels = wiredSignalComponents;
+    for (const auto& [name, indices] : relayTunnelsByName) {
+        const bool groupIsWired = std::any_of(indices.begin(), indices.end(),
+            [&](uint32_t index) { return wiredSignalComponents.count(index) != 0; });
+        if (groupIsWired) activeSignalTunnels.insert(indices.begin(), indices.end());
     }
 
     // Malha de controle é, por definição, um loop algébrico: `SignalCompiler` só aceita um SCC se
@@ -1783,6 +1700,8 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
 
     for (uint32_t index : m_activeComponentIndices) {
         IComponentModel* component = m_componentInstances[index].get();
+        if (isRelayTunnelTypeId(component->typeId()) && activeSignalTunnels.count(index) == 0)
+            continue;
         const auto* mathBlock = dynamic_cast<const components::SignalMathBlock*>(component);
         for (const SignalPortDescriptor& port : component->signalPorts()) {
             // A porta de SAÍDA de um bloco de controle não vira relay: quem publica
@@ -1798,7 +1717,7 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
                 ? simulation::SignalScalarType::Bool : simulation::SignalScalarType::Real;
             block.output = {"out", {scalar, 1}, port.unit};
             block.rate = {1, 0, 0};
-            // Túnel de relay (nativo OU elétrico legado, ver `isRelayTunnelTypeId`):
+            // Túnel de sinal (`connectors.signal_tunnel`):
             // sua declared `direction` só descreve o papel de FRONTEIRA (quem de fora pode dirigi-lo),
             // nunca decide sozinha se o BLOCO precisa de um `"in"` -- é `wiredInputTargets` (o fato de
             // ALGUÉM, dentro ou fora do subcircuito, já apontar um fio pra ele) que decide isso pra um
@@ -2359,6 +2278,10 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
         if (compDef.typeId == "connectors.tunnel") {
             const std::string internalName = tunnelNameFromPropertiesJson(compDef.propertiesJson);
             if (!internalName.empty()) setTunnelNameUnlocked(childIndex, "pin", "", internalName);
+        } else if (compDef.typeId == "connectors.signal_tunnel") {
+            auto* tunnel = static_cast<components::SignalTunnel*>(m_componentInstances[childIndex].get());
+            if (!tunnel->name().empty())
+                tunnel->setNamespace(std::to_string(subcircuitInstanceId) + "::");
         }
     }
 
@@ -2411,7 +2334,7 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
             // elétrico -- ver `SignalTunnel.hpp`.
             const auto signalTunnelIt = std::find_if(
                 def->components.begin(), def->components.end(), [&](const registry::SubcircuitComponentDef& c) {
-                    return (c.typeId == "connectors.signal_tunnel" || c.typeId == "connectors.tunnel") &&
+                    return c.typeId == "connectors.signal_tunnel" &&
                            tunnelNameFromPropertiesJson(c.propertiesJson) == ifaceDef.internalTunnel;
                 });
             if (signalTunnelIt == def->components.end()) {
@@ -2419,18 +2342,14 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
                                           "' referencia signal tunnel interno inexistente: " + ifaceDef.internalTunnel);
             }
             const uint32_t signalTunnelIndex = componentIndexByLocalId.at(signalTunnelIt->id);
-            const bool isDualDomainTunnel = signalTunnelIt->typeId == "connectors.tunnel";
-            const std::string signalPortId = isDualDomainTunnel ? "pin" : std::string(components::SignalTunnel::kPortId);
+            const std::string signalPortId(components::SignalTunnel::kPortId);
             // `ifaceDef.direction` é só metadado de CATÁLOGO (permite a Extension desenhar a seta do
             // pino de fronteira sem instanciar nada) -- a fonte real de verdade é sempre a própria
             // instância `SignalTunnel` (ver doc de `exposedSignalPins`). Uma declaração "in"/"out"
             // que diverge da instância real é rejeitada aqui, na hora da expansão -- nunca
             // silenciosamente ignorada, o que deixaria o catálogo mentindo pro usuário sobre o
             // sentido do fio.
-            // O Tunnel de domínio duplo não carrega direction própria: sua porta começa como
-            // Output e o fio de cada lado determina o papel efetivo no relay. A direção da
-            // interface continua sendo validada para SignalTunnel, que possui direction fixa.
-            if (!isDualDomainTunnel && (ifaceDef.direction == "in" || ifaceDef.direction == "out")) {
+            if (ifaceDef.direction == "in" || ifaceDef.direction == "out") {
                 const std::optional<SignalPortDescriptor> resolvedPort =
                     findSignalPortUnlocked(signalTunnelIndex, signalPortId);
                 // Convenção deliberada: `direction:"in"` (de fora pra dentro do subcircuito) exige

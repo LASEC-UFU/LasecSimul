@@ -302,10 +302,10 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
     const pinId = `external-${String(variable).padStart(2, "0")}`;
     const componentId = `tunnel-${pinId}`;
     external.set(variable, componentId);
-    components.push({ id: componentId, typeId: "connectors.tunnel", label: pinId, properties: { name: pinId, pinId, direction: "Input", valueType: "Real", legacyVariableIndex: variable, samplePeriodNs: 10_000_000 }, visual: { x: 20, y: 40 + external.size * 30, rotation: 0 } });
+    components.push({ id: componentId, typeId: "connectors.signal_tunnel", label: pinId, properties: { name: pinId, pinId, direction: "Input", valueType: "Real", legacyVariableIndex: variable, samplePeriodNs: 10_000_000 }, visual: { x: 20, y: 40 + external.size * 30, rotation: 0 } });
     interfaces.push({ pinId, label: pinId, internalTunnel: pinId, domain: "signal", direction: "in", valueType: "Real", width: 1 });
     pins.push({ id: pinId, label: pinId, kind: "ANALOG_IN", x: 0, y: 20 + external.size * 20, angle: 180, length: 8 });
-    return { componentId, pinId: "pin" };
+    return { componentId, pinId: "value" };
   };
   const connectVariable = (variable: number, targetComponentId: string, targetPinId: string): void => {
     const source = producers.get(variable) ?? ensureExternal(variable);
@@ -353,14 +353,14 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
       if (endpoint.kind !== "port") continue;
       const componentId = endpoint.componentId;
       const component = components.find((candidate) => candidate.id === componentId);
-      if (!component || component.typeId === "connectors.tunnel") continue;
+      if (!component || component.typeId === "connectors.signal_tunnel") continue;
       const tunnelId = `tunnel-${conductor.id}-${side}`;
       if (tunnelEndpoints.has(tunnelId)) continue;
       tunnelEndpoints.add(tunnelId);
       const direction = side === "from" ? 1 : -1;
       components.push({
         id: tunnelId,
-        typeId: "connectors.tunnel",
+        typeId: "connectors.signal_tunnel",
         label: conductor.id,
         properties: { name: conductor.id },
         visual: { x: (component.visual?.x ?? 0) + direction * 48, y: component.visual?.y ?? 0, rotation: direction > 0 ? 0 : 180 },
@@ -373,10 +373,10 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
     const source = producers.get(variable)!;
     const pinId = `output-${String(variable).padStart(2, "0")}`;
     const componentId = `tunnel-${pinId}`;
-    components.push({ id: componentId, typeId: "connectors.tunnel", label: pinId, properties: { name: pinId, pinId, direction: "Output", valueType: "Real", legacyVariableIndex: variable, samplePeriodNs: 10_000_000 }, visual: { x: 1000, y: 40 + interfaces.length * 30, rotation: 180 } });
+    components.push({ id: componentId, typeId: "connectors.signal_tunnel", label: pinId, properties: { name: pinId, pinId, direction: "Output", valueType: "Real", legacyVariableIndex: variable, samplePeriodNs: 10_000_000 }, visual: { x: 1000, y: 40 + interfaces.length * 30, rotation: 180 } });
     interfaces.push({ pinId, label: pinId, internalTunnel: pinId, domain: "signal", direction: "out", valueType: "Real", width: 1 });
     pins.push({ id: pinId, label: pinId, kind: "ANALOG_OUT", x: 140, y: 20 + outputVariables.indexOf(variable) * 20, angle: 0, length: 8 });
-    addWire(source.componentId, source.pinId, componentId, "pin");
+    addWire(source.componentId, source.pinId, componentId, "value");
   }
 
   // Divide cada ligação em dois trechos locais: porta -> túnel e túnel -> porta.
@@ -386,7 +386,7 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
     const endpointTunnelName = (endpoint: typeof conductor.from): string | undefined => {
       if (endpoint.kind !== "port") return undefined;
       const candidate = componentById.get(endpoint.componentId);
-      if (!candidate || candidate.typeId !== "connectors.tunnel") return undefined;
+      if (!candidate || candidate.typeId !== "connectors.signal_tunnel") return undefined;
       const value = candidate.properties.pinId ?? candidate.properties.name;
       return typeof value === "string" && value.trim() ? value.trim() : undefined;
     };
@@ -396,13 +396,13 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
       const endpoint = conductor[side];
       if (endpoint.kind !== "port") continue;
       const component = componentById.get(endpoint.componentId);
-      if (!component || component.typeId === "connectors.tunnel") continue;
+      if (!component || component.typeId === "connectors.signal_tunnel") continue;
       const tunnelId = `tunnel-${conductor.id}-${side}`;
       if (componentById.has(tunnelId)) continue;
       const direction = side === "from" ? 1 : -1;
       const tunnel: ProjectComponent = {
         id: tunnelId,
-        typeId: "connectors.tunnel",
+        typeId: "connectors.signal_tunnel",
         label: tunnelName,
         properties: { name: tunnelName },
         visual: { x: (component.visual?.x ?? 0) + direction * 48, y: component.visual?.y ?? 0, rotation: direction > 0 ? 0 : 180 },
@@ -414,7 +414,7 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
   topology.conductors = topology.conductors.flatMap((conductor) => {
     const fromComponent = conductor.from.kind === "port" ? componentById.get(conductor.from.componentId) : undefined;
     const toComponent = conductor.to.kind === "port" ? componentById.get(conductor.to.componentId) : undefined;
-    if (fromComponent?.typeId === "connectors.tunnel" || toComponent?.typeId === "connectors.tunnel") {
+    if (fromComponent?.typeId === "connectors.signal_tunnel" || toComponent?.typeId === "connectors.signal_tunnel") {
       return [{ ...conductor, vertices: [] }];
     }
     const local: ProjectTopology["conductors"] = [];
@@ -422,9 +422,9 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
       const endpoint = conductor[side];
       if (endpoint.kind !== "port") continue;
       const component = componentById.get(endpoint.componentId);
-      if (!component || component.typeId === "connectors.tunnel") continue;
+      if (!component || component.typeId === "connectors.signal_tunnel") continue;
       const tunnelId = `tunnel-${conductor.id}-${side}`;
-      const tunnelEndpoint = { kind: "port" as const, componentId: tunnelId, pinId: "pin" };
+      const tunnelEndpoint = { kind: "port" as const, componentId: tunnelId, pinId: "value" };
       local.push(side === "from"
         ? { id: `${conductor.id}-from`, from: endpoint, to: tunnelEndpoint, vertices: [] }
         : { id: `${conductor.id}-to`, from: tunnelEndpoint, to: endpoint, vertices: [] });
@@ -436,7 +436,7 @@ export function convertTdpsToSubcircuit(model: TdpsModel, typeId = `subcircuits.
     if (!conductor.id.endsWith("-from") || conductor.from.kind !== "port" || conductor.to.kind !== "port") continue;
     const source = componentById.get(conductor.from.componentId);
     const tunnel = componentById.get(conductor.to.componentId);
-    if (!source || tunnel?.typeId !== "connectors.tunnel") continue;
+    if (!source || tunnel?.typeId !== "connectors.signal_tunnel") continue;
     const key = `${conductor.from.componentId}:${conductor.from.pinId}`;
     const group = sourceGroups.get(key) ?? [];
     group.push({ conductor, tunnel, baseId: conductor.id.slice(0, -5) });
