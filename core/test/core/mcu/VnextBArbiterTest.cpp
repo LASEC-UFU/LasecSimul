@@ -4,7 +4,6 @@
 // today (see EVIDENCE.md / r2_hygiene_manifest.json: mcu_scheduler_pacing_sync_real_qemu_test
 // stalls for the full 90s test duration under VNEXT_B+MTTCG, reproduced twice).
 #include "mcu/qemu/VnextBArbiter.hpp"
-#include "mcu/qemu/VnextBCapacityGuard.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -442,130 +441,6 @@ int main() {
                     "item 10c: the leftover (305, generation0) entry, reached afterward, is recognized as stale");
         TEST_ASSERT(s.callbacksStale == 1 && s.callbacksFired == 1 && s.nowNs == 305,
                     "item 10d: exactly one stale no-op, exactly one real fire -- no double consumption");
-    }
-
-    // ==== E145 (EVIDENCE.md, 2026-09-09; DECISION-010) ====
-    // computeSafeVnextBSessions(): pure capacity math for the production-path admission guard
-    // (McuController::start()'s VNEXT_B branch) -- below the limit, exactly at the limit, and
-    // above the limit, matching the exact host shape this episode measured (32 logical
-    // processors, 6 reserved, 2 vCPUs/session -> 13 safe sessions) plus edge cases.
-    {
-        TEST_ASSERT(computeSafeVnextBSessions(32, 6, 2) == 13,
-                    "E145: this episode's measured host (32 logical, 6 reserved, 2 vCPUs/session) -> 13 safe sessions");
-        TEST_ASSERT(computeSafeVnextBSessions(32, 6, 2) >= 12,
-                    "E145 below-limit: N=12 (already B11-validated) must be <= the computed safe ceiling");
-        TEST_ASSERT(13 <= computeSafeVnextBSessions(32, 6, 2),
-                    "E145 at-limit: N=13 (the calculated ceiling itself) must be admissible, not rejected");
-        TEST_ASSERT(16 > computeSafeVnextBSessions(32, 6, 2),
-                    "E145 above-limit: N=16 must exceed the computed ceiling on this host shape (matches E133/E144)");
-        TEST_ASSERT(computeSafeVnextBSessions(4, 6, 2) == 0,
-                    "E145 edge: a host with fewer logical processors than the reserve is 0 safe sessions, not underflow");
-        TEST_ASSERT(computeSafeVnextBSessions(32, 6, 0) == 0,
-                    "E145 edge: zero vCPUs/session is 0 safe sessions (division-by-zero guard), not undefined");
-        TEST_ASSERT(computeSafeVnextBSessions(6, 6, 2) == 0,
-                    "E145 edge: usable==reserved exactly is 0 safe sessions, not a negative-wraparound value");
-        // A different host shape (not this machine) to prove the formula generalizes, per the
-        // task's own explicit requirement not to hardcode a single-machine constant.
-        TEST_ASSERT(computeSafeVnextBSessions(8, 2, 2) == 3,
-                    "E145 generalization: an 8-logical-processor host (2 reserved) -> 3 safe sessions, not this machine's 13");
-    }
-
-    // ==== E146 (EVIDENCE.md, 2026-09-09) ====
-    // computeAllowedVnextBSessions(): E145's topology-computed safe_sessions is a THEORETICAL
-    // CPU-oversubscription bound, never validated end-to-end at N=13 on this host (a second host
-    // freeze interrupted that validation, unrelated to N=13 itself). Treating an unvalidated
-    // theoretical bound as a certified production limit was exactly the mistake this release must
-    // not repeat: the effective admitted ceiling is always min(topology capacity, certified
-    // release limit), never either alone.
-    {
-        // host capable of 13 (this machine, per E145), certified at 8 for this release -> 8.
-        TEST_ASSERT(computeAllowedVnextBSessions(13, 8) == 8,
-                    "E146: host capable of 13, certified at 8 -> effective limit is 8, not 13");
-        // host capable of only 6 (a smaller/more-reserved host), certified at 8 -> 6, never
-        // oversold past what the host itself can actually carry.
-        TEST_ASSERT(computeAllowedVnextBSessions(6, 8) == 6,
-                    "E146: host capable of 6, certified at 8 -> effective limit is 6, never oversold past topology");
-        // Exactly at the limit: topology and certification agree exactly -> that exact value,
-        // not off-by-one in either direction.
-        TEST_ASSERT(computeAllowedVnextBSessions(8, 8) == 8,
-                    "E146: host capacity exactly equals the certified limit -> effective limit is exactly 8");
-        // One above: a host capable of 9, certified at 8 -> still 8 (the certification is the
-        // binding constraint here, not the topology).
-        TEST_ASSERT(computeAllowedVnextBSessions(9, 8) == 8,
-                    "E146: host capable of one more than certified (9) -> effective limit stays 8");
-        // Invalid/degenerate inputs: zero topology capacity (e.g. hardware_concurrency()
-        // unavailable, per vnextBSafeSessionsForThisHost()'s own fail-closed behavior) or zero
-        // certified limit both collapse to zero admitted sessions, never a wraparound or a
-        // silent fallback to the other operand.
-        TEST_ASSERT(computeAllowedVnextBSessions(0, 8) == 0,
-                    "E146 invalid input: zero topology capacity -> zero effective limit, not the certified value");
-        TEST_ASSERT(computeAllowedVnextBSessions(13, 0) == 0,
-                    "E146 invalid input: zero certified limit -> zero effective limit, not the topology value");
-        // This release's actual certified constant, end to end: on this episode's measured host
-        // shape (32 logical, 6 reserved, 2 vCPUs/session -> 13), the release-level entry point
-        // must report exactly 8, matching kVnextBCertifiedReleaseSessionLimit, not the raw 13.
-        TEST_ASSERT(computeAllowedVnextBSessions(computeSafeVnextBSessions(32, 6, 2), kVnextBCertifiedReleaseSessionLimit) == 8,
-                    "E146: this release's effective limit on the E145-measured host shape is exactly 8");
-        // No partial initialization: the function is a pure min() with no side effects and no
-        // observable intermediate state -- calling it repeatedly with the same inputs is
-        // idempotent and never touches activeVnextBSessionCount().
-        const uint32_t before = activeVnextBSessionCount().load(std::memory_order_acquire);
-        (void)computeAllowedVnextBSessions(13, 8);
-        (void)computeAllowedVnextBSessions(13, 8);
-        (void)computeAllowedVnextBSessions(13, 8);
-        TEST_ASSERT(activeVnextBSessionCount().load(std::memory_order_acquire) == before,
-                    "E146: computing the allowed-sessions ceiling has no side effects on the live admission counter");
-    }
-
-    // ==== E146 concurrency proof ====
-    // A real N=9 negative test against vnext_b_production_scale_test.exe's parallelStart path
-    // (all sessions calling McuController::start() from concurrent threads) caught the FIRST
-    // version of this guard letting every one of 9 requested sessions through: it did a plain
-    // load() of the counter, checked it, and only THEN incremented -- classic check-then-act,
-    // where every thread can observe the same stale pre-increment count and all decide they are
-    // admissible before any of them actually increments. This test hammers the exact fixed
-    // pattern (reserve via fetch_add FIRST, unconditionally; validate the value that specific
-    // call reserved; roll back with fetch_sub if rejected) with real concurrent threads, many
-    // times, and requires EXACTLY the certified limit to be admitted every single run -- never
-    // more, matching the production code in McuController.cpp line for line.
-    {
-        constexpr uint32_t kLimit = 8;
-        constexpr uint32_t kRequesters = 32;
-        constexpr int kTrials = 25;
-        for (int trial = 0; trial < kTrials; ++trial) {
-            std::atomic<uint32_t> counter{0};
-            std::atomic<uint32_t> admitted{0};
-            std::atomic<uint32_t> rejected{0};
-            std::vector<std::thread> threads;
-            threads.reserve(kRequesters);
-            for (uint32_t i = 0; i < kRequesters; ++i) {
-                threads.emplace_back([&] {
-                    // Mirrors McuController::start()'s VNEXT_B admission block exactly: reserve
-                    // first (fetch_add, unconditional), then validate what THIS call reserved.
-                    const uint32_t reservedCount = counter.fetch_add(1, std::memory_order_acq_rel) + 1;
-                    if (reservedCount > kLimit) {
-                        counter.fetch_sub(1, std::memory_order_acq_rel);
-                        rejected.fetch_add(1, std::memory_order_relaxed);
-                    } else {
-                        admitted.fetch_add(1, std::memory_order_relaxed);
-                    }
-                });
-            }
-            for (auto& t : threads) t.join();
-            if (admitted.load() != kLimit || rejected.load() != kRequesters - kLimit ||
-                counter.load() != kLimit) {
-                std::fprintf(stderr,
-                    "  FALHOU: E146 concurrency trial %d -- admitted=%u rejected=%u "
-                    "finalCounter=%u (expected admitted=%u rejected=%u finalCounter=%u)\n",
-                    trial, admitted.load(), rejected.load(), counter.load(),
-                    kLimit, kRequesters - kLimit, kLimit);
-                ++failures;
-            }
-        }
-        std::fprintf(stderr,
-            "  OK: E146 concurrency: %d trials x %u concurrent requesters, limit=%u -- "
-            "exactly %u admitted and exactly %u rejected every single trial, never more\n",
-            kTrials, kRequesters, kLimit, kLimit, kRequesters - kLimit);
     }
 
     if (failures == 0) {

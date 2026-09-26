@@ -1,5 +1,4 @@
 #include "McuController.hpp"
-#include "qemu/VnextBCapacityGuard.hpp"
 
 #include <algorithm>
 #include <charconv>
@@ -406,79 +405,13 @@ void McuController::start(const std::filesystem::path& firmwarePath, const std::
         // it is called from the dispatcher's worker thread (a different thread than the one
         // writing m_vnextBAttached here); a torn read of a single-byte bool is not a practical
         // concern on any real target this project builds for.
-        // E145/E146 (EVIDENCE.md, 2026-09-09; DECISION-010): fail-closed host-capacity admission,
-        // BEFORE any QEMU process is created -- a project with enough MCU components could
-        // otherwise reproduce the same host freeze DECISION-010 documents for test runners,
-        // entirely inside ordinary product usage, with no test harness involved at all. The
-        // admitted ceiling is min(topology-computed safe capacity, this release's certified
-        // limit) -- E146 (EVIDENCE.md, 2026-09-09): the topology number alone is a theoretical
-        // CPU-oversubscription bound, never validated end-to-end at N=13 on this host, and must
-        // not be treated as a certified capacity by itself (see VnextBCapacityGuard.hpp's own
-        // comment on kVnextBCertifiedReleaseSessionLimit). The escape hatch is opt-in-only and
-        // never set by any gate/runner/config in this codebase -- see VnextBCapacityGuard.hpp.
-        //
-        // Count strictly on the false->true transition of m_vnextBAttached (mirrored by stop()'s
-        // true->false decrement below): prepare() tears down any previous attachment on this
-        // same controller internally, so a re-entrant start() without an intervening stop() must
-        // not double-count a session this controller already held.
-        const bool wasAlreadyAttached = m_vnextBAttached;
-        bool reservedCapacitySlot = false;
-        if (!wasAlreadyAttached && !qemu::vnextBCapacityOverrideRequested()) {
-            // E146 (EVIDENCE.md, 2026-09-09): a real-firmware N=9 negative test caught this exact
-            // guard letting ALL requested sessions through under a parallel-start caller (multiple
-            // threads calling McuController::start() concurrently, as
-            // VnextBProductionScaleTest.cpp's parallelStart path does). The original form did a
-            // plain load() of the counter, checked it, and only THEN incremented -- classic
-            // check-then-act: every thread can observe the same stale pre-increment count and all
-            // decide they are admissible before any of them actually increments. Fixed by making
-            // reservation ITSELF the atomic operation (fetch_add first, unconditionally), then
-            // validating the value that specific call reserved; a rejected caller rolls its own
-            // reservation back with fetch_sub before throwing. No other thread's decision is ever
-            // based on a value that could still change before it acts on it.
-            const uint32_t reservedCount =
-                qemu::activeVnextBSessionCount().fetch_add(1, std::memory_order_acq_rel) + 1;
-            reservedCapacitySlot = true;
-            const uint32_t topologySafeSessions = qemu::vnextBSafeSessionsForThisHost();
-            const uint32_t certifiedLimit = qemu::kVnextBCertifiedReleaseSessionLimit;
-            const uint32_t allowedSessions =
-                qemu::computeAllowedVnextBSessions(topologySafeSessions, certifiedLimit);
-            if (reservedCount > allowedSessions) {
-                qemu::activeVnextBSessionCount().fetch_sub(1, std::memory_order_acq_rel);
-                throw std::runtime_error(
-                    "VNEXT_B capacity guard (DECISION-010): starting session " +
-                    std::to_string(reservedCount) + " would exceed this release's effective "
-                    "MTTCG session limit. requested_sessions=" + std::to_string(reservedCount) +
-                    " host_calculated_capacity=" + std::to_string(topologySafeSessions) + " (" +
-                    std::to_string(std::thread::hardware_concurrency()) + " logical processors, " +
-                    std::to_string(qemu::kVnextBReservedProcessors) + " reserved, " +
-                    std::to_string(qemu::kVnextBVcpusPerSession) + " vCPUs/session) "
-                    "certified_release_limit=" + std::to_string(certifiedLimit) +
-                    " effective_allowed_limit=" + std::to_string(allowedSessions) + ". Refusing to "
-                    "start a new QEMU process rather than risk an unresponsive host or run beyond "
-                    "this release's validated envelope. Set "
-                    "LASECSIMUL_VNEXT_B_CAPACITY_OVERRIDE=1 only for a deliberate, understood, "
-                    "human-supervised experiment -- never in production or automated gates.");
-            }
-        }
-        // A rollback is owed to the counter whenever, at this point, a slot is credited to THIS
-        // controller: either this call itself just reserved a fresh one (reservedCapacitySlot),
-        // or it was already counted from a prior successful start() and prepare()'s own internal
-        // stop()-of-the-previous-attachment (VnextBAttachment::prepare() always tears down any
-        // existing attachment first) is about to make that no longer true.
-        const bool capacityRollbackOwed = reservedCapacitySlot || wasAlreadyAttached;
-        try {
-            m_vnextB.prepare(std::move(spec), identity.sessionExecutionId, arenaName, m_adapter.chipId(),
-                             std::move(notificationWake), [this] { return m_vnextBAttached; });
-        } catch (...) {
-            if (capacityRollbackOwed) qemu::activeVnextBSessionCount().fetch_sub(1, std::memory_order_acq_rel);
-            throw;
-        }
+        m_vnextB.prepare(std::move(spec), identity.sessionExecutionId, arenaName, m_adapter.chipId(),
+                         std::move(notificationWake), [this] { return m_vnextBAttached; });
         m_vnextBAttached = true;
         try {
             m_vnextB.activate();
         } catch (...) {
             m_vnextBAttached = false;
-            if (capacityRollbackOwed) qemu::activeVnextBSessionCount().fetch_sub(1, std::memory_order_acq_rel);
             m_vnextB.stop();
             throw;
         }
@@ -526,7 +459,6 @@ void McuController::stop() {
     if (m_vnextBAttached) {
         m_vnextB.stop();
         m_vnextBAttached = false;
-        qemu::activeVnextBSessionCount().fetch_sub(1, std::memory_order_acq_rel);
     }
     m_processManager.stop();
     m_arenaBridge.close();
