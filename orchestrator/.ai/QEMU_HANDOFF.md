@@ -1,5 +1,25 @@
 # START HERE - LasecSimul VNEXT_B / ESP32
 
+## v0.0.49 I2C runtime promotion and installer build (2026-09-27)
+
+CURRENT_OBJECTIVE = Publish v0.0.49 installers with the generic ESP32 I2C STOP/FIFO fix.
+WHERE_I_STOPPED = The first GitHub package run rejected the new vendored QEMU because QEMU_RUNTIME.json still held the old hash. That run was cancelled; the manifest and local canonical executable now match the tested binary.
+WHY_I_STOPPED = Re-dispatch is required because a workflow run checks out an immutable commit.
+LAST_ACTION = Promoted QEMU source b211e01 and executable SHA-256 C25B9C66B2A358C740C41ABE7EF043736FE9C9659A61A27E27BBE6C7743D678B; updated the manifest.
+LAST_RESULT = Real user firmware: LEGACY 30 s, 558 OLED frames and 307 telemetry lines; VNEXT_B 8 s, 34 telemetry lines. Both had zero ESP_ERR_INVALID_STATE and zero FIFO errors.
+CURRENT_BLOCKER = None after pushing the corrected manifest.
+NEXT_EXACT_ACTION = Dispatch package-installers.yml for v0.0.49 and verify the Windows job and release assets.
+NEXT_COMMAND = gh workflow run package-installers.yml --ref main -f version=v0.0.49 -f tag_repository=true -f publish_release=true
+EXPECTED_PASS = Windows package, bundled QEMU handshake, release upload, tag and release succeed.
+EXPECTED_FAIL = Any Windows job failure, missing installer asset, or release mismatch.
+IF_PASS = Record run and release links.
+IF_FAIL = Inspect the failing step and repair the specific cause before another dispatch.
+WHAT_CHANGED_THIS_TURN = QEMU STOP/FIFO repair, bundled binary, provenance and canonical runtime hash.
+OPEN_PROBLEMS = Historical multi-session certification is outside this single-session I2C validation.
+DO_NOT_CHANGE = Preserve the unrelated untracked vnext_prototype/reg_v0045.log.
+DO_NOT_REPEAT = Do not dispatch with a vendored QEMU hash different from QEMU_RUNTIME.json.
+FILES_TO_INSPECT_FIRST = orchestrator/.ai/QEMU_RUNTIME.json; .github/workflows/package-installers.yml; devices/qemu-esp32/bin/BUILD-PROVENANCE-1H.txt.
+
 ## LOCAL USER-PROJECT HANDOFF — E148 LED/UART acceptance (2026-09-14)
 
 Current local work: repair Arduino 3.3.9 GPIO13/115200 UART on the user's complete

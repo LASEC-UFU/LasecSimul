@@ -1,5 +1,13 @@
 # NEXT ACTION
 
+## v0.0.49 installer rerun (2026-09-27)
+
+Push the QEMU_RUNTIME.json hash correction, then dispatch `Package Installers`
+for `v0.0.49` on `main` with tagging and release enabled. Verify Windows
+package, bundled QEMU handshake, tag, release and installer asset. The first
+run (36356998037) was cancelled after the optional Linux package step exposed
+the old manifest hash.
+
 ## E148 local ESP32 LED/UART handoff (2026-09-14)
 
 User project acceptance is green on the local development candidate (connected

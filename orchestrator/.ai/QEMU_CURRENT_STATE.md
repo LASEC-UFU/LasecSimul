@@ -1,5 +1,14 @@
 # QEMU build and runtime provenance
 
+## v0.0.49 I2C runtime (2026-09-27)
+
+Canonical and vendored QEMU now match source commit `b211e01` and SHA-256
+`C25B9C66B2A358C740C41ABE7EF043736FE9C9659A61A27E27BBE6C7743D678B`.
+The generic I2C STOP/FIFO repair passed 30 s LEGACY and 8 s VNEXT_B runs
+with the user's OLED firmware, zero `ESP_ERR_INVALID_STATE` and zero FIFO errors.
+This is single-session I2C evidence; the historical capacity entries below
+remain historical and do not certify additional session counts for this build.
+
 ## E145 state — QEMU unchanged; E141 candidate re-certified for Release+H143 with a computed, enforced safe MTTCG capacity; still unpromoted (2026-09-09)
 
 QEMU itself was not touched in E145 (out of scope). Current canonical
