@@ -103,7 +103,7 @@
     }
   ],
   "limits": {
-    "stepTimeoutMs": 8,
+    "stepTimeoutMs": 0,
     "expectedComplexity": "medium"
   },
   "package": {

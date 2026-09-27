@@ -382,7 +382,7 @@
     "description": "Ponte UART virtual para a extensão LasecPlot. Possui exclusivamente TX e RX."
   },
   "limits": {
-    "stepTimeoutMs": 1,
+    "stepTimeoutMs": 0,
     "expectedComplexity": "medium"
   }
 }
