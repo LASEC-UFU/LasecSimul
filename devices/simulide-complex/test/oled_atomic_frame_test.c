@@ -61,6 +61,28 @@ int main(void) {
                     display->oled_presented[32] == 0xaa,
                 "a command boundary must publish an intentionally partial update");
 
+    /* SSD1306 scroll changes the glass read address, never the GDDRAM. Stopping it must
+     * restore the original pixels; other pages remain stationary. */
+    memset(display->bytes, 0, 1024);
+    display->bytes[0] = 1;
+    display->bytes[128 + 10] = 1;
+    oled_present(display);
+    display->display_on = 1;
+    display->oled_scroll_start = display->oled_scroll_end = 0;
+    display->oled_scroll_right = 0;
+    oled_command(display, 0x2f);
+    oled_scroll_once(display);
+    uint8_t visible[1024];
+    visible_mono_payload(display, visible, sizeof visible);
+    ok &= check(visible[127] == 1 && visible[128 + 10] == 1,
+                "hardware scroll must wrap only its configured page");
+    ok &= check(display->bytes[0] == 1 && display->oled_presented[0] == 1,
+                "hardware scroll must not modify GDDRAM or front buffer");
+    oled_command(display, 0x2e);
+    visible_mono_payload(display, visible, sizeof visible);
+    ok &= check(visible[0] == 1 && visible[127] == 0 && visible[128 + 10] == 1,
+                "stopscroll must restore the unshifted GDDRAM image");
+
     free(display);
     if (ok) printf("OK: SSD1306 publishes only complete frames or explicit partial boundaries.\n");
     return ok ? 0 : 1;

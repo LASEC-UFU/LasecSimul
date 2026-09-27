@@ -88,17 +88,32 @@ const char* hostPinName(void* hostCtx, uint32_t index) {
 // ganha o MESMO CrashGuard/m_health de qualquer outro evento, sem duplicar essa lógica aqui.
 // `scheduleEventUnlocked` é seguro chamar de dentro de on_event/stamp (mesma seção travada do
 // settle); o callback em si dispara DEPOIS, já fora dela (ver Scheduler::processNextEventUntilLocked).
-void hostScheduleEvent(void* hostCtx, uint64_t delayNs, uint32_t eventId) {
-    auto* ctx = static_cast<NativeDeviceHostContext*>(hostCtx);
-    if (!ctx || !ctx->scheduler || !ctx->owner) return;
+void scheduleHostTimer(NativeDeviceHostContext* ctx, uint64_t delayNs, uint32_t eventId,
+                       bool schedulerLockHeld) {
     NativeDeviceProxy* owner = ctx->owner;
     auto deliver = [owner, ctx, eventId] {
         ctx->inUnlockedTimerCallback = true;
         owner->onEvent(ComponentEvent{kTimerEventTag, eventId, 0, 0});
         ctx->inUnlockedTimerCallback = false;
+        // onEvent() has released NativeDeviceProxy::m_deviceMutex here. The IPC telemetry
+        // path can hold Scheduler::m_mutex while reading that device; acquiring the Scheduler
+        // mutex inside onEvent() would invert those locks and freeze both threads.
+        for (const auto& [delay, id] : ctx->deferredTimerSchedules)
+            scheduleHostTimer(ctx, delay, id, false);
+        ctx->deferredTimerSchedules.clear();
     };
-    if (ctx->inUnlockedTimerCallback) ctx->scheduler->scheduleEvent(delayNs, std::move(deliver));
-    else ctx->scheduler->scheduleEventUnlocked(delayNs, std::move(deliver));
+    if (schedulerLockHeld) ctx->scheduler->scheduleEventUnlocked(delayNs, std::move(deliver));
+    else ctx->scheduler->scheduleEvent(delayNs, std::move(deliver));
+}
+
+void hostScheduleEvent(void* hostCtx, uint64_t delayNs, uint32_t eventId) {
+    auto* ctx = static_cast<NativeDeviceHostContext*>(hostCtx);
+    if (!ctx || !ctx->scheduler || !ctx->owner) return;
+    if (ctx->inUnlockedTimerCallback) {
+        ctx->deferredTimerSchedules.emplace_back(delayNs, eventId);
+        return;
+    }
+    scheduleHostTimer(ctx, delayNs, eventId, true);
 }
 
 uint64_t hostNowNs(void* hostCtx) {

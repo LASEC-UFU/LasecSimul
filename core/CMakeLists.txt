@@ -965,6 +965,7 @@ if(NOT WIN32)
     target_link_libraries(plugin_runtime_test PRIVATE dl)
 endif()
 add_test(NAME plugin_runtime COMMAND plugin_runtime_test)
+set_tests_properties(plugin_runtime PROPERTIES TIMEOUT 10)
 
 # Resiliência de MCU a crash de plugin (auditoria arquitetural 2026-07-09, Fase 3): prova, com
 # vtable sintética que desreferencia ponteiro nulo de propósito, que NativeMcuAdapterProxy/

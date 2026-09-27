@@ -3,6 +3,8 @@
 #include <memory>
 #include <mutex>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 #include "lasecsimul/IComponentModel.hpp"
 #include "lasecsimul/device_abi.h"
 #include "../registry/ComponentParams.hpp"
@@ -40,6 +42,9 @@ struct NativeDeviceHostContext {
      * deliberadamente com o mutex liberado. Host calls devem então usar as variantes públicas
      * sincronizadas; stamp/PIN_CHANGE usam as variantes Unlocked. */
     bool inUnlockedTimerCallback = false;
+    /** Timer callbacks hold the device lock. Queue their follow-up timers until onEvent()
+     * returns, so scheduleEvent() never waits for the Scheduler lock under that device lock. */
+    std::vector<std::pair<uint64_t, uint32_t>> deferredTimerSchedules;
 
     std::unordered_map<uint32_t, int32_t> pendingDigitalDrive;
     std::unordered_map<uint32_t, float> pendingAnalogDrive;

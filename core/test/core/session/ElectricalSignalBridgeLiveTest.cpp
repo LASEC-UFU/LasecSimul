@@ -89,7 +89,7 @@ void voltageSensorPublishesElectricalReadingAsSignal() {
     const uint32_t sensor = session.addComponent("bridges.voltage_sensor", {});
     ComponentParams gainParams;
     gainParams.properties["gain"] = 1.0;
-    gainParams.properties["samplePeriodNs"] = 10'000'000.0;
+    gainParams.properties["samplePeriodNs"] = 10.0;
     const uint32_t gain = session.addComponent("control.gain", gainParams);
 
     session.connectWire(source, "pin", r1, "p1");
@@ -102,12 +102,12 @@ void voltageSensorPublishesElectricalReadingAsSignal() {
     const auto plan = session.simulationPlan();
     check(plan != nullptr && plan->signal && plan->signal->engine, "(1) circuito misto elétrico+sinal com sensor de tensão compila");
 
-    // >= alguns períodos de amostragem do control.gain (10ms): a relay block do sensor ("sig.<idx>.
+    // >= alguns períodos de amostragem do control.gain (10ns): a relay block do sensor ("sig.<idx>.
     // value") fica no rate GENÉRICO (1ns, nunca herda o rate do bloco de controle -- só
     // `connectors.signal_tunnel` propaga rate, ver `controlRateByComponent` em
     // `materializeSignalGraphUnlocked`), então o rate group do gain só ativa nos múltiplos do
-    // período dele -- rodar só alguns ns nunca chegaria à primeira ativação.
-    session.scheduler().runUntil(50'000'000ull);
+    // período dele -- 50ns exercitam cinco ciclos sem iterar milhões de eventos de 1ns.
+    session.scheduler().runUntil(50ull);
     const double atGain = session.signalRuntime().real(session.signalRuntime().output(signalPortBlockId(gain, "in")));
     check(std::abs(atGain - 6.0) < 0.05, "(1) o valor de sinal lido pelo control.gain é a tensão real medida no ponto médio (~6V)");
 }
@@ -124,7 +124,7 @@ void controlledVoltageSourceDrivesElectricalNodeFromSignal() {
     const uint32_t ground = session.addComponent("other.ground", {});
     ComponentParams biasParams;
     biasParams.properties["bias"] = 9.0;
-    biasParams.properties["samplePeriodNs"] = 10'000'000.0;
+    biasParams.properties["samplePeriodNs"] = 10.0;
     const uint32_t bias = session.addComponent("control.bias", biasParams);
 
     session.connectWire(bias, "out", actuator, "command");
@@ -132,7 +132,7 @@ void controlledVoltageSourceDrivesElectricalNodeFromSignal() {
     session.connectWire(actuator, "n", ground, "pin");
     session.connectWire(resistor, "p2", ground, "pin");
 
-    session.scheduler().runUntil(50'000'000ull);
+    session.scheduler().runUntil(50ull);
     const auto current = session.componentCurrent(actuator);
     // Magnitude, não sinal: o que importa aqui é a Lei de Ohm (V/R) bater com o comando de sinal --
     // o SENTIDO da corrente é convenção interna do branch da fonte ideal, não o que este teste quer
@@ -153,7 +153,7 @@ void currentSensorPublishesElectricalReadingAsSignal() {
     const uint32_t ground = session.addComponent("other.ground", {});
     ComponentParams gainParams;
     gainParams.properties["gain"] = 1.0;
-    gainParams.properties["samplePeriodNs"] = 10'000'000.0;
+    gainParams.properties["samplePeriodNs"] = 10.0;
     const uint32_t gain = session.addComponent("control.gain", gainParams);
 
     session.connectWire(source, "pin", sensor, "p");
@@ -161,7 +161,7 @@ void currentSensorPublishesElectricalReadingAsSignal() {
     session.connectWire(resistor, "p2", ground, "pin");
     session.connectWire(sensor, "value", gain, "in");
 
-    session.scheduler().runUntil(50'000'000ull);
+    session.scheduler().runUntil(50ull);
     const double atGain = session.signalRuntime().real(session.signalRuntime().output(signalPortBlockId(gain, "in")));
     check(std::abs(std::abs(atGain) - 12.0 / 1000.0) < 1e-6, "(3) o sinal lido é a corrente real do laço (12V/1k = 12mA, magnitude)");
 }
@@ -191,14 +191,14 @@ void digitalSensorDrivesDigitalActuatorThroughSignalWire() {
     // `SignalDigitalOutput` não sobrescreve `current()` (só sensor/fonte analógica o fazem) -- lê a
     // corrente pelo RESISTOR (que sempre expõe `current()`), consequência elétrica real do estado
     // do atuador, não um atalho pro estado interno dele.
-    session.scheduler().runUntil(1'000'000ull);
+    session.scheduler().runUntil(100ull);
     const auto currentOff = session.componentCurrent(resistor);
     check(currentOff.has_value() && std::abs(*currentOff) < 1e-9, "(4a) sem fio de comando, saída digital fica em 0V (default false)");
 
     session.connectWire(sensor, "value", actuator, "command");
     const auto plan = session.simulationPlan();
     check(plan != nullptr && plan->signal && plan->signal->engine, "(4b) malha digital sensor->sinal->atuador compila");
-    session.scheduler().runUntil(5'000'000ull);
+    session.scheduler().runUntil(500ull);
     const auto currentOn = session.componentCurrent(resistor);
     check(currentOn.has_value() && std::abs(std::abs(*currentOn) - 5.0 / 1000.0) < 1e-6,
           "(4c) sensor digital mede 12V como 'true' -> atuador liga em 5V -> 5mA no resistor de 1k, tudo via fio comum");

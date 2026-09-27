@@ -51,6 +51,7 @@ typedef struct {
     uint8_t oled_display_offset, oled_start_line, oled_rotate, oled_x_offset;
     uint8_t oled_scroll, oled_scroll_vertical, oled_scroll_right, oled_scroll_single;
     uint8_t oled_scroll_start, oled_scroll_end, oled_scroll_offset;
+    uint32_t oled_scroll_column;
     uint16_t oled_scroll_interval;
     uint64_t oled_scroll_elapsed_ns;
     uint32_t oled_frame_bytes_written;
@@ -199,6 +200,7 @@ static void oled_reset(SimDevice* s) {
     s->oled_scroll_offset = 0;
     s->oled_scroll_interval = 5;
     s->oled_scroll_elapsed_ns = 0;
+    s->oled_scroll_column = 0;
     s->oled_frame_bytes_written = 0;
     s->oled_frame_active = 0;
     s->oled_transaction_wrote_data = 0;
@@ -330,8 +332,8 @@ static void oled_command(SimDevice* s, uint8_t c) {
         s->oled_scroll_right = c == 0x29;
         s->oled_scroll_single = 0;
     }
-    else if (c == 0x2e) { s->latch = 0; s->oled_scroll = 0; }
-    else if (c == 0x2f) { s->latch = 1; s->oled_scroll = 1; s->oled_scroll_elapsed_ns = 0; }
+    else if (c == 0x2e) { s->latch = 0; s->oled_scroll = 0; s->oled_scroll_column = 0; }
+    else if (c == 0x2f) { s->latch = 1; s->oled_scroll = 1; s->oled_scroll_elapsed_ns = 0; s->oled_scroll_column = 0; }
     else if (c == 0xa0) s->remap = 0;
     else if (c == 0xa1) s->remap = 1;
     else if (c == 0xa4) s->full_on = 0;
@@ -348,43 +350,9 @@ static void oled_command(SimDevice* s, uint8_t c) {
 
 static void oled_scroll_once(SimDevice* s) {
     if (!s->width || !s->rows) return;
-    uint32_t start = s->oled_scroll_start < s->rows ? s->oled_scroll_start : 0;
-    uint32_t end = s->oled_scroll_end < s->rows ? s->oled_scroll_end : s->rows - 1;
-    if (end < start) return;
-    for (uint32_t page = start; page <= end; ++page) {
-        uint8_t* row = s->bytes + page * s->width;
-        if (s->oled_scroll_right) {
-            uint8_t last = row[s->width - 1];
-            memmove(row + 1, row, s->width - 1);
-            row[0] = last;
-        } else {
-            uint8_t first = row[0];
-            memmove(row, row + 1, s->width - 1);
-            row[s->width - 1] = first;
-        }
-    }
-    if (s->oled_scroll_vertical && s->oled_scroll_offset) {
-        const uint32_t bit_start = start * 8;
-        const uint32_t bit_count = (end - start + 1) * 8;
-        const uint32_t shift = s->oled_scroll_offset % bit_count;
-        uint8_t column_bits[128];
-        for (uint32_t col = 0; col < s->width; ++col) {
-            memset(column_bits, 0, bit_count);
-            for (uint32_t bit = 0; bit < bit_count; ++bit) {
-                const uint32_t source_y = bit_start + bit;
-                column_bits[bit] = (s->bytes[(source_y / 8) * s->width + col] >> (source_y & 7)) & 1;
-            }
-            for (uint32_t bit = 0; bit < bit_count; ++bit) {
-                const uint32_t dest_y = bit_start + bit;
-                uint8_t* cell = &s->bytes[(dest_y / 8) * s->width + col];
-                const uint8_t mask = (uint8_t)(1u << (dest_y & 7));
-                const uint32_t source_bit = (bit + shift) % bit_count;
-                if (column_bits[source_bit]) *cell |= mask;
-                else *cell &= (uint8_t)~mask;
-            }
-        }
-    }
-    oled_present(s);
+    /* O SSD1306 rola o endereço de leitura do vidro; a GDDRAM não muda. Alterá-la aqui fazia
+     * stopscroll() conservar pixels deslocados e corrompia uma atualização parcial posterior. */
+    s->oled_scroll_column = (s->oled_scroll_column + 1u) % s->width;
 }
 
 static void i2c_payload_byte(SimDevice* s, uint8_t byte) {
@@ -1096,7 +1064,15 @@ static void visible_mono_payload(const SimDevice* s, uint8_t* payload, uint32_t 
     for (uint32_t source_y = 0; source_y < s->height; ++source_y) {
         const uint32_t ram_y = (source_y + s->oled_start_line) % s->height;
         for (uint32_t source_x = 0; source_x < s->width; ++source_x) {
-            const uint32_t source = (ram_y / 8) * s->width + source_x;
+            uint32_t scrolled_x = source_x;
+            const uint32_t page = ram_y / 8;
+            if (s->oled_scroll && page >= s->oled_scroll_start && page <= s->oled_scroll_end) {
+                const uint32_t shift = s->oled_scroll_column % s->width;
+                scrolled_x = s->oled_scroll_right
+                    ? (source_x + s->width - shift) % s->width
+                    : (source_x + shift) % s->width;
+            }
+            const uint32_t source = page * s->width + scrolled_x;
             uint8_t lit = (s->oled_presented[source] >> (ram_y & 7)) & 1;
             if (s->invert) lit = !lit;
             if (!lit) continue;

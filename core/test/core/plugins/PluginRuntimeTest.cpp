@@ -1,6 +1,10 @@
 #include <cstdio>
+#include <chrono>
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 #include "plugins/GlobalPluginCache.hpp"
 #include "plugins/PluginLoader.hpp"
@@ -116,6 +120,65 @@ const LsdnDeviceVTable* getDeviceVTable3(uint32_t* major, uint32_t* minor) {
     return &kDeviceVTable3;
 }
 const LsdnDeviceVTable* getDeviceVTable3Wrapper(uint32_t* major, uint32_t* minor) { return getDeviceVTable3(major, minor); }
+
+struct TimerDeviceState {
+    const LsdnHostApi* api = nullptr;
+    void* hostCtx = nullptr;
+    std::mutex gateMutex;
+    std::condition_variable gate;
+    bool timerEntered = false;
+    bool allowReschedule = false;
+    bool rescheduled = false;
+    int completedTimers = 0;
+};
+TimerDeviceState* timerDevice = nullptr;
+
+LsdnDevice* createTimerDevice(void* hostCtx, const LsdnHostApi* api) {
+    timerDevice = new TimerDeviceState{};
+    timerDevice->api = api;
+    timerDevice->hostCtx = hostCtx;
+    return reinterpret_cast<LsdnDevice*>(timerDevice);
+}
+void onTimerDeviceEvent(LsdnDevice* dev, const LsdnEvent* event) {
+    auto* state = reinterpret_cast<TimerDeviceState*>(dev);
+    if (event->tag != LSDN_EVT_TIMER) {
+        state->api->schedule_event(state->hostCtx, 1, 1);
+    } else if (event->a == 1) {
+        {
+            std::unique_lock lock(state->gateMutex);
+            state->timerEntered = true;
+            state->gate.notify_one();
+            state->gate.wait(lock, [&] { return state->allowReschedule; });
+        }
+        state->api->schedule_event(state->hostCtx, 1, 2);
+        {
+            std::lock_guard lock(state->gateMutex);
+            state->rescheduled = true;
+            state->gate.notify_one();
+        }
+        ++state->completedTimers;
+    } else if (event->a == 2) {
+        ++state->completedTimers;
+    }
+}
+uint32_t getTimerDeviceState(LsdnDevice*, uint8_t* out, uint32_t cap) {
+    if (cap == 0) return 1;
+    out[0] = 42;
+    return 1;
+}
+void destroyTimerDevice(LsdnDevice* dev) {
+    delete reinterpret_cast<TimerDeviceState*>(dev);
+    timerDevice = nullptr;
+}
+const LsdnDeviceVTable kTimerDeviceVTable = {
+    &createTimerDevice, &initDevice1, &stampDevice3, &postStepDevice3, &onTimerDeviceEvent,
+    &getPropertyDevice, &setPropertyDevice, &getTimerDeviceState, &setStateDevice, &destroyTimerDevice,
+};
+const LsdnDeviceVTable* getTimerDeviceVTable(uint32_t* major, uint32_t* minor) {
+    *major = LSDN_ABI_VERSION_MAJOR;
+    *minor = LSDN_ABI_VERSION_MINOR;
+    return &kTimerDeviceVTable;
+}
 
 LsdnDevice* createDevice2(void*, const LsdnHostApi*) { return reinterpret_cast<LsdnDevice*>(new DeviceState{}); }
 void initDevice2(LsdnDevice*) {}
@@ -269,6 +332,46 @@ int main() {
         for (const Pin& pin : proxy3->pins()) afterIds.push_back(pin.id);
         ok &= expect(afterIds == std::vector<std::string>({"out0", "out1", "out2", "out3"}),
                      "pin_declare chamado de DENTRO de set_property() deve mudar pins() na hora, sem recriar a instância");
+    }
+
+    // A leitura de telemetria segura Scheduler::m_mutex e depois pede m_deviceMutex. Um timer
+    // que reagenda seu próximo bit precisa soltar m_deviceMutex antes de adquirir o Scheduler:
+    // reproduz a inversão de locks observada ao vivo com LasecPlot + OLED na v0.0.48.
+    {
+        auto timerModule = PluginLoader::createDeviceModuleFromExports(
+            nullptr, &getTimerDeviceVTable, "device.timer");
+        cache.setActiveDeviceModule("test.timer_device", timerModule);
+        ComponentMeta timerMeta{"test.timer_device", {}};
+        auto proxy = runtime.createDeviceInstance("test.timer_device", timerMeta, params, scheduler);
+        proxy->onAssignedIndex(3);
+        scheduler.synchronized([&] { proxy->onEvent(ComponentEvent{kPinChangeEventTag, 0, 0, 0}); });
+
+        std::thread worker([&] { scheduler.runUntil(3); });
+        {
+            std::unique_lock gate(timerDevice->gateMutex);
+            if (!timerDevice->gate.wait_for(gate, std::chrono::seconds(2),
+                                            [&] { return timerDevice->timerEntered; })) {
+                ok &= expect(false, "timer callback should start");
+            }
+        }
+        uint8_t state = 0;
+        scheduler.synchronized([&] {
+            {
+                std::lock_guard gate(timerDevice->gateMutex);
+                timerDevice->allowReschedule = true;
+                timerDevice->gate.notify_one();
+            }
+            std::unique_lock gate(timerDevice->gateMutex);
+            const bool scheduled = timerDevice->gate.wait_for(gate, std::chrono::seconds(2),
+                [&] { return timerDevice->rescheduled; });
+            gate.unlock();
+            ok &= expect(scheduled, "timer must reschedule while telemetry holds Scheduler lock");
+            if (scheduled)
+                ok &= expect(proxy->getState(&state, 1) == 1 && state == 42,
+                             "telemetry read must finish while timer reschedules");
+        });
+        worker.join();
+        ok &= expect(timerDevice->completedTimers == 2, "both timer callbacks should finish");
     }
 
     proxy1.reset();

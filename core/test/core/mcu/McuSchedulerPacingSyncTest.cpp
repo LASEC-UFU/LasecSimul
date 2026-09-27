@@ -111,6 +111,7 @@ private:
 } // namespace
 
 int main() {
+    try {
 #ifndef ESP32_ADAPTER_DLL_PATH
 #error "ESP32_ADAPTER_DLL_PATH precisa ser definido pelo CMakeLists (caminho do adapter.dll real)"
 #endif
@@ -139,7 +140,8 @@ int main() {
         check(mcuPtr != nullptr, "McuComponent criado (teste de posicao sem estado)");
 
         session.scheduler().start();
-        mcuPtr->openSyntheticArenaForTesting(uniqueArenaName("a"));
+        const std::string arenaName = uniqueArenaName("pacing-reload");
+        mcuPtr->openSyntheticArenaForTesting(arenaName);
         LsdnQemuArena* arena = mcuPtr->arenaBridge().arena();
 
         check(!session.computeSlowestMcuPositionNsForTesting().has_value(),
@@ -152,11 +154,13 @@ int main() {
         const bool gotPosition = waitUntil([&] { return session.computeSlowestMcuPositionNsForTesting().has_value(); });
         check(gotPosition, "depois do primeiro heartbeat, uma posicao passa a ser reportada");
 
-        // Recarga: abre uma NOVA arena sintetica no mesmo McuComponent -- reseta latestVirtualTimeNs()
+        // Recarga: recria a arena sintetica no mesmo McuComponent -- reseta latestVirtualTimeNs()
         // pra 0 e a origem pro nowNs() ATUAL (ja corrigido em McuComponent::openSyntheticArenaForTesting).
+        // O doorbell deste McuComponent permanece vinculado ao nome da arena enquanto sua
+        // thread de poll existe; reutilizar o nome testa a recarga sem trocar um HANDLE ativo.
         producer.stop();
         const uint64_t nowNsAtReload = session.scheduler().nowNs();
-        mcuPtr->openSyntheticArenaForTesting(uniqueArenaName("b"));
+        mcuPtr->openSyntheticArenaForTesting(arenaName);
         check(!session.computeSlowestMcuPositionNsForTesting().has_value(),
               "logo apos recarregar, volta a nao reportar posicao nenhuma (nenhum evento na arena nova ainda)");
 
@@ -293,4 +297,8 @@ int main() {
     }
     std::fprintf(stderr, "\n%d teste(s) FALHARAM.\n", failures);
     return 1;
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "Falha inesperada no teste de pacing: %s\n", e.what());
+        return 2;
+    }
 }
