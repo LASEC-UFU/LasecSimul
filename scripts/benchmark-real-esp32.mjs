@@ -23,7 +23,8 @@ const corePath = process.argv[5] ?? path.join(repo, "core", "build", "Release", 
 const profiling = process.argv[6] !== "false";
 const realTimeRate = Number(process.argv[7] ?? 0);
 const gdbPort = Number(process.env.LASECSIMUL_BENCHMARK_GDB_PORT ?? 0);
-const qemuPath = path.join(runtimeRepo, "devices", "qemu-esp32", "bin", "qemu-system-xtensa.exe");
+const qemuPath = process.env.LASECSIMUL_BENCHMARK_QEMU_PATH ??
+  path.join(runtimeRepo, "devices", "qemu-esp32", "bin", "qemu-system-xtensa.exe");
 const subcircuitPath = path.join(runtimeRepo, "subcircuits", "esp32_devkitc_v4.lssubcircuit");
 
 for (const required of [projectPath, firmwarePath, corePath, qemuPath, subcircuitPath]) {
@@ -396,6 +397,12 @@ async function main() {
   if (!allowIncomplete && /Guru Meditation|panic'ed|CORRUPTED/i.test(qemuLogs + directUartText)) {
     throw new Error("Firmware entrou em panic durante a execução real.");
   }
+  const i2cInvalidStateErrors = (directUartText.match(/ESP_ERR_INVALID_STATE/g) ?? []).length;
+  const i2cFifoErrors = (qemuLogs.match(/I2C TX FIFO while it is full|empty TX FIFO/g) ?? []).length;
+  if (process.env.LASECSIMUL_BENCHMARK_REQUIRE_I2C_CLEAN === "1" &&
+      (i2cInvalidStateErrors || i2cFifoErrors)) {
+    throw new Error(`I2C falhou: invalidState=${i2cInvalidStateErrors}, fifo=${i2cFifoErrors}`);
+  }
   const rates = samples.map((sample) => sample.rate);
   const mcuRates = samples.flatMap((sample) => typeof sample.mcuRate === "number" ? [sample.mcuRate] : []);
   const uartSummary = (hex) => {
@@ -417,6 +424,7 @@ async function main() {
     );
     return {
       bytes: bytes.length,
+      i2cInvalidStateErrors: (printable.match(/ESP_ERR_INVALID_STATE/g) ?? []).length,
       preview: printable.slice(0, 500),
       tail: printable.slice(-500),
       firstTextLineHex: bytes.subarray(
@@ -521,6 +529,7 @@ async function main() {
       qemu: {
         guruMeditation: /Guru Meditation|panic'ed|CORRUPTED/i.test(qemuLogs + directUartText),
         i2cAckErrors: (qemuLogs.match(/esp32_i2c_event ackERR/g) ?? []).length,
+        i2cFifoErrors,
         profile: qemuLogs.match(/\[LasecSimul\]\[PROFILE\][^\r\n]*/g)?.at(-1),
         ...(process.env.LASECSIMUL_SETTLE_PROVENANCE === "1" ? {
           provenance: qemuLogs.split(/\r?\n/).filter((line) => /PROVENANCE/.test(line)).slice(-30),

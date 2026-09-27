@@ -1,6 +1,6 @@
 QEMU source: C:\SourceCode\qemu_lasecSimul
-QEMU HEAD: 92d3b96071d4f3c7756a155536f8bfa0c7fdfd84
-Executable SHA-256: 3D5D4C569906B713BFCBFF8A763D87529A2C69B6AE30331E07B2367681F5CDD9
+QEMU HEAD: b211e01c4da2db8cd2a9008192a3149dcc7673ae
+Executable SHA-256: C25B9C66B2A358C740C41ABE7EF043736FE9C9659A61A27E27BBE6C7743D678B
 Build: MSYS2 UCRT64, ninja qemu-system-xtensa.exe
-Etapa: 1H runtime identity startup parser (NONE / COMPLETE_VALID / MANAGED_INVALID)
+Etapa: I2C STOP terminal e continuação de FIFO de 32 bytes nos transportes LEGACY e VNEXT_B
 Historical provenance preserved in BUILD-PROVENANCE.txt.

@@ -34,9 +34,9 @@ branch (not yet distilled into a numbered patch against the `721ff59` baseline -
   for the full architecture writeup, what was measured, and what a real fix needs to do.
 
 The current packaged executable additionally uses arena ABI v5 and the I2C burst mailbox implemented
-in the local QEMU working tree on top of `71a0b06`. It collapses a supported ESP-IDF transaction into
+in the QEMU fork at `b211e01`. It collapses a supported ESP-IDF transaction into
 one Core round-trip while preserving virtual bus time, ACK/NACK status, FIFO order, clock stretching,
 and electrical fallback for command lists or topologies that cannot be represented safely. The exact
-source files and executable checksum are recorded in `bin/BUILD-PROVENANCE.txt`. The QEMU working-tree
-changes still need to be committed (or distilled into `patches/0005-...`) before producing a tagged
-release; the packaged development binary itself is reproducibly identified by its SHA-256.
+source commit and executable checksum are recorded in `bin/BUILD-PROVENANCE-1H.txt`. That commit
+also ends a hardware STOP command without replaying stale command registers, and retains the final
+byte of a split 32-byte FIFO write until a second mailbox request completes it.
