@@ -51,7 +51,26 @@ int main(void) {
     ok &= check(display->oled_presented[0] == 0xaa && display->oled_presented[1023] == 0xaa,
                 "front buffer must contain the complete new frame");
 
+    /* A page-window update is also split across I2C transactions. The visible
+     * image must not contain columns from both the old and new text positions. */
+    display->start_x = display->x = 0;
+    display->end_x = 127;
+    display->start_y = display->y = 2;
+    display->end_y = 4;
+    for (int i = 0; i < 31; ++i) oled_data(display, 0x55);
+    ok &= check(display->oled_frame_active && display->oled_presented[2 * 128] == 0xaa,
+                "a partial page-window transaction must stay pending");
+    for (int i = 31; i < 3 * 128; ++i) oled_data(display, 0x55);
+    ok &= check(!display->oled_frame_active &&
+                    display->oled_presented[2 * 128] == 0x55 &&
+                    display->oled_presented[4 * 128 + 127] == 0x55 &&
+                    display->oled_presented[128] == 0xaa,
+                "the complete page window must publish without changing other pages");
+
     fake_now_ns = 2000000;
+    display->start_y = display->y = 0;
+    display->end_y = 7;
+    display->x = 0;
     for (int i = 0; i < 32; ++i) oled_data(display, 0x55);
     fake_now_ns += 1000000000ull;
     ok &= check(display->oled_presented[0] == 0xaa,
@@ -82,6 +101,30 @@ int main(void) {
     visible_mono_payload(display, visible, sizeof visible);
     ok &= check(visible[0] == 1 && visible[127] == 0 && visible[128 + 10] == 1,
                 "stopscroll must restore the unshifted GDDRAM image");
+
+    /* A split fast-path FIFO write may continue with START=0 after pin-edge
+     * notifications. Those notifications cannot replace its I2C control phase. */
+    oled_reset(display);
+    display->addr_mode = 0;
+    display->i2c_address = 0x3c;
+    uint8_t first_slice[] = {0x40, 0xa5};
+    LsdnI2cTransfer transfer = {0};
+    LsdnI2cTransferResult result;
+    transfer.address = 0x3c;
+    transfer.start = transfer.stop = 1;
+    transfer.tx_data = first_slice;
+    transfer.tx_size = sizeof first_slice;
+    i2c_transfer((LsdnDevice*)display, &transfer, &result);
+    display->pin_level[0] = display->pin_level[1] = 1;
+    handle_pin_change(display, 1, 0);
+    uint8_t second_slice[] = {0x5a};
+    transfer.start = 0;
+    transfer.tx_data = second_slice;
+    transfer.tx_size = sizeof second_slice;
+    i2c_transfer((LsdnDevice*)display, &transfer, &result);
+    ok &= check(display->bytes[0] == 0xa5 && display->bytes[1] == 0x5a &&
+                    display->fast_i2c_phase == 1,
+                "fast continuation must remain in data mode across unrelated pin edges");
 
     free(display);
     if (ok) printf("OK: SSD1306 publishes only complete frames or explicit partial boundaries.\n");

@@ -60,6 +60,10 @@ typedef struct {
     uint8_t oled_diag_in_fast;
     uint8_t tft_madctl;
     uint8_t pending_cmd, pending_count, pending_index, control, i2c_phase;
+    /* A mailbox I2C can continue a transaction after an electrical START/STOP
+     * notification. Its control-byte phase follows the mailbox START flag, not
+     * unrelated pin edges that may arrive between two FIFO slices. */
+    uint8_t fast_control, fast_i2c_phase;
     uint32_t data_acc, data_index, data_bytes, pixel_mode;
     uint8_t ddram[80], cgram[64];
     int ddaddr, cgaddr, write_ddram, direction, shift_display, line_length, data_length, nibble, input;
@@ -204,6 +208,7 @@ static void oled_reset(SimDevice* s) {
     s->oled_frame_bytes_written = 0;
     s->oled_frame_active = 0;
     s->oled_transaction_wrote_data = 0;
+    s->fast_control = s->fast_i2c_phase = 0;
 }
 
 static uint32_t oled_buffer_bytes(const SimDevice* s) {
@@ -230,17 +235,20 @@ static void oled_present(SimDevice* s) {
     s->oled_frame_bytes_written = 0;
 }
 
-static int oled_full_horizontal_window(const SimDevice* s) {
-    return s->addr_mode == 0 && s->start_x == 0 && s->start_y == 0 &&
-           s->end_x + 1 == s->width && s->end_y + 1 == s->rows;
+static uint32_t oled_address_window_bytes(const SimDevice* s) {
+    if (s->addr_mode > 1 || !s->width || !s->rows ||
+        s->start_x > s->end_x || s->end_x >= s->width ||
+        s->start_y > s->end_y || s->end_y >= s->rows) return 0;
+    return (s->end_x - s->start_x + 1u) * (s->end_y - s->start_y + 1u);
 }
 
 static void oled_data(SimDevice* s, uint8_t data) {
     ++s->oled_diag_data_total;
     if (s->oled_diag_in_fast) ++s->oled_diag_data_fast;
     else ++s->oled_diag_data_electrical;
-    const int full_frame = oled_full_horizontal_window(s);
-    if (full_frame && !s->oled_frame_active && s->x == 0 && s->y == 0) {
+    const uint32_t window_bytes = oled_address_window_bytes(s);
+    if (window_bytes && !s->oled_frame_active &&
+        s->x == s->start_x && s->y == s->start_y) {
         s->oled_frame_active = 1;
         s->oled_frame_bytes_written = 0;
     }
@@ -251,7 +259,7 @@ static void oled_data(SimDevice* s, uint8_t data) {
     }
     if (write_x < s->width && s->y < s->rows) s->bytes[s->y * s->width + write_x] = data;
     s->oled_transaction_wrote_data = 1;
-    if (s->oled_frame_active && full_frame) ++s->oled_frame_bytes_written;
+    if (s->oled_frame_active && window_bytes) ++s->oled_frame_bytes_written;
     if (s->addr_mode & 1) {
         s->y++;
         if (s->y > s->end_y) { s->y = s->start_y; if (s->addr_mode == 1 && ++s->x > s->end_x) s->x = s->start_x; }
@@ -259,7 +267,7 @@ static void oled_data(SimDevice* s, uint8_t data) {
         s->x++;
         if (s->x > s->end_x) { s->x = s->start_x; if (s->addr_mode == 0 && ++s->y > s->end_y) s->y = s->start_y; }
     }
-    if (s->oled_frame_active && s->oled_frame_bytes_written >= oled_buffer_bytes(s)) oled_present(s);
+    if (s->oled_frame_active && s->oled_frame_bytes_written >= window_bytes) oled_present(s);
 }
 
 static void oled_param(SimDevice* s, uint8_t data) {
@@ -355,31 +363,31 @@ static void oled_scroll_once(SimDevice* s) {
     s->oled_scroll_column = (s->oled_scroll_column + 1u) % s->width;
 }
 
-static void i2c_payload_byte(SimDevice* s, uint8_t byte) {
+static void i2c_payload_byte(SimDevice* s, uint8_t byte, uint8_t* phase, uint8_t* control) {
     if (s->kind == KIND_AIP31068) {
-        if (s->i2c_phase == 0) {
-            s->control = byte;
-            s->i2c_phase = 1;
+        if (*phase == 0) {
+            *control = byte;
+            *phase = 1;
         } else {
-            if (s->control & 0x40) hd_data(s, byte);
+            if (*control & 0x40) hd_data(s, byte);
             else hd_command(s, byte);
             /* Co=1: o próximo byte volta a ser controle. Co=0: D/C permanece válido para todos
              * os bytes restantes da transação (modo usado pelas bibliotecas LCD comuns). */
-            if (s->control & 0x80) s->i2c_phase = 0;
+            if (*control & 0x80) *phase = 0;
         }
     } else if (s->kind == KIND_OLED || s->kind == KIND_SH1107) {
-        if (s->i2c_phase == 0) {
-            s->control = byte;
-            s->i2c_phase = 1;
-        } else if (s->control & 0x40) {
+        if (*phase == 0) {
+            *control = byte;
+            *phase = 1;
+        } else if (*control & 0x40) {
             oled_data(s, byte);
-            if (s->control & 0x80) s->i2c_phase = 0;
+            if (*control & 0x80) *phase = 0;
         } else if (s->pending_count) {
             oled_param(s, byte);
-            if (s->control & 0x80) s->i2c_phase = 0;
+            if (*control & 0x80) *phase = 0;
         } else {
             oled_command(s, byte);
-            if (s->control & 0x80) s->i2c_phase = 0;
+            if (*control & 0x80) *phase = 0;
         }
     }
 }
@@ -663,7 +671,7 @@ static void i2c_clock_bit(SimDevice* s) {
         s->i2c_addressed = (uint8_t)((byte >> 1) == s->i2c_address);
         if (s->i2c_addressed) s->i2c_ack_pending = 1;
     } else if (s->i2c_addressed) {
-        i2c_payload_byte(s, byte);
+        i2c_payload_byte(s, byte, &s->i2c_phase, &s->control);
         s->i2c_ack_pending = 1;
     }
 }
@@ -1186,11 +1194,12 @@ static uint32_t i2c_transfer(LsdnDevice* dev, const LsdnI2cTransfer* transfer,
         return 1;
     }
     if (transfer->start) {
-        s->i2c_phase = 0;
+        s->fast_i2c_phase = 0;
         s->oled_transaction_wrote_data = 0;
     }
     s->oled_diag_in_fast = 1;
-    for (uint32_t i = 0; i < transfer->tx_size; ++i) i2c_payload_byte(s, transfer->tx_data[i]);
+    for (uint32_t i = 0; i < transfer->tx_size; ++i)
+        i2c_payload_byte(s, transfer->tx_data[i], &s->fast_i2c_phase, &s->fast_control);
     s->oled_diag_in_fast = 0;
     if (transfer->stop && s->oled_transaction_wrote_data && !s->oled_frame_active) oled_present(s);
     return 1;

@@ -507,6 +507,7 @@ async function main() {
       exactMatch: directUartHex === plotUartHex,
       directMonitor: directUartSummary,
       lasecPlot: lasecPlotUartSummary,
+      ...(process.env.LASECSIMUL_BENCHMARK_UART_FULL_TEXT === "1" ? { directMonitorText: directUartText } : {}),
       ...(uartTimelineEnabled ? (compact ? { timelineSummary: uartTimelineSummary } : { timeline: uartTimeline }) : {}),
     },
     ledUartAcceptance,
