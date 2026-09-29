@@ -1773,7 +1773,7 @@ set(LASECSIMUL_HERMETIC_TESTS
     ghdl_arena_bridge ghdl_process_manager fpga_port_mapper mna_solver sha256 passive_components
     transient_rc transient_rlc simulation_performance_smoke property_definition dynamic_pins
     logic_components plugin_loader plugin_loader_real_dll plugin_checksum plugin_duplicate_device_id
-    plugin_runtime mcu_crash_resilience qemu_process_manager mcu_debug_launch qemu_arena_bridge
+    plugin_runtime mcu_crash_resilience qemu_process_manager mcu_debug_launch mcu_network_launch qemu_arena_bridge
     firmware_watcher esp32_adapter esp32_devkitc_subcircuit bus command_queue_session logic_gate_plugin
     logic_family_extension mcu_component mcu_usart_monitor mcu_uart_to_lasecplot
     mcu_component_live_poll_thread mcu_scheduler_pacing_sync pin_change_dispatch plugin_watchdog
@@ -1816,3 +1816,26 @@ set_tests_properties(${LASECSIMUL_EXTERNAL_PLC_TESTS} PROPERTIES
     LABELS "external-plc"
     SKIP_REGULAR_EXPRESSION "PULADO:"
 )
+
+# O baseline (scripts/baseline-core.js) exige exatamente um grupo por teste, mas só descobria um
+# teste esquecido na execução noturna, depois do merge (mcu_network_launch ficou sem grupo de
+# 2026-09-18 a 2026-09-29). A mesma regra vale aqui, em todo configure.
+get_property(_lasecsimul_registered_tests DIRECTORY PROPERTY TESTS)
+set(_lasecsimul_classified
+    ${LASECSIMUL_HERMETIC_TESTS} ${LASECSIMUL_EXTERNAL_GHDL_TESTS} ${LASECSIMUL_EXTERNAL_QEMU_TESTS}
+    ${LASECSIMUL_EXTERNAL_PYTHON_TESTS} ${LASECSIMUL_EXTERNAL_PLC_TESTS})
+set(_lasecsimul_classification_errors "")
+foreach(_lasecsimul_test IN LISTS _lasecsimul_registered_tests)
+    set(_lasecsimul_matches ${_lasecsimul_classified})
+    list(FILTER _lasecsimul_matches INCLUDE REGEX "^${_lasecsimul_test}$")
+    list(LENGTH _lasecsimul_matches _lasecsimul_match_count)
+    if(NOT _lasecsimul_match_count EQUAL 1)
+        string(APPEND _lasecsimul_classification_errors
+               "\n  ${_lasecsimul_test}: listado em ${_lasecsimul_match_count} grupo(s)")
+    endif()
+endforeach()
+if(_lasecsimul_classification_errors)
+    message(FATAL_ERROR
+        "Todo teste precisa estar em exatamente um de LASECSIMUL_HERMETIC_TESTS / "
+        "LASECSIMUL_EXTERNAL_{GHDL,QEMU,PYTHON,PLC}_TESTS:${_lasecsimul_classification_errors}")
+endif()
