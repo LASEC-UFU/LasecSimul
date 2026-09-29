@@ -404,6 +404,15 @@ void Scheduler::start() {
                 continue;
             }
 
+            // Cede m_mutex a quem espera em synchronized() antes de retomá-lo (ver synchronized()).
+            // Limite de 20 ms: nunca prende a worker se a outra thread demorar a ser escalonada.
+            if (m_externalLockWaiters.load(std::memory_order_acquire) > 0) {
+                const auto yieldDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(20);
+                while (m_externalLockWaiters.load(std::memory_order_acquire) > 0 &&
+                       std::chrono::steady_clock::now() < yieldDeadline) {
+                    std::this_thread::yield();
+                }
+            }
             const auto cycleStart = std::chrono::steady_clock::now();
             const uint64_t cycleSimStartNs = nowNs();
             // Capturadas ANTES de ler o teto (m_advanceLimit) e de rodar runUntil(). Achado

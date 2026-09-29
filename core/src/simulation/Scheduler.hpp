@@ -212,7 +212,13 @@ public:
     /** Incrementada somente quando reset() descarta a fila inteira de callbacks. */
     uint64_t resetGeneration() const { return m_resetGeneration.load(std::memory_order_acquire); }
     template <class Fn> decltype(auto) synchronized(Fn&& fn) const {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        // Achado 2026-09-29 (core_bootstrap T4i/T4j intermitentes): o mutex do Windows não é
+        // justo, e a worker solta e retoma m_mutex a cada ciclo; quem esperava aqui podia ficar
+        // segundos na fila (1,4-5,5 s medidos). O contador pede à worker que ceda a vez no início
+        // do próximo ciclo (ver start()).
+        m_externalLockWaiters.fetch_add(1, std::memory_order_seq_cst);
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_externalLockWaiters.fetch_sub(1, std::memory_order_release);
         return std::forward<Fn>(fn)();
     }
     template <class Fn>
@@ -407,6 +413,8 @@ private:
     std::atomic<uint64_t> m_nextEventSnapshotNs{std::numeric_limits<uint64_t>::max()};
     /** true enquanto a worker está numa espera temporizada em m_pacingWake (ver signalWorkAvailable). */
     std::atomic<bool> m_workerTimedWait{false};
+    /** Threads bloqueadas em synchronized() esperando m_mutex (ver synchronized()). */
+    mutable std::atomic<uint32_t> m_externalLockWaiters{0};
     uint64_t m_currentTimeStepNs = 0;
     uint64_t m_minimumTimeStepNs = 1;
     bool m_adaptiveTimeStep = false;
