@@ -256,6 +256,54 @@ void testPacingSleepEndsWhenHostPacedPositionMovesAhead() {
     assert(scheduler.nowNs() >= target);
 }
 
+// Achado 2026-09-29: as gerações observadas pela espera eram lidas DEPOIS de runUntil(). Uma posição
+// publicada entre a leitura do teto e o fim do ciclo (a thread de poll do MCU faz isso ao ver uma
+// leitura de GPIO do QEMU) entrava no valor "observado" e a espera dormia os 5 ms inteiros. Aqui o
+// próprio callback do teto publica a nova posição logo depois de ser amostrado.
+void testAdvanceLimitChangeDuringCycleIsNotLost() {
+    Scheduler* schedulerPtr = nullptr;
+    Scheduler scheduler(2, [&schedulerPtr] {
+        schedulerPtr->dirtySet().clear();
+        return false;
+    });
+    schedulerPtr = &scheduler;
+    scheduler.setMaximumTimeStepNs(100'000);
+    scheduler.setRealTimeRate(0.0); // sem pacing: só o teto limita, isolando a espera do teto
+    std::atomic<uint64_t> referencePositionNs{1'000'000};
+    std::atomic<bool> publishAfterSample{false};
+    std::atomic<int64_t> publishedAtNs{0};
+    const auto steadyNs = [] {
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(
+                   std::chrono::steady_clock::now().time_since_epoch()).count();
+    };
+    scheduler.setAdvanceLimitCallback([&] {
+        const uint64_t sampled = referencePositionNs.load(std::memory_order_relaxed);
+        if (publishAfterSample.exchange(false)) {
+            referencePositionNs.store(sampled + 500'000'000, std::memory_order_relaxed);
+            publishedAtNs.store(steadyNs(), std::memory_order_relaxed);
+            schedulerPtr->notifyAdvanceLimitChanged();
+        }
+        return std::optional<uint64_t>(sampled);
+    });
+
+    scheduler.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(40)); // trava no teto inicial
+    const uint64_t cappedNowNs = scheduler.nowNs();
+    publishAfterSample.store(true, std::memory_order_relaxed);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(200);
+    while (scheduler.nowNs() <= cappedNowNs && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::yield();
+    }
+    const int64_t passedAtNs = steadyNs();
+    scheduler.stop();
+
+    assert(publishedAtNs.load() != 0);
+    assert(scheduler.nowNs() > cappedNowNs);
+    const int64_t reactionNs = passedAtNs - publishedAtNs.load();
+    std::printf("  [info] teto publicado no meio do ciclo: avanço retomado em %.3f ms\n", reactionNs / 1e6);
+    assert(reactionNs < 2'500'000); // antes: o timeout de 5 ms inteiro
+}
+
 void testAdvanceLimitNulloptBehavesLikeNoHook() {
     Scheduler* schedulerPtr = nullptr;
     Scheduler scheduler(2, [&schedulerPtr] {
@@ -598,6 +646,7 @@ int main() {
     testAdvanceLimitLiftsImmediatelyWhenReferenceMoves();
     testHostPacedPositionSkipsPacingSleep();
     testPacingSleepEndsWhenHostPacedPositionMovesAhead();
+    testAdvanceLimitChangeDuringCycleIsNotLost();
     testAdvanceLimitNulloptBehavesLikeNoHook();
     testAdvanceLimitAppliesEvenWithUnlimitedRate();
     testAdvanceLimitNoBusySpinWhenPermanentlyCapped();

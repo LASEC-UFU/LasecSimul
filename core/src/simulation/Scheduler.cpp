@@ -395,6 +395,13 @@ void Scheduler::start() {
 
             const auto cycleStart = std::chrono::steady_clock::now();
             const uint64_t cycleSimStartNs = nowNs();
+            // Capturadas ANTES de ler o teto (m_advanceLimit) e de rodar runUntil(). Achado
+            // 2026-09-29: capturadas depois, um teto que subiu (ou um evento agendado) DURANTE
+            // runUntil() já entrava no valor "observado"; a espera abaixo não via mudança e dormia
+            // os 5 ms inteiros com o teto já liberado. Uma leitura de GPIO do ESP32 (o QEMU fica
+            // parado esperando a resposta) levava 5 ms em ~0,5% das vezes por causa disso.
+            const uint64_t cycleAdvanceGen = m_advanceLimitGeneration.load(std::memory_order_acquire);
+            const uint64_t cycleWorkGen = m_workGeneration.load(std::memory_order_acquire);
             uint64_t targetTimeNs = 0;
             {
                 const uint64_t observedWork = m_workGeneration.load(std::memory_order_acquire);
@@ -465,13 +472,12 @@ void Scheduler::start() {
                 // comum) -- espera um pouco em vez de girar sem dormir (a matemática de pacing
                 // abaixo, gated em cycleSimEndNs>cycleSimStartNs, não dispara nesse caso).
                 if (m_commandDrain) m_commandDrain();
-                // Captura ANTES do wait -- ver doc-comment de notifyAdvanceLimitChanged(): sem checar
-                // este contador no predicado, um notify_all() daquela função não tinha como acordar
-                // esta espera de verdade (o predicado antigo só olhava running/paused), e todo ciclo
-                // pagava o timeout de 5ms inteiro em vez de acordar assim que a posição de referência
-                // avançasse.
-                const uint64_t observedAdvanceGen = m_advanceLimitGeneration.load(std::memory_order_acquire);
-                const uint64_t observedWorkGen = m_workGeneration.load(std::memory_order_acquire);
+                // Ver doc-comment de notifyAdvanceLimitChanged(): sem checar estes contadores no
+                // predicado, um notify_all() daquela função não tinha como acordar esta espera de
+                // verdade, e todo ciclo pagava o timeout de 5ms inteiro. Os valores observados são
+                // os do início do ciclo (ver cycleAdvanceGen).
+                const uint64_t observedAdvanceGen = cycleAdvanceGen;
+                const uint64_t observedWorkGen = cycleWorkGen;
                 std::unique_lock<std::mutex> pacingLock(m_pacingMutex);
                 const auto waitStart = std::chrono::steady_clock::now();
                 m_pacingWake.wait_for(pacingLock, std::chrono::milliseconds(5), [this, observedAdvanceGen,
@@ -541,7 +547,9 @@ void Scheduler::start() {
                     // Sleep that whole quantum. yield() is NOT a timed wait: spinning
                     // through the final quantum consumed a full CPU and competed with
                     // the artifact whose progress this worker is meant to follow.
-                    uint64_t observedAdvanceGen = m_advanceLimitGeneration.load(std::memory_order_acquire);
+                    // Geração do início do ciclo: uma posição de referência publicada entre a
+                    // checagem behindHostPacedClock() acima e esta linha não pode se perder.
+                    uint64_t observedAdvanceGen = cycleAdvanceGen;
                     std::unique_lock<std::mutex> pacingLock(m_pacingMutex);
                     m_pacingWake.wait_until(pacingLock, deadline, [&] {
                         if (!m_running.load(std::memory_order_acquire) ||
