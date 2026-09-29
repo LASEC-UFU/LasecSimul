@@ -1,7 +1,7 @@
 QEMU source: C:\SourceCode\qemu_lasecSimul (https://github.com/josuemoraisgh/qemu_lasecSimul)
-QEMU HEAD: cdbc8ee50a190bcbdfb7b2ba32843c05afbe32c5 (= b211e01 + devices/qemu-esp32/patches/0006-esp32-bql-free-idle-wait-and-locked-heartbeat-rearm.patch)
-Executable SHA-256: 6036D022084DE3ABFE122F044D11B067FF4C37C2BC69E9D789F8CC893759CEC8
-Build: MSYS2 UCRT64, ninja -j6 -l24 qemu-system-xtensa.exe (build-ucrt64); após o commit cdbc8ee o ninja não relinkou e o executável manteve o SHA-256 acima
-Etapa: espera ociosa sem BQL no laço principal do Windows e rearme do heartbeat sob active_timers_lock
-Anterior: C25B9C66B2A358C740C41ABE7EF043736FE9C9659A61A27E27BBE6C7743D678B (b211e01)
+QEMU HEAD: 2f244a3da6bbe4990da9d1328c94430a2a92bb55 (= cdbc8ee + devices/qemu-esp32/patches/0007, 0008 e 0009)
+Executable SHA-256: 0AD7016B45277B34C8AC54D0813ACC54EDA8A69C476F8201B5B0EEDD3E1F7A2F
+Build: MSYS2 UCRT64, ninja -j6 -l24 qemu-system-xtensa.exe (build-ucrt64), árvore limpa em 2f244a3
+Etapa: doorbell na leitura síncrona, contador do Timer Group sem BQL e STOP I2C espelhado só em transação elétrica
+Anterior: 6036D022084DE3ABFE122F044D11B067FF4C37C2BC69E9D789F8CC893759CEC8 (cdbc8ee)
 Historical provenance preserved in BUILD-PROVENANCE.txt.

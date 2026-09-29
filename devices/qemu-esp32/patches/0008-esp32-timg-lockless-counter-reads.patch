@@ -1,0 +1,392 @@
+From 9f36ff002071249bea017e00634d9774b1b537a1 Mon Sep 17 00:00:00 2001
+From: josuemoraisgh <josue@ufu.br>
+Date: Tue, 29 Sep 2026 18:04:04 -0300
+Subject: [PATCH] perf(esp32): serve timer-group counter reads without the BQL
+
+millis(), micros() and esp_timer_get_time() latch and read the TIMG0 LACT
+counter through MMIO, and every TCG MMIO access took the BQL. A firmware
+loop that polls the time (Arduino loop() without delay, busy waits,
+delayMicroseconds) kept the BQL busy with short, frequent acquisitions;
+Windows locks are not fair, so the other vCPU could not take interrupts and
+the main loop could not run QEMU timers (heartbeat, esp_timer alarm) for
+hundreds of us to tens of ms. Measured in the guest: an esp_timer one-shot
+waited on with esp_timer_get_time() fired p50 1345 / p95 3224 us late,
+versus 72 / 111 us when the waiting CPU did not touch MMIO.
+
+- MemoryRegion.lockless_io (backport of upstream
+  memory_region_enable_lockless_io()): cputlb dispatches such regions
+  without the BQL; every other region is unchanged.
+- esp32_timg: reads (pure state) and the UPDATE latch run without the BQL;
+  all other writes take it. A per-timer latch_lock makes clock read,
+  count computation and last_val store atomic between CPUs; without it a
+  preempted CPU could store an older latch over a newer one (time went
+  back by up to 18 us). Writers of the counter base take it as well
+  (lock order BQL -> latch_lock).
+- The TIMG region now covers its whole 0x1000 block (only the first
+  0x100 bytes hold registers; the rest reads 0 as on the chip). With
+  0x100 the page was a subpage and accesses went through subpage_read()/
+  prepare_mmio_access(), which take the BQL regardless of the flag.
+
+After: the same one-shot fires p50 84 / p95 130 us late with the polling
+loop; alarm-to-ISR latency p50 94.5 -> 19 us, p95 906 -> 46 us.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ accel/tcg/cputlb.c            | 46 ++++++++++++++++++++++----------
+ hw/timer/esp32_timg.c         | 50 ++++++++++++++++++++++++++++-------
+ include/exec/memory.h         |  7 +++++
+ include/hw/timer/esp32_timg.h |  6 +++++
+ 4 files changed, 85 insertions(+), 24 deletions(-)
+
+diff --git a/accel/tcg/cputlb.c b/accel/tcg/cputlb.c
+index d68fa68..bbd7d36 100644
+--- a/accel/tcg/cputlb.c
++++ b/accel/tcg/cputlb.c
+@@ -1378,6 +1378,20 @@ static void save_iotlb_data(CPUState *cs, MemoryRegionSection *section,
+ #endif
+ }
+ 
++/*
++ * LasecSimul: MemoryRegion.lockless_io (backport of upstream memory_region_enable_lockless_io())
++ * lets a device serve TCG accesses without the BQL. Every other MR keeps the BQL exactly as before.
++ */
++static inline bool tlb_full_mmio_lockless(CPUArchState *env, CPUTLBEntryFull *full)
++{
++    MemoryRegionSection *section = iotlb_to_section(env_cpu(env), full->xlat_section, full->attrs);
++    return section->mr->lockless_io;
++}
++
++#define MMIO_IOTHREAD_LOCK_GUARD(env, full) \
++    g_autoptr(IOThreadLockAuto) _iothread_lock_auto __attribute__((unused)) = \
++        tlb_full_mmio_lockless(env, full) ? NULL : qemu_iothread_auto_lock(__FILE__, __LINE__)
++
+ static uint64_t io_readx(CPUArchState *env, CPUTLBEntryFull *full,
+                          int mmu_idx, vaddr addr, uintptr_t retaddr,
+                          MMUAccessType access_type, MemOp op)
+@@ -1403,7 +1417,9 @@ static uint64_t io_readx(CPUArchState *env, CPUTLBEntryFull *full,
+      */
+     save_iotlb_data(cpu, section, mr_offset);
+ 
+-    {
++    if (mr->lockless_io) {
++        r = memory_region_dispatch_read(mr, mr_offset, &val, op, full->attrs);
++    } else {
+         QEMU_IOTHREAD_LOCK_GUARD();
+         r = memory_region_dispatch_read(mr, mr_offset, &val, op, full->attrs);
+     }
+@@ -1443,7 +1459,9 @@ static void io_writex(CPUArchState *env, CPUTLBEntryFull *full,
+      */
+     save_iotlb_data(cpu, section, mr_offset);
+ 
+-    {
++    if (mr->lockless_io) {
++        r = memory_region_dispatch_write(mr, mr_offset, val, op, full->attrs);
++    } else {
+         QEMU_IOTHREAD_LOCK_GUARD();
+         r = memory_region_dispatch_write(mr, mr_offset, val, op, full->attrs);
+     }
+@@ -2266,7 +2284,7 @@ static uint64_t do_ld_beN(CPUArchState *env, MMULookupPageData *p,
+     unsigned tmp, half_size;
+ 
+     if (unlikely(p->flags & TLB_MMIO)) {
+-        QEMU_IOTHREAD_LOCK_GUARD();
++        MMIO_IOTHREAD_LOCK_GUARD(env, p->full);
+         return do_ld_mmio_beN(env, p->full, ret_be, p->addr, p->size,
+                               mmu_idx, type, ra);
+     }
+@@ -2317,7 +2335,7 @@ static Int128 do_ld16_beN(CPUArchState *env, MMULookupPageData *p,
+     MemOp atom;
+ 
+     if (unlikely(p->flags & TLB_MMIO)) {
+-        QEMU_IOTHREAD_LOCK_GUARD();
++        MMIO_IOTHREAD_LOCK_GUARD(env, p->full);
+         a = do_ld_mmio_beN(env, p->full, a, p->addr, size - 8,
+                            mmu_idx, MMU_DATA_LOAD, ra);
+         b = do_ld_mmio_beN(env, p->full, 0, p->addr + 8, 8,
+@@ -2379,7 +2397,7 @@ static uint16_t do_ld_2(CPUArchState *env, MMULookupPageData *p, int mmu_idx,
+     uint16_t ret;
+ 
+     if (unlikely(p->flags & TLB_MMIO)) {
+-        QEMU_IOTHREAD_LOCK_GUARD();
++        MMIO_IOTHREAD_LOCK_GUARD(env, p->full);
+         ret = do_ld_mmio_beN(env, p->full, 0, p->addr, 2, mmu_idx, type, ra);
+         if ((memop & MO_BSWAP) == MO_LE) {
+             ret = bswap16(ret);
+@@ -2400,7 +2418,7 @@ static uint32_t do_ld_4(CPUArchState *env, MMULookupPageData *p, int mmu_idx,
+     uint32_t ret;
+ 
+     if (unlikely(p->flags & TLB_MMIO)) {
+-        QEMU_IOTHREAD_LOCK_GUARD();
++        MMIO_IOTHREAD_LOCK_GUARD(env, p->full);
+         ret = do_ld_mmio_beN(env, p->full, 0, p->addr, 4, mmu_idx, type, ra);
+         if ((memop & MO_BSWAP) == MO_LE) {
+             ret = bswap32(ret);
+@@ -2421,7 +2439,7 @@ static uint64_t do_ld_8(CPUArchState *env, MMULookupPageData *p, int mmu_idx,
+     uint64_t ret;
+ 
+     if (unlikely(p->flags & TLB_MMIO)) {
+-        QEMU_IOTHREAD_LOCK_GUARD();
++        MMIO_IOTHREAD_LOCK_GUARD(env, p->full);
+         ret = do_ld_mmio_beN(env, p->full, 0, p->addr, 8, mmu_idx, type, ra);
+         if ((memop & MO_BSWAP) == MO_LE) {
+             ret = bswap64(ret);
+@@ -2580,7 +2598,7 @@ static Int128 do_ld16_mmu(CPUArchState *env, vaddr addr,
+     crosspage = mmu_lookup(env, addr, oi, ra, MMU_DATA_LOAD, &l);
+     if (likely(!crosspage)) {
+         if (unlikely(l.page[0].flags & TLB_MMIO)) {
+-            QEMU_IOTHREAD_LOCK_GUARD();
++            MMIO_IOTHREAD_LOCK_GUARD(env, l.page[0].full);
+             a = do_ld_mmio_beN(env, l.page[0].full, 0, addr, 8,
+                                l.mmu_idx, MMU_DATA_LOAD, ra);
+             b = do_ld_mmio_beN(env, l.page[0].full, 0, addr + 8, 8,
+@@ -2779,7 +2797,7 @@ static uint64_t do_st_leN(CPUArchState *env, MMULookupPageData *p,
+     unsigned tmp, half_size;
+ 
+     if (unlikely(p->flags & TLB_MMIO)) {
+-        QEMU_IOTHREAD_LOCK_GUARD();
++        MMIO_IOTHREAD_LOCK_GUARD(env, p->full);
+         return do_st_mmio_leN(env, p->full, val_le, p->addr,
+                               p->size, mmu_idx, ra);
+     } else if (unlikely(p->flags & TLB_DISCARD_WRITE)) {
+@@ -2834,7 +2852,7 @@ static uint64_t do_st16_leN(CPUArchState *env, MMULookupPageData *p,
+     MemOp atom;
+ 
+     if (unlikely(p->flags & TLB_MMIO)) {
+-        QEMU_IOTHREAD_LOCK_GUARD();
++        MMIO_IOTHREAD_LOCK_GUARD(env, p->full);
+         do_st_mmio_leN(env, p->full, int128_getlo(val_le),
+                        p->addr, 8, mmu_idx, ra);
+         return do_st_mmio_leN(env, p->full, int128_gethi(val_le),
+@@ -2897,7 +2915,7 @@ static void do_st_2(CPUArchState *env, MMULookupPageData *p, uint16_t val,
+         if ((memop & MO_BSWAP) != MO_LE) {
+             val = bswap16(val);
+         }
+-        QEMU_IOTHREAD_LOCK_GUARD();
++        MMIO_IOTHREAD_LOCK_GUARD(env, p->full);
+         do_st_mmio_leN(env, p->full, val, p->addr, 2, mmu_idx, ra);
+     } else if (unlikely(p->flags & TLB_DISCARD_WRITE)) {
+         /* nothing */
+@@ -2917,7 +2935,7 @@ static void do_st_4(CPUArchState *env, MMULookupPageData *p, uint32_t val,
+         if ((memop & MO_BSWAP) != MO_LE) {
+             val = bswap32(val);
+         }
+-        QEMU_IOTHREAD_LOCK_GUARD();
++        MMIO_IOTHREAD_LOCK_GUARD(env, p->full);
+         do_st_mmio_leN(env, p->full, val, p->addr, 4, mmu_idx, ra);
+     } else if (unlikely(p->flags & TLB_DISCARD_WRITE)) {
+         /* nothing */
+@@ -2937,7 +2955,7 @@ static void do_st_8(CPUArchState *env, MMULookupPageData *p, uint64_t val,
+         if ((memop & MO_BSWAP) != MO_LE) {
+             val = bswap64(val);
+         }
+-        QEMU_IOTHREAD_LOCK_GUARD();
++        MMIO_IOTHREAD_LOCK_GUARD(env, p->full);
+         do_st_mmio_leN(env, p->full, val, p->addr, 8, mmu_idx, ra);
+     } else if (unlikely(p->flags & TLB_DISCARD_WRITE)) {
+         /* nothing */
+@@ -3067,7 +3085,7 @@ static void do_st16_mmu(CPUArchState *env, vaddr addr, Int128 val,
+             }
+             a = int128_getlo(val);
+             b = int128_gethi(val);
+-            QEMU_IOTHREAD_LOCK_GUARD();
++            MMIO_IOTHREAD_LOCK_GUARD(env, l.page[0].full);
+             do_st_mmio_leN(env, l.page[0].full, a, addr, 8, l.mmu_idx, ra);
+             do_st_mmio_leN(env, l.page[0].full, b, addr + 8, 8, l.mmu_idx, ra);
+         } else if (unlikely(l.page[0].flags & TLB_DISCARD_WRITE)) {
+diff --git a/hw/timer/esp32_timg.c b/hw/timer/esp32_timg.c
+index 955c3e5..a8e65f6 100644
+--- a/hw/timer/esp32_timg.c
++++ b/hw/timer/esp32_timg.c
+@@ -25,13 +25,18 @@
+ #include "hw/timer/esp32_timg_wdt_scale_math.h"
+ #include "hw/misc/esp32_dport.h"
+ 
+-#define TIMG_REGFILE_SIZE 0x100
++/* O bloco do TIMG ocupa 0x1000 no mapa do ESP32 (TIMG1 começa 0x1000 depois do TIMG0); só os
++ * primeiros 0x100 têm registradores, o resto é reservado e lê 0. Mapear a página inteira deixa o
++ * TCG despachar direto nesta região: com 0x100, a página virava um subpage e todo acesso passava
++ * por subpage_read()/prepare_mmio_access(), que tomam o BQL mesmo com lockless_io. */
++#define TIMG_REGFILE_SIZE 0x1000
+ #define TIMG_INTERRUPT_WDT_REALTIME_SCALE_DEFAULT 100
+ #define TIMG_INTERRUPT_WDT_SCALE_MAX 100
+ 
+ static Esp32TimgState *esp32_timg_tg0;
+ 
+ static uint64_t esp32_timg_timer_get_count(Esp32TimgTimerState *s, uint64_t ns_now);
++static void esp32_timg_timer_latch(Esp32TimgTimerState *ts);
+ static uint64_t esp32_timg_timer_count_to_ns(Esp32TimgTimerState *s, uint64_t count);
+ static void esp32_timg_timer_update_config(Esp32TimgTimerState *ts);
+ static void esp32_timg_timer_update_alarm(Esp32TimgTimerState *ts, uint64_t ns_now);
+@@ -71,6 +76,7 @@ static inline qemu_irq get_edge_irq(Esp32TimgState* s, Esp32TimgInterruptType it
+ }
+ 
+ 
++/* Roda sem o BQL (região lockless_io): só lê estado, sem efeito colateral. */
+ static uint64_t esp32_timg_read(void *opaque, hwaddr addr, unsigned int size)
+ {
+     Esp32TimgState *s = ESP32_TIMG(opaque);
+@@ -92,12 +98,12 @@ static uint64_t esp32_timg_read(void *opaque, hwaddr addr, unsigned int size)
+     case A_TIMG_T0LO:
+     case A_TIMG_T1LO:
+     case A_TIMG_LACTLO:
+-        r = ts->last_val & UINT32_MAX;
++        r = qatomic_read(&ts->last_val) & UINT32_MAX;
+         break;
+     case A_TIMG_T0HI:
+     case A_TIMG_T1HI:
+     case A_TIMG_LACTHI:
+-        r = ts->last_val >> 32;
++        r = qatomic_read(&ts->last_val) >> 32;
+         break;
+     case A_TIMG_T0LOADLO:
+     case A_TIMG_T1LOADLO:
+@@ -174,6 +180,17 @@ static void esp32_timg_write(void *opaque, hwaddr addr,
+         ts = &s->lact;
+     }
+ 
++    if (addr == A_TIMG_T0UPDATE || addr == A_TIMG_T1UPDATE || addr == A_TIMG_LACTUPDATE) {
++        /* Único registrador escrito sem o BQL (a região é lockless_io): millis(), micros() e
++         * esp_timer_get_time() fazem este latch em laço. Com o BQL, um laço assim numa CPU
++         * atrasava por centenas de us a ms a outra CPU atendendo interrupções e o laço principal
++         * (timers do QEMU, heartbeat do Core), medido em 2026-09-29. */
++        esp32_timg_timer_latch(ts);
++        return;
++    }
++    /* Os demais registradores mexem em linhas de IRQ, timers e estado compartilhado. */
++    QEMU_IOTHREAD_LOCK_GUARD();
++
+     switch (addr) {
+     case A_TIMG_T0CONFIG:
+     case A_TIMG_T1CONFIG:
+@@ -181,13 +198,6 @@ static void esp32_timg_write(void *opaque, hwaddr addr,
+         ts->config_reg = value;
+         esp32_timg_timer_update_config(ts);
+         break;
+-    case A_TIMG_T0UPDATE:
+-    case A_TIMG_T1UPDATE:
+-    case A_TIMG_LACTUPDATE: {
+-        uint64_t ns_now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+-        ts->last_val = esp32_timg_timer_get_count(ts, ns_now);
+-        break;
+-    }
+     case A_TIMG_T0LOADLO:
+     case A_TIMG_T1LOADLO:
+     case A_TIMG_LACTLOADLO:
+@@ -283,8 +293,10 @@ static void esp32_timg_timer_reset(Esp32TimgTimerState* ts)
+         | (1 << R_TIMG_T0CONFIG_DIVIDER_SHIFT);
+     ts->alarm_val = 0;
+     ts->load_val = 0;
++    qemu_mutex_lock(&ts->latch_lock);
+     ts->count_base = 0;
+     ts->ns_base = 0;
++    qemu_mutex_unlock(&ts->latch_lock);
+     esp32_timg_timer_update_config(ts);
+ }
+ 
+@@ -432,6 +444,14 @@ static uint64_t esp32_timg_timer_get_count(Esp32TimgTimerState *s, uint64_t ns_n
+     return count;
+ }
+ 
++static void esp32_timg_timer_latch(Esp32TimgTimerState *ts)
++{
++    qemu_mutex_lock(&ts->latch_lock);
++    const uint64_t ns_now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    qatomic_set(&ts->last_val, esp32_timg_timer_get_count(ts, ns_now));
++    qemu_mutex_unlock(&ts->latch_lock);
++}
++
+ static uint64_t esp32_timg_timer_count_to_ns(Esp32TimgTimerState *s, uint64_t count)
+ {
+     return muldiv64(count, 1000 * s->divider, s->parent->apb_freq_hz / 1000000);
+@@ -451,6 +471,7 @@ static uint32_t esp32_timg_timer_div_from_reg(uint32_t reg_val)
+ static void esp32_timg_timer_update_config(Esp32TimgTimerState *ts)
+ {
+     uint64_t ns_now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    qemu_mutex_lock(&ts->latch_lock);
+     ts->count_base = esp32_timg_timer_get_count(ts, ns_now);
+     ts->ns_base = ns_now;
+ 
+@@ -458,6 +479,7 @@ static void esp32_timg_timer_update_config(Esp32TimgTimerState *ts)
+     ts->inc = FIELD_EX32(ts->config_reg, TIMG_T0CONFIG, INCREASE);
+     ts->autoreload = FIELD_EX32(ts->config_reg, TIMG_T0CONFIG, AUTORELOAD);
+     ts->divider = esp32_timg_timer_div_from_reg(FIELD_EX32(ts->config_reg, TIMG_T0CONFIG, DIVIDER));
++    qemu_mutex_unlock(&ts->latch_lock);
+     ts->edge_int_en = FIELD_EX32(ts->config_reg, TIMG_T0CONFIG, EDGE_INT);
+     ts->level_int_en = FIELD_EX32(ts->config_reg, TIMG_T0CONFIG, LEVEL_INT);
+     ts->alarm = FIELD_EX32(ts->config_reg, TIMG_T0CONFIG, ALARM);
+@@ -473,8 +495,10 @@ static void esp32_timg_timer_reload(Esp32TimgTimerState *ts, uint64_t ns_now)
+ {
+     timer_del(&ts->alarm_timer);
+ 
++    qemu_mutex_lock(&ts->latch_lock);
+     ts->ns_base = ns_now;
+     ts->count_base = ts->load_val;
++    qemu_mutex_unlock(&ts->latch_lock);
+ 
+     TIMG_DEBUG_LOG("%s: TG%d base=0x%llx ns=0x%llx\n", __func__, ts->parent->id,
+              ts->count_base, ts->ns_base);
+@@ -783,6 +807,7 @@ static void esp32_timg_realize(DeviceState *dev, Error **errp)
+ 
+ static void esp32_timg_timer_init(Esp32TimgState *s, Esp32TimgTimerState *ts, Esp32TimgInterruptType int_type) {
+     ts->parent = s;
++    qemu_mutex_init(&ts->latch_lock);
+     timer_init_ns(&ts->alarm_timer, QEMU_CLOCK_VIRTUAL, esp32_timg_timer_cb, ts);
+     ts->int_type = int_type;
+ }
+@@ -794,6 +819,11 @@ static void esp32_timg_init(Object *obj)
+ 
+     memory_region_init_io(&s->iomem, obj, &esp32_timg_ops, s,
+                           TYPE_ESP32_TIMG, TIMG_REGFILE_SIZE);
++    /* Leituras e o latch UPDATE rodam sem o BQL; esp32_timg_write() toma o BQL para o resto.
++     * Acessos simultâneos das duas CPUs são esperados, então o guarda de reentrância (pensado
++     * para acessos serializados pelo BQL) não se aplica. */
++    s->iomem.lockless_io = true;
++    s->iomem.disable_reentrancy_guard = true;
+     sysbus_init_mmio(sbd, &s->iomem);
+     qdev_init_gpio_out_named(DEVICE(sbd), s->irqs, SYSBUS_DEVICE_GPIO_IRQ, 2*TIMG_INT_MAX);
+ 
+diff --git a/include/exec/memory.h b/include/exec/memory.h
+index 6828442..4a137b3 100644
+--- a/include/exec/memory.h
++++ b/include/exec/memory.h
+@@ -799,6 +799,13 @@ struct MemoryRegion {
+ 
+     /* For devices designed to perform re-entrant IO into their own IO MRs */
+     bool disable_reentrancy_guard;
++
++    /*
++     * LasecSimul (backport of upstream memory_region_enable_lockless_io()): TCG dispatches
++     * accesses to this MR without taking the BQL. The device callbacks must take the BQL
++     * themselves for anything that is not thread-safe (IRQ lines, timers, shared state).
++     */
++    bool lockless_io;
+ };
+ 
+ struct IOMMUMemoryRegion {
+diff --git a/include/hw/timer/esp32_timg.h b/include/hw/timer/esp32_timg.h
+index c15b010..c806f0f 100644
+--- a/include/hw/timer/esp32_timg.h
++++ b/include/hw/timer/esp32_timg.h
+@@ -3,6 +3,7 @@
+ #include "hw/hw.h"
+ #include "hw/registerfields.h"
+ #include "qemu/main-loop.h"
++#include "qemu/thread.h"
+ 
+ #define TYPE_ESP32_TIMG "timer.esp32.timg"
+ #define ESP32_TIMG(obj) OBJECT_CHECK(Esp32TimgState, (obj), TYPE_ESP32_TIMG)
+@@ -41,6 +42,11 @@ typedef struct Esp32TimgTimerState {
+     uint64_t count_base;
+     uint64_t last_val;
+     uint64_t ns_base;
++    /* O latch UPDATE roda sem o BQL. Este mutex torna atômicos, entre as duas CPUs, a leitura do
++     * relógio, o cálculo e a gravação de last_val (sem ele, uma CPU preemptada entre calcular e
++     * gravar sobrescrevia um latch mais novo com um valor mais velho: o tempo voltava). Escritores
++     * de en/inc/divider/ns_base/count_base também o tomam (ordem: BQL -> latch_lock). */
++    QemuMutex latch_lock;
+     Esp32TimgInterruptType int_type;
+     QEMUTimer alarm_timer;
+ } Esp32TimgTimerState;
+-- 
+2.43.0.windows.1
+

@@ -11,6 +11,10 @@ The bundled `qemu-system-xtensa.exe` is built from:
   - [`patches/0004-esp32-i2c-cancel-stale-timer.patch`](patches/0004-esp32-i2c-cancel-stale-timer.patch)
   - [`patches/0006-esp32-bql-free-idle-wait-and-locked-heartbeat-rearm.patch`](patches/0006-esp32-bql-free-idle-wait-and-locked-heartbeat-rearm.patch)
     (2026-09-29, commit `cdbc8ee` do fork, sobre `b211e01`)
+  - [`patches/0007-esp32-read-doorbell.patch`](patches/0007-esp32-read-doorbell.patch) (`b2f487d`)
+  - [`patches/0008-esp32-timg-lockless-counter-reads.patch`](patches/0008-esp32-timg-lockless-counter-reads.patch) (`9f36ff0`)
+  - [`patches/0009-esp32-i2c-stop-mirror-only-after-electrical-transaction.patch`](patches/0009-esp32-i2c-stop-mirror-only-after-electrical-transaction.patch)
+    (`2f244a3`)
 
 The realtime MTTCG build disables only Timer Group 1's interrupt watchdog by default because it
 otherwise measures host wall-time stalls instead of equivalent ESP32 progress. Timer Group 0 and
@@ -55,3 +59,20 @@ As of 2026-09-29 the packaged executable is built from `qemu_lasecSimul` commit
 - `util/qemu-timer.c`: `timer_reload_ns()` inserts under `active_timers_lock`. Without it the
   LasecSimul heartbeat was dropped by a race with vCPUs arming timers on the same list, a few
   seconds after boot, in part of the runs.
+
+As of 2026-09-29 (second update) the packaged executable is built from `qemu_lasecSimul` commit
+`2f244a3da6bbe4990da9d1328c94430a2a92bb55` (`cdbc8ee` plus patches 0007-0009; SHA-256
+`0AD7016B...`, see `bin/BUILD-PROVENANCE-1H.txt`):
+
+- `softmmu/simuliface.c` (0007): `readReg()` rings the Core's poll doorbell after publishing
+  `SIM_READ`. The Core's poll thread only saw a read at the end of its 5 ms bounded wait, so every
+  GPIO_IN read took ~5 ms with the vCPU (and the BQL) held.
+- `hw/timer/esp32_timg.c`, `accel/tcg/cputlb.c`, `include/exec/memory.h` (0008): Timer Group
+  counter latches and LO/HI reads run without the BQL (backport of upstream
+  `memory_region_enable_lockless_io`, with a per-timer latch mutex; the register file is mapped as
+  a full 4 KiB page so it does not go through `subpage_read`). `esp_timer_get_time()`/`millis()`
+  loops no longer starve the main loop and the other vCPU.
+- `hw/i2c/esp32_i2c.c` (0009): STOP is mirrored to the Core's electrical I2C engine only when the
+  transaction opened the electrical bus (RSTART/WRITE/READ mirrored). A burst-delivered
+  transaction used to end with an empty electrical START+STOP that re-solved the MCU circuit twice
+  per transaction; the STOP bus time is still charged.
