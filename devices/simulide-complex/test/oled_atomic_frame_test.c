@@ -102,6 +102,40 @@ int main(void) {
     ok &= check(visible[0] == 1 && visible[127] == 0 && visible[128 + 10] == 1,
                 "stopscroll must restore the unshifted GDDRAM image");
 
+    /* Adafruit_SSD1306::begin(SWITCHCAPVCC) + startscrollleft(0, 0): D=1, K=1+15+50, 64 MUX gives
+     * 370 kHz / (66 * 64) = 87.6 Hz, so 5 frames = 57.08 ms per column. One second delivered in the
+     * Core's ~16.7 ms post_step batches must yield 17 columns (the old 60 Hz model gave 12). */
+    oled_reset(display);
+    display->display_on = 1;
+    const uint8_t timing[][2] = {{0xd5, 0x80}, {0xd9, 0xf1}, {0xa8, 0x3f}};
+    for (size_t i = 0; i < sizeof timing / sizeof timing[0]; ++i) {
+        oled_command(display, timing[i][0]);
+        oled_param(display, timing[i][1]);
+    }
+    oled_command(display, 0x27);
+    const uint8_t scroll_left[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0xff};
+    for (size_t i = 0; i < sizeof scroll_left; ++i) oled_param(display, scroll_left[i]);
+    oled_command(display, 0x2f);
+    for (int i = 0; i < 60; ++i) post_step((LsdnDevice*)display, 16666667ull);
+    ok &= check(display->oled_scroll_column == 17,
+                "hardware scroll must follow the SSD1306 frame rate without dropping batch remainders");
+
+    /* A full rotation is 128 columns * 57.081 ms = 7306.38 ms. A firmware that restarts the scroll
+     * after one cycle must see the image back at the origin from then until the next column. */
+    uint64_t elapsed_ns = 60ull * 16666667ull;
+    while (elapsed_ns + 1000000ull <= 7306000000ull) {
+        post_step((LsdnDevice*)display, 1000000ull);
+        elapsed_ns += 1000000ull;
+    }
+    ok &= check(display->oled_scroll_column == 127, "one column before the full cycle the text is 127 columns in");
+    post_step((LsdnDevice*)display, 7307000000ull - elapsed_ns);
+    elapsed_ns = 7307000000ull;
+    ok &= check(display->oled_scroll_column == 0, "after 128 columns (7306.4 ms) the rotation is back at the origin");
+    post_step((LsdnDevice*)display, 7334000000ull - elapsed_ns);
+    ok &= check(display->oled_scroll_column == 0,
+                "the image stays at the origin through the middle of that column (firmware stop point)");
+    oled_command(display, 0x2e);
+
     /* A split fast-path FIFO write may continue with START=0 after pin-edge
      * notifications. Those notifications cannot replace its I2C control phase. */
     oled_reset(display);

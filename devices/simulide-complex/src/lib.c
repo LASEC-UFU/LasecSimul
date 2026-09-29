@@ -51,6 +51,7 @@ typedef struct {
     uint8_t oled_display_offset, oled_start_line, oled_rotate, oled_x_offset;
     uint8_t oled_scroll, oled_scroll_vertical, oled_scroll_right, oled_scroll_single;
     uint8_t oled_scroll_start, oled_scroll_end, oled_scroll_offset;
+    uint8_t oled_clock_setting, oled_precharge, oled_mux; /* D5h, D9h, A8h: temporização do quadro */
     uint32_t oled_scroll_column;
     uint16_t oled_scroll_interval;
     uint64_t oled_scroll_elapsed_ns;
@@ -202,6 +203,9 @@ static void oled_reset(SimDevice* s) {
     s->oled_scroll_start = 0;
     s->oled_scroll_end = s->rows ? (uint8_t)(s->rows - 1) : 7;
     s->oled_scroll_offset = 0;
+    s->oled_clock_setting = 0x80;
+    s->oled_precharge = 0x22;
+    s->oled_mux = 0x3f;
     s->oled_scroll_interval = 5;
     s->oled_scroll_elapsed_ns = 0;
     s->oled_scroll_column = 0;
@@ -287,7 +291,11 @@ static void oled_param(SimDevice* s, uint8_t data) {
         if (s->pending_index == 1) s->y = s->start_y = page;
         else s->end_y = page;
     }
-    /* Multiplex ratio não redimensiona fisicamente o módulo escolhido pelo usuário. */
+    /* Multiplex ratio não redimensiona fisicamente o módulo escolhido pelo usuário; só entra na
+     * frequência de quadro, junto com o clock (D5h) e as fases de pre-charge (D9h). */
+    else if (s->pending_cmd == 0xa8) s->oled_mux = data & 0x3f;
+    else if (s->pending_cmd == 0xd5) s->oled_clock_setting = data;
+    else if (s->pending_cmd == 0xd9) s->oled_precharge = data;
     else if (s->pending_cmd == 0xd3) s->oled_display_offset = data & 0x7f;
     else if (s->pending_cmd == 0xdc) s->oled_start_line = data & 0x7f;
     else if (s->pending_cmd == 0x26 || s->pending_cmd == 0x27 ||
@@ -356,11 +364,31 @@ static void oled_command(SimDevice* s, uint8_t c) {
     else if (c == 0xc8) s->scan_inv = 1;
 }
 
-static void oled_scroll_once(SimDevice* s) {
+static void oled_scroll_advance(SimDevice* s, uint64_t steps) {
     if (!s->width || !s->rows) return;
     /* O SSD1306 rola o endereço de leitura do vidro; a GDDRAM não muda. Alterá-la aqui fazia
      * stopscroll() conservar pixels deslocados e corrompia uma atualização parcial posterior. */
-    s->oled_scroll_column = (s->oled_scroll_column + 1u) % s->width;
+    s->oled_scroll_column = (uint32_t)((s->oled_scroll_column + steps % s->width) % s->width);
+}
+
+static void oled_scroll_once(SimDevice* s) { oled_scroll_advance(s, 1); }
+
+/* Período de um quadro, que é a unidade do intervalo de rolagem (26h/27h/29h/2Ah). SSD1306 Rev 1.1,
+ * seção 8.3 e Tabela 13-1: F_FRM = F_OSC / (D * K * MUX), com D = D5h[3:0] + 1, K = fase 1 + fase 2
+ * (D9h, em DCLKs; 0 é inválido e fica no valor de reset 2) + 50 DCLKs de BANK0, e MUX = A8h + 1. O
+ * datasheet só caracteriza F_OSC no ajuste padrão D5h[7:4] = 1000b (típ. 370 kHz) e diz apenas que
+ * ele cresce com o registrador, então o valor típico vale para qualquer ajuste. Com a inicialização
+ * da Adafruit (D5h=80h, D9h=F1h, 64 MUX) são ~87,6 Hz: o antigo 60 Hz fixo rolava ~46% mais devagar
+ * que o módulo real. O SH1107 não tem essa caracterização aqui e mantém os 60 Hz anteriores. */
+static uint64_t oled_frame_period_ns(const SimDevice* s) {
+    if (s->kind != KIND_OLED) return 16666667ull;
+    const uint64_t divide = (uint64_t)(s->oled_clock_setting & 0x0f) + 1u;
+    uint64_t phase1 = s->oled_precharge & 0x0f, phase2 = s->oled_precharge >> 4;
+    if (!phase1) phase1 = 2;
+    if (!phase2) phase2 = 2;
+    uint64_t mux = (uint64_t)(s->oled_mux & 0x3f) + 1u;
+    if (mux < 16) mux = 16; /* A8h 0..14 são entradas inválidas; o mínimo é 16 MUX. */
+    return divide * (phase1 + phase2 + 50u) * mux * 1000000000ull / 370000ull;
 }
 
 static void i2c_payload_byte(SimDevice* s, uint8_t byte, uint8_t* phase, uint8_t* control) {
@@ -981,14 +1009,20 @@ static void post_step(LsdnDevice* dev, uint64_t dt_ns) {
         double delta = s->servo_target - s->servo_pos;
         if (fabs(delta) > max_move) delta = delta < 0 ? -max_move : max_move;
         s->servo_pos += delta;
-    } else if ((s->kind == KIND_OLED || s->kind == KIND_SH1107) &&
-               (s->oled_scroll || s->oled_scroll_single)) {
+    } else if ((s->kind == KIND_OLED || s->kind == KIND_SH1107) && s->oled_scroll_single) {
+        oled_scroll_once(s);
+        s->oled_scroll_elapsed_ns = 0;
+        s->oled_scroll_single = 0;
+    } else if ((s->kind == KIND_OLED || s->kind == KIND_SH1107) && s->oled_scroll) {
+        /* O Core entrega dt em lotes de ~16,7 ms. Zerar o acumulado a cada passo descartava o
+         * resto do lote e alongava cada passo até o próximo múltiplo do lote. */
         s->oled_scroll_elapsed_ns += dt_ns;
-        const uint64_t interval_ns = (uint64_t)(s->oled_scroll_interval ? s->oled_scroll_interval : 1) * 16666667ull;
-        if (s->oled_scroll_single || s->oled_scroll_elapsed_ns >= interval_ns) {
-            oled_scroll_once(s);
-            s->oled_scroll_elapsed_ns = 0;
-            s->oled_scroll_single = 0;
+        const uint64_t interval_ns =
+            (uint64_t)(s->oled_scroll_interval ? s->oled_scroll_interval : 1) * oled_frame_period_ns(s);
+        if (s->oled_scroll_elapsed_ns >= interval_ns) {
+            const uint64_t steps = s->oled_scroll_elapsed_ns / interval_ns;
+            s->oled_scroll_elapsed_ns -= steps * interval_ns;
+            oled_scroll_advance(s, steps);
         }
     }
 }
