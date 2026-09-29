@@ -304,6 +304,58 @@ void testAdvanceLimitChangeDuringCycleIsNotLost() {
     assert(reactionNs < 2'500'000); // antes: o timeout de 5 ms inteiro
 }
 
+// Achado 2026-09-29: a thread de poll do MCU agenda a leitura de GPIO no instante publicado pelo
+// QEMU, mas a worker podia já ter passado desse instante e estar numa espera de pacing longa. A
+// espera ignorava trabalho novo (a leitura ficava parada até o prazo, com o QEMU bloqueado), e o
+// evento atrasado fazia m_nowNs voltar para o instante dele.
+void testLateEventEndsPacingSleepWithoutMovingTimeBack() {
+    Scheduler* schedulerPtr = nullptr;
+    Scheduler scheduler(2, [&schedulerPtr] {
+        schedulerPtr->dirtySet().clear();
+        return false;
+    });
+    schedulerPtr = &scheduler;
+    scheduler.setMaximumTimeStepNs(100'000);
+    scheduler.setRealTimeRate(1.0);
+    std::atomic<uint64_t> hostPacedNs{400'000'000};
+    scheduler.setHostPacedPositionCallback([&hostPacedNs] {
+        const uint64_t value = hostPacedNs.load(std::memory_order_relaxed);
+        return value ? std::optional<uint64_t>(value) : std::nullopt;
+    });
+
+    scheduler.start();
+    // Corre até a referência (400 ms simulados em poucos ms de parede) e fica muito à frente da
+    // própria âncora de parede: sem a referência, o pacing dorme até o relógio de parede alcançar.
+    const auto reachDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (scheduler.nowNs() < 400'000'000 && std::chrono::steady_clock::now() < reachDeadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    hostPacedNs.store(0, std::memory_order_relaxed);
+    std::this_thread::sleep_for(std::chrono::milliseconds(20)); // entra na espera de pacing
+    const uint64_t nowBefore = scheduler.nowNs();
+    assert(nowBefore >= 400'000'000);
+
+    std::atomic<uint64_t> nowInCallback{0};
+    std::atomic<int64_t> ranAtNs{0};
+    const auto scheduledAt = std::chrono::steady_clock::now();
+    scheduler.scheduleAt(nowBefore - 1'000, [&] {
+        nowInCallback.store(schedulerPtr->nowNs(), std::memory_order_relaxed);
+        ranAtNs.store((std::chrono::steady_clock::now() - scheduledAt).count(), std::memory_order_relaxed);
+    });
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+    while (nowInCallback.load() == 0 && std::chrono::steady_clock::now() < deadline) std::this_thread::yield();
+    scheduler.stop();
+
+    assert(nowInCallback.load() != 0);
+    const double reactionMs = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::duration(ranAtNs.load())).count();
+    std::printf("  [info] evento atrasado durante o pacing: executado em %.3f ms, relógio %llu -> %llu\n",
+                reactionMs, static_cast<unsigned long long>(nowBefore),
+                static_cast<unsigned long long>(nowInCallback.load()));
+    assert(reactionMs < 5.0);                    // antes: até o prazo do pacing (centenas de ms)
+    assert(nowInCallback.load() >= nowBefore);   // antes: voltava para nowBefore - 1000
+}
+
 void testAdvanceLimitNulloptBehavesLikeNoHook() {
     Scheduler* schedulerPtr = nullptr;
     Scheduler scheduler(2, [&schedulerPtr] {
@@ -647,6 +699,7 @@ int main() {
     testHostPacedPositionSkipsPacingSleep();
     testPacingSleepEndsWhenHostPacedPositionMovesAhead();
     testAdvanceLimitChangeDuringCycleIsNotLost();
+    testLateEventEndsPacingSleepWithoutMovingTimeBack();
     testAdvanceLimitNulloptBehavesLikeNoHook();
     testAdvanceLimitAppliesEvenWithUnlimitedRate();
     testAdvanceLimitNoBusySpinWhenPermanentlyCapped();

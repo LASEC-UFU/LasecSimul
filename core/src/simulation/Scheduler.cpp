@@ -10,6 +10,7 @@ namespace lasecsimul::simulation {
 void Scheduler::pushEventLocked(uint64_t timeNs, uint32_t componentIndex, EventCallback callback) {
     m_events.push({timeNs, componentIndex, m_nextSequence++, std::move(callback)});
     m_pendingEventSnapshot.store(m_events.size(), std::memory_order_relaxed);
+    m_nextEventSnapshotNs.store(m_events.top().timeNs, std::memory_order_release);
 }
 
 void Scheduler::scheduleAt(uint64_t timeNs, uint32_t componentIndex) {
@@ -157,9 +158,13 @@ bool Scheduler::processNextEventUntilLocked(std::unique_lock<std::mutex>& lock, 
     ScheduledEvent event = m_events.top();
     m_events.pop();
     m_pendingEventSnapshot.store(m_events.size(), std::memory_order_relaxed);
+    m_nextEventSnapshotNs.store(m_events.empty() ? std::numeric_limits<uint64_t>::max() : m_events.top().timeNs,
+                                std::memory_order_release);
     if (m_profilingEnabled.load(std::memory_order_relaxed))
         m_eventsProcessed.fetch_add(1, std::memory_order_relaxed);
-    m_nowNs = event.timeNs;
+    // Um evento agendado por outra thread para um instante que a worker já passou é processado
+    // AGORA: o relógio nunca volta (antes m_nowNs recuava para event.timeNs).
+    if (event.timeNs > m_nowNs) m_nowNs = event.timeNs;
     m_nowSnapshotNs.store(m_nowNs, std::memory_order_release);
 
     if (event.componentIndex != kNoComponent) m_dirty.insert(event.componentIndex);
@@ -210,7 +215,12 @@ void Scheduler::runUntil(uint64_t targetTimeNs) {
         bool cappedByStep = false;
         if (selectedStep > 0 && targetTimeNs - m_nowNs > selectedStep) { nextTime = m_nowNs + selectedStep; cappedByStep = true; }
         bool cappedByEvent = false;
-        if (!m_events.empty() && m_events.top().timeNs < nextTime) { nextTime = m_events.top().timeNs; cappedByEvent = true; }
+        // Um evento agendado por outra thread para um instante já passado vira um passo de duração
+        // zero no instante atual: o relógio nunca volta.
+        if (!m_events.empty() && m_events.top().timeNs < nextTime) {
+            nextTime = std::max(m_events.top().timeNs, m_nowNs);
+            cappedByEvent = true;
+        }
         if (tracing) { iterTrace.nextTime = nextTime; iterTrace.maximumTimeStepNs = maxStep; }
         // TEMPORARY (ConsumerTrace investigation, round 9: Option C audit) -- classify which term
         // won the min(), aggregate-only (no per-step dump), plus a bounded reservoir of
@@ -343,6 +353,7 @@ void Scheduler::reset() {
     }
     m_events = {};
     m_pendingEventSnapshot.store(0, std::memory_order_relaxed);
+    m_nextEventSnapshotNs.store(std::numeric_limits<uint64_t>::max(), std::memory_order_release);
     m_resetGeneration.fetch_add(1, std::memory_order_release);
     m_nowNs = 0;
     m_nowSnapshotNs.store(0, std::memory_order_release);
@@ -478,6 +489,7 @@ void Scheduler::start() {
                 // os do início do ciclo (ver cycleAdvanceGen).
                 const uint64_t observedAdvanceGen = cycleAdvanceGen;
                 const uint64_t observedWorkGen = cycleWorkGen;
+                m_workerTimedWait.store(true, std::memory_order_seq_cst);
                 std::unique_lock<std::mutex> pacingLock(m_pacingMutex);
                 const auto waitStart = std::chrono::steady_clock::now();
                 m_pacingWake.wait_for(pacingLock, std::chrono::milliseconds(5), [this, observedAdvanceGen,
@@ -486,6 +498,8 @@ void Scheduler::start() {
                            m_advanceLimitGeneration.load(std::memory_order_acquire) != observedAdvanceGen ||
                            m_workGeneration.load(std::memory_order_acquire) != observedWorkGen;
                 });
+                pacingLock.unlock();
+                m_workerTimedWait.store(false, std::memory_order_relaxed);
                 m_advanceLimitWaitCount.fetch_add(1, std::memory_order_relaxed);
                 m_advanceLimitWaitNanoseconds.fetch_add(
                     static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -550,15 +564,24 @@ void Scheduler::start() {
                     // Geração do início do ciclo: uma posição de referência publicada entre a
                     // checagem behindHostPacedClock() acima e esta linha não pode se perder.
                     uint64_t observedAdvanceGen = cycleAdvanceGen;
+                    m_workerTimedWait.store(true, std::memory_order_seq_cst);
                     std::unique_lock<std::mutex> pacingLock(m_pacingMutex);
                     m_pacingWake.wait_until(pacingLock, deadline, [&] {
                         if (!m_running.load(std::memory_order_acquire) ||
                             m_paused.load(std::memory_order_acquire)) return true;
+                        // Achado 2026-09-29: um evento agendado por outra thread (a thread de poll
+                        // do MCU agenda a leitura de GPIO no instante publicado pelo QEMU) para um
+                        // instante que este ciclo já passou ficava na fila até o prazo do pacing
+                        // (dezenas de ms). Evento futuro continua esperando o pacing normal.
+                        if (m_workGeneration.load(std::memory_order_acquire) != cycleWorkGen &&
+                            m_nextEventSnapshotNs.load(std::memory_order_acquire) <= cycleSimEndNs) return true;
                         const uint64_t generation = m_advanceLimitGeneration.load(std::memory_order_acquire);
                         if (generation == observedAdvanceGen) return false;
                         observedAdvanceGen = generation;
                         return behindHostPacedClock(cycleSimEndNs);
                     });
+                    pacingLock.unlock();
+                    m_workerTimedWait.store(false, std::memory_order_relaxed);
                 }
             } else if (realTimeRate <= 0.0) {
                 pacingWallOrigin = std::chrono::steady_clock::now();

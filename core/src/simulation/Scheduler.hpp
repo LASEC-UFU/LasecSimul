@@ -319,8 +319,14 @@ private:
 
     void pushEventLocked(uint64_t timeNs, uint32_t componentIndex, EventCallback callback);
     void signalWorkAvailable() {
-        m_workGeneration.fetch_add(1, std::memory_order_release);
+        m_workGeneration.fetch_add(1, std::memory_order_seq_cst);
         m_workGeneration.notify_all();
+        // As esperas temporizadas em m_pacingWake (pacing e teto) também precisam ver trabalho
+        // novo. Só notifica quando a worker está numa delas: markDirty() chama isto a cada marcação.
+        if (m_workerTimedWait.load(std::memory_order_seq_cst)) {
+            { std::lock_guard<std::mutex> pacingLock(m_pacingMutex); }
+            m_pacingWake.notify_all();
+        }
     }
     bool processNextEventUntilLocked(std::unique_lock<std::mutex>& lock, uint64_t targetTimeNs);
     bool settleUntilStableLocked(std::unique_lock<std::mutex>& lock);
@@ -395,6 +401,12 @@ private:
     std::atomic<uint64_t> m_maxSettleNanoseconds{0};
     std::atomic<uint64_t> m_maxSettleAtNowNs{0};
     std::atomic<uint64_t> m_pendingEventSnapshot{0};
+    /** Instante do evento mais cedo na fila (UINT64_MAX se vazia), escrito sob m_mutex e lido sem
+     * ele pela espera de pacing: um evento agendado por outra thread para um instante que a worker
+     * já alcançou precisa encerrar a espera. */
+    std::atomic<uint64_t> m_nextEventSnapshotNs{std::numeric_limits<uint64_t>::max()};
+    /** true enquanto a worker está numa espera temporizada em m_pacingWake (ver signalWorkAvailable). */
+    std::atomic<bool> m_workerTimedWait{false};
     uint64_t m_currentTimeStepNs = 0;
     uint64_t m_minimumTimeStepNs = 1;
     bool m_adaptiveTimeStep = false;
