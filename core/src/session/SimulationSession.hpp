@@ -118,6 +118,8 @@ struct NodeVoltageSnapshot {
     // por componentIndex -> {pinId -> slot}; índice fora de faixa ou pinId ausente = componente/
     // pino não existente (removido ou nunca existiu) NESTE snapshot.
     std::shared_ptr<const std::vector<std::unordered_map<std::string, uint32_t>>> pinSlotsByComponent;
+    // por componentIndex -> IComponentModel::current() no mesmo passo estável das tensões.
+    std::shared_ptr<const std::vector<std::optional<double>>> componentCurrents;
 };
 
 /** Resolve a tensão do pino `pinId` de `component` dentro de `snapshot` -- `std::nullopt` se o

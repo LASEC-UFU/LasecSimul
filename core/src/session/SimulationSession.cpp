@@ -1240,8 +1240,16 @@ void SimulationSession::publishSnapshot() {
             m_netlist.componentPinSlotsCopy());
     }
 
+    // Correntes dos componentes no mesmo instante das tensões: getComponentCurrent lê daqui, sem
+    // disputar o mutex do Scheduler (ver componentCurrent()).
+    auto componentCurrents = std::make_shared<std::vector<std::optional<double>>>(m_componentInstances.size());
+    for (size_t index = 0; index < m_componentInstances.size(); ++index) {
+        if (m_componentInstances[index]) (*componentCurrents)[index] = m_componentInstances[index]->current();
+    }
+
     auto snapshot = std::make_shared<const NodeVoltageSnapshot>(
-        NodeVoltageSnapshot{std::move(nodeVoltages), std::move(slotToNode), std::move(pinSlotsByComponent)});
+        NodeVoltageSnapshot{std::move(nodeVoltages), std::move(slotToNode), std::move(pinSlotsByComponent),
+                            std::move(componentCurrents)});
 
     std::lock_guard<std::mutex> lock(m_snapshotMutex);
     m_publishedSnapshot = std::move(snapshot);
@@ -2599,16 +2607,16 @@ PluginHealthStatus SimulationSession::componentHealth(uint32_t componentIndex) c
 }
 
 std::optional<double> SimulationSession::componentCurrent(uint32_t componentIndex) const {
-    auto result = m_scheduler.trySynchronized([&]() -> std::optional<double> {
-    if (componentIndex >= m_componentInstances.size()) return std::nullopt;
-    IComponentModel* instance = m_componentInstances[componentIndex].get();
-    if (!instance) return std::nullopt;
-    return instance->current();
-    });
-    // Leitura auxiliar/visual: nunca espera atrás da worker nem ocupa o canal de controle. Uma
-    // amostra indisponível neste instante equivale a "sem leitura"; o próximo frame tenta de novo.
-    if (!result) return std::nullopt;
-    return *result;
+    // Achado 2026-09-29 (core_bootstrap T4b3 intermitente): esta leitura usava trySynchronized() e
+    // devolvia "sem corrente" sempre que a worker segurava o mutex do Scheduler. Com a simulação
+    // livre, a worker só o solta por instantes entre ciclos: numa falha medida, 100 leituras em 2 s
+    // encontraram o mutex ocupado. Agora lê o snapshot publicado a cada passo estável, como as
+    // tensões de nó: nunca espera atrás da worker e nunca confunde "ocupado" com "sem corrente".
+    const std::shared_ptr<const NodeVoltageSnapshot> snapshot = currentSnapshot();
+    if (!snapshot || !snapshot->componentCurrents || componentIndex >= snapshot->componentCurrents->size()) {
+        return std::nullopt;
+    }
+    return (*snapshot->componentCurrents)[componentIndex];
 }
 
 void SimulationSession::loadMcuFirmware(uint32_t componentIndex, const std::filesystem::path& firmwarePath,

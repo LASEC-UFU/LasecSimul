@@ -419,11 +419,9 @@ static void testGetComponentCurrentOverIpc() {
     std::fprintf(stderr, "\n[T4b3] 'getComponentCurrent' via IPC mede a corrente de um resistor (10V/1k/1k)\n");
 
     const std::string pipeName = "lasecsimul-bootstrap-test-current";
+    lasecsimul::app::CoreApplication app({pipeName});
     int serverResult = -1;
-    std::thread serverThread([&] {
-        lasecsimul::app::CoreApplication app({pipeName});
-        serverResult = app.run();
-    });
+    std::thread serverThread([&] { serverResult = app.run(); });
 
 #ifdef _WIN32
     void* conn = clientConnect(pipeName);
@@ -476,6 +474,28 @@ static void testGetComponentCurrentOverIpc() {
         }
         TEST_ASSERT(stabilized, "corrente do resistor r1 converge para 5mA (10V/2k) via getComponentCurrent");
         std::fprintf(stderr, "  [info] ultima corrente lida: %.6f\n", lastCurrent);
+
+        // Achado 2026-09-29: a leitura usava trySynchronized() e respondia "sem corrente" sempre
+        // que a worker segurava Scheduler::m_mutex (com a simulação livre, quase sempre). Com o
+        // mutex ocupado por outra thread, a corrente do último passo estável continua disponível.
+        std::atomic<bool> holding{false};
+        std::atomic<bool> release{false};
+        std::thread holder([&] {
+            app.sessionForTesting().scheduler().synchronized([&] {
+                holding.store(true, std::memory_order_release);
+                while (!release.load(std::memory_order_acquire)) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            });
+        });
+        for (int attempt = 0; attempt < 2000 && !holding.load(std::memory_order_acquire); ++attempt) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        const nlohmann::json heldResp = send("getComponentCurrent", {{"instanceId", r1}});
+        release.store(true, std::memory_order_release);
+        holder.join();
+        TEST_ASSERT(holding.load(), "thread auxiliar segurou Scheduler::m_mutex");
+        TEST_ASSERT(heldResp.value("ok", false) && heldResp["payload"].value("hasCurrent", false) &&
+                        std::abs(heldResp["payload"].value("current", -1.0) - 0.005) < 1e-4,
+                    "getComponentCurrent devolve a corrente publicada mesmo com o mutex do Scheduler ocupado");
 
         const nlohmann::json groundResp = send("getComponentCurrent", {{"instanceId", ground}});
         TEST_ASSERT(groundResp.value("ok", false) && !groundResp["payload"].value("hasCurrent", true),
