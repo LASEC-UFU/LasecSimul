@@ -77,6 +77,12 @@ public:
      * chamador tente novamente sem consumir o receptor eletrico, evitando inversao de mutex entre
      * Scheduler e a thread/callback da MCU. */
     std::optional<std::string> tryDrainUartTxWireTap(size_t localPinIndex, bool& busy) const;
+    /** Mesma condição de pino-fonte de `tryDrainUartTxWireTap()`, sem drenar nada: pino dedicado de
+     * TX de USART cujo módulo publica a cópia byte-exata consumida pelos receptores do circuito. */
+    bool pinHasUartTxWireTap(size_t localPinIndex) const;
+    /** Repassa ao adaptador (ver `IMcuAdapter::setPinTransitionsObserved`). `SimulationSession`
+     * chama isto ao publicar o plano, com a simulação parada. */
+    void setPinTransitionsObserved(size_t localPinIndex, bool observed);
 
     /** Agrega a saúde do adaptador (`create`/`build_launch_args`/`get_memory_regions`/
      * `get_pin_map`/`create_modules`, ver `NativeMcuAdapterProxy`) com a de cada módulo concreto
@@ -213,6 +219,9 @@ public:
     qemu::QemuArenaBridge& arenaBridge() { return m_controller.arenaBridge(); }
     /** Indica que esta instância usa o transporte VNEXT-B em vez da arena legada. */
     bool vnextBActive() const noexcept { return m_controller.vnextBActive(); }
+    /** Ver `McuController::hostPacedVirtualClock()`: `pacingPositionNs()` deste MCU é então um
+     * limite inferior do tempo real na timeline do Scheduler. */
+    bool hostPacedVirtualClock() const noexcept { return m_controller.hostPacedVirtualClock(); }
 
     /** Achado 2026-07-22 (indicador "MCU real-time ratio" sempre em 0%, mesmo com o MCU rodando
      * normalmente): `arena->qemuTime` NUNCA é escrito pelo fork QEMU real (confirmado lendo
@@ -382,7 +391,8 @@ private:
     /** Drena TODO o buffer de monitor (até esvaziar ou `kUsartMonitorDrainGuard` iterações, o que
      * vier primeiro -- nunca deveria bater no guard em uso normal, é só proteção contra um adaptador
      * malcomportado que nunca devolve buffer vazio) do módulo dono de `regionStart`, devolvendo hex
-     * lowercase (2 chars por byte, `""` se vazio ou módulo não encontrado). `tx=true` = lado saída. */
+     * lowercase (2 chars por byte, `""` se vazio ou módulo não encontrado). `tx=true` = lado saída.
+     * Também devolve `""`, sem consumir nada, se a USART estiver atualizando o buffer neste instante. */
     std::string drainUsartMonitorHex(uint64_t regionStart, bool tx) const;
     /** Decodifica `hex` (lowercase/uppercase, 2 chars por byte) e injeta no RX do módulo dono de
      * `regionStart` via `QemuModule::injectRxBytes` -- ver doc-comment lá (bypassa temporização

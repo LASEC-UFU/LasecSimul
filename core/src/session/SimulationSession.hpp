@@ -668,6 +668,11 @@ private:
     std::vector<std::vector<uint8_t>> captureComponentTelemetryStatesUnlocked(
         const std::vector<uint32_t>& componentIndices) const;
     void rebuildTopologyIfNeeded();
+    /** Recalcula, para cada pino de cada MCU, se outro componente do nó elétrico observa suas
+     * transições (ver `IMcuAdapter::setPinTransitionsObserved`). Roda ao fim de todo
+     * `rebuildTopologyIfNeeded()` -- único ponto em que a topologia muda; durante o Run ela é imutável. */
+    void refreshMcuPinTransitionObserversUnlocked();
+    bool mcuPinTransitionsObservedUnlocked(uint32_t mcuIndex, size_t localPinIndex) const;
     /** Reaproveita `CircuitGroup` (matriz/fatoração já estampada) de `previous` pra qualquer rede
      * cujo conjunto de componentes vivos E mapeamento pino->índice local não mudaram -- sem isso,
      * `Netlist::rebuildTopology()` sempre aloca `CircuitGroup` novo/vazio pra TUDO (deliberado,
@@ -925,6 +930,12 @@ private:
      * `m_componentInstances` já é funilada pela fila de comandos (`enqueueCommand`/
      * `drainCommandQueue`), nunca concorrente com a própria worker. */
     std::optional<uint64_t> computeSlowestMcuPositionNs();
+    /** Hook `Scheduler::HostPacedPositionFn`: a MAIOR posição publicada entre os MCUs cujo QEMU usa
+     * relógio virtual acompanhando o host (`McuComponent::hostPacedVirtualClock()`). Cada uma é um
+     * limite inferior do tempo real, então a maior também é; sem staleness aqui, porque uma posição
+     * antiga fica atrás do Scheduler e não dispensa espera nenhuma. Mesma convenção de thread de
+     * `computeSlowestMcuPositionNs()`: só lê atômicos de cada MCU. */
+    std::optional<uint64_t> computeHostPacedMcuPositionNs() const;
 
     /** Fast path de transferência I2C (ver McuComponent::setI2cTransferHandler,
      * docs/39-i2c-mttcg-throughput-ceiling-*.md seção 9): dado o MCU e o índice de barramento I2C,

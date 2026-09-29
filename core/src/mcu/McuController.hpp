@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <filesystem>
 #include <string>
 #include <functional>
@@ -72,6 +73,15 @@ public:
     qemu::QemuArenaBridge& arenaBridge() { return m_arenaBridge; }
     const qemu::QemuArenaBridge& arenaBridge() const { return m_arenaBridge; }
 
+    /** true quando o QEMU em execução usa um relógio virtual acompanhando o relógio do host
+     * (MTTCG ou TCG single, ambos sem `-icount`). Nesse modo um timestamp publicado pelo QEMU
+     * nunca está à frente do tempo real: o pacing do Scheduler pode alcançá-lo sem esperar.
+     * Falso no modo determinístico (`-icount`), cujo relógio pode correr à frente do host. Lido
+     * pela thread do Scheduler enquanto start()/stop() rodam em outra thread. */
+    bool hostPacedVirtualClock() const noexcept {
+        return m_hostPacedVirtualClock.load(std::memory_order_acquire);
+    }
+
 private:
     const IMcuAdapter& m_adapter;
     std::string m_qemuBinaryOverride;
@@ -79,6 +89,7 @@ private:
     qemu::QemuArenaBridge m_arenaBridge;
     qemu::VnextBAttachment m_vnextB;
     bool m_vnextBAttached = false;
+    std::atomic<bool> m_hostPacedVirtualClock{false};
     RuntimeLaunchIdentity m_runtimeIdentity{};
 };
 

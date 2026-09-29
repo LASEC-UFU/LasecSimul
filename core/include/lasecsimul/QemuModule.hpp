@@ -100,6 +100,8 @@ public:
      * monitor da MCU podem observar a mesma transmissao sem competir pelo mesmo buffer. Adaptador
      * sem ABI minor 9 devolve false e o Core continua usando o receptor eletrico normal. */
     virtual bool drainWireTapByte(uint8_t& /*outByte*/) { return false; }
+    /** true quando drainWireTapByte() é realmente suportado, sem consumir nada. */
+    virtual bool hasWireTap() const { return false; }
 
     /** Injeta `count` bytes como se tivessem chegado pela entrada real do periférico (ex: RX de
      * uma USART) -- bypassa qualquer temporização elétrica bit-a-bit de propósito (ferramenta de

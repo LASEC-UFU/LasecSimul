@@ -429,9 +429,23 @@ McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedule
          * `pollThreadRunning` é false e este ramo despacha normalmente). */
         const bool backgroundThreadOwnsI2c =
             m_callbackState->pollThreadRunning.load(std::memory_order_acquire);
-        if ((m_scheduler.isRunning() && !m_scheduler.isCurrentThreadWorker()) ||
-            (m_scheduler.isCurrentThreadWorker() && backgroundThreadOwnsI2c)) {
-            schedulePollAt(m_scheduler.nowNs(), deferred);
+        /* Achado 2026-09-28 (rolagem do SSD1306 ~4x mais lenta que no hardware): os dois ramos
+         * abaixo reagendavam um poll do Scheduler no MESMO instante enquanto o pedido esperava a
+         * thread de fundo. Como o QEMU publica o burst microssegundos depois de a worker drenar a
+         * escrita de CTR que o precede, a worker entrava num laço poll -> pedido pendente -> poll
+         * no mesmo nowNs (~700 mil callbacks/s medidos), tomando este mutex a cada volta. A thread
+         * de fundo precisa dele para reivindicar e concluir o pedido e ficava faminta (p90 ~4 ms
+         * por aquisição, duas por burst); enquanto isso o relógio elétrico ficava parado, a fila
+         * da arena enchia e o firmware via cada transação I2C custar milissegundos. */
+        if (m_scheduler.isRunning() && !m_scheduler.isCurrentThreadWorker()) {
+            // A thread de fundo perdeu a corrida contra um burst publicado depois da própria
+            // checagem do mailbox: a próxima iteração dela o reivindica, sem esperar outra
+            // campainha (que o QEMU não toca de novo enquanto aguarda esta resposta).
+            return PollStep::DispatchedReady;
+        }
+        if (m_scheduler.isCurrentThreadWorker() && backgroundThreadOwnsI2c) {
+            // A thread de fundo conclui o pedido sem a worker; ao terminar ela volta a olhar a
+            // fila e agenda o próximo poll necessário. Não reagende nada aqui.
             return PollStep::DeferredFuture;
         }
         if (processI2cBurstLocked()) return PollStep::DispatchedReady;
@@ -957,6 +971,13 @@ constexpr char kHexDigits[] = "0123456789abcdef";
 std::string McuComponent::drainUsartMonitorHex(uint64_t regionStart, bool tx) const {
     QemuModule* module = findModule(regionStart);
     if (!module) return {};
+    // Achado 2026-09-29 (LasecPlot divergiu do monitor com o mesmo numero de bytes): o wakeup da
+    // USART empurra no buffer do monitor segurando so' m_callbackState->mutex (o Scheduler solta o
+    // seu antes do callback), e esta leitura via IPC segurava so' Scheduler::m_mutex -- push_back e
+    // pop_front concorrentes no mesmo std::deque. Mesma regra de tryDrainUartTxWireTap(): nunca
+    // esperar por este mutex com o do Scheduler tomado; ocupado = nada drenado, o proximo poll pega.
+    std::unique_lock<std::recursive_mutex> lock(m_callbackState->mutex, std::try_to_lock);
+    if (!lock.owns_lock()) return {};
     std::string hex;
     uint8_t byte = 0;
     for (int guard = 0; guard < kUsartMonitorDrainGuard && module->drainMonitorByte(tx, byte); ++guard) {
@@ -964,6 +985,23 @@ std::string McuComponent::drainUsartMonitorHex(uint64_t regionStart, bool tx) co
         hex.push_back(kHexDigits[byte & 0x0Fu]);
     }
     return hex;
+}
+
+bool McuComponent::pinHasUartTxWireTap(size_t localPinIndex) const {
+    const std::span<const PinMapping> mappings = m_adapter->pinMap();
+    if (localPinIndex >= mappings.size() || localPinIndex >= m_moduleByPin.size()) return false;
+    const PinMapping& mapping = mappings[localPinIndex];
+    QemuModule* module = m_moduleByPin[localPinIndex];
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    return mapping.moduleKind == ModuleKind::Usart && module && module->hasWireTap() &&
+           module->isOutputEnabled(mapping.bitOrLine);
+}
+
+void McuComponent::setPinTransitionsObserved(size_t localPinIndex, bool observed) {
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    if (localPinIndex < m_adapter->pinMap().size()) {
+        m_adapter->setPinTransitionsObserved(static_cast<uint32_t>(localPinIndex), observed);
+    }
 }
 
 std::optional<std::string>

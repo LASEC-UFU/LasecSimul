@@ -127,6 +127,15 @@ std::vector<std::unique_ptr<QemuModule>> NativeMcuAdapterProxy::createModules() 
     return modules;
 }
 
+void NativeMcuAdapterProxy::setPinTransitionsObserved(uint32_t pinIndex, bool observed) {
+    const LsdnMcuVTable* vt = m_module->mcuVTable();
+    if (!vt->set_pin_transitions_observed || m_health == PluginHealthStatus::Faulted) return;
+    const bool ok = CrashGuard::call(m_chipId, [&] {
+        vt->set_pin_transitions_observed(m_handle, pinIndex, observed ? 1 : 0);
+    });
+    if (!ok) m_health = PluginHealthStatus::Faulted;
+}
+
 std::optional<uint32_t> NativeMcuAdapterProxy::resolveI2cPinIndex(uint32_t bus, bool sda) const {
     const LsdnMcuVTable* vt = m_module->mcuVTable();
     if (!vt->resolve_i2c_pin || m_health == PluginHealthStatus::Faulted) return std::nullopt;

@@ -33,7 +33,14 @@ extern "C" {
 #endif
 
 #define LSDN_MCU_ABI_VERSION_MAJOR 3
-#define LSDN_MCU_ABI_VERSION_MINOR 0
+#define LSDN_MCU_ABI_VERSION_MINOR 1
+/* Minor 1 (2026-09-29): entrou set_pin_transitions_observed -- o Core informa, por pino fisico e
+ * antes de cada Run (topologia imutavel durante o Run), se algum outro componente do no' eletrico
+ * observa transicoes individuais. Com todos os pinos que carregam o TX de uma USART nao
+ * observados, o adaptador pode transmitir cada frame sem bordas por bit (linha em repouso e um
+ * unico evento no fim do frame, mesmo instante do caminho bit-a-bit); o byte continua saindo pelo
+ * monitor/tap no tempo real do baud. Opcional -- NULL, ou nenhuma chamada, mantem todo pino
+ * observado (caminho eletrico bit-a-bit de sempre). */
 /* Major 3 (2026-08-26): entrou resolve_i2c_pin (LsdnMcuVTable) -- fast path de transferencia I2C
  * (ver device_abi.h ABI 4 LsdnI2cTransfer/i2c_transfer, docs/39-i2c-mttcg-throughput-ceiling-*.md
  * secao 9). So' o Core sabe qual componente esta' fisicamente ligado a um pino (Netlist/topologia,
@@ -227,6 +234,11 @@ typedef struct LsdnMcuVTable {
      * LSDN_QEMU_ARENA_CAP_I2C_BURST publica um pedido de burst -- nunca no caminho eletrico
      * bit-a-bit comum. */
     int32_t (*resolve_i2c_pin)(LsdnMcuAdapter* adapter, uint32_t bus, uint8_t sda, uint32_t* out_pin);
+
+    /* ABI 3.1: opcional. `pin` no mesmo espaco de get_pin_map; observed=0 garante que nenhum outro
+     * componente do no' depende das bordas desse pino (ver comentario de LSDN_MCU_ABI_VERSION_MINOR).
+     * O adaptador decide, frame a frame e com o roteamento atual, se pode omitir as bordas. */
+    void (*set_pin_transitions_observed)(LsdnMcuAdapter* adapter, uint32_t pin, int32_t observed);
 } LsdnMcuVTable;
 
 /* Simbolo exportado por um plugin de adaptador de MCU — distinto de lsdn_get_vtable (dispositivos)

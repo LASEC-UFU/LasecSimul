@@ -523,16 +523,33 @@ void Scheduler::start() {
                 // clock kept advancing: future MMIO events drifted ever farther
                 // ahead and returning ring credit became progressively slower.
                 // Catch-up still processes every event and respects advanceLimit.
-                if (requiredElapsed > actualElapsed && requiredElapsed - actualElapsed >= pacingQuantum) {
+                // Achado 2026-09-28: a âncora de parede acima é do próprio Core e fica alguns ms
+                // atrás do relógio de um QEMU em tempo real. Dormir até ela deixava o elétrico
+                // atrás de escritas que o QEMU já publicou; como cada burst I2C espera a fila da
+                // arena drenar (e a fila só drena quando o Core alcança o timestamp de cada
+                // entrada), cada transação pagava esse atraso. Atrás do relógio do host não há
+                // o que esperar; e uma espera em curso termina assim que ele nos ultrapassa.
+                const auto behindHostPacedClock = [this](uint64_t simNs) {
+                    if (!m_hostPacedPosition) return false;
+                    const std::optional<uint64_t> position = m_hostPacedPosition();
+                    return position && *position > simNs;
+                };
+                if (requiredElapsed > actualElapsed && requiredElapsed - actualElapsed >= pacingQuantum &&
+                    !behindHostPacedClock(cycleSimEndNs)) {
                     const auto deadline = pacingWallOrigin + requiredElapsed;
                     // The guard above already accumulates a host-sized quantum.
                     // Sleep that whole quantum. yield() is NOT a timed wait: spinning
                     // through the final quantum consumed a full CPU and competed with
                     // the artifact whose progress this worker is meant to follow.
+                    uint64_t observedAdvanceGen = m_advanceLimitGeneration.load(std::memory_order_acquire);
                     std::unique_lock<std::mutex> pacingLock(m_pacingMutex);
-                    m_pacingWake.wait_until(pacingLock, deadline, [this] {
-                        return !m_running.load(std::memory_order_acquire) ||
-                               m_paused.load(std::memory_order_acquire);
+                    m_pacingWake.wait_until(pacingLock, deadline, [&] {
+                        if (!m_running.load(std::memory_order_acquire) ||
+                            m_paused.load(std::memory_order_acquire)) return true;
+                        const uint64_t generation = m_advanceLimitGeneration.load(std::memory_order_acquire);
+                        if (generation == observedAdvanceGen) return false;
+                        observedAdvanceGen = generation;
+                        return behindHostPacedClock(cycleSimEndNs);
                     });
                 }
             } else if (realTimeRate <= 0.0) {

@@ -73,6 +73,14 @@ public:
         (void)bus; (void)sda;
         return std::nullopt;
     }
+
+    /** Informa se algum outro componente do nó elétrico do pino `pinIndex` (espaço de `pinMap()`)
+     * observa suas transições individuais -- ver `LsdnMcuVTable::set_pin_transitions_observed`.
+     * Só o Core conhece a topologia; só o adaptador sabe quais pinos carregam cada sinal agora.
+     * Default: ignora (o adaptador continua tratando todo pino como observado). */
+    virtual void setPinTransitionsObserved(uint32_t pinIndex, bool observed) {
+        (void)pinIndex; (void)observed;
+    }
 };
 
 } // namespace lasecsimul

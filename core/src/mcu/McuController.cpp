@@ -377,6 +377,9 @@ void McuController::start(const std::filesystem::path& firmwarePath, const std::
     m_runtimeIdentity = identity;
     QemuLaunchSpec spec = buildLaunchSpec(
         firmwarePath, arenaName, callSiteBinaryOverride, debug, identity);
+    m_hostPacedVirtualClock.store(
+        std::find(spec.args.begin(), spec.args.end(), "-icount") == spec.args.end(),
+        std::memory_order_release);
     const char* selectedTransport = std::getenv("LASECSIMUL_MCU_TRANSPORT");
     const bool useVnextBTransport =
         selectedTransport && std::string_view(selectedTransport) == "VNEXT_B";
@@ -456,6 +459,7 @@ void McuController::start(const std::filesystem::path& firmwarePath, const std::
 }
 
 void McuController::stop() {
+    m_hostPacedVirtualClock.store(false, std::memory_order_release);
     if (m_vnextBAttached) {
         m_vnextB.stop();
         m_vnextBAttached = false;

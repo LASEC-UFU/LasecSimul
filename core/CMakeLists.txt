@@ -1726,6 +1726,19 @@ if(NOT WIN32)
 endif()
 add_test(NAME i2c_fast_path_dispatch COMMAND i2c_fast_path_dispatch_test)
 
+# mcu_abi.h 3.1: quais pinos de MCU têm observadores das bordas no nó elétrico (túnel e RX de
+# LasecPlot servido pelo tap não contam; qualquer outro componente conta).
+add_executable(mcu_pin_transition_observers_test
+    test/core/session/McuPinTransitionObserversTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_pin_transition_observers_test PRIVATE include src)
+target_link_libraries(mcu_pin_transition_observers_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(mcu_pin_transition_observers_test PRIVATE dl)
+endif()
+add_test(NAME mcu_pin_transition_observers COMMAND mcu_pin_transition_observers_test)
+
 # Fechamento do gate de materializacao de portas Signal Graph (HART Device Engine v2, FEAT-013):
 # prova que connectWire()/disconnectWire() roteiam para o dominio Signal Graph quando os dois
 # endpoints resolvem via IComponentModel::signalPorts(), usando componentes fake GENERICOS (nao

@@ -14,12 +14,15 @@
 // deadlocka (a interação mais arriscada: `stopFirmware()`/`loadFirmware()` seguram
 // `m_callbackState->mutex` e podem ser chamados a partir de um callback que JÁ segura esse mutex
 // recursivamente, ver onEvent() -- a thread de poll nunca pode depender de join() pra terminar).
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <thread>
+#include <variant>
 #include <vector>
 #include "components/active/DiodeLegArray.hpp"
 #include "components/other/Ground.hpp"
@@ -276,6 +279,204 @@ void runI2cDuplicateDispatchRegressionTest(mcu::McuComponent& mcu, LsdnQemuArena
     mcu.setI2cTransferHandler(nullptr);
 }
 
+// Achado 2026-09-28 (rolagem do SSD1306 ~4x mais lenta que o hardware): quando a worker do
+// Scheduler chegava num poll com um pedido I2C ainda no handler da thread de fundo, ela reagendava
+// um poll no MESMO instante, em laço (~700 mil callbacks/s com firmware real): o relógio elétrico
+// ficava parado nesse instante e a thread de fundo disputava o mutex do MCU a cada volta. Aqui uma
+// entrada futura é agendada pela thread de fundo, o pedido fica preso no handler e a worker alcança
+// o instante da entrada durante a espera: o relógio precisa passar dele sem uma rajada de eventos.
+void runI2cPendingBurstDoesNotFreezeSchedulerTest(simulation::Scheduler& scheduler, mcu::McuComponent& mcu,
+                                                  LsdnQemuArena* arena, uint64_t gpioStart) {
+    std::atomic<bool> entered{false};
+    std::atomic<bool> release{false};
+    mcu.setI2cTransferHandler([&](uint32_t, uint32_t, const I2cTransfer&) -> I2cTransferResult {
+        entered.store(true);
+        while (!release.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        I2cTransferResult result;
+        result.handled = true;
+        result.addressAck = true;
+        return result;
+    });
+    const double previousRate = scheduler.realTimeRate();
+    scheduler.setRealTimeRate(1.0);
+
+    const uint64_t futureNs = scheduler.nowNs() + 50'000'000;
+    const uint64_t slot = arena->queueWriteIndex % LSDN_QEMU_ARENA_QUEUE_DEPTH;
+    arena->queue[slot].regAddr = gpioStart + 0x04;
+    arena->queue[slot].regData = 0;
+    arena->queue[slot].simuAction = LSDN_SIM_WRITE;
+    arena->queue[slot].simuTime = (futureNs - mcu.qemuTimeOriginNsForTesting()) * 1000u;
+    arena->queueWriteIndex++;
+#ifdef _WIN32
+    mcu.ringPollDoorbellForTesting();
+#endif
+    check(waitUntil([&] { return mcu.pacingPositionNs().value_or(0) >= futureNs; }),
+          "thread de fundo agenda a entrada futura antes do pedido I2C");
+
+    simulateQemuI2cBurstRequest(arena, 9001, 0x3C << 1);
+#ifdef _WIN32
+    mcu.ringPollDoorbellForTesting();
+#endif
+    check(waitUntil([&] { return entered.load(); }), "thread de fundo segura o pedido I2C no handler");
+    scheduler.setProfilingEnabled(true);
+    scheduler.resetMetrics();
+    const bool advanced = waitUntil([&] { return scheduler.nowNs() > futureNs + 1'000'000; },
+                                    std::chrono::seconds(2));
+    const uint64_t events = scheduler.metrics().eventsProcessed;
+    release.store(true);
+    check(advanced, "relogio do Scheduler passa da entrada futura com o pedido I2C pendente");
+    check(events < 1000, "worker nao reagenda polls no mesmo instante enquanto o pedido I2C esta pendente");
+    std::printf("  [info] eventos do Scheduler com o pedido pendente: %llu\n", static_cast<unsigned long long>(events));
+    check(waitUntil([&] { return i2cResponseObserved(arena, 9001) && queueDrained(arena); }),
+          "pedido I2C concluido e entrada futura despachada depois da liberacao");
+
+    scheduler.setProfilingEnabled(false);
+    scheduler.setRealTimeRate(previousRate);
+    mcu.setI2cTransferHandler(nullptr);
+}
+
+/** Receptor de teste com os pinos do LasecPlot. Nenhuma lógica: o que importa é o typeId no nó. */
+class FakeLasecPlot final : public IComponentModel {
+public:
+    const char* typeId() const override { return "peripherals.lasecplot"; }
+    std::span<Pin> pins() override { return m_pins; }
+    void stamp(MnaMatrixView&) override {}
+    void postStep(uint64_t) override {}
+    size_t getState(uint8_t*, size_t) const override { return 0; }
+    void setState(const uint8_t*, size_t) override {}
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return {}; }
+
+private:
+    std::array<Pin, 2> m_pins{Pin{"tx"}, Pin{"rx"}};
+};
+
+struct UartStreamResult {
+    std::string bytesHex;
+    std::string monitorHex;
+    uint64_t schedulerEvents = 0;
+    bool i2cServed = false;
+    double i2cLatencyMs = 0.0;
+};
+
+// Achado 2026-09-29 (1000 bytes a 115200 baud levavam ~0,5 s simulados): cada byte de TX custava
+// ~10 bordas no pino e, a 115200 contínuos, o Core deixava de acompanhar o tempo real -- a fila da
+// arena enchia e pedidos I2C esperavam. `uart0TxPin` sem observador (só o LasecPlot servido pelo tap)
+// transmite um frame por evento; aqui um fluxo de 100 bytes corre junto com um pedido I2C.
+UartStreamResult runUartStreamWithI2c(simulation::Scheduler& scheduler, mcu::McuComponent& mcu, LsdnQemuArena* arena,
+                                      size_t uart0TxPin, uint64_t i2cSequence, uint32_t byteCount = 100) {
+    UartStreamResult out;
+    std::atomic<int64_t> servedAtNs{0};
+    mcu.setI2cTransferHandler([&](uint32_t, uint32_t, const I2cTransfer&) -> I2cTransferResult {
+        servedAtNs.store(std::chrono::steady_clock::now().time_since_epoch().count());
+        I2cTransferResult result;
+        result.handled = true;
+        result.addressAck = true;
+        return result;
+    });
+    const double previousRate = scheduler.realTimeRate();
+    scheduler.setRealTimeRate(1.0);
+    scheduler.setProfilingEnabled(true);
+    scheduler.resetMetrics();
+
+    // "Abrir monitor serial" e o benchmark leem uart0_tx_monitor_hex pela IPC enquanto a thread de
+    // poll empurra bytes no mesmo buffer -- aqui essa leitura concorrente roda o fluxo inteiro.
+    std::function<PropertyValue()> readMonitor;
+    for (PropertyDescriptor& descriptor : mcu.propertyDescriptors()) {
+        if (descriptor.name == "uart0_tx_monitor_hex") readMonitor = descriptor.get;
+    }
+    auto drainMonitor = [&] {
+        const PropertyValue value = readMonitor();
+        if (const auto* hex = std::get_if<std::string>(&value)) out.monitorHex += *hex;
+    };
+    for (int i = 0; i < 4; ++i) drainMonitor(); // bytes de fases anteriores deste executavel
+    out.monitorHex.clear();
+    std::atomic<bool> streamDone{false};
+    std::thread monitorReader([&] {
+        while (!streamDone.load()) {
+            drainMonitor();
+            std::this_thread::yield();
+        }
+    });
+
+    auto publish = [&](uint64_t addr, uint64_t value) {
+        while ((arena->queueWriteIndex - arena->queueReadIndex) >= LSDN_QEMU_ARENA_QUEUE_DEPTH) std::this_thread::yield();
+        simulateQemuWrite(arena, addr, value);
+    };
+    publish(0x3FF40000 + 0x14, 8'680u); // 115200 baud: o QEMU publica o bit-time em ns
+    int64_t i2cPublishedAtNs = 0;
+    auto drainTapUntil = [&](uint32_t bytes) {
+        return waitUntil([&] {
+            bool busy = false;
+            if (const auto hex = mcu.tryDrainUartTxWireTap(uart0TxPin, busy)) out.bytesHex += *hex;
+            return out.bytesHex.size() >= 2u * bytes;
+        });
+    };
+    // Como o firmware, nunca passa do FIFO de TX (128 bytes): blocos de 100 e espera o tap alcançar.
+    constexpr uint32_t kChunk = 100;
+    for (uint32_t i = 0; i < byteCount; ++i) {
+        if (i > 0 && i % kChunk == 0 && !drainTapUntil(i)) break;
+        publish(0x3FF40000, i & 0xFFu);
+        if (i == byteCount / 2) {
+            i2cPublishedAtNs = std::chrono::steady_clock::now().time_since_epoch().count();
+            simulateQemuI2cBurstRequest(arena, i2cSequence, 0x3C << 1);
+        }
+    }
+    drainTapUntil(byteCount);
+    waitUntil([&] { return i2cResponseObserved(arena, i2cSequence); });
+    streamDone.store(true);
+    monitorReader.join();
+    waitUntil([&] {
+        drainMonitor();
+        return out.monitorHex.size() >= 2u * byteCount;
+    });
+    out.schedulerEvents = scheduler.metrics().eventsProcessed;
+    out.i2cServed = i2cResponseObserved(arena, i2cSequence);
+    out.i2cLatencyMs = (servedAtNs.load() - i2cPublishedAtNs) / 1e6;
+
+    scheduler.setProfilingEnabled(false);
+    scheduler.setRealTimeRate(previousRate);
+    mcu.setI2cTransferHandler(nullptr);
+    return out;
+}
+
+std::string expectedCounterHex(uint32_t count) {
+    static const char digits[] = "0123456789abcdef";
+    std::string hex;
+    for (uint32_t i = 0; i < count; ++i) {
+        hex.push_back(digits[(i >> 4) & 0xF]);
+        hex.push_back(digits[i & 0xF]);
+    }
+    return hex;
+}
+
+void runUartFrameModeRegressionTest(simulation::Scheduler& scheduler, mcu::McuComponent& mcu, LsdnQemuArena* arena,
+                                    size_t uart0TxPin) {
+    const UartStreamResult frames = runUartStreamWithI2c(scheduler, mcu, arena, uart0TxPin, 9101);
+    std::printf("  [info] frame por evento: %llu eventos do Scheduler, I2C atendido em %.2f ms\n",
+                static_cast<unsigned long long>(frames.schedulerEvents), frames.i2cLatencyMs);
+    check(frames.bytesHex == expectedCounterHex(100), "UART sem observador entrega os 100 bytes em ordem pelo tap");
+    check(frames.monitorHex == expectedCounterHex(100),
+          "monitor lido concorrentemente com a transmissao recebe os mesmos 100 bytes em ordem");
+    check(frames.schedulerEvents < 400, "UART sem observador custa perto de um evento por byte, nao um por bit");
+    check(frames.i2cServed && frames.i2cLatencyMs < 20.0, "pedido I2C no meio do fluxo UART e' atendido sem esperar o fluxo");
+
+    // O mesmo pino declarado observado volta ao caminho bit-a-bit (bordas reais no nó elétrico).
+    mcu.setPinTransitionsObserved(uart0TxPin, true);
+    const UartStreamResult bits = runUartStreamWithI2c(scheduler, mcu, arena, uart0TxPin, 9102);
+    mcu.setPinTransitionsObserved(uart0TxPin, false);
+    std::printf("  [info] bit-a-bit: %llu eventos do Scheduler\n", static_cast<unsigned long long>(bits.schedulerEvents));
+    check(bits.bytesHex == expectedCounterHex(100), "caminho bit-a-bit continua entregando os mesmos bytes");
+    check(bits.monitorHex == expectedCounterHex(100), "monitor concorrente tambem e' byte-exato no caminho bit-a-bit");
+    check(bits.schedulerEvents > 800, "pino observado mantem as bordas por bit");
+
+    // Fluxo maior que o FIFO de TX (128): varios reabastecimentos, valores de byte dando a volta em
+    // 0xFF, e a leitura concorrente do monitor cruzando os push_back da thread de poll.
+    const UartStreamResult longStream = runUartStreamWithI2c(scheduler, mcu, arena, uart0TxPin, 9103, 300);
+    check(longStream.bytesHex == expectedCounterHex(300), "fluxo longo chega byte-exato pelo tap");
+    check(longStream.monitorHex == expectedCounterHex(300),
+          "fluxo longo chega byte-exato ao monitor lido concorrentemente");
+}
+
 } // namespace
 
 int main() {
@@ -347,6 +548,15 @@ int main() {
     session.connectWire(indexA, "GPIO2", resistorIndex, "pin-1");
     session.connectWire(resistorIndex, "pin-2", ledIndex, "anode");
     session.connectWire(ledIndex, "cathode", groundIndex, "pin");
+    session.components().registerFactory("peripherals.lasecplot", [](const registry::ComponentParams&) {
+        return std::make_unique<FakeLasecPlot>();
+    });
+    const uint32_t plotIndex = session.addComponent("peripherals.lasecplot", {});
+    session.connectWire(indexA, "UART0_TX", plotIndex, "rx");
+    size_t uart0TxPin = 0;
+    for (size_t i = 0; i < mcuA->pins().size(); ++i) {
+        if (mcuA->pins()[i].id == "UART0_TX") uart0TxPin = i;
+    }
 
     // Liga o Scheduler de verdade -- ponto central deste teste: a partir daqui, McuComponent::
     // onPollEvent() vê isRunning()==true e delega para runBackgroundPollLoop() em vez do laço
@@ -366,6 +576,8 @@ int main() {
     // explicitamente a janela de partida (thread de poll dedicada ainda sem garantia de ja ter
     // rodado), o estado estacionario e um cenario de estresse concorrente com escritas de registrador.
     runI2cDuplicateDispatchRegressionTest(*mcuA, arenaA);
+    runI2cPendingBurstDoesNotFreezeSchedulerTest(session.scheduler(), *mcuA, arenaA, gpioStart);
+    runUartFrameModeRegressionTest(session.scheduler(), *mcuA, arenaA, uart0TxPin);
 
     // Escritas intercaladas nas duas arenas, sem nenhum settleStep()/markDirty() manual -- só a
     // thread de poll dedicada de cada McuComponent deveria perceber e despachar cada uma.

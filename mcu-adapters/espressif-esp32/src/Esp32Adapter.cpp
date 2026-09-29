@@ -144,6 +144,9 @@ constexpr uint32_t kSpiMisoLine = 1;
 constexpr uint32_t kSpiMosiLine = 2;
 constexpr uint32_t kSpiCs0Line = 3;
 constexpr uint64_t kDefaultUartBitPeriodNs = 8'680; // 115200 baud, rounded to ns
+// Espaco de indices de get_pin_map (ver buildPinMap): GPIO0..39, UART0_RX, UART0_TX, RST.
+constexpr uint32_t kPinMapCount = 43;
+constexpr uint32_t kPinMapUart0Tx = 41;
 constexpr uint64_t kEsp32ApbClockHz = 80'000'000;
 
 /* esp32_i2c_updt_frequency() (fork QEMU, hw/i2c/esp32_i2c.c) ja' espelha o periodo de bit REAL,
@@ -266,6 +269,10 @@ struct UsartState {
     uint8_t dataBits = 8;
     uint8_t stopBits = 1;
     uint64_t bitPeriodNs = kDefaultUartBitPeriodNs;
+    // Ver usartTxTransitionsUnobserved(): recalculado a cada entrada do modulo (escrita no FIFO ou
+    // wakeup) e aplicado so' quando um frame comeca, nunca no meio dele.
+    bool txSilentFramesAllowed = false;
+    bool txFrameSilent = false;
     uint64_t txDueNs = LSDN_QEMU_MODULE_NO_WAKEUP;
     uint64_t rxDueNs = LSDN_QEMU_MODULE_NO_WAKEUP;
     // Monitor fora da banda (ver `drainMonitorByte`/`kUsartMonitorCap` acima) -- byte-exato, tocado
@@ -394,6 +401,14 @@ struct Esp32SharedState {
     std::array<I2cState, 2> i2cs{};
     std::array<SpiState, 2> spis{};
     LedcState ledc{};
+    // mcu_abi.h 3.1 (set_pin_transitions_observed): por indice de get_pin_map. Fica fora de toda
+    // rotina de reset de periferico -- descreve o circuito ao redor do chip, nao o chip. Default
+    // "observado" em todos, que mantem o caminho bit-a-bit ate' o Core provar o contrario.
+    std::array<bool, kPinMapCount> pinTransitionsObserved = [] {
+        std::array<bool, kPinMapCount> observed{};
+        observed.fill(true);
+        return observed;
+    }();
 };
 
 SignalDesc makeRawGpio(uint32_t pin) { return SignalDesc{SignalKind::RawGpio, pin}; }
@@ -444,6 +459,16 @@ void usartStartTx(UsartState& usart, uint64_t nowNs) {
     usart.txTotalBits = static_cast<uint8_t>(1u + usart.dataBits + usart.stopBits);
     usart.txBitIndex = 0;
     usart.txActive = true;
+    usart.txFrameSilent = usart.txSilentFramesAllowed;
+    if (usart.txFrameSilent) {
+        // Nenhum pino que carrega este TX tem observador de bordas: a linha fica em repouso e o
+        // frame inteiro vira um unico prazo. usartAdvanceTx() conclui o byte exatamente em
+        // inicio + txTotalBits * bitPeriodNs, o mesmo instante do caminho bit-a-bit abaixo.
+        usart.txLevel = true;
+        usart.txBitIndex = usart.txTotalBits;
+        usart.txDueNs = addDelayNs(nowNs, usart.bitPeriodNs * usart.txTotalBits);
+        return;
+    }
     usart.txLevel = (usart.txFrame & 1u) != 0; // start bit
     usart.txBitIndex = 1;
     usart.txDueNs = addDelayNs(nowNs, usart.bitPeriodNs);
@@ -475,6 +500,7 @@ void usartAdvanceTx(UsartState& usart, uint64_t nowNs) {
     pushMonitorByte(usart.txWireTap, usart.txWireTapDropped, sentByte);
 
     usart.txActive = false;
+    usart.txFrameSilent = false;
     usart.txLevel = true;
     usartStartTx(usart, nowNs);
 }
@@ -774,6 +800,21 @@ SignalDesc selectedDirectInputSignal(const Esp32SharedState& state, uint32_t pin
     const uint8_t muxIndex = selectedIoMuxIndex(state, pin);
     if (muxIndex == 2 || muxIndex >= 6) return {};
     return ioMuxFunc(state, pin, muxIndex);
+}
+
+// mcu_abi.h 3.1: um frame da USART `index` pode omitir as bordas por bit somente quando TODO pino
+// que carrega esse TX agora -- o dedicado (UART0_TX) e cada GPIO cujo IOMUX/GPIO matrix seleciona
+// o sinal -- foi declarado sem observador pelo Core. O roteamento pode mudar em runtime, por isso
+// a verificacao roda de novo a cada entrada do modulo, antes do proximo frame comecar.
+bool usartTxTransitionsUnobserved(const Esp32SharedState& chip, uint32_t index) {
+    if (index == 0 && chip.pinTransitionsObserved[kPinMapUart0Tx]) return false;
+    for (uint32_t pin = 0; pin < 34; ++pin) {
+        const SignalDesc signal = selectedPinOutputSignal(chip, pin);
+        if (signal.kind == SignalKind::UartTx && signal.index == index && chip.pinTransitionsObserved[pin]) {
+            return false;
+        }
+    }
+    return true;
 }
 
 void routeDirectInputAt(Esp32SharedState& state, uint32_t pin, uint64_t nowNs) {
@@ -1151,6 +1192,7 @@ void usartWriteRegisterAt(LsdnQemuModule* module, uint64_t address, uint64_t val
     UsartState& usart = s->chip->usarts[s->index];
     const uint64_t offset = address - usartStartAddress(s->index);
     const uint32_t data = static_cast<uint32_t>(value);
+    usart.txSilentFramesAllowed = usartTxTransitionsUnobserved(*s->chip, s->index);
 
     switch (offset) {
         case 0x00:
@@ -1238,7 +1280,9 @@ uint64_t usartNextWakeupDelayNsAt(LsdnQemuModule* module, uint64_t nowNs) {
 void usartOnWakeup(LsdnQemuModule* module, uint64_t nowNs) {
     auto* s = reinterpret_cast<UsartModuleState*>(module);
     if (s->index >= s->chip->usarts.size()) return;
-    usartAdvanceDueWork(s->chip->usarts[s->index], nowNs);
+    UsartState& usart = s->chip->usarts[s->index];
+    usart.txSilentFramesAllowed = usartTxTransitionsUnobserved(*s->chip, s->index);
+    usartAdvanceDueWork(usart, nowNs);
 }
 
 // Monitor fora da banda (mcu_abi.h minor 6) -- ver `UsartState::txMonitor`/`rxMonitor`,
@@ -2101,8 +2145,8 @@ struct Esp32AdapterState {
 void buildPinMap(Esp32AdapterState* state) {
     state->pinIdStorage.clear();
     state->pinMapStorage.clear();
-    state->pinIdStorage.reserve(43);
-    state->pinMapStorage.reserve(43);
+    state->pinIdStorage.reserve(kPinMapCount);
+    state->pinMapStorage.reserve(kPinMapCount);
 
     for (uint32_t gpio = 0; gpio <= 39; ++gpio) {
         state->pinIdStorage.push_back("GPIO" + std::to_string(gpio));
@@ -2250,8 +2294,14 @@ int32_t resolveI2cPin(LsdnMcuAdapter* adapter, uint32_t bus, uint8_t sda, uint32
     return 0;
 }
 
+void setPinTransitionsObserved(LsdnMcuAdapter* adapter, uint32_t pin, int32_t observed) {
+    auto* state = reinterpret_cast<Esp32AdapterState*>(adapter);
+    if (pin < state->chip.pinTransitionsObserved.size()) state->chip.pinTransitionsObserved[pin] = observed != 0;
+}
+
 const LsdnMcuVTable kVTable = {
     &create, &buildLaunchArgs, &getMemoryRegions, &getPinMap, &createModules, &destroy, &resolveI2cPin,
+    &setPinTransitionsObserved,
 };
 
 } // namespace

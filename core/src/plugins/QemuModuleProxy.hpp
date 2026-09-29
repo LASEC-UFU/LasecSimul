@@ -188,6 +188,8 @@ public:
         return result;
     }
 
+    bool hasWireTap() const override { return m_handle.vtable->drain_wire_tap_byte != nullptr; }
+
     bool drainWireTapByte(uint8_t& outByte) override {
         if (!m_handle.vtable->drain_wire_tap_byte) return false;
         bool result = false;

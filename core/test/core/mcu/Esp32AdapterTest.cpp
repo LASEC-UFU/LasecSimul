@@ -275,6 +275,66 @@ int main() {
         TEST_ASSERT(uart0Module && (uart0Module->readRegister(0x3FF40000 + 0x1C) & 0xFFu) == 0u,
                     "UART0 RX FIFO decrementa apos leitura");
 
+        // mcu_abi.h 3.1: frame de TX sem bordas. Com todos os pinos que carregam U0TXD sem
+        // observador (UART0_TX dedicado = indice 41 do pinMap, e GPIO1 pelo IOMUX), cada byte vira
+        // um unico prazo no fim do frame -- o mesmo instante do caminho bit-a-bit -- e a linha fica
+        // em repouso; monitor e tap recebem os bytes nesse instante e na mesma ordem.
+        if (uart0Module && ioMuxModule) {
+            adapter->setPinTransitionsObserved(1, false);
+            adapter->setPinTransitionsObserved(41, false);
+            uart0Module->reset();
+            uart0Module->writeRegisterAt(0x3FF40000 + 0x14, 5'000u, 0);
+            uart0Module->writeRegisterAt(0x3FF40000 + 0x00, 0x55u, 0);
+            uart0Module->writeRegisterAt(0x3FF40000 + 0x00, 0xA3u, 0);
+            TEST_ASSERT(gpioModule->outputLevel(1) && uart0Module->outputLevel(1),
+                        "frame sem observador mantem GPIO1 e UART0_TX em repouso (sem start bit)");
+            TEST_ASSERT(uart0Module->nextWakeupDelayNs(0) == 50'000u,
+                        "frame sem observador agenda um unico prazo no fim dos 10 bits (8N1)");
+            uint8_t tapped = 0;
+            TEST_ASSERT(!uart0Module->drainWireTapByte(tapped), "nenhum byte sai antes do fim do frame");
+            uart0Module->onWakeup(50'000u);
+            TEST_ASSERT(uart0Module->drainWireTapByte(tapped) && tapped == 0x55u,
+                        "primeiro byte sai no fim do primeiro frame (mesmo instante do caminho bit-a-bit)");
+            TEST_ASSERT(uart0Module->nextWakeupDelayNs(50'000u) == 50'000u,
+                        "segundo frame emenda no primeiro, sem folga nem antecipacao");
+            uart0Module->onWakeup(100'000u);
+            TEST_ASSERT(uart0Module->drainWireTapByte(tapped) && tapped == 0xA3u,
+                        "segundo byte sai em ordem no fim do segundo frame");
+            TEST_ASSERT(uart0Module->nextWakeupDelayNs(100'000u) == QemuModule::kNoWakeup,
+                        "FIFO vazio nao agenda mais nada");
+            uint8_t monitored[2] = {};
+            TEST_ASSERT(uart0Module->drainMonitorByte(true, monitored[0]) &&
+                            uart0Module->drainMonitorByte(true, monitored[1]) &&
+                            monitored[0] == 0x55u && monitored[1] == 0xA3u,
+                        "monitor serial recebe os mesmos bytes, na mesma ordem");
+
+            // Um observador em qualquer pino que carrega o sinal devolve o caminho bit-a-bit.
+            adapter->setPinTransitionsObserved(1, true);
+            uart0Module->reset();
+            uart0Module->writeRegisterAt(0x3FF40000 + 0x14, 5'000u, 0);
+            uart0Module->writeRegisterAt(0x3FF40000 + 0x00, 0x55u, 0);
+            TEST_ASSERT(!gpioModule->outputLevel(1) && uart0Module->nextWakeupDelayNs(0) == 5'000u,
+                        "GPIO1 observado mantem start bit baixo e prazo por bit");
+
+            // A decisao segue o roteamento atual: U0TXD tambem em GPIO4 pela GPIO matrix, e GPIO4
+            // continua observado (default), entao o frame e' bit-a-bit mesmo com GPIO1/41 livres.
+            adapter->setPinTransitionsObserved(1, false);
+            const uint64_t gpio4IoMux = ioMuxModule->readRegister(0x3FF49000 + 0x48);
+            const uint64_t gpio4OutSel = gpioModule->readRegister(0x3FF44000 + 0x530 + 4u * 4u);
+            ioMuxModule->writeRegister(0x3FF49000 + 0x48, 2u << 12);
+            gpioModule->writeRegister(0x3FF44000 + 0x530 + 4u * 4u, 14u);
+            uart0Module->reset();
+            uart0Module->writeRegisterAt(0x3FF40000 + 0x14, 5'000u, 0);
+            uart0Module->writeRegisterAt(0x3FF40000 + 0x00, 0x55u, 0);
+            TEST_ASSERT(!gpioModule->outputLevel(4) && uart0Module->nextWakeupDelayNs(0) == 5'000u,
+                        "U0TXD roteado a um GPIO observado pela matrix mantem o caminho bit-a-bit");
+            ioMuxModule->writeRegister(0x3FF49000 + 0x48, gpio4IoMux);
+            gpioModule->writeRegister(0x3FF44000 + 0x530 + 4u * 4u, gpio4OutSel);
+            adapter->setPinTransitionsObserved(1, true);
+            adapter->setPinTransitionsObserved(41, true);
+            uart0Module->reset();
+        }
+
         // ADC1 canal 6 = GPIO34. A tensao analogica nao pode ser reduzida a HIGH/LOW na ABI.
         gpioModule->setInputVoltageAt(34, 1.65, 0);
         if (adcModule) adcModule->writeRegister(0x3FF48800 + 0x54, uint64_t(1u << 6u) << 19u);

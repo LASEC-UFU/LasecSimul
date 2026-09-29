@@ -48,6 +48,7 @@ public:
      * thread nova por chamada, ver doc da classe acima), mesma escolha que
      * `NativeDeviceProxy::transferI2c` já faz pelo mesmo motivo. */
     std::optional<uint32_t> resolveI2cPinIndex(uint32_t bus, bool sda) const override;
+    void setPinTransitionsObserved(uint32_t pinIndex, bool observed) override;
 
 private:
     static MemoryRegion toCoreRegion(const LsdnMemoryRegion& region);

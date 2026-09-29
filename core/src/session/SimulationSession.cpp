@@ -274,6 +274,7 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
     m_scheduler.setCommandDrainCallback([this] { drainCommandQueue(); });
     m_scheduler.setCommandPendingCallback([this] { return m_commandQueue.hasPending(); });
     m_scheduler.setAdvanceLimitCallback([this] { return computeSlowestMcuPositionNs(); });
+    m_scheduler.setHostPacedPositionCallback([this] { return computeHostPacedMcuPositionNs(); });
     setTransientSettings(m_transientSettings);
 }
 
@@ -2786,6 +2787,66 @@ std::optional<uint64_t> SimulationSession::computeSlowestMcuPositionNs() {
     return slowest;
 }
 
+/* Achado 2026-09-29 (1000 bytes a 115200 baud levavam ~480-600 ms simulados em vez de 86,8 ms): cada
+ * byte de TX custava ~10 bordas no pino da MCU e ~10 timers no decodificador do LasecPlot, cada uma
+ * com um settle. A 115200 baud contínuos o Core não acompanhava o tempo real, a fila da arena
+ * enchia e o QEMU parava de drenar o FIFO da UART. Um pino só dispensa as bordas quando nada no seu
+ * nó depende delas: além do próprio pino, só túneis (continuidade pura) e o RX de um LasecPlot
+ * cujo texto já vem do tap byte-exato desse mesmo pino (ver tryDrainUartRx). Qualquer outro
+ * componente -- ponta de prova, LED, resistor, outro receptor, outro pino de MCU -- mantém o
+ * caminho bit-a-bit. LASECSIMUL_UART_TX_FRAME_MODE=bit força o caminho bit-a-bit em todo pino. */
+bool SimulationSession::mcuPinTransitionsObservedUnlocked(uint32_t mcuIndex, size_t localPinIndex) const {
+    auto* mcu = static_cast<mcu::McuComponent*>(m_componentInstances[mcuIndex].get());
+    const std::span<Pin> pins = mcu->pins();
+    if (localPinIndex >= pins.size()) return true;
+    const auto& slots = m_netlist.pinSlotsOf(mcuIndex);
+    const auto slot = slots.find(pins[localPinIndex].id);
+    if (slot == slots.end() || slot->second >= m_topology.slotToNode.size()) return true;
+    const uint32_t node = m_topology.slotToNode[slot->second];
+    if (node >= m_topology.pinRefsByNode.size()) return true;
+
+    std::optional<bool> hasTap;
+    for (const simulation::NodePinRef& ref : m_topology.pinRefsByNode[node]) {
+        if (ref.componentIndex == mcuIndex && ref.localPinIndex == localPinIndex) continue;
+        if (ref.componentIndex >= m_componentInstances.size() || !m_componentInstances[ref.componentIndex]) return true;
+        IComponentModel& other = *m_componentInstances[ref.componentIndex];
+        const std::string_view typeId = other.typeId();
+        if (typeId == "connectors.tunnel") continue;
+        if (typeId == "peripherals.lasecplot") {
+            const std::span<Pin> otherPins = other.pins();
+            const bool rxPin = ref.localPinIndex < otherPins.size() &&
+                               (otherPins[ref.localPinIndex].id == "rx" || otherPins[ref.localPinIndex].id == "RX");
+            if (!hasTap) hasTap = mcu->pinHasUartTxWireTap(localPinIndex);
+            if (rxPin && *hasTap) continue;
+        }
+        return true;
+    }
+    return false;
+}
+
+void SimulationSession::refreshMcuPinTransitionObserversUnlocked() {
+    const char* mode = std::getenv("LASECSIMUL_UART_TX_FRAME_MODE");
+    const bool forceBitLevel = mode && std::string_view(mode) == "bit";
+    for (uint32_t mcuIndex : m_mcuComponentIndices) {
+        auto* mcu = static_cast<mcu::McuComponent*>(m_componentInstances[mcuIndex].get());
+        const size_t pinCount = mcu->pins().size();
+        for (size_t pin = 0; pin < pinCount; ++pin) {
+            mcu->setPinTransitionsObserved(pin, forceBitLevel || mcuPinTransitionsObservedUnlocked(mcuIndex, pin));
+        }
+    }
+}
+
+std::optional<uint64_t> SimulationSession::computeHostPacedMcuPositionNs() const {
+    std::optional<uint64_t> latest;
+    for (uint32_t i : m_mcuComponentIndices) {
+        const auto* mcu = static_cast<const mcu::McuComponent*>(m_componentInstances[i].get());
+        if (!mcu->hostPacedVirtualClock()) continue;
+        if (const std::optional<uint64_t> position = mcu->pacingPositionNs())
+            latest = latest ? std::max(*latest, *position) : *position;
+    }
+    return latest;
+}
+
 bool SimulationSession::isI2cFastPathTransparentUnlocked(const IComponentModel& component) {
     // Tipos embutidos cujo comportamento elétrico já é conhecido e não interfere no protocolo I2C
     // (resistor passivo ou um túnel que só encaminha o mesmo nó) -- qualquer
@@ -3011,6 +3072,7 @@ void SimulationSession::rebuildTopologyIfNeeded() {
         for (uint32_t i : m_activeComponentIndices) m_scheduler.dirtySet().insert(i);
     }
     m_previousNodeVoltages = m_nodeVoltages;
+    refreshMcuPinTransitionObserversUnlocked();
 }
 
 void SimulationSession::reuseUnaffectedCircuitGroups(simulation::Topology& previous,

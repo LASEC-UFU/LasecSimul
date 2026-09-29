@@ -246,6 +246,14 @@ int main() {
     // UART0 TX temporizado: GPIO1 em funcao IOMUX 0 e' U0TXD. Escrever 0x55 no FIFO deve iniciar
     // start bit baixo imediatamente, depois o wakeup do modulo avanca para o primeiro bit de dados
     // (LSB=1) em ~8.68us, reestampando o pino pelo Scheduler.
+    // mcu_abi.h 3.1: sem nenhum componente no no' do GPIO1 (nem no UART0_TX dedicado) o frame sairia
+    // sem bordas. Uma carga de 10 kOhm ao terra -- o que uma entrada real ligada ao pino representa --
+    // torna as transicoes observadas e mantem o caminho bit-a-bit que este trecho verifica.
+    registry::ComponentParams uartLoadParams;
+    uartLoadParams.properties["resistance"] = 10'000.0;
+    const uint32_t uartLoadIndex = session.addComponent("passive.resistor", uartLoadParams);
+    session.connectWire(mcuIndex, "GPIO1", uartLoadIndex, "pin-1");
+    session.connectWire(uartLoadIndex, "pin-2", groundIndex, "pin");
     simulateQemuWrite(arena, ioMuxStart + 0x88, 0);
     session.scheduler().markDirty(mcuIndex);
     for (int i = 0; i < 5 && session.settleStep(); ++i) {}

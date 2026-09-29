@@ -99,6 +99,11 @@ public:
      * MCU -- um ciclo de realimentação estrutural). Um teto de POSIÇÃO absoluta não tem esse
      * problema: é uma comparação direta entre dois valores, sem janela nem suavização nenhuma. */
     using AdvanceLimitFn = std::function<std::optional<uint64_t>()>;
+    /** Posição (na timeline deste Scheduler) que um relógio externo acompanhando o relógio do host
+     * comprovadamente já alcançou -- hoje, o timestamp mais recente publicado por um QEMU em modo
+     * MTTCG/tempo real (ver `SimulationSession::computeHostPacedMcuPositionNs()`). Estar atrás dela
+     * significa estar atrás do tempo real, então o pacing não dorme; `std::nullopt` = sem referência. */
+    using HostPacedPositionFn = std::function<std::optional<uint64_t>()>;
     using BeforeExecutionFn = std::function<void()>;
 
     Scheduler(size_t componentCapacity, SettleStepFn settleStep)
@@ -113,6 +118,7 @@ public:
     void setCommandDrainCallback(CommandDrainFn callback) { m_commandDrain = std::move(callback); }
     void setCommandPendingCallback(CommandPendingFn callback) { m_commandPending = std::move(callback); }
     void setAdvanceLimitCallback(AdvanceLimitFn callback) { m_advanceLimit = std::move(callback); }
+    void setHostPacedPositionCallback(HostPacedPositionFn callback) { m_hostPacedPosition = std::move(callback); }
     void setBeforeExecutionCallback(BeforeExecutionFn callback) { m_beforeExecution = std::move(callback); }
     /** Acorda a worker se ela estiver parked (ociosa ou pausada) depois que a thread de IPC publica
      * um comando. Usa um contador atômico, não condition_variable: `atomic::wait(valor)` verifica o
@@ -137,6 +143,10 @@ public:
      * timeout de 5ms volta a ser só uma rede de segurança, não o caminho comum. */
     void notifyAdvanceLimitChanged() {
         m_advanceLimitGeneration.fetch_add(1, std::memory_order_release);
+        // Passar pelo mutex fecha a janela entre o predicado da worker (avaliado com ele travado)
+        // e o bloqueio: sem isto o notify podia cair nela e a espera de pacing durava o quantum
+        // inteiro, com o QEMU esperando a fila drenar. Nenhuma espera chama isto com ele travado.
+        { std::lock_guard<std::mutex> pacingLock(m_pacingMutex); }
         m_pacingWake.notify_all();
     }
     void setMaximumTimeStepNs(uint64_t ns) { m_maximumTimeStepNs.store(ns, std::memory_order_relaxed); }
@@ -335,6 +345,7 @@ private:
     CommandDrainFn m_commandDrain;
     CommandPendingFn m_commandPending;
     AdvanceLimitFn m_advanceLimit;
+    HostPacedPositionFn m_hostPacedPosition;
     BeforeExecutionFn m_beforeExecution;
 
     std::thread m_thread;
