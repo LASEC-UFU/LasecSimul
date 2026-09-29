@@ -1,5 +1,16 @@
 # QEMU build and runtime provenance
 
+## v0.0.51 BQL-free idle wait and locked heartbeat re-arm (2026-09-29)
+
+Canonical and vendored QEMU now match source commit `cdbc8ee` (`b211e01` plus
+patch 0006) and SHA-256
+`6036D022084DE3ABFE122F044D11B067FF4C37C2BC69E9D789F8CC893759CEC8`.
+The Windows main loop waits for its next timer without the BQL
+(`LASECSIMUL_QEMU_BQL_FREE_IDLE=0` restores the old poll), and
+`timer_reload_ns()` re-arms the heartbeat under `active_timers_lock`.
+Evidence is single-session (real `display.lsproj` firmware plus Core suites);
+it does not extend the historical multi-session certification.
+
 ## v0.0.49 I2C runtime (2026-09-27)
 
 Canonical and vendored QEMU now match source commit `b211e01` and SHA-256

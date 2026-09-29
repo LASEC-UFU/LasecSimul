@@ -1,6 +1,7 @@
-QEMU source: C:\SourceCode\qemu_lasecSimul
-QEMU HEAD: b211e01c4da2db8cd2a9008192a3149dcc7673ae
-Executable SHA-256: C25B9C66B2A358C740C41ABE7EF043736FE9C9659A61A27E27BBE6C7743D678B
-Build: MSYS2 UCRT64, ninja qemu-system-xtensa.exe
-Etapa: I2C STOP terminal e continuação de FIFO de 32 bytes nos transportes LEGACY e VNEXT_B
+QEMU source: C:\SourceCode\qemu_lasecSimul (https://github.com/josuemoraisgh/qemu_lasecSimul)
+QEMU HEAD: cdbc8ee50a190bcbdfb7b2ba32843c05afbe32c5 (= b211e01 + devices/qemu-esp32/patches/0006-esp32-bql-free-idle-wait-and-locked-heartbeat-rearm.patch)
+Executable SHA-256: 6036D022084DE3ABFE122F044D11B067FF4C37C2BC69E9D789F8CC893759CEC8
+Build: MSYS2 UCRT64, ninja -j6 -l24 qemu-system-xtensa.exe (build-ucrt64); após o commit cdbc8ee o ninja não relinkou e o executável manteve o SHA-256 acima
+Etapa: espera ociosa sem BQL no laço principal do Windows e rearme do heartbeat sob active_timers_lock
+Anterior: C25B9C66B2A358C740C41ABE7EF043736FE9C9659A61A27E27BBE6C7743D678B (b211e01)
 Historical provenance preserved in BUILD-PROVENANCE.txt.

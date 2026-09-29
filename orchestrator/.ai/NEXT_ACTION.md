@@ -1,5 +1,14 @@
 # NEXT ACTION
 
+## v0.0.51 SSD1306/UART/QEMU performance release (2026-09-29)
+
+Dispatch `Package Installers` for `v0.0.51` on `main` with tagging and release
+enabled, then verify the Windows package, the bundled QEMU handshake, the tag,
+the release assets and a smoke run of the final VSIX with `display.lsproj`.
+Open item: `mcu_restart_stress` failed one startup cycle (QEMU never left
+`qemu_init()` within the Core's 5 s READY wait) in one of two full `-j4` Debug
+suite runs; 0/475 cycles on reruns with either QEMU. Not caused by patch 0006.
+
 ## v0.0.49 installer rerun (2026-09-27)
 
 Push the QEMU_RUNTIME.json hash correction, then dispatch `Package Installers`

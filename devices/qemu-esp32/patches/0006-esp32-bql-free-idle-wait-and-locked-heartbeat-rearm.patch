@@ -1,0 +1,152 @@
+From cdbc8ee50a190bcbdfb7b2ba32843c05afbe32c5 Mon Sep 17 00:00:00 2001
+From: josuemoraisgh <josue@ufu.br>
+Date: Tue, 29 Sep 2026 11:31:00 -0300
+Subject: [PATCH] perf(esp32): wait for timers without the BQL and lock the
+ heartbeat re-arm
+
+Windows realtime (MTTCG) main loop: when the next timer is less than 1 ms
+away, main_loop_timeout() used a zero-timeout poll and re-took the BQL every
+few microseconds. The Xtensa TCG takes the same BQL on every interrupt-level
+change (HELPER(check_interrupts)) and in waiti, so every FreeRTOS critical
+section competed with the spinning main loop. os_host_main_loop_wait() now
+waits for that deadline without the BQL, polling the same handles with a
+zero timeout, and leaves early when a handle becomes ready or when the new
+main_loop_idle_wake_hook reports a Core IRQ request or the end of the run.
+Measured in the guest: xSemaphoreTake/Give pair 30 -> 6 us, malloc/free
+92 -> 23 us, Wire.setClock pair 0.57 -> 0.13 ms.
+LASECSIMUL_QEMU_BQL_FREE_IDLE=0 restores the previous single poll.
+
+timer_reload_ns() inserted the LasecSimul heartbeat timer without
+active_timers_lock. timerlist_run_timers() drops that lock before calling
+the callback that re-arms it, and MTTCG vCPUs arm other timers on the same
+QEMU_CLOCK_VIRTUAL list at the same time, so a concurrent insertion could
+lose the heartbeat a few seconds after boot in part of the runs. It now
+uses the same locked delete/insert as timer_mod_ns(), without notifying the
+main loop (the caller is the main loop itself).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ softmmu/simuliface.c | 12 ++++++++++++
+ util/main-loop.c     | 39 +++++++++++++++++++++++++++++++++++++--
+ util/qemu-timer.c    | 11 ++++++++++-
+ 3 files changed, 59 insertions(+), 3 deletions(-)
+
+diff --git a/softmmu/simuliface.c b/softmmu/simuliface.c
+index 43b7dbe..9f03af1 100644
+--- a/softmmu/simuliface.c
++++ b/softmmu/simuliface.c
+@@ -736,6 +736,17 @@ uint64_t getQemu_ps(void)
+     return simuClockNs()*1000;
+ }
+ 
++/* Definido em util/main-loop.c: consultado pela espera ociosa sem BQL de main_loop_timeout()
++ * (Windows) para acordar antes do próximo timer. */
++extern bool (*main_loop_idle_wake_hook)(void);
++
++/* Registrado em main_loop_idle_wake_hook: a espera ociosa sem BQL do laço principal acorda antes
++ * do próximo timer quando o Core pede uma IRQ ou encerra o Run (ver qemu_main_loop()). */
++static bool simuMainLoopWakeRequested(void)
++{
++    return !m_arena || !m_arena->running || m_arena->irqNumber;
++}
++
+ uint64_t getQemu_ns(void)
+ {
+     return simuClockNs();
+@@ -952,6 +963,7 @@ int simuMain( int argc, char** argv )
+ 
+     //updtCpuFreqHz( 240000000 );
+ 
++    main_loop_idle_wake_hook = simuMainLoopWakeRequested;
+     qemu_init( argc, argv );
+     printf("Qemu: initialized\n" );fflush( stdout );
+ 
+diff --git a/util/main-loop.c b/util/main-loop.c
+index 5697be9..fcf9329 100644
+--- a/util/main-loop.c
++++ b/util/main-loop.c
+@@ -466,6 +466,11 @@ static void pollfds_poll(GArray *pollfds, int nfds, fd_set *rfds,
+     }
+ }
+ 
++bool (*main_loop_idle_wake_hook)(void);
++/* Tempo máximo, em ns, que a próxima volta de os_host_main_loop_wait() pode esperar SEM o BQL pelo
++ * próximo timer (ver main_loop_timeout()). Zero = uma única consulta, comportamento anterior. */
++static int64_t precise_idle_wait_ns;
++
+ static int os_host_main_loop_wait(int64_t timeout)
+ {
+     GMainContext *context = g_main_context_default_l;
+@@ -532,7 +537,23 @@ static int os_host_main_loop_wait(int64_t timeout)
+ 
+     /* A zero-time LasecSimul precision poll must yield while the BQL is still unlocked.  Yielding
+      * after qemu_mutex_lock_iothread() can starve both ESP32 vCPUs and make shutdown appear hung. */
+-    if (poll_timeout_ns == 0) SwitchToThread();
++    if (poll_timeout_ns == 0) {
++        SwitchToThread();
++        /* 2026-09-29: sem esta espera, cada volta voltava a tomar o BQL em poucos microssegundos.
++         * O TCG do Xtensa toma o mesmo BQL a cada mudança de nível de interrupção (rsil/wsr.ps,
++         * HELPER(check_interrupts)) e em waiti, ou seja, em toda seção crítica do FreeRTOS: medido
++         * no firmware, um par xSemaphoreTake/Give custava ~30 us e um timer de 200 us disparava
++         * ~1 ms depois. Aqui o laço espera o próximo timer com a mesma precisão, mas sem o BQL;
++         * sai antes se algum handle ficar pronto (BH, timer novo armado por uma vCPU via
++         * qemu_notify_event, E/S) ou se o hook pedir (IRQ do Core, parada). */
++        const int64_t idle_until = precise_idle_wait_ns > 0 ? get_clock() + precise_idle_wait_ns : 0;
++        while (g_poll_ret == 0 && idle_until && get_clock() < idle_until &&
++               !(main_loop_idle_wake_hook && main_loop_idle_wake_hook())) {
++            g_poll_ret = qemu_poll_ns(poll_fds, n_poll_fds + w->num, 0);
++            if (g_poll_ret == 0) SwitchToThread();
++        }
++    }
++    precise_idle_wait_ns = 0;
+ 
+     replay_mutex_lock();
+ 
+@@ -599,7 +620,21 @@ void main_loop_timeout( int64_t timeout_ns )
+     }
+     const bool cooperative_poll = precise_sub_ms && !icount_enabled() &&
+                                   host_wait_ns >= 0 && host_wait_ns < SCALE_MS;
+-    if (cooperative_poll) host_wait_ns = 0;
++    if (cooperative_poll) {
++        host_wait_ns = 0;
++        /* Espera ociosa sem BQL até o próximo timer (ver os_host_main_loop_wait()), limitada a
++         * 1 ms para reavaliar sockets/fontes GLib. LASECSIMUL_QEMU_BQL_FREE_IDLE=0 volta à consulta
++         * única por volta. */
++        static int bql_free_idle = -1;
++        if (bql_free_idle < 0) {
++            const char *value = getenv("LASECSIMUL_QEMU_BQL_FREE_IDLE");
++            bql_free_idle = !(value && strcmp(value, "0") == 0);
++        }
++        if (bql_free_idle) {
++            const int64_t deadline = timerlistgroup_deadline_ns(&main_loop_tlg);
++            precise_idle_wait_ns = deadline < 0 || deadline > SCALE_MS ? SCALE_MS : deadline;
++        }
++    }
+ #endif
+     int ret = os_host_main_loop_wait( host_wait_ns );
+     mlpoll.state = ret < 0 ? MAIN_LOOP_POLL_ERR : MAIN_LOOP_POLL_OK;
+diff --git a/util/qemu-timer.c b/util/qemu-timer.c
+index aebadf8..ee345cf 100644
+--- a/util/qemu-timer.c
++++ b/util/qemu-timer.c
+@@ -458,7 +458,16 @@ void timer_mod_ns(QEMUTimer *ts, int64_t expire_time)
+ void timer_reload_ns( QEMUTimer *ts, int64_t expire_time )
+ {
+     QEMUTimerList *timer_list = ts->timer_list;
+-    timer_mod_ns_locked( timer_list, ts, expire_time );
++    /* 2026-09-29: a inserção acontecia sem active_timers_lock. timerlist_run_timers() solta essa
++     * trava antes de chamar o callback (é dele que este rearme é chamado), e sob MTTCG as vCPUs
++     * armam outros timers da MESMA lista (QEMU_CLOCK_VIRTUAL) ao mesmo tempo: duas inserções
++     * concorrentes perdiam um nó e o heartbeat do LasecSimul parava para sempre poucos segundos
++     * após o boot, em parte das execuções. Mesmo protocolo de timer_mod_ns(), sem notificar o
++     * laço principal: o chamador é o próprio laço, que recalcula o prazo na volta seguinte. */
++    WITH_QEMU_LOCK_GUARD(&timer_list->active_timers_lock) {
++        timer_del_locked(timer_list, ts);
++        timer_mod_ns_locked(timer_list, ts, expire_time);
++    }
+ }
+ 
+ /* modify the current timer so that it will be fired when current_time
+-- 
+2.43.0.windows.1
+

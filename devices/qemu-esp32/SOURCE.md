@@ -9,6 +9,8 @@ The bundled `qemu-system-xtensa.exe` is built from:
   - [`patches/0002-esp32-i2c-electrical-start-timing.patch`](patches/0002-esp32-i2c-electrical-start-timing.patch)
   - [`patches/0003-esp32-i2c-address-ack-burst.patch`](patches/0003-esp32-i2c-address-ack-burst.patch)
   - [`patches/0004-esp32-i2c-cancel-stale-timer.patch`](patches/0004-esp32-i2c-cancel-stale-timer.patch)
+  - [`patches/0006-esp32-bql-free-idle-wait-and-locked-heartbeat-rearm.patch`](patches/0006-esp32-bql-free-idle-wait-and-locked-heartbeat-rearm.patch)
+    (2026-09-29, commit `cdbc8ee` do fork, sobre `b211e01`)
 
 The realtime MTTCG build disables only Timer Group 1's interrupt watchdog by default because it
 otherwise measures host wall-time stalls instead of equivalent ESP32 progress. Timer Group 0 and
@@ -40,3 +42,16 @@ and electrical fallback for command lists or topologies that cannot be represent
 source commit and executable checksum are recorded in `bin/BUILD-PROVENANCE-1H.txt`. That commit
 also ends a hardware STOP command without replaying stale command registers, and retains the final
 byte of a split 32-byte FIFO write until a second mailbox request completes it.
+
+As of 2026-09-29 the packaged executable is built from `qemu_lasecSimul` commit
+`cdbc8ee50a190bcbdfb7b2ba32843c05afbe32c5` (`b211e01` plus patch 0006; SHA-256 `6036D022...`, see
+`bin/BUILD-PROVENANCE-1H.txt`):
+
+- `util/main-loop.c`: the Windows precision loop of `main_loop_timeout()` waits for the next timer
+  deadline without holding the BQL (zero-timeout polls of the same handles, plus an arena hook for a
+  Core IRQ request or stop). The Xtensa TCG takes the BQL on every interrupt-level change
+  (`HELPER(check_interrupts)`) and in `waiti`, so every FreeRTOS critical section used to compete
+  with the spinning main loop. Rollback: `LASECSIMUL_QEMU_BQL_FREE_IDLE=0`.
+- `util/qemu-timer.c`: `timer_reload_ns()` inserts under `active_timers_lock`. Without it the
+  LasecSimul heartbeat was dropped by a race with vCPUs arming timers on the same list, a few
+  seconds after boot, in part of the runs.

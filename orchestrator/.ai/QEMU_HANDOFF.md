@@ -1,5 +1,16 @@
 # START HERE - LasecSimul VNEXT_B / ESP32
 
+## v0.0.51 SSD1306/UART/QEMU performance release (2026-09-29)
+
+CURRENT_OBJECTIVE = Publish v0.0.51 with the SSD1306 frame-rate model, UART TX frame mode, Core pacing fixes and QEMU cdbc8ee.
+LAST_ACTION = Committed qemu_lasecSimul cdbc8ee (b211e01 + patch 0006); ninja on that commit relinked nothing and kept SHA-256 6036D022084DE3ABFE122F044D11B067FF4C37C2BC69E9D789F8CC893759CEC8.
+LAST_RESULT = Packaged runtime with the user's display.lsproj: SSD1306 line 1 17.6 px/s, line 2 16.5-16.6 px/s, 1000 serial bytes at 115200 in 95-110 ms, UART byte-exact against LasecPlot.
+CURRENT_BLOCKER = None.
+NEXT_COMMAND = gh workflow run package-installers.yml --ref main -f version=v0.0.51 -f tag_repository=true -f publish_release=true
+OPEN_PROBLEMS = One unexplained mcu_restart_stress startup timeout inside qemu_init() under a -j4 suite run (0/475 cycles on reruns with new and old QEMU).
+DO_NOT_CHANGE = Preserve the unrelated untracked vnext_prototype/reg_v0045.log.
+DO_NOT_REPEAT = Do not dispatch with a vendored QEMU hash different from QEMU_RUNTIME.json.
+
 ## v0.0.49 I2C runtime promotion and installer build (2026-09-27)
 
 CURRENT_OBJECTIVE = Publish v0.0.49 installers with the generic ESP32 I2C STOP/FIFO fix.
