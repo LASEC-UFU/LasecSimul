@@ -15,6 +15,8 @@ The bundled `qemu-system-xtensa.exe` is built from:
   - [`patches/0008-esp32-timg-lockless-counter-reads.patch`](patches/0008-esp32-timg-lockless-counter-reads.patch) (`9f36ff0`)
   - [`patches/0009-esp32-i2c-stop-mirror-only-after-electrical-transaction.patch`](patches/0009-esp32-i2c-stop-mirror-only-after-electrical-transaction.patch)
     (`2f244a3`)
+  - [`patches/0010-vnext-i2c-submit-wait-pause.patch`](patches/0010-vnext-i2c-submit-wait-pause.patch)
+    (`7ead728`)
 
 The realtime MTTCG build disables only Timer Group 1's interrupt watchdog by default because it
 otherwise measures host wall-time stalls instead of equivalent ESP32 progress. Timer Group 0 and
@@ -76,3 +78,13 @@ As of 2026-09-29 (second update) the packaged executable is built from `qemu_las
   transaction opened the electrical bus (RSTART/WRITE/READ mirrored). A burst-delivered
   transaction used to end with an empty electrical START+STOP that re-solved the MCU circuit twice
   per transaction; the STOP bus time is still charged.
+
+As of 2026-09-30 the packaged executable is built from `qemu_lasecSimul` commit
+`7ead728b3d6393c63ec414915a1962aa173232ee` (SHA-256 `B77C1D0F...`). The VNEXT_B I2C
+submitter pauses its vCPU while the Core computes the response. The host round trip therefore
+does not consume guest driver time; the I2C peripheral's own timer still applies the simulated
+wire duration after the response. The pause is armed before the request becomes visible to the
+Core, preventing a response from racing ahead of the stop. A 180-second run of the supplied
+`display.lsproj` and `merged.bin` had zero `ESP_ERR_INVALID_STATE` messages and display updates
+through the end of the run. The previous packaged executable had four such errors in 70 seconds
+with the same fixture.
