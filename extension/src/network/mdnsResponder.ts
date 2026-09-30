@@ -18,11 +18,12 @@ import { logSimulation } from "../diagnostics/simulationLog";
  *     (127.0.0.1:MDNS_FEED_PORT). We answer every learned name -> 127.0.0.1.
  *
  *   - **lab-router (TAP + gateway)**: each guest has its OWN routable IP on the
- *     TAP (10.<ns>.<slot>.15). Its mDNS announcements DO reach the host over the
- *     TAP (the gateway forwards multicast), so we learn `<host>.local -> real IP`
- *     straight from the wire and answer with that real IP. This serves any number
- *     of guests (thin-client, one ESP per session): every name resolves to its own
- *     reachable address, no loopback collision.
+ *     TAP (10.<ns>.<slot>.15). We learn `<host>.local -> real IP` from the guest's
+ *     mDNS announcements arriving over the TAP AND by actively re-querying the
+ *     names the OS asks about (so a guest that re-ran with a new IP is picked up
+ *     within seconds instead of staying stuck on the first IP it ever advertised).
+ *     Entries expire if unseen, and answers carry a short TTL so the OS re-resolves
+ *     often. Serves any number of guests (thin-client, one ESP per session).
  */
 
 const MDNS_GROUP = "224.0.0.251";
@@ -30,9 +31,14 @@ const MDNS_PORT = 5353;
 /** Fixed loopback port QEMU feeds learned hostnames to (isolated only). Bound with
  * SO_REUSEADDR so several VS Code sessions on one PC share it harmlessly. */
 export const MDNS_FEED_PORT = 42353;
-/** Re-announce learned names periodically so a resolver that missed the reply (or
- * started after) still populates its cache. */
-const ANNOUNCE_INTERVAL_MS = 2000;
+/** Short answer TTL (seconds): the OS re-resolves this often, so a guest that
+ * moved to a new IP is reflected quickly instead of being cached stale for 120s. */
+const ANSWER_TTL_SECONDS = 10;
+/** How often to re-announce known names and actively re-query wanted names. */
+const REFRESH_INTERVAL_MS = 4000;
+/** Drop a lab-router entry not reconfirmed within this window, so we never keep
+ * answering a dead IP from a previous run after its guest is gone. */
+const ENTRY_STALE_MS = 45000;
 
 export interface MdnsResponderHandle {
   readonly feedPort: number;
@@ -42,8 +48,13 @@ export interface MdnsResponderHandle {
 export interface MdnsResponderOptions {
   /** true (isolated): answer every learned name -> 127.0.0.1, learning names from
    * the QEMU loopback feed. false (lab-router): answer each name -> the guest's
-   * real TAP IP, learned from the guest's own mDNS A-record announcements. */
+   * real TAP IP, learned/refreshed from the guest's own mDNS announcements. */
   loopbackOnly: boolean;
+}
+
+interface KnownEntry {
+  ip: string;
+  lastSeen: number;
 }
 
 /** Read a DNS name at buf[off]: dotted, lowercase, no trailing dot. Follows
@@ -80,25 +91,39 @@ function readName(buf: Buffer, off: number): { name: string; after: number } | u
   return { name: labels.join(".").toLowerCase(), after };
 }
 
-/** Build an mDNS answer: `name` A (cache-flush) -> `ip`, TTL 120. */
-function buildAnswer(name: string, ip: string): Buffer {
-  const octets = ip.split(".").map((n) => parseInt(n, 10) & 0xff);
-  const nameBuf = Buffer.concat([
+/** Encode a dotted name as DNS labels + terminating zero. */
+function encodeName(name: string): Buffer {
+  return Buffer.concat([
     ...name.split(".").map((label) =>
       Buffer.concat([Buffer.from([label.length]), Buffer.from(label, "latin1")]),
     ),
     Buffer.from([0]),
   ]);
+}
+
+/** Build an mDNS answer: `name` A (cache-flush) -> `ip`, short TTL. */
+function buildAnswer(name: string, ip: string): Buffer {
+  const octets = ip.split(".").map((n) => parseInt(n, 10) & 0xff);
   const header = Buffer.from([0, 0, 0x84, 0x00, 0, 0, 0, 1, 0, 0, 0, 0]); // QR+AA, 1 answer
+  const ttl = Buffer.from([
+    (ANSWER_TTL_SECONDS >>> 24) & 0xff, (ANSWER_TTL_SECONDS >>> 16) & 0xff,
+    (ANSWER_TTL_SECONDS >>> 8) & 0xff, ANSWER_TTL_SECONDS & 0xff,
+  ]);
   const rr = Buffer.concat([
-    nameBuf,
+    encodeName(name),
     Buffer.from([0, 1]), // type A
     Buffer.from([0x80, 1]), // class IN + cache-flush
-    Buffer.from([0, 0, 0, 120]), // TTL
+    ttl,
     Buffer.from([0, 4]), // rdlength
     Buffer.from(octets),
   ]);
   return Buffer.concat([header, rr]);
+}
+
+/** Build an mDNS query for `name` (A record). */
+function buildQuery(name: string): Buffer {
+  const header = Buffer.from([0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]); // QDCOUNT=1
+  return Buffer.concat([header, encodeName(name), Buffer.from([0, 1, 0, 1])]); // type A, class IN
 }
 
 /** A guest IP we are willing to hand out for lab-router: a real, reachable address,
@@ -164,8 +189,9 @@ function localIpv4Addresses(): string[] {
  * could not be created -- a failure here must never take down the extension host,
  * just disable `.local` resolution. */
 export function startMdnsResponder(options: MdnsResponderOptions): MdnsResponderHandle | undefined {
-  const known = new Map<string, string>(); // <host>.local -> IP to answer with
-  let announceTimer: NodeJS.Timeout | undefined;
+  const known = new Map<string, KnownEntry>(); // <host>.local -> {ip, lastSeen}
+  const wanted = new Set<string>(); // names the OS has queried for (to actively refresh)
+  let timer: NodeJS.Timeout | undefined;
 
   const responder = dgram.createSocket({ type: "udp4", reuseAddr: true });
   const feed = dgram.createSocket({ type: "udp4", reuseAddr: true });
@@ -179,10 +205,26 @@ export function startMdnsResponder(options: MdnsResponderOptions): MdnsResponder
   };
 
   const learn = (name: string, ip: string, source: string): void => {
-    if (known.get(name) === ip) return;
-    known.set(name, ip);
-    logSimulation("info", `mDNS (${source}): ${name} -> ${ip}`, { stage: "network-mdns" });
-    announce(name, ip);
+    const prev = known.get(name);
+    known.set(name, { ip, lastSeen: Date.now() });
+    if (!prev || prev.ip !== ip) {
+      logSimulation("info", `mDNS (${source}): ${name} -> ${ip}`, { stage: "network-mdns" });
+      announce(name, ip); // cache-flush answer so the OS replaces any stale entry at once
+    }
+  };
+
+  /** Send an mDNS query for `name` out every local interface, so a guest on the
+   * TAP (not just the default route) answers with its current IP. */
+  const queryEverywhere = (name: string): void => {
+    const q = buildQuery(name);
+    try { responder.send(q, MDNS_PORT, MDNS_GROUP); } catch { /* default iface */ }
+    for (const addr of localIpv4Addresses()) {
+      try {
+        responder.setMulticastInterface(addr);
+        responder.send(q, MDNS_PORT, MDNS_GROUP);
+      } catch { /* iface busy / not multicast-capable */ }
+    }
+    try { responder.setMulticastInterface("0.0.0.0"); } catch { /* restore default */ }
   };
 
   responder.on("error", (err) => {
@@ -197,8 +239,8 @@ export function startMdnsResponder(options: MdnsResponderOptions): MdnsResponder
   responder.on("message", (msg, rinfo) => {
     const isResponse = ((msg[2] ?? 0) & 0x80) !== 0;
     if (isResponse) {
-      // lab-router: learn <host>.local -> real IP straight from the guest's own
-      // mDNS announcements (they reach the host over the TAP). Isolated ignores the
+      // lab-router: learn/refresh <host>.local -> real IP from the guest's own
+      // announcements and from replies to our active queries. Isolated ignores the
       // wire and trusts only the loopback feed (SLIRP IPs are not host-reachable).
       if (options.loopbackOnly) return;
       for (const rec of extractARecords(msg)) {
@@ -208,7 +250,8 @@ export function startMdnsResponder(options: MdnsResponderOptions): MdnsResponder
       }
       return;
     }
-    // A query: answer any name we know, unicast to the querier and multicast.
+    // A query: answer any name we know (unicast + multicast), remember it as a name
+    // of interest, and (lab-router) kick off a refresh so a stale IP self-corrects.
     const qd = ((msg[4] ?? 0) << 8) | (msg[5] ?? 0);
     let off = 12;
     for (let i = 0; i < qd; i++) {
@@ -216,12 +259,17 @@ export function startMdnsResponder(options: MdnsResponderOptions): MdnsResponder
       if (!parsed) return;
       const qtype = ((msg[parsed.after] ?? 0) << 8) | (msg[parsed.after + 1] ?? 0);
       off = parsed.after + 4;
-      const ip = known.get(parsed.name);
-      if ((qtype === 1 || qtype === 255) && ip) {
-        const resp = buildAnswer(parsed.name, ip);
-        try { responder.send(resp, MDNS_PORT, MDNS_GROUP); } catch { /* re-announced periodically */ }
-        try { responder.send(resp, rinfo.port, rinfo.address); } catch { /* querier gone */ }
+      if (qtype !== 1 && qtype !== 255) continue;
+      if (parsed.name.endsWith(".local")) wanted.add(parsed.name);
+      const entry = known.get(parsed.name);
+      if (entry) {
+        // Unicast the answer straight to the querier (the Windows resolver accepts
+        // it). Deliberately NOT multicast, so other host responders sharing 5353
+        // don't learn from -- and ping-pong with -- our answers.
+        try { responder.send(buildAnswer(parsed.name, entry.ip), rinfo.port, rinfo.address); }
+        catch { /* querier gone */ }
       }
+      if (!options.loopbackOnly) queryEverywhere(parsed.name);
     }
   });
 
@@ -253,17 +301,33 @@ export function startMdnsResponder(options: MdnsResponderOptions): MdnsResponder
     return undefined;
   }
 
-  announceTimer = setInterval(() => {
-    for (const [name, ip] of known) announce(name, ip);
-  }, ANNOUNCE_INTERVAL_MS);
-  if (typeof announceTimer.unref === "function") announceTimer.unref();
+  timer = setInterval(() => {
+    // Deliberately NO periodic multicast re-announce here: with several responders
+    // sharing 5353 on one PC (thin-client), each broadcasting its own view every few
+    // seconds, a single stale/conflicting entry ping-pongs into an announcement storm.
+    // Instead we stay passive -- the OS re-resolves on its own (short ANSWER_TTL) and
+    // we answer, and we actively re-query to keep our own view current. A single
+    // cache-flush announce still fires from learn() only when an IP actually changes.
+    const now = Date.now();
+    if (!options.loopbackOnly) {
+      for (const [name, entry] of known) {
+        // Drop entries whose guest hasn't been reconfirmed recently, so we stop
+        // resolving a dead IP from a previous run. Isolated (127.0.0.1) is static.
+        if (now - entry.lastSeen > ENTRY_STALE_MS) known.delete(name);
+      }
+      // Re-query the names the OS cares about so a guest that moved to a new IP
+      // (re-run) is picked up within a few seconds and stale entries get refreshed.
+      for (const name of wanted) queryEverywhere(name);
+    }
+  }, REFRESH_INTERVAL_MS);
+  if (typeof timer.unref === "function") timer.unref();
 
   return {
     feedPort: MDNS_FEED_PORT,
     dispose(): void {
-      if (announceTimer) {
-        clearInterval(announceTimer);
-        announceTimer = undefined;
+      if (timer) {
+        clearInterval(timer);
+        timer = undefined;
       }
       try { responder.close(); } catch { /* already closed */ }
       try { feed.close(); } catch { /* already closed */ }
