@@ -1,6 +1,5 @@
 #include "simulation/Scheduler.hpp"
 #include <algorithm>
-#include <cassert>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -8,6 +7,11 @@
 #include <optional>
 #include <thread>
 #include <vector>
+// assert() é a verificação deste teste. Em Release o CMake define NDEBUG e cada assert() viraria
+// no-op: o baseline noturno (Release) aprovava o teste sem checar nada. <assert.h> redefine
+// assert() conforme NDEBUG a cada inclusão; por isso vem depois dos outros includes.
+#undef NDEBUG
+#include <assert.h>
 
 using lasecsimul::simulation::Scheduler;
 

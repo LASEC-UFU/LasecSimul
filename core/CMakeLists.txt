@@ -1845,7 +1845,8 @@ endif()
 # no baseline). Todo teste que usa assert() precisa reativá-lo com #undef NDEBUG antes de
 # <assert.h>.
 file(GLOB_RECURSE _lasecsimul_test_sources
-     "${CMAKE_CURRENT_SOURCE_DIR}/test/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/test/*.hpp")
+     "${CMAKE_CURRENT_SOURCE_DIR}/test/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/test/*.hpp"
+     "${CMAKE_CURRENT_SOURCE_DIR}/../test/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/../test/*.hpp")
 set(_lasecsimul_assert_errors "")
 foreach(_lasecsimul_source IN LISTS _lasecsimul_test_sources)
     file(STRINGS "${_lasecsimul_source}" _lasecsimul_assert_uses REGEX "(^|[^_A-Za-z0-9])assert\\(")
