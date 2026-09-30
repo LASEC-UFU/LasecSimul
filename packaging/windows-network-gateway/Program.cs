@@ -165,7 +165,14 @@ internal static class Program
             handle.Dispose();
             throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "não foi possível ativar a TAP");
         }
-        return new FileStream(handle, FileAccess.ReadWrite, MaximumFrameSize, isAsync: true);
+        // Buffer size 1 disables FileStream's internal buffering. On a TAP device a
+        // 64 KB buffer HELD every written frame until ~64 KB had accumulated (or a
+        // flush), so guest-bound frames (ARP/ICMP/HTTP replies) only trickled out in
+        // delayed bursts -- the lab-router "works sometimes / seconds of latency /
+        // ping times out" symptom (isolated/SLIRP, which never touches the TAP, stayed
+        // fast at ~25 ms). With buffering off, each WriteAsync goes straight to the
+        // adapter and each ReadAsync returns one frame immediately.
+        return new FileStream(handle, FileAccess.ReadWrite, bufferSize: 1, isAsync: true);
     }
 
     private static async Task ReadClientLoop(QemuClient client)
@@ -222,7 +229,7 @@ internal static class Program
         if (!localDestination && _tap is not null)
         {
             await TapWriteLock.WaitAsync();
-            try { await _tap.WriteAsync(frame); }
+            try { await _tap.WriteAsync(frame); await _tap.FlushAsync(); }
             finally { TapWriteLock.Release(); }
         }
     }
