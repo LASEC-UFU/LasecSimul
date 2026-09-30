@@ -475,7 +475,15 @@ internal static class Program
                 await stream.WriteAsync(header);
                 await stream.WriteAsync(frame);
             }
-            catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException) { }
+            // A forward to a single client must NEVER crash the gateway. A client that
+            // just disconnected but is still in the Clients collection makes GetStream()
+            // throw InvalidOperationException ("operation is not allowed on non-connected
+            // sockets"); before this was uncaught it propagated through Broadcast() ->
+            // ReadTapLoop() and tore down the whole gateway (5s restart loop), which
+            // dropped every guest's connection mid-ARP so server->guest ping never
+            // completed. Swallow any send failure to one client; the read loops remove
+            // dead clients from the tables on their own.
+            catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException or InvalidOperationException) { }
             finally { _writeLock.Release(); }
         }
 
