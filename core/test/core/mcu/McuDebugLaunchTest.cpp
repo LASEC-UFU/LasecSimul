@@ -10,9 +10,16 @@ class FakeAdapter final : public IMcuAdapter {
 public:
     const char* chipId() const override { return "fake.cpu"; }
     QemuLaunchSpec buildLaunchArgs(std::string_view firmware) const override {
-        // Mirrors the real Esp32Adapter's MTTCG default (-accel tcg,thread=multi,
-        // no -icount) so McuController's LASECSIMUL_QEMU_TCG_THREAD override and
-        // its execution= diagnostic have something realistic to act on.
+        // Mirrors the real Esp32Adapter's contract (configuredExecutionMode()): MTTCG by default
+        // (-accel tcg,thread=multi, no -icount); any other LASECSIMUL_ESP32_EXECUTION_MODE value is
+        // the deterministic rollback (tcg,thread=single plus -icount). McuController's
+        // LASECSIMUL_QEMU_TCG_THREAD/TB_SIZE overrides and its execution= diagnostic then have
+        // something realistic to act on.
+        const char* mode = std::getenv("LASECSIMUL_ESP32_EXECUTION_MODE");
+        if (mode && *mode && std::string_view(mode) != "mttcg") {
+            return {"qemu-fake", {"qemu-fake", "-kernel", std::string(firmware), "-accel", "tcg,thread=single",
+                                  "-icount", "shift=4,align=off,sleep=off"}};
+        }
         return {"qemu-fake",
                 {"qemu-fake", "-kernel", std::string(firmware), "-accel", "tcg,thread=multi"}};
     }
@@ -25,10 +32,12 @@ int main() {
 #ifdef _WIN32
     _putenv_s("LASECSIMUL_NETWORK_NAMESPACE", "42");
     _putenv_s("LASECSIMUL_NETWORK_MODE", "");
+    _putenv_s("LASECSIMUL_NETWORK_FRONTEND", "");
     _putenv_s("LASECSIMUL_GATEWAY_PORT", "9011");
 #else
     setenv("LASECSIMUL_NETWORK_NAMESPACE", "42", 1);
     unsetenv("LASECSIMUL_NETWORK_MODE");
+    unsetenv("LASECSIMUL_NETWORK_FRONTEND");
     setenv("LASECSIMUL_GATEWAY_PORT", "9011", 1);
 #endif
     FakeAdapter adapter;
@@ -52,9 +61,25 @@ int main() {
     const QemuLaunchSpec normal = controller.buildLaunchSpec("firmware.bin", "lasecsimul-mcu-1234-7");
     assert(normal.args.front() == "lasecsimul-mcu-1234-7");
     assert(std::find(normal.args.begin(), normal.args.end(), "-gdb") == normal.args.end());
+    // Frontend padrão desde docs/47: o modelo Wi-Fi transparente do ESP32 (esp32_wifi).
     assert(std::find(normal.args.begin(), normal.args.end(),
-                     "user,model=open_eth,mac=02:4c:2a:07:b8:e4,net=10.42.7.0/24,host=10.42.7.2,dhcpstart=10.42.7.15,dns=10.42.7.3") !=
+                     "user,model=esp32_wifi,mac=02:4c:2a:07:b8:e4,net=10.42.7.0/24,host=10.42.7.2,dhcpstart=10.42.7.15,dns=10.42.7.3") !=
            normal.args.end());
+#ifdef _WIN32
+    _putenv_s("LASECSIMUL_NETWORK_FRONTEND", "openeth");
+#else
+    setenv("LASECSIMUL_NETWORK_FRONTEND", "openeth", 1);
+#endif
+    // Rollback documentado (LASECSIMUL_NETWORK_FRONTEND=openeth): mesma rede e MAC, NIC Ethernet.
+    const QemuLaunchSpec openEth = controller.buildLaunchSpec("firmware.bin", "lasecsimul-mcu-1234-7");
+    assert(std::find(openEth.args.begin(), openEth.args.end(),
+                     "user,model=open_eth,mac=02:4c:2a:07:b8:e4,net=10.42.7.0/24,host=10.42.7.2,dhcpstart=10.42.7.15,dns=10.42.7.3") !=
+           openEth.args.end());
+#ifdef _WIN32
+    _putenv_s("LASECSIMUL_NETWORK_FRONTEND", "");
+#else
+    unsetenv("LASECSIMUL_NETWORK_FRONTEND");
+#endif
 
 #ifdef _WIN32
     _putenv_s("LASECSIMUL_NETWORK_MODE", "lab-router");
@@ -63,7 +88,7 @@ int main() {
 #endif
     const QemuLaunchSpec routed = controller.buildLaunchSpec("firmware.bin", "lasecsimul-mcu-1234-7");
     const std::string expectedRouter =
-        "socket,model=open_eth,mac=02:4c:2a:07:b8:e4,connect=127.0.0.1:9011";
+        "socket,model=esp32_wifi,mac=02:4c:2a:07:b8:e4,connect=127.0.0.1:9011";
     assert(std::find(routed.args.begin(), routed.args.end(), expectedRouter) != routed.args.end());
 
 #ifdef _WIN32
@@ -74,7 +99,7 @@ int main() {
     const QemuLaunchSpec bridged = controller.buildLaunchSpec(
         "firmware.bin", "lasecsimul-mcu-1234-7");
     const std::string expectedBridge =
-        "socket,model=open_eth,mac=02:4c:2a:07:b8:e4,connect=127.0.0.1:9011";
+        "socket,model=esp32_wifi,mac=02:4c:2a:07:b8:e4,connect=127.0.0.1:9011";
     assert(std::find(bridged.args.begin(), bridged.args.end(), expectedBridge) != bridged.args.end());
 
     const QemuLaunchSpec debug = controller.buildLaunchSpec(
