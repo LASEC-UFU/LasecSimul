@@ -2610,13 +2610,26 @@ std::optional<double> SimulationSession::componentCurrent(uint32_t componentInde
     // Achado 2026-09-29 (core_bootstrap T4b3 intermitente): esta leitura usava trySynchronized() e
     // devolvia "sem corrente" sempre que a worker segurava o mutex do Scheduler. Com a simulação
     // livre, a worker só o solta por instantes entre ciclos: numa falha medida, 100 leituras em 2 s
-    // encontraram o mutex ocupado. Agora lê o snapshot publicado a cada passo estável, como as
-    // tensões de nó: nunca espera atrás da worker e nunca confunde "ocupado" com "sem corrente".
-    const std::shared_ptr<const NodeVoltageSnapshot> snapshot = currentSnapshot();
-    if (!snapshot || !snapshot->componentCurrents || componentIndex >= snapshot->componentCurrents->size()) {
-        return std::nullopt;
+    // encontraram o mutex ocupado. Com a worker rodando, lê o snapshot publicado a cada passo
+    // estável, como as tensões de nó: nunca espera atrás dela e nunca confunde "ocupado" com "sem
+    // corrente".
+    if (m_scheduler.isRunning()) {
+        const std::shared_ptr<const NodeVoltageSnapshot> snapshot = currentSnapshot();
+        if (snapshot && snapshot->componentCurrents && componentIndex < snapshot->componentCurrents->size()) {
+            return (*snapshot->componentCurrents)[componentIndex];
+        }
     }
-    return (*snapshot->componentCurrents)[componentIndex];
+    // Sem worker (sessão síncrona, testes que chamam settleStep() direto) nenhum passo estável
+    // publica snapshot: lê a instância, sem esperar, como nodeVoltageOfPin(). Também cobre um
+    // componente adicionado depois do último snapshot.
+    auto result = m_scheduler.trySynchronized([&]() -> std::optional<double> {
+        if (componentIndex >= m_componentInstances.size()) return std::nullopt;
+        IComponentModel* instance = m_componentInstances[componentIndex].get();
+        if (!instance) return std::nullopt;
+        return instance->current();
+    });
+    if (!result) return std::nullopt;
+    return *result;
 }
 
 void SimulationSession::loadMcuFirmware(uint32_t componentIndex, const std::filesystem::path& firmwarePath,
