@@ -112,7 +112,7 @@ import { parseIecProject } from "./plc/iecProject";
 import { readPlcNativeModule } from "./plc/artifact";
 import { maybeOfferMachineNetworkSetup, registerMachineNetworkSetupCommand } from "./network/machineNetworkSetup";
 import { resolveNetworkMode } from "./network/networkMode";
-import { startIsolatedMdnsResponder } from "./network/mdnsResponder";
+import { startMdnsResponder } from "./network/mdnsResponder";
 import { commitDslCommand, commitOpenDslIfPresent, onDslDraftOpenChanged, openDslCommand, registerDslDraftCloseTracking } from "./dsl/dslCommands";
 
 let propertyInspectorView: PropertyInspectorViewProvider | undefined;
@@ -435,18 +435,30 @@ function launchCoreProcess(extensionPath: string): { corePath: string; pipeName:
   }
 
   // Isolated (SLIRP) mode only: the guest is behind QEMU's NAT, so `<host>.local`
-  // never reaches the OS resolver on the same PC. Run a host-side mDNS responder
-  // that answers learned names -> 127.0.0.1 (where hostfwd exposes the guest's
-  // services), and tell QEMU to feed it the hostname it sees the guest advertise.
-  // lab-router/lab-bridge use a real TAP where ordinary mDNS already works.
+  // never reaches the OS resolver reliably on the same PC. Run a host-side mDNS
+  // responder that answers `<host>.local` for the Windows resolver:
+  //   - isolated: guest has no host-reachable IP -> answer 127.0.0.1 (services are
+  //     on loopback via hostfwd); QEMU feeds the learned hostname over loopback
+  //     because SLIRP mDNS never reaches the host.
+  //   - lab-router: each guest has its own routable TAP IP -> the responder learns
+  //     `<host>.local -> real IP` from the guest's own mDNS announcements arriving
+  //     over the TAP, and answers that. Serves any number of guests (thin-client).
+  const mdnsMode =
+    networkMode.effectiveMode === "isolated" ? "isolated"
+    : networkMode.effectiveMode === "lab-router" ? "lab-router"
+    : undefined;
   state.mdnsResponder?.dispose();
   state.mdnsResponder = undefined;
-  if (process.platform === "win32" && networkMode.effectiveMode === "isolated") {
-    const responder = startIsolatedMdnsResponder();
+  if (process.platform === "win32" && mdnsMode) {
+    const loopbackOnly = mdnsMode === "isolated";
+    const responder = startMdnsResponder({ loopbackOnly });
     if (responder) {
       state.mdnsResponder = responder;
-      coreEnv.LASECSIMUL_ESP32_MDNS_REFLECT = "1";
-      coreEnv.LASECSIMUL_ESP32_MDNS_FEED_PORT = String(responder.feedPort);
+      // Only isolated needs the QEMU loopback feed; lab-router learns from the wire.
+      if (loopbackOnly) {
+        coreEnv.LASECSIMUL_ESP32_MDNS_REFLECT = "1";
+        coreEnv.LASECSIMUL_ESP32_MDNS_FEED_PORT = String(responder.feedPort);
+      }
     }
   }
 
