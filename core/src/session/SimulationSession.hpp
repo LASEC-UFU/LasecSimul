@@ -448,8 +448,14 @@ public:
     std::optional<uint64_t> firstMcuVirtualTimeNs() const;
 
     /** Só pra TESTE: expõe `computeSlowestMcuPositionNs()` (ver seu doc-comment na seção privada)
-     * sem precisar esperar um ciclo real do laço de pacing do Scheduler chamar o hook sozinho. */
-    std::optional<uint64_t> computeSlowestMcuPositionNsForTesting() { return computeSlowestMcuPositionNs(); }
+     * sem precisar esperar um ciclo real do laço de pacing do Scheduler chamar o hook sozinho.
+     * Achado 2026-09-29: a função muta `m_mcuPositionTracking` e só é segura na thread do
+     * Scheduler. Chamada direto da thread do teste, concorria com a worker (que a chama a cada
+     * ciclo) e corrompia o heap: mcu_scheduler_pacing_sync travava ou dava SEGFAULT de forma
+     * intermitente. Pela fila de comandos ela roda na worker (ou direto, sem worker viva). */
+    std::optional<uint64_t> computeSlowestMcuPositionNsForTesting() {
+        return runViaCommandQueue([](SimulationSession& self) { return self.computeSlowestMcuPositionNs(); });
+    }
 
     void sendComponentEvent(uint32_t componentIndex, const ComponentEvent& event);
 
