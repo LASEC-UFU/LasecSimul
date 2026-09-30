@@ -1,5 +1,18 @@
 # NEXT ACTION
 
+## Timing investigation after v0.0.51 (2026-09-29, not released)
+
+Local commits only; nothing pushed, no tag. The user decides whether to cut
+v0.0.52 after reviewing the results. Before any release: push qemu_lasecSimul
+b2f487d, 9f36ff0 and 2f244a3, then the LasecSimul commits from 093946bd to the
+docs commit that added this entry, and dispatch `Package Installers` as usual.
+Validation done locally: full Debug suite 107/107 (5 skipped for missing
+external prerequisites), `node scripts/baseline-core.js --config Release`
+status=candidate with zero failures, extension suite, oled_atomic_frame,
+test-uart-devices, core_bootstrap 200 consecutive passes (incl. 50 under CPU
+saturation), mcu_restart_stress 15/15, bundled-QEMU gate on a local VSIX, and
+a 10-minute display.lsproj run.
+
 ## v0.0.51 SSD1306/UART/QEMU performance release (2026-09-29)
 
 Dispatch `Package Installers` for `v0.0.51` on `main` with tagging and release

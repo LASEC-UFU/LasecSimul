@@ -1,5 +1,21 @@
 # QEMU build and runtime provenance
 
+## Read doorbell, lockless Timer Group counter, electrical STOP mirror (2026-09-29)
+
+Canonical and vendored QEMU now match source commit `2f244a3` (`cdbc8ee` plus
+patches 0007-0009) and SHA-256
+`0AD7016B45277B34C8AC54D0813ACC54EDA8A69C476F8201B5B0EEDD3E1F7A2F`
+(same 36-DLL import table as v0.0.51). diag-v3 firmware on display.lsproj,
+LEGACY transport, 2 runs of 20 s, p50/p95 before (v0.0.51) -> after:
+GPIO_IN read 5026/5721 -> 15/42 us; esp_timer one-shot 1 ms 1345/3224 ->
+59/84 us; I2C address-only at 400 kHz 492/659 -> 305/388 us; display()
+33.8/38.1 -> 31.7/32.7 ms. Periodic esp_timer: no accumulated error (slope
+~0 us/period). 10-minute user firmware: scroll 17.29 px/s, 73/79 cycles end at
+128 columns and 6 at 129-130 as set by the firmware's own stop time (device
+duration equals firmware duration within 75 us in 20/20 traced cycles), CPU and
+memory flat, UART byte-exact, no Guru Meditation, no orphans. Single-session
+evidence; it does not extend the historical multi-session certification.
+
 ## v0.0.51 BQL-free idle wait and locked heartbeat re-arm (2026-09-29)
 
 Canonical and vendored QEMU now match source commit `cdbc8ee` (`b211e01` plus
