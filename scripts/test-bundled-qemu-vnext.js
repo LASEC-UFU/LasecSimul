@@ -231,17 +231,34 @@ function verifyPackagedCoreLoads(extensionDir, workDir) {
   });
 }
 
-function verifyNoOrphans() {
+function runtimeProcessLines() {
   const result = spawnSync("tasklist.exe", ["/fo", "csv", "/nh"], { encoding: "utf8", env: cleanEnv });
-  const lines = String(result.stdout || "").split("\n");
-  const orphans = lines.filter((line) => /qemu-system-xtensa\.exe|lasecsimul-core\.exe/i.test(line));
+  return String(result.stdout || "").split("\n")
+    .filter((line) => /qemu-system-xtensa\.exe|lasecsimul-core\.exe/i.test(line));
+}
+
+function processId(tasklistCsvLine) {
+  return tasklistCsvLine.split('","')[1];
+}
+
+// Órfão é um processo que o gate deixou para trás. Um Core ou QEMU que já existia antes do gate
+// (ex.: a extensão aberta no VS Code da mesma máquina) não foi criado por ele e fazia o gate falhar
+// mesmo com o teardown correto.
+function verifyNoOrphans(preexistingIds) {
+  const lines = runtimeProcessLines();
+  const preexisting = lines.filter((line) => preexistingIds.has(processId(line)));
+  const orphans = lines.filter((line) => !preexistingIds.has(processId(line)));
   if (orphans.length > 0) {
     fail(`processo(s) orfao(s) apos teardown do gate:\n${orphans.join("\n")}`);
+  }
+  for (const line of preexisting) {
+    console.log(`[test-bundled-qemu-vnext] ignorado (ja existia antes do gate): ${line.trim()}`);
   }
   console.log("[test-bundled-qemu-vnext] teardown OK: zero processos orfaos (qemu-system-xtensa.exe / lasecsimul-core.exe)");
 }
 
 async function main() {
+  const preexistingRuntimeIds = new Set(runtimeProcessLines().map(processId));
   const vsixPath = resolveVsixPath();
   ensureFile(vsixPath, "VSIX final (dist/release/win32-x64)");
   const vsixSha256 = sha256(vsixPath);
@@ -260,7 +277,7 @@ async function main() {
     const romDir = verifyRoms(qemuBinDir);
     verifyVnextBHandshake(qemuPath, romDir, workDir);
     const coreSha256 = await verifyPackagedCoreLoads(extensionDir, workDir);
-    verifyNoOrphans();
+    verifyNoOrphans(preexistingRuntimeIds);
 
     console.log("[test-bundled-qemu-vnext] hashes efetivamente executados:");
     console.log(`  vsix=${vsixSha256}`);
