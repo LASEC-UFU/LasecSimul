@@ -1,11 +1,12 @@
 # NEXT ACTION
 
-## Timing investigation after v0.0.51 (2026-09-29, not released)
+## v0.0.52 timing release (2026-09-30)
 
-Local commits only; nothing pushed, no tag. The user decides whether to cut
-v0.0.52 after reviewing the results. Before any release: push qemu_lasecSimul
-b2f487d, 9f36ff0 and 2f244a3, then the LasecSimul commits from 093946bd to the
-docs commit that added this entry, and dispatch `Package Installers` as usual.
+Authorized by the user on 2026-09-30. qemu_lasecSimul b2f487d, 9f36ff0 and
+2f244a3 are pushed first, then LasecSimul main; dispatch `Package Installers`
+for `v0.0.52` with tagging and release enabled and verify the workflow, the
+VSIX (version 0.0.52, bundled QEMU SHA-256 0AD7016B..., VNEXT_B gate) and the
+release assets.
 Validation done locally: full Debug suite 107/107 (5 skipped for missing
 external prerequisites), `node scripts/baseline-core.js --config Release`
 status=candidate with zero failures, extension suite, oled_atomic_frame,

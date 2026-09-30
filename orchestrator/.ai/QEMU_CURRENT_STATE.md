@@ -1,6 +1,6 @@
 # QEMU build and runtime provenance
 
-## Read doorbell, lockless Timer Group counter, electrical STOP mirror (2026-09-29)
+## v0.0.52 read doorbell, lockless Timer Group counter, electrical STOP mirror (2026-09-29)
 
 Canonical and vendored QEMU now match source commit `2f244a3` (`cdbc8ee` plus
 patches 0007-0009) and SHA-256

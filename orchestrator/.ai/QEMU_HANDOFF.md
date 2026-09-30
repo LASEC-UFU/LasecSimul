@@ -1,12 +1,12 @@
 # START HERE - LasecSimul VNEXT_B / ESP32
 
-## Timing investigation after v0.0.51 (2026-09-29)
+## v0.0.52 timing release (2026-09-30)
 
-CURRENT_OBJECTIVE = Root-cause the residual SSD1306 scroll, GPIO, esp_timer and I2C latencies, core_bootstrap intermittency and the nightly core-baseline failure; no release until the user reviews.
+CURRENT_OBJECTIVE = Publish v0.0.52 with the SSD1306 scroll, GPIO, esp_timer and I2C latency fixes, the core_bootstrap and nightly core-baseline fixes and QEMU 2f244a3.
 LAST_ACTION = Vendored qemu_lasecSimul 2f244a3 (SHA-256 0AD7016B...), fixed three test-infrastructure inconsistencies (Release asserts, skip convention, gate orphan check) and a July test race in mcu_scheduler_pacing_sync.
 LAST_RESULT = Debug suite 107/107, core-baseline Release candidate with zero failures, bundled-QEMU gate OK on a local VSIX, display.lsproj 10 min clean.
-CURRENT_BLOCKER = None (awaiting the user's decision on v0.0.52).
-NEXT_COMMAND = Push qemu_lasecSimul main, then LasecSimul main, then gh workflow run package-installers.yml --ref main -f version=v0.0.52 -f tag_repository=true -f publish_release=true (only after approval).
+CURRENT_BLOCKER = None.
+NEXT_COMMAND = gh workflow run package-installers.yml --ref main -f version=v0.0.52 -f tag_repository=true -f publish_release=true (qemu_lasecSimul 2f244a3 already pushed).
 OPEN_PROBLEMS = Isolated 5-70 ms stalls of the Core process (3 of ~5500 esp_timer samples >5 ms), not reproduced in the VM or attributed to power throttling. Each MCU electrical output change costs ~76 us of host time (stamp 30 us + solve 46 us).
 DO_NOT_CHANGE = Preserve the unrelated untracked vnext_prototype/reg_v0045.log. Keep the fork build-ucrt64 feature set (36 imported DLLs); repo-based runs need the UCRT64 bin directory on PATH.
 DO_NOT_REPEAT = Do not disable curl/gnutls/libssh/lzo/png/snappy/libusb in build-ucrt64 to match the stale tracked config-host.h: every released binary imports them.
