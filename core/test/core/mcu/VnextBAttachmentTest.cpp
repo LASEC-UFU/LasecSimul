@@ -37,7 +37,9 @@ int main() {
  try {
     const char* configured = std::getenv("LASECSIMUL_TEST_QEMU_BINARY");
     if (!configured || !*configured || !std::filesystem::exists(configured)) {
-        std::cout << "SKIP: LASECSIMUL_TEST_QEMU_BINARY is not available\n";
+        // PULADO: faz o ctest reportar Skipped (SKIP_REGULAR_EXPRESSION de external-qemu); só
+        // "SKIP:" contava como Passed sem ter verificado nada.
+        std::cout << "PULADO: SKIP -- LASECSIMUL_TEST_QEMU_BINARY is not available\n";
         return 0;
     }
     // P1 (re-oracled for E141 production-clean, EVIDENCE.md E141): this used to assert on

@@ -378,8 +378,11 @@ int main() {
     const char* firmwareEnv = std::getenv("LASECSIMUL_TEST_FIRMWARE");
     const char* qemuEnv = std::getenv("LASECSIMUL_TEST_QEMU_BINARY");
     if (!firmwareEnv || !*firmwareEnv || !qemuEnv || !*qemuEnv) {
-        std::fprintf(stderr, "FAILED: LASECSIMUL_TEST_FIRMWARE and LASECSIMUL_TEST_QEMU_BINARY are required\n");
-        return 1;
+        // Pré-requisito externo ausente = teste pulado (PULADO: é o SKIP_REGULAR_EXPRESSION de
+        // external-qemu), como nos demais testes com QEMU real; SKIPPED continua sendo o que o
+        // runner E131 reconhece.
+        std::fprintf(stderr, "PULADO: SKIPPED -- LASECSIMUL_TEST_FIRMWARE and LASECSIMUL_TEST_QEMU_BINARY are required\n");
+        return 0;
     }
     const std::filesystem::path firmware = std::filesystem::u8path(firmwareEnv);
     const std::filesystem::path qemu = std::filesystem::u8path(qemuEnv);

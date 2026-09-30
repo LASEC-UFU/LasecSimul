@@ -453,7 +453,9 @@ int main() {
     const char* firmwareText = std::getenv("LASECSIMUL_TEST_FIRMWARE");
     const char* qemuText = std::getenv("LASECSIMUL_TEST_QEMU_BINARY");
     if (!firmwareText || !*firmwareText || !qemuText || !*qemuText) {
-        std::fprintf(stderr, "SKIPPED: LASECSIMUL_TEST_FIRMWARE and LASECSIMUL_TEST_QEMU_BINARY are required\n");
+        // PULADO: faz o ctest reportar Skipped (SKIP_REGULAR_EXPRESSION de external-qemu); só
+        // "SKIPPED:" contava como Passed sem ter verificado nada.
+        std::fprintf(stderr, "PULADO: SKIPPED -- LASECSIMUL_TEST_FIRMWARE and LASECSIMUL_TEST_QEMU_BINARY are required\n");
         return 0;
     }
 
