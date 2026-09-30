@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cmath>
 #include <cstdint>
@@ -252,6 +253,12 @@ public:
 
     void start();
     void setFailNextStartForTesting(bool enabled) { m_failNextStartForTesting.store(enabled); }
+    /** Prazo da espera "teto sem espaço para avançar" (5 ms em produção). Um teste que quer provar
+     * que a espera termina pela notificação, e não pelo prazo, o alonga até o atraso de um wakeup
+     * perdido ficar ordens de grandeza acima da latência de escalonamento do host. */
+    void setAdvanceLimitWaitTimeoutForTesting(std::chrono::nanoseconds timeout) {
+        m_advanceLimitWaitTimeoutNs.store(static_cast<uint64_t>(timeout.count()), std::memory_order_relaxed);
+    }
     /** Pause/resume continuam lock-free para poder interromper um settle não convergente sem esperar
      * pelo mutex que esse mesmo settle segura. signalWorkAvailable() elimina a antiga janela de
      * wakeup perdido sem reintroduzir o deadlock (ver .spec 32.5.22). */
@@ -370,6 +377,7 @@ private:
     std::condition_variable m_pacingWake;
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_failNextStartForTesting{false};
+    std::atomic<uint64_t> m_advanceLimitWaitTimeoutNs{5'000'000};
     std::atomic<bool> m_paused{false};
     /** Setada por `stop()` ANTES de `m_thread.join()`, checada dentro de `settleUntilStableLocked()`
      * -- sem isso, um circuito que nunca converge/estabiliza (oscilação sustentada entre dois

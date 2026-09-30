@@ -501,8 +501,9 @@ void Scheduler::start() {
                 m_workerTimedWait.store(true, std::memory_order_seq_cst);
                 std::unique_lock<std::mutex> pacingLock(m_pacingMutex);
                 const auto waitStart = std::chrono::steady_clock::now();
-                m_pacingWake.wait_for(pacingLock, std::chrono::milliseconds(5), [this, observedAdvanceGen,
-                                                                                  observedWorkGen] {
+                m_pacingWake.wait_for(pacingLock,
+                                      std::chrono::nanoseconds(m_advanceLimitWaitTimeoutNs.load(std::memory_order_relaxed)),
+                                      [this, observedAdvanceGen, observedWorkGen] {
                     return !m_running.load(std::memory_order_acquire) || m_paused.load(std::memory_order_acquire) ||
                            m_advanceLimitGeneration.load(std::memory_order_acquire) != observedAdvanceGen ||
                            m_workGeneration.load(std::memory_order_acquire) != observedWorkGen;

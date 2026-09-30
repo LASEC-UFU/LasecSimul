@@ -269,6 +269,10 @@ void testAdvanceLimitChangeDuringCycleIsNotLost() {
     schedulerPtr = &scheduler;
     scheduler.setMaximumTimeStepNs(100'000);
     scheduler.setRealTimeRate(0.0); // sem pacing: só o teto limita, isolando a espera do teto
+    // Com o prazo de produção (5 ms) o wakeup perdido custava 5 ms, da ordem da latência de
+    // escalonamento de uma suíte paralela: o teste falhava sob carga sem o bug. Com 30 s, perder a
+    // notificação trava o avanço por 30 s; a notificação entregue libera em microssegundos.
+    scheduler.setAdvanceLimitWaitTimeoutForTesting(std::chrono::seconds(30));
     std::atomic<uint64_t> referencePositionNs{1'000'000};
     std::atomic<bool> publishAfterSample{false};
     std::atomic<int64_t> publishedAtNs{0};
@@ -290,7 +294,10 @@ void testAdvanceLimitChangeDuringCycleIsNotLost() {
     std::this_thread::sleep_for(std::chrono::milliseconds(40)); // trava no teto inicial
     const uint64_t cappedNowNs = scheduler.nowNs();
     publishAfterSample.store(true, std::memory_order_relaxed);
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(200);
+    // Acorda a worker sem mudar o teto: o ciclo seguinte amostra o teto antigo e o callback publica
+    // o novo DURANTE esse ciclo, que é o cenário do bug.
+    scheduler.notifyAdvanceLimitChanged();
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
     while (scheduler.nowNs() <= cappedNowNs && std::chrono::steady_clock::now() < deadline) {
         std::this_thread::yield();
     }
@@ -301,7 +308,7 @@ void testAdvanceLimitChangeDuringCycleIsNotLost() {
     assert(scheduler.nowNs() > cappedNowNs);
     const int64_t reactionNs = passedAtNs - publishedAtNs.load();
     std::printf("  [info] teto publicado no meio do ciclo: avanço retomado em %.3f ms\n", reactionNs / 1e6);
-    assert(reactionNs < 2'500'000); // antes: o timeout de 5 ms inteiro
+    assert(reactionNs < 5'000'000'000); // antes: o prazo inteiro da espera (30 s aqui)
 }
 
 // Achado 2026-09-29: a thread de poll do MCU agenda a leitura de GPIO no instante publicado pelo
@@ -323,6 +330,7 @@ void testLateEventEndsPacingSleepWithoutMovingTimeBack() {
         return value ? std::optional<uint64_t>(value) : std::nullopt;
     });
 
+    const auto startedAt = std::chrono::steady_clock::now();
     scheduler.start();
     // Corre até a referência (400 ms simulados em poucos ms de parede) e fica muito à frente da
     // própria âncora de parede: sem a referência, o pacing dorme até o relógio de parede alcançar.
@@ -349,10 +357,17 @@ void testLateEventEndsPacingSleepWithoutMovingTimeBack() {
     assert(nowInCallback.load() != 0);
     const double reactionMs = std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::duration(ranAtNs.load())).count();
-    std::printf("  [info] evento atrasado durante o pacing: executado em %.3f ms, relógio %llu -> %llu\n",
-                reactionMs, static_cast<unsigned long long>(nowBefore),
+    // O bug fazia o evento esperar o prazo do pacing: o tempo que falta para a âncora de parede
+    // (taxa 1.0, iniciada no start) alcançar nowBefore. Um limite fixo em ms confundia esse atraso
+    // com a latência de escalonamento de uma suíte paralela; o limite é uma fração do prazo medido.
+    const double pacingRemainingMs =
+        nowBefore / 1e6 - std::chrono::duration<double, std::milli>(scheduledAt - startedAt).count();
+    std::printf("  [info] evento atrasado durante o pacing: executado em %.3f ms (prazo do pacing %.1f ms), "
+                "relógio %llu -> %llu\n",
+                reactionMs, pacingRemainingMs, static_cast<unsigned long long>(nowBefore),
                 static_cast<unsigned long long>(nowInCallback.load()));
-    assert(reactionMs < 5.0);                    // antes: até o prazo do pacing (centenas de ms)
+    assert(pacingRemainingMs > 100.0);           // o cenário precisa de uma espera longa para distinguir
+    assert(reactionMs < pacingRemainingMs / 4);  // antes: o prazo inteiro do pacing
     assert(nowInCallback.load() >= nowBefore);   // antes: voltava para nowBefore - 1000
 }
 
