@@ -5,12 +5,16 @@
 // prova o layout de fio, não só a API C++.
 #include "fpga/GhdlArenaBridge.hpp"
 #include <atomic>
-#include <cassert>
 #include <chrono>
 #include <cstdio>
 #include <stdexcept>
 #include <string>
 #include <vector>
+// assert() é a verificação deste teste. Em Release o CMake define NDEBUG e cada assert() viraria
+// no-op: o baseline noturno (Release) aprovava o teste sem checar nada. <assert.h> redefine
+// assert() conforme NDEBUG a cada inclusão; por isso vem depois dos outros includes.
+#undef NDEBUG
+#include <assert.h>
 
 using namespace lasecsimul;
 using namespace lasecsimul::fpga;

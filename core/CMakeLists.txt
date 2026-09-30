@@ -1839,3 +1839,27 @@ if(_lasecsimul_classification_errors)
         "Todo teste precisa estar em exatamente um de LASECSIMUL_HERMETIC_TESTS / "
         "LASECSIMUL_EXTERNAL_{GHDL,QEMU,PYTHON,PLC}_TESTS:${_lasecsimul_classification_errors}")
 endif()
+
+# O baseline noturno roda em Release, onde o CMake define NDEBUG: um teste que verifica com
+# assert() passava sem checar nada (mcu_debug_launch falhava em Debug desde 2026-09-09 e passava
+# no baseline). Todo teste que usa assert() precisa reativá-lo com #undef NDEBUG antes de
+# <assert.h>.
+file(GLOB_RECURSE _lasecsimul_test_sources
+     "${CMAKE_CURRENT_SOURCE_DIR}/test/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/test/*.hpp")
+set(_lasecsimul_assert_errors "")
+foreach(_lasecsimul_source IN LISTS _lasecsimul_test_sources)
+    file(STRINGS "${_lasecsimul_source}" _lasecsimul_assert_uses REGEX "(^|[^_A-Za-z0-9])assert\\(")
+    # Menção em comentário (ex.: cabeçalho que descreve o teste) não é uso.
+    list(FILTER _lasecsimul_assert_uses EXCLUDE REGEX "^[ \t]*(//|/\\*|\\*)")
+    if(_lasecsimul_assert_uses)
+        file(STRINGS "${_lasecsimul_source}" _lasecsimul_undef REGEX "^#undef NDEBUG")
+        if(NOT _lasecsimul_undef)
+            string(APPEND _lasecsimul_assert_errors "\n  ${_lasecsimul_source}")
+        endif()
+    endif()
+endforeach()
+if(_lasecsimul_assert_errors)
+    message(FATAL_ERROR
+        "Teste usa assert() sem '#undef NDEBUG' antes de <assert.h>; em Release ele não "
+        "verificaria nada:${_lasecsimul_assert_errors}")
+endif()
