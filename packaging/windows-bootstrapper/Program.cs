@@ -586,10 +586,23 @@ internal static class Program
         var command =
             "$ErrorActionPreference='Stop'; " +
             $"$tap='{tap}'; $ip='{tapAddress}'; " +
-            "if(-not (Get-NetIPAddress -InterfaceAlias $tap -AddressFamily IPv4 -ErrorAction SilentlyContinue | " +
-            "Where-Object {$_.IPAddress -eq $ip})){ New-NetIPAddress -InterfaceAlias $tap -IPAddress $ip -PrefixLength 16 -Type Unicast | Out-Null }; " +
+            // A freshly created TAP adapter has DHCP enabled, and New-NetIPAddress refuses
+            // to write a static IP to the PersistentStore while DHCP is on -- it fails with
+            // "Inconsistent parameters PolicyStore PersistentStore and Dhcp Enabled" (Win32
+            // error 87). Set-NetIPInterface -Dhcp Disabled does NOT reliably take effect on
+            // a media-disconnected TAP before the address is assigned (confirmed on a user's
+            // Win11: error 87 still fired). `netsh set address ... static` disables DHCP and
+            // writes the static IP atomically and persistently, and clears the APIPA
+            // (169.254.x) autoconfig too. PowerShell passes `name=$tap` as one argument with
+            // the space preserved, so no literal quoting is needed.
+            "netsh interface ipv4 set address name=$tap static $ip 255.255.0.0 | Out-Null; " +
+            "if($LASTEXITCODE -ne 0){ throw ('netsh set address falhou: exit ' + $LASTEXITCODE) }; " +
+            // On a domain-joined host the TAP is often classified 'DomainAuthenticated' and a
+            // 'Network List Manager Policies' GPO forbids reclassifying it, so this cmdlet
+            // throws PermissionDenied. That must NOT abort provisioning: the mDNS firewall
+            // rules below are -Profile Any, so routing works regardless of the category.
             "$profile=Get-NetConnectionProfile -InterfaceAlias $tap -ErrorAction SilentlyContinue | Select-Object -First 1; " +
-            "if($profile){ Set-NetConnectionProfile -InterfaceAlias $tap -NetworkCategory Private }; " +
+            "if($profile){ Set-NetConnectionProfile -InterfaceAlias $tap -NetworkCategory Private -ErrorAction SilentlyContinue }; " +
             $"Set-NetIPInterface -InterfaceIndex {tapIndex} -AddressFamily IPv4 -Forwarding Enabled; " +
             "$uplinks=Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | " +
             "Where-Object {$_.ifIndex -ne " + tapIndex + "} | Select-Object -ExpandProperty ifIndex -Unique; " +
