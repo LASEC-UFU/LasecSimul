@@ -46,6 +46,7 @@
 #include "../fpga/GhdlBackend.hpp"
 #include "../protocols/IndustrialProtocolComponents.hpp"
 #include "../protocols/HartCommunicationComponent.hpp"
+#include "../protocols/HartModemComponent.hpp"
 #include <nlohmann/json.hpp>
 #include <array>
 #include <cstdio>
@@ -1133,6 +1134,15 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
     };
     registerHartTransport("protocol.hart.udp", "UDP Port", protocols::HartCommunicationComponent::Mode::Udp, "UDP Port");
 
+    // HART modem: the PC side of the loop, wired in series with the 4-20 mA
+    // circuit. HART reaches a field device only as FSK on the wire.
+    reg.registerFactory(protocols::HartModemComponent::kTypeId, [&scheduler](const ComponentParams& p) {
+        return std::make_unique<protocols::HartModemComponent>(scheduler, p);
+    });
+    registerBuiltinMetadata(protocols::HartModemComponent::kTypeId, "Modem HART",
+        protocols::HartModemComponent::propertySchema(), R"json({"en":{"name":"HART Modem"}})json",
+        std::nullopt, std::nullopt, {"loop_plus", "loop_minus"});
+
     // Concrete SMAR HART field devices (FEAT: HART concrete devices). Each is the SAME
     // no second engine, no per-device C++ subclass -- differing only by the DevicePreset's default
     // property values (profile id, tag, and the Device Variable(s) exposed as Signal Graph ports via
@@ -1151,6 +1161,9 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
             protocols::HartCommunicationComponent::readoutFormat(), std::nullopt,
             {"sensor_plus", "sensor_minus", "loop_plus", "loop_minus"});
     };
+    registerHartDevice("protocol.hart.device.standard", "Dispositivo HART padrao",
+        protocols::HartCommunicationComponent::standardFieldDevicePreset(),
+        "Standard HART Field Device");
     registerHartDevice("protocol.hart.device.smar_ld301", "SMAR LD301 - Transmissor de Pressao Diferencial",
         protocols::HartCommunicationComponent::smarLd301Preset(),
         "SMAR LD301 - Differential Pressure Transmitter (SIMULATED)");

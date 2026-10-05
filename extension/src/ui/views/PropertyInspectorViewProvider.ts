@@ -2,11 +2,14 @@ import * as vscode from "vscode";
 import { PropertySchemaEntry, WebviewComponentCatalogEntry, WebviewComponentModel } from "../webview/model";
 import { SimulationStatus } from "../webview/messages";
 import { propertyFieldKindFromEditor } from "../webview/batchProperties";
+import { listHostSerialPorts } from "../../serialport/hostPorts";
 import {
   HART_BUILTIN_VARIABLES,
   hartInspectorClientScript,
   parseCommandRows,
   parseVariableRows,
+  mergeCommandRows,
+  mergeVariableRows,
   preserveExistingVariableIds,
   renderCommandsSection,
   renderVariablesSection,
@@ -33,6 +36,21 @@ function escapeAttr(value: string): string {
  * through the schematic panel's normal requestUpdateProperty path, so undo/persistence/Core
  * validation remain single-sourced (the Authoring Model is the source of truth -- this class
  * only renders it and forwards edits, it never keeps a second authoritative copy). */
+/** HART modem PC side: the serial port is picked from the ports present on
+ * this computer (COMx, com0com CNCx); only the fields of the chosen link
+ * (serial or UDP) are shown. */
+export async function hartModemPcSideSchemas(schemas: PropertySchemaEntry[], values: Record<string, unknown>): Promise<PropertySchemaEntry[]> {
+  const udp = String(values.pc_link ?? "serial") === "udp";
+  const current = String(values.port_name ?? "");
+  const ports = await listHostSerialPorts();
+  const names = [...new Set([...(current ? [current] : []), ...ports])];
+  return schemas
+    .filter((schema) => udp ? schema.id !== "port_name" : schema.id !== "udp_address" && schema.id !== "udp_port")
+    .map((schema) => schema.id === "port_name" && names.length > 0
+      ? { ...schema, editor: "select", options: names.map((name) => ({ value: name, label: name })) }
+      : schema);
+}
+
 export class PropertyInspectorViewProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
   private component?: WebviewComponentModel;
@@ -76,9 +94,12 @@ export class PropertyInspectorViewProvider implements vscode.WebviewViewProvider
       // are keyed on it -- see hartInspectorSections.ts), but a stale/
       // bypassed webview message must not be able to sneak a changed id
       // through and silently orphan a wire.
+      const previousVariables = String(this.component.properties.hartVariablesJson ?? "[]");
       const value = message.name === "hartVariablesJson" && typeof message.value === "string"
-        ? preserveExistingVariableIds(String(this.component.properties.hartVariablesJson ?? "[]"), message.value)
-        : message.value;
+        ? mergeVariableRows(previousVariables, preserveExistingVariableIds(previousVariables, message.value))
+        : message.name === "hartCommandsJson" && typeof message.value === "string"
+          ? mergeCommandRows(String(this.component.properties.hartCommandsJson ?? "[]"), message.value)
+          : message.value;
       this.forwardMutation(this.component.id, message.name, value);
     });
     return this.render();
@@ -105,9 +126,12 @@ export class PropertyInspectorViewProvider implements vscode.WebviewViewProvider
     if (!this.view) return;
     const c = this.component;
     const descriptor = c ? this.catalog.find((entry) => entry.typeId === c.typeId) : undefined;
-    const schemas = descriptor?.propertySchema ?? [];
     const values = c?.properties ?? {};
-    const isHart = Boolean(c && c.typeId.startsWith("protocol.hart."));
+    const schemas = c?.typeId === "protocol.hart.modem"
+      ? await hartModemPcSideSchemas(descriptor?.propertySchema ?? [], values)
+      : descriptor?.propertySchema ?? [];
+    if (this.component !== c) return; // selection changed while listing ports
+    const isHart = Boolean(c && c.typeId.startsWith("protocol.hart.") && c.typeId !== "protocol.hart.modem");
 
     // Section grouping (section 6 of the Property Inspector contract): group
     // by `schema.group` in order of first appearance, instead of one flat

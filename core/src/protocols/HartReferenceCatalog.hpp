@@ -3,7 +3,9 @@
 #include "HartCommandProgram.hpp"
 #include "HartEngine.hpp"
 
+#include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace lasecsimul::protocols {
@@ -40,6 +42,8 @@ public:
     static HartDeviceProfile makeSmarLd301Profile();
     static HartDeviceProfile makeSmarTt301Profile();
     static HartDeviceProfile makeSmarFy301Profile();
+    /** Profile of the standard HART field device (`protocol.hart.device.standard`). */
+    static HartDeviceProfile makeStandardFieldDeviceProfile();
 
     static bool registerProfiles(HartProfileRegistry& registry);
     static bool registerGenericProfile(HartProfileRegistry& registry);

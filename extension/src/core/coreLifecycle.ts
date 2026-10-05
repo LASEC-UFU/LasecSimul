@@ -939,13 +939,18 @@ async function pollTelemetryFrame(expectedGeneration: number): Promise<void> {
   state.schematicPanel.postMessage({ version: 1, type: "componentVisualState", statesByComponentId });
 
   const readoutsByKey: Record<string, ComponentReadoutValue> = {};
+  // Exposed inner components whose symbol projects live state (e.g. the
+  // LCD of a HART transmitter subcircuit) also get their raw runtime state.
+  const visualStatesByKey: Record<string, string> = {};
   for (const [key, typeId] of overlayTypeId) {
     const bytes = frame.componentStates[overlayStateKey.get(key) ?? ""];
     if (!bytes) continue;
     const readout = decodeComponentReadout(typeId, bytes);
     if (readout !== undefined) readoutsByKey[key] = readout;
+    const entry = findCatalogEntry(typeId);
+    if (entry?.package?.runtimeState || entry?.boardPackage?.runtimeState) visualStatesByKey[key] = bytes.toString("base64");
   }
-  state.schematicPanel.postMessage({ version: 1, type: "boardOverlayReadouts", readoutsByKey });
+  state.schematicPanel.postMessage({ version: 1, type: "boardOverlayReadouts", readoutsByKey, visualStatesByKey });
   state.schematicPanel.postMessage({ version: 1, type: "wireVoltages", voltagesByWireId: frame.nodeVoltages });
 
   const wallMs = Date.now();

@@ -44,7 +44,7 @@ enum class HartVarId : uint8_t {
     Tag,                       // 6 bytes packed ASCII (8 chars)
     PrimaryVariableUnit,
     PrimaryVariable,           // 4 bytes IEEE-754 BE when appended
-    Message,                   // 18 bytes packed ASCII (24 chars) -- Universal Command 12/17
+    Message,                   // 24 bytes packed ASCII (32 chars) -- Universal Command 12/17 (HCF_SPEC-127 6.12)
     Descriptor,                // 12 bytes packed ASCII (16 chars) -- Universal Command 13/18
     Date,                      // 3 bytes {day, month, year-1900} -- Universal Command 13/18
     FinalAssemblyNumber,       // 3 bytes big-endian unsigned -- Universal Command 16/19
@@ -64,12 +64,18 @@ enum class HartVarId : uint8_t {
     PvTransferFunctionCode,    // 1 byte enum (Common Table 3) -- default 0 (Linear)
     AlarmSelectionCode,        // 1 byte enum (Common Table 6) -- default 251 (None)
     WriteProtectCode,          // 1 byte enum (Common Table 7) -- default 251 (None, not implemented)
+    ImplementedUniversalRevision, // 1 byte -- HartDeviceProfile::implementedUniversalRevision (layout selector)
 };
 
 enum class HartDeviceVariableField : uint8_t {
     Code, Units, Value, Status, UpperLimit, LowerLimit, MinimumSpan,
     ClassificationCode, Family, AcquisitionPeriod, Properties, Serial, Damping, WriteMode,
 };
+
+/** Field of an authored (user/manufacturer) variable a program reads or
+ * writes. `Value` is encoded per the variable's declared type; the range
+ * fields are Float32 (e.g. the 0 %/100 % points of a scaled variable). */
+enum class HartUserVariableField : uint8_t { Value, LowerRange, UpperRange };
 
 /** `$BODY`, `$BODY[a:b]`, hex literal, row/variable reference, `$code`. */
 struct HartExpr {
@@ -80,8 +86,14 @@ struct HartExpr {
      * because it is the ONLY formula any HART command in this project
      * needs (HART-FR extensibility gate: add a new formula as a new Kind,
      * do not build a general arithmetic language for a single use). */
+    /** `OutputPercent`: the analog output expressed in percent of span
+     * (saturation and fixed-current mode applied), e.g. a controller's MV. */
+    /** `UserVariableTable`: `table[request[offset] + length]` -- a bounded,
+     * request-indexed read of an authored parameter list (a paged table
+     * read); an index outside the list is HCF_SPEC-307 RC 2. */
     enum class Kind : uint8_t { RequestBody, BodySlice, HexConstant, Variable, UserVariable, LocalCode,
-                                LoopCurrentMilliamps, PercentOfRange, DeviceVariable };
+                                LoopCurrentMilliamps, PercentOfRange, DeviceVariable, OutputPercent,
+                                UserVariableTable };
     Kind kind = Kind::RequestBody;
     size_t offset = 0;              // BodySlice
     size_t length = 0;               // BodySlice; 0 means "to end of body"
@@ -89,6 +101,8 @@ struct HartExpr {
     HartVarId variable = HartVarId::ManufacturerId; // Variable
     std::string variableId;           // UserVariable, resolved against the plan
     HartDeviceVariableField deviceVariableField = HartDeviceVariableField::Value;
+    HartUserVariableField userVariableField = HartUserVariableField::Value; // UserVariable
+    std::vector<std::string> table;   // UserVariableTable
 
     static HartExpr body() noexcept { HartExpr e; e.kind = Kind::RequestBody; return e; }
     static HartExpr bodySlice(size_t offset, size_t length) noexcept {
@@ -99,7 +113,14 @@ struct HartExpr {
     }
     static HartExpr hexByte(uint8_t byte) noexcept { return hex({byte}); }
     static HartExpr var(HartVarId id) noexcept { HartExpr e; e.kind = Kind::Variable; e.variable = id; return e; }
-    static HartExpr userVar(std::string id) { HartExpr e; e.kind = Kind::UserVariable; e.variableId = std::move(id); return e; }
+    static HartExpr userVar(std::string id, HartUserVariableField field = HartUserVariableField::Value) {
+        HartExpr e; e.kind = Kind::UserVariable; e.variableId = std::move(id); e.userVariableField = field; return e;
+    }
+    static HartExpr outputPercent() noexcept { HartExpr e; e.kind = Kind::OutputPercent; return e; }
+    static HartExpr userVarTable(std::vector<std::string> ids, size_t requestIndexOffset, size_t addend = 0) {
+        HartExpr e; e.kind = Kind::UserVariableTable; e.table = std::move(ids);
+        e.offset = requestIndexOffset; e.length = addend; return e;
+    }
     static HartExpr localCode() noexcept { HartExpr e; e.kind = Kind::LocalCode; return e; }
     static HartExpr loopCurrentMilliamps() noexcept { HartExpr e; e.kind = Kind::LoopCurrentMilliamps; return e; }
     static HartExpr percentOfRange() noexcept { HartExpr e; e.kind = Kind::PercentOfRange; return e; }
@@ -123,6 +144,26 @@ struct HartSetStmt { HartVarId target; HartExpr value; };
 struct HartSetDeviceVariableStmt { HartDeviceVariableField target; HartExpr value; };
 
 enum class HartDeviceVariableGuard : uint8_t { Exists, Writable, UnitsMatch, ValidWriteCode };
+
+/** `SET(variableId, value)` for an authored (user/manufacturer) variable:
+ * the bytes are decoded per the variable's declared type and committed to
+ * the device plan when the command succeeds. */
+struct HartSetUserVariableStmt {
+    std::string variableId;
+    HartUserVariableField field = HartUserVariableField::Value;
+    HartExpr value;
+};
+
+/** HCF_SPEC-307 Response Code. `abort` = error class: execution stops, no
+ * Response Data Bytes are returned. Otherwise it is a warning (e.g. the
+ * multi-definition warnings 112-127) and the data bytes are kept. `noReply`
+ * makes the device stay silent (e.g. a tag-addressed command that does not
+ * match this device). */
+struct HartResponseCodeStmt {
+    uint8_t code = 0;
+    bool abort = false;
+    bool noReply = false;
+};
 struct HartGuardDeviceVariableStmt { HartDeviceVariableGuard guard; HartExpr value; };
 
 /** `IF EQ(lhs, rhs) THEN [...] ELSE [...]`. */
@@ -154,7 +195,8 @@ struct HartForCodesStmt {
 };
 
 using HartStatementNode = std::variant<HartAppendStmt, HartSetStmt, HartSetDeviceVariableStmt,
-                                       HartGuardDeviceVariableStmt, HartIfStmt, HartMapStmt, HartForCodesStmt>;
+                                       HartGuardDeviceVariableStmt, HartIfStmt, HartMapStmt, HartForCodesStmt,
+                                       HartSetUserVariableStmt, HartResponseCodeStmt>;
 struct HartStatement { HartStatementNode node; };
 
 struct HartCommandDefinition {
@@ -202,6 +244,7 @@ struct HartExecutionVariables {
     std::array<uint8_t, 3> deviceId{};
     uint8_t numRequestPreambles = 5;
     uint8_t universalCommandRevision = 7;
+    uint8_t implementedUniversalRevision = 7;
     uint8_t transmitterSpecificRevision = 1;
     uint8_t softwareRevision = 1;
     uint8_t hardwareRevisionAndSignal = 0;
@@ -209,7 +252,7 @@ struct HartExecutionVariables {
     std::array<uint8_t, 6> tagPacked{};
     uint8_t primaryVariableUnit = 57; // HART unit code 57 = percent
     float primaryVariable = 0.0f;
-    std::array<uint8_t, 18> messagePacked{};
+    std::array<uint8_t, 24> messagePacked{};
     std::array<uint8_t, 12> descriptorPacked{};
     std::array<uint8_t, 3> date{};
     std::array<uint8_t, 3> finalAssemblyNumber{};
@@ -220,10 +263,16 @@ struct HartExecutionVariables {
     float upperRangeValue = 100.0f;
     float lowerRangeValue = 0.0f;
     uint8_t pvTransferFunctionCode = 0x00; // 0 = Linear
+    float transferCutoffPercent = 0.0f;
+    uint8_t transferCutoffMode = 0;
     uint8_t alarmSelectionCode = 0xFB;     // 251 = None
     uint8_t writeProtectCode = 0xFB;       // 251 = None
     bool fixedCurrentMode = false;
     float fixedCurrentMilliamps = 0.0f;
+    float analogLowerSaturationPercent = std::numeric_limits<float>::quiet_NaN();
+    float analogUpperSaturationPercent = std::numeric_limits<float>::quiet_NaN();
+    /** Burnout current while in sensor fault (hartAlarmMilliamps), else NaN. */
+    float alarmMilliamps = std::numeric_limits<float>::quiet_NaN();
     float loopCurrentZeroTrim = 0.0f;
     float loopCurrentGainTrim = 1.0f;
     uint8_t diagnosticStatus = 0;
@@ -232,8 +281,18 @@ struct HartExecutionVariables {
         double value = 0.0;
         HartVariableType type = HartVariableType::Float32;
         uint8_t wireWidth = 1;
+        float lowerRangeValue = std::numeric_limits<float>::quiet_NaN();
+        float upperRangeValue = std::numeric_limits<float>::quiet_NaN();
+        /** Pre-encoded wire bytes of an `Ascii` variable. */
+        std::vector<uint8_t> text;
+        /** Set by a SET statement; the hook commits only dirty variables. */
+        bool dirty = false;
     };
-    std::span<const UserVariable> userVariables;
+    std::span<UserVariable> userVariables;
+    /** Set when a request body slice was out of range (HCF_SPEC-307 RC 5). */
+    bool requestTooShort = false;
+    /** Set when a request-selected index/code does not exist (RC 2). */
+    bool invalidSelection = false;
     struct DeviceVariable {
         uint8_t code = 0xFF;
         uint8_t units = 250;
@@ -255,7 +314,9 @@ struct HartExecutionVariables {
     std::span<DeviceVariable> deviceVariables;
 };
 
-// Shared derived values used by Universal and Analog Channel commands.
+// Shared derived values used by Universal and Analog Channel commands; both
+// delegate to `hartEvaluateAnalogOutput` (HartEngine.hpp), the one authority.
+HartAnalogOutput hartAnalogOutput(const HartExecutionVariables& variables) noexcept;
 float hartPercentOfRange(const HartExecutionVariables& variables) noexcept;
 float hartLoopCurrentMilliamps(const HartExecutionVariables& variables) noexcept;
 

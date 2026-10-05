@@ -20239,7 +20239,8 @@
     },
     {
       "typeId": "peripherals.udp",
-      "label": "UDP Port",
+      "label": "UDP Port (legado)",
+      "hidden": true,
       "pinCount": 0,
       "icon": "globe",
       "folderPath": [
@@ -20258,8 +20259,266 @@
       }
     },
     {
+      "typeId": "protocol.hart.device.standard",
+      "label": "Dispositivo HART padrão",
+      "pinCount": 4,
+      "pinIds": [
+        "sensor_plus",
+        "sensor_minus",
+        "loop_plus",
+        "loop_minus"
+      ],
+      "icon": "package",
+      "folderPath": [
+        "Protocolos Industriais",
+        "HART"
+      ],
+      "workspaceSection": "process",
+      "graphical": true,
+      "package": {
+        "width": 120,
+        "height": 120,
+        "border": false,
+        "shapes": [
+          {
+            "kind": "rect",
+            "x": 0,
+            "y": 0,
+            "w": 120,
+            "h": 120,
+            "rx": 10,
+            "ry": 10,
+            "fill": "#b9bfc6",
+            "stroke": "#4d525a",
+            "strokeWidth": 1.5
+          },
+          {
+            "kind": "rect",
+            "x": 7,
+            "y": 7,
+            "w": 106,
+            "h": 76,
+            "rx": 6,
+            "ry": 6,
+            "fill": "#c5cfb2",
+            "stroke": "#59604f",
+            "strokeWidth": 1
+          },
+          {
+            "kind": "text",
+            "x": 47,
+            "y": 101,
+            "value": "HART",
+            "fontSize": 10,
+            "color": "#2b2f33"
+          }
+        ],
+        "pins": [
+          {
+            "id": "sensor_plus",
+            "kind": "ANALOG_IN",
+            "x": 0,
+            "y": 95,
+            "angle": 180,
+            "length": 8,
+            "label": "S+"
+          },
+          {
+            "id": "sensor_minus",
+            "kind": "ANALOG_IN",
+            "x": 0,
+            "y": 110,
+            "angle": 180,
+            "length": 8,
+            "label": "S-"
+          },
+          {
+            "id": "loop_plus",
+            "kind": "POWER",
+            "x": 120,
+            "y": 95,
+            "angle": 0,
+            "length": 8,
+            "label": "LOOP+"
+          },
+          {
+            "id": "loop_minus",
+            "kind": "POWER",
+            "x": 120,
+            "y": 110,
+            "angle": 0,
+            "length": 8,
+            "label": "LOOP-"
+          }
+        ],
+        "runtimeState": {
+          "versionOffset": 8,
+          "expectedVersion": 1279476785,
+          "surface": {
+            "encoding": "segment-lcd",
+            "x": 9,
+            "y": 9,
+            "w": 102,
+            "h": 72,
+            "sourceWidth": 1,
+            "sourceHeight": 1,
+            "payloadOffset": 12
+          }
+        }
+      },
+      "defaultProperties": {
+        "enabled": true,
+        "pollingAddress": 0,
+        "uniqueId": "000001",
+        "tag": "HART",
+        "unit": "%",
+        "profileId": "lasecsimul.hart.standard-field-device",
+        "hartVariablesJson": "[{\"id\":\"PV\",\"name\":\"PV\",\"unit\":\"%\",\"value\":0,\"role\":\"PV\",\"type\":\"Float32\",\"direction\":\"Input\",\"deviceVariableCode\":246,\"deviceVariableUnit\":57,\"lowerRangeValue\":0,\"upperRangeValue\":100}]"
+      },
+      "help": {
+        "description": "Dispositivo de campo HART padrão: terminais de sinal (S+/S-) e laço 4-20 mA (LOOP+/LOOP-); identidade, revisão, comandos, variáveis e saturação configuráveis. Base dos transmissores (ex.: subcircuito SMAR LD301)."
+      }
+    },
+    {
+      "typeId": "protocol.hart.modem",
+      "label": "Modem HART",
+      "pinCount": 2,
+      "pinIds": [
+        "loop_plus",
+        "loop_minus"
+      ],
+      "icon": "serialterm",
+      "folderPath": [
+        "Protocolos Industriais",
+        "HART"
+      ],
+      "workspaceSection": "process",
+      "graphical": true,
+      "package": {
+        "width": 72,
+        "height": 32,
+        "border": false,
+        "background": {
+          "kind": "color",
+          "value": "transparent"
+        },
+        "shapes": [
+          {
+            "kind": "rect",
+            "x": 0,
+            "y": 0,
+            "w": 72,
+            "h": 32,
+            "rx": 4,
+            "ry": 4,
+            "stroke": "#00006b",
+            "fill": "#00008b",
+            "strokeWidth": 1
+          },
+          {
+            "kind": "rect",
+            "x": 11,
+            "y": 5,
+            "w": 8,
+            "h": 6,
+            "rx": 2,
+            "ry": 2,
+            "stroke": "none",
+            "fill": "#000000",
+            "stateFill": {
+              "prop": "__serial_tx_state",
+              "map": {
+                "off": "#000000",
+                "idle": "#ff0000",
+                "active": "#ffff00"
+              },
+              "fallback": "#000000"
+            }
+          },
+          {
+            "kind": "rect",
+            "x": 11,
+            "y": 21,
+            "w": 8,
+            "h": 6,
+            "rx": 2,
+            "ry": 2,
+            "stroke": "none",
+            "fill": "#000000",
+            "stateFill": {
+              "prop": "__serial_rx_state",
+              "map": {
+                "off": "#000000",
+                "idle": "#ff0000",
+                "active": "#ffff00"
+              },
+              "fallback": "#000000"
+            }
+          },
+          {
+            "kind": "rect",
+            "x": 24,
+            "y": 6,
+            "w": 44,
+            "h": 20,
+            "rx": 3,
+            "ry": 3,
+            "stroke": "#888888",
+            "fill": "#c0c0c0",
+            "strokeWidth": 1
+          },
+          {
+            "kind": "text",
+            "x": 46,
+            "y": 20,
+            "value": "Abrir",
+            "stateText": {
+              "kind": "property",
+              "prop": "__serial_button_label"
+            },
+            "fontSize": 11,
+            "color": "#000000",
+            "cssClass": "serial-toggle-hit-zone"
+          }
+        ],
+        "pinLabelColor": "#FAFAC8",
+        "pins": [
+          {
+            "id": "loop_plus",
+            "kind": "POWER",
+            "x": 0,
+            "y": 8,
+            "angle": 180,
+            "length": 8,
+            "label": "L+"
+          },
+          {
+            "id": "loop_minus",
+            "kind": "POWER",
+            "x": 0,
+            "y": 24,
+            "angle": 180,
+            "length": 8,
+            "label": "L-"
+          }
+        ]
+      },
+      "defaultProperties": {
+        "pc_link": "serial",
+        "port_name": "COM1",
+        "udp_address": "127.0.0.1",
+        "udp_port": 5094,
+        "auto_open": false,
+        "senseResistance": 250,
+        "transmitAmplitudeMvpp": 500
+      },
+      "help": {
+        "description": "Modem HART (lado do PC). Ligado EM SÉRIE no laço 4-20 mA (L+ / L-), com resistor interno de 250 Ω: demodula a resposta dos transmissores (±0,5 mA em FSK 1200/2200 Hz) e modula o pedido do PC (≈500 mV p-p) no fio. Um único modem atende vários transmissores no mesmo par de fios (multiponto: endereços de polling 1-15 e IDs diferentes). Ligação com o PC: porta serial (COM/CNC, 1200 bit/s 8O1) ou UDP (um quadro HART por datagrama); Abrir/Fechar abre a ligação."
+      }
+    },
+    {
       "typeId": "protocol.hart.device.smar_ld301",
-      "label": "SMAR LD301",
+      "label": "SMAR LD301 (legado)", "hidden": true,
       "pinCount": 0,
       "icon": "smar-ld301",
       "folderPath": [
@@ -20268,14 +20527,11 @@
       ],
       "workspaceSection": "process",
       "defaultProperties": {
-        "bus": "hart-1",
-        "endpoint": "COM1",
         "enabled": true,
         "pollingAddress": 0,
         "uniqueId": "029EB1",
         "tag": "LD301",
         "unit": "kPa",
-        "baudRate": 1200,
         "profileId": "lasecsimul.hart.smar-ld301",
         "hartVariablesJson": "[{\"id\":\"PV\",\"name\":\"Pressao Diferencial\",\"unit\":\"kPa\",\"value\":0,\"role\":\"PV\",\"type\":\"Float32\",\"direction\":\"Input\",\"classification\":65,\"family\":5,\"writable\":false,\"lowerRangeValue\":0,\"upperRangeValue\":25,\"pressure\":{\"pressureUnitCode\":12}}]"
       },
@@ -20294,14 +20550,11 @@
       ],
       "workspaceSection": "process",
       "defaultProperties": {
-        "bus": "hart-1",
-        "endpoint": "COM1",
         "enabled": true,
         "pollingAddress": 0,
         "uniqueId": "029EB1",
         "tag": "TT301",
         "unit": "C",
-        "baudRate": 1200,
         "profileId": "lasecsimul.hart.smar-tt301",
         "hartVariablesJson": "[{\"id\":\"PV\",\"name\":\"Temperatura\",\"unit\":\"C\",\"value\":25,\"role\":\"PV\",\"type\":\"Float32\",\"direction\":\"Input\",\"classification\":64,\"family\":4,\"writable\":false,\"lowerRangeValue\":-50,\"upperRangeValue\":200,\"temperature\":{\"probeType\":0,\"numberOfWires\":3}}]"
       },
@@ -20320,14 +20573,11 @@
       ],
       "workspaceSection": "process",
       "defaultProperties": {
-        "bus": "hart-1",
-        "endpoint": "COM1",
         "enabled": true,
         "pollingAddress": 0,
         "uniqueId": "029EB1",
         "tag": "FY301",
         "unit": "%",
-        "baudRate": 1200,
         "profileId": "lasecsimul.hart.smar-fy301",
         "hartVariablesJson": "[{\"id\":\"PV\",\"name\":\"Posicao Real\",\"unit\":\"%\",\"value\":0,\"role\":\"PV\",\"type\":\"Float32\",\"direction\":\"Input\",\"classification\":91,\"family\":6,\"writable\":false,\"lowerRangeValue\":0,\"upperRangeValue\":100},{\"id\":\"setpoint\",\"name\":\"Setpoint de Posicao\",\"unit\":\"%\",\"value\":0,\"role\":\"SV\",\"type\":\"Float32\",\"direction\":\"Output\",\"classification\":91,\"family\":6,\"writable\":true,\"lowerRangeValue\":0,\"upperRangeValue\":100}]"
       },

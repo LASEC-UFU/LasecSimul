@@ -11,6 +11,7 @@ import { SUBCIRCUIT_SCHEMA_VERSION, schemaVersionRejectionMessage } from "./subc
 import { livePackagePreviewSymbolSvg } from "../ui/webview/componentSymbols";
 import { externalFolderPath } from "./externalComponents";
 import { WorkspaceSection } from "../ui/webview/workspace";
+import { manifestHartDeviceComponentId } from "../hart/hartManifest";
 
 /** Converte um `icon{}` canônico (`PackageDescriptor`, sem pinos) num `<svg>` autocontido pra usar
  * como `iconSvgInline` -- MESMO pipeline (`resolvePackageLayout`+`packageBodySvg`, via
@@ -323,6 +324,7 @@ export interface ParsedSubcircuitManifest {
   folderPath: string[] | undefined;
   workspaceSection?: WorkspaceSection;
   mcuHost: boolean;
+  hartDeviceComponentId?: string;
   serialPorts: ReturnType<typeof sanitizeMcuSerialPorts>;
 }
 
@@ -417,6 +419,7 @@ export function parseSubcircuitManifest(json: Record<string, unknown>, manifestD
     folderPath,
     workspaceSection: manifestWorkspaceSection(json),
     mcuHost: manifestHostsMcu(json, mcuAdapterTypeIds),
+    hartDeviceComponentId: manifestHartDeviceComponentId(json),
     serialPorts: sanitizeMcuSerialPorts(json.serialPorts),
   };
 }
@@ -592,6 +595,7 @@ export function resolveRegisteredItem(source: RegisteredSource, extensionPath: s
       registeredSourceRemovable: source.removable !== false,
       registeredSourceKind: source.kind,
       mcuHost: parsed.mcuHost,
+      ...(parsed.hartDeviceComponentId ? { hartDeviceComponentId: parsed.hartDeviceComponentId } : {}),
       serialPorts: parsed.serialPorts,
     };
     return {

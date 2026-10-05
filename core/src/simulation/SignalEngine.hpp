@@ -181,6 +181,12 @@ private:
     std::vector<uint8_t> m_boolCandidate;
     std::vector<double> m_expressionStack;
     std::vector<uint64_t> m_nextActivationNs;
+    /** Rate groups made only of ExternalInput blocks. Their value is written
+     * straight into the output slot by setExternal*, so activating them is a
+     * no-op: they are never activated nor scheduled (a generic port runs at
+     * the 1 ns marker rate and would otherwise step the simulation 1 ns at a
+     * time). */
+    std::vector<uint8_t> m_passiveGroup;
     std::vector<double> m_dynamicState;
     std::vector<double> m_dynamicCandidate;
     std::vector<double> m_dynamicFullStep;

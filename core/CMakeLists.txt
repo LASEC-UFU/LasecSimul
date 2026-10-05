@@ -87,7 +87,12 @@ set(CORE_SOURCES
     src/protocols/HartCommandClassification.cpp
     src/protocols/HartTypeCodec.cpp
     src/protocols/HartTransport.cpp
+    src/protocols/HartLcd.cpp
     src/protocols/HartCommunicationComponent.cpp
+    src/protocols/HartPhysicalLayer.cpp
+    src/protocols/HartModemComponent.cpp
+    src/protocols/HostSerialPort.cpp
+    src/protocols/HostUdpSocket.cpp
     src/fpga/FpgaComponent.cpp
     src/fpga/FpgaPortMapper.cpp
     src/fpga/GhdlBackend.cpp
@@ -178,7 +183,12 @@ set(TEST_COMMON_SOURCE_FILES
     src/protocols/HartCommandClassification.cpp
     src/protocols/HartTypeCodec.cpp
     src/protocols/HartTransport.cpp
+    src/protocols/HartLcd.cpp
     src/protocols/HartCommunicationComponent.cpp
+    src/protocols/HartPhysicalLayer.cpp
+    src/protocols/HartModemComponent.cpp
+    src/protocols/HostSerialPort.cpp
+    src/protocols/HostUdpSocket.cpp
     src/protocols/IndustrialProtocols.cpp
     src/fpga/FpgaComponent.cpp
     src/fpga/FpgaPortMapper.cpp
@@ -411,13 +421,89 @@ add_executable(hart_engine_test
     src/protocols/HartCommandClassification.cpp
     src/protocols/HartTypeCodec.cpp
     src/protocols/HartTransport.cpp
+    src/protocols/HartLcd.cpp
     src/protocols/HartCommunicationComponent.cpp
+    src/protocols/HartPhysicalLayer.cpp
+    src/protocols/HartModemComponent.cpp
+    src/protocols/HostSerialPort.cpp
+    src/protocols/HostUdpSocket.cpp
     src/simulation/SignalEngine.cpp
     src/simulation/Scheduler.cpp
 )
 target_include_directories(hart_engine_test PRIVATE include src)
 target_link_libraries(hart_engine_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
 add_test(NAME hart_engine COMMAND hart_engine_test)
+
+# LD301 reference audit: identity/state/command tests plus a replay of the
+# real HART capture (ld301/, copied as a fixture) through the physical-frame
+# transport. See docs/ld301-audit.md.
+add_executable(hart_ld301_test
+    test/core/protocols/HartLd301Test.cpp
+    src/protocols/HartEngine.cpp
+    src/protocols/HartReferenceCatalog.cpp
+    src/protocols/HartCommandProgram.cpp
+    src/protocols/HartCommandJson.cpp
+    src/protocols/HartCommandClassification.cpp
+    src/protocols/HartTypeCodec.cpp
+    src/protocols/HartTransport.cpp
+    src/protocols/HartLcd.cpp
+    src/protocols/HartCommunicationComponent.cpp
+    src/protocols/HartPhysicalLayer.cpp
+    src/protocols/HartModemComponent.cpp
+    src/protocols/HostSerialPort.cpp
+    src/protocols/HostUdpSocket.cpp
+    src/simulation/SignalEngine.cpp
+    src/simulation/Scheduler.cpp
+)
+target_include_directories(hart_ld301_test PRIVATE include src)
+target_link_libraries(hart_ld301_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(hart_ld301_test PRIVATE
+    LASECSIMUL_TEST_LD301_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_capture.txt"
+    LASECSIMUL_TEST_LD301_CMD129_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_cmd129_flange.txt"
+    LASECSIMUL_TEST_LD301_CMD129_DIAPHRAGM_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_cmd129_diaphragm.txt"
+    LASECSIMUL_TEST_LD301_CMD129_FILL_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_cmd129_fillfluid.txt"
+    LASECSIMUL_TEST_LD301_CMD129_SEAL_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_cmd129_seal.txt"
+    LASECSIMUL_TEST_LD301_CMD165_DISPLAY_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_cmd165_display_first.txt"
+    LASECSIMUL_TEST_LD301_CMD165_OUTPUT_PERCENT_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_cmd165_display_output_percent.txt"
+    LASECSIMUL_TEST_LD301_CMD165_PRESSURE_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_cmd165_display_pressure.txt"
+    LASECSIMUL_TEST_LD301_CMD165_PV_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_cmd165_display_pv.txt"
+    LASECSIMUL_TEST_LD301_CMD165_NONE_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_cmd165_display_none.txt"
+    LASECSIMUL_TEST_LD301_TABLE_Y2_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_table_y2.txt"
+    LASECSIMUL_TEST_LD301_TABLE_POINTS5_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_table_points5.txt"
+    LASECSIMUL_TEST_LD301_CHARACTERIZATION_ON_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_characterization_on.txt"
+    LASECSIMUL_TEST_LD301_CHARACTERIZATION_OFF_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_characterization_off.txt"
+    LASECSIMUL_TEST_LD301_FUNCTION_SQRT_READBACK_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_function_sqrt_readback.txt"
+    LASECSIMUL_TEST_LD301_FUNCTION_SQRT_WRITE_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_function_sqrt_write.txt"
+    LASECSIMUL_TEST_LD301_SQRT_BUMPLESS_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_sqrt_bumpless_write.txt"
+    LASECSIMUL_TEST_LD301_USER_UNIT_OFF_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_user_unit_off.txt"
+    LASECSIMUL_TEST_LD301_USER_UNIT_ON_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_user_unit_on.txt"
+    LASECSIMUL_TEST_LD301_TOTALIZATION_MAXFLOW_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_totalization_maxflow99.txt"
+    LASECSIMUL_TEST_LD301_TOTALIZATION_FACTOR_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_totalization_factor2.txt"
+    LASECSIMUL_TEST_LD301_TOTALIZATION_MODE_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_totalization_mode_on.txt"
+    LASECSIMUL_TEST_LD301_TOTALIZATION_MODE_OFF_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/ld301_totalization_mode_off.txt"
+    LASECSIMUL_TEST_LD301_SUBCIRCUIT="${CMAKE_CURRENT_SOURCE_DIR}/../subcircuits/hart_smar_ld301.lssubcircuit")
+add_test(NAME hart_ld301 COMMAND hart_ld301_test)
+
+# Camada fisica HART (Bell 202 FSK): transmissor, receptor e recorte de quadros.
+add_executable(hart_physical_layer_test
+    test/core/protocols/HartPhysicalLayerTest.cpp
+    src/protocols/HartPhysicalLayer.cpp
+)
+target_include_directories(hart_physical_layer_test PRIVATE include src)
+add_test(NAME hart_physical_layer COMMAND hart_physical_layer_test)
+
+# Serves the HART device of the LD301 subcircuit on a Windows COM port
+# (PACTware or scripts/ld301_serial_check.py on the other end of com0com).
+if(WIN32)
+    add_executable(hart_ld301_serial_bridge
+        tools/hart_ld301_serial_bridge.cpp
+        ${TEST_COMMON_SOURCES}
+    )
+    target_include_directories(hart_ld301_serial_bridge PRIVATE include src)
+    target_link_libraries(hart_ld301_serial_bridge PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+    target_compile_definitions(hart_ld301_serial_bridge PRIVATE
+        LASECSIMUL_LD301_SUBCIRCUIT="${CMAKE_CURRENT_SOURCE_DIR}/../subcircuits/hart_smar_ld301.lssubcircuit")
+endif()
 
 set_tests_properties(python_session PROPERTIES TIMEOUT 30 SKIP_REGULAR_EXPRESSION "PULADO:")
 if(Python3_Interpreter_FOUND)
@@ -629,6 +715,21 @@ if(NOT WIN32)
     target_link_libraries(adc_dac_bus_test PRIVATE dl)
 endif()
 add_test(NAME adc_dac_bus COMMAND adc_dac_bus_test)
+
+# HART pelo fio do 4-20 mA, ponta a ponta numa SimulationSession: fonte, resistor, modem HART em
+# serie e o LD301; o pedido e a resposta so existem como FSK no circuito.
+add_executable(hart_wire_loop_test
+    test/core/protocols/HartWireLoopTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(hart_wire_loop_test PRIVATE include src)
+target_link_libraries(hart_wire_loop_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(hart_wire_loop_test PRIVATE
+    LASECSIMUL_TEST_LD301_SUBCIRCUIT="${CMAKE_CURRENT_SOURCE_DIR}/../subcircuits/hart_smar_ld301.lssubcircuit")
+if(NOT WIN32)
+    target_link_libraries(hart_wire_loop_test PRIVATE dl)
+endif()
+add_test(NAME hart_wire_loop COMMAND hart_wire_loop_test)
 
 # Componentes "Fontes"/"Medidores" portados do SimulIDE
 add_executable(simulide_sources_meters_test
@@ -1404,7 +1505,12 @@ add_executable(session_restart_stress_test
     src/protocols/HartCommandClassification.cpp
     src/protocols/HartTypeCodec.cpp
     src/protocols/HartTransport.cpp
+    src/protocols/HartLcd.cpp
     src/protocols/HartCommunicationComponent.cpp
+    src/protocols/HartPhysicalLayer.cpp
+    src/protocols/HartModemComponent.cpp
+    src/protocols/HostSerialPort.cpp
+    src/protocols/HostUdpSocket.cpp
     src/session/PauseExpression.cpp
     src/plugins/PluginModule.cpp
     src/plugins/PluginLoader.cpp
@@ -1769,7 +1875,7 @@ set(LASECSIMUL_HERMETIC_TESTS
     pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues shared_host_capacity simulation_plan signal_engine signal_dynamics signal_bridge signal_graph_wiring signal_graph_subcircuit_boundary process_subcircuit simulation_plan_session dense_hot_path voltage_divider circuit_group_reuse diode zener_led
     inert_components_fix probe_pause_on_change subcircuit simulide_sources_meters voltmeter
     component_removal netlist union_find scheduler sparse_set core_bootstrap circuit_group logic_value
-    session_execution_identity vnext_b_arbiter vnext_b_wait_dispatcher drain_cutoff_gate dynamic_component_dispatch i2c_fast_path_dispatch mcu_pin_transition_observers hart_engine
+    session_execution_identity vnext_b_arbiter vnext_b_wait_dispatcher drain_cutoff_gate dynamic_component_dispatch i2c_fast_path_dispatch mcu_pin_transition_observers hart_engine hart_ld301 hart_physical_layer hart_wire_loop
     ghdl_arena_bridge ghdl_process_manager fpga_port_mapper mna_solver sha256 passive_components
     transient_rc transient_rlc simulation_performance_smoke property_definition dynamic_pins
     logic_components plugin_loader plugin_loader_real_dll plugin_checksum plugin_duplicate_device_id

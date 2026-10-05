@@ -11,6 +11,9 @@ import {
   renderVariablesSection,
   serializeCommandRows,
   serializeVariableRows,
+  mergeCommandRows,
+  mergeVariableRows,
+  valueEditorHtml,
 } from "./hartInspectorSections";
 
 (async () => {
@@ -176,6 +179,45 @@ import {
     const script = hartInspectorClientScript();
     assert(script.includes("var nextId = 128;"), "a sugestão de novo id deveria começar em 128 (início da faixa Device-Specific)");
     assert(script.includes("nextId <= 253"), "a sugestão de novo id nunca deveria ultrapassar 253 (fim da faixa Device-Specific)");
+  });
+
+  await test("passos avançados da DSL (responseCode, variableTable, forCodes) e writeSteps sobrevivem ao round-trip do editor", () => {
+    const command = {
+      id: 140, name: "LD301", enabled: true,
+      writeSteps: [{ kind: "set", target: "pid.setpoint", value: { kind: "bodySlice", offset: 0, length: 4 } }],
+      responseSteps: [
+        { kind: "responseCode", code: 112, abort: false },
+        { kind: "hex", bytes: "39" },
+        { kind: "variableTable", variables: ["a", "b"], indexByte: 0, addend: 0 },
+        { kind: "variable", variable: "pv", field: "upperRange" },
+      ],
+    };
+    const roundTripped = JSON.parse(serializeCommandRows(parseCommandRows(JSON.stringify([command]))));
+    assert(JSON.stringify(roundTripped[0].responseSteps) === JSON.stringify(command.responseSteps), "passos preservados verbatim");
+    assert(JSON.stringify(roundTripped[0].writeSteps) === JSON.stringify(command.writeSteps), "writeSteps preservados");
+    const html = renderCommandsSection(parseCommandRows(JSON.stringify([command])), "OK", { structuralEditsLocked: false });
+    assert(html.includes("data-hc-raw="), "passo avançado renderizado como somente leitura com o JSON original");
+  });
+
+  await test("mergeVariableRows/mergeCommandRows não perdem campos que o editor não renderiza", () => {
+    const previous = JSON.stringify([{ id: "pvUserUnit", name: "PV", deviceVariableCode: 4, derivedSource: 243, lowerRangeValue: 243 }]);
+    const merged = JSON.parse(mergeVariableRows(previous, JSON.stringify([{ id: "pvUserUnit", name: "PV (mm)" }])));
+    assert(merged[0].name === "PV (mm)" && merged[0].derivedSource === 243 && merged[0].deviceVariableCode === 4, "metadados preservados");
+    const commands = JSON.parse(mergeCommandRows(JSON.stringify([{ id: 128, name: "A", afterSteps: [{ kind: "hex", bytes: "00" }] }]),
+                                                 JSON.stringify([{ id: 128, name: "B", responseSteps: [] }])));
+    assert(commands[0].name === "B" && Array.isArray(commands[0].afterSteps), "afterSteps preservados");
+  });
+
+  await test("variável com códigos nomeados (ex.: material do flange do LD301) vira lista e preserva os códigos", () => {
+    const json = JSON.stringify([{ id: "flange.material", name: "Flange material", role: "VendorSpecific", type: "UInt8",
+      direction: "Internal", value: 4, codes: { "3": "Hastelloy C", "4": "Monel", "251": "None" } }]);
+    const rows = parseVariableRows(json);
+    const html = renderVariablesSection(rows, { structuralEditsLocked: false });
+    assert(html.includes('data-hv-numeric="1"') && html.includes(">Monel (4)</option>") && /value="4" selected/.test(html), "lista com Monel selecionado");
+    const unknown = valueEditorHtml({ ...rows[0]!, value: 22 }, 'data-hv-field="value"', false);
+    assert(unknown.includes("código 22 (desconhecido)"), "código fora da tabela continua visível");
+    const merged = JSON.parse(mergeVariableRows(json, serializeVariableRows(rows))) as Array<Record<string, unknown>>;
+    assert(JSON.stringify(merged[0]!.codes) === JSON.stringify({ "3": "Hastelloy C", "4": "Monel", "251": "None" }), "salvar preserva a tabela de códigos");
   });
 
   const { failed } = finish();

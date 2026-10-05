@@ -561,6 +561,16 @@ let dcMotorLastAnimationMs: number | undefined;
  * chave `${outerComponentId}:${innerComponentId}`, ver `coreLifecycle.ts::pollBoardOverlayReadouts`.
  * Fix "LED onboard não acende quando exposto no símbolo" (2026-07-18). */
 let boardOverlayReadoutsByKey: Record<string, ComponentReadoutValue> = {};
+/** Raw runtime state (base64) of exposed inner components whose package
+ * projects live state (`runtimeState`, e.g. a transmitter LCD). */
+let boardOverlayVisualStatesByKey: Record<string, string> = {};
+
+function boardOverlayRuntimeState(outerComponentId: string, item: { id: string; typeId: string }): Record<string, string> {
+  const entry = catalogEntryFor(item.typeId);
+  if (!entry?.package?.runtimeState && !entry?.boardPackage?.runtimeState) return {};
+  const encoded = boardOverlayVisualStatesByKey[`${outerComponentId}:${item.id}`];
+  return encoded ? { __runtime_state: encoded } : {};
+}
 let pendingWirePreviewTarget: Point | undefined;
 let pendingWireRoute: Point[] = [];
 let pendingWireBendLengths: number[] = [];
@@ -636,6 +646,9 @@ interface SerialPortRuntime {
   rxActivityUntil: number; txActivityUntil: number;
 }
 const serialPortRuntime = new Map<string, SerialPortRuntime>();
+/** Serial ports present on the PC (COMx, com0com CNCx) for the HART modem's PC side. */
+let hostSerialPorts: string[] = [];
+let hostSerialPortsRequestedAt = 0;
 let serialTerminalLayer: HTMLDivElement | undefined;
 /** Painel "Abrir monitor serial UARTx" de um `QemuDevice` -- réplica visual/funcional do
  * `SerialMonitor` real do SimulIDE (`gui/serial/serialmon.cpp`): painéis Input/Output lado a lado,
@@ -1773,6 +1786,7 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
         ...graphicalRuntimeProperties(properties, (sourceId) => boardOverlayReadoutsByKey[`${component.id}:${sourceId}`]),
       };
     }
+    properties = { ...properties, ...boardOverlayRuntimeState(component.id, item) };
     const box = componentBox(item.typeId, properties, boardVariant);
     const el = document.createElement("div");
     // Item OPERAVEL (botao/chave/controle HMI) continua recebendo ponteiro; o resto do sinotico e'
@@ -2005,7 +2019,8 @@ function patchBoardOverlayRuntimeVisuals(): void {
     for (const item of items) {
       const isLed = item.typeId === "outputs.led" || item.typeId === "outputs.led_bar";
       const isGraphical = isGraphicalTypeId(item.typeId);
-      if (!isLed && !isGraphical) continue;
+      const runtimeState = boardOverlayRuntimeState(outerComponentId, item);
+      if (!isLed && !isGraphical && Object.keys(runtimeState).length === 0) continue;
       const key = `${outerComponentId}:${item.id}`;
       const svg = boardOverlaySvgByKey.get(key);
       if (!svg) continue;
@@ -2022,6 +2037,7 @@ function patchBoardOverlayRuntimeVisuals(): void {
           ...graphicalRuntimeProperties(properties, (sourceId) => boardOverlayReadoutsByKey[`${outerComponentId}:${sourceId}`]),
         } as Record<string, string | number | boolean>;
       }
+      properties = { ...properties, ...runtimeState };
       svg.innerHTML = packageSymbolSvg(item.typeId, properties, item.id, "board") ?? componentSymbolSvg(item.typeId, properties);
     }
   }
@@ -5738,7 +5754,7 @@ function runtimeSymbolProperties(component: WebviewComponentModel): Record<strin
     ? lasecPlotRuntime.get(component.id)
     : component.typeId === "peripherals.serialterm"
       ? serialTerminalRuntime.get(component.id)
-      : component.typeId === "peripherals.serialport"
+      : component.typeId === "peripherals.serialport" || component.typeId === "protocol.hart.modem"
         ? serialPortRuntime.get(component.id)
         : undefined;
   const pinConnected = (pinId: string) => state.topology.conductors.some((wire) =>
@@ -5747,13 +5763,14 @@ function runtimeSymbolProperties(component: WebviewComponentModel): Record<strin
   const now = Date.now();
   const serialState = serialRuntime ? {
     __serial_button_label: serialRuntime.opened ? "Fechar" : "Abrir",
-    __serial_tx_state: component.typeId === "peripherals.serialport"
+    __serial_tx_state: component.typeId === "peripherals.serialport" || component.typeId === "protocol.hart.modem"
       ? (!serialRuntime.opened ? "off" : (serialRuntime as SerialPortRuntime).txActivityUntil > now ? "active" : "idle")
       : (!pinConnected("tx") ? "off" : component.typeId === "peripherals.serialterm" && ((serialRuntime as SerialTerminalRuntime).txActivityUntil ?? 0) > now ? "active" : "idle"),
-    __serial_rx_state: component.typeId === "peripherals.serialport"
+    __serial_rx_state: component.typeId === "peripherals.serialport" || component.typeId === "protocol.hart.modem"
       ? (!serialRuntime.opened ? "off" : (serialRuntime as SerialPortRuntime).rxActivityUntil > now ? "active" : "idle")
       : (!pinConnected("rx") ? "off" : component.typeId === "peripherals.serialterm" && ((serialRuntime as SerialTerminalRuntime).rxActivityUntil ?? 0) > now ? "active" : "idle"),
-  } : component.typeId === "peripherals.lasecplot" || component.typeId === "peripherals.serialterm" || component.typeId === "peripherals.serialport"
+  } : component.typeId === "peripherals.lasecplot" || component.typeId === "peripherals.serialterm" ||
+      component.typeId === "peripherals.serialport" || component.typeId === "protocol.hart.modem"
     ? { __serial_button_label: "Abrir", __serial_tx_state: "off", __serial_rx_state: "off" }
     : {};
   // `outputs.led_bar` entra aqui também (fix "LED onboard não acende", 2026-07-18) -- `Led Bar`
@@ -8552,7 +8569,7 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
       });
     });
   }
-  if (component.typeId === "peripherals.serialport") {
+  if (component.typeId === "peripherals.serialport" || component.typeId === "protocol.hart.modem") {
     bodyGroup.querySelectorAll<SVGTextElement>(".serial-toggle-hit-zone").forEach((text) => {
       text.style.cursor = "pointer"; text.style.pointerEvents = "all";
       text.addEventListener("click", (event: MouseEvent) => {
@@ -9216,8 +9233,26 @@ function resolvePropertyFields(component: WebviewComponentModel): PropertyField[
   if (!schema || schema.length === 0) return augmentRuntimePropertyFields(component, inferPropertyFields(component));
 
   const fields: PropertyField[] = [];
+  // HART modem: only the fields of the chosen PC link; the serial port is
+  // picked from the ports present on this computer.
+  const hartModem = component.typeId === "protocol.hart.modem";
+  const modemOverUdp = hartModem && String(component.properties.pc_link ?? "serial") === "udp";
+  if (hartModem && Date.now() - hostSerialPortsRequestedAt > 5000) {
+    hostSerialPortsRequestedAt = Date.now();
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestHostSerialPorts" });
+  }
   for (const propSchema of schema) {
     if (propSchema.hidden && !propertyDialogShowAll) continue;
+    if (hartModem && (modemOverUdp ? propSchema.id === "port_name" : propSchema.id === "udp_address" || propSchema.id === "udp_port")) continue;
+    if (hartModem && propSchema.id === "port_name") {
+      const current = String(component.properties.port_name ?? propSchema.default ?? "");
+      const names = [...new Set([...(current ? [current] : []), ...hostSerialPorts])];
+      fields.push({
+        key: propSchema.id, label: propSchema.label, kind: "select", value: current, readonly: propSchema.readOnly,
+        group: propSchema.group || t("principal"), options: names.map((name) => ({ value: name, label: name })),
+      });
+      continue;
+    }
     const kind = propertyFieldKindFromEditor(propSchema.editor);
     const isLiveReadout = kind === "readonly" && Boolean(propSchema.showOnSymbol);
     // "filePath" tem 2 fontes possíveis: o caso especial único `subcircuitPath` (bloco genérico de
@@ -9537,29 +9572,6 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
     }
     group.append(swatch, text);
     row.append(caption, group);
-    return row;
-  }
-
-  // A porta COM/TTY é a mesma para UART/QEMU e HART. Quando o usuário escolhe
-  // HART, este seletor aponta a ponte para uma instância já existente (SMAR ou
-  // outro endpoint HART), em vez de criar uma cópia específica do dispositivo.
-  if ((component.typeId === "peripherals.serialport" || component.typeId === "peripherals.serialterm" || component.typeId === "peripherals.udp") && field.key === "hart_device_id") {
-    const select = document.createElement("select");
-    select.className = "property-sheet__field-input";
-    const empty = document.createElement("option");
-    empty.value = "";
-    empty.textContent = "Selecione um dispositivo HART";
-    select.appendChild(empty);
-    for (const candidate of state.components.filter((entry) => entry.typeId.startsWith("protocol.hart.device."))) {
-      const option = document.createElement("option");
-      option.value = candidate.id;
-      option.textContent = candidate.label;
-      select.appendChild(option);
-    }
-    select.value = String(field.value ?? "");
-    select.disabled = Boolean(field.readonly);
-    select.addEventListener("change", () => applyChange(select.value));
-    row.append(caption, select);
     return row;
   }
 
@@ -9948,7 +9960,7 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
     action.addEventListener("click", () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestToggleSerialTerminal", componentId: component.id }));
     const row = document.createElement("div"); row.className = "property-sheet__actions"; row.append(action); shell.append(row);
   }
-  if (component.typeId === "peripherals.serialport") {
+  if (component.typeId === "peripherals.serialport" || component.typeId === "protocol.hart.modem") {
     const runtime = serialPortRuntime.get(component.id);
     const action = document.createElement("button"); action.type = "button"; action.className = "property-sheet__button";
     action.textContent = runtime?.opened ? "Fechar porta" : "Abrir porta";
@@ -10408,6 +10420,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
 
   if (message.type === "boardOverlayReadouts") {
     boardOverlayReadoutsByKey = message.readoutsByKey;
+    boardOverlayVisualStatesByKey = message.visualStatesByKey ?? {};
     // Fix real 2026-07-18 ("Parar" ficava sem resposta durante a simulação): NUNCA `render()` aqui
     // -- reconstruiria o esquemático INTEIRO a cada ~300ms só pra atualizar o brilho de 1 LED.
     // `patchBoardOverlayRuntimeVisuals` faz o patch pontual (mesmo princípio de `componentReadout`/
@@ -10506,6 +10519,12 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       if (target.length > 200_000) target.splice(0, target.length - 200_000);
       renderMcuSerialMonitorWindows();
     }
+  }
+
+  if (message.type === "hostSerialPorts") {
+    hostSerialPorts = message.ports;
+    renderPropertyDock();
+    refreshOpenPropertyDialog();
   }
 
   if (message.type === "serialPortStatus") {

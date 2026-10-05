@@ -1,0 +1,32 @@
+[08:57:59.717] SERIAL RX (16 bytes): FF FF FF FF FF 82 BE 01 05 F0 4D A5 02 01 05 26
+[08:58:00.019] UDP RX (2 bytes): FF FF
+[08:58:00.019] UDP RX (1 bytes): FF
+[08:58:00.040] UDP RX (3 bytes): FF FF 86
+[08:58:00.068] UDP RX (3 bytes): BE 01 05
+[08:58:00.098] UDP RX (3 bytes): F0 4D A5
+[08:58:00.122] UDP RX (3 bytes): 04 00 64
+[08:58:00.150] UDP RX (3 bytes): 01 05 40
+[08:58:00.222] SERIAL RX (14 bytes): FF FF FF FF FF 82 BE 01 05 F0 4D A4 00 21
+[08:58:00.429] UDP RX (3 bytes): FF FF FF
+[08:58:00.458] UDP RX (3 bytes): FF FF 86
+[08:58:00.481] UDP RX (3 bytes): BE 01 05
+[08:58:00.516] UDP RX (3 bytes): F0 4D A4
+[08:58:00.538] UDP RX (3 bytes): 06 00 44
+[08:58:00.565] UDP RX (3 bytes): 01 05 02
+[08:58:00.608] UDP RX (2 bytes): 02 63
+[08:58:00.625] SERIAL RX (14 bytes): FF FF FF FF FF 82 BE 01 05 F0 4D 80 00 05
+[08:58:00.818] UDP RX (1 bytes): FF
+[08:58:00.842] UDP RX (3 bytes): FF FF FF
+[08:58:00.870] UDP RX (3 bytes): FF 86 BE
+[08:58:00.906] UDP RX (3 bytes): 01 05 F0
+[08:58:00.927] UDP RX (3 bytes): 4D 80 1A
+[08:58:00.932] UDP RX (1 bytes): 00
+[08:58:00.955] UDP RX (3 bytes): 44 16 04
+[08:58:00.983] UDP RX (3 bytes): FC 01 FB
+[08:58:01.020] UDP RX (3 bytes): 05 07 05
+[08:58:01.040] UDP RX (3 bytes): 01 01 02
+[08:58:01.068] UDP RX (3 bytes): 01 01 04
+[08:58:01.096] UDP RX (3 bytes): 45 9F 07
+[08:58:01.124] UDP RX (3 bytes): 2E 00 00
+[08:58:01.155] UDP RX (3 bytes): 00 00 FA
+[08:58:01.180] UDP RX (2 bytes): 00 43

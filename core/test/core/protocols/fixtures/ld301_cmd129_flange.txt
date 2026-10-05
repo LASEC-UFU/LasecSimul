@@ -1,0 +1,43 @@
+[07:43:22.320] SERIAL RX (14 bytes): FF FF FF FF FF 82 BE 01 05 F0 4D 80 00 05
+[07:43:22.622] UDP RX (1 bytes): FF
+[07:43:22.648] UDP RX (3 bytes): FF FF FF
+[07:43:22.681] UDP RX (3 bytes): FF 86 BE
+[07:43:22.704] UDP RX (4 bytes): 01 05 F0 4D
+[07:43:22.733] UDP RX (3 bytes): 80 1A 00
+[07:43:22.761] UDP RX (3 bytes): 44 0C 03
+[07:43:22.789] UDP RX (3 bytes): 0A 01 02
+[07:43:22.816] UDP RX (3 bytes): FB FB FB
+[07:43:22.845] UDP RX (3 bytes): FB 01 02
+[07:43:22.873] UDP RX (3 bytes): 01 01 04
+[07:43:22.901] UDP RX (3 bytes): 45 9F 07
+[07:43:22.929] UDP RX (3 bytes): 2E 00 00
+[07:43:22.957] UDP RX (3 bytes): 00 00 FA
+[07:43:22.986] UDP RX (2 bytes): 00 57
+[07:43:45.598] SERIAL RX (25 bytes): FF FF FF FF FF 82 BE 01 05 F0 4D 81 0B 16 04 FC 01 FB 04 05 03 02 01 02 18
+[07:43:45.986] UDP RX (1 bytes): FF
+[07:43:45.994] UDP RX (3 bytes): FF FF FF
+[07:43:46.027] UDP RX (3 bytes): FF 86 BE
+[07:43:46.050] UDP RX (3 bytes): 01 05 F0
+[07:43:46.084] UDP RX (3 bytes): 4D 81 0D
+[07:43:46.086] UDP RX (1 bytes): 00
+[07:43:46.107] UDP RX (3 bytes): 44 16 04
+[07:43:46.135] UDP RX (3 bytes): FC 01 FB
+[07:43:46.163] UDP RX (3 bytes): 04 05 03
+[07:43:46.194] UDP RX (3 bytes): 02 01 02
+[07:43:46.220] UDP RX (1 bytes): 5E
+[07:43:46.256] SERIAL RX (14 bytes): FF FF FF FF FF 82 BE 01 05 F0 4D 80 00 05
+[07:43:46.442] UDP RX (1 bytes): FF
+[07:43:46.468] UDP RX (3 bytes): FF FF FF
+[07:43:46.496] UDP RX (3 bytes): FF 86 BE
+[07:43:46.555] UDP RX (3 bytes): 01 05 F0
+[07:43:46.555] UDP RX (3 bytes): 4D 80 1A
+[07:43:46.582] UDP RX (3 bytes): 00 44 16
+[07:43:46.609] UDP RX (3 bytes): 04 FC 01
+[07:43:46.643] UDP RX (3 bytes): FB 04 05
+[07:43:46.665] UDP RX (3 bytes): 03 02 01
+[07:43:46.665] UDP RX (1 bytes): 02
+[07:43:46.698] UDP RX (3 bytes): 01 01 04
+[07:43:46.722] UDP RX (3 bytes): 45 9F 07
+[07:43:46.750] UDP RX (3 bytes): 2E 00 00
+[07:43:46.778] UDP RX (3 bytes): 00 00 FA
+[07:43:46.806] UDP RX (2 bytes): 00 45

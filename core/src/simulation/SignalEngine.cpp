@@ -751,6 +751,14 @@ void SignalRuntime::bind(std::shared_ptr<const CompiledSignalGraph> graph) {
     m_dynamicFullStep.assign(stateCount, 0.0);
     m_dynamicOutputCandidate.assign(reals, 0.0);
     m_delayBuffers.clear();
+    m_passiveGroup.assign(m_graph ? m_graph->rateGroups.size() : 0, 0);
+    for (size_t group = 0; m_graph && group < m_graph->rateGroups.size(); ++group) {
+        bool passive = true;
+        for (const ExecutionItem& item : m_graph->rateGroups[group].items)
+            for (uint32_t block : item.blocks)
+                if (m_graph->blocks[block].kind != SignalBlockKind::ExternalInput) passive = false;
+        m_passiveGroup[group] = passive ? 1 : 0;
+    }
     if (m_graph) {
         m_delayBuffers.resize(m_graph->delayBlocks.size());
         for (uint32_t blockIndex = 0; blockIndex < m_graph->blocks.size(); ++blockIndex) {
@@ -852,6 +860,7 @@ void SignalRuntime::executeUntil(uint64_t timestampNs) {
         uint32_t selected = UINT32_MAX;
         uint64_t next = std::numeric_limits<uint64_t>::max();
         for (uint32_t index = 0; index < m_nextActivationNs.size(); ++index) {
+            if (index < m_passiveGroup.size() && m_passiveGroup[index]) continue;
             const bool earlierPhase = selected != UINT32_MAX && m_nextActivationNs[index] == next &&
                                       m_graph->rateGroups[index].rate.phase <
                                           m_graph->rateGroups[selected].rate.phase;
@@ -1171,7 +1180,10 @@ void SignalRuntime::rollbackContinuousStep() {
 std::optional<uint64_t> SignalRuntime::nextEventNs() const {
     if (!m_graph) return std::nullopt;
     uint64_t next = std::numeric_limits<uint64_t>::max();
-    for (uint64_t activation : m_nextActivationNs) if (activation > m_lastExecutionNs) next = std::min(next, activation);
+    for (size_t index = 0; index < m_nextActivationNs.size(); ++index) {
+        if (index < m_passiveGroup.size() && m_passiveGroup[index]) continue;
+        if (m_nextActivationNs[index] > m_lastExecutionNs) next = std::min(next, m_nextActivationNs[index]);
+    }
     for (uint32_t blockIndex : m_graph->delayBlocks) {
         const CompiledBlock& block = m_graph->blocks[blockIndex];
         const DelayBuffer& buffer = m_delayBuffers[block.delayIndex];

@@ -443,7 +443,9 @@ export interface PackageRuntimeStateColor {
 
 export interface PackageRuntimeSurface {
   /** Layout do payload depois de `payloadOffset`. */
-  encoding: "mono-page-lsb" | "rgbx32le" | "luma8" | "max7219" | "character-grid";
+  /** `segment-lcd`: indicador de 4 1/2 dígitos + 5 alfanuméricos + anunciadores
+   * (transmissores HART, ver `segmentLcd.ts`); `sourceWidth/Height` não se aplicam. */
+  encoding: "mono-page-lsb" | "rgbx32le" | "luma8" | "max7219" | "character-grid" | "segment-lcd";
   x: PackageNumberValue;
   y: PackageNumberValue;
   w: PackageNumberValue;
@@ -994,6 +996,9 @@ export interface WebviewComponentCatalogEntry {
   /** `true` quando esta entrada representa um MCU direto (`mcu-adapter`) OU um subcircuito que
    * hospeda um MCU interno (ex: DevKit/WROOM com ESP32 QEMU dentro). */
   mcuHost?: boolean;
+  /** Subcircuito que envolve um dispositivo HART (ex.: SMAR LD301): id local
+   * desse dispositivo interno, alvo das portas HART (serial/UDP). */
+  hartDeviceComponentId?: string;
   /** Portas seriais expostas pelo MCU/subcircuito. Ausente significa que a UI nao oferece monitor serial. */
   serialPorts?: McuSerialPortEntry[];
   /** ABI v2 -- ver `ReadoutFormatEntry`. Vem de `getPropertySchemas` (`attachPropertySchemas` em

@@ -12,6 +12,7 @@
 
 import { ComponentViewSpec, JUNCTION_TYPE_ID, PackageDescriptor, PackageDynamicPinGroup, PackageNumberValue, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, SimulideQtWidgetSpec, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecHitTest, ViewSpecInteraction, ViewSpecProjection, WebviewComponentModel } from "./model.js";
 import { simulidePaintToPackageShapes } from "./simulidePaint.js";
+import { decodeSegmentLcd, segmentLcdSvg } from "./segmentLcd";
 
 export interface ComponentBox {
   width: number;
@@ -1387,6 +1388,10 @@ function runtimeSurfaceSvg(pkg: PackageDescriptor, properties: Record<string, un
   const h = Math.max(0, numericPackageValue(surface.h, properties, {}, 0));
   const sourceWidth = Math.max(1, Math.trunc(numericPackageValue(surface.sourceWidth, properties, {}, 1)));
   const sourceHeight = Math.max(1, Math.trunc(numericPackageValue(surface.sourceHeight, properties, {}, 1)));
+  if (surface.encoding === "segment-lcd") {
+    return segmentLcdSvg(decodeSegmentLcd(bytes, surface.payloadOffset), x, y, w, h,
+      runtimeColor(surface.onColor, properties, "#1b1f1a"), runtimeColor(surface.offColor, properties, "rgba(27,31,26,0.07)"));
+  }
   const enabled = surface.enabledOffset === undefined || readRuntimeNumber(bytes, surface.enabledOffset, "u32le") !== 0;
   const onColor = runtimeColor(surface.onColor, properties, "#ffffff");
   const offColor = runtimeColor(surface.offColor, properties, "#000000");

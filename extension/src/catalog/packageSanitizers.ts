@@ -945,7 +945,7 @@ function sanitizeRuntimeSurface(value: unknown): PackageRuntimeSurface | undefin
   const raw = value as Record<string, unknown>;
   const encoding = raw.encoding;
   if (encoding !== "mono-page-lsb" && encoding !== "rgbx32le" && encoding !== "luma8" &&
-      encoding !== "max7219" && encoding !== "character-grid") return undefined;
+      encoding !== "max7219" && encoding !== "character-grid" && encoding !== "segment-lcd") return undefined;
   const x = sanitizeNumberValue(raw.x);
   const y = sanitizeNumberValue(raw.y);
   const w = sanitizeNumberValue(raw.w);

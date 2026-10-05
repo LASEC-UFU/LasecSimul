@@ -41,9 +41,14 @@ public:
     // Returns false for malformed/oversized/unknown requests. `response` receives a complete
     // encoded HART frame when true. The caller owns all I/O and can bind this to virtual, serial,
     // or UDP without changing command execution.
+    // A request starting with 0xFF preambles is decoded as a physical HART-5+
+    // frame (short/long address, byte count, XOR) and answered with an ACK
+    // frame carrying the Response Code and the Field Device Status byte.
     bool transact(std::span<const uint8_t> request, HartResponseBuilder& response) noexcept;
 
 private:
+    bool transactPhysical(std::span<const uint8_t> request, HartResponseBuilder& response) noexcept;
+
     HartEngine& m_engine;
     HartTransportConfig m_config;
     HartTransportCounters m_counters;

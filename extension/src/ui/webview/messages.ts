@@ -117,6 +117,7 @@ export type HostToWebviewMessage =
   | { version: number; type: "serialTerminalData"; componentId: string; dataHex: string; simulationTimeNs: number }
   | { version: number; type: "serialTerminalLoadedFile"; componentId: string; dataHex: string }
   | { version: number; type: "serialPortStatus"; componentId: string; opened: boolean; online: boolean; rxBytes: number; txBytes: number; error?: string }
+  | { version: number; type: "hostSerialPorts"; ports: string[] }
   /** Painel "Abrir monitor serial UARTx" de um `QemuDevice` (ver `mcuCommands.ts::openSerialMonitor`,
    * `main.ts::renderMcuSerialMonitorWindows`) -- réplica visual/funcional do `SerialMonitor` real do
    * SimulIDE (`gui/serial/serialmon.cpp`: painéis Input/Output, Pause, modo de impressão), mas SEM
@@ -158,7 +159,7 @@ export type HostToWebviewMessage =
    * como bloco -- só dentro do próprio modo de edição do subcircuito (que usa `runtimeSymbolProperties`
    * normalmente). Chave = `${outerComponentId}:${innerComponentId}` (ver
    * `coreLifecycle.ts::pollBoardOverlayReadouts`). */
-  | { version: number; type: "boardOverlayReadouts"; readoutsByKey: Record<string, ComponentReadoutValue> }
+  | { version: number; type: "boardOverlayReadouts"; readoutsByKey: Record<string, ComponentReadoutValue>; visualStatesByKey?: Record<string, string> }
   /** Vem de `lasecsimul.rotateSelectionCw`/`Ccw` (`extension.ts`), disparado por keybinding do
    * VSCode com `when: activeWebviewPanelId == 'lasecsimul.schematic'` -- sobrepõe o `Ctrl+R`/
    * `Ctrl+Shift+R` nativo do VSCode SÓ enquanto o painel está em foco (`when` reverte sozinho ao
@@ -215,6 +216,7 @@ export type WebviewToHostMessage =
   | { version: number; type: "requestSerialTerminalLoadFile"; componentId: string }
   | { version: number; type: "requestSerialTerminalSaveLog"; text: string }
   | { version: number; type: "requestToggleSerialPort"; componentId: string }
+  | { version: number; type: "requestHostSerialPorts" }
   /** Bloco genérico de subcircuito por caminho -- abre um seletor de `.lssubcircuit`, resolve
    * typeId/pinos/package do arquivo escolhido e registra no Core (verbo IPC avulso, sem
    * `library.json`). Mesmo comando serve pra escolha inicial e pra "relink" (arquivo ausente ou

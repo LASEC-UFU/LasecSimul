@@ -8,15 +8,21 @@
 
 namespace lasecsimul::protocols {
 
+HartAnalogOutput hartAnalogOutput(const HartExecutionVariables& variables) noexcept {
+    return hartEvaluateAnalogOutput(variables.primaryVariable, variables.lowerRangeValue, variables.upperRangeValue,
+                                    variables.analogLowerSaturationPercent, variables.analogUpperSaturationPercent,
+                                    variables.fixedCurrentMode, variables.fixedCurrentMilliamps,
+                                    variables.loopCurrentZeroTrim, variables.loopCurrentGainTrim, variables.loopCurrentMode,
+                                    variables.alarmMilliamps,
+                                    {variables.pvTransferFunctionCode, variables.transferCutoffPercent, variables.transferCutoffMode});
+}
+
 float hartPercentOfRange(const HartExecutionVariables& variables) noexcept {
-    const float span = variables.upperRangeValue - variables.lowerRangeValue;
-    return span != 0.0f ? 100.0f * (variables.primaryVariable - variables.lowerRangeValue) / span : 0.0f;
+    return hartAnalogOutput(variables).percentOfRange;
 }
 
 float hartLoopCurrentMilliamps(const HartExecutionVariables& variables) noexcept {
-    if (variables.fixedCurrentMode) return variables.fixedCurrentMilliamps;
-    const float calculated = 4.0f + 16.0f * (hartPercentOfRange(variables) / 100.0f);
-    return (calculated + variables.loopCurrentZeroTrim) * variables.loopCurrentGainTrim;
+    return hartAnalogOutput(variables).milliamps;
 }
 
 namespace {
@@ -26,7 +32,7 @@ size_t hartVarWidth(HartVarId id) noexcept {
         case HartVarId::DeviceId: return 3;
         case HartVarId::Tag: return 6;
         case HartVarId::PrimaryVariable: return 4;
-        case HartVarId::Message: return 18;
+        case HartVarId::Message: return 24;
         case HartVarId::Descriptor: return 12;
         case HartVarId::Date: return 3;
         case HartVarId::FinalAssemblyNumber: return 3;
@@ -59,10 +65,10 @@ std::optional<std::span<const uint8_t>> evalExpr(const HartExpr& expr, HartExecu
         case HartExpr::Kind::RequestBody:
             return request;
         case HartExpr::Kind::BodySlice: {
-            if (expr.offset > request.size()) return std::nullopt;
+            if (expr.offset > request.size()) { vars.requestTooShort = true; return std::nullopt; }
             const size_t available = request.size() - expr.offset;
             const size_t length = expr.length == 0 ? available : expr.length;
-            if (length > available) return std::nullopt;
+            if (length > available) { vars.requestTooShort = true; return std::nullopt; }
             return request.subspan(expr.offset, length);
         }
         case HartExpr::Kind::HexConstant:
@@ -114,8 +120,17 @@ std::optional<std::span<const uint8_t>> evalExpr(const HartExpr& expr, HartExecu
                 case HartVarId::PvTransferFunctionCode: scratch[0] = vars.pvTransferFunctionCode; return std::span(scratch.data(), 1);
                 case HartVarId::AlarmSelectionCode: scratch[0] = vars.alarmSelectionCode; return std::span(scratch.data(), 1);
                 case HartVarId::WriteProtectCode: scratch[0] = vars.writeProtectCode; return std::span(scratch.data(), 1);
+                case HartVarId::ImplementedUniversalRevision: scratch[0] = vars.implementedUniversalRevision; return std::span(scratch.data(), 1);
             }
             return std::nullopt;
+        case HartExpr::Kind::OutputPercent: {
+            // The driven output in percent of span: the saturated PV percent,
+            // or the fixed current expressed in percent.
+            const float value = hartAnalogOutput(vars).outputPercent;
+            const auto encoded = HartTypeCodec::encodeFloat32BE(value);
+            std::copy(encoded.begin(), encoded.end(), scratch.begin());
+            return std::span<const uint8_t>(scratch.data(), 4);
+        }
         case HartExpr::Kind::PercentOfRange:
         case HartExpr::Kind::LoopCurrentMilliamps: {
             // HCF_SPEC-127 6.3: Percent of Range follows PV linearly between
@@ -206,9 +221,25 @@ std::optional<std::span<const uint8_t>> evalExpr(const HartExpr& expr, HartExecu
             }
             return std::nullopt;
         }
+        case HartExpr::Kind::UserVariableTable: {
+            if (expr.offset >= request.size()) { vars.requestTooShort = true; return std::nullopt; }
+            const size_t index = static_cast<size_t>(request[expr.offset]) + expr.length;
+            if (index >= expr.table.size()) { vars.invalidSelection = true; return std::nullopt; }
+            HartExpr selected = HartExpr::userVar(expr.table[index]);
+            const auto bytes = evalExpr(selected, vars, request, localCode, scratch);
+            if (!bytes.has_value()) vars.invalidSelection = true;
+            return bytes;
+        }
         case HartExpr::Kind::UserVariable:
             for (const auto& value : vars.userVariables) {
                 if (value.id != expr.variableId) continue;
+                if (expr.userVariableField != HartUserVariableField::Value) {
+                    const float bound = expr.userVariableField == HartUserVariableField::LowerRange
+                        ? value.lowerRangeValue : value.upperRangeValue;
+                    const auto encoded = HartTypeCodec::encodeFloat32BE(bound);
+                    std::copy(encoded.begin(), encoded.end(), scratch.begin());
+                    return std::span<const uint8_t>(scratch.data(), 4);
+                }
                 // Encode per the variable's OWN declared type, not always
                 // Float32BE -- a user variable authored as UInt8/UInt16/
                 // Int16/Bool in the Property Inspector must actually produce
@@ -251,6 +282,8 @@ std::optional<std::span<const uint8_t>> evalExpr(const HartExpr& expr, HartExecu
                         std::copy(encoded.begin(), encoded.end(), scratch.begin());
                         return std::span<const uint8_t>(scratch.data(), encoded.size());
                     }
+                    case HartVariableType::Ascii:
+                        return std::span<const uint8_t>(value.text.data(), value.text.size());
                     case HartVariableType::PackedAscii:
                         // A PackedAscii-typed value is textual; `UserVariable`
                         // only carries a numeric `double` today (see
@@ -286,6 +319,8 @@ size_t estimateExprMax(const HartExpr& expr, size_t maxRequestBytes) noexcept {
         case HartExpr::Kind::UserVariable: return 4;
         case HartExpr::Kind::LoopCurrentMilliamps: return 4;
         case HartExpr::Kind::PercentOfRange: return 4;
+        case HartExpr::Kind::OutputPercent: return 4;
+        case HartExpr::Kind::UserVariableTable: return 4;
         case HartExpr::Kind::DeviceVariable:
             switch (expr.deviceVariableField) {
                 case HartDeviceVariableField::Code:
@@ -326,6 +361,7 @@ size_t estimateMaxBytes(const std::vector<HartStatement>& statements, size_t max
                     total += estimateMaxBytes(node.prefix, maxRequestBytes);
                     total += node.maxIterations * estimateMaxBytes(node.body, maxRequestBytes);
                 }
+                // HartSetUserVariableStmt / HartResponseCodeStmt: no response bytes.
             },
             statement.node);
     }
@@ -338,6 +374,10 @@ std::string validateStatements(const std::vector<HartStatement>& statements, siz
 std::string validateExpr(const HartExpr& expr, size_t maxRequestBytes) {
     if (expr.kind == HartExpr::Kind::BodySlice && expr.length != 0 && expr.offset + expr.length > maxRequestBytes) {
         return "HART command body slice exceeds maximum request size";
+    }
+    if (expr.kind == HartExpr::Kind::UserVariableTable) {
+        if (expr.offset >= maxRequestBytes) return "HART command table index byte exceeds maximum request size";
+        if (expr.table.empty() || expr.table.size() > 256) return "HART command variable table must hold 1-256 entries";
     }
     return {};
 }
@@ -389,6 +429,11 @@ std::string validateStatements(const std::vector<HartStatement>& statements, siz
                             if (node.table[i].key == node.table[j].key) { error = "HART command MAP has duplicate keys"; break; }
                         }
                     }
+                } else if constexpr (std::is_same_v<T, HartSetUserVariableStmt>) {
+                    if (node.variableId.empty()) { error = "HART command SET targets an empty variable id"; return; }
+                    error = validateExpr(node.value, maxRequestBytes);
+                } else if constexpr (std::is_same_v<T, HartResponseCodeStmt>) {
+                    // Any code is legal for a manufacturer command; nothing to validate.
                 } else if constexpr (std::is_same_v<T, HartForCodesStmt>) {
                     if (node.maxIterations == 0 || node.maxIterations > 64) {
                         error = "HART command FOR_CODES iteration bound is not sane";
@@ -530,6 +575,67 @@ bool execStatement(const HartStatement& statement, HartExecutionVariables& vars,
                     }
                 }
                 return response.writeBytes(node.defaultValue);
+            } else if constexpr (std::is_same_v<T, HartSetUserVariableStmt>) {
+                std::array<uint8_t, 8> scratch{};
+                const auto bytes = evalExpr(node.value, vars, request, localCode, scratch);
+                if (!bytes.has_value()) return false;
+                for (auto& target : vars.userVariables) {
+                    if (target.id != node.variableId) continue;
+                    if (node.field != HartUserVariableField::Value) {
+                        if (bytes->size() != 4) return false;
+                        const float bound = HartTypeCodec::decodeFloat32BE(*bytes);
+                        if (!std::isfinite(bound)) return false;
+                        (node.field == HartUserVariableField::LowerRange ? target.lowerRangeValue : target.upperRangeValue) = bound;
+                        target.dirty = true;
+                        return true;
+                    }
+                    const auto unsignedValue = [&](size_t width) -> std::optional<uint32_t> {
+                        if (bytes->size() != width) return std::nullopt;
+                        uint32_t result = 0;
+                        for (uint8_t byte : *bytes) result = (result << 8) | byte;
+                        return result;
+                    };
+                    switch (target.type) {
+                        case HartVariableType::Float32: {
+                            if (bytes->size() != 4) return false;
+                            const float decoded = HartTypeCodec::decodeFloat32BE(*bytes);
+                            if (!std::isfinite(decoded)) return false;
+                            target.value = decoded;
+                            break;
+                        }
+                        case HartVariableType::UInt8:
+                        case HartVariableType::Bool: {
+                            const auto decoded = unsignedValue(1); if (!decoded) return false;
+                            target.value = *decoded; break;
+                        }
+                        case HartVariableType::UInt16: {
+                            const auto decoded = unsignedValue(2); if (!decoded) return false;
+                            target.value = *decoded; break;
+                        }
+                        case HartVariableType::Int16: {
+                            const auto decoded = unsignedValue(2); if (!decoded) return false;
+                            target.value = static_cast<int16_t>(static_cast<uint16_t>(*decoded)); break;
+                        }
+                        case HartVariableType::Enum:
+                        case HartVariableType::BitEnum: {
+                            const auto decoded = unsignedValue(std::clamp<size_t>(target.wireWidth, 1, 2)); if (!decoded) return false;
+                            target.value = *decoded; break;
+                        }
+                        case HartVariableType::Ascii:
+                            if (bytes->size() != target.text.size()) return false;
+                            target.text.assign(bytes->begin(), bytes->end());
+                            break;
+                        case HartVariableType::PackedAscii:
+                            return false;
+                    }
+                    target.dirty = true;
+                    return true;
+                }
+                return false;
+            } else if constexpr (std::is_same_v<T, HartResponseCodeStmt>) {
+                if (node.noReply) return response.suppressReply();
+                response.setResponseCode(node.code);
+                return !node.abort;
             } else if constexpr (std::is_same_v<T, HartForCodesStmt>) {
                 if (!execStatements(node.prefix, vars, request, localCode, response)) return false;
                 std::array<uint8_t, 8> sourceScratch{};
@@ -579,10 +685,23 @@ HartCommandCompileResult HartCommandCompiler::compile(HartCommandDefinition defi
 
 bool HartCommandExecutor::execute(const HartCompiledCommandProgram& program, HartExecutionVariables& variables,
                                   std::span<const uint8_t> request, HartResponseBuilder& response) noexcept {
+    variables.requestTooShort = false;
+    variables.invalidSelection = false;
     HartResponseBuilder discard(program.maxResponseBytes + 1);
-    if (!execStatements(program.definition.write, variables, request, 0, discard)) return false;
-    if (!execStatements(program.definition.resp, variables, request, 0, response)) return false;
-    return execStatements(program.definition.after, variables, request, 0, discard);
+    // Write/after stages produce no data bytes, but a Response Code or a
+    // reply suppression they decide must still reach the real response.
+    const auto propagate = [&](bool ok) {
+        if (discard.responseCode() != 0) response.setResponseCode(discard.responseCode());
+        if (discard.replySuppressed()) response.suppressReply();
+        if (!ok && variables.requestTooShort && response.responseCode() == 0)
+            response.setResponseCode(HartResponseCodes::TooFewDataBytes);
+        if (!ok && variables.invalidSelection && response.responseCode() == 0)
+            response.setResponseCode(HartResponseCodes::InvalidSelection);
+        return ok;
+    };
+    if (!propagate(execStatements(program.definition.write, variables, request, 0, discard))) return false;
+    if (!propagate(execStatements(program.definition.resp, variables, request, 0, response))) return false;
+    return propagate(execStatements(program.definition.after, variables, request, 0, discard));
 }
 
 std::vector<HartStatement> hartIdentityBlockMacro() {

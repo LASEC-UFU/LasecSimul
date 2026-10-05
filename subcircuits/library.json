@@ -208,6 +208,10 @@
     {
       "typeId": "subcircuits.control.divide",
       "manifest": "control_divide.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.hart.smar_ld301",
+      "manifest": "hart_smar_ld301.lssubcircuit"
     }
   ]
 }

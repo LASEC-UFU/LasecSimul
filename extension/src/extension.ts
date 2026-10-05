@@ -96,7 +96,7 @@ import { initializeLasecPlot, lasecPlotManager } from "./lasecplot/manager";
 import { LasecSimulInteropApi } from "./lasecplot/api";
 import { initializeSerialTerminal, serialTerminalManager } from "./serialterm/manager";
 import { initializeSerialPort, serialPortManager } from "./serialport/manager";
-import { hartUdpManager, initializeHartUdp } from "./hart/udpManager";
+import { listHostSerialPorts } from "./serialport/hostPorts";
 import {
   gatherInternalComponentSnapshots,
   resolveSourceFilePath,
@@ -215,7 +215,6 @@ function syncSchematicPanel(): void {
   lasecPlotManager?.sync();
   serialTerminalManager?.sync();
   serialPortManager?.sync();
-  hartUdpManager?.sync();
   const lastSynced = state.lastSyncedProjectState;
   if (lastSynced &&
       (lastSynced.components !== state.schematicState.components || lastSynced.topology.conductors !== state.schematicState.topology.conductors) &&
@@ -363,7 +362,6 @@ function attachCoreProcessHandlers(proc: CoreProcess, corePath: string): void {
     }
     serialTerminalManager?.updateSimulationState();
     serialPortManager?.updateSimulationState();
-    hartUdpManager?.sync();
   });
 }
 
@@ -687,6 +685,7 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
     logicSymbolPackage: parsed.logicSymbolPackage,
     disabled: false,
     mcuHost: parsed.mcuHost,
+    ...(parsed.hartDeviceComponentId ? { hartDeviceComponentId: parsed.hartDeviceComponentId } : {}),
     serialPorts: parsed.serialPorts,
   };
 
@@ -1695,6 +1694,10 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestSerialTerminalSaveLog":
       void serialTerminalManager?.saveLog(message.text);
       return;
+    case "requestHostSerialPorts":
+      // HART modem: the PC-side serial port is picked from the ports present on this computer.
+      void listHostSerialPorts().then((ports) => state.schematicPanel?.postMessage({ version: 1, type: "hostSerialPorts", ports }));
+      return;
     case "requestToggleSerialPort":
       void serialPortManager?.toggle(message.componentId).catch((error) =>
         vscode.window.showErrorMessage(`Serial Port: ${error instanceof Error ? error.message : String(error)}`));
@@ -2482,7 +2485,6 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   const lasecPlot = initializeLasecPlot(context);
   initializeSerialTerminal(context);
   initializeSerialPort(context);
-  initializeHartUdp(context);
   registerMcuDebugTracking(context);
   state.extensionContext = context;
   maybeOfferMachineNetworkSetup(context);

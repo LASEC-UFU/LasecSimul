@@ -223,15 +223,17 @@ int main() {
     // fix that keeps Command 1 from silently re-canonicalizing the tag).
     {
         HartResponseBuilder msgInitial(32);
-        check(referenceEngine.execute("hart-1", 1, 0x0C, {}, msgInitial) && msgInitial.size() == 18,
-              "0x0C read message: 18-byte packed body (24-char field) even before any write");
+        // HCF_SPEC-127 6.12: Message = Response Data Bytes 0-23, packed
+        // (32 characters). Confirmed by a real HART-5 LD301 capture.
+        check(referenceEngine.execute("hart-1", 1, 0x0C, {}, msgInitial) && msgInitial.size() == 24,
+              "0x0C read message: 24-byte packed body (32-char field) even before any write");
 
-        const std::vector<uint8_t> newMessage = HartTypeCodec::encodePackedAscii("HELLO WORLD", 24);
-        check(newMessage.size() == 18, "packed-ASCII message round-trips to 18 bytes for 24 chars");
+        const std::vector<uint8_t> newMessage = HartTypeCodec::encodePackedAscii("HELLO WORLD", 32);
+        check(newMessage.size() == 24, "packed-ASCII message round-trips to 24 bytes for 32 chars");
         HartResponseBuilder writeMsgResp(32);
         check(referenceEngine.execute("hart-1", 1, 0x11, newMessage, writeMsgResp) && writeMsgResp.size() == newMessage.size() &&
                   std::equal(newMessage.begin(), newMessage.end(), writeMsgResp.bytes().begin()),
-              "0x11 write message accepts a full 18-byte body and echoes it back (HCF_SPEC-127 6.17)");
+              "0x11 write message accepts a full 24-byte body and echoes it back (HCF_SPEC-127 6.17)");
         HartResponseBuilder msgAfter(32);
         check(referenceEngine.execute("hart-1", 1, 0x0C, {}, msgAfter) &&
                   std::equal(newMessage.begin(), newMessage.end(), msgAfter.bytes().begin()) &&
@@ -893,7 +895,7 @@ int main() {
             HartResponseBuilder wire(16);
             if (!HartFrameCodec::encode(request, wire)) return {};
             // 48 bytes: large enough for the widest response this helper is
-            // used against (Command 12's 18-byte packed message), not just
+            // used against (Command 12's 24-byte packed message), not just
             // the 1-2 byte user-variable payloads it was first written for.
             HartResponseBuilder responseWire(48);
             if (!component.transact(wire.bytes(), responseWire)) return {};
@@ -926,7 +928,7 @@ int main() {
         // proves HartCommunicationComponent::transact -> HartEngine::execute
         // -> the programHook's persistence write-back is wired end to end,
         // not just correct in isolation.
-        const auto componentNewMessage = HartTypeCodec::encodePackedAscii("PROD PATH OK", 24);
+        const auto componentNewMessage = HartTypeCodec::encodePackedAscii("PROD PATH OK", 32);
         HartFrame writeMessageRequest{7, 0x11, componentNewMessage};
         HartResponseBuilder writeMessageWire(32);
         check(HartFrameCodec::encode(writeMessageRequest, writeMessageWire), "component test: encode write-message request");

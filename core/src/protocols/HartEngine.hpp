@@ -34,12 +34,51 @@ public:
     std::span<const uint8_t> bytes() const noexcept { return {m_bytes.data(), m_size}; }
     size_t size() const noexcept { return m_size; }
     bool overflowed() const noexcept { return m_overflow; }
+    /** HCF_SPEC-307 command Response Code chosen by the handler. 0 = success.
+     * A handler that rejects a request sets the precise error code before
+     * returning false; a warning (e.g. 8 or 112-127) is set while still
+     * returning true, so the Response Data Bytes are kept. */
+    uint8_t responseCode() const noexcept { return m_responseCode; }
+    void setResponseCode(uint8_t code) noexcept { m_responseCode = code; }
+    /** Convenience for handlers: record an error Response Code and fail. */
+    bool fail(uint8_t code) noexcept { m_responseCode = code; return false; }
+    /** The addressed device must stay silent (e.g. a tag-addressed command
+     * whose tag does not match): no frame at all, not an error reply. */
+    bool suppressReply() noexcept { m_noReply = true; return false; }
+    bool replySuppressed() const noexcept { return m_noReply; }
 
 private:
     std::vector<uint8_t> m_bytes;
     size_t m_size = 0;
     bool m_overflow = false;
+    uint8_t m_responseCode = 0;
+    bool m_noReply = false;
 };
+
+/** HCF_SPEC-307 single-definition Response Codes used by the generic engine. */
+namespace HartResponseCodes {
+inline constexpr uint8_t Success = 0;
+inline constexpr uint8_t InvalidSelection = 2;
+inline constexpr uint8_t PassedParameterTooLarge = 3;
+inline constexpr uint8_t PassedParameterTooSmall = 4;
+inline constexpr uint8_t TooFewDataBytes = 5;
+inline constexpr uint8_t InWriteProtectMode = 7;
+inline constexpr uint8_t InMultidropMode = 11;
+inline constexpr uint8_t AccessRestricted = 16;
+inline constexpr uint8_t CommandNotImplemented = 64;
+}
+
+/** HART Field Device Status byte bits (HCF_SPEC-99 / Common Practice). */
+namespace HartDeviceStatusBits {
+inline constexpr uint8_t DeviceMalfunction = 0x80;
+inline constexpr uint8_t ConfigurationChanged = 0x40;
+inline constexpr uint8_t ColdStart = 0x20;
+inline constexpr uint8_t MoreStatusAvailable = 0x10;
+inline constexpr uint8_t LoopCurrentFixed = 0x08;
+inline constexpr uint8_t LoopCurrentSaturated = 0x04;
+inline constexpr uint8_t NonPrimaryVariableOutOfLimits = 0x02;
+inline constexpr uint8_t PrimaryVariableOutOfLimits = 0x01;
+}
 
 class HartPayloadReader final {
 public:
@@ -114,6 +153,38 @@ struct HartDeviceProfile {
     uint8_t primaryVariableUnit = 57;
     float upperRangeValue = 100.0f;
     float lowerRangeValue = 0.0f;
+    /** PV analog output clamp, in percent of span (the domain transmitters
+     * clamp in: a NAMUR NE-43 device declares -1.25 % / 103.125 %, i.e.
+     * 3.8 / 20.5 mA). NaN keeps the historical unclamped mapping. Reaching
+     * either limit sets Device Status bit 0x04. */
+    float analogLowerSaturationPercent = std::numeric_limits<float>::quiet_NaN();
+    float analogUpperSaturationPercent = std::numeric_limits<float>::quiet_NaN();
+    /** Command 40 (loop test) accepted band, in mA. NaN keeps the
+     * saturation band (LD301 manual: "corrente fixa ... de 3,6 a 21 mA"). */
+    float analogFixedLowMilliamps = std::numeric_limits<float>::quiet_NaN();
+    float analogFixedHighMilliamps = std::numeric_limits<float>::quiet_NaN();
+    /** Burnout (NAMUR NE-43 failure) current driven while the device is in
+     * a sensor fault, chosen by the Alarm Selection Code (0 High, 1 Low).
+     * NaN: no failure current, the output keeps following the PV. */
+    float analogAlarmLowMilliamps = std::numeric_limits<float>::quiet_NaN();
+    float analogAlarmHighMilliamps = std::numeric_limits<float>::quiet_NaN();
+    /** Commands 35/36/37: range values may exceed the transducer limits by
+     * this percent of each limit's magnitude (LD301 manual: "valores que
+     * excedam até 25% destes limites são aceitos"). */
+    float rangeLimitTolerancePercent = 0.0f;
+    /** Commands 35/36: a span down to this percent of the minimum span is
+     * still accepted with Response Code 14 (LD301 manual: "valores até 0,90
+     * do span mínimo são aceitos"); below it the span is invalid (RC 29). */
+    float minimumSpanAcceptPercent = 100.0f;
+    /** Operation counters: a successful configuration change made by
+     * `command` increments the UInt8 variable `variableId` (cyclic 0..255). */
+    struct OperationCounter { HartCommandId command = 0; std::string variableId; };
+    std::vector<OperationCounter> operationCounters;
+    /** Universal Command Revision whose command data layouts this profile
+     * implements (e.g. Command 15's trailer). Distinct from the identity's
+     * reported revision because the generic catalog profile reports a
+     * placeholder 5 while implementing HART 7 layouts. */
+    uint8_t implementedUniversalRevision = 7;
 };
 
 /** Stable authoring-time edge from an I/O System to one child HART device.
@@ -222,6 +293,9 @@ struct HartSubDeviceAssignment {
 class HartProfileRegistry final {
 public:
     bool registerProfile(HartDeviceProfile profile);
+    /** Inserts or overwrites in place: a pointer already handed out by
+     * `find` for this id stays valid (the engine keeps such pointers). */
+    bool registerOrReplace(HartDeviceProfile profile);
     bool remove(std::string_view id) noexcept;
     const HartDeviceProfile* find(std::string_view id) const noexcept;
     size_t size() const noexcept { return m_profiles.size(); }
@@ -242,7 +316,17 @@ enum class HartVariableRole : uint8_t {
 /** Every entry here has an on-wire codec.  Common Table ENUM/BIT_ENUM values
  * are still numbers on the wire; their table id supplies human presentation
  * in the authoring UI without turning labels into protocol data. */
-enum class HartVariableType : uint8_t { Float32, UInt8, UInt16, Int16, PackedAscii, Bool, Enum, BitEnum };
+enum class HartVariableType : uint8_t { Float32, UInt8, UInt16, Int16, PackedAscii, Bool, Enum, BitEnum,
+                                         /** Fixed-width ISO Latin-1 text, NUL padded (`wireWidth` bytes). */
+                                         Ascii };
+
+/** Common Table 34 codes a Device Variable may mirror instead of owning a
+ * stored value (`VariableConfiguration::derivedSource`). */
+namespace HartDerivedSource {
+inline constexpr uint8_t None = 0xFF;
+inline constexpr uint8_t PercentRange = 243;
+inline constexpr uint8_t LoopCurrent = 244;
+}
 
 /** The only public value-ownership choices for a HART variable. */
 enum class HartVariableDirection : uint8_t { Internal, Input, Output };
@@ -377,8 +461,19 @@ struct HartDevicePlan {
         float trimAdjustment = 0.0f;
         float factoryTrimAdjustment = 0.0f;
         /** Kept last to retain aggregate-initializer compatibility for device
-         * profiles/tests. ENUM01 (expanded device type) uses two bytes. */
+         * profiles/tests. ENUM01 (expanded device type) uses two bytes; an
+         * `Ascii` variable uses this as its fixed text width. */
         uint8_t wireWidth = 1;
+        /** Live value source for a Device Variable that mirrors a standard
+         * derived quantity (HartDerivedSource) instead of a stored value.
+         * PercentRange is mapped linearly onto this variable's own
+         * lower/upperRangeValue (e.g. a "user unit" scaled PV). */
+        uint8_t derivedSource = HartDerivedSource::None;
+        /** Value of an `Ascii` variable. */
+        std::string textValue;
+        /** Optional analog transfer parameter: 1=cutoff percent, 2=cutoff mode.
+         * Device profiles bind their own authored variables to these roles. */
+        uint8_t transferParameter = 0;
     };
     std::vector<VariableConfiguration> variables;
     /** Packed-ASCII device tag used by command 0x0B tag matching; falls back to
@@ -577,6 +672,61 @@ struct HartDevicePlan {
         std::array<uint8_t, 2> channelBlacklist{{0xFF, 0xFF}};
         std::array<uint8_t, 2> pendingChannelBlacklist{{0xFF, 0xFF}};
     } wireless;
+    /** HCF_SPEC-99 7.x revision rules: one non-volatile Configuration
+     * Changed bit per master (bit0 primary, bit1 secondary). Set by every
+     * configuration write; Command 38 clears only the requester's bit. */
+    uint8_t configurationChangedMasters = 0;
+    /** One Cold Start bit per master (bit0 primary, bit1 secondary). Set at
+     * power-up/reset, cleared after the first response to that master. */
+    uint8_t coldStartMasters = 0x03;
+    /** Simulated sensor failure (open/defective sensor): Device Malfunction
+     * in the status byte and, per Alarm Selection, the burnout current. */
+    bool sensorFault = false;
+};
+
+/** Live analog-output evaluation shared by Universal 2/3, Common Practice 33
+ * and the Device Status byte, so the formula has exactly one authority. */
+struct HartAnalogOutput {
+    float percentOfRange = 0.0f;
+    /** Driven output in percent of span (saturated percent, or the fixed
+     * current expressed in percent). */
+    float outputPercent = 0.0f;
+    /** Loop current actually driven (fixed/trim/saturation applied). */
+    float milliamps = 4.0f;
+    /** The PV-driven output (fixed mode ignored) sits at a saturation limit. */
+    bool saturated = false;
+};
+struct HartTransferSettings {
+    uint8_t function = 0;
+    float cutoffPercent = 0.0f;
+    uint8_t cutoffMode = 0; // 0: hard; nonzero: continuous linear segment
+};
+HartTransferSettings hartTransferSettings(const HartDevicePlan& plan) noexcept;
+HartAnalogOutput hartEvaluateAnalogOutput(double primaryValue, float lowerRangeValue, float upperRangeValue,
+                                          float lowerSaturationPercent, float upperSaturationPercent, bool fixedCurrentMode,
+                                          float fixedCurrentMilliamps, float zeroTrim, float gainTrim,
+                                          uint8_t loopCurrentMode,
+                                          float alarmMilliamps = std::numeric_limits<float>::quiet_NaN(),
+                                          HartTransferSettings transfer = {}) noexcept;
+/** Burnout current the device drives now (sensor fault + Alarm Selection
+ * Code 0 High / 1 Low), or NaN when the output follows the PV. */
+float hartAlarmMilliamps(const HartDeviceProfile& profile, const HartDevicePlan& plan) noexcept;
+
+/** HART-5+ physical address of one request frame. */
+struct HartFrameAddress {
+    bool longFrame = false;
+    bool primaryMaster = true;
+    uint8_t pollingAddress = 0;
+    std::array<uint8_t, 5> longAddress{};
+};
+
+/** Outcome of `HartEngine::executeAddressed`. */
+struct HartAddressedReply {
+    bool addressed = false;     ///< false: no device owns the address -> stay silent
+    bool executed = false;      ///< the command produced Response Data Bytes
+    uint8_t responseCode = 0;
+    uint8_t deviceStatus = 0;
+    uint8_t responsePreambles = 5;
 };
 
 struct HartProtocolPlan {
@@ -653,10 +803,19 @@ public:
                  std::span<const uint8_t> request, HartResponseBuilder& response) noexcept {
         return execute("hart-1", pollingAddress, command, request, response);
     }
+    /** Wire-level dispatch for a physical HART frame: resolves the short or
+     * long (5-byte) address, applies the frame-format rules of the device's
+     * Universal Command Revision, runs the command and returns the Response
+     * Code plus the per-master Field Device Status byte. Response Data Bytes
+     * are written to `response` only when `executed` is true. */
+    HartAddressedReply executeAddressed(std::string_view bus, const HartFrameAddress& address, HartCommandId command,
+                                        std::span<const uint8_t> request, HartResponseBuilder& response) noexcept;
     void setVirtualTimeSeconds(uint64_t seconds) noexcept;
     uint64_t virtualTimeSeconds() const noexcept { return m_virtualTimeSeconds; }
     std::vector<HartBurstEvent> takeBurstEvents(std::string_view deviceId) noexcept;
     bool setDiagnosticStatus(std::string_view deviceId, uint8_t status) noexcept;
+    /** Inject/clear a sensor failure (HartDevicePlan::sensorFault). */
+    bool setSensorFault(std::string_view deviceId, bool fault) noexcept;
 
 private:
     struct RuntimeDevice {
@@ -688,6 +847,7 @@ private:
     void runDueActions(RuntimeDevice& device, uint64_t previous, uint64_t current) noexcept;
     void runDueBursts(RuntimeDevice& device, uint64_t previous, uint64_t current) noexcept;
     static double evaluatePrimary(RuntimeDevice&) noexcept;
+    uint8_t fieldDeviceStatus(RuntimeDevice&, uint8_t masterBit) noexcept;
     const HartProfileRegistry& m_profiles;
     HartCommandRegistry m_commands;
     std::vector<RuntimeDevice> m_devices;

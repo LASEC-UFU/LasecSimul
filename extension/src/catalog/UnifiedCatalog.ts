@@ -97,6 +97,7 @@ const DEFAULT_CATALOG_FILE: UnifiedCatalogFile = {
     subcategory: entry.subcategory,
     disabled: entry.disabled,
     disabledReason: entry.disabledReason,
+    hidden: entry.hidden,
   })),
   registeredSources: [],
 };

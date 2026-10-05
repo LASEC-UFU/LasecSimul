@@ -158,10 +158,16 @@ const catalog: PaletteRenderableEntry[] = [
     assert(processTree.includes("protocol.modbus.server") && processTree.includes("protocol.modbus.client"), "Processo deveria conter servidor e cliente Modbus");
     assert(processTree.includes("protocol.hart.transmitter") && processTree.includes("protocol.hart.communicator"), "Processo deveria conter os blocos HART");
     const miscTree = JSON.stringify(buildPaletteTree(defaultComponentCatalog, "", "misc"));
-    assert(miscTree.includes("peripherals.udp"), "Miscelâneos deveria conter o UDP");
-    for (const typeId of ["protocol.hart.device.smar_ld301", "protocol.hart.device.smar_tt301", "protocol.hart.device.smar_fy301"]) {
+    // O UDP direto no dispositivo saiu: o UDP agora é uma opção do Modem HART.
+    assert(!miscTree.includes("peripherals.udp"), "a porta UDP direta (legado) não deveria aparecer na paleta");
+    // LD301 agora é o subcircuito subcircuits/hart_smar_ld301 sobre o
+    // dispositivo HART padrão; o tipo built-in antigo fica oculto.
+    for (const typeId of ["protocol.hart.device.standard", "protocol.hart.device.smar_tt301", "protocol.hart.device.smar_fy301"]) {
       assert(processTree.includes(typeId), `${typeId} deveria aparecer na paleta HART`);
     }
+    assert(!processTree.includes("protocol.hart.device.smar_ld301"), "o LD301 built-in legado não deveria aparecer na paleta");
+    // O PC fala HART pelo fio: o Modem HART (em série no laço) fica na mesma pasta.
+    assert(processTree.includes("protocol.hart.modem"), "o Modem HART deveria aparecer na paleta HART");
     assert(processTree.includes("Protocolos Industriais"), "protocolos deveriam ficar sob Process/Protocolos Industriais");
   });
 

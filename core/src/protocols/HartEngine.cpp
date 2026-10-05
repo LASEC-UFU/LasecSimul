@@ -145,6 +145,14 @@ IHartCommandHandler* HartCommandRegistry::find(HartCommandId command) const noex
     return it == m_handlers.end() ? nullptr : it->second;
 }
 
+bool HartProfileRegistry::registerOrReplace(HartDeviceProfile profile) {
+    if (profile.id.empty() || profile.version == 0) return false;
+    const auto it = m_profiles.find(profile.id);
+    if (it == m_profiles.end()) return m_profiles.emplace(profile.id, std::move(profile)).second;
+    it->second = std::move(profile);
+    return true;
+}
+
 bool HartProfileRegistry::registerProfile(HartDeviceProfile profile) {
     if (profile.id.empty() || profile.version == 0) return false;
     const auto [it, inserted] = m_profiles.emplace(profile.id, std::move(profile));
@@ -363,6 +371,15 @@ std::vector<HartBurstEvent> HartEngine::takeBurstEvents(std::string_view deviceI
     return {};
 }
 
+bool HartEngine::setSensorFault(std::string_view deviceId, bool fault) noexcept {
+    for (RuntimeDevice& device : m_devices) {
+        if (device.plan.id != deviceId) continue;
+        device.plan.sensorFault = fault;
+        return true;
+    }
+    return false;
+}
+
 bool HartEngine::setDiagnosticStatus(std::string_view deviceId, uint8_t status) noexcept {
     for (RuntimeDevice& device : m_devices) {
         if (device.plan.id != deviceId) continue;
@@ -501,7 +518,7 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
                                                [command](const HartCommandDescriptor& descriptor) { return descriptor.id == command; });
     const bool declaredByDevice = std::any_of(selected->plan.commandConfigurations.begin(), selected->plan.commandConfigurations.end(),
                                               [command](const HartDevicePlan::CommandConfiguration& configuration) { return configuration.command == command; });
-    if (!declaredByProfile && !declaredByDevice) return false;
+    if (!declaredByProfile && !declaredByDevice) return response.fail(HartResponseCodes::CommandNotImplemented);
     if (command == 0x6A) {
         if (!request.empty()) return false;
         selected->burstEvents.clear();
@@ -569,7 +586,7 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
     }
     for (const auto& configuration : selected->plan.commandConfigurations) {
         if (configuration.command != command) continue;
-        if (!configuration.enabled) return false;
+        if (!configuration.enabled) return response.fail(HartResponseCodes::CommandNotImplemented);
         if (configuration.hasStaticResponse) {
             return response.writeBytes(configuration.staticResponse);
         }
@@ -586,7 +603,7 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
         command != 0x48 && command != 0x49 && command != 0x4A && command != 0x4B &&
         command != 0x4D && command != 0x4E && command != 0x26 && command != 0x30) {
         const bool owner = selected->plan.lockCode != 3 && selected->plan.lockOwner == masterRole;
-        if (!owner) return false;
+        if (!owner) return response.fail(HartResponseCodes::AccessRestricted);
     }
 
     auto put16Engine = [&](uint16_t value) {
@@ -767,7 +784,8 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
                                  assignment.expandedDeviceType, assignment.deviceId, assignment.longTag, assignment.deviceRevision);
         }
         if (command == 530) {
-            if (selected->plan.writeProtectCode != 0xFB || request.size() != 44) return false;
+            if (selected->plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+            if (request.size() != 44) return false;
             const uint16_t requestedIndex = static_cast<uint16_t>(request[0] << 8 | request[1]);
             const uint8_t card = request[2], channel = request[3];
             const uint16_t manufacturer = static_cast<uint16_t>(request[4] << 8 | request[5]);
@@ -820,7 +838,8 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
                                    committed.expandedDeviceType, committed.deviceId, committed.longTag, committed.deviceRevision);
         }
         if (command == 531) {
-            if (selected->plan.writeProtectCode != 0xFB || request.size() != 1 || request[0] > 1) return false;
+            if (selected->plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+            if (request.size() != 1 || request[0] > 1) return false;
             if (selected->plan.subDevices.size() > selected->plan.assignmentCapacity || selected->plan.subDevices.size() > selected->plan.assignments.size()) return false;
             std::array<HartSubDeviceAssignment, 32> staged{};
             for (size_t i = 0; i < selected->plan.subDevices.size(); ++i) {
@@ -1032,7 +1051,26 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
         effectivePlan.virtualTimeSeconds = m_virtualTimeSeconds;
         for (size_t i = 0; i < effectivePlan.variables.size() && i < selected->variableValues.size(); ++i)
             effectivePlan.variables[i].value = selected->variableValues[i];
+        const uint32_t configurationCounterBefore = selected->plan.configurationChangedCounter;
         if (m_programHook(*selected->profile, effectivePlan, primary, command, request, response, masterRole)) {
+            // Every configuration write increments the plan counter; HART
+            // 5+ exposes that event as one non-volatile Configuration
+            // Changed bit per master (HCF_SPEC-99 revision rules).
+            if (effectivePlan.configurationChangedCounter != configurationCounterBefore) {
+                effectivePlan.configurationChangedMasters = 0x03;
+                // Operation counters (profile data): each configuration
+                // change made by a monitored command increments its UInt8
+                // counter, cyclic 0..255 (LD301 manual, "Contador de
+                // Operacoes"). A rejected write changes nothing.
+                for (const auto& counter : selected->profile->operationCounters) {
+                    if (counter.command != command) continue;
+                    for (auto& variable : effectivePlan.variables) {
+                        if (variable.id != counter.variableId) continue;
+                        variable.value = static_cast<double>((static_cast<uint32_t>(std::max(0.0, variable.value)) + 1u) % 256u);
+                        variable.runtimeMutable = true;
+                    }
+                }
+            }
             // Persist whatever the command's write stage mutated (tag,
             // message, descriptor, date, final assembly number, ...) back
             // into the actual runtime device -- a write command is a real
@@ -1062,8 +1100,11 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
             // Keep the live value cache coherent after a writable Device
             // Variable mutation; otherwise the next dispatch would replace
             // the committed value with the stale Signal Graph snapshot.
+            // Device-owned state written by a command (`runtimeMutable`,
+            // e.g. a manufacturer parameter set through the DSL) follows the
+            // same rule.
             for (size_t i = 0; i < selected->plan.variables.size() && i < selected->variableValues.size(); ++i)
-                if (selected->plan.variables[i].writable)
+                if (selected->plan.variables[i].writable || selected->plan.variables[i].runtimeMutable)
                     selected->variableValues[i] = selected->plan.variables[i].value;
             // Command 113 catch mappings observe actual canonical command
             // responses. The captured snapshot is stored on the receiver's
@@ -1099,6 +1140,151 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
         }
     }
     return false;
+}
+
+HartTransferSettings hartTransferSettings(const HartDevicePlan& plan) noexcept {
+    HartTransferSettings settings;
+    settings.function = plan.pvTransferFunctionCode;
+    for (const auto& variable : plan.variables) {
+        if (variable.transferParameter == 1) settings.cutoffPercent = static_cast<float>(variable.value);
+        else if (variable.transferParameter == 2) settings.cutoffMode = static_cast<uint8_t>(variable.value);
+    }
+    return settings;
+}
+
+HartAnalogOutput hartEvaluateAnalogOutput(double primaryValue, float lowerRangeValue, float upperRangeValue,
+                                          float lowerSaturationPercent, float upperSaturationPercent, bool fixedCurrentMode,
+                                          float fixedCurrentMilliamps, float zeroTrim, float gainTrim,
+                                          uint8_t loopCurrentMode, float alarmMilliamps, HartTransferSettings transfer) noexcept {
+    HartAnalogOutput output;
+    // Ratio first, then scale: the evaluation order observed bit-for-bit on
+    // a real HART-5 transmitter (ld301 capture: PV 0, range 190..1690 ->
+    // C1 4A AA AA). A zero span is a degenerate configuration; 0 % is the
+    // defined fallback rather than propagating NaN/Inf.
+    const float span = upperRangeValue - lowerRangeValue;
+    const float ratio = span != 0.0f ? (static_cast<float>(primaryValue) - lowerRangeValue) / span : 0.0f;
+    const float inputPercent = ratio * 100.0f;
+    output.percentOfRange = inputPercent;
+    if (transfer.function == 1 && std::isfinite(inputPercent)) {
+        const float cutoff = std::clamp(transfer.cutoffPercent, 0.0f, 100.0f);
+        if (inputPercent < cutoff && cutoff > 0.0f)
+            output.percentOfRange = transfer.cutoffMode == 0 ? 0.0f : inputPercent * (10.0f / std::sqrt(cutoff));
+        else
+            output.percentOfRange = inputPercent <= 0.0f ? 0.0f : 10.0f * std::sqrt(inputPercent);
+    }
+    // Saturation is applied in the percent domain (ld301 capture: MV is
+    // exactly -1.25 % while the loop reads 3.80 mA).
+    float outputPercent = output.percentOfRange;
+    if (std::isfinite(lowerSaturationPercent) && outputPercent <= lowerSaturationPercent) {
+        outputPercent = lowerSaturationPercent; output.saturated = true;
+    }
+    if (std::isfinite(upperSaturationPercent) && outputPercent >= upperSaturationPercent) {
+        outputPercent = upperSaturationPercent; output.saturated = true;
+    }
+    const float driven = 4.0f + 16.0f * (outputPercent / 100.0f);
+    output.outputPercent = fixedCurrentMode ? (fixedCurrentMilliamps - 4.0f) / 16.0f * 100.0f : outputPercent;
+    if (fixedCurrentMode) output.milliamps = fixedCurrentMilliamps;
+    else if (loopCurrentMode == 0) output.milliamps = 4.0f; // multidrop: loop parked at 4 mA
+    else output.milliamps = (driven + zeroTrim) * gainTrim;
+    if (loopCurrentMode == 0) output.saturated = false;
+    // Burnout: a failed transmitter parks its loop at the alarm current
+    // (LD301 manual: 3,6 mA low / 21 mA high), which is also reported as a
+    // saturated output ("Saida saturada ... ou em Burnout", Tabela 5.1).
+    // A loop test and multidrop keep precedence.
+    if (std::isfinite(alarmMilliamps) && !fixedCurrentMode && loopCurrentMode != 0) {
+        output.milliamps = alarmMilliamps;
+        output.outputPercent = (alarmMilliamps - 4.0f) / 16.0f * 100.0f;
+        output.saturated = true;
+    }
+    return output;
+}
+
+float hartAlarmMilliamps(const HartDeviceProfile& profile, const HartDevicePlan& plan) noexcept {
+    if (!plan.sensorFault) return std::numeric_limits<float>::quiet_NaN();
+    if (plan.alarmSelectionCode == 0) return profile.analogAlarmHighMilliamps;
+    if (plan.alarmSelectionCode == 1) return profile.analogAlarmLowMilliamps;
+    return std::numeric_limits<float>::quiet_NaN();
+}
+
+uint8_t HartEngine::fieldDeviceStatus(RuntimeDevice& device, uint8_t masterBit) noexcept {
+    const HartDevicePlan& plan = device.plan;
+    // Malfunction / More Status Available / out-of-limit bits may be stored
+    // (diagnostic injection, status simulation); every other bit is derived
+    // from live state so it can never go stale.
+    uint8_t status = static_cast<uint8_t>(plan.diagnosticStatus &
+        (HartDeviceStatusBits::DeviceMalfunction | HartDeviceStatusBits::MoreStatusAvailable |
+         HartDeviceStatusBits::NonPrimaryVariableOutOfLimits | HartDeviceStatusBits::PrimaryVariableOutOfLimits));
+    if (plan.configurationChangedMasters & masterBit) status |= HartDeviceStatusBits::ConfigurationChanged;
+    if (plan.coldStartMasters & masterBit) status |= HartDeviceStatusBits::ColdStart;
+    if (plan.fixedCurrentMode) status |= HartDeviceStatusBits::LoopCurrentFixed;
+    const auto primary = std::find_if(plan.variables.begin(), plan.variables.end(), [](const auto& variable) {
+        return variable.deviceVariableCode == 246 || variable.role == HartVariableRole::PrimaryVariable ||
+               variable.id == "PV" || variable.id == "primary";
+    });
+    const double pv = evaluatePrimary(device) + plan.primaryVariableZeroOffset;
+    const float lower = primary != plan.variables.end() && std::isfinite(primary->lowerRangeValue)
+        ? primary->lowerRangeValue : device.profile->lowerRangeValue;
+    const float upper = primary != plan.variables.end() && std::isfinite(primary->upperRangeValue)
+        ? primary->upperRangeValue : device.profile->upperRangeValue;
+    // Saturation is a property of the PV-driven output: a transmitter held
+    // in fixed-current mode keeps reporting it (ld301 capture: 0x4C).
+    const HartAnalogOutput analog = hartEvaluateAnalogOutput(pv, lower, upper, device.profile->analogLowerSaturationPercent,
+                                                             device.profile->analogUpperSaturationPercent, false, 0.0f,
+                                                             0.0f, 1.0f, plan.loopCurrentMode,
+                                                             hartAlarmMilliamps(*device.profile, plan), hartTransferSettings(plan));
+    if (analog.saturated) status |= HartDeviceStatusBits::LoopCurrentSaturated;
+    if (plan.sensorFault) status |= HartDeviceStatusBits::DeviceMalfunction;
+    for (size_t i = 0; i < plan.variables.size(); ++i) {
+        const auto& variable = plan.variables[i];
+        if (variable.upperTransducerLimit <= variable.lowerTransducerLimit) continue; // limits not configured
+        const bool isPrimary = primary != plan.variables.end() && &variable == &*primary;
+        if (!isPrimary && (variable.deviceVariableCode == 0xFF || variable.derivedSource != HartDerivedSource::None)) continue;
+        const double value = isPrimary ? pv : (i < device.variableValues.size() ? device.variableValues[i] : variable.value);
+        if (value >= variable.lowerTransducerLimit && value <= variable.upperTransducerLimit) continue;
+        status |= isPrimary ? HartDeviceStatusBits::PrimaryVariableOutOfLimits : HartDeviceStatusBits::NonPrimaryVariableOutOfLimits;
+    }
+    return status;
+}
+
+HartAddressedReply HartEngine::executeAddressed(std::string_view bus, const HartFrameAddress& address, HartCommandId command,
+                                                std::span<const uint8_t> request, HartResponseBuilder& response) noexcept {
+    HartAddressedReply reply;
+    RuntimeDevice* selected = nullptr;
+    for (RuntimeDevice& device : m_devices) {
+        if (device.plan.bus != bus) continue;
+        if (!address.longFrame) {
+            if (device.plan.pollingAddress == address.pollingAddress) { selected = &device; break; }
+            continue;
+        }
+        // Long address = 6-bit manufacturer id + device type + 24-bit
+        // device id, the same identity Command 0 reports.
+        const auto deviceId = parseDeviceIdHexEngine(device.plan.uniqueId);
+        if ((address.longAddress[0] & 0x3F) == (device.profile->manufacturerId & 0x3F) &&
+            address.longAddress[1] == static_cast<uint8_t>(device.profile->deviceType) &&
+            std::equal(deviceId.begin(), deviceId.end(), address.longAddress.begin() + 2)) { selected = &device; break; }
+    }
+    if (!selected) return reply;
+    // HART 5+ revision rule: every command except Command 0 is implemented
+    // only in the long frame format.
+    if (!address.longFrame && command != 0 && selected->profile->identity.universalCommandRevision >= 5) return reply;
+    reply.addressed = true;
+    reply.responsePreambles = selected->plan.responsePreambles;
+    const uint8_t masterBit = address.primaryMaster ? 0x01 : 0x02;
+    response.setResponseCode(HartResponseCodes::Success);
+    const bool executed = execute(bus, selected->plan.pollingAddress, command, request, response,
+                                  address.primaryMaster ? 0 : 1);
+    if (!executed && response.replySuppressed()) { reply.addressed = false; return reply; }
+    reply.executed = executed;
+    reply.responseCode = response.responseCode();
+    if (!executed && reply.responseCode == HartResponseCodes::Success) {
+        // A handler that rejected the request without naming a code: the
+        // dominant cause in the generic handlers is a malformed/short body.
+        reply.responseCode = request.empty() ? HartResponseCodes::TooFewDataBytes : HartResponseCodes::InvalidSelection;
+    }
+    reply.deviceStatus = fieldDeviceStatus(*selected, masterBit);
+    selected->plan.coldStartMasters = static_cast<uint8_t>(selected->plan.coldStartMasters & ~masterBit);
+    if (executed && command == 0x2A) selected->plan.coldStartMasters = 0x03; // Command 42: device reset
+    return reply;
 }
 
 } // namespace lasecsimul::protocols

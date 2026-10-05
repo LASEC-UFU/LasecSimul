@@ -239,6 +239,7 @@ async function resolveProjectSubcircuitReferences(projectDir: string): Promise<v
       logicSymbolPackage: parsed.logicSymbolPackage,
       disabled: false,
       mcuHost: parsed.mcuHost,
+      ...(parsed.hartDeviceComponentId ? { hartDeviceComponentId: parsed.hartDeviceComponentId } : {}),
       serialPorts: parsed.serialPorts,
     });
     updatedComponents.set(component.id, {

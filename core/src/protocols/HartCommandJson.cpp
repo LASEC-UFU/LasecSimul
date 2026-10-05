@@ -11,7 +11,7 @@ namespace lasecsimul::protocols {
 namespace {
 
 struct VarIdName { HartVarId id; const char* name; };
-constexpr std::array<VarIdName, 12> kVarIdNames{{
+constexpr std::array<VarIdName, 14> kVarIdNames{{
     {HartVarId::ManufacturerId, "ManufacturerId"},
     {HartVarId::DeviceType, "DeviceType"},
     {HartVarId::DeviceId, "DeviceId"},
@@ -24,6 +24,8 @@ constexpr std::array<VarIdName, 12> kVarIdNames{{
     {HartVarId::Tag, "Tag"},
     {HartVarId::PrimaryVariableUnit, "PrimaryVariableUnit"},
     {HartVarId::PrimaryVariable, "PrimaryVariable"},
+    {HartVarId::AlarmSelectionCode, "AlarmSelectionCode"},
+    {HartVarId::PvTransferFunctionCode, "PvTransferFunctionCode"},
 }};
 
 std::optional<HartVarId> parseVarId(const std::string& name) noexcept {
@@ -123,8 +125,47 @@ std::optional<HartExpr> parseExpr(const nlohmann::json& node, std::string& error
     if (kind == "variable") {
         const std::string name = node.value("variable", std::string{});
         if (name.empty()) { error = "empty variable reference"; return std::nullopt; }
-        if (const auto varId = parseVarId(name)) return HartExpr::var(*varId);
-        return HartExpr::userVar(name);
+        const std::string field = node.value("field", std::string{"value"});
+        if (field == "value") {
+            if (const auto varId = parseVarId(name)) return HartExpr::var(*varId);
+            return HartExpr::userVar(name);
+        }
+        if (field == "lowerRange") return HartExpr::userVar(name, HartUserVariableField::LowerRange);
+        if (field == "upperRange") return HartExpr::userVar(name, HartUserVariableField::UpperRange);
+        error = "unknown variable field \"" + field + "\" (value, lowerRange, upperRange)";
+        return std::nullopt;
+    }
+    if (kind == "variableTable") {
+        // A request byte selects one of an authored list of variables
+        // (paged table reads); out of range is Response Code 2.
+        if (!node.contains("variables") || !node["variables"].is_array() || node["variables"].empty()) {
+            error = "variableTable requires a non-empty \"variables\" array";
+            return std::nullopt;
+        }
+        std::vector<std::string> ids;
+        for (const auto& id : node["variables"]) {
+            if (!id.is_string() || id.get<std::string>().empty()) { error = "variableTable entries must be variable ids"; return std::nullopt; }
+            ids.push_back(id.get<std::string>());
+        }
+        return HartExpr::userVarTable(std::move(ids), node.value("indexByte", size_t{0}), node.value("addend", size_t{0}));
+    }
+    if (kind == "percentOfRange") return HartExpr::percentOfRange();
+    if (kind == "loopCurrent") return HartExpr::loopCurrentMilliamps();
+    if (kind == "outputPercent") return HartExpr::outputPercent();
+    if (kind == "deviceVariable") {
+        static constexpr std::array<std::pair<const char*, HartDeviceVariableField>, 14> fields{{
+            {"code", HartDeviceVariableField::Code}, {"units", HartDeviceVariableField::Units},
+            {"value", HartDeviceVariableField::Value}, {"status", HartDeviceVariableField::Status},
+            {"upperLimit", HartDeviceVariableField::UpperLimit}, {"lowerLimit", HartDeviceVariableField::LowerLimit},
+            {"minimumSpan", HartDeviceVariableField::MinimumSpan}, {"classification", HartDeviceVariableField::ClassificationCode},
+            {"family", HartDeviceVariableField::Family}, {"acquisitionPeriod", HartDeviceVariableField::AcquisitionPeriod},
+            {"properties", HartDeviceVariableField::Properties}, {"serial", HartDeviceVariableField::Serial},
+            {"damping", HartDeviceVariableField::Damping}, {"writeMode", HartDeviceVariableField::WriteMode},
+        }};
+        const std::string field = node.value("field", std::string{});
+        for (const auto& [name, value] : fields) if (field == name) return HartExpr::deviceVariable(value);
+        error = "unknown deviceVariable field \"" + field + "\"";
+        return std::nullopt;
     }
     if (kind == "body") return HartExpr::body();
     if (kind == "bodySlice") {
@@ -153,7 +194,9 @@ bool parseStatement(const nlohmann::json& node, std::vector<HartStatement>& out,
     // "append this" (implicit Append, matches PACTware's SEQUENCE semantics
     // and keeps the flat-step authoring shape from the previous iteration
     // working unchanged).
-    if (kind == "hex" || kind == "variable" || kind == "body" || kind == "bodySlice" || kind == "localCode") {
+    if (kind == "hex" || kind == "variable" || kind == "body" || kind == "bodySlice" || kind == "localCode" ||
+        kind == "variableTable" || kind == "percentOfRange" || kind == "loopCurrent" || kind == "outputPercent" ||
+        kind == "deviceVariable") {
         auto expr = parseExpr(node, error);
         if (!expr) return false;
         out.push_back(HartStatement{HartAppendStmt{std::move(*expr)}});
@@ -161,12 +204,47 @@ bool parseStatement(const nlohmann::json& node, std::vector<HartStatement>& out,
     }
     if (kind == "set") {
         const std::string target = node.value("target", std::string{});
-        const auto varId = parseVarId(target);
-        if (!varId) { error = "SET target \"" + target + "\" is not a recognized built-in variable"; return false; }
+        if (target.empty()) { error = "SET requires a \"target\""; return false; }
         if (!node.contains("value")) { error = "SET requires a \"value\" expression"; return false; }
         auto value = parseExpr(node["value"], error);
         if (!value) return false;
-        out.push_back(HartStatement{HartSetStmt{*varId, std::move(*value)}});
+        // A built-in identity variable, otherwise an authored device variable
+        // (manufacturer parameter) written with its own declared type.
+        if (const auto varId = parseVarId(target)) {
+            out.push_back(HartStatement{HartSetStmt{*varId, std::move(*value)}});
+            return true;
+        }
+        const std::string field = node.value("field", std::string{"value"});
+        HartUserVariableField userField = HartUserVariableField::Value;
+        if (field == "lowerRange") userField = HartUserVariableField::LowerRange;
+        else if (field == "upperRange") userField = HartUserVariableField::UpperRange;
+        else if (field != "value") { error = "unknown SET field \"" + field + "\""; return false; }
+        out.push_back(HartStatement{HartSetUserVariableStmt{target, userField, std::move(*value)}});
+        return true;
+    }
+    if (kind == "setDeviceVariable") {
+        const std::string field = node.value("field", std::string{});
+        HartDeviceVariableField target;
+        if (field == "units") target = HartDeviceVariableField::Units;
+        else if (field == "value") target = HartDeviceVariableField::Value;
+        else if (field == "damping") target = HartDeviceVariableField::Damping;
+        else if (field == "writeMode") target = HartDeviceVariableField::WriteMode;
+        else { error = "unknown writable deviceVariable field \"" + field + "\""; return false; }
+        if (!node.contains("value")) { error = "setDeviceVariable requires a \"value\" expression"; return false; }
+        auto value = parseExpr(node["value"], error);
+        if (!value) return false;
+        out.push_back(HartStatement{HartSetDeviceVariableStmt{target, std::move(*value)}});
+        return true;
+    }
+    if (kind == "responseCode") {
+        // HCF_SPEC-307: an error ("abort") stops the command with no data
+        // bytes; otherwise the code is a warning and the data are kept.
+        if (node.value("noReply", false)) { out.push_back(HartStatement{HartResponseCodeStmt{0, true, true}}); return true; }
+        if (!node.contains("code") || !node["code"].is_number_unsigned() || node["code"].get<unsigned>() > 255) {
+            error = "responseCode requires an unsigned \"code\" (0-255)";
+            return false;
+        }
+        out.push_back(HartStatement{HartResponseCodeStmt{node["code"].get<uint8_t>(), node.value("abort", false), false}});
         return true;
     }
     if (kind == "if") {
@@ -242,7 +320,22 @@ nlohmann::json exprToJson(const HartExpr& expr) {
     switch (expr.kind) {
         case HartExpr::Kind::HexConstant: return {{"kind", "hex"}, {"bytes", toHex(expr.constant)}};
         case HartExpr::Kind::Variable: return {{"kind", "variable"}, {"variable", varIdName(expr.variable)}};
-        case HartExpr::Kind::UserVariable: return {{"kind", "variable"}, {"variable", expr.variableId}};
+        case HartExpr::Kind::UserVariable: {
+            nlohmann::json out{{"kind", "variable"}, {"variable", expr.variableId}};
+            if (expr.userVariableField == HartUserVariableField::LowerRange) out["field"] = "lowerRange";
+            if (expr.userVariableField == HartUserVariableField::UpperRange) out["field"] = "upperRange";
+            return out;
+        }
+        case HartExpr::Kind::UserVariableTable:
+            return {{"kind", "variableTable"}, {"variables", expr.table}, {"indexByte", expr.offset}, {"addend", expr.length}};
+        case HartExpr::Kind::PercentOfRange: return {{"kind", "percentOfRange"}};
+        case HartExpr::Kind::LoopCurrentMilliamps: return {{"kind", "loopCurrent"}};
+        case HartExpr::Kind::OutputPercent: return {{"kind", "outputPercent"}};
+        case HartExpr::Kind::DeviceVariable: {
+            static constexpr std::array<const char*, 14> names{"code", "units", "value", "status", "upperLimit", "lowerLimit",
+                "minimumSpan", "classification", "family", "acquisitionPeriod", "properties", "serial", "damping", "writeMode"};
+            return {{"kind", "deviceVariable"}, {"field", names[static_cast<size_t>(expr.deviceVariableField)]}};
+        }
         case HartExpr::Kind::RequestBody: return {{"kind", "body"}};
         case HartExpr::Kind::BodySlice: return {{"kind", "bodySlice"}, {"offset", expr.offset}, {"length", expr.length}};
         case HartExpr::Kind::LocalCode: return {{"kind", "localCode"}};
@@ -260,6 +353,12 @@ nlohmann::json statementToJson(const HartStatement& statement) {
                 return exprToJson(node.source);
             } else if constexpr (std::is_same_v<T, HartSetStmt>) {
                 return {{"kind", "set"}, {"target", varIdName(node.target)}, {"value", exprToJson(node.value)}};
+            } else if constexpr (std::is_same_v<T, HartSetDeviceVariableStmt>) {
+                const char* field = "value";
+                if (node.target == HartDeviceVariableField::Units) field = "units";
+                else if (node.target == HartDeviceVariableField::Damping) field = "damping";
+                else if (node.target == HartDeviceVariableField::WriteMode) field = "writeMode";
+                return {{"kind", "setDeviceVariable"}, {"field", field}, {"value", exprToJson(node.value)}};
             } else if constexpr (std::is_same_v<T, HartIfStmt>) {
                 return {{"kind", "if"}, {"lhs", exprToJson(node.lhs)}, {"rhs", exprToJson(node.rhs)},
                         {"then", statementsToJson(node.thenBranch)}, {"else", statementsToJson(node.elseBranch)}};
@@ -273,6 +372,14 @@ nlohmann::json statementToJson(const HartStatement& statement) {
             } else if constexpr (std::is_same_v<T, HartForCodesStmt>) {
                 return {{"kind", "forCodes"}, {"source", exprToJson(node.source)}, {"maxIterations", node.maxIterations},
                         {"prefix", statementsToJson(node.prefix)}, {"body", statementsToJson(node.body)}};
+            } else if constexpr (std::is_same_v<T, HartSetUserVariableStmt>) {
+                nlohmann::json out{{"kind", "set"}, {"target", node.variableId}, {"value", exprToJson(node.value)}};
+                if (node.field == HartUserVariableField::LowerRange) out["field"] = "lowerRange";
+                if (node.field == HartUserVariableField::UpperRange) out["field"] = "upperRange";
+                return out;
+            } else if constexpr (std::is_same_v<T, HartResponseCodeStmt>) {
+                if (node.noReply) return {{"kind", "responseCode"}, {"noReply", true}};
+                return {{"kind", "responseCode"}, {"code", node.code}, {"abort", node.abort}};
             } else {
                 return {{"kind", "hex"}, {"bytes", ""}}; // unreachable: visit above is exhaustive over HartStatementNode
             }

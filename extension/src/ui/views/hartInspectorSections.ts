@@ -83,6 +83,10 @@ export interface HartVariableRow {
   readable?: boolean;
   writable?: boolean;
   runtimeMutable?: boolean;
+  /** Meaning of each code of an enumerated manufacturer parameter (e.g. the
+   * LD301 flange material: "3" -> "Hastelloy C"), shown instead of the raw
+   * number. Data only: the wire value stays the code. */
+  codes?: Record<string, string>;
   deviceVariableCode?: number;
   deviceVariableUnit?: number;
   classification?: number;
@@ -108,6 +112,9 @@ export interface HartCommandStepRow {
   variable?: string; // "kind":"variable"
   offset?: number; // "kind":"bodySlice"
   length?: number; // "kind":"bodySlice"
+  /** A step this simple editor cannot edit (responseCode, variableTable,
+   * forCodes, if, ...): carried through verbatim, shown read-only. */
+  raw?: Record<string, unknown>;
 }
 
 export interface HartCommandRow {
@@ -115,6 +122,17 @@ export interface HartCommandRow {
   name: string;
   enabled: boolean;
   responseSteps: HartCommandStepRow[];
+  /** Write/after stages are not editable here; they are preserved as-is. */
+  writeSteps?: unknown[];
+  afterSteps?: unknown[];
+}
+
+const SIMPLE_STEP_KINDS = ["hex", "variable", "body", "bodySlice"];
+
+function isSimpleStep(step: Record<string, unknown>): boolean {
+  if (!SIMPLE_STEP_KINDS.includes(String(step.kind))) return false;
+  // A variable step that reads a range field is not representable either.
+  return !(step.kind === "variable" && step.field !== undefined && step.field !== "value");
 }
 
 function asRecordArray(json: string): Array<Record<string, unknown>> {
@@ -152,6 +170,9 @@ export function parseVariableRows(json: string): HartVariableRow[] {
     unit: typeof item.unit === "string" ? item.unit : "",
     value: typeof item.value === "number" ? item.value : 0,
     runtimeMutable: item.runtimeMutable === true,
+    ...(item.codes && typeof item.codes === "object" && !Array.isArray(item.codes)
+      ? { codes: Object.fromEntries(Object.entries(item.codes as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === "string")) }
+      : {}),
     ...(typeof item.deviceVariableCode === "number" ? { deviceVariableCode: item.deviceVariableCode } : {}),
     ...(typeof item.deviceVariableUnit === "number" ? { deviceVariableUnit: item.deviceVariableUnit } : {}),
     ...(typeof item.classification === "number" ? { classification: item.classification } : {}),
@@ -188,6 +209,22 @@ export function parseVariableRows(json: string): HartVariableRow[] {
  * the payload -- a row that already existed at position i keeps its old id
  * regardless of what the incoming payload says; a genuinely new row (no
  * previous row at that position) keeps whatever id it arrived with. */
+/** The variables editor renders only part of each variable (Device
+ * Variable metadata, derived sources, text values, family data, ... are not
+ * editable there). Merges every field the webview did not send back from the
+ * previous variable with the same id, so an edit never strips them. */
+export function mergeVariableRows(previousJson: string, nextJson: string): string {
+  const previous = new Map(asRecordArray(previousJson).map((row) => [String(row.id ?? ""), row]));
+  return JSON.stringify(asRecordArray(nextJson).map((row) => ({ ...(previous.get(String(row.id ?? "")) ?? {}), ...row })));
+}
+
+/** Same for commands: write/after stages and any other field the editor does
+ * not render are kept from the previous command with the same id. */
+export function mergeCommandRows(previousJson: string, nextJson: string): string {
+  const previous = new Map(asRecordArray(previousJson).map((row) => [Number(row.id), row]));
+  return JSON.stringify(asRecordArray(nextJson).map((row) => ({ ...(previous.get(Number(row.id)) ?? {}), ...row })));
+}
+
 export function preserveExistingVariableIds(previousJson: string, nextJson: string): string {
   const previous = asRecordArray(previousJson);
   const next = asRecordArray(nextJson);
@@ -221,21 +258,26 @@ export function parseCommandRows(json: string): HartCommandRow[] {
     responseSteps: Array.isArray(item.responseSteps)
       ? (item.responseSteps as unknown[])
           .filter((s): s is Record<string, unknown> => Boolean(s) && typeof s === "object")
-          .map((s) => ({
-            kind: (["hex", "variable", "body", "bodySlice"].includes(String(s.kind)) ? s.kind : "hex") as HartCommandStepKind,
+          .map((s) => isSimpleStep(s) ? {
+            kind: s.kind as HartCommandStepKind,
             ...(typeof s.bytes === "string" ? { bytes: s.bytes } : {}),
             ...(typeof s.variable === "string" ? { variable: s.variable } : {}),
             ...(typeof s.offset === "number" ? { offset: s.offset } : {}),
             ...(typeof s.length === "number" ? { length: s.length } : {}),
-          }))
+          } : { kind: "hex" as HartCommandStepKind, raw: s })
       : [],
+    ...(Array.isArray(item.writeSteps) ? { writeSteps: item.writeSteps as unknown[] } : {}),
+    ...(Array.isArray(item.afterSteps) ? { afterSteps: item.afterSteps as unknown[] } : {}),
   }));
 }
 
 export function serializeCommandRows(rows: HartCommandRow[]): string {
   return JSON.stringify(rows.map((row) => ({
     id: row.id, name: row.name, enabled: row.enabled,
+    ...(row.writeSteps ? { writeSteps: row.writeSteps } : {}),
+    ...(row.afterSteps ? { afterSteps: row.afterSteps } : {}),
     responseSteps: row.responseSteps.map((step) => {
+      if (step.raw) return step.raw;
       if (step.kind === "hex") return { kind: "hex", bytes: step.bytes ?? "" };
       if (step.kind === "variable") return { kind: "variable", variable: step.variable ?? "ManufacturerId" };
       if (step.kind === "bodySlice") return { kind: "bodySlice", offset: step.offset ?? 0, length: step.length ?? 1 };
@@ -260,6 +302,19 @@ export interface HartSectionOptions {
   structuralEditsLocked: boolean;
 }
 
+/** Value editor of a variable: a list of named codes when the variable
+ * declares them (an unlisted current code stays selectable, marked unknown),
+ * otherwise a number. */
+export function valueEditorHtml(row: HartVariableRow, dataAttrs: string, disabled: boolean): string {
+  const codes = row.codes ?? {};
+  const keys = Object.keys(codes).sort((a, b) => Number(a) - Number(b));
+  if (keys.length === 0) return `<input type="number" ${dataAttrs} value="${row.value}" ${disabled ? "disabled" : ""}>`;
+  const current = String(row.value);
+  const options = keys.map((code) => ({ value: code, label: `${codes[code]} (${code})` }));
+  if (!keys.includes(current)) options.unshift({ value: current, label: `código ${current} (desconhecido)` });
+  return selectHtml(`${dataAttrs} data-hv-numeric="1"`, options, current, disabled);
+}
+
 export function renderVariablesSection(rows: HartVariableRow[], options: HartSectionOptions): string {
   const rowHtml = rows.map((row, i) => {
     const d = (field: string) => `data-hv-index="${i}" data-hv-field="${field}"`;
@@ -277,7 +332,7 @@ export function renderVariablesSection(rows: HartVariableRow[], options: HartSec
         ${selectHtml(`data-hv-index="${i}" data-hv-field="direction"`, HART_VARIABLE_DIRECTIONS, row.direction, structuralDisabled)}
         <input ${d("unit")} value="${escapeAttr(row.unit)}" placeholder="unit">
       </div>
-      ${row.direction === "Internal" ? `<div class="hv-line"><label><input type="number" ${d("value")} value="${row.value}" ${valueDisabled ? "disabled" : ""}> Value</label></div>` : ""}
+      ${row.direction === "Internal" ? `<div class="hv-line"><label>${valueEditorHtml(row, d("value"), valueDisabled)} Value</label></div>` : ""}
       ${row.direction === "Input" ? `<div class="hv-note">Input: value owned by the Signal Graph wire.</div><input type="checkbox" data-hv-field="writable" disabled hidden>` : ""}
       ${row.direction === "Output" ? `<div class="hv-note">Output: value published to the Signal Graph.</div>` : ""}
     </div>`;
@@ -291,6 +346,15 @@ export function renderCommandsSection(rows: HartCommandRow[], compilerStatus: st
   const structuralDisabled = options.structuralEditsLocked;
   const rowHtml = rows.map((row, i) => {
     const stepsHtml = row.responseSteps.map((step, si) => {
+      if (step.raw) {
+        // Advanced DSL step: read-only here, round-tripped verbatim.
+        const json = JSON.stringify(step.raw);
+        return `<div class="hc-step"><code data-hc-index="${i}" data-hc-step="${si}" data-hc-raw="${escapeAttr(json)}" title="Passo avançado da DSL HART (editável no JSON do comando)">${escapeAttr(String(step.raw.kind))}: ${escapeAttr(json.length > 90 ? `${json.slice(0, 90)}…` : json)}</code>
+        <button data-hc-step-up="${i}:${si}" ${structuralDisabled || si === 0 ? "disabled" : ""} title="Move up">&uarr;</button>
+        <button data-hc-step-down="${i}:${si}" ${structuralDisabled || si === row.responseSteps.length - 1 ? "disabled" : ""} title="Move down">&darr;</button>
+        <button data-hc-step-remove="${i}:${si}" ${structuralDisabled ? "disabled" : ""} title="Remove step">&minus;</button>
+      </div>`;
+      }
       const kindSelect = selectHtml(`data-hc-index="${i}" data-hc-step="${si}" data-hc-field="kind"`, HART_COMMAND_STEP_KINDS, step.kind, structuralDisabled);
       let paramHtml = "";
       if (step.kind === "hex") {
@@ -345,7 +409,7 @@ export function hartInspectorClientScript(): string {
       var i = Number(el.dataset.hvIndex), field = el.dataset.hvField;
       if (field === undefined) return;
       rows[i] = rows[i] || {};
-      rows[i][field] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
+      rows[i][field] = el.type === 'checkbox' ? el.checked : (el.type === 'number' || el.dataset.hvNumeric) ? Number(el.value) : el.value;
     });
     return rows.filter(Boolean);
   }
@@ -362,6 +426,7 @@ export function hartInspectorClientScript(): string {
     document.querySelectorAll('[data-hc-step]').forEach(function(el) {
       var i = Number(el.dataset.hcIndex), s = Number(el.dataset.hcStep), field = el.dataset.hcField;
       rows[i] = rows[i] || { responseSteps: [] };
+      if (el.dataset.hcRaw !== undefined) { rows[i].responseSteps[s] = JSON.parse(el.dataset.hcRaw); return; }
       rows[i].responseSteps[s] = rows[i].responseSteps[s] || {};
       rows[i].responseSteps[s][field] = el.type === 'number' ? Number(el.value) : el.value;
     });

@@ -131,6 +131,8 @@ test("catalogo canonico registra PLC, Modbus e HART nas areas visiveis", () => {
   const udp = byTypeId.get("peripherals.udp");
   assert(udp?.workspaceSection === "misc", "peripherals.udp deve existir na aba Miscelâneos");
   assert(udp?.folderPath?.[0] === "peripherals", "peripherals.udp deve ficar na pasta output");
+  // Mantido só para abrir projetos antigos: o UDP agora é uma opção do Modem HART.
+  assert(udp?.hidden === true, "peripherals.udp (UDP direto no dispositivo) deve estar oculto");
 });
 
 // Property Inspector editor-kind coverage gate (section 117/120/134 of the
