@@ -20276,49 +20276,41 @@
       "workspaceSection": "process",
       "graphical": true,
       "package": {
-        "width": 120,
-        "height": 120,
+        "width": 88,
+        "height": 58,
         "border": false,
         "shapes": [
           {
             "kind": "rect",
             "x": 0,
             "y": 0,
-            "w": 120,
-            "h": 120,
-            "rx": 10,
-            "ry": 10,
+            "w": 88,
+            "h": 58,
+            "rx": 5,
+            "ry": 5,
             "fill": "#b9bfc6",
             "stroke": "#4d525a",
             "strokeWidth": 1.5
           },
           {
             "kind": "rect",
-            "x": 7,
-            "y": 7,
-            "w": 106,
-            "h": 76,
-            "rx": 6,
-            "ry": 6,
+            "x": 5,
+            "y": 5,
+            "w": 78,
+            "h": 48,
+            "rx": 3,
+            "ry": 3,
             "fill": "#c5cfb2",
             "stroke": "#59604f",
             "strokeWidth": 1
-          },
-          {
-            "kind": "text",
-            "x": 47,
-            "y": 101,
-            "value": "HART",
-            "fontSize": 10,
-            "color": "#2b2f33"
           }
         ],
         "pins": [
           {
             "id": "sensor_plus",
             "kind": "ANALOG_IN",
-            "x": 0,
-            "y": 95,
+            "x": -8,
+            "y": 37,
             "angle": 180,
             "length": 8,
             "label": "S+"
@@ -20326,8 +20318,8 @@
           {
             "id": "sensor_minus",
             "kind": "ANALOG_IN",
-            "x": 0,
-            "y": 110,
+            "x": -8,
+            "y": 50,
             "angle": 180,
             "length": 8,
             "label": "S-"
@@ -20335,8 +20327,8 @@
           {
             "id": "loop_plus",
             "kind": "POWER",
-            "x": 120,
-            "y": 95,
+            "x": 96,
+            "y": 37,
             "angle": 0,
             "length": 8,
             "label": "LOOP+"
@@ -20344,8 +20336,8 @@
           {
             "id": "loop_minus",
             "kind": "POWER",
-            "x": 120,
-            "y": 110,
+            "x": 96,
+            "y": 50,
             "angle": 0,
             "length": 8,
             "label": "LOOP-"
@@ -20356,10 +20348,10 @@
           "expectedVersion": 1279476785,
           "surface": {
             "encoding": "segment-lcd",
-            "x": 9,
-            "y": 9,
-            "w": 102,
-            "h": 72,
+            "x": 7,
+            "y": 7,
+            "w": 74,
+            "h": 44,
             "sourceWidth": 1,
             "sourceHeight": 1,
             "payloadOffset": 12

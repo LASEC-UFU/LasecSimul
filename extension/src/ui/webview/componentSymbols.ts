@@ -12,7 +12,7 @@
 
 import { ComponentViewSpec, JUNCTION_TYPE_ID, PackageDescriptor, PackageDynamicPinGroup, PackageNumberValue, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, SimulideQtWidgetSpec, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecHitTest, ViewSpecInteraction, ViewSpecProjection, WebviewComponentModel } from "./model.js";
 import { simulidePaintToPackageShapes } from "./simulidePaint.js";
-import { decodeSegmentLcd, segmentLcdSvg } from "./segmentLcd";
+import { decodeSegmentLcd, segmentLcdSvg } from "./segmentLcd.js";
 
 export interface ComponentBox {
   width: number;

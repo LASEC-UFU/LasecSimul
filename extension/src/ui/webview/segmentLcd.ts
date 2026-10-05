@@ -164,7 +164,7 @@ export function segmentLcdSvg(frame: SegmentLcdFrame | undefined, x: number, y: 
   markup += annunciator("°", U(0.765), V(0.70), small * 1.2, on(A.degree), lit, ghost);
   markup += annunciator("min", U(0.80), V(0.84), small, on(A.minutes), lit, ghost);
   // Bottom row.
-  markup += annunciator("SP", U(0.36), V(0.97), small, on(A.setpoint), lit, ghost);
-  markup += annunciator("PV", U(0.52), V(0.97), small, on(A.processVariable), lit, ghost);
+  markup += annunciator("SP", U(0.36), V(0.93), small, on(A.setpoint), lit, ghost);
+  markup += annunciator("PV", U(0.52), V(0.93), small, on(A.processVariable), lit, ghost);
   return `<g data-runtime-surface="segment-lcd">${markup}</g>`;
 }

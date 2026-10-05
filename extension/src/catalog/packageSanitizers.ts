@@ -46,7 +46,7 @@ const VIEW_SPEC_PROJECTION_KINDS = new Set(["translate", "rotate", "fill", "visi
 const VIEW_SPEC_HIT_TEST_KINDS = new Set(["rect", "circle", "ellipse", "polygon", "path"]);
 const VIEW_SPEC_INTERACTION_KINDS = new Set(["dragVector", "dragAngular", "touchPoint", "press", "toggle", "slider"]);
 
-export function sanitizePackageShape(value: unknown): PackageShape | undefined {
+export function sanitizePackageShape(value: unknown, assetBasePath?: string): PackageShape | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const shape = value as Record<string, unknown> & { kind?: unknown };
   if (typeof shape.kind !== "string" || !PACKAGE_SHAPE_KINDS.has(shape.kind)) return undefined;
@@ -72,8 +72,17 @@ export function sanitizePackageShape(value: unknown): PackageShape | undefined {
   const logicGateBody = logicGateBodyStyle === "and" || logicGateBodyStyle === "or"
     ? { style: logicGateBodyStyle as "and" | "or" }
     : undefined;
+  let imageHref: string | undefined;
+  if (shape.kind === "image" && assetBasePath && typeof shape.href === "string" &&
+      !/^(?:data:|#|https?:|file:)/i.test(shape.href)) {
+    const assetPath = normalizeAbsolutePath(assetBasePath, shape.href);
+    if (fileExists(assetPath)) {
+      imageHref = `data:${imageMimeForFile(assetPath)};base64,${fs.readFileSync(assetPath).toString("base64")}`;
+    }
+  }
   return {
     ...(shape as unknown as PackageShape),
+    ...(imageHref ? { href: imageHref } : {}),
     cssClass: typeof shape.cssClass === "string" && shape.cssClass.trim() ? shape.cssClass.trim() : undefined,
     partId: typeof shape.partId === "string" && shape.partId.trim() ? shape.partId.trim() : undefined,
     stateFill: sanitizeSimulidePaintStateFill(shape.stateFill),
@@ -552,7 +561,7 @@ export function sanitizeViewSpecPart(value: unknown): ViewSpecPart | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const raw = value as Record<string, unknown>;
   const paint = Array.isArray(raw.paint)
-    ? raw.paint.map(sanitizePackageShape).filter((shape): shape is PackageShape => Boolean(shape))
+    ? raw.paint.map((shape: unknown) => sanitizePackageShape(shape)).filter((shape): shape is PackageShape => Boolean(shape))
     : undefined;
   const hitTest = typeof raw.hitTest === "string" && raw.hitTest.trim()
     ? raw.hitTest.trim()
@@ -735,7 +744,7 @@ export function sanitizeComponentViewSpec(value: unknown): ComponentViewSpec | u
   if (typeof value !== "object" || value === null) return undefined;
   const raw = value as Record<string, unknown>;
   const paint = Array.isArray(raw.paint)
-    ? raw.paint.map(sanitizePackageShape).filter((shape): shape is PackageShape => Boolean(shape))
+    ? raw.paint.map((shape: unknown) => sanitizePackageShape(shape)).filter((shape): shape is PackageShape => Boolean(shape))
     : [];
   const dialWidgetRaw = typeof raw.dialWidget === "object" && raw.dialWidget !== null
     ? raw.dialWidget as Record<string, unknown>
@@ -1035,7 +1044,7 @@ export function sanitizePackage(value: unknown, assetBasePath?: string): Package
   const shapes: PackageShape[] = [];
   if (Array.isArray(raw.shapes)) {
     for (const shapeValue of raw.shapes) {
-      const shape = sanitizePackageShape(shapeValue);
+      const shape = sanitizePackageShape(shapeValue, assetBasePath);
       if (shape) shapes.push(shape);
     }
   }

@@ -3,7 +3,9 @@ import * as path from "path";
 import { manifestHartDeviceComponentId } from "../hart/hartManifest";
 import { assert, createTestRunner } from "../ipc/testSupport/MockCoreServer";
 import { loadUnifiedCatalog } from "./UnifiedCatalog";
+import { sanitizePackage } from "./packageSanitizers";
 import { buildPaletteTree, PaletteTreeNode } from "../ui/webview/paletteTree";
+import { livePackagePreviewSymbolSvg } from "../ui/webview/componentSymbols";
 
 // The standard HART field device is the base every transmitter is built
 // from; LD301 is the subcircuit subcircuits/hart_smar_ld301 (the old built-in
@@ -86,6 +88,34 @@ function findFolder(nodes: PaletteTreeNode[], label: string): Extract<PaletteTre
     const pins = (manifest.interface as Array<{ pinId: string }>).map((entry) => entry.pinId);
     assert(JSON.stringify(pins) === JSON.stringify(["sensor_plus", "sensor_minus", "loop_plus", "loop_minus"]), "pinos do subcircuito");
     assert(JSON.stringify(manifest.folderPath) === JSON.stringify(["Protocolos Industriais", "HART"]), "pasta HART");
+  });
+
+  await test("LD301 uses its packaged SVG on the schematic and in the palette", () => {
+    const subcircuitsDir = path.resolve(__dirname, "../../../..", "subcircuits");
+    const manifest = JSON.parse(fs.readFileSync(path.join(subcircuitsDir, "hart_smar_ld301.lssubcircuit"), "utf8"));
+    const symbol = sanitizePackage(manifest.symbol, subcircuitsDir);
+    const artwork = fs.readFileSync(path.join(subcircuitsDir, "ld301.svg"));
+    const image = symbol?.shapes?.find((shape) => shape.kind === "image");
+    const prefix = "data:image/svg+xml;base64,";
+    assert(Boolean(image?.href?.startsWith(prefix)), "forma vetorial do símbolo");
+    assert(Buffer.from(image?.href?.slice(prefix.length) ?? "", "base64").equals(artwork), "símbolo usa o SVG empacotado");
+    assert(manifest.iconPath === "./ld301.svg", "paleta aponta para o mesmo SVG empacotado");
+    const preview = livePackagePreviewSymbolSvg(symbol!);
+    assert(preview.svg.includes(prefix), "prévia do esquemático desenha o SVG");
+    assert(symbol?.pins.length === 4, "quatro terminais HART preservados");
+    const projectCatalog = JSON.parse(fs.readFileSync(path.join(subcircuitsDir, "..", "project", "schema", "component-catalog.json"), "utf8"));
+    const standard = projectCatalog.items.find((entry: { typeId: string }) => entry.typeId === "protocol.hart.device.standard")?.package;
+    const display = manifest.exposedComponents.find((entry: { componentId: string }) => entry.componentId === "ld301");
+    assert(Boolean(display && standard), "LCD e posição exposta presentes");
+    assert(display.y + standard!.height < image!.y!, "LCD acima da imagem, sem sobreposição");
+    assert(Boolean(standard!.shapes?.every((shape: { kind: string }) => shape.kind !== "text")), "LCD sem inscrição HART");
+    const glass = standard!.shapes?.[1];
+    assert(Boolean(glass?.kind === "rect" && glass.x === 5 && glass.y === 5 &&
+      standard!.width - glass.x - glass.w! === 5 && standard!.height - glass.y - glass.h! === 5),
+      "borda do LCD com a mesma espessura nos quatro lados");
+    const screenPreview = livePackagePreviewSymbolSvg(standard!);
+    assert(!screenPreview.svg.includes("terminal-clip"), "terminais não recortam as laterais do LCD");
+    assert(display.x + screenPreview.offsetX === 31, "LCD centralizado sobre o transmissor");
   });
 
   const { failed } = finish();

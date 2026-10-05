@@ -31,5 +31,6 @@ function runProject(label, tsconfigPath) {
 
 const hostOk = runProject("host", "./");
 const webviewOk = runProject("webview", "./tsconfig.webview.json");
+const importsOk = webviewOk && spawnSync(process.execPath, [require.resolve("./check-webview-modules")], { stdio: "inherit" }).status === 0;
 
-process.exitCode = hostOk && webviewOk ? 0 : 1;
+process.exitCode = hostOk && webviewOk && importsOk ? 0 : 1;

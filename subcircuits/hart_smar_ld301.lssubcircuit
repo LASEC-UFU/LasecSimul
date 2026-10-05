@@ -217,18 +217,20 @@
     }
   ],
   "symbolMode": "custom",
+  "iconPath": "./ld301.svg",
   "symbol": {
     "width": 150,
-    "height": 158,
-    "border": true,
+    "height": 228,
+    "border": false,
     "shapes": [
       {
-        "kind": "text",
-        "x": 44,
-        "y": 151,
-        "value": "SMAR LD301",
-        "fontSize": 10,
-        "color": "#000000"
+        "kind": "image",
+        "href": "./ld301.svg",
+        "x": 0,
+        "y": 66,
+        "w": 150,
+        "h": 162,
+        "preserveAspectRatio": "xMidYMid meet"
       }
     ],
     "pins": [
@@ -236,7 +238,7 @@
         "id": "sensor_plus",
         "kind": "ANALOG_IN",
         "x": 0,
-        "y": 104,
+        "y": 168,
         "angle": 180,
         "length": 8,
         "label": "S+"
@@ -245,7 +247,7 @@
         "id": "sensor_minus",
         "kind": "ANALOG_IN",
         "x": 0,
-        "y": 124,
+        "y": 188,
         "angle": 180,
         "length": 8,
         "label": "S-"
@@ -254,7 +256,7 @@
         "id": "loop_plus",
         "kind": "POWER",
         "x": 150,
-        "y": 104,
+        "y": 168,
         "angle": 0,
         "length": 8,
         "label": "LOOP+"
@@ -263,7 +265,7 @@
         "id": "loop_minus",
         "kind": "POWER",
         "x": 150,
-        "y": 124,
+        "y": 188,
         "angle": 0,
         "length": 8,
         "label": "LOOP-"
@@ -273,8 +275,8 @@
   "exposedComponents": [
     {
       "componentId": "ld301",
-      "x": 15,
-      "y": 8,
+      "x": 23,
+      "y": 4,
       "rotation": 0,
       "flipH": false,
       "flipV": false,
