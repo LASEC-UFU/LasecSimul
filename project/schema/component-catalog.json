@@ -476,6 +476,13 @@
             "Tanks & Vessels"
           ]
         },
+        "graphics.valve_globe_svg": {
+          "label": "Vector Globe Valve",
+          "folderPath": [
+            "Graphical",
+            "Valves"
+          ]
+        },
         "graphics.tank_horizontal": {
           "label": "Horizontal Tank",
           "folderPath": [
@@ -724,7 +731,6 @@
         "graphics.pid.acc_afr": {
           "label": "Air Filter Regulator",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Accessories"
           ]
@@ -732,7 +738,6 @@
         "graphics.pid.acc_bimetal": {
           "label": "Bimetal Thermometer",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Accessories"
           ]
@@ -740,7 +745,6 @@
         "graphics.pid.acc_bulb": {
           "label": "Filled Bulb + Capillary",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Accessories"
           ]
@@ -748,7 +752,6 @@
         "graphics.pid.acc_floatcage": {
           "label": "External Float Cage",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Accessories"
           ]
@@ -756,7 +759,6 @@
         "graphics.pid.acc_lg": {
           "label": "Gauge Glass",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Accessories"
           ]
@@ -764,7 +766,6 @@
         "graphics.pid.acc_loadcell": {
           "label": "Load Cell",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Accessories"
           ]
@@ -772,7 +773,6 @@
         "graphics.pid.acc_pg": {
           "label": "Pressure Gauge",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Accessories"
           ]
@@ -780,7 +780,6 @@
         "graphics.pid.acc_radar": {
           "label": "Radar Level Horn",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Accessories"
           ]
@@ -788,7 +787,6 @@
         "graphics.pid.acc_seal": {
           "label": "Diaphragm Seal",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Accessories"
           ]
@@ -796,7 +794,6 @@
         "graphics.pid.acc_siphon": {
           "label": "Gauge Siphon (Pigtail)",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Accessories"
           ]
@@ -804,7 +801,6 @@
         "graphics.pid.acc_thermowell": {
           "label": "Thermowell",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Accessories"
           ]
@@ -812,7 +808,6 @@
         "graphics.pid.agitator": {
           "label": "Agitator / Mixer",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Rotating"
           ]
@@ -820,7 +815,6 @@
         "graphics.pid.air_dryer": {
           "label": "Instrument Air Dryer",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -828,7 +822,6 @@
         "graphics.pid.ann_arrow": {
           "label": "Flow Arrow",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Annotation"
           ]
@@ -836,7 +829,6 @@
         "graphics.pid.ann_bl_flag": {
           "label": "Battery Limit Flag",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Annotation"
           ]
@@ -844,7 +836,6 @@
         "graphics.pid.ann_cloud": {
           "label": "Revision Cloud",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Annotation"
           ]
@@ -852,7 +843,6 @@
         "graphics.pid.ann_detail_flag": {
           "label": "Detail Flag",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Annotation"
           ]
@@ -860,7 +850,6 @@
         "graphics.pid.ann_equipstrip": {
           "label": "Equipment Title Strip",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Annotation"
           ]
@@ -868,7 +857,6 @@
         "graphics.pid.ann_holds": {
           "label": "HOLD Flag",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Annotation"
           ]
@@ -876,7 +864,6 @@
         "graphics.pid.ann_insulation": {
           "label": "Insulation Mark",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Annotation"
           ]
@@ -884,7 +871,6 @@
         "graphics.pid.ann_matchline": {
           "label": "Match Line",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Annotation"
           ]
@@ -892,7 +878,6 @@
         "graphics.pid.ann_noteflag": {
           "label": "Note Flag",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Annotation"
           ]
@@ -900,7 +885,6 @@
         "graphics.pid.ann_offpage": {
           "label": "Off-Page Connector",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Annotation"
           ]
@@ -908,7 +892,6 @@
         "graphics.pid.ann_onpage": {
           "label": "On-Page Reference",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Annotation"
           ]
@@ -916,7 +899,6 @@
         "graphics.pid.ann_revtriangle": {
           "label": "Revision Triangle",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Annotation"
           ]
@@ -924,7 +906,6 @@
         "graphics.pid.ann_slope": {
           "label": "Slope Mark",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Annotation"
           ]
@@ -932,7 +913,6 @@
         "graphics.pid.ann_text": {
           "label": "Text Note",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Annotation"
           ]
@@ -940,7 +920,6 @@
         "graphics.pid.ann_tiein": {
           "label": "Tie-In Point",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Annotation"
           ]
@@ -948,7 +927,6 @@
         "graphics.pid.bagfilter": {
           "label": "Bag House",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -956,7 +934,6 @@
         "graphics.pid.bl_terminal": {
           "label": "Battery Limit / Terminal",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -964,7 +941,6 @@
         "graphics.pid.blender_ribbon": {
           "label": "Ribbon Blender",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -972,7 +948,6 @@
         "graphics.pid.blower": {
           "label": "Blower / Fan",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Rotating"
           ]
@@ -980,7 +955,6 @@
         "graphics.pid.boiler": {
           "label": "Boiler",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -988,7 +962,6 @@
         "graphics.pid.bpcv": {
           "label": "Back-Pressure Regulator",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Safety"
           ]
@@ -996,7 +969,6 @@
         "graphics.pid.breather": {
           "label": "Breather Vent",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Safety"
           ]
@@ -1004,7 +976,6 @@
         "graphics.pid.bucket_elevator": {
           "label": "Bucket Elevator",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1012,7 +983,6 @@
         "graphics.pid.centrifuge": {
           "label": "Centrifuge",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1020,7 +990,6 @@
         "graphics.pid.chiller": {
           "label": "Chiller Package",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1028,7 +997,6 @@
         "graphics.pid.clarifier": {
           "label": "Clarifier / Thickener",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1036,7 +1004,6 @@
         "graphics.pid.coalescer": {
           "label": "Coalescer",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1044,7 +1011,6 @@
         "graphics.pid.comp_centrifugal": {
           "label": "Compressor",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Rotating"
           ]
@@ -1052,7 +1018,6 @@
         "graphics.pid.comp_recip": {
           "label": "Reciprocating Compressor",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Rotating"
           ]
@@ -1060,7 +1025,6 @@
         "graphics.pid.comp_screw": {
           "label": "Screw Compressor",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Rotating"
           ]
@@ -1068,7 +1032,6 @@
         "graphics.pid.conveyor_belt": {
           "label": "Belt Conveyor",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1076,7 +1039,6 @@
         "graphics.pid.conveyor_screw": {
           "label": "Screw Conveyor",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1084,7 +1046,6 @@
         "graphics.pid.cooling_tower": {
           "label": "Cooling Tower",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Heat Transfer"
           ]
@@ -1092,7 +1053,6 @@
         "graphics.pid.crusher": {
           "label": "Crusher / Mill",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1100,7 +1060,6 @@
         "graphics.pid.crystallizer": {
           "label": "Crystallizer",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1108,7 +1067,6 @@
         "graphics.pid.ctl_dcs": {
           "label": "DCS",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Control"
           ]
@@ -1116,7 +1074,6 @@
         "graphics.pid.ctl_interlock": {
           "label": "Interlock",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Control"
           ]
@@ -1124,7 +1081,6 @@
         "graphics.pid.ctl_jb": {
           "label": "Junction Box",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Control"
           ]
@@ -1132,7 +1088,6 @@
         "graphics.pid.ctl_panel": {
           "label": "Local Panel",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Control"
           ]
@@ -1140,7 +1095,6 @@
         "graphics.pid.ctl_plc": {
           "label": "PLC System",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Control"
           ]
@@ -1148,7 +1102,6 @@
         "graphics.pid.ctl_sis": {
           "label": "SIS",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Control"
           ]
@@ -1156,7 +1109,6 @@
         "graphics.pid.cv_ball": {
           "label": "Control Valve (Ball)",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Control Valves"
           ]
@@ -1164,7 +1116,6 @@
         "graphics.pid.cv_butterfly": {
           "label": "Control Valve (Butterfly)",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Control Valves"
           ]
@@ -1172,7 +1123,6 @@
         "graphics.pid.cv_globe": {
           "label": "Control Valve (Globe)",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Control Valves"
           ]
@@ -1180,7 +1130,6 @@
         "graphics.pid.cyclone": {
           "label": "Cyclone",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Vessels"
           ]
@@ -1188,7 +1137,6 @@
         "graphics.pid.deaerator": {
           "label": "Deaerator",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1196,7 +1144,6 @@
         "graphics.pid.demister": {
           "label": "Demister Pad",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1204,7 +1151,6 @@
         "graphics.pid.dryer_rotary": {
           "label": "Rotary Dryer",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1212,7 +1158,6 @@
         "graphics.pid.dryer_spray": {
           "label": "Spray Dryer",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1220,7 +1165,6 @@
         "graphics.pid.dryer_tray": {
           "label": "Tray Dryer",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1228,7 +1172,6 @@
         "graphics.pid.ejector": {
           "label": "Ejector / Eductor",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Rotating"
           ]
@@ -1236,7 +1179,6 @@
         "graphics.pid.elec_barrier": {
           "label": "IS Barrier",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1244,7 +1186,6 @@
         "graphics.pid.elec_mcc": {
           "label": "MCC",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1252,7 +1193,6 @@
         "graphics.pid.elec_transformer": {
           "label": "Transformer",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1260,7 +1200,6 @@
         "graphics.pid.elec_ups": {
           "label": "UPS",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1268,7 +1207,6 @@
         "graphics.pid.evaporator": {
           "label": "Evaporator",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1276,7 +1214,6 @@
         "graphics.pid.extruder": {
           "label": "Extruder",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1284,7 +1221,6 @@
         "graphics.pid.fan": {
           "label": "Fan (Axial)",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Rotating"
           ]
@@ -1292,7 +1228,6 @@
         "graphics.pid.fe_avgpitot": {
           "label": "Averaging Pitot",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Flow Elements"
           ]
@@ -1300,7 +1235,6 @@
         "graphics.pid.fe_coriolis": {
           "label": "Coriolis Meter",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Flow Elements"
           ]
@@ -1308,7 +1242,6 @@
         "graphics.pid.fe_magmeter": {
           "label": "Magnetic Flowmeter",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Flow Elements"
           ]
@@ -1316,7 +1249,6 @@
         "graphics.pid.fe_nozzle": {
           "label": "Flow Nozzle",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Flow Elements"
           ]
@@ -1324,7 +1256,6 @@
         "graphics.pid.fe_orifice": {
           "label": "Orifice Plate",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Flow Elements"
           ]
@@ -1332,7 +1263,6 @@
         "graphics.pid.fe_pd": {
           "label": "PD Meter",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Flow Elements"
           ]
@@ -1340,7 +1270,6 @@
         "graphics.pid.fe_pitot": {
           "label": "Pitot Tube",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Flow Elements"
           ]
@@ -1348,7 +1277,6 @@
         "graphics.pid.fe_ro": {
           "label": "Restriction Orifice",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Flow Elements"
           ]
@@ -1356,7 +1284,6 @@
         "graphics.pid.fe_rotameter": {
           "label": "Rotameter",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Flow Elements"
           ]
@@ -1364,7 +1291,6 @@
         "graphics.pid.fe_thermal": {
           "label": "Thermal Mass Flowmeter",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Flow Elements"
           ]
@@ -1372,7 +1298,6 @@
         "graphics.pid.fe_turbine": {
           "label": "Turbine Meter",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Flow Elements"
           ]
@@ -1380,7 +1305,6 @@
         "graphics.pid.fe_ultrasonic": {
           "label": "Ultrasonic Flowmeter",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Flow Elements"
           ]
@@ -1388,7 +1312,6 @@
         "graphics.pid.fe_venturi": {
           "label": "Venturi Tube",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Flow Elements"
           ]
@@ -1396,7 +1319,6 @@
         "graphics.pid.fe_vortex": {
           "label": "Vortex Meter",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Flow Elements"
           ]
@@ -1404,7 +1326,6 @@
         "graphics.pid.feeder_rotary": {
           "label": "Rotary Feeder",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1412,7 +1333,6 @@
         "graphics.pid.filter_sep": {
           "label": "Filter Separator",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1420,7 +1340,6 @@
         "graphics.pid.filter_cartridge": {
           "label": "Filter",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1428,7 +1347,6 @@
         "graphics.pid.filter_press": {
           "label": "Filter Press",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1436,7 +1354,6 @@
         "graphics.pid.filter_rotary": {
           "label": "Rotary Drum Filter",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1444,7 +1361,6 @@
         "graphics.pid.fit_blind": {
           "label": "Blind Flange",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1452,7 +1368,6 @@
         "graphics.pid.fit_coupling": {
           "label": "Quick Coupling",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1460,7 +1375,6 @@
         "graphics.pid.fit_drain": {
           "label": "Drain",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1468,7 +1382,6 @@
         "graphics.pid.fit_exhaust_head": {
           "label": "Exhaust Head",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1476,7 +1389,6 @@
         "graphics.pid.fit_expansion": {
           "label": "Expansion Joint",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1484,7 +1396,6 @@
         "graphics.pid.fit_flanges": {
           "label": "Flange Pair",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1492,7 +1403,6 @@
         "graphics.pid.fit_funnel": {
           "label": "Drain Funnel (Tundish)",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1500,7 +1410,6 @@
         "graphics.pid.fit_hose": {
           "label": "Hose",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1508,7 +1417,6 @@
         "graphics.pid.fit_hose_station": {
           "label": "Utility Hose Station",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1516,7 +1424,6 @@
         "graphics.pid.fit_mixing_tee": {
           "label": "Mixing Tee",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1524,7 +1431,6 @@
         "graphics.pid.fit_pulsation_dampener": {
           "label": "Pulsation Dampener",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1532,7 +1438,6 @@
         "graphics.pid.fit_quill": {
           "label": "Injection Quill",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1540,7 +1445,6 @@
         "graphics.pid.fit_reducer": {
           "label": "Reducer",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1548,7 +1452,6 @@
         "graphics.pid.fit_reducer_ecc": {
           "label": "Eccentric Reducer",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1556,7 +1459,6 @@
         "graphics.pid.fit_rupture_pin": {
           "label": "Rupture Pin Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1564,7 +1466,6 @@
         "graphics.pid.fit_sample": {
           "label": "Sample Point",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1572,7 +1473,6 @@
         "graphics.pid.fit_sightglass": {
           "label": "Sight Glass",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1580,7 +1480,6 @@
         "graphics.pid.fit_silencer": {
           "label": "Silencer",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1588,7 +1487,6 @@
         "graphics.pid.fit_spade": {
           "label": "Spade / Spacer",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1596,7 +1494,6 @@
         "graphics.pid.fit_specbreak": {
           "label": "Spec Break",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1604,7 +1501,6 @@
         "graphics.pid.fit_spectacle": {
           "label": "Spectacle Blind",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1612,7 +1508,6 @@
         "graphics.pid.fit_steam_trap": {
           "label": "Steam Trap",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1620,7 +1515,6 @@
         "graphics.pid.fit_trap_bucket": {
           "label": "Inverted Bucket Trap",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1628,7 +1522,6 @@
         "graphics.pid.fit_trap_float": {
           "label": "Float Steam Trap",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1636,7 +1529,6 @@
         "graphics.pid.fit_trap_thermo": {
           "label": "Thermodynamic Trap",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1644,7 +1536,6 @@
         "graphics.pid.fit_union": {
           "label": "Union",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1652,7 +1543,6 @@
         "graphics.pid.fit_vent": {
           "label": "Vent",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1660,7 +1550,6 @@
         "graphics.pid.flame_arrestor": {
           "label": "Flame Arrestor",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Safety"
           ]
@@ -1668,7 +1557,6 @@
         "graphics.pid.flare": {
           "label": "Flare",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1676,7 +1564,6 @@
         "graphics.pid.heater_electric": {
           "label": "Electric Heater",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Heat Transfer"
           ]
@@ -1684,7 +1571,6 @@
         "graphics.pid.heater_fired": {
           "label": "Fired Heater",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Heat Transfer"
           ]
@@ -1692,7 +1578,6 @@
         "graphics.pid.hx_air_cooler": {
           "label": "Air Cooler (Fin-Fan)",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Heat Transfer"
           ]
@@ -1700,7 +1585,6 @@
         "graphics.pid.hx_coil": {
           "label": "Heating/Cooling Coil",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Heat Transfer"
           ]
@@ -1708,7 +1592,6 @@
         "graphics.pid.hx_condenser": {
           "label": "Condenser",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Heat Transfer"
           ]
@@ -1716,7 +1599,6 @@
         "graphics.pid.hx_doublepipe": {
           "label": "Double-Pipe Exchanger",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Heat Transfer"
           ]
@@ -1724,7 +1606,6 @@
         "graphics.pid.hx_kettle": {
           "label": "Kettle Reboiler",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Heat Transfer"
           ]
@@ -1732,7 +1613,6 @@
         "graphics.pid.hx_plate": {
           "label": "Plate Exchanger",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Heat Transfer"
           ]
@@ -1740,7 +1620,6 @@
         "graphics.pid.hx_shell_tube": {
           "label": "Shell & Tube Exchanger",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Heat Transfer"
           ]
@@ -1748,7 +1627,6 @@
         "graphics.pid.hydrocyclone": {
           "label": "Hydrocyclone",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1756,7 +1634,6 @@
         "graphics.pid.instr_converter": {
           "label": "Signal Converter (I/P, E/P…)",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Instruments"
           ]
@@ -1764,7 +1641,6 @@
         "graphics.pid.logic_and": {
           "label": "AND Gate",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Control"
           ]
@@ -1772,7 +1648,6 @@
         "graphics.pid.logic_not": {
           "label": "NOT Gate",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Control"
           ]
@@ -1780,7 +1655,6 @@
         "graphics.pid.logic_or": {
           "label": "OR Gate",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Control"
           ]
@@ -1788,7 +1662,6 @@
         "graphics.pid.mill_ball": {
           "label": "Ball Mill",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1796,7 +1669,6 @@
         "graphics.pid.mixer_static": {
           "label": "Static Mixer",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1804,7 +1676,6 @@
         "graphics.pid.motor": {
           "label": "Motor",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Rotating"
           ]
@@ -1812,7 +1683,6 @@
         "graphics.pid.package_unit": {
           "label": "Package Unit",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1820,7 +1690,6 @@
         "graphics.pid.pcv_self": {
           "label": "Self-Acting Regulator",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Safety"
           ]
@@ -1828,7 +1697,6 @@
         "graphics.pid.pse": {
           "label": "Rupture Disc",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Safety"
           ]
@@ -1836,7 +1704,6 @@
         "graphics.pid.psv": {
           "label": "Pressure Safety Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Safety"
           ]
@@ -1844,7 +1711,6 @@
         "graphics.pid.psv_pilot": {
           "label": "Pilot-Operated PSV",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Safety"
           ]
@@ -1852,7 +1718,6 @@
         "graphics.pid.pump_centrifugal": {
           "label": "Centrifugal Pump",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Rotating"
           ]
@@ -1860,7 +1725,6 @@
         "graphics.pid.pump_diaphragm": {
           "label": "Diaphragm/Metering Pump",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Rotating"
           ]
@@ -1868,7 +1732,6 @@
         "graphics.pid.pump_gear": {
           "label": "PD Pump (Gear/Screw)",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Rotating"
           ]
@@ -1876,7 +1739,6 @@
         "graphics.pid.pump_peristaltic": {
           "label": "Peristaltic Pump",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Rotating"
           ]
@@ -1884,7 +1746,6 @@
         "graphics.pid.pump_plunger": {
           "label": "Plunger Pump",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Rotating"
           ]
@@ -1892,7 +1753,6 @@
         "graphics.pid.pump_submersible": {
           "label": "Submersible Pump",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Rotating"
           ]
@@ -1900,7 +1760,6 @@
         "graphics.pid.pump_vacuum": {
           "label": "Vacuum Pump",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Rotating"
           ]
@@ -1908,7 +1767,6 @@
         "graphics.pid.pvsv": {
           "label": "Pressure/Vacuum Relief Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Safety"
           ]
@@ -1916,7 +1774,6 @@
         "graphics.pid.sample_cooler": {
           "label": "Sample Cooler",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1924,7 +1781,6 @@
         "graphics.pid.screen_vibrating": {
           "label": "Vibrating Screen",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1932,7 +1788,6 @@
         "graphics.pid.scrubber": {
           "label": "Scrubber",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1940,7 +1795,6 @@
         "graphics.pid.stack": {
           "label": "Stack",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1948,7 +1802,6 @@
         "graphics.pid.strainer_basket": {
           "label": "Basket Strainer",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1956,7 +1809,6 @@
         "graphics.pid.strainer_cone": {
           "label": "Temporary Cone Strainer",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1964,7 +1816,6 @@
         "graphics.pid.strainer_y": {
           "label": "Y-Strainer",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Inline"
           ]
@@ -1972,7 +1823,6 @@
         "graphics.pid.tcv_self": {
           "label": "Self-Acting Temperature Regulator",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Safety"
           ]
@@ -1980,7 +1830,6 @@
         "graphics.pid.turbine_steam": {
           "label": "Turbine Driver",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Rotating"
           ]
@@ -1988,7 +1837,6 @@
         "graphics.pid.vacuum_breaker": {
           "label": "Vacuum Breaker",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Safety"
           ]
@@ -1996,7 +1844,6 @@
         "graphics.pid.valve_angle": {
           "label": "Angle Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2004,7 +1851,6 @@
         "graphics.pid.valve_ball": {
           "label": "Ball Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2012,7 +1858,6 @@
         "graphics.pid.valve_ballcheck": {
           "label": "Ball Check Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2020,7 +1865,6 @@
         "graphics.pid.valve_butterfly": {
           "label": "Butterfly Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2028,7 +1872,6 @@
         "graphics.pid.valve_check": {
           "label": "Check Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2036,7 +1879,6 @@
         "graphics.pid.valve_diaphragm": {
           "label": "Diaphragm Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2044,7 +1886,6 @@
         "graphics.pid.valve_float": {
           "label": "Float Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2052,7 +1893,6 @@
         "graphics.pid.valve_foot": {
           "label": "Foot Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2060,7 +1900,6 @@
         "graphics.pid.valve_fourway": {
           "label": "4-Way Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2068,7 +1907,6 @@
         "graphics.pid.valve_gate": {
           "label": "Gate Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2076,7 +1914,6 @@
         "graphics.pid.valve_globe": {
           "label": "Globe Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2084,7 +1921,6 @@
         "graphics.pid.valve_knife": {
           "label": "Knife Gate Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2092,7 +1928,6 @@
         "graphics.pid.valve_mov": {
           "label": "Motor-Operated Valve (MOV)",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2100,7 +1935,6 @@
         "graphics.pid.valve_needle": {
           "label": "Needle Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2108,7 +1942,6 @@
         "graphics.pid.valve_pinch": {
           "label": "Pinch Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2116,7 +1949,6 @@
         "graphics.pid.valve_plug": {
           "label": "Plug Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2124,7 +1956,6 @@
         "graphics.pid.valve_solenoid": {
           "label": "Solenoid Valve (XV)",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2132,7 +1963,6 @@
         "graphics.pid.valve_stopcheck": {
           "label": "Stop-Check Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2140,7 +1970,6 @@
         "graphics.pid.valve_threeway": {
           "label": "3-Way Valve",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Valves"
           ]
@@ -2148,7 +1977,6 @@
         "graphics.pid.vessel_bullet": {
           "label": "Bullet",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Vessels"
           ]
@@ -2156,7 +1984,6 @@
         "graphics.pid.vessel_column_packed": {
           "label": "Packed Column",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Vessels"
           ]
@@ -2164,7 +1991,6 @@
         "graphics.pid.vessel_column_tray": {
           "label": "Tray Column",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Vessels"
           ]
@@ -2172,7 +1998,6 @@
         "graphics.pid.vessel_cstr": {
           "label": "Jacketed Reactor (CSTR)",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Vessels"
           ]
@@ -2180,7 +2005,6 @@
         "graphics.pid.vessel_fixedbed": {
           "label": "Fixed-Bed Reactor",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Vessels"
           ]
@@ -2188,7 +2012,6 @@
         "graphics.pid.vessel_floating_roof": {
           "label": "Floating-Roof Tank",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Vessels"
           ]
@@ -2196,7 +2019,6 @@
         "graphics.pid.vessel_horizontal": {
           "label": "Horizontal Vessel",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Vessels"
           ]
@@ -2204,7 +2026,6 @@
         "graphics.pid.vessel_ko_drum": {
           "label": "KO Drum / 2-Phase Separator",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Vessels"
           ]
@@ -2212,7 +2033,6 @@
         "graphics.pid.vessel_open": {
           "label": "Open Tank / Pit",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Vessels"
           ]
@@ -2220,7 +2040,6 @@
         "graphics.pid.vessel_sep3": {
           "label": "3-Phase Separator",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Vessels"
           ]
@@ -2228,7 +2047,6 @@
         "graphics.pid.vessel_silo": {
           "label": "Silo / Hopper",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Vessels"
           ]
@@ -2236,7 +2054,6 @@
         "graphics.pid.vessel_sphere": {
           "label": "Sphere",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Vessels"
           ]
@@ -2244,7 +2061,6 @@
         "graphics.pid.vessel_tank": {
           "label": "Storage Tank",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Vessels"
           ]
@@ -2252,7 +2068,6 @@
         "graphics.pid.vessel_vertical": {
           "label": "Vertical Vessel",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Vessels"
           ]
@@ -2260,7 +2075,6 @@
         "graphics.pid.vfd": {
           "label": "VFD",
           "folderPath": [
-            "Graphical",
             "P&ID",
             "P&ID Rotating"
           ]
@@ -2290,7 +2104,6 @@
           "label": "Bar Indicator",
           "folderPath": [
             "Graphical",
-            "HMI",
             "Indicators"
           ]
         },
@@ -2298,7 +2111,6 @@
           "label": "Radial Gauge",
           "folderPath": [
             "Graphical",
-            "HMI",
             "Indicators"
           ]
         },
@@ -2306,7 +2118,6 @@
           "label": "Value Display",
           "folderPath": [
             "Graphical",
-            "HMI",
             "Indicators"
           ]
         },
@@ -2314,7 +2125,6 @@
           "label": "Vessel / Tank",
           "folderPath": [
             "Graphical",
-            "HMI",
             "Equipment"
           ]
         },
@@ -2322,7 +2132,6 @@
           "label": "HMI Valve",
           "folderPath": [
             "Graphical",
-            "HMI",
             "Equipment"
           ]
         },
@@ -2330,7 +2139,6 @@
           "label": "Pump / Motor",
           "folderPath": [
             "Graphical",
-            "HMI",
             "Equipment"
           ]
         },
@@ -2338,7 +2146,6 @@
           "label": "HMI Lamp",
           "folderPath": [
             "Graphical",
-            "HMI",
             "Indicators"
           ]
         },
@@ -2346,7 +2153,6 @@
           "label": "Panel Frame",
           "folderPath": [
             "Graphical",
-            "HMI",
             "Layout"
           ]
         },
@@ -2354,7 +2160,6 @@
           "label": "Loop Faceplate",
           "folderPath": [
             "Graphical",
-            "HMI",
             "Control"
           ]
         },
@@ -2362,7 +2167,6 @@
           "label": "Alarm Banner",
           "folderPath": [
             "Graphical",
-            "HMI",
             "Indicators"
           ]
         }
@@ -10369,26 +10173,138 @@
         "height": 180
       },
       "propertySchema": [
-        {"id": "width", "label": "Largura", "group": "Geometria", "unit": "px", "editor": "number", "default": 120, "min": 4, "max": 4000, "step": 1},
-        {"id": "height", "label": "Altura", "group": "Geometria", "unit": "px", "editor": "number", "default": 180, "min": 4, "max": 4000, "step": 1}
+        {
+          "id": "width",
+          "label": "Largura",
+          "group": "Geometria",
+          "unit": "px",
+          "editor": "number",
+          "default": 120,
+          "min": 4,
+          "max": 4000,
+          "step": 1
+        },
+        {
+          "id": "height",
+          "label": "Altura",
+          "group": "Geometria",
+          "unit": "px",
+          "editor": "number",
+          "default": 180,
+          "min": 4,
+          "max": 4000,
+          "step": 1
+        }
       ],
       "package": {
         "width": 120,
         "height": 180,
         "border": false,
-        "background": {"kind": "none"},
+        "background": {
+          "kind": "none"
+        },
         "pins": [],
         "shapes": [
-          {"kind": "image", "href": "../../subcircuits/tank.svg", "x": 0, "y": 0, "w": 120, "h": 180, "preserveAspectRatio": "xMidYMid meet"}
+          {
+            "kind": "image",
+            "href": "../../subcircuits/tank.svg",
+            "x": 0,
+            "y": 0,
+            "w": 120,
+            "h": 180,
+            "preserveAspectRatio": "xMidYMid meet"
+          }
         ],
         "aspect": "fixed",
         "dynamicLayout": {
-          "schematicWidth": {"prop": "width", "fallback": 120},
-          "schematicHeight": {"prop": "height", "fallback": 180}
+          "schematicWidth": {
+            "prop": "width",
+            "fallback": 120
+          },
+          "schematicHeight": {
+            "prop": "height",
+            "fallback": 180
+          }
         }
       },
       "help": {
         "description": "Tanque vetorial fornecido em tank.svg. Elemento gráfico sem pinos ou simulação de nível."
+      }
+    },
+    {
+      "typeId": "graphics.valve_globe_svg",
+      "label": "Válvula globo vetorial",
+      "pinCount": 0,
+      "icon": "graphic-valve-globe",
+      "iconFilePath": "../../subcircuits/valveGlobe.svg",
+      "graphical": true,
+      "folderPath": [
+        "Grafico",
+        "Valvulas"
+      ],
+      "category": "Grafico",
+      "workspaceSection": "misc",
+      "defaultProperties": {
+        "width": 120,
+        "height": 120
+      },
+      "propertySchema": [
+        {
+          "id": "width",
+          "label": "Largura",
+          "group": "Geometria",
+          "unit": "px",
+          "editor": "number",
+          "default": 120,
+          "min": 4,
+          "max": 4000,
+          "step": 1
+        },
+        {
+          "id": "height",
+          "label": "Altura",
+          "group": "Geometria",
+          "unit": "px",
+          "editor": "number",
+          "default": 120,
+          "min": 4,
+          "max": 4000,
+          "step": 1
+        }
+      ],
+      "package": {
+        "width": 120,
+        "height": 120,
+        "border": false,
+        "background": {
+          "kind": "none"
+        },
+        "pins": [],
+        "shapes": [
+          {
+            "kind": "image",
+            "href": "../../subcircuits/valveGlobe.svg",
+            "x": 0,
+            "y": 0,
+            "w": 120,
+            "h": 120,
+            "preserveAspectRatio": "xMidYMid meet"
+          }
+        ],
+        "aspect": "fixed",
+        "dynamicLayout": {
+          "schematicWidth": {
+            "prop": "width",
+            "fallback": 120
+          },
+          "schematicHeight": {
+            "prop": "height",
+            "fallback": 120
+          }
+        }
+      },
+      "help": {
+        "description": "Válvula globo vetorial fornecida em valveGlobe.svg. Elemento gráfico sem pinos."
       }
     },
     {
@@ -20557,7 +20473,8 @@
     },
     {
       "typeId": "protocol.hart.device.smar_ld301",
-      "label": "SMAR LD301 (legado)", "hidden": true,
+      "label": "SMAR LD301 (legado)",
+      "hidden": true,
       "pinCount": 0,
       "icon": "smar-ld301",
       "folderPath": [
@@ -20582,7 +20499,12 @@
       "typeId": "protocol.hart.device.smar_tt301",
       "label": "SMAR TT301",
       "pinCount": 4,
-      "pinIds": ["sensor_plus", "sensor_minus", "loop_plus", "loop_minus"],
+      "pinIds": [
+        "sensor_plus",
+        "sensor_minus",
+        "loop_plus",
+        "loop_minus"
+      ],
       "icon": "smar-tt301",
       "iconFilePath": "../../subcircuits/tt301.svg",
       "folderPath": [
@@ -20596,20 +20518,91 @@
         "height": 200,
         "border": false,
         "shapes": [
-          {"kind": "rect", "x": 31, "y": 4, "w": 88, "h": 58, "rx": 5, "ry": 5, "fill": "#b9bfc6", "stroke": "#4d525a", "strokeWidth": 1.5},
-          {"kind": "rect", "x": 36, "y": 9, "w": 78, "h": 48, "rx": 3, "ry": 3, "fill": "#c5cfb2", "stroke": "#59604f", "strokeWidth": 1},
-          {"kind": "image", "href": "../../subcircuits/tt301.svg", "x": 0, "y": 66, "w": 150, "h": 125, "preserveAspectRatio": "xMidYMid meet"}
+          {
+            "kind": "rect",
+            "x": 31,
+            "y": 4,
+            "w": 88,
+            "h": 58,
+            "rx": 5,
+            "ry": 5,
+            "fill": "#b9bfc6",
+            "stroke": "#4d525a",
+            "strokeWidth": 1.5
+          },
+          {
+            "kind": "rect",
+            "x": 36,
+            "y": 9,
+            "w": 78,
+            "h": 48,
+            "rx": 3,
+            "ry": 3,
+            "fill": "#c5cfb2",
+            "stroke": "#59604f",
+            "strokeWidth": 1
+          },
+          {
+            "kind": "image",
+            "href": "../../subcircuits/tt301.svg",
+            "x": 0,
+            "y": 66,
+            "w": 150,
+            "h": 125,
+            "preserveAspectRatio": "xMidYMid meet"
+          }
         ],
         "pins": [
-          {"id": "sensor_plus", "kind": "ANALOG_IN", "x": -8, "y": 141, "angle": 180, "length": 8, "label": "S+"},
-          {"id": "sensor_minus", "kind": "ANALOG_IN", "x": -8, "y": 160, "angle": 180, "length": 8, "label": "S-"},
-          {"id": "loop_plus", "kind": "POWER", "x": 158, "y": 141, "angle": 0, "length": 8, "label": "LOOP+"},
-          {"id": "loop_minus", "kind": "POWER", "x": 158, "y": 160, "angle": 0, "length": 8, "label": "LOOP-"}
+          {
+            "id": "sensor_plus",
+            "kind": "ANALOG_IN",
+            "x": -8,
+            "y": 141,
+            "angle": 180,
+            "length": 8,
+            "label": "S+"
+          },
+          {
+            "id": "sensor_minus",
+            "kind": "ANALOG_IN",
+            "x": -8,
+            "y": 160,
+            "angle": 180,
+            "length": 8,
+            "label": "S-"
+          },
+          {
+            "id": "loop_plus",
+            "kind": "POWER",
+            "x": 158,
+            "y": 141,
+            "angle": 0,
+            "length": 8,
+            "label": "LOOP+"
+          },
+          {
+            "id": "loop_minus",
+            "kind": "POWER",
+            "x": 158,
+            "y": 160,
+            "angle": 0,
+            "length": 8,
+            "label": "LOOP-"
+          }
         ],
         "runtimeState": {
           "versionOffset": 8,
           "expectedVersion": 1279476785,
-          "surface": {"encoding": "segment-lcd", "x": 38, "y": 11, "w": 74, "h": 44, "sourceWidth": 1, "sourceHeight": 1, "payloadOffset": 12}
+          "surface": {
+            "encoding": "segment-lcd",
+            "x": 38,
+            "y": 11,
+            "w": 74,
+            "h": 44,
+            "sourceWidth": 1,
+            "sourceHeight": 1,
+            "payloadOffset": 12
+          }
         }
       },
       "defaultProperties": {
@@ -20632,7 +20625,12 @@
       "typeId": "protocol.hart.device.smar_fy301",
       "label": "SMAR FY301",
       "pinCount": 4,
-      "pinIds": ["sensor_plus", "sensor_minus", "loop_plus", "loop_minus"],
+      "pinIds": [
+        "sensor_plus",
+        "sensor_minus",
+        "loop_plus",
+        "loop_minus"
+      ],
       "icon": "smar-fy301",
       "iconFilePath": "../../subcircuits/fy301.svg",
       "folderPath": [
@@ -20646,20 +20644,91 @@
         "height": 184,
         "border": false,
         "shapes": [
-          {"kind": "rect", "x": 31, "y": 4, "w": 88, "h": 58, "rx": 5, "ry": 5, "fill": "#b9bfc6", "stroke": "#4d525a", "strokeWidth": 1.5},
-          {"kind": "rect", "x": 36, "y": 9, "w": 78, "h": 48, "rx": 3, "ry": 3, "fill": "#c5cfb2", "stroke": "#59604f", "strokeWidth": 1},
-          {"kind": "image", "href": "../../subcircuits/fy301.svg", "x": 0, "y": 66, "w": 150, "h": 113, "preserveAspectRatio": "xMidYMid meet"}
+          {
+            "kind": "rect",
+            "x": 31,
+            "y": 4,
+            "w": 88,
+            "h": 58,
+            "rx": 5,
+            "ry": 5,
+            "fill": "#b9bfc6",
+            "stroke": "#4d525a",
+            "strokeWidth": 1.5
+          },
+          {
+            "kind": "rect",
+            "x": 36,
+            "y": 9,
+            "w": 78,
+            "h": 48,
+            "rx": 3,
+            "ry": 3,
+            "fill": "#c5cfb2",
+            "stroke": "#59604f",
+            "strokeWidth": 1
+          },
+          {
+            "kind": "image",
+            "href": "../../subcircuits/fy301.svg",
+            "x": 0,
+            "y": 66,
+            "w": 150,
+            "h": 113,
+            "preserveAspectRatio": "xMidYMid meet"
+          }
         ],
         "pins": [
-          {"id": "sensor_plus", "kind": "ANALOG_IN", "x": -8, "y": 139, "angle": 180, "length": 8, "label": "POS+"},
-          {"id": "sensor_minus", "kind": "ANALOG_IN", "x": -8, "y": 157, "angle": 180, "length": 8, "label": "POS-"},
-          {"id": "loop_plus", "kind": "POWER", "x": 158, "y": 139, "angle": 0, "length": 8, "label": "LOOP+"},
-          {"id": "loop_minus", "kind": "POWER", "x": 158, "y": 157, "angle": 0, "length": 8, "label": "LOOP-"}
+          {
+            "id": "sensor_plus",
+            "kind": "ANALOG_IN",
+            "x": -8,
+            "y": 139,
+            "angle": 180,
+            "length": 8,
+            "label": "POS+"
+          },
+          {
+            "id": "sensor_minus",
+            "kind": "ANALOG_IN",
+            "x": -8,
+            "y": 157,
+            "angle": 180,
+            "length": 8,
+            "label": "POS-"
+          },
+          {
+            "id": "loop_plus",
+            "kind": "POWER",
+            "x": 158,
+            "y": 139,
+            "angle": 0,
+            "length": 8,
+            "label": "LOOP+"
+          },
+          {
+            "id": "loop_minus",
+            "kind": "POWER",
+            "x": 158,
+            "y": 157,
+            "angle": 0,
+            "length": 8,
+            "label": "LOOP-"
+          }
         ],
         "runtimeState": {
           "versionOffset": 8,
           "expectedVersion": 1279476785,
-          "surface": {"encoding": "segment-lcd", "x": 38, "y": 11, "w": 74, "h": 44, "sourceWidth": 1, "sourceHeight": 1, "payloadOffset": 12}
+          "surface": {
+            "encoding": "segment-lcd",
+            "x": 38,
+            "y": 11,
+            "w": 74,
+            "h": 44,
+            "sourceWidth": 1,
+            "sourceHeight": 1,
+            "payloadOffset": 12
+          }
         }
       },
       "defaultProperties": {
@@ -23494,11 +23563,10 @@
       "icon": "pid-acc-afr",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Acessórios P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -23588,11 +23656,10 @@
       "icon": "pid-acc-bimetal",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Acessórios P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -23682,11 +23749,10 @@
       "icon": "pid-acc-bulb",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Acessórios P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -23776,11 +23842,10 @@
       "icon": "pid-acc-floatcage",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Acessórios P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -23870,11 +23935,10 @@
       "icon": "pid-acc-lg",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Acessórios P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -23964,11 +24028,10 @@
       "icon": "pid-acc-loadcell",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Acessórios P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -24058,11 +24121,10 @@
       "icon": "pid-acc-pg",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Acessórios P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -24152,11 +24214,10 @@
       "icon": "pid-acc-radar",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Acessórios P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -24246,11 +24307,10 @@
       "icon": "pid-acc-seal",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Acessórios P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -24340,11 +24400,10 @@
       "icon": "pid-acc-siphon",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Acessórios P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -24434,11 +24493,10 @@
       "icon": "pid-acc-thermowell",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Acessórios P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -24528,11 +24586,10 @@
       "icon": "pid-agitator",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Máquinas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -24622,11 +24679,10 @@
       "icon": "pid-air-dryer",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -24716,11 +24772,10 @@
       "icon": "pid-ann-arrow",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Anotação P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -24810,11 +24865,10 @@
       "icon": "pid-ann-bl-flag",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Anotação P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -24904,11 +24958,10 @@
       "icon": "pid-ann-cloud",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Anotação P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -24998,11 +25051,10 @@
       "icon": "pid-ann-detail-flag",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Anotação P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -25092,11 +25144,10 @@
       "icon": "pid-ann-equipstrip",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Anotação P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -25186,11 +25237,10 @@
       "icon": "pid-ann-holds",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Anotação P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -25280,11 +25330,10 @@
       "icon": "pid-ann-insulation",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Anotação P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -25374,11 +25423,10 @@
       "icon": "pid-ann-matchline",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Anotação P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 8,
@@ -25468,11 +25516,10 @@
       "icon": "pid-ann-noteflag",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Anotação P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -25562,11 +25609,10 @@
       "icon": "pid-ann-offpage",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Anotação P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -25656,11 +25702,10 @@
       "icon": "pid-ann-onpage",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Anotação P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -25750,11 +25795,10 @@
       "icon": "pid-ann-revtriangle",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Anotação P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -25844,11 +25888,10 @@
       "icon": "pid-ann-slope",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Anotação P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -25938,11 +25981,10 @@
       "icon": "pid-ann-text",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Anotação P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -26032,11 +26074,10 @@
       "icon": "pid-ann-tiein",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Anotação P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -26126,11 +26167,10 @@
       "icon": "pid-bagfilter",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -26220,11 +26260,10 @@
       "icon": "pid-bl-terminal",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -26314,11 +26353,10 @@
       "icon": "pid-blender-ribbon",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 56,
@@ -26408,11 +26446,10 @@
       "icon": "pid-blower",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Máquinas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -26502,11 +26539,10 @@
       "icon": "pid-boiler",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -26596,11 +26632,10 @@
       "icon": "pid-bpcv",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Segurança P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -26690,11 +26725,10 @@
       "icon": "pid-breather",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Segurança P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -26784,11 +26818,10 @@
       "icon": "pid-bucket-elevator",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -26878,11 +26911,10 @@
       "icon": "pid-centrifuge",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -26972,11 +27004,10 @@
       "icon": "pid-chiller",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -27066,11 +27097,10 @@
       "icon": "pid-clarifier",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 80,
@@ -27160,11 +27190,10 @@
       "icon": "pid-coalescer",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 80,
@@ -27254,11 +27283,10 @@
       "icon": "pid-comp-centrifugal",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Máquinas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -27348,11 +27376,10 @@
       "icon": "pid-comp-recip",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Máquinas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -27442,11 +27469,10 @@
       "icon": "pid-comp-screw",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Máquinas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 40,
@@ -27536,11 +27562,10 @@
       "icon": "pid-conveyor-belt",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 80,
@@ -27630,11 +27655,10 @@
       "icon": "pid-conveyor-screw",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 80,
@@ -27724,11 +27748,10 @@
       "icon": "pid-cooling-tower",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Troca Térmica P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -27818,11 +27841,10 @@
       "icon": "pid-crusher",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -27912,11 +27934,10 @@
       "icon": "pid-crystallizer",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -28006,11 +28027,10 @@
       "icon": "pid-ctl-dcs",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Controle P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 40,
@@ -28100,11 +28120,10 @@
       "icon": "pid-ctl-interlock",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Controle P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -28194,11 +28213,10 @@
       "icon": "pid-ctl-jb",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Controle P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -28288,11 +28306,10 @@
       "icon": "pid-ctl-panel",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Controle P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 40,
@@ -28382,11 +28399,10 @@
       "icon": "pid-ctl-plc",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Controle P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 40,
@@ -28476,11 +28492,10 @@
       "icon": "pid-ctl-sis",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Controle P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 40,
@@ -28570,11 +28585,10 @@
       "icon": "pid-cv-ball",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas de Controle P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -29697,11 +29711,10 @@
       "icon": "pid-cv-butterfly",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas de Controle P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -30824,11 +30837,10 @@
       "icon": "pid-cv-globe",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas de Controle P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -31951,11 +31963,10 @@
       "icon": "pid-cyclone",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Vasos P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 40,
@@ -32045,11 +32056,10 @@
       "icon": "pid-deaerator",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 80,
@@ -32139,11 +32149,10 @@
       "icon": "pid-demister",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -32233,11 +32242,10 @@
       "icon": "pid-dryer-rotary",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 96,
@@ -32327,11 +32335,10 @@
       "icon": "pid-dryer-spray",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -32421,11 +32428,10 @@
       "icon": "pid-dryer-tray",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -32515,11 +32521,10 @@
       "icon": "pid-ejector",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Máquinas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -32609,11 +32614,10 @@
       "icon": "pid-elec-barrier",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -32703,11 +32707,10 @@
       "icon": "pid-elec-mcc",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -32797,11 +32800,10 @@
       "icon": "pid-elec-transformer",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -32891,11 +32893,10 @@
       "icon": "pid-elec-ups",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -32985,11 +32986,10 @@
       "icon": "pid-evaporator",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -33079,11 +33079,10 @@
       "icon": "pid-extruder",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 72,
@@ -33173,11 +33172,10 @@
       "icon": "pid-fan",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Máquinas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -33267,11 +33265,10 @@
       "icon": "pid-fe-avgpitot",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Elementos de Vazão P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -33361,11 +33358,10 @@
       "icon": "pid-fe-coriolis",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Elementos de Vazão P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -33455,11 +33451,10 @@
       "icon": "pid-fe-magmeter",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Elementos de Vazão P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -33549,11 +33544,10 @@
       "icon": "pid-fe-nozzle",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Elementos de Vazão P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -33643,11 +33637,10 @@
       "icon": "pid-fe-orifice",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Elementos de Vazão P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -33737,11 +33730,10 @@
       "icon": "pid-fe-pd",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Elementos de Vazão P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -33831,11 +33823,10 @@
       "icon": "pid-fe-pitot",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Elementos de Vazão P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -33925,11 +33916,10 @@
       "icon": "pid-fe-ro",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Elementos de Vazão P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -34019,11 +34009,10 @@
       "icon": "pid-fe-rotameter",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Elementos de Vazão P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -34113,11 +34102,10 @@
       "icon": "pid-fe-thermal",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Elementos de Vazão P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -34207,11 +34195,10 @@
       "icon": "pid-fe-turbine",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Elementos de Vazão P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -34301,11 +34288,10 @@
       "icon": "pid-fe-ultrasonic",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Elementos de Vazão P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -34395,11 +34381,10 @@
       "icon": "pid-fe-venturi",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Elementos de Vazão P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -34489,11 +34474,10 @@
       "icon": "pid-fe-vortex",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Elementos de Vazão P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -34583,11 +34567,10 @@
       "icon": "pid-feeder-rotary",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -34677,11 +34660,10 @@
       "icon": "pid-filter-sep",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -34771,11 +34753,10 @@
       "icon": "pid-filter-cartridge",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -34865,11 +34846,10 @@
       "icon": "pid-filter-press",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -34959,11 +34939,10 @@
       "icon": "pid-filter-rotary",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -35053,11 +35032,10 @@
       "icon": "pid-fit-blind",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -35147,11 +35125,10 @@
       "icon": "pid-fit-coupling",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -35241,11 +35218,10 @@
       "icon": "pid-fit-drain",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -35335,11 +35311,10 @@
       "icon": "pid-fit-exhaust-head",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -35429,11 +35404,10 @@
       "icon": "pid-fit-expansion",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -35523,11 +35497,10 @@
       "icon": "pid-fit-flanges",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -35617,11 +35590,10 @@
       "icon": "pid-fit-funnel",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -35711,11 +35683,10 @@
       "icon": "pid-fit-hose",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -35805,11 +35776,10 @@
       "icon": "pid-fit-hose-station",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -35899,11 +35869,10 @@
       "icon": "pid-fit-mixing-tee",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -35993,11 +35962,10 @@
       "icon": "pid-fit-pulsation-dampener",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -36087,11 +36055,10 @@
       "icon": "pid-fit-quill",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -36181,11 +36148,10 @@
       "icon": "pid-fit-reducer",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -36275,11 +36241,10 @@
       "icon": "pid-fit-reducer-ecc",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -36369,11 +36334,10 @@
       "icon": "pid-fit-rupture-pin",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -36463,11 +36427,10 @@
       "icon": "pid-fit-sample",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -36557,11 +36520,10 @@
       "icon": "pid-fit-sightglass",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -36651,11 +36613,10 @@
       "icon": "pid-fit-silencer",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -36745,11 +36706,10 @@
       "icon": "pid-fit-spade",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -36839,11 +36799,10 @@
       "icon": "pid-fit-specbreak",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -36933,11 +36892,10 @@
       "icon": "pid-fit-spectacle",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -37027,11 +36985,10 @@
       "icon": "pid-fit-steam-trap",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -37121,11 +37078,10 @@
       "icon": "pid-fit-trap-bucket",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -37215,11 +37171,10 @@
       "icon": "pid-fit-trap-float",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -37309,11 +37264,10 @@
       "icon": "pid-fit-trap-thermo",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -37403,11 +37357,10 @@
       "icon": "pid-fit-union",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -37497,11 +37450,10 @@
       "icon": "pid-fit-vent",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -37591,11 +37543,10 @@
       "icon": "pid-flame-arrestor",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Segurança P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -37685,11 +37636,10 @@
       "icon": "pid-flare",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -37779,11 +37729,10 @@
       "icon": "pid-heater-electric",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Troca Térmica P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 40,
@@ -37873,11 +37822,10 @@
       "icon": "pid-heater-fired",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Troca Térmica P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 56,
@@ -37967,11 +37915,10 @@
       "icon": "pid-hx-air-cooler",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Troca Térmica P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -38061,11 +38008,10 @@
       "icon": "pid-hx-coil",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Troca Térmica P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -38155,11 +38101,10 @@
       "icon": "pid-hx-condenser",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Troca Térmica P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -38249,11 +38194,10 @@
       "icon": "pid-hx-doublepipe",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Troca Térmica P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -38343,11 +38287,10 @@
       "icon": "pid-hx-kettle",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Troca Térmica P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 80,
@@ -38437,11 +38380,10 @@
       "icon": "pid-hx-plate",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Troca Térmica P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -38531,11 +38473,10 @@
       "icon": "pid-hx-shell-tube",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Troca Térmica P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -38625,11 +38566,10 @@
       "icon": "pid-hydrocyclone",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -38719,11 +38659,10 @@
       "icon": "pid-instr-converter",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Instrumentos P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -38940,11 +38879,10 @@
       "icon": "pid-logic-and",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Controle P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -39034,11 +38972,10 @@
       "icon": "pid-logic-not",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Controle P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -39128,11 +39065,10 @@
       "icon": "pid-logic-or",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Controle P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -39222,11 +39158,10 @@
       "icon": "pid-mill-ball",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -39316,11 +39251,10 @@
       "icon": "pid-mixer-static",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 40,
@@ -39410,11 +39344,10 @@
       "icon": "pid-motor",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Máquinas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -39504,11 +39437,10 @@
       "icon": "pid-package-unit",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 96,
@@ -39598,11 +39530,10 @@
       "icon": "pid-pcv-self",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Segurança P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -39692,11 +39623,10 @@
       "icon": "pid-pse",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Segurança P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -39786,11 +39716,10 @@
       "icon": "pid-psv",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Segurança P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -39880,11 +39809,10 @@
       "icon": "pid-psv-pilot",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Segurança P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -39974,11 +39902,10 @@
       "icon": "pid-pump-centrifugal",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Máquinas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -40068,11 +39995,10 @@
       "icon": "pid-pump-diaphragm",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Máquinas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -40162,11 +40088,10 @@
       "icon": "pid-pump-gear",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Máquinas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -40256,11 +40181,10 @@
       "icon": "pid-pump-peristaltic",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Máquinas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -40350,11 +40274,10 @@
       "icon": "pid-pump-plunger",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Máquinas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -40444,11 +40367,10 @@
       "icon": "pid-pump-submersible",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Máquinas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -40538,11 +40460,10 @@
       "icon": "pid-pump-vacuum",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Máquinas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -40632,11 +40553,10 @@
       "icon": "pid-pvsv",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Segurança P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -40726,11 +40646,10 @@
       "icon": "pid-sample-cooler",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -40820,11 +40739,10 @@
       "icon": "pid-screen-vibrating",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -40914,11 +40832,10 @@
       "icon": "pid-scrubber",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 40,
@@ -41008,11 +40925,10 @@
       "icon": "pid-stack",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -41102,11 +41018,10 @@
       "icon": "pid-strainer-basket",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -41196,11 +41111,10 @@
       "icon": "pid-strainer-cone",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -41290,11 +41204,10 @@
       "icon": "pid-strainer-y",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Em Linha P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -41384,11 +41297,10 @@
       "icon": "pid-tcv-self",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Segurança P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -41478,11 +41390,10 @@
       "icon": "pid-turbine-steam",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Máquinas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -41572,11 +41483,10 @@
       "icon": "pid-vacuum-breaker",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Segurança P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -41666,11 +41576,10 @@
       "icon": "pid-valve-angle",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -41760,11 +41669,10 @@
       "icon": "pid-valve-ball",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -41854,11 +41762,10 @@
       "icon": "pid-valve-ballcheck",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -41948,11 +41855,10 @@
       "icon": "pid-valve-butterfly",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -42042,11 +41948,10 @@
       "icon": "pid-valve-check",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -42136,11 +42041,10 @@
       "icon": "pid-valve-diaphragm",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -42230,11 +42134,10 @@
       "icon": "pid-valve-float",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -42324,11 +42227,10 @@
       "icon": "pid-valve-foot",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 16,
@@ -42418,11 +42320,10 @@
       "icon": "pid-valve-fourway",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -42512,11 +42413,10 @@
       "icon": "pid-valve-gate",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -42606,11 +42506,10 @@
       "icon": "pid-valve-globe",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -42700,11 +42599,10 @@
       "icon": "pid-valve-knife",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -42794,11 +42692,10 @@
       "icon": "pid-valve-mov",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -42888,11 +42785,10 @@
       "icon": "pid-valve-needle",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -42982,11 +42878,10 @@
       "icon": "pid-valve-pinch",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -43076,11 +42971,10 @@
       "icon": "pid-valve-plug",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -43170,11 +43064,10 @@
       "icon": "pid-valve-solenoid",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -43264,11 +43157,10 @@
       "icon": "pid-valve-stopcheck",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -43358,11 +43250,10 @@
       "icon": "pid-valve-threeway",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Válvulas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 32,
@@ -43452,11 +43343,10 @@
       "icon": "pid-vessel-bullet",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Vasos P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 80,
@@ -43546,11 +43436,10 @@
       "icon": "pid-vessel-column-packed",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Vasos P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 40,
@@ -43640,11 +43529,10 @@
       "icon": "pid-vessel-column-tray",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Vasos P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 40,
@@ -43734,11 +43622,10 @@
       "icon": "pid-vessel-cstr",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Vasos P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -43828,11 +43715,10 @@
       "icon": "pid-vessel-fixedbed",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Vasos P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -43922,11 +43808,10 @@
       "icon": "pid-vessel-floating-roof",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Vasos P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -44016,11 +43901,10 @@
       "icon": "pid-vessel-horizontal",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Vasos P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 80,
@@ -44110,11 +43994,10 @@
       "icon": "pid-vessel-ko-drum",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Vasos P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -44204,11 +44087,10 @@
       "icon": "pid-vessel-open",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Vasos P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -44298,11 +44180,10 @@
       "icon": "pid-vessel-sep3",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Vasos P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 80,
@@ -44392,11 +44273,10 @@
       "icon": "pid-vessel-silo",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Vasos P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -44486,11 +44366,10 @@
       "icon": "pid-vessel-sphere",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Vasos P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -44580,11 +44459,10 @@
       "icon": "pid-vessel-tank",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Vasos P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 64,
@@ -44674,11 +44552,10 @@
       "icon": "pid-vessel-vertical",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Vasos P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 48,
@@ -44768,11 +44645,10 @@
       "icon": "pid-vfd",
       "graphical": true,
       "folderPath": [
-        "Grafico",
         "P&ID",
         "Máquinas P&ID"
       ],
-      "category": "Grafico",
+      "category": "P&ID",
       "workspaceSection": "misc",
       "defaultProperties": {
         "width": 24,
@@ -44863,7 +44739,6 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "HMI",
         "Indicadores"
       ],
       "category": "Grafico",
@@ -45516,7 +45391,6 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "HMI",
         "Indicadores"
       ],
       "category": "Grafico",
@@ -45998,7 +45872,6 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "HMI",
         "Indicadores"
       ],
       "category": "Grafico",
@@ -46450,7 +46323,6 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "HMI",
         "Equipamentos"
       ],
       "category": "Grafico",
@@ -47323,7 +47195,6 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "HMI",
         "Equipamentos"
       ],
       "category": "Grafico",
@@ -47713,7 +47584,6 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "HMI",
         "Equipamentos"
       ],
       "category": "Grafico",
@@ -48220,7 +48090,6 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "HMI",
         "Indicadores"
       ],
       "category": "Grafico",
@@ -48508,7 +48377,6 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "HMI",
         "Layout"
       ],
       "category": "Grafico",
@@ -48697,7 +48565,6 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "HMI",
         "Controle"
       ],
       "category": "Grafico",
@@ -49574,7 +49441,6 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "HMI",
         "Indicadores"
       ],
       "category": "Grafico",

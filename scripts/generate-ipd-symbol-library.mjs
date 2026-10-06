@@ -160,8 +160,8 @@ function catalogItemFor(def) {
     pinCount: 0,
     icon: iconOf(def.id),
     graphical: true,
-    folderPath: ["Grafico", "P&ID", folderPt],
-    category: "Grafico",
+    folderPath: ["P&ID", folderPt],
+    category: "P&ID",
     workspaceSection: "misc",
     defaultProperties,
     propertySchema: schema,
@@ -226,7 +226,7 @@ catalog.translations.en = catalog.translations.en ?? { items: {} };
 catalog.translations.en.items = catalog.translations.en.items ?? {};
 for (const def of defs) {
   const [, folderEn] = CATEGORY_FOLDER[def.category] ?? ["Outros P&ID", "P&ID Other"];
-  catalog.translations.en.items[typeIdOf(def.id)] = { label: def.name, folderPath: ["Graphical", "P&ID", folderEn] };
+  catalog.translations.en.items[typeIdOf(def.id)] = { label: def.name, folderPath: ["P&ID", folderEn] };
 }
 fs.writeFileSync(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`, "utf8");
 

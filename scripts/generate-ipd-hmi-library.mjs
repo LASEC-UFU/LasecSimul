@@ -1,5 +1,5 @@
 /**
- * Biblioteca de WIDGETS DE SUPERVISÓRIO herdada do HMI Studio do IPD -- `Gráfico > HMI`.
+ * Biblioteca de WIDGETS DE SUPERVISÓRIO herdada do HMI Studio do IPD -- `Gráfico`.
  *
  * ESCOPO, EXPLÍCITO: só a CAMADA VISUAL. O IPD traz junto um simulador de processo próprio
  * (`src/hmi/sim/`: rede hidráulica, modelo de processo, controlador PI, ciclo de vida de alarme
@@ -599,7 +599,7 @@ function catalogItemFor(widget) {
     pinCount: 0,
     icon: iconOf(widget.id),
     graphical: true,
-    folderPath: ["Grafico", "HMI", widget.folder[0]],
+    folderPath: ["Grafico", widget.folder[0]],
     category: "Grafico",
     workspaceSection: "misc",
     defaultProperties,
@@ -627,7 +627,7 @@ catalog.translations = catalog.translations ?? {};
 catalog.translations.en = catalog.translations.en ?? { items: {} };
 catalog.translations.en.items = catalog.translations.en.items ?? {};
 for (const widget of WIDGETS) {
-  catalog.translations.en.items[typeIdOf(widget.id)] = { label: widget.labelEn, folderPath: ["Graphical", "HMI", widget.folder[1]] };
+  catalog.translations.en.items[typeIdOf(widget.id)] = { label: widget.labelEn, folderPath: ["Graphical", widget.folder[1]] };
 }
 fs.writeFileSync(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`, "utf8");
 

@@ -45,12 +45,27 @@ function filledRectHeight(svg: string, fill: string): number {
     assert(Boolean(root), "a pasta Grafico deveria existir na aba Miscelaneos");
     if (!root || root.kind !== "folder") throw new Error("pasta Grafico ausente");
     const folders = root.children.filter((node) => node.kind === "folder").map((node) => node.label).sort();
-    // "Bombas e Motores" deixou de existir: bomba e motor eram duplicatas nativas de
-    // `graphics.hmi.pump`, e o equipamento herdado do IPD vive em `Grafico > HMI > Equipamentos`
-    // (widgets ligados ao binding) e em `Grafico > P&ID` (desenho ISA).
-    for (const expected of ["Tubulacao", "Tanques e Vasos", "Valvulas", "Instrumentos", "Indicadores", "Controles HMI", "HMI", "P&ID", "Supervisório Industrial", "Formas Basicas"]) {
+    for (const expected of ["Tubulacao", "Tanques e Vasos", "Valvulas", "Instrumentos", "Indicadores", "Controles HMI", "Controle", "Equipamentos", "Layout", "Supervisório Industrial", "Formas Basicas"]) {
       assert(folders.includes(expected), `subsecao ${expected} deveria existir -- veio ${JSON.stringify(folders)}`);
     }
+    assert(!folders.includes("HMI") && !folders.includes("P&ID"), "HMI deve ser achatado e P&ID deve ficar na raiz de Miscelaneos");
+    const indicators = root.children.find((node) => node.kind === "folder" && node.label === "Indicadores");
+    assert(indicators?.kind === "folder", "Indicadores deveria existir sob Grafico");
+    if (indicators?.kind === "folder") {
+      const items = indicators.children.filter((node) => node.kind === "component");
+      assert(items.length === 10 && items.some((node) => node.typeId.startsWith("graphics.hmi.")) && items.some((node) => !node.typeId.startsWith("graphics.hmi.")),
+        "os indicadores nativos e HMI devem estar na mesma pasta");
+    }
+    const pid = tree.find((node) => node.kind === "folder" && node.label === "P&ID");
+    assert(pid?.kind === "folder" && pid.children.some((node) => node.kind === "folder" && node.label === "Válvulas P&ID"),
+      "P&ID e suas subpastas devem ficar diretamente em Miscelaneos");
+
+    const english = buildPaletteTree(loadUnifiedCatalog(process.cwd(), "en").catalog.filter((entry) => entry.typeId.startsWith("graphics.")), "", "misc");
+    const englishGraphic = english.find((node) => node.kind === "folder" && node.label === "Graphical");
+    assert(englishGraphic?.kind === "folder" && englishGraphic.children.some((node) => node.kind === "folder" && node.label === "Indicators")
+      && !englishGraphic.children.some((node) => node.kind === "folder" && (node.label === "HMI" || node.label === "P&ID"))
+      && english.some((node) => node.kind === "folder" && node.label === "P&ID"),
+      "a hierarquia em ingles deve seguir a mesma organizacao");
   });
 
   await test("todo simbolo e puramente visual: zero pinos, nunca sincronizado com o Core", () => {
@@ -71,8 +86,8 @@ function filledRectHeight(svg: string, fill: string): number {
       assert(svg.length > 0, `${entry.typeId} nao renderizou nada`);
       assert(!svg.includes("NaN"), `${entry.typeId} gerou NaN em algum atributo`);
       assert(!svg.includes("undefined"), `${entry.typeId} gerou undefined em algum atributo`);
-      if (entry.typeId === "graphics.tank_svg") {
-        assert(/<image\b[^>]*href="data:image\/svg\+xml;base64,/.test(svg), "o tanque deve usar SVG vetorial empacotado");
+      if (entry.typeId === "graphics.tank_svg" || entry.typeId === "graphics.valve_globe_svg") {
+        assert(/<image\b[^>]*href="data:image\/svg\+xml;base64,/.test(svg), `${entry.typeId} deve usar SVG vetorial empacotado`);
       } else {
         assert(!/<image\b/.test(svg), `${entry.typeId} usa bitmap -- a biblioteca e vetorial`);
       }
@@ -103,6 +118,30 @@ function filledRectHeight(svg: string, fill: string): number {
       "traducao inglesa do tanque vetorial");
     const bigger = componentBox(tank!.typeId, { ...tank!.defaultProperties, width: 240, height: 360 });
     assert(bigger.width === 240 && bigger.height === 360, "tanque nao pode ser redimensionado");
+  });
+
+  await test("a válvula globo SVG aparece em Grafico > Valvulas e usa o arquivo fornecido", () => {
+    const valve = byTypeId.get("graphics.valve_globe_svg");
+    assert(Boolean(valve), "válvula globo vetorial ausente do catálogo");
+    const tree = buildPaletteTree(graphics, "", "misc");
+    const graphic = tree.find((node) => node.kind === "folder" && node.label === "Grafico");
+    const valves = graphic?.kind === "folder"
+      ? graphic.children.find((node) => node.kind === "folder" && node.label === "Valvulas")
+      : undefined;
+    assert(valves?.kind === "folder" && valves.children.some((node) => node.kind === "component" && node.typeId === valve?.typeId),
+      "válvula vetorial fora da pasta Valvulas");
+    const assetPath = path.resolve(process.cwd(), "..", "subcircuits", "valveGlobe.svg");
+    const prefix = "data:image/svg+xml;base64,";
+    const image = valve?.package?.shapes?.find((shape) => shape.kind === "image");
+    assert(Boolean(image?.href?.startsWith(prefix)), "SVG da válvula não foi resolvido no catálogo");
+    assert(Buffer.from(image?.href?.slice(prefix.length) ?? "", "base64").equals(fs.readFileSync(assetPath)),
+      "imagem da válvula difere do SVG fornecido");
+    assert(valve?.iconFilePath === assetPath && valve.pinCount === 0, "ícone e pinos da válvula estão incorretos");
+    const english = loadUnifiedCatalog(process.cwd(), "en").catalog.find((entry) => entry.typeId === valve?.typeId);
+    assert(english?.label === "Vector Globe Valve" && JSON.stringify(english.folderPath) === JSON.stringify(["Graphical", "Valves"]),
+      "tradução inglesa da válvula vetorial");
+    const bigger = componentBox(valve!.typeId, { ...valve!.defaultProperties, width: 240, height: 240 });
+    assert(bigger.width === 240 && bigger.height === 240, "válvula vetorial não pode ser redimensionada");
   });
 
   await test("redimensionar e por instancia: width/height mudam a caixa e o desenho escala", () => {
@@ -179,7 +218,7 @@ function filledRectHeight(svg: string, fill: string): number {
       const groups = new Set((entry.propertySchema ?? []).map((schema) => schema.group));
       assert(groups.has("Geometria"), `${entry.typeId} deveria expor o grupo Geometria no Inspector`);
       // Arte SVG fornecida pelo usuário preserva as próprias cores; só o tamanho é editável.
-      if (entry.typeId !== "graphics.tank_svg") {
+      if (entry.typeId !== "graphics.tank_svg" && entry.typeId !== "graphics.valve_globe_svg") {
         assert(groups.has("Aparência") || groups.has("Componente"), `${entry.typeId} deveria expor Aparencia ou Componente`);
       }
     }

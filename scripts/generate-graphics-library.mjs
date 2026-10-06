@@ -3,8 +3,8 @@
  *
  * Cada símbolo é DADO: um `package.simulidePaint` declarativo (o mesmo IR já usado por 55
  * dispositivos do catálogo, ver `ui/webview/simulidePaint.ts`) publicado em
- * `project/schema/component-catalog.json`. Adicionar um símbolo novo é acrescentar uma entrada
- * nesta lista -- nunca um `case` novo no renderizador, nunca um editor novo, nunca um formato novo.
+ * `project/schema/component-catalog.json`. Adicionar um símbolo procedural é acrescentar uma entrada
+ * nesta lista; SVGs fornecidos separadamente ficam no catálogo e são preservados abaixo.
  * Ver `docs/44-biblioteca-grafica-supervisorio-fase0.md` para a auditoria que levou a este desenho.
  *
  * Regras que este gerador materializa:
@@ -1180,6 +1180,8 @@ const ownedTypeIds = new Set(SYMBOLS.map((def) => `graphics.${def.id}`));
 // (`catalog/subcircuitSymbolScene.ts`). Só ganham a subpasta nova.
 const LEGACY_FOLDER = { pt: ["Grafico", "Formas Basicas"], en: ["Graphical", "Basic Shapes"] };
 const LEGACY_IDS = ["graphics.rectangle", "graphics.ellipse", "graphics.line", "graphics.text", "graphics.image"];
+// SVGs fornecidos separadamente vivem no catálogo e não são gerados por SYMBOLS.
+const ASSET_BACKED_IDS = new Set(["graphics.tank_svg", "graphics.valve_globe_svg"]);
 
 /** As 5 legadas estavam com rótulo em INGLÊS na língua-base do arquivo (que é pt-BR) -- a
  * tradução `en` já tinha o mesmo texto, então o item aparecia em inglês nas DUAS línguas. */
@@ -1199,7 +1201,8 @@ const LEGACY_PT_LABEL = {
 const ownsNamespace = (typeId) => typeId.startsWith("graphics.")
   && !typeId.startsWith("graphics.pid.")
   && !typeId.startsWith("graphics.hmi.")
-  && !LEGACY_IDS.includes(typeId);
+  && !LEGACY_IDS.includes(typeId)
+  && !ASSET_BACKED_IDS.has(typeId);
 const kept = catalog.items.filter((item) => !ownsNamespace(item.typeId) || ownedTypeIds.has(item.typeId))
   .filter((item) => !ownedTypeIds.has(item.typeId));
 for (const item of kept) {
