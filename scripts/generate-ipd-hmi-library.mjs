@@ -24,6 +24,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { graphicsPaletteFolder } from "./graphics-palette-folder.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const catalogPath = path.join(repoRoot, "project", "schema", "component-catalog.json");
@@ -599,7 +600,7 @@ function catalogItemFor(widget) {
     pinCount: 0,
     icon: iconOf(widget.id),
     graphical: true,
-    folderPath: ["Grafico", widget.folder[0]],
+    folderPath: ["Grafico", graphicsPaletteFolder(widget.folder)[0]],
     category: "Grafico",
     workspaceSection: "misc",
     defaultProperties,
@@ -627,7 +628,7 @@ catalog.translations = catalog.translations ?? {};
 catalog.translations.en = catalog.translations.en ?? { items: {} };
 catalog.translations.en.items = catalog.translations.en.items ?? {};
 for (const widget of WIDGETS) {
-  catalog.translations.en.items[typeIdOf(widget.id)] = { label: widget.labelEn, folderPath: ["Graphical", widget.folder[1]] };
+  catalog.translations.en.items[typeIdOf(widget.id)] = { label: widget.labelEn, folderPath: ["Graphical", graphicsPaletteFolder(widget.folder)[1]] };
 }
 fs.writeFileSync(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`, "utf8");
 

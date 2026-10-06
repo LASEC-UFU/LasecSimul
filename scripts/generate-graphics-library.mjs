@@ -23,6 +23,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { graphicsPaletteFolder } from "./graphics-palette-folder.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const catalogPath = path.join(repoRoot, "project", "schema", "component-catalog.json");
@@ -998,7 +999,7 @@ function catalogItemFor(def) {
     pinCount: 0,
     icon: `graphic-${def.id.replace(/_/g, "-")}`,
     graphical: true,
-    folderPath: ["Grafico", def.folder[0]],
+    folderPath: ["Grafico", graphicsPaletteFolder(def.folder)[0]],
     category: "Grafico",
     workspaceSection: "misc",
     defaultProperties: defaultPropertiesFor(def),
@@ -1222,7 +1223,7 @@ catalog.translations = catalog.translations ?? {};
 catalog.translations.en = catalog.translations.en ?? { items: {} };
 catalog.translations.en.items = catalog.translations.en.items ?? {};
 for (const def of SYMBOLS) {
-  catalog.translations.en.items[`graphics.${def.id}`] = { label: def.labelEn, folderPath: ["Graphical", def.folder[1]] };
+  catalog.translations.en.items[`graphics.${def.id}`] = { label: def.labelEn, folderPath: ["Graphical", graphicsPaletteFolder(def.folder)[1]] };
 }
 const LEGACY_EN_LABEL = {
   "graphics.rectangle": "Rectangle", "graphics.ellipse": "Ellipse", "graphics.line": "Line",

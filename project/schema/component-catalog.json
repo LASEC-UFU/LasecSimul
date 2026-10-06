@@ -564,28 +564,28 @@
           "label": "Numeric Display",
           "folderPath": [
             "Graphical",
-            "Indicators"
+            "Controls/Indicators"
           ]
         },
         "graphics.level_bar": {
           "label": "Level Bar",
           "folderPath": [
             "Graphical",
-            "Indicators"
+            "Controls/Indicators"
           ]
         },
         "graphics.gauge_bar": {
           "label": "Horizontal Gauge",
           "folderPath": [
             "Graphical",
-            "Indicators"
+            "Controls/Indicators"
           ]
         },
         "graphics.status_lamp": {
           "label": "Status Lamp",
           "folderPath": [
             "Graphical",
-            "Indicators"
+            "Controls/Indicators"
           ]
         },
         "graphics.flow_arrow": {
@@ -669,56 +669,56 @@
           "label": "Command Button",
           "folderPath": [
             "Graphical",
-            "HMI Controls"
+            "Controls/Indicators"
           ]
         },
         "graphics.hmi_toggle": {
           "label": "HMI Toggle",
           "folderPath": [
             "Graphical",
-            "HMI Controls"
+            "Controls/Indicators"
           ]
         },
         "graphics.hmi_switch": {
           "label": "HMI Switch",
           "folderPath": [
             "Graphical",
-            "HMI Controls"
+            "Controls/Indicators"
           ]
         },
         "graphics.numeric_input": {
           "label": "Numeric Input",
           "folderPath": [
             "Graphical",
-            "HMI Controls"
+            "Controls/Indicators"
           ]
         },
         "graphics.slider": {
           "label": "HMI Slider",
           "folderPath": [
             "Graphical",
-            "HMI Controls"
+            "Controls/Indicators"
           ]
         },
         "graphics.setpoint": {
           "label": "Setpoint",
           "folderPath": [
             "Graphical",
-            "HMI Controls"
+            "Controls/Indicators"
           ]
         },
         "graphics.alarm_indicator": {
           "label": "Alarm Indicator",
           "folderPath": [
             "Graphical",
-            "Indicators"
+            "Controls/Indicators"
           ]
         },
         "graphics.group_box": {
           "label": "Group Box",
           "folderPath": [
             "Graphical",
-            "HMI Controls"
+            "Controls/Indicators"
           ]
         },
         "graphics.signal_elbow": {
@@ -2097,28 +2097,28 @@
           "label": "Illuminated Pushbutton",
           "folderPath": [
             "Graphical",
-            "HMI Controls"
+            "Controls/Indicators"
           ]
         },
         "graphics.hmi.bar": {
           "label": "Bar Indicator",
           "folderPath": [
             "Graphical",
-            "Indicators"
+            "Controls/Indicators"
           ]
         },
         "graphics.hmi.gauge": {
           "label": "Radial Gauge",
           "folderPath": [
             "Graphical",
-            "Indicators"
+            "Controls/Indicators"
           ]
         },
         "graphics.hmi.display": {
           "label": "Value Display",
           "folderPath": [
             "Graphical",
-            "Indicators"
+            "Controls/Indicators"
           ]
         },
         "graphics.hmi.tank": {
@@ -2146,7 +2146,7 @@
           "label": "HMI Lamp",
           "folderPath": [
             "Graphical",
-            "Indicators"
+            "Controls/Indicators"
           ]
         },
         "graphics.hmi.panel": {
@@ -2167,7 +2167,7 @@
           "label": "Alarm Banner",
           "folderPath": [
             "Graphical",
-            "Indicators"
+            "Controls/Indicators"
           ]
         }
       }
@@ -12914,7 +12914,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Indicadores"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",
@@ -13211,7 +13211,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Indicadores"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",
@@ -13611,7 +13611,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Indicadores"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",
@@ -13921,7 +13921,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Indicadores"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",
@@ -14274,7 +14274,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Controles HMI"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",
@@ -14553,7 +14553,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Controles HMI"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",
@@ -15004,7 +15004,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Controles HMI"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",
@@ -15467,7 +15467,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Controles HMI"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",
@@ -15868,7 +15868,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Controles HMI"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",
@@ -16242,7 +16242,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Controles HMI"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",
@@ -16642,7 +16642,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Controles HMI"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",
@@ -17023,7 +17023,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Indicadores"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",
@@ -18656,7 +18656,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Controles HMI"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",
@@ -44739,7 +44739,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Indicadores"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",
@@ -45391,7 +45391,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Indicadores"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",
@@ -45872,7 +45872,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Indicadores"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",
@@ -48090,7 +48090,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Indicadores"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",
@@ -49441,7 +49441,7 @@
       "graphical": true,
       "folderPath": [
         "Grafico",
-        "Indicadores"
+        "Controles/Indicadores"
       ],
       "category": "Grafico",
       "workspaceSection": "misc",

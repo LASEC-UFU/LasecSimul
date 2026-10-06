@@ -45,16 +45,19 @@ function filledRectHeight(svg: string, fill: string): number {
     assert(Boolean(root), "a pasta Grafico deveria existir na aba Miscelaneos");
     if (!root || root.kind !== "folder") throw new Error("pasta Grafico ausente");
     const folders = root.children.filter((node) => node.kind === "folder").map((node) => node.label).sort();
-    for (const expected of ["Tubulacao", "Tanques e Vasos", "Valvulas", "Instrumentos", "Indicadores", "Controles HMI", "Controle", "Equipamentos", "Layout", "Supervisório Industrial", "Formas Basicas"]) {
+    for (const expected of ["Tubulacao", "Tanques e Vasos", "Valvulas", "Instrumentos", "Controles/Indicadores", "Controle", "Equipamentos", "Layout", "Supervisório Industrial", "Formas Basicas"]) {
       assert(folders.includes(expected), `subsecao ${expected} deveria existir -- veio ${JSON.stringify(folders)}`);
     }
-    assert(!folders.includes("HMI") && !folders.includes("P&ID"), "HMI deve ser achatado e P&ID deve ficar na raiz de Miscelaneos");
-    const indicators = root.children.find((node) => node.kind === "folder" && node.label === "Indicadores");
-    assert(indicators?.kind === "folder", "Indicadores deveria existir sob Grafico");
-    if (indicators?.kind === "folder") {
-      const items = indicators.children.filter((node) => node.kind === "component");
-      assert(items.length === 10 && items.some((node) => node.typeId.startsWith("graphics.hmi.")) && items.some((node) => !node.typeId.startsWith("graphics.hmi.")),
-        "os indicadores nativos e HMI devem estar na mesma pasta");
+    assert(!folders.some((folder) => ["HMI", "P&ID", "Indicadores", "Controles HMI"].includes(folder)),
+      "as antigas pastas HMI, P&ID, Indicadores e Controles HMI não devem permanecer sob Grafico");
+    const controlsIndicators = root.children.find((node) => node.kind === "folder" && node.label === "Controles/Indicadores");
+    assert(controlsIndicators?.kind === "folder", "a pasta Controles/Indicadores deveria existir sob Grafico");
+    if (controlsIndicators?.kind === "folder") {
+      const items = controlsIndicators.children.filter((node) => node.kind === "component");
+      assert(items.length === 18 && items.some((node) => node.typeId.startsWith("graphics.hmi."))
+        && items.some((node) => node.typeId === "graphics.hmi_button")
+        && items.some((node) => node.typeId === "graphics.value_display"),
+      "os controles e indicadores nativos e HMI devem estar na mesma pasta");
     }
     const pid = tree.find((node) => node.kind === "folder" && node.label === "P&ID");
     assert(pid?.kind === "folder" && pid.children.some((node) => node.kind === "folder" && node.label === "Válvulas")
@@ -63,8 +66,8 @@ function filledRectHeight(svg: string, fill: string): number {
 
     const english = buildPaletteTree(loadUnifiedCatalog(process.cwd(), "en").catalog.filter((entry) => entry.typeId.startsWith("graphics.")), "", "misc");
     const englishGraphic = english.find((node) => node.kind === "folder" && node.label === "Graphical");
-    assert(englishGraphic?.kind === "folder" && englishGraphic.children.some((node) => node.kind === "folder" && node.label === "Indicators")
-      && !englishGraphic.children.some((node) => node.kind === "folder" && (node.label === "HMI" || node.label === "P&ID"))
+    assert(englishGraphic?.kind === "folder" && englishGraphic.children.some((node) => node.kind === "folder" && node.label === "Controls/Indicators")
+      && !englishGraphic.children.some((node) => node.kind === "folder" && ["HMI", "P&ID", "Indicators", "HMI Controls"].includes(node.label))
       && english.some((node) => node.kind === "folder" && node.label === "P&ID"
         && node.children.filter((child) => child.kind === "folder").every((child) => !child.label.includes("P&ID"))),
       "a hierarquia em ingles deve seguir a mesma organizacao");
