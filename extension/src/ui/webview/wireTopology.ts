@@ -25,7 +25,7 @@ import {
   splitWireRouteAtPoint,
 } from "./wireGeometry.js";
 import { CanonicalEndpoint, TopologyNode, WebviewComponentModel, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint } from "./model.js";
-import { componentBox, componentLocalOrigin, pinLocalPosition } from "./componentSymbols.js";
+import { componentBox, componentLocalOrigin, instancePinPlacements, pinLocalPosition } from "./componentSymbols.js";
 import { localToScene, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
 import {
   ConnectionDirection,
@@ -84,9 +84,9 @@ function componentSceneRect(component: WebviewComponentModel): ConnectionRect {
 }
 
 /**
- * Port exit direction derived from the authored pin position and the same
- * affine transform used by the renderer. Package pins normally sit on a box
- * edge; generic fallback pins do too. This adds routing metadata without
+ * Port exit direction follows the edited terminal angle when present;
+ * otherwise it uses the authored pin position. The same affine transform
+ * used by the renderer applies to that direction. This adds routing metadata without
  * changing any stable pin ID or simulation semantics.
  */
 export function pinSceneDirection(component: WebviewComponentModel, pinId: string): ConnectionDirection | undefined {
@@ -101,7 +101,12 @@ export function pinSceneDirection(component: WebviewComponentModel, pinId: strin
     { direction: "bottom", distance: Math.abs(size.height - point.y), vector: { x: 0, y: 1 } },
   ];
   candidates.sort((a, b) => a.distance - b.distance);
-  const localDirection = candidates[0]!;
+  const editedAngle = instancePinPlacements(component.properties)[pinId]?.angle;
+  const editedVector: Record<number, Point> = {
+    0: { x: 1, y: 0 }, 90: { x: 0, y: -1 },
+    180: { x: -1, y: 0 }, 270: { x: 0, y: 1 },
+  };
+  const localVector = editedAngle === undefined ? candidates[0]!.vector : editedVector[editedAngle]!;
   const transform = {
     size,
     rotation: component.rotation,
@@ -110,7 +115,7 @@ export function pinSceneDirection(component: WebviewComponentModel, pinId: strin
     origin: componentLocalOrigin(component.typeId, component.properties),
   };
   const transformedPoint = transformLocalPoint(point, transform);
-  const transformedVectorEnd = transformLocalPoint({ x: point.x + localDirection.vector.x, y: point.y + localDirection.vector.y }, transform);
+  const transformedVectorEnd = transformLocalPoint({ x: point.x + localVector.x, y: point.y + localVector.y }, transform);
   const dx = transformedVectorEnd.x - transformedPoint.x;
   const dy = transformedVectorEnd.y - transformedPoint.y;
   if (Math.abs(dx) >= Math.abs(dy)) return dx < 0 ? "left" : "right";

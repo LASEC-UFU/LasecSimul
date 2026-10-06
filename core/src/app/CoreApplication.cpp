@@ -1859,6 +1859,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                 resp.payloadJson = nlohmann::json{{"instanceId", std::to_string(expansion.subcircuitInstanceId)},
                                                    {"exposedPins", exposedPinsJson},
                                                    {"exposedSignalPins", exposedSignalPinsJson},
+                                                   {"topologyRevision", session.wireTopologyRevision()},
                                                    {"primaryMcuInstanceId",
                                                     expansion.primaryMcuInstanceId
                                                         ? nlohmann::json(std::to_string(*expansion.primaryMcuInstanceId))
@@ -1867,7 +1868,8 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             } else {
                 const uint32_t instanceId = session.addComponent(typeId, params);
                 resp.ok = true;
-                resp.payloadJson = nlohmann::json{{"instanceId", std::to_string(instanceId)}}.dump();
+                resp.payloadJson = nlohmann::json{{"instanceId", std::to_string(instanceId)},
+                                                   {"topologyRevision", session.wireTopologyRevision()}}.dump();
             }
         } catch (const std::exception& e) {
             resp.ok = false;
@@ -2205,6 +2207,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                 session.removeComponent(instanceId);
             }
             resp.ok = true;
+            resp.payloadJson = nlohmann::json{{"topologyRevision", session.wireTopologyRevision()}}.dump();
         } catch (const std::exception& e) {
             resp.ok = false;
             resp.error = std::string("removeComponent falhou: ") + e.what();

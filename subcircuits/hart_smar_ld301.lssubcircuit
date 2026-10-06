@@ -14,7 +14,7 @@
   ],
   "workspaceSection": "process",
   "help": {
-    "description": "Transmissor de pressão SMAR LD301 construído sobre o dispositivo HART padrão. PRESSÃO: entrada de sinal de processo em mmH2O@20C, conectável a um slider ou planta industrial. LOOP+/LOOP-: laço elétrico de 4-20 mA a dois fios (alimentação externa). Para falar com um PC/PACTware, ligue um Modem HART em série no laço."
+    "description": "Transmissor diferencial SMAR LD301. HIGH e LOW recebem pressão em mmH2O@20C por sinais independentes; a variável medida é HIGH menos LOW. Ligue um slider ou uma planta em cada entrada. LOOP+/LOOP- formam o laço elétrico de 4-20 mA com alimentação externa."
   },
   "components": [
     {
@@ -76,11 +76,11 @@
       }
     },
     {
-      "id": "tunnel_pressure",
+      "id": "tunnel_high",
       "typeId": "connectors.signal_tunnel",
       "properties": {
-        "name": "pressure",
-        "pinId": "pressure",
+        "name": "high",
+        "pinId": "high",
         "direction": "Input",
         "valueType": "Real",
         "unit": ""
@@ -90,6 +90,24 @@
         "y": 160,
         "rotation": 0
       }
+    },
+    {
+      "id": "tunnel_low",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "low",
+        "pinId": "low",
+        "direction": "Input",
+        "valueType": "Real",
+        "unit": ""
+      },
+      "visual": { "x": 160, "y": 200, "rotation": 0 }
+    },
+    {
+      "id": "differential_pressure",
+      "typeId": "control.subtract",
+      "properties": { "inputs": "high,low", "samplePeriodNs": 1000 },
+      "visual": { "x": 240, "y": 180, "rotation": 0 }
     },
     {
       "id": "tunnel_loop_plus",
@@ -123,17 +141,29 @@
     "nodes": [],
     "conductors": [
       {
-        "id": "wire-pressure",
+        "id": "wire-high",
         "from": {
           "kind": "port",
-          "componentId": "tunnel_pressure",
+          "componentId": "tunnel_high",
           "pinId": "value"
         },
         "to": {
           "kind": "port",
-          "componentId": "ld301",
-          "pinId": "PV"
+          "componentId": "differential_pressure",
+          "pinId": "high"
         },
+        "points": []
+      },
+      {
+        "id": "wire-low",
+        "from": { "kind": "port", "componentId": "tunnel_low", "pinId": "value" },
+        "to": { "kind": "port", "componentId": "differential_pressure", "pinId": "low" },
+        "points": []
+      },
+      {
+        "id": "wire-differential-pressure",
+        "from": { "kind": "port", "componentId": "differential_pressure", "pinId": "out" },
+        "to": { "kind": "port", "componentId": "ld301", "pinId": "PV" },
         "points": []
       },
       {
@@ -168,9 +198,18 @@
   },
   "interface": [
     {
-      "pinId": "pressure",
-      "label": "PRESSÃO",
-      "internalTunnel": "pressure",
+      "pinId": "high",
+      "label": "HIGH",
+      "internalTunnel": "high",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "low",
+      "label": "LOW",
+      "internalTunnel": "low",
       "domain": "signal",
       "direction": "in",
       "valueType": "Real",
@@ -208,13 +247,22 @@
     ],
     "pins": [
       {
-        "id": "pressure",
+        "id": "high",
         "kind": "ANALOG_IN",
         "x": 0,
-        "y": 178,
+        "y": 168,
         "angle": 180,
         "length": 8,
-        "label": "PRESSÃO"
+        "label": "HIGH"
+      },
+      {
+        "id": "low",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 188,
+        "angle": 180,
+        "length": 8,
+        "label": "LOW"
       },
       {
         "id": "loop_plus",

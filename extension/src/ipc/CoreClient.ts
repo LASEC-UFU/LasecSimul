@@ -197,9 +197,11 @@ export class CoreClient {
       cacheRootDir: string;
       sourceRootDir: string;
     }
-  ): Promise<{ instanceId: string; primaryMcuInstanceId?: string; exposedPins?: Record<string, { instanceId: string; pinId: string }>; exposedSignalPins?: Record<string, { instanceId: string; pinId: string }> }> {
+  ): Promise<{ instanceId: string; primaryMcuInstanceId?: string; exposedPins?: Record<string, { instanceId: string; pinId: string }>; exposedSignalPins?: Record<string, { instanceId: string; pinId: string }>; topologyRevision?: number }> {
     const resp = await this.request("addComponent", { typeId, properties, pins, instanceName, signalAliases, fpga });
-    return resp as { instanceId: string; primaryMcuInstanceId?: string; exposedPins?: Record<string, { instanceId: string; pinId: string }>; exposedSignalPins?: Record<string, { instanceId: string; pinId: string }> };
+    const result = resp as { instanceId: string; primaryMcuInstanceId?: string; exposedPins?: Record<string, { instanceId: string; pinId: string }>; exposedSignalPins?: Record<string, { instanceId: string; pinId: string }>; topologyRevision?: number };
+    if (result.topologyRevision !== undefined) this.wireTopologyRevision = result.topologyRevision;
+    return result;
   }
 
   /** `requiresRestart: true` quando a propriedade alterada tem essa flag no schema (`Core` já
@@ -316,7 +318,9 @@ export class CoreClient {
   }
 
   async removeComponent(instanceId: string): Promise<void> {
-    await this.request("removeComponent", { instanceId });
+    const response = await this.request("removeComponent", { instanceId });
+    const revision = (response as { topologyRevision?: number }).topologyRevision;
+    if (revision !== undefined) this.wireTopologyRevision = revision;
   }
 
   async loadDeviceLibrary(libraryJsonPath: string): Promise<void> {

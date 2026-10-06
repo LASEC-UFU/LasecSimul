@@ -390,7 +390,7 @@ int main(int argc, char** argv) {
         check(device != nullptr && device->value("id", std::string{}) == "ld301" &&
                   device->at("properties").value("profileId", std::string{}) == "lasecsimul.hart.standard-field-device",
               "S2 it contains one standard HART field device (protocol.hart.device.standard), not a built-in LD301");
-        bool interfaceOk = document.contains("interface") && document["interface"].size() == 3;
+        bool interfaceOk = document.contains("interface") && document["interface"].size() == 4;
         for (const char* pin : {"loop_plus", "loop_minus"}) {
             bool inInterface = false, tunnelWired = false;
             std::string tunnelId;
@@ -405,18 +405,20 @@ int main(int argc, char** argv) {
                     wire["to"].value("pinId", std::string{}) == pin) tunnelWired = true;
             interfaceOk = interfaceOk && inInterface && tunnelWired;
         }
-        const auto pressurePort = std::find_if(document["interface"].begin(), document["interface"].end(), [](const auto& entry) {
-            return entry.value("pinId", std::string{}) == "pressure" && entry.value("domain", std::string{}) == "signal" &&
-                   entry.value("direction", std::string{}) == "in";
-        });
+        for (const char* pin : {"high", "low"}) {
+            const auto signalPort = std::find_if(document["interface"].begin(), document["interface"].end(), [pin](const auto& entry) {
+                return entry.value("pinId", std::string{}) == pin && entry.value("domain", std::string{}) == "signal" &&
+                       entry.value("direction", std::string{}) == "in";
+            });
+            interfaceOk = interfaceOk && signalPort != document["interface"].end();
+        }
         const bool pressureWired = std::any_of(document["topology"]["conductors"].begin(),
             document["topology"]["conductors"].end(), [](const auto& wire) {
-                return wire["from"].value("componentId", std::string{}) == "tunnel_pressure" &&
+                return wire["from"].value("componentId", std::string{}) == "differential_pressure" &&
                        wire["to"].value("componentId", std::string{}) == "ld301" &&
                        wire["to"].value("pinId", std::string{}) == "PV";
             });
-        check(interfaceOk && pressurePort != document["interface"].end() && pressureWired,
-              "S3 pressure is a Signal Graph input and LOOP+/LOOP- stay electrical");
+        check(interfaceOk && pressureWired, "S3 HIGH/LOW drive PV through a differential block; LOOP+/LOOP- stay electrical");
         const auto exported = document.value("exportedPropertyComponentIds", nlohmann::json::array());
         check(std::find(exported.begin(), exported.end(), "ld301") != exported.end(),
               "S4 the inner device's properties are exported: each LD301 instance can be changed");

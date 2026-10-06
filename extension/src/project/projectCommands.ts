@@ -148,6 +148,15 @@ function projectToWebviewState(project: ProjectDocument, projectDir?: string): W
       } } : {}),
     };
   });
+  // Projetos salvos antes das duas entradas diferenciais tinham um único pino
+  // `pressure`. A identidade da ligação passa a `high`; `low` fica em zero até
+  // o usuário conectar a segunda pressão.
+  const legacyLd301Ids = new Set(components
+    .filter((component) => component.typeId === "subcircuits.hart.smar_ld301")
+    .map((component) => component.id));
+  const migrateLd301Endpoint = <T extends { kind: string; componentId?: string; pinId?: string }>(endpoint: T): T =>
+    endpoint.kind === "port" && endpoint.pinId === "pressure" && endpoint.componentId && legacyLd301Ids.has(endpoint.componentId)
+      ? { ...endpoint, pinId: "high" } : endpoint;
   // `ProjectTopology` (`ProjectTypes.ts`, formato persistido) e `CanonicalTopologyDocument`
   // (`model.ts`, modelo vivo) têm a MESMA forma de endpoint (`{kind:"port"|"node",...}`) desde a
   // Fase C completa (`.spec` seção 25.6) -- só o nome do campo de geometria difere (`vertices` no
@@ -160,8 +169,8 @@ function projectToWebviewState(project: ProjectDocument, projectDir?: string): W
       const points = (conductor.vertices.length > 0 ? conductor.vertices : visualWirePoints.get(conductor.id));
       return {
         id: conductor.id,
-        from: conductor.from,
-        to: conductor.to,
+        from: migrateLd301Endpoint(conductor.from),
+        to: migrateLd301Endpoint(conductor.to),
         ...(conductor.hidden ? { hidden: true } : {}),
         ...(conductor.lineClass ? { lineClass: conductor.lineClass } : {}),
         ...(points && points.length > 0 ? { points } : {}),

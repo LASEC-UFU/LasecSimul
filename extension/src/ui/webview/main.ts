@@ -3,9 +3,9 @@ import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, Mcu
 import { reorderedZOrder, zOrderModeForKey, type ZOrderMode } from "./zOrder.js";
 import { graphicalRuntimeProperties, isGraphicalTypeId } from "./graphicsBinding.js";
 import { GraphicalActionPhase, GraphicalActionValue, graphicalActionConfig, isGraphicalActionTypeId, resolveGraphicalActionValue } from "./graphicsAction.js";
-import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage, resolvedPackageFor, runtimeSurfaceImageHref } from "./componentSymbols.js";
+import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, instancePinPlacements, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage, resolvedPackageFor, runtimeSurfaceImageHref } from "./componentSymbols.js";
 import { ExternalLabelKind, SYMBOL_PIN_LABEL_ALIGN_KEY, formatProbeVoltage, genericExternalLabelFontSize, isExternalProbeReadout, labelPropertyKey, nextLabelRotation, resolveDefaultExternalLabelOffset, resolveExternalLabelColor, symbolPinLabelPackageFields } from "./componentLabels.js";
-import { resizedComponentSize, svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
+import { resizedComponentSize, sceneToLocal, svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
 import { detectChannelTrigger, digitalStepPath, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import { analogSampleHoldPath, clampInstrumentWindow, decodeInstrumentState, encodeInstrumentState, panInstrumentTime, zoomInstrumentTimeAt } from "./instrumentViewport.js";
 import {
@@ -45,6 +45,7 @@ import { formatHartHex, hartCommonTableForType, hartVariableTypeOptions } from "
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FINE_WIRE_STEP = WIRE_GRID_SIZE / 10;
+let editingTerminalsComponentId: string | undefined;
 
 interface WindowWithInitialState extends Window {
   __LASECSIMUL_INITIAL_STATE__?: WebviewProjectState;
@@ -227,6 +228,10 @@ const UI_TEXT = {
     continueSimulation: "Continuar simulação",
     stopSimulation: "Parar simulação",
     componentProperties: "Propriedades do componente",
+    editTerminals: "Editar terminais",
+    finishTerminalEditing: "Concluir edição dos terminais",
+    rotateTerminal: "Girar terminal",
+    restoreTerminal: "Restaurar terminal",
     deleteSelectedWire: "Apagar fio selecionado",
     deleteSelectedComponent: "Apagar componente selecionado",
     deleteSelectedItems: "Apagar selecionados",
@@ -378,6 +383,10 @@ const UI_TEXT = {
     continueSimulation: "Continue simulation",
     stopSimulation: "Stop simulation",
     componentProperties: "Component properties",
+    editTerminals: "Edit terminals",
+    finishTerminalEditing: "Finish editing terminals",
+    rotateTerminal: "Rotate terminal",
+    restoreTerminal: "Reset terminal",
     deleteSelectedWire: "Delete selected wire",
     deleteSelectedComponent: "Delete selected component",
     deleteSelectedItems: "Delete selected items",
@@ -4545,6 +4554,27 @@ function componentPinLocalPosition(component: WebviewComponentModel, pinIndex: n
   return transformLocalPoint(base, { size: box, rotation: component.rotation, flipH: Boolean(component.flipH), flipV: Boolean(component.flipV), origin });
 }
 
+function updateInstanceTerminal(component: WebviewComponentModel, pinId: string, placement?: { x: number; y: number; angle: number }): void {
+  const next = instancePinPlacements(component.properties);
+  if (placement) next[pinId] = placement;
+  else delete next[pinId];
+  const value = JSON.stringify(next);
+  component.properties.__ui_pinLayout = value;
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty",
+    componentId: component.id, name: "__ui_pinLayout", value });
+  render();
+}
+
+function terminalPlacement(component: WebviewComponentModel, pinId: string): { x: number; y: number; angle: number } | undefined {
+  const index = component.pins.findIndex((pin) => pin.id === pinId);
+  if (index < 0) return undefined;
+  const current = instancePinPlacements(component.properties)[pinId];
+  if (current) return current;
+  const point = pinLocalPosition(pinId, index, component.pins.length, component.typeId, component.properties);
+  const angle = resolvedPackageFor(component.typeId, component.properties)?.pins.find((pin) => pin.id === pinId)?.angle ?? 0;
+  return { ...point, angle: (Math.round(angle / 90) * 90 + 360) % 360 };
+}
+
 function setPolylinePoints(polyline: SVGPolylineElement, points: Point[]): void {
   polyline.setAttribute("points", points.map((point) => `${point.x},${point.y}`).join(" "));
 }
@@ -7735,6 +7765,8 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       hideContextMenu();
       return;
     }
+    const terminalPinId = event.target instanceof Element
+      ? event.target.closest<SVGCircleElement>(".pin-terminal")?.dataset.pinId : undefined;
     const catalogEntry = catalogEntryFor(component.typeId);
     if (!isComponentSelected(component.id)) selectOnlyComponent(component.id);
     persistState();
@@ -7867,6 +7899,18 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         ]
       : [];
     const menuItems: ContextMenuItem[] = [
+      ...(!isGroup && component.pins.length > 0 ? [
+        { label: editingTerminalsComponentId === component.id ? t("finishTerminalEditing") : t("editTerminals"),
+          onClick: () => { editingTerminalsComponentId = editingTerminalsComponentId === component.id ? undefined : component.id; render(); } } satisfies ContextMenuItem,
+        ...(editingTerminalsComponentId === component.id && terminalPinId ? [
+          { label: `${t("rotateTerminal")} ${terminalPinId} 90°`, onClick: () => {
+            const placement = terminalPlacement(component, terminalPinId);
+            if (placement) updateInstanceTerminal(component, terminalPinId, { ...placement, angle: (placement.angle + 90) % 360 });
+          } } satisfies ContextMenuItem,
+          { label: `${t("restoreTerminal")} ${terminalPinId}`, onClick: () => updateInstanceTerminal(component, terminalPinId) } satisfies ContextMenuItem,
+        ] : []),
+        { kind: "separator" } satisfies ContextMenuItem,
+      ] : []),
       ...exposedSubmenuItems,
       ...openSubcircuitMenuItems,
       ...(exposedSubmenuItems.length > 0 || openSubcircuitMenuItems.length > 0 ? [{ kind: "separator" } satisfies ContextMenuItem] : []),
@@ -8656,7 +8700,8 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
     circle.setAttribute("cx", String(local.x));
     circle.setAttribute("cy", String(local.y));
     circle.setAttribute("r", String(PIN_RADIUS));
-    circle.setAttribute("class", `pin-terminal ${isActive ? "pin-terminal--active" : ""}`);
+    const isEditingTerminal = editingTerminalsComponentId === component.id;
+    circle.setAttribute("class", `pin-terminal ${isActive ? "pin-terminal--active" : ""} ${isEditingTerminal ? "pin-terminal--editing" : ""}`);
     circle.dataset.componentId = component.id;
     circle.dataset.pinId = pin.id;
     const titleEl = document.createElementNS(SVG_NS, "title");
@@ -8665,12 +8710,58 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
 
     circle.addEventListener("click", (event) => {
       event.stopPropagation();
+      if (editingTerminalsComponentId === component.id) return;
       // `handleWireGestureClick` já cobre a guarda de `placingTypeId` -- clique é descartado,
       // `stopPropagation` já rodou.
       const point = pinScenePosition(component, pin.id)!;
       handleWireGestureClick({ kind: "pin", componentId: component.id, pinId: pin.id, point });
     });
-    circle.addEventListener("pointerdown", (event) => startPinConnectionDrag(event, component, pin.id));
+    circle.addEventListener("pointerdown", (event) => {
+      if (editingTerminalsComponentId !== component.id) {
+        startPinConnectionDrag(event, component, pin.id);
+        return;
+      }
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      circle.setPointerCapture(event.pointerId);
+      const move = (pointer: PointerEvent): void => {
+        const canvas = document.querySelector<HTMLElement>(".canvas");
+        if (!canvas) return;
+        const scene = eventToCanvasPoint(pointer, canvas);
+        const size = componentBox(component.typeId, component.properties);
+        const local = sceneToLocal(scene, { size, position: { x: component.x, y: component.y },
+          rotation: component.rotation, flipH: Boolean(component.flipH), flipV: Boolean(component.flipV),
+          origin: componentLocalOrigin(component.typeId, component.properties) });
+        const x = Math.round(Math.max(0, Math.min(size.width, local.x)) * 10) / 10;
+        const y = Math.round(Math.max(0, Math.min(size.height, local.y)) * 10) / 10;
+        const preview = transformLocalPoint({ x, y }, { size, rotation: component.rotation,
+          flipH: Boolean(component.flipH), flipV: Boolean(component.flipV),
+          origin: componentLocalOrigin(component.typeId, component.properties) });
+        circle.setAttribute("cx", String(preview.x));
+        circle.setAttribute("cy", String(preview.y));
+      };
+      const finish = (pointer: PointerEvent): void => {
+        circle.removeEventListener("pointermove", move);
+        circle.removeEventListener("pointerup", finish);
+        circle.removeEventListener("pointercancel", cancel);
+        const canvas = document.querySelector<HTMLElement>(".canvas");
+        if (!canvas) return;
+        const scene = eventToCanvasPoint(pointer, canvas);
+        const size = componentBox(component.typeId, component.properties);
+        const local = sceneToLocal(scene, { size, position: { x: component.x, y: component.y },
+          rotation: component.rotation, flipH: Boolean(component.flipH), flipV: Boolean(component.flipV),
+          origin: componentLocalOrigin(component.typeId, component.properties) });
+        const current = terminalPlacement(component, pin.id);
+        if (!current) return;
+        updateInstanceTerminal(component, pin.id, { x: Math.round(Math.max(0, Math.min(size.width, local.x)) * 10) / 10,
+          y: Math.round(Math.max(0, Math.min(size.height, local.y)) * 10) / 10, angle: current.angle });
+      };
+      const cancel = (): void => { circle.removeEventListener("pointermove", move); circle.removeEventListener("pointerup", finish); circle.removeEventListener("pointercancel", cancel); render(); };
+      circle.addEventListener("pointermove", move);
+      circle.addEventListener("pointerup", finish);
+      circle.addEventListener("pointercancel", cancel);
+    });
     svg.appendChild(circle);
   });
 

@@ -10,7 +10,7 @@ laço**.
 ```
  +24 V ──[ R 250 Ω ]──(L+) MODEM HART (L-)──(LOOP+) TRANSMISSOR (LOOP-)── 0 V
                          │                      │
-                     COM do PC              PRESSÃO : sinal do processo (LD301)
+                     COM do PC              HIGH/LOW : pressão do processo (LD301)
                   (PACTware, DTM)
 ```
 
@@ -19,8 +19,10 @@ laço**.
   LasecPlot, com LEDs Tx/Rx e botão **Abrir/Fechar** da porta COM. Ele é ligado
   **em série** pelos terminais **L+ / L-** e tem um **resistor interno de 250 Ω**,
   a carga HART. Com ele, o resistor externo é opcional.
-- **Transmissor**: terminais **LOOP+ / LOOP-** no laço. No LD301, conecte a
-  saída `OUT` de um slider ou da planta à entrada de sinal **PRESSÃO**. O
+- **Transmissor**: terminais **LOOP+ / LOOP-** no laço. No LD301, conecte
+  dois sliders ou saídas da planta às entradas de sinal **HIGH** e **LOW**.
+  A pressão medida é HIGH menos LOW, em mmH2O@20C. Para simular pressão
+  manométrica, mantenha LOW em zero. O
   dispositivo HART padrão mantém as entradas elétricas **S+ / S-**.
 - **PC**: em *Ligação com o PC*, escolha **Serial (COM / CNC)** ou **UDP**.
   - **Serial**: *Porta serial* é uma lista com as portas que existem no PC

@@ -1,7 +1,7 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
 import fs from "node:fs";
 import path from "node:path";
-import { canonicalPackagePinId, componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, pinLocalPosition, packageSymbolSvg, pinTerminalMargins, registerPackage, resolvedPackageFor, runtimeSurfaceImageHref } from "./componentSymbols";
+import { canonicalPackagePinId, componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, instancePinPlacements, pinLocalPosition, packageSymbolSvg, pinTerminalMargins, registerPackage, resolvedPackageFor, runtimeSurfaceImageHref } from "./componentSymbols";
 import { transformLocalPoint } from "./componentGeometry";
 import { sanitizePackage } from "../../catalog/packageSanitizers";
 import { PackageDescriptor, WebviewComponentModel } from "./model";
@@ -85,6 +85,18 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
     const origin = componentLocalOrigin("test.qt-origin", { __simulideQtOrigin: true });
     assert(box.width === 76 && box.height === 40, `box deveria incluir lead externo do package, recebido {${box.width},${box.height}}`);
     assert(Boolean(origin) && near(origin!.x, 8) && near(origin!.y, 0), `origem Qt deveria ser o offset do layout resolvido, recebido ${JSON.stringify(origin)}`);
+  });
+
+  await test("terminal editado por instância move ponta, lead e direção sem mudar outras instâncias", () => {
+    registerPackage("test.pin-editor", pkg);
+    const properties = { __ui_pinLayout: JSON.stringify({ out: { x: 30, y: 0, angle: 90 } }) };
+    const moved = pinLocalPosition("out", 0, 3, "test.pin-editor", properties);
+    const original = pinLocalPosition("out", 0, 3, "test.pin-editor");
+    assert(near(moved.x, 30) && near(moved.y, 0), `ponta movida: ${JSON.stringify(moved)}`);
+    assert(near(original.x, 76) && near(original.y, 20), `outra instância manteve posição: ${JSON.stringify(original)}`);
+    assert(instancePinPlacements(properties).out?.angle === 90, "giro do terminal precisa persistir");
+    const svg = componentSymbolSvg("test.pin-editor", properties);
+    assert(svg.includes('x1="30.0" y1="0.0" x2="30.0" y2="8.0"'), "lead deve seguir o terminal movido e girado");
   });
 
   await test("package traduzido de cena SimulIDE aplica escala local em box, origem e pinos", () => {

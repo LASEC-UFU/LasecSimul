@@ -729,6 +729,17 @@ html, body {
   r: 4.5;
 }
 
+.component .pin-terminal--editing,
+.component--package .pin-terminal--editing,
+.component--package .pin-terminal--editing:hover {
+  fill: #f59e0b;
+  stroke: #78350f;
+  stroke-width: 1.5;
+  opacity: 1;
+  r: 6;
+  cursor: move;
+}
+
 /* IPD-style magnetic docking feedback. Pins remain visually quiet during
    ordinary editing; while a connection is active, compatible targets become
    discoverable and the nearest target gets an unambiguous magnetic halo. */

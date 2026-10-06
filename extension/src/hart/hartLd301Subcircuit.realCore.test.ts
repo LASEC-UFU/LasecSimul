@@ -19,7 +19,7 @@ const { test, finish } = createTestRunner("LD301 subcircuit on the standard HART
 
 const extensionRoot = path.resolve(__dirname, "..", "..");
 const repoRoot = path.resolve(extensionRoot, "..");
-const pins = ["pressure", "loop_plus", "loop_minus"].map((id, index) => ({ id, x: 0, y: index * 12 }));
+const pins = ["high", "low", "loop_plus", "loop_minus"].map((id, index) => ({ id, x: 0, y: index * 12 }));
 
 function body(frameHex: string): string {
   // Strip preambles; the slave delimiter starts the frame.
@@ -66,13 +66,20 @@ function body(frameHex: string): string {
       assert(body(reply.frameHex) === "86be0105f04d1402404493", `Command 20: ${reply.frameHex}`);
     });
 
-    await test("o slider alimenta a entrada PRESSAO e altera a PV medida", async () => {
-      const pressure = ld301.exposedSignalPins?.pressure;
-      assert(Boolean(pressure), "a interface do LD301 deve expor PRESSAO como sinal");
-      if (!pressure) return;
-      const slider = await client.addComponent("graphics.slider", { value: 190 }, [{ id: "out", x: 0, y: 0 }], "Pressao manual");
-      await client.connectWire(slider.instanceId, "out", pressure.instanceId, pressure.pinId);
-      await client.step(1_000);
+    await test("os sinais HIGH e LOW persistem na transacao de fios e PV mede a diferenca", async () => {
+      const highInput = ld301.exposedSignalPins?.high;
+      const lowInput = ld301.exposedSignalPins?.low;
+      assert(Boolean(highInput && lowInput), "LD301 deve expor HIGH e LOW como sinais");
+      if (!highInput || !lowInput) return;
+      const highSlider = await client.addComponent("graphics.slider", { value: 1190 }, [{ id: "out", x: 0, y: 0 }], "HIGH");
+      const lowSlider = await client.addComponent("graphics.slider", { value: 1000 }, [{ id: "out", x: 0, y: 0 }], "LOW");
+      await client.applyWireTopologyTransaction([
+        { kind: "connect", from: { componentId: highSlider.instanceId, pinId: "out" },
+          to: { componentId: highInput.instanceId, pinId: highInput.pinId } },
+        { kind: "connect", from: { componentId: lowSlider.instanceId, pinId: "out" },
+          to: { componentId: lowInput.instanceId, pinId: lowInput.pinId } },
+      ]);
+      await client.step(10_000);
       const readPressure = async (): Promise<number> => {
         const reply = await client.hartTransact(inner, "ffffffffff82be0105f04d010084");
         const frame = Buffer.from(reply.frameHex, "hex");
@@ -81,10 +88,14 @@ function body(frameHex: string): string {
       };
       const low = await readPressure();
       assert(Math.abs(low - 190) < 0.01, `PRESSAO 190 deveria chegar a PV: ${low}`);
-      await client.setProperty(slider.instanceId, "value", 1690);
-      await client.step(1_000);
+      await client.setProperty(highSlider.instanceId, "value", 1690);
+      await client.step(10_000);
       const high = await readPressure();
-      assert(Math.abs(high - 1690) < 0.01, `PRESSAO 1690 deveria chegar a PV: ${high}`);
+      assert(Math.abs(high - 690) < 0.01, `HIGH 1690 menos LOW 1000 deveria produzir PV 690: ${high}`);
+      await client.setProperty(lowSlider.instanceId, "value", 0);
+      await client.step(10_000);
+      const zeroLow = await readPressure();
+      assert(Math.abs(zeroLow - 1690) < 0.01, `LOW 0 deveria produzir PV 1690: ${zeroLow}`);
     });
   } finally {
     await client.stop().catch(() => undefined);

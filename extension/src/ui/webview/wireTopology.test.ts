@@ -11,6 +11,7 @@ import {
   mergeCollinearSegments,
   movableTopologyNodeIds,
   normalizeWireGeometry,
+  pinSceneDirection,
   pinScenePosition,
   removeOrphanNodes,
   splitSegmentAtPoint,
@@ -102,6 +103,10 @@ function portWire(id: string, fromComponentId: string, toComponentId: string, pi
     const genericFallbackWidth = 70; // DEFAULT_BOX -- se pinScenePosition caísse no fallback genérico, a posição dependeria disso, não do package
     assert(Math.abs(outPos.x - (100 + genericFallbackWidth)) > 1, "posição não pode bater com o box genérico -- sinal de que caiu no fallback em vez de usar o package");
     assert(Math.abs(outPos.x - 176) < 1e-6 && Math.abs(outPos.y - 120) < 1e-6, `esperado {176,120} (geometria real do package, verificado contra componentSymbols.ts), recebido {${outPos.x},${outPos.y}}`);
+    component.properties.__ui_pinLayout = JSON.stringify({ out: { x: 30, y: 0, angle: 90 } });
+    const movedPos = pinScenePosition([component], "pkg1", "out")!;
+    assert(movedPos.x === 130 && movedPos.y === 100, `fio deve seguir o terminal editado: ${JSON.stringify(movedPos)}`);
+    assert(pinSceneDirection(component, "out") === "top", "rota do fio deve seguir a rotação editada do terminal");
     registerPackage("test.wireTopologyPackage", undefined);
   });
 

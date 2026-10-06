@@ -66,6 +66,29 @@ interface ResolvedPackage {
   source: MaterializedPackageDescriptor;
 }
 
+export interface InstancePinPlacement { x: number; y: number; angle: number }
+
+/** Per-instance terminal positions in the rendered local coordinate system. */
+export function instancePinPlacements(properties?: Record<string, unknown>): Record<string, InstancePinPlacement> {
+  const raw = properties?.__ui_pinLayout;
+  if (typeof raw !== "string") return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const result: Record<string, InstancePinPlacement> = {};
+    for (const [id, value] of Object.entries(parsed)) {
+      if (!value || typeof value !== "object") continue;
+      const pin = value as Record<string, unknown>;
+      if (typeof pin.x === "number" && Number.isFinite(pin.x) &&
+          typeof pin.y === "number" && Number.isFinite(pin.y) &&
+          typeof pin.angle === "number" && [0, 90, 180, 270].includes(pin.angle)) {
+        result[id] = { x: pin.x, y: pin.y, angle: pin.angle };
+      }
+    }
+    return result;
+  } catch { return {}; }
+}
+
 function rotatePoint(x: number, y: number, cx: number, cy: number, deg: number): { x: number; y: number } {
   const rad = (deg * Math.PI) / 180;
   const cos = Math.cos(rad);
@@ -414,16 +437,31 @@ export function registerPackage(typeId: string, pkg: PackageDescriptor | undefin
  * MESMOS pinos materializados que `packageBodySvg` usa (não uma cópia da lógica de materialização) --
  * evita duplicar `materializePackage`/`resolvePackageLayout` só pra auditoria. */
 export function resolvedPackageFor(typeId: string, properties?: Record<string, unknown>, variant?: PackageVariant): ResolvedPackage | undefined {
+  const withInstancePins = (pkg: PackageDescriptor): ResolvedPackage => {
+    const resolved = resolvePackageLayout(materializePackage(pkg, properties));
+    const placements = instancePinPlacements(properties);
+    if (Object.keys(placements).length === 0) return resolved;
+    const scale = packageInstanceScale(properties);
+    return { ...resolved, pins: resolved.pins.map((pin) => {
+      const placement = placements[pin.id];
+      if (!placement) return pin;
+      const tipX = placement.x / scale.x;
+      const tipY = placement.y / scale.y;
+      return { ...pin, x: tipX / resolved.scaleX - resolved.offsetX,
+        y: tipY / resolved.scaleY - resolved.offsetY, tipX, tipY, angle: placement.angle,
+        labelX: undefined, labelY: undefined, labelRotation: undefined };
+    }) };
+  };
   if (variant === "board") {
     const boardPackage = BOARD_PACKAGE_BY_TYPE_ID.get(typeId);
-    if (boardPackage) return resolvePackageLayout(materializePackage(boardPackage, properties));
+    if (boardPackage) return withInstancePins(boardPackage);
   }
   if (properties?.logicSymbol === true) {
     const logicSymbolPackage = LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID.get(typeId);
-    if (logicSymbolPackage) return resolvePackageLayout(materializePackage(logicSymbolPackage, properties));
+    if (logicSymbolPackage) return withInstancePins(logicSymbolPackage);
   }
   const pkg = PACKAGE_BY_TYPE_ID.get(typeId);
-  return pkg ? resolvePackageLayout(materializePackage(pkg, properties)) : undefined;
+  return pkg ? withInstancePins(pkg) : undefined;
 }
 
 /** `offsetX`/`offsetY`/`scaleX`/`scaleY` reais que `packageBodySvg` aplica pra desenhar este typeId
@@ -1833,6 +1871,8 @@ export function pinLocalPosition(pinId: string, pinIndex: number, pinCount: numb
       return { x: pin.tipX * instanceScale.x, y: pin.tipY * instanceScale.y };
     }
   }
+  const placement = instancePinPlacements(properties)[pinId];
+  if (placement) return { x: placement.x, y: placement.y };
   if (typeId === JUNCTION_TYPE_ID) return { x: 0, y: 0 };
   const box = componentBox(typeId, properties);
   // SimulIDE sources/ground.cpp:
