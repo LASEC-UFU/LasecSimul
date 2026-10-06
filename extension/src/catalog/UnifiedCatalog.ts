@@ -4,6 +4,7 @@ import { McuSerialPortEntry, PackageDescriptor, PackageProvenance, PropertySchem
 import { defaultComponentCatalog } from "../ui/webview/catalog";
 import { controlGraphCatalog } from "./controlGraphCatalog";
 import { sanitizeMcuSerialPorts } from "./catalogMetadata";
+import { sanitizePackage } from "./packageSanitizers";
 import { WorkspaceSection } from "../ui/webview/workspace";
 
 export type RegisteredSourceKind = "abi-device" | "mcu-adapter" | "subcircuit-file";
@@ -123,7 +124,15 @@ export function sanitizeStringArray(value: unknown): string[] | undefined {
   return strings.length > 0 ? strings : undefined;
 }
 
-export function entryToWebview(item: UnifiedCatalogItem): WebviewComponentCatalogEntry {
+function resolvePackageArtwork(descriptor: PackageDescriptor | undefined, assetBasePath: string | undefined): PackageDescriptor | undefined {
+  if (!descriptor || !assetBasePath ||
+      !descriptor.shapes?.some((shape) => shape.kind === "image" && typeof shape.href === "string" && shape.href.startsWith("."))) {
+    return descriptor;
+  }
+  return sanitizePackage(descriptor, assetBasePath) ?? descriptor;
+}
+
+export function entryToWebview(item: UnifiedCatalogItem, assetBasePath?: string): WebviewComponentCatalogEntry {
   const folderPath = sanitizeFolderPath(item.folderPath);
   const category = folderPath[0] ?? item.category ?? "Outros";
   const subcategory = folderPath.length > 1 ? folderPath[1] : item.subcategory;
@@ -148,10 +157,12 @@ export function entryToWebview(item: UnifiedCatalogItem): WebviewComponentCatalo
     folderPath,
     workspaceSection: item.workspaceSection,
     icon: item.icon,
-    iconFilePath: item.iconFilePath,
+    iconFilePath: item.iconFilePath && assetBasePath
+      ? path.resolve(assetBasePath, item.iconFilePath)
+      : item.iconFilePath,
     symbolSvg,
-    package: item.package,
-    boardPackage: item.boardPackage,
+    package: resolvePackageArtwork(item.package, assetBasePath),
+    boardPackage: resolvePackageArtwork(item.boardPackage, assetBasePath),
     propertySchema: item.propertySchema,
     help: item.help,
     pinCount: item.pinCount,
@@ -255,7 +266,7 @@ export function loadUnifiedCatalog(extensionPath: string, requestedLanguage?: st
   const { sourcePath, file } = readUnifiedCatalogFile(extensionPath);
   const baseLanguage = typeof file.language === "string" && file.language.trim() ? file.language : "pt-BR";
   const resolvedItems = resolveLocalizedItems(file.items, requestedLanguage, baseLanguage, file.translations);
-  const loadedCatalog = resolvedItems.map(entryToWebview);
+  const loadedCatalog = resolvedItems.map((item) => entryToWebview(item, path.dirname(sourcePath)));
   // TDPS and the bundled control-block subcircuits use these Core-native
   // SignalEngine primitives internally. They must be in the visual catalog
   // even though they are hidden from the placement palette.

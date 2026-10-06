@@ -118,6 +118,35 @@ function findFolder(nodes: PaletteTreeNode[], label: string): Extract<PaletteTre
     assert(display.x + screenPreview.offsetX === 31, "LCD centralizado sobre o transmissor");
   });
 
+  await test("TT301 and FY301 load their SVG artwork, LCD and four Core terminals", () => {
+    const repoRoot = path.resolve(__dirname, "../../../..");
+    const realCatalog = loadUnifiedCatalog(path.join(repoRoot, "extension"), "pt-BR").catalog;
+    const prefix = "data:image/svg+xml;base64,";
+    for (const [typeId, artworkName, modelName] of [
+      ["protocol.hart.device.smar_tt301", "tt301.svg", "TT301"],
+      ["protocol.hart.device.smar_fy301", "fy301.svg", "FY301"],
+    ] as const) {
+      const entry = realCatalog.find((candidate) => candidate.typeId === typeId);
+      const artwork = fs.readFileSync(path.join(repoRoot, "subcircuits", artworkName));
+      const image = entry?.package?.shapes?.find((shape) => shape.kind === "image");
+      assert(Boolean(entry?.graphical && image?.href?.startsWith(prefix)), `${modelName}: arte SVG no esquema`);
+      assert(Buffer.from(image?.href?.slice(prefix.length) ?? "", "base64").equals(artwork), `${modelName}: SVG original empacotado`);
+      assert(entry?.iconFilePath === path.join(repoRoot, "subcircuits", artworkName), `${modelName}: ícone da paleta`);
+      assert(JSON.stringify(entry?.pinIds) === JSON.stringify(["sensor_plus", "sensor_minus", "loop_plus", "loop_minus"]),
+        `${modelName}: terminais usados pelo Core`);
+      assert(entry?.package?.pins?.length === 4, `${modelName}: quatro pinos desenhados`);
+      assert(entry?.package?.runtimeState?.surface?.encoding === "segment-lcd", `${modelName}: LCD dinâmico`);
+      const glass = entry?.package?.shapes?.[1];
+      assert(Boolean(glass?.kind === "rect" && glass.x === 36 && glass.y === 9 && glass.w === 78 && glass.h === 48),
+        `${modelName}: borda uniforme do LCD`);
+      assert(Boolean(image?.y !== undefined && 4 + 58 < image.y), `${modelName}: LCD separado acima do transmissor`);
+      assert(entry?.defaultProperties?.displayModelName === modelName, `${modelName}: identificação no LCD`);
+      const preview = livePackagePreviewSymbolSvg(entry!.package!);
+      assert(preview.svg.includes(prefix), `${modelName}: prévia renderiza o SVG`);
+      assert(!preview.svg.includes("terminal-clip"), `${modelName}: arte não cortada pelos terminais`);
+    }
+  });
+
   const { failed } = finish();
   process.exitCode = failed > 0 ? 1 : 0;
 })();
