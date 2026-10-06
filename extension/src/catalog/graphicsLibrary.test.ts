@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { createTestRunner, assert } from "../ipc/testSupport/MockCoreServer";
 import { loadUnifiedCatalog } from "./UnifiedCatalog";
-import { componentBox, packageSymbolSvg, registerPackage } from "../ui/webview/componentSymbols";
+import { componentBox, packageSymbolSvg, pinLocalPosition, registerPackage } from "../ui/webview/componentSymbols";
 import { graphicalRuntimeProperties } from "../ui/webview/graphicsBinding";
 import { propertyFieldKindFromEditor } from "../ui/webview/batchProperties";
 import { buildPaletteTree } from "../ui/webview/paletteTree";
@@ -73,14 +73,16 @@ function filledRectHeight(svg: string, fill: string): number {
       "a hierarquia em ingles deve seguir a mesma organizacao");
   });
 
-  await test("todo simbolo e puramente visual: zero pinos, nunca sincronizado com o Core", () => {
-    // `pinCount: 0` é o que faz `coreLifecycle.ts::shouldSyncComponentToCore` devolver false --
-    // é a garantia ESTRUTURAL da FEAT-008 de que a visualizacao nao participa do solver.
+  await test("o slider tem saida de sinal e os demais graficos permanecem sem terminais", () => {
     for (const entry of graphics) {
-      assert(entry.pinCount === 0, `${entry.typeId} deveria ter pinCount 0`);
+      assert(entry.pinCount === (entry.typeId === "graphics.slider" ? 1 : 0), `${entry.typeId} tem quantidade de pinos incorreta`);
       assert(entry.graphical === true, `${entry.typeId} deveria ser graphical`);
       assert(entry.workspaceSection === "misc", `${entry.typeId} deveria ficar em Miscelaneos`);
     }
+    const slider = byTypeId.get("graphics.slider")!;
+    const box = componentBox(slider.typeId, slider.defaultProperties);
+    const out = pinLocalPosition("out", 0, 1, slider.typeId, slider.defaultProperties);
+    assert(out.x > box.width / 2 && out.y > 0 && out.y < box.height, "terminal OUT deve aparecer à direita do slider");
   });
 
   await test("todo simbolo com package desenha vetor real (sem NaN/undefined no SVG)", () => {

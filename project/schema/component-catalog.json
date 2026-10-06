@@ -16223,7 +16223,8 @@
     {
       "typeId": "graphics.slider",
       "label": "Slider HMI",
-      "pinCount": 0,
+      "pinCount": 1,
+      "pinIds": ["out"],
       "icon": "graphic-slider",
       "graphical": true,
       "folderPath": [
@@ -16512,6 +16513,9 @@
           "step": 1
         }
       ],
+      "help": {
+        "description": "Controle manual com saída de sinal OUT. Conecte OUT à entrada de processo de um transmissor ou planta. Ajuste Limite mínimo e Limite máximo na seção Ação para a unidade do processo; para a faixa inicial do LD301, use 190 e 1690 mmH2O@20C."
+      },
       "package": {
         "width": 212,
         "height": 34,
@@ -16529,7 +16533,17 @@
             "fallback": 34
           }
         },
-        "pins": [],
+        "pins": [
+          {
+            "id": "out",
+            "kind": "ANALOG_OUT",
+            "x": {"prop": "width", "fallback": 212},
+            "y": {"prop": "height", "multiplier": 0.5, "fallback": 17},
+            "angle": 0,
+            "length": 8,
+            "label": "OUT"
+          }
+        ],
         "simulidePaint": {
           "version": 1,
           "bounds": {
@@ -20803,8 +20817,38 @@
         "Meters"
       ],
       "defaultProperties": {
-        "resistance": 0.000001
+        "resistance": 0.000001,
+        "displayUnit": "auto"
       },
+      "propertySchema": [
+        {
+          "id": "resistance",
+          "label": "Resistência interna",
+          "group": "Leitura",
+          "unit": "Ω",
+          "editor": "number",
+          "default": 0.000001,
+          "min": 1e-12
+        },
+        {
+          "id": "displayUnit",
+          "label": "Escala exibida",
+          "group": "Leitura",
+          "editor": "select",
+          "default": "auto",
+          "options": [
+            {"value": "auto", "label": "Automática"},
+            {"value": "GA", "label": "GA"},
+            {"value": "MA", "label": "MA"},
+            {"value": "kA", "label": "kA"},
+            {"value": "A", "label": "A"},
+            {"value": "mA", "label": "mA"},
+            {"value": "µA", "label": "µA"},
+            {"value": "nA", "label": "nA"},
+            {"value": "pA", "label": "pA"}
+          ]
+        }
+      ],
       "help": {
         "description": "Amperímetro de baixa resistência série. Conecte em série no ramo para medir a corrente que passa por ele."
       },

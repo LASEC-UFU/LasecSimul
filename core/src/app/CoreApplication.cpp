@@ -32,6 +32,7 @@
 #include "../components/sources/WaveGen.hpp"
 #include "../components/connectors/SignalTunnel.hpp"
 #include "../components/control/SignalMathBlock.hpp"
+#include "../components/control/ManualSignalSlider.hpp"
 #include "../components/connectors/Tunnel.hpp"
 #include "../components/connectors/Bus.hpp"
 #include "../components/logic/Button.hpp"
@@ -302,6 +303,13 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
                                 components::SignalMathBlock::readoutFormat(), std::nullopt,
                                 std::vector<std::string>{});
     }
+
+    reg.registerFactory("graphics.slider", [](const ComponentParams& p) {
+        return std::make_unique<components::ManualSignalSlider>(p);
+    });
+    registerBuiltinMetadata("graphics.slider", "Slider HMI", components::ManualSignalSlider::propertySchema(),
+                            R"json({"en":{"name":"HMI Slider"}})json", std::nullopt, std::nullopt,
+                            std::vector<std::string>{});
 
     reg.registerFactory("bridges.voltage_sensor", [](const ComponentParams& p) {
         return std::make_unique<components::SignalVoltageSensor>(makePins2(p, "p", "n"));
@@ -1017,8 +1025,10 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
 
     reg.registerFactory("meters.ampmeter", [](const ComponentParams& p) {
         const auto pos = makePinVector(p, 3);
-        const double resistance = std::get<double>(propertyOrDefault(p.properties, components::Ampmeter::propertySchema().front()));
-        return std::make_unique<components::Ampmeter>(std::array<Pin, 3>{pos[0], pos[1], pos[2]}, resistance);
+        const auto schemas = components::Ampmeter::propertySchema();
+        const double resistance = std::get<double>(propertyOrDefault(p.properties, schemaById(schemas, "resistance")));
+        const std::string displayUnit = std::get<std::string>(propertyOrDefault(p.properties, schemaById(schemas, "displayUnit")));
+        return std::make_unique<components::Ampmeter>(std::array<Pin, 3>{pos[0], pos[1], pos[2]}, resistance, displayUnit);
     });
     registerBuiltinMetadata("meters.ampmeter", "Amperímetro", components::Ampmeter::propertySchema(),
                             englishName("Ampmeter"), components::Ampmeter::readoutFormat());

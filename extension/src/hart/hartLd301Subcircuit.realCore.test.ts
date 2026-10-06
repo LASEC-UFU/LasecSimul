@@ -19,7 +19,7 @@ const { test, finish } = createTestRunner("LD301 subcircuit on the standard HART
 
 const extensionRoot = path.resolve(__dirname, "..", "..");
 const repoRoot = path.resolve(extensionRoot, "..");
-const pins = ["sensor_plus", "sensor_minus", "loop_plus", "loop_minus"].map((id, index) => ({ id, x: 0, y: index * 12 }));
+const pins = ["pressure", "loop_plus", "loop_minus"].map((id, index) => ({ id, x: 0, y: index * 12 }));
 
 function body(frameHex: string): string {
   // Strip preambles; the slave delimiter starts the frame.
@@ -64,6 +64,27 @@ function body(frameHex: string): string {
     await test("Command 20 (HART 6+) is not implemented: RC 64", async () => {
       const reply = await client.hartTransact(inner, "ffffffffff82be0105f04d140091");
       assert(body(reply.frameHex) === "86be0105f04d1402404493", `Command 20: ${reply.frameHex}`);
+    });
+
+    await test("o slider alimenta a entrada PRESSAO e altera a PV medida", async () => {
+      const pressure = ld301.exposedSignalPins?.pressure;
+      assert(Boolean(pressure), "a interface do LD301 deve expor PRESSAO como sinal");
+      if (!pressure) return;
+      const slider = await client.addComponent("graphics.slider", { value: 190 }, [{ id: "out", x: 0, y: 0 }], "Pressao manual");
+      await client.connectWire(slider.instanceId, "out", pressure.instanceId, pressure.pinId);
+      await client.step(1_000);
+      const readPressure = async (): Promise<number> => {
+        const reply = await client.hartTransact(inner, "ffffffffff82be0105f04d010084");
+        const frame = Buffer.from(reply.frameHex, "hex");
+        assert(frame[11] === 1 && frame[13] === 0, `Command 1 inesperado: ${reply.frameHex}`);
+        return frame.readFloatBE(16);
+      };
+      const low = await readPressure();
+      assert(Math.abs(low - 190) < 0.01, `PRESSAO 190 deveria chegar a PV: ${low}`);
+      await client.setProperty(slider.instanceId, "value", 1690);
+      await client.step(1_000);
+      const high = await readPressure();
+      assert(Math.abs(high - 1690) < 0.01, `PRESSAO 1690 deveria chegar a PV: ${high}`);
     });
   } finally {
     await client.stop().catch(() => undefined);

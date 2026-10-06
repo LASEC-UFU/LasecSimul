@@ -257,7 +257,8 @@ protocol.hart.device.standard  ◄──────────── subcircui
   quadros físicos, RC, status, saída            + propriedades do exemplar LD301:
   analógica, terminais S+/S-/LOOP+/LOOP-,         identidade, revisão, conjunto de comandos,
   DSL HART, traços de perfil por instância        saturação, variáveis (116), 33 comandos DSL
-                                                 + 4 túneis → pinos S+ S- LOOP+ LOOP-
+                                                 + entrada PRESSÃO por sinal e dois túneis
+                                                   elétricos → LOOP+ LOOP-
                                                  + propriedades exportadas para a instância
 ```
 
@@ -265,6 +266,12 @@ Não existe código específico do LD301 no Core. O antigo tipo built‑in
 `protocol.hart.device.smar_ld301` continua registrado (genérico, como no HEAD)
 apenas para abrir projetos antigos; na paleta ele está oculto. O TT301 e o
 FY301 ficam como estavam, para serem refeitos sobre o dispositivo padrão.
+
+No símbolo atual do LD301, `PRESSÃO` recebe diretamente o valor em
+`mmH2O@20C` pelo grafo de sinais; um slider de `Gráfico → Controles/Indicadores`
+pode dirigir essa entrada pelo terminal `OUT`. Os bornes `LOOP+` e `LOOP-`
+continuam no circuito elétrico. A faixa inicial capturada é 190–1690 mmH2O
+para 4–20 mA; ajuste os limites de ação do slider a essa faixa para testá-la.
 
 ### 5.2 Funcionalidades — onde cada uma vive agora
 

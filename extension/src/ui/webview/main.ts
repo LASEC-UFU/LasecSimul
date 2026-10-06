@@ -7428,7 +7428,16 @@ function graphicalActionTarget(component: WebviewComponentModel): {
   config: NonNullable<ReturnType<typeof graphicalActionConfig>>;
   target: WebviewComponentModel;
 } | undefined {
-  const config = graphicalActionConfig(component.properties);
+  const config = graphicalActionConfig(component.properties) ?? (component.typeId === "graphics.slider" ? {
+    targetId: component.id,
+    property: "value",
+    mode: "set" as const,
+    value: Number(component.properties.value ?? 50),
+    releaseValue: 0,
+    step: Number(component.properties.actionStep ?? 1),
+    minimum: Number(component.properties.actionMin ?? 0),
+    maximum: Number(component.properties.actionMax ?? 100),
+  } : undefined);
   if (!config) return undefined;
   const target = state.components.find((entry) => entry.id === config.targetId);
   return target ? { config, target } : undefined;
@@ -7467,8 +7476,11 @@ function applyGraphicalOperatorAction(
   const displayValue = typeof nextValue === "boolean" ? (nextValue ? 100 : 0) : typeof nextValue === "number" ? nextValue : undefined;
   if (displayValue !== undefined) {
     component.properties.value = displayValue;
-    if (!preview) {
-      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: "value", value: displayValue });
+    if (resolved.target.id !== component.id || resolved.config.property !== "value") {
+      if (component.typeId === "graphics.slider" || !preview) {
+        send({ version: WEBVIEW_MESSAGE_VERSION, type: preview ? "requestPreviewProperty" : "requestUpdateProperty",
+          componentId: component.id, name: "value", value: displayValue });
+      }
     }
   }
 
@@ -7558,6 +7570,15 @@ function attachGraphicalOperatorInteraction(
         else resolved.target.properties[resolved.config.property] = initialTargetValue;
         if (initialDisplayValue === undefined) delete component.properties.value;
         else component.properties.value = initialDisplayValue;
+        if (typeof initialTargetValue === "number" || typeof initialTargetValue === "boolean" || typeof initialTargetValue === "string") {
+          send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestPreviewProperty",
+            componentId: resolved.target.id, name: resolved.config.property, value: initialTargetValue });
+        }
+        if ((resolved.target.id !== component.id || resolved.config.property !== "value") &&
+            (typeof initialDisplayValue === "number" || typeof initialDisplayValue === "boolean" || typeof initialDisplayValue === "string")) {
+          send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestPreviewProperty",
+            componentId: component.id, name: "value", value: initialDisplayValue });
+        }
         const targetElement = componentElementsById.get(resolved.target.id);
         if (targetElement) updateComponentElement(targetElement, resolved.target);
         updateComponentElement(el, component);

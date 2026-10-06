@@ -273,6 +273,9 @@ void testAmpmeterMeasuresSeriesCurrentAndForwardsToOutputPin() {
     const double outVoltage = session.nodeVoltageOfPin(amp, "outPin");
     check(nearlyEqual(outVoltage, current, 1e-4), "Ampmeter: outPin reflete a corrente medida como tensao analogica");
     checkCurrent(session, amp, 0.01, 1e-4, "Ampmeter: current() = +10mA (lPin->rPin, mesmo valor de outPin)");
+    const auto unitError = session.setProperty(amp, "displayUnit", PropertyValue{std::string("mA")});
+    check(!unitError.has_value(), "Ampmeter: aceita escala exibida em mA sem alterar a corrente do circuito");
+    checkCurrent(session, amp, 0.01, 1e-4, "Ampmeter: escala exibida nao altera a medida fisica em ampères");
 }
 
 void testClockTogglesOverTime() {

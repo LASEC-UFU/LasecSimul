@@ -86,7 +86,7 @@ function findFolder(nodes: PaletteTreeNode[], label: string): Extract<PaletteTre
     const manifest = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
     assert(manifestHartDeviceComponentId(manifest) === "ld301", "hartDeviceComponentId do dispositivo interno");
     const pins = (manifest.interface as Array<{ pinId: string }>).map((entry) => entry.pinId);
-    assert(JSON.stringify(pins) === JSON.stringify(["sensor_plus", "sensor_minus", "loop_plus", "loop_minus"]), "pinos do subcircuito");
+    assert(JSON.stringify(pins) === JSON.stringify(["pressure", "loop_plus", "loop_minus"]), "entrada de pressão por sinal e bornes elétricos do laço");
     assert(JSON.stringify(manifest.folderPath) === JSON.stringify(["Protocolos Industriais", "HART"]), "pasta HART");
   });
 
@@ -102,7 +102,8 @@ function findFolder(nodes: PaletteTreeNode[], label: string): Extract<PaletteTre
     assert(manifest.iconPath === "./ld301.svg", "paleta aponta para o mesmo SVG empacotado");
     const preview = livePackagePreviewSymbolSvg(symbol!);
     assert(preview.svg.includes(prefix), "prévia do esquemático desenha o SVG");
-    assert(symbol?.pins.length === 4, "quatro terminais HART preservados");
+    assert(symbol?.pins.length === 3 && symbol.pins[0]?.id === "pressure", "pressão como sinal e dois bornes HART");
+    assert(manifest.name === "SMAR LD301", "nome do transmissor sem sufixo redundante");
     const projectCatalog = JSON.parse(fs.readFileSync(path.join(subcircuitsDir, "..", "project", "schema", "component-catalog.json"), "utf8"));
     const standard = projectCatalog.items.find((entry: { typeId: string }) => entry.typeId === "protocol.hart.device.standard")?.package;
     const display = manifest.exposedComponents.find((entry: { componentId: string }) => entry.componentId === "ld301");

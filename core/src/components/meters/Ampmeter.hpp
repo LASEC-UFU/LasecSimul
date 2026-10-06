@@ -3,6 +3,7 @@
 #include <array>
 #include <cstring>
 #include <optional>
+#include <string>
 #include "lasecsimul/IComponentModel.hpp"
 #include "lasecsimul/PropertyDefinition.hpp"
 
@@ -18,8 +19,9 @@ namespace lasecsimul::components {
  */
 class Ampmeter final : public IComponentModel {
 public:
-    Ampmeter(std::array<Pin, 3> pins, double resistanceOhm)
-        : m_pins(std::move(pins)), m_resistance(resistanceOhm < 1e-12 ? 1e-12 : resistanceOhm) {}
+    Ampmeter(std::array<Pin, 3> pins, double resistanceOhm, std::string displayUnit = "auto")
+        : m_pins(std::move(pins)), m_resistance(resistanceOhm < 1e-12 ? 1e-12 : resistanceOhm),
+          m_displayUnit(std::move(displayUnit)) {}
 
     const char* typeId() const override { return "meters.ampmeter"; }
     std::span<Pin> pins() override { return m_pins; }
@@ -53,7 +55,8 @@ public:
     std::vector<PropertyDescriptor> propertyDescriptors() override { return toPropertyDescriptors(properties()); }
 
     std::vector<PropertyDefinition> properties() {
-        const PropertySchema schema = propertySchema().front();
+        const auto schemas = propertySchema();
+        const PropertySchema& schema = schemas.front();
         return {
             PropertyDefinition{
                 schema,
@@ -62,6 +65,15 @@ public:
                     if (const std::optional<std::string> error = validatePropertyValue(schema, v)) return {false, *error};
                     const double d = std::get<double>(v);
                     m_resistance = d < 1e-12 ? 1e-12 : d; // defesa extra, mesmo com minValue já validado acima
+                    return {true, {}};
+                },
+            },
+            PropertyDefinition{
+                schemas[1],
+                [this] { return PropertyValue{m_displayUnit}; },
+                [this, unitSchema = schemas[1]](const PropertyValue& v) -> PropertyBindResult {
+                    if (const auto error = validatePropertyValue(unitSchema, v)) return {false, *error};
+                    m_displayUnit = std::get<std::string>(v);
                     return {true, {}};
                 },
             },
@@ -87,7 +99,17 @@ public:
         resistance.defaultValue = 1e-6;
         resistance.minValue = 1e-12;
         resistance.flags |= PropertySchemaShowOnSymbol;
-        return {resistance};
+        PropertySchema displayUnit;
+        displayUnit.id = "displayUnit";
+        displayUnit.label = "Escala exibida";
+        displayUnit.group = "Leitura";
+        displayUnit.valueKind = PropertyValueKind::String;
+        displayUnit.editor = "select";
+        displayUnit.defaultValue = std::string("auto");
+        displayUnit.options = {{"auto", "Automática"}, {"GA", "GA"}, {"MA", "MA"},
+                               {"kA", "kA"}, {"A", "A"}, {"mA", "mA"},
+                               {"µA", "µA"}, {"nA", "nA"}, {"pA", "pA"}};
+        return {resistance, displayUnit};
     }
 
 private:
@@ -98,6 +120,7 @@ private:
 
     std::array<Pin, 3> m_pins;
     double m_resistance;
+    std::string m_displayUnit;
     double m_lastCurrent = 0.0;
 };
 

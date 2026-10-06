@@ -112,7 +112,16 @@ function formatFixed(value: number, decimals: number): string {
   return value.toFixed(Math.max(0, Math.trunc(decimals)));
 }
 
-function formatSimulideMeterDisplay(value: number, unit: string): string {
+function formatSimulideMeterDisplay(value: number, unit: string, fixedUnit?: string): string {
+  if (unit === "A" && fixedUnit && fixedUnit !== "auto") {
+    const factors: Record<string, number> = { GA: 1e9, MA: 1e6, kA: 1e3, A: 1, mA: 1e-3, "µA": 1e-6, nA: 1e-9, pA: 1e-12 };
+    const factor = factors[fixedUnit];
+    if (factor !== undefined) {
+      const scaled = Math.abs(value / factor);
+      if (!Number.isFinite(scaled) || scaled > 999) return ` ----\n${fixedUnit}`;
+      return `${value < 0 ? "-" : " "}${formatFixed(scaled, 3).slice(0, 5)}\n${fixedUnit}`;
+    }
+  }
   let sign = " ";
   let scaled = Math.abs(value);
   if (scaled < 1e-9) scaled = 0;
@@ -183,7 +192,10 @@ function stateTextFor(primitive: SimulidePaintPrimitive, properties: Record<stri
     return text[index] ?? primitive.stateText.fallback ?? "";
   }
   const readout = readoutNumber(properties);
-  if (primitive.stateText.kind === "meterDisplay") return formatSimulideMeterDisplay(readout, primitive.stateText.unit);
+  if (primitive.stateText.kind === "meterDisplay") {
+    return formatSimulideMeterDisplay(readout, primitive.stateText.unit,
+      typeof properties.displayUnit === "string" ? properties.displayUnit : undefined);
+  }
   if (primitive.stateText.kind === "frequencyDisplay") return formatSimulideFrequencyDisplay(readout);
   const decimals = primitive.stateText.decimals ?? 2;
   return `${formatFixed(readout, decimals)}${primitive.stateText.unit ?? ""}`;

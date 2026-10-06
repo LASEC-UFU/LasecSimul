@@ -4,6 +4,7 @@
 #include "../components/connectors/SignalTunnel.hpp"
 #include "../components/connectors/Tunnel.hpp"
 #include "../components/control/SignalMathBlock.hpp"
+#include "../components/control/ManualSignalSlider.hpp"
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -1746,7 +1747,10 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
                 block.inputs.push_back({"in", {scalar, 1}, port.unit});
             } else {
                 block.kind = simulation::SignalBlockKind::ExternalInput;
-                if (scalar == simulation::SignalScalarType::Real) block.realParameters = {0.0};
+                if (scalar == simulation::SignalScalarType::Real) {
+                    const auto* slider = dynamic_cast<const components::ManualSignalSlider*>(component);
+                    block.realParameters = {slider ? slider->value() : 0.0};
+                }
                 else block.boolParameters = {0};
             }
             if (const auto controlRate = controlRateByComponent.find(index); controlRate != controlRateByComponent.end()) {
@@ -1970,6 +1974,11 @@ std::optional<std::string> SimulationSession::setPropertyUnlocked(uint32_t compo
         }
 
         descriptor.set(value);
+        if (propertyName == "value" && dynamic_cast<components::ManualSignalSlider*>(instance)) {
+            try {
+                m_runtimeState.signals.setExternalReal(signalPortBlockId(component, "out"), std::get<double>(value));
+            } catch (...) { /* Signal plan is not bound until simulation starts. */ }
+        }
         if ((schema.flags & PropertySchemaAffectsPinCount) != 0) reregisterPinsIfChanged(component, instance);
         simulation::PlanDomain executionChanges = refreshComponentExecutionLists(component);
         if (std::binary_search(m_signalSubscribers.begin(), m_signalSubscribers.end(), component)) {

@@ -1,11 +1,11 @@
 {
   "schemaVersion": 3,
   "typeId": "subcircuits.hart.smar_ld301",
-  "name": "SMAR LD301 (HART)",
+  "name": "SMAR LD301",
   "language": "pt-BR",
   "translations": {
     "en": {
-      "name": "SMAR LD301 (HART)"
+      "name": "SMAR LD301"
     }
   },
   "folderPath": [
@@ -14,7 +14,7 @@
   ],
   "workspaceSection": "process",
   "help": {
-    "description": "Transmissor de pressão SMAR LD301 (HART 5) construído sobre o dispositivo HART padrão. Configuração do exemplar capturado em ld301/ (ver docs/ld301-audit.md). S+/S-: sinal injetado proporcional à pressão (0 V = 0 mmH2O, 5 V = +5107,7451 mmH2O). LOOP+/LOOP-: laço 4-20 mA a dois fios (alimentação externa). HART: somente pelo fio do laço (resposta em FSK de ±0,5 mA sobre os 4-20 mA); para falar com um PC/PACTware, ligue um Modem HART em série no laço."
+    "description": "Transmissor de pressão SMAR LD301 construído sobre o dispositivo HART padrão. PRESSÃO: entrada de sinal de processo em mmH2O@20C, conectável a um slider ou planta industrial. LOOP+/LOOP-: laço elétrico de 4-20 mA a dois fios (alimentação externa). Para falar com um PC/PACTware, ligue um Modem HART em série no laço."
   },
   "components": [
     {
@@ -76,28 +76,18 @@
       }
     },
     {
-      "id": "tunnel_sensor_plus",
-      "typeId": "connectors.tunnel",
+      "id": "tunnel_pressure",
+      "typeId": "connectors.signal_tunnel",
       "properties": {
-        "name": "sensor_plus",
-        "pinId": "sensor_plus"
+        "name": "pressure",
+        "pinId": "pressure",
+        "direction": "Input",
+        "valueType": "Real",
+        "unit": ""
       },
       "visual": {
         "x": 160,
         "y": 160,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "tunnel_sensor_minus",
-      "typeId": "connectors.tunnel",
-      "properties": {
-        "name": "sensor_minus",
-        "pinId": "sensor_minus"
-      },
-      "visual": {
-        "x": 160,
-        "y": 200,
         "rotation": 0
       }
     },
@@ -133,30 +123,16 @@
     "nodes": [],
     "conductors": [
       {
-        "id": "wire-sensor_plus",
+        "id": "wire-pressure",
         "from": {
           "kind": "port",
-          "componentId": "tunnel_sensor_plus",
-          "pinId": "pin"
+          "componentId": "tunnel_pressure",
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
           "componentId": "ld301",
-          "pinId": "sensor_plus"
-        },
-        "points": []
-      },
-      {
-        "id": "wire-sensor_minus",
-        "from": {
-          "kind": "port",
-          "componentId": "tunnel_sensor_minus",
-          "pinId": "pin"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "ld301",
-          "pinId": "sensor_minus"
+          "pinId": "PV"
         },
         "points": []
       },
@@ -192,16 +168,13 @@
   },
   "interface": [
     {
-      "pinId": "sensor_plus",
-      "label": "S+",
-      "internalTunnel": "sensor_plus",
-      "domain": "electrical"
-    },
-    {
-      "pinId": "sensor_minus",
-      "label": "S-",
-      "internalTunnel": "sensor_minus",
-      "domain": "electrical"
+      "pinId": "pressure",
+      "label": "PRESSÃO",
+      "internalTunnel": "pressure",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
     },
     {
       "pinId": "loop_plus",
@@ -235,22 +208,13 @@
     ],
     "pins": [
       {
-        "id": "sensor_plus",
+        "id": "pressure",
         "kind": "ANALOG_IN",
         "x": 0,
-        "y": 168,
+        "y": 178,
         "angle": 180,
         "length": 8,
-        "label": "S+"
-      },
-      {
-        "id": "sensor_minus",
-        "kind": "ANALOG_IN",
-        "x": 0,
-        "y": 188,
-        "angle": 180,
-        "length": 8,
-        "label": "S-"
+        "label": "PRESSÃO"
       },
       {
         "id": "loop_plus",

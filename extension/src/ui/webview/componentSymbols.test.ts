@@ -190,6 +190,8 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
     assert(voltSvg.includes('stroke="#ff0000"'), `Voltimeter lPin deveria preservar setColor(Qt::red), markup: ${voltSvg}`);
     assert(voltSvg.includes("<tspan") && voltSvg.includes("-2.499") && voltSvg.includes("> V<"), `Voltimeter deveria renderizar QGraphicsSimpleTextItem em duas linhas, markup: ${voltSvg}`);
     assert(ampSvg.includes("> 1.200<") && ampSvg.includes("> mA<"), `Ampmeter deveria formatar leitura via Meter::updateStep/valToUnit, markup: ${ampSvg}`);
+    const ampFixed = packageSymbolSvg("meters.ampmeter", { __readout: 0.01287, displayUnit: "mA" }, "ampmeter-fixed") ?? "";
+    assert(ampFixed.includes("> 12.87<") && ampFixed.includes(">mA<"), `Ampmeter deveria mostrar a unidade mA selecionada, markup: ${ampFixed}`);
     assert(freqSvg.includes(">2.5000 kHz<"), `FreqMeter deveria formatar leitura via FreqMeter::updateStep, markup: ${freqSvg}`);
   });
 
