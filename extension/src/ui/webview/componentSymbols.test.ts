@@ -2,7 +2,7 @@ import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
 import fs from "node:fs";
 import path from "node:path";
 import { canonicalPackagePinId, componentBox, componentLocalOrigin, componentSymbolSvg, hasRealPinPosition, instancePinPlacements, pinLocalPosition, packageSymbolSvg, pinTerminalMargins, registerPackage, resolvedPackageFor, runtimeSurfaceImageHref } from "./componentSymbols";
-import { transformLocalPoint } from "./componentGeometry";
+import { flipLocalTerminal, transformLocalPoint } from "./componentGeometry";
 import { sanitizePackage } from "../../catalog/packageSanitizers";
 import { PackageDescriptor, WebviewComponentModel } from "./model";
 
@@ -97,6 +97,24 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
     assert(instancePinPlacements(properties).out?.angle === 90, "giro do terminal precisa persistir");
     const svg = componentSymbolSvg("test.pin-editor", properties);
     assert(svg.includes('x1="30.0" y1="0.0" x2="30.0" y2="8.0"'), "lead deve seguir o terminal movido e girado");
+  });
+
+  await test("inverter terminal horizontalmente leva o texto do pino junto", () => {
+    registerPackage("test.pin-label-flip", pkg);
+    const size = componentBox("test.pin-label-flip");
+    const original = { x: 76, y: 20, angle: 0 };
+    const mirrored = flipLocalTerminal(original, size, 0, "horizontal");
+    const before = componentSymbolSvg("test.pin-label-flip");
+    const after = componentSymbolSvg("test.pin-label-flip", { __ui_pinLayout: JSON.stringify({ out: mirrored }) });
+    const labelX = (svg: string): number => {
+      const match = svg.match(/<text x="([\d.-]+)" y="[\d.-]+"[^>]*>OUT<\/text>/);
+      if (!match) throw new Error("rótulo OUT ausente");
+      return Number(match[1]);
+    };
+    assert(mirrored.x === 0 && mirrored.angle === 180, `pino espelhado: ${JSON.stringify(mirrored)}`);
+    assert(labelX(after) < labelX(before), `texto deve acompanhar o pino: ${labelX(before)} -> ${labelX(after)}`);
+    assert(pinLocalPosition("out", 0, 3, "test.pin-label-flip", { __ui_pinLayout: JSON.stringify({ out: mirrored }) }).x === 0,
+      "ponta do fio deve chegar ao lado espelhado");
   });
 
   await test("package traduzido de cena SimulIDE aplica escala local em box, origem e pinos", () => {

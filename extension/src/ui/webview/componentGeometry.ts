@@ -98,6 +98,20 @@ export function transformLocalPoint(point: Point, transform: LocalTransform): Po
   return rotateLocalPoint(mirrorLocalPoint(point, transform), transform);
 }
 
+/** Espelha um terminal individual no eixo VISUAL do componente, preservando seu ID.
+ * A posição e a direção mudam juntas; o rótulo é calculado a partir delas pelo renderer. */
+export function flipLocalTerminal(
+  terminal: { x: number; y: number; angle: number },
+  size: GeometrySize,
+  rotation: 0 | 90 | 180 | 270,
+  axis: "horizontal" | "vertical",
+): { x: number; y: number; angle: number } {
+  const localHorizontal = (axis === "horizontal") === (rotation === 0 || rotation === 180);
+  return localHorizontal
+    ? { x: size.width - terminal.x, y: terminal.y, angle: (180 - terminal.angle + 360) % 360 }
+    : { x: terminal.x, y: size.height - terminal.y, angle: (360 - terminal.angle) % 360 };
+}
+
 export function localToScene(point: Point, transform: SceneTransform): Point {
   const local = transformLocalPoint(point, transform);
   return { x: transform.position.x + local.x, y: transform.position.y + local.y };

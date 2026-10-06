@@ -88,6 +88,17 @@ const center = (box) => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 }
     if (!(await pin.evaluate((element) => element.classList.contains("pin-terminal--selected")))) {
       throw new Error("Terminal perdeu a seleção depois do giro");
     }
+    const beforeFlip = center(await pin.boundingBox());
+    await workbench.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { button: "right" });
+    await frame.locator(".context-menu").first().getByRole("button", { name: /Flip horizontally|Inverter horizontalmente/ }).click();
+    let afterFlip = center(await pin.boundingBox());
+    for (let attempt = 0; attempt < 30 && Math.abs(afterFlip.x - beforeFlip.x) < 3; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      afterFlip = center(await pin.boundingBox());
+    }
+    if (Math.abs(afterFlip.x - beforeFlip.x) < 3) {
+      throw new Error(`Inversão horizontal não moveu o terminal no eixo visual: ${JSON.stringify({ beforeFlip, afterFlip })}`);
+    }
     process.stdout.write("terminal editor E2E OK\n");
   } finally {
     if (browser) await browser.close().catch(() => {});

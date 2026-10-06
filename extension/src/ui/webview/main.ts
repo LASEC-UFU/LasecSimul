@@ -5,7 +5,7 @@ import { graphicalRuntimeProperties, isGraphicalTypeId } from "./graphicsBinding
 import { GraphicalActionPhase, GraphicalActionValue, graphicalActionConfig, isGraphicalActionTypeId, resolveGraphicalActionValue } from "./graphicsAction.js";
 import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, instancePinPlacements, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage, resolvedPackageFor, runtimeSurfaceImageHref } from "./componentSymbols.js";
 import { ExternalLabelKind, SYMBOL_PIN_LABEL_ALIGN_KEY, formatProbeVoltage, genericExternalLabelFontSize, isExternalProbeReadout, labelPropertyKey, nextLabelRotation, resolveDefaultExternalLabelOffset, resolveExternalLabelColor, symbolPinLabelPackageFields } from "./componentLabels.js";
-import { resizedComponentSize, sceneToLocal, svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
+import { flipLocalTerminal, resizedComponentSize, sceneToLocal, svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
 import { detectChannelTrigger, digitalStepPath, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import { analogSampleHoldPath, clampInstrumentWindow, decodeInstrumentState, encodeInstrumentState, panInstrumentTime, zoomInstrumentTimeAt } from "./instrumentViewport.js";
 import {
@@ -4568,13 +4568,17 @@ function transformEditedTerminal(component: WebviewComponentModel, pinId: string
   operation: "cw" | "ccw" | "half" | "flipH" | "flipV"): void {
   const placement = terminalPlacement(component, pinId);
   if (!placement) return;
+  if (operation === "flipH" || operation === "flipV") {
+    updateInstanceTerminal(component, pinId, flipLocalTerminal(placement,
+      componentBox(component.typeId, component.properties), component.rotation,
+      operation === "flipH" ? "horizontal" : "vertical"));
+    return;
+  }
   const angle = placement.angle;
   // Ângulos de pino: 0=saída à direita, 90=acima, 180=esquerda, 270=abaixo.
   const nextAngle = operation === "cw" ? (angle + 270) % 360
     : operation === "ccw" ? (angle + 90) % 360
-    : operation === "half" ? (angle + 180) % 360
-    : operation === "flipH" ? (180 - angle + 360) % 360
-    : (360 - angle) % 360;
+    : (angle + 180) % 360;
   updateInstanceTerminal(component, pinId, { ...placement, angle: nextAngle });
 }
 
