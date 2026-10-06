@@ -88,19 +88,19 @@ function loadSymbolDefs(libDir) {
 
 /** Categoria do IPD -> subpasta da paleta, pt-BR e en. */
 const CATEGORY_FOLDER = {
-  instruments: ["Instrumentos P&ID", "P&ID Instruments"],
-  valves: ["Válvulas P&ID", "P&ID Valves"],
-  "control-valves": ["Válvulas de Controle P&ID", "P&ID Control Valves"],
-  safety: ["Segurança P&ID", "P&ID Safety"],
-  "flow-elements": ["Elementos de Vazão P&ID", "P&ID Flow Elements"],
-  accessories: ["Acessórios P&ID", "P&ID Accessories"],
-  rotating: ["Máquinas P&ID", "P&ID Rotating"],
-  vessels: ["Vasos P&ID", "P&ID Vessels"],
-  heat: ["Troca Térmica P&ID", "P&ID Heat Transfer"],
-  inline: ["Em Linha P&ID", "P&ID Inline"],
-  control: ["Controle P&ID", "P&ID Control"],
-  annotation: ["Anotação P&ID", "P&ID Annotation"],
-  custom: ["Personalizados P&ID", "P&ID Custom"],
+  instruments: ["Instrumentos", "Instruments"],
+  valves: ["Válvulas", "Valves"],
+  "control-valves": ["Válvulas de Controle", "Control Valves"],
+  safety: ["Segurança", "Safety"],
+  "flow-elements": ["Elementos de Vazão", "Flow Elements"],
+  accessories: ["Acessórios", "Accessories"],
+  rotating: ["Máquinas", "Rotating"],
+  vessels: ["Vasos", "Vessels"],
+  heat: ["Troca Térmica", "Heat Transfer"],
+  inline: ["Em Linha", "Inline"],
+  control: ["Controle", "Control"],
+  annotation: ["Anotação", "Annotation"],
+  custom: ["Personalizados", "Custom"],
 };
 
 const typeIdOf = (id) => `graphics.pid.${id.replace(/[^a-z0-9]+/gi, "_").toLowerCase()}`;
@@ -153,7 +153,7 @@ function catalogItemFor(def) {
   }));
   const schema = propertySchemaFor(def, width, height);
   const defaultProperties = Object.fromEntries(schema.map((entry) => [entry.id, entry.default]));
-  const [folderPt] = CATEGORY_FOLDER[def.category] ?? ["Outros P&ID", "P&ID Other"];
+  const [folderPt] = CATEGORY_FOLDER[def.category] ?? ["Outros", "Other"];
   return {
     typeId: typeIdOf(def.id),
     label: def.name,
@@ -225,7 +225,7 @@ catalog.translations = catalog.translations ?? {};
 catalog.translations.en = catalog.translations.en ?? { items: {} };
 catalog.translations.en.items = catalog.translations.en.items ?? {};
 for (const def of defs) {
-  const [, folderEn] = CATEGORY_FOLDER[def.category] ?? ["Outros P&ID", "P&ID Other"];
+  const [, folderEn] = CATEGORY_FOLDER[def.category] ?? ["Outros", "Other"];
   catalog.translations.en.items[typeIdOf(def.id)] = { label: def.name, folderPath: ["P&ID", folderEn] };
 }
 fs.writeFileSync(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`, "utf8");

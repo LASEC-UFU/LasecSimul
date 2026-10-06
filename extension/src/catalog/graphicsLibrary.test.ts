@@ -57,14 +57,16 @@ function filledRectHeight(svg: string, fill: string): number {
         "os indicadores nativos e HMI devem estar na mesma pasta");
     }
     const pid = tree.find((node) => node.kind === "folder" && node.label === "P&ID");
-    assert(pid?.kind === "folder" && pid.children.some((node) => node.kind === "folder" && node.label === "Válvulas P&ID"),
+    assert(pid?.kind === "folder" && pid.children.some((node) => node.kind === "folder" && node.label === "Válvulas")
+      && pid.children.filter((node) => node.kind === "folder").every((node) => !node.label.includes("P&ID")),
       "P&ID e suas subpastas devem ficar diretamente em Miscelaneos");
 
     const english = buildPaletteTree(loadUnifiedCatalog(process.cwd(), "en").catalog.filter((entry) => entry.typeId.startsWith("graphics.")), "", "misc");
     const englishGraphic = english.find((node) => node.kind === "folder" && node.label === "Graphical");
     assert(englishGraphic?.kind === "folder" && englishGraphic.children.some((node) => node.kind === "folder" && node.label === "Indicators")
       && !englishGraphic.children.some((node) => node.kind === "folder" && (node.label === "HMI" || node.label === "P&ID"))
-      && english.some((node) => node.kind === "folder" && node.label === "P&ID"),
+      && english.some((node) => node.kind === "folder" && node.label === "P&ID"
+        && node.children.filter((child) => child.kind === "folder").every((child) => !child.label.includes("P&ID"))),
       "a hierarquia em ingles deve seguir a mesma organizacao");
   });
 

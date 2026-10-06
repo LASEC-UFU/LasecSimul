@@ -732,1351 +732,1351 @@
           "label": "Air Filter Regulator",
           "folderPath": [
             "P&ID",
-            "P&ID Accessories"
+            "Accessories"
           ]
         },
         "graphics.pid.acc_bimetal": {
           "label": "Bimetal Thermometer",
           "folderPath": [
             "P&ID",
-            "P&ID Accessories"
+            "Accessories"
           ]
         },
         "graphics.pid.acc_bulb": {
           "label": "Filled Bulb + Capillary",
           "folderPath": [
             "P&ID",
-            "P&ID Accessories"
+            "Accessories"
           ]
         },
         "graphics.pid.acc_floatcage": {
           "label": "External Float Cage",
           "folderPath": [
             "P&ID",
-            "P&ID Accessories"
+            "Accessories"
           ]
         },
         "graphics.pid.acc_lg": {
           "label": "Gauge Glass",
           "folderPath": [
             "P&ID",
-            "P&ID Accessories"
+            "Accessories"
           ]
         },
         "graphics.pid.acc_loadcell": {
           "label": "Load Cell",
           "folderPath": [
             "P&ID",
-            "P&ID Accessories"
+            "Accessories"
           ]
         },
         "graphics.pid.acc_pg": {
           "label": "Pressure Gauge",
           "folderPath": [
             "P&ID",
-            "P&ID Accessories"
+            "Accessories"
           ]
         },
         "graphics.pid.acc_radar": {
           "label": "Radar Level Horn",
           "folderPath": [
             "P&ID",
-            "P&ID Accessories"
+            "Accessories"
           ]
         },
         "graphics.pid.acc_seal": {
           "label": "Diaphragm Seal",
           "folderPath": [
             "P&ID",
-            "P&ID Accessories"
+            "Accessories"
           ]
         },
         "graphics.pid.acc_siphon": {
           "label": "Gauge Siphon (Pigtail)",
           "folderPath": [
             "P&ID",
-            "P&ID Accessories"
+            "Accessories"
           ]
         },
         "graphics.pid.acc_thermowell": {
           "label": "Thermowell",
           "folderPath": [
             "P&ID",
-            "P&ID Accessories"
+            "Accessories"
           ]
         },
         "graphics.pid.agitator": {
           "label": "Agitator / Mixer",
           "folderPath": [
             "P&ID",
-            "P&ID Rotating"
+            "Rotating"
           ]
         },
         "graphics.pid.air_dryer": {
           "label": "Instrument Air Dryer",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.ann_arrow": {
           "label": "Flow Arrow",
           "folderPath": [
             "P&ID",
-            "P&ID Annotation"
+            "Annotation"
           ]
         },
         "graphics.pid.ann_bl_flag": {
           "label": "Battery Limit Flag",
           "folderPath": [
             "P&ID",
-            "P&ID Annotation"
+            "Annotation"
           ]
         },
         "graphics.pid.ann_cloud": {
           "label": "Revision Cloud",
           "folderPath": [
             "P&ID",
-            "P&ID Annotation"
+            "Annotation"
           ]
         },
         "graphics.pid.ann_detail_flag": {
           "label": "Detail Flag",
           "folderPath": [
             "P&ID",
-            "P&ID Annotation"
+            "Annotation"
           ]
         },
         "graphics.pid.ann_equipstrip": {
           "label": "Equipment Title Strip",
           "folderPath": [
             "P&ID",
-            "P&ID Annotation"
+            "Annotation"
           ]
         },
         "graphics.pid.ann_holds": {
           "label": "HOLD Flag",
           "folderPath": [
             "P&ID",
-            "P&ID Annotation"
+            "Annotation"
           ]
         },
         "graphics.pid.ann_insulation": {
           "label": "Insulation Mark",
           "folderPath": [
             "P&ID",
-            "P&ID Annotation"
+            "Annotation"
           ]
         },
         "graphics.pid.ann_matchline": {
           "label": "Match Line",
           "folderPath": [
             "P&ID",
-            "P&ID Annotation"
+            "Annotation"
           ]
         },
         "graphics.pid.ann_noteflag": {
           "label": "Note Flag",
           "folderPath": [
             "P&ID",
-            "P&ID Annotation"
+            "Annotation"
           ]
         },
         "graphics.pid.ann_offpage": {
           "label": "Off-Page Connector",
           "folderPath": [
             "P&ID",
-            "P&ID Annotation"
+            "Annotation"
           ]
         },
         "graphics.pid.ann_onpage": {
           "label": "On-Page Reference",
           "folderPath": [
             "P&ID",
-            "P&ID Annotation"
+            "Annotation"
           ]
         },
         "graphics.pid.ann_revtriangle": {
           "label": "Revision Triangle",
           "folderPath": [
             "P&ID",
-            "P&ID Annotation"
+            "Annotation"
           ]
         },
         "graphics.pid.ann_slope": {
           "label": "Slope Mark",
           "folderPath": [
             "P&ID",
-            "P&ID Annotation"
+            "Annotation"
           ]
         },
         "graphics.pid.ann_text": {
           "label": "Text Note",
           "folderPath": [
             "P&ID",
-            "P&ID Annotation"
+            "Annotation"
           ]
         },
         "graphics.pid.ann_tiein": {
           "label": "Tie-In Point",
           "folderPath": [
             "P&ID",
-            "P&ID Annotation"
+            "Annotation"
           ]
         },
         "graphics.pid.bagfilter": {
           "label": "Bag House",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.bl_terminal": {
           "label": "Battery Limit / Terminal",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.blender_ribbon": {
           "label": "Ribbon Blender",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.blower": {
           "label": "Blower / Fan",
           "folderPath": [
             "P&ID",
-            "P&ID Rotating"
+            "Rotating"
           ]
         },
         "graphics.pid.boiler": {
           "label": "Boiler",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.bpcv": {
           "label": "Back-Pressure Regulator",
           "folderPath": [
             "P&ID",
-            "P&ID Safety"
+            "Safety"
           ]
         },
         "graphics.pid.breather": {
           "label": "Breather Vent",
           "folderPath": [
             "P&ID",
-            "P&ID Safety"
+            "Safety"
           ]
         },
         "graphics.pid.bucket_elevator": {
           "label": "Bucket Elevator",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.centrifuge": {
           "label": "Centrifuge",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.chiller": {
           "label": "Chiller Package",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.clarifier": {
           "label": "Clarifier / Thickener",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.coalescer": {
           "label": "Coalescer",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.comp_centrifugal": {
           "label": "Compressor",
           "folderPath": [
             "P&ID",
-            "P&ID Rotating"
+            "Rotating"
           ]
         },
         "graphics.pid.comp_recip": {
           "label": "Reciprocating Compressor",
           "folderPath": [
             "P&ID",
-            "P&ID Rotating"
+            "Rotating"
           ]
         },
         "graphics.pid.comp_screw": {
           "label": "Screw Compressor",
           "folderPath": [
             "P&ID",
-            "P&ID Rotating"
+            "Rotating"
           ]
         },
         "graphics.pid.conveyor_belt": {
           "label": "Belt Conveyor",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.conveyor_screw": {
           "label": "Screw Conveyor",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.cooling_tower": {
           "label": "Cooling Tower",
           "folderPath": [
             "P&ID",
-            "P&ID Heat Transfer"
+            "Heat Transfer"
           ]
         },
         "graphics.pid.crusher": {
           "label": "Crusher / Mill",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.crystallizer": {
           "label": "Crystallizer",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.ctl_dcs": {
           "label": "DCS",
           "folderPath": [
             "P&ID",
-            "P&ID Control"
+            "Control"
           ]
         },
         "graphics.pid.ctl_interlock": {
           "label": "Interlock",
           "folderPath": [
             "P&ID",
-            "P&ID Control"
+            "Control"
           ]
         },
         "graphics.pid.ctl_jb": {
           "label": "Junction Box",
           "folderPath": [
             "P&ID",
-            "P&ID Control"
+            "Control"
           ]
         },
         "graphics.pid.ctl_panel": {
           "label": "Local Panel",
           "folderPath": [
             "P&ID",
-            "P&ID Control"
+            "Control"
           ]
         },
         "graphics.pid.ctl_plc": {
           "label": "PLC System",
           "folderPath": [
             "P&ID",
-            "P&ID Control"
+            "Control"
           ]
         },
         "graphics.pid.ctl_sis": {
           "label": "SIS",
           "folderPath": [
             "P&ID",
-            "P&ID Control"
+            "Control"
           ]
         },
         "graphics.pid.cv_ball": {
           "label": "Control Valve (Ball)",
           "folderPath": [
             "P&ID",
-            "P&ID Control Valves"
+            "Control Valves"
           ]
         },
         "graphics.pid.cv_butterfly": {
           "label": "Control Valve (Butterfly)",
           "folderPath": [
             "P&ID",
-            "P&ID Control Valves"
+            "Control Valves"
           ]
         },
         "graphics.pid.cv_globe": {
           "label": "Control Valve (Globe)",
           "folderPath": [
             "P&ID",
-            "P&ID Control Valves"
+            "Control Valves"
           ]
         },
         "graphics.pid.cyclone": {
           "label": "Cyclone",
           "folderPath": [
             "P&ID",
-            "P&ID Vessels"
+            "Vessels"
           ]
         },
         "graphics.pid.deaerator": {
           "label": "Deaerator",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.demister": {
           "label": "Demister Pad",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.dryer_rotary": {
           "label": "Rotary Dryer",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.dryer_spray": {
           "label": "Spray Dryer",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.dryer_tray": {
           "label": "Tray Dryer",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.ejector": {
           "label": "Ejector / Eductor",
           "folderPath": [
             "P&ID",
-            "P&ID Rotating"
+            "Rotating"
           ]
         },
         "graphics.pid.elec_barrier": {
           "label": "IS Barrier",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.elec_mcc": {
           "label": "MCC",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.elec_transformer": {
           "label": "Transformer",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.elec_ups": {
           "label": "UPS",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.evaporator": {
           "label": "Evaporator",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.extruder": {
           "label": "Extruder",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fan": {
           "label": "Fan (Axial)",
           "folderPath": [
             "P&ID",
-            "P&ID Rotating"
+            "Rotating"
           ]
         },
         "graphics.pid.fe_avgpitot": {
           "label": "Averaging Pitot",
           "folderPath": [
             "P&ID",
-            "P&ID Flow Elements"
+            "Flow Elements"
           ]
         },
         "graphics.pid.fe_coriolis": {
           "label": "Coriolis Meter",
           "folderPath": [
             "P&ID",
-            "P&ID Flow Elements"
+            "Flow Elements"
           ]
         },
         "graphics.pid.fe_magmeter": {
           "label": "Magnetic Flowmeter",
           "folderPath": [
             "P&ID",
-            "P&ID Flow Elements"
+            "Flow Elements"
           ]
         },
         "graphics.pid.fe_nozzle": {
           "label": "Flow Nozzle",
           "folderPath": [
             "P&ID",
-            "P&ID Flow Elements"
+            "Flow Elements"
           ]
         },
         "graphics.pid.fe_orifice": {
           "label": "Orifice Plate",
           "folderPath": [
             "P&ID",
-            "P&ID Flow Elements"
+            "Flow Elements"
           ]
         },
         "graphics.pid.fe_pd": {
           "label": "PD Meter",
           "folderPath": [
             "P&ID",
-            "P&ID Flow Elements"
+            "Flow Elements"
           ]
         },
         "graphics.pid.fe_pitot": {
           "label": "Pitot Tube",
           "folderPath": [
             "P&ID",
-            "P&ID Flow Elements"
+            "Flow Elements"
           ]
         },
         "graphics.pid.fe_ro": {
           "label": "Restriction Orifice",
           "folderPath": [
             "P&ID",
-            "P&ID Flow Elements"
+            "Flow Elements"
           ]
         },
         "graphics.pid.fe_rotameter": {
           "label": "Rotameter",
           "folderPath": [
             "P&ID",
-            "P&ID Flow Elements"
+            "Flow Elements"
           ]
         },
         "graphics.pid.fe_thermal": {
           "label": "Thermal Mass Flowmeter",
           "folderPath": [
             "P&ID",
-            "P&ID Flow Elements"
+            "Flow Elements"
           ]
         },
         "graphics.pid.fe_turbine": {
           "label": "Turbine Meter",
           "folderPath": [
             "P&ID",
-            "P&ID Flow Elements"
+            "Flow Elements"
           ]
         },
         "graphics.pid.fe_ultrasonic": {
           "label": "Ultrasonic Flowmeter",
           "folderPath": [
             "P&ID",
-            "P&ID Flow Elements"
+            "Flow Elements"
           ]
         },
         "graphics.pid.fe_venturi": {
           "label": "Venturi Tube",
           "folderPath": [
             "P&ID",
-            "P&ID Flow Elements"
+            "Flow Elements"
           ]
         },
         "graphics.pid.fe_vortex": {
           "label": "Vortex Meter",
           "folderPath": [
             "P&ID",
-            "P&ID Flow Elements"
+            "Flow Elements"
           ]
         },
         "graphics.pid.feeder_rotary": {
           "label": "Rotary Feeder",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.filter_sep": {
           "label": "Filter Separator",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.filter_cartridge": {
           "label": "Filter",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.filter_press": {
           "label": "Filter Press",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.filter_rotary": {
           "label": "Rotary Drum Filter",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_blind": {
           "label": "Blind Flange",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_coupling": {
           "label": "Quick Coupling",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_drain": {
           "label": "Drain",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_exhaust_head": {
           "label": "Exhaust Head",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_expansion": {
           "label": "Expansion Joint",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_flanges": {
           "label": "Flange Pair",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_funnel": {
           "label": "Drain Funnel (Tundish)",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_hose": {
           "label": "Hose",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_hose_station": {
           "label": "Utility Hose Station",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_mixing_tee": {
           "label": "Mixing Tee",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_pulsation_dampener": {
           "label": "Pulsation Dampener",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_quill": {
           "label": "Injection Quill",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_reducer": {
           "label": "Reducer",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_reducer_ecc": {
           "label": "Eccentric Reducer",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_rupture_pin": {
           "label": "Rupture Pin Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_sample": {
           "label": "Sample Point",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_sightglass": {
           "label": "Sight Glass",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_silencer": {
           "label": "Silencer",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_spade": {
           "label": "Spade / Spacer",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_specbreak": {
           "label": "Spec Break",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_spectacle": {
           "label": "Spectacle Blind",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_steam_trap": {
           "label": "Steam Trap",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_trap_bucket": {
           "label": "Inverted Bucket Trap",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_trap_float": {
           "label": "Float Steam Trap",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_trap_thermo": {
           "label": "Thermodynamic Trap",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_union": {
           "label": "Union",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.fit_vent": {
           "label": "Vent",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.flame_arrestor": {
           "label": "Flame Arrestor",
           "folderPath": [
             "P&ID",
-            "P&ID Safety"
+            "Safety"
           ]
         },
         "graphics.pid.flare": {
           "label": "Flare",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.heater_electric": {
           "label": "Electric Heater",
           "folderPath": [
             "P&ID",
-            "P&ID Heat Transfer"
+            "Heat Transfer"
           ]
         },
         "graphics.pid.heater_fired": {
           "label": "Fired Heater",
           "folderPath": [
             "P&ID",
-            "P&ID Heat Transfer"
+            "Heat Transfer"
           ]
         },
         "graphics.pid.hx_air_cooler": {
           "label": "Air Cooler (Fin-Fan)",
           "folderPath": [
             "P&ID",
-            "P&ID Heat Transfer"
+            "Heat Transfer"
           ]
         },
         "graphics.pid.hx_coil": {
           "label": "Heating/Cooling Coil",
           "folderPath": [
             "P&ID",
-            "P&ID Heat Transfer"
+            "Heat Transfer"
           ]
         },
         "graphics.pid.hx_condenser": {
           "label": "Condenser",
           "folderPath": [
             "P&ID",
-            "P&ID Heat Transfer"
+            "Heat Transfer"
           ]
         },
         "graphics.pid.hx_doublepipe": {
           "label": "Double-Pipe Exchanger",
           "folderPath": [
             "P&ID",
-            "P&ID Heat Transfer"
+            "Heat Transfer"
           ]
         },
         "graphics.pid.hx_kettle": {
           "label": "Kettle Reboiler",
           "folderPath": [
             "P&ID",
-            "P&ID Heat Transfer"
+            "Heat Transfer"
           ]
         },
         "graphics.pid.hx_plate": {
           "label": "Plate Exchanger",
           "folderPath": [
             "P&ID",
-            "P&ID Heat Transfer"
+            "Heat Transfer"
           ]
         },
         "graphics.pid.hx_shell_tube": {
           "label": "Shell & Tube Exchanger",
           "folderPath": [
             "P&ID",
-            "P&ID Heat Transfer"
+            "Heat Transfer"
           ]
         },
         "graphics.pid.hydrocyclone": {
           "label": "Hydrocyclone",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.instr_converter": {
           "label": "Signal Converter (I/P, E/P…)",
           "folderPath": [
             "P&ID",
-            "P&ID Instruments"
+            "Instruments"
           ]
         },
         "graphics.pid.logic_and": {
           "label": "AND Gate",
           "folderPath": [
             "P&ID",
-            "P&ID Control"
+            "Control"
           ]
         },
         "graphics.pid.logic_not": {
           "label": "NOT Gate",
           "folderPath": [
             "P&ID",
-            "P&ID Control"
+            "Control"
           ]
         },
         "graphics.pid.logic_or": {
           "label": "OR Gate",
           "folderPath": [
             "P&ID",
-            "P&ID Control"
+            "Control"
           ]
         },
         "graphics.pid.mill_ball": {
           "label": "Ball Mill",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.mixer_static": {
           "label": "Static Mixer",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.motor": {
           "label": "Motor",
           "folderPath": [
             "P&ID",
-            "P&ID Rotating"
+            "Rotating"
           ]
         },
         "graphics.pid.package_unit": {
           "label": "Package Unit",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.pcv_self": {
           "label": "Self-Acting Regulator",
           "folderPath": [
             "P&ID",
-            "P&ID Safety"
+            "Safety"
           ]
         },
         "graphics.pid.pse": {
           "label": "Rupture Disc",
           "folderPath": [
             "P&ID",
-            "P&ID Safety"
+            "Safety"
           ]
         },
         "graphics.pid.psv": {
           "label": "Pressure Safety Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Safety"
+            "Safety"
           ]
         },
         "graphics.pid.psv_pilot": {
           "label": "Pilot-Operated PSV",
           "folderPath": [
             "P&ID",
-            "P&ID Safety"
+            "Safety"
           ]
         },
         "graphics.pid.pump_centrifugal": {
           "label": "Centrifugal Pump",
           "folderPath": [
             "P&ID",
-            "P&ID Rotating"
+            "Rotating"
           ]
         },
         "graphics.pid.pump_diaphragm": {
           "label": "Diaphragm/Metering Pump",
           "folderPath": [
             "P&ID",
-            "P&ID Rotating"
+            "Rotating"
           ]
         },
         "graphics.pid.pump_gear": {
           "label": "PD Pump (Gear/Screw)",
           "folderPath": [
             "P&ID",
-            "P&ID Rotating"
+            "Rotating"
           ]
         },
         "graphics.pid.pump_peristaltic": {
           "label": "Peristaltic Pump",
           "folderPath": [
             "P&ID",
-            "P&ID Rotating"
+            "Rotating"
           ]
         },
         "graphics.pid.pump_plunger": {
           "label": "Plunger Pump",
           "folderPath": [
             "P&ID",
-            "P&ID Rotating"
+            "Rotating"
           ]
         },
         "graphics.pid.pump_submersible": {
           "label": "Submersible Pump",
           "folderPath": [
             "P&ID",
-            "P&ID Rotating"
+            "Rotating"
           ]
         },
         "graphics.pid.pump_vacuum": {
           "label": "Vacuum Pump",
           "folderPath": [
             "P&ID",
-            "P&ID Rotating"
+            "Rotating"
           ]
         },
         "graphics.pid.pvsv": {
           "label": "Pressure/Vacuum Relief Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Safety"
+            "Safety"
           ]
         },
         "graphics.pid.sample_cooler": {
           "label": "Sample Cooler",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.screen_vibrating": {
           "label": "Vibrating Screen",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.scrubber": {
           "label": "Scrubber",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.stack": {
           "label": "Stack",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.strainer_basket": {
           "label": "Basket Strainer",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.strainer_cone": {
           "label": "Temporary Cone Strainer",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.strainer_y": {
           "label": "Y-Strainer",
           "folderPath": [
             "P&ID",
-            "P&ID Inline"
+            "Inline"
           ]
         },
         "graphics.pid.tcv_self": {
           "label": "Self-Acting Temperature Regulator",
           "folderPath": [
             "P&ID",
-            "P&ID Safety"
+            "Safety"
           ]
         },
         "graphics.pid.turbine_steam": {
           "label": "Turbine Driver",
           "folderPath": [
             "P&ID",
-            "P&ID Rotating"
+            "Rotating"
           ]
         },
         "graphics.pid.vacuum_breaker": {
           "label": "Vacuum Breaker",
           "folderPath": [
             "P&ID",
-            "P&ID Safety"
+            "Safety"
           ]
         },
         "graphics.pid.valve_angle": {
           "label": "Angle Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_ball": {
           "label": "Ball Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_ballcheck": {
           "label": "Ball Check Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_butterfly": {
           "label": "Butterfly Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_check": {
           "label": "Check Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_diaphragm": {
           "label": "Diaphragm Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_float": {
           "label": "Float Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_foot": {
           "label": "Foot Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_fourway": {
           "label": "4-Way Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_gate": {
           "label": "Gate Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_globe": {
           "label": "Globe Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_knife": {
           "label": "Knife Gate Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_mov": {
           "label": "Motor-Operated Valve (MOV)",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_needle": {
           "label": "Needle Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_pinch": {
           "label": "Pinch Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_plug": {
           "label": "Plug Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_solenoid": {
           "label": "Solenoid Valve (XV)",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_stopcheck": {
           "label": "Stop-Check Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.valve_threeway": {
           "label": "3-Way Valve",
           "folderPath": [
             "P&ID",
-            "P&ID Valves"
+            "Valves"
           ]
         },
         "graphics.pid.vessel_bullet": {
           "label": "Bullet",
           "folderPath": [
             "P&ID",
-            "P&ID Vessels"
+            "Vessels"
           ]
         },
         "graphics.pid.vessel_column_packed": {
           "label": "Packed Column",
           "folderPath": [
             "P&ID",
-            "P&ID Vessels"
+            "Vessels"
           ]
         },
         "graphics.pid.vessel_column_tray": {
           "label": "Tray Column",
           "folderPath": [
             "P&ID",
-            "P&ID Vessels"
+            "Vessels"
           ]
         },
         "graphics.pid.vessel_cstr": {
           "label": "Jacketed Reactor (CSTR)",
           "folderPath": [
             "P&ID",
-            "P&ID Vessels"
+            "Vessels"
           ]
         },
         "graphics.pid.vessel_fixedbed": {
           "label": "Fixed-Bed Reactor",
           "folderPath": [
             "P&ID",
-            "P&ID Vessels"
+            "Vessels"
           ]
         },
         "graphics.pid.vessel_floating_roof": {
           "label": "Floating-Roof Tank",
           "folderPath": [
             "P&ID",
-            "P&ID Vessels"
+            "Vessels"
           ]
         },
         "graphics.pid.vessel_horizontal": {
           "label": "Horizontal Vessel",
           "folderPath": [
             "P&ID",
-            "P&ID Vessels"
+            "Vessels"
           ]
         },
         "graphics.pid.vessel_ko_drum": {
           "label": "KO Drum / 2-Phase Separator",
           "folderPath": [
             "P&ID",
-            "P&ID Vessels"
+            "Vessels"
           ]
         },
         "graphics.pid.vessel_open": {
           "label": "Open Tank / Pit",
           "folderPath": [
             "P&ID",
-            "P&ID Vessels"
+            "Vessels"
           ]
         },
         "graphics.pid.vessel_sep3": {
           "label": "3-Phase Separator",
           "folderPath": [
             "P&ID",
-            "P&ID Vessels"
+            "Vessels"
           ]
         },
         "graphics.pid.vessel_silo": {
           "label": "Silo / Hopper",
           "folderPath": [
             "P&ID",
-            "P&ID Vessels"
+            "Vessels"
           ]
         },
         "graphics.pid.vessel_sphere": {
           "label": "Sphere",
           "folderPath": [
             "P&ID",
-            "P&ID Vessels"
+            "Vessels"
           ]
         },
         "graphics.pid.vessel_tank": {
           "label": "Storage Tank",
           "folderPath": [
             "P&ID",
-            "P&ID Vessels"
+            "Vessels"
           ]
         },
         "graphics.pid.vessel_vertical": {
           "label": "Vertical Vessel",
           "folderPath": [
             "P&ID",
-            "P&ID Vessels"
+            "Vessels"
           ]
         },
         "graphics.pid.vfd": {
           "label": "VFD",
           "folderPath": [
             "P&ID",
-            "P&ID Rotating"
+            "Rotating"
           ]
         },
         "graphics.tank_ipd": {
@@ -23564,7 +23564,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Acessórios P&ID"
+        "Acessórios"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -23657,7 +23657,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Acessórios P&ID"
+        "Acessórios"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -23750,7 +23750,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Acessórios P&ID"
+        "Acessórios"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -23843,7 +23843,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Acessórios P&ID"
+        "Acessórios"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -23936,7 +23936,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Acessórios P&ID"
+        "Acessórios"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -24029,7 +24029,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Acessórios P&ID"
+        "Acessórios"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -24122,7 +24122,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Acessórios P&ID"
+        "Acessórios"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -24215,7 +24215,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Acessórios P&ID"
+        "Acessórios"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -24308,7 +24308,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Acessórios P&ID"
+        "Acessórios"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -24401,7 +24401,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Acessórios P&ID"
+        "Acessórios"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -24494,7 +24494,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Acessórios P&ID"
+        "Acessórios"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -24587,7 +24587,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Máquinas P&ID"
+        "Máquinas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -24680,7 +24680,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -24773,7 +24773,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Anotação P&ID"
+        "Anotação"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -24866,7 +24866,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Anotação P&ID"
+        "Anotação"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -24959,7 +24959,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Anotação P&ID"
+        "Anotação"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -25052,7 +25052,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Anotação P&ID"
+        "Anotação"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -25145,7 +25145,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Anotação P&ID"
+        "Anotação"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -25238,7 +25238,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Anotação P&ID"
+        "Anotação"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -25331,7 +25331,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Anotação P&ID"
+        "Anotação"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -25424,7 +25424,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Anotação P&ID"
+        "Anotação"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -25517,7 +25517,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Anotação P&ID"
+        "Anotação"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -25610,7 +25610,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Anotação P&ID"
+        "Anotação"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -25703,7 +25703,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Anotação P&ID"
+        "Anotação"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -25796,7 +25796,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Anotação P&ID"
+        "Anotação"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -25889,7 +25889,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Anotação P&ID"
+        "Anotação"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -25982,7 +25982,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Anotação P&ID"
+        "Anotação"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -26075,7 +26075,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Anotação P&ID"
+        "Anotação"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -26168,7 +26168,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -26261,7 +26261,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -26354,7 +26354,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -26447,7 +26447,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Máquinas P&ID"
+        "Máquinas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -26540,7 +26540,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -26633,7 +26633,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Segurança P&ID"
+        "Segurança"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -26726,7 +26726,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Segurança P&ID"
+        "Segurança"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -26819,7 +26819,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -26912,7 +26912,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -27005,7 +27005,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -27098,7 +27098,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -27191,7 +27191,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -27284,7 +27284,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Máquinas P&ID"
+        "Máquinas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -27377,7 +27377,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Máquinas P&ID"
+        "Máquinas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -27470,7 +27470,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Máquinas P&ID"
+        "Máquinas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -27563,7 +27563,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -27656,7 +27656,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -27749,7 +27749,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Troca Térmica P&ID"
+        "Troca Térmica"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -27842,7 +27842,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -27935,7 +27935,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -28028,7 +28028,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Controle P&ID"
+        "Controle"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -28121,7 +28121,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Controle P&ID"
+        "Controle"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -28214,7 +28214,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Controle P&ID"
+        "Controle"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -28307,7 +28307,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Controle P&ID"
+        "Controle"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -28400,7 +28400,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Controle P&ID"
+        "Controle"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -28493,7 +28493,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Controle P&ID"
+        "Controle"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -28586,7 +28586,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas de Controle P&ID"
+        "Válvulas de Controle"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -29712,7 +29712,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas de Controle P&ID"
+        "Válvulas de Controle"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -30838,7 +30838,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas de Controle P&ID"
+        "Válvulas de Controle"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -31964,7 +31964,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Vasos P&ID"
+        "Vasos"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -32057,7 +32057,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -32150,7 +32150,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -32243,7 +32243,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -32336,7 +32336,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -32429,7 +32429,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -32522,7 +32522,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Máquinas P&ID"
+        "Máquinas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -32615,7 +32615,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -32708,7 +32708,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -32801,7 +32801,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -32894,7 +32894,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -32987,7 +32987,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -33080,7 +33080,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -33173,7 +33173,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Máquinas P&ID"
+        "Máquinas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -33266,7 +33266,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Elementos de Vazão P&ID"
+        "Elementos de Vazão"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -33359,7 +33359,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Elementos de Vazão P&ID"
+        "Elementos de Vazão"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -33452,7 +33452,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Elementos de Vazão P&ID"
+        "Elementos de Vazão"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -33545,7 +33545,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Elementos de Vazão P&ID"
+        "Elementos de Vazão"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -33638,7 +33638,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Elementos de Vazão P&ID"
+        "Elementos de Vazão"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -33731,7 +33731,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Elementos de Vazão P&ID"
+        "Elementos de Vazão"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -33824,7 +33824,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Elementos de Vazão P&ID"
+        "Elementos de Vazão"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -33917,7 +33917,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Elementos de Vazão P&ID"
+        "Elementos de Vazão"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -34010,7 +34010,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Elementos de Vazão P&ID"
+        "Elementos de Vazão"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -34103,7 +34103,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Elementos de Vazão P&ID"
+        "Elementos de Vazão"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -34196,7 +34196,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Elementos de Vazão P&ID"
+        "Elementos de Vazão"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -34289,7 +34289,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Elementos de Vazão P&ID"
+        "Elementos de Vazão"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -34382,7 +34382,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Elementos de Vazão P&ID"
+        "Elementos de Vazão"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -34475,7 +34475,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Elementos de Vazão P&ID"
+        "Elementos de Vazão"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -34568,7 +34568,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -34661,7 +34661,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -34754,7 +34754,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -34847,7 +34847,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -34940,7 +34940,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -35033,7 +35033,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -35126,7 +35126,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -35219,7 +35219,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -35312,7 +35312,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -35405,7 +35405,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -35498,7 +35498,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -35591,7 +35591,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -35684,7 +35684,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -35777,7 +35777,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -35870,7 +35870,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -35963,7 +35963,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -36056,7 +36056,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -36149,7 +36149,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -36242,7 +36242,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -36335,7 +36335,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -36428,7 +36428,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -36521,7 +36521,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -36614,7 +36614,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -36707,7 +36707,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -36800,7 +36800,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -36893,7 +36893,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -36986,7 +36986,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -37079,7 +37079,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -37172,7 +37172,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -37265,7 +37265,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -37358,7 +37358,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -37451,7 +37451,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -37544,7 +37544,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Segurança P&ID"
+        "Segurança"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -37637,7 +37637,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -37730,7 +37730,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Troca Térmica P&ID"
+        "Troca Térmica"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -37823,7 +37823,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Troca Térmica P&ID"
+        "Troca Térmica"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -37916,7 +37916,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Troca Térmica P&ID"
+        "Troca Térmica"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -38009,7 +38009,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Troca Térmica P&ID"
+        "Troca Térmica"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -38102,7 +38102,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Troca Térmica P&ID"
+        "Troca Térmica"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -38195,7 +38195,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Troca Térmica P&ID"
+        "Troca Térmica"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -38288,7 +38288,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Troca Térmica P&ID"
+        "Troca Térmica"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -38381,7 +38381,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Troca Térmica P&ID"
+        "Troca Térmica"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -38474,7 +38474,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Troca Térmica P&ID"
+        "Troca Térmica"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -38567,7 +38567,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -38660,7 +38660,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Instrumentos P&ID"
+        "Instrumentos"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -38880,7 +38880,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Controle P&ID"
+        "Controle"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -38973,7 +38973,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Controle P&ID"
+        "Controle"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -39066,7 +39066,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Controle P&ID"
+        "Controle"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -39159,7 +39159,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -39252,7 +39252,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -39345,7 +39345,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Máquinas P&ID"
+        "Máquinas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -39438,7 +39438,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -39531,7 +39531,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Segurança P&ID"
+        "Segurança"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -39624,7 +39624,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Segurança P&ID"
+        "Segurança"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -39717,7 +39717,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Segurança P&ID"
+        "Segurança"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -39810,7 +39810,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Segurança P&ID"
+        "Segurança"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -39903,7 +39903,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Máquinas P&ID"
+        "Máquinas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -39996,7 +39996,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Máquinas P&ID"
+        "Máquinas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -40089,7 +40089,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Máquinas P&ID"
+        "Máquinas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -40182,7 +40182,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Máquinas P&ID"
+        "Máquinas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -40275,7 +40275,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Máquinas P&ID"
+        "Máquinas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -40368,7 +40368,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Máquinas P&ID"
+        "Máquinas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -40461,7 +40461,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Máquinas P&ID"
+        "Máquinas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -40554,7 +40554,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Segurança P&ID"
+        "Segurança"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -40647,7 +40647,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -40740,7 +40740,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -40833,7 +40833,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -40926,7 +40926,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -41019,7 +41019,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -41112,7 +41112,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -41205,7 +41205,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Em Linha P&ID"
+        "Em Linha"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -41298,7 +41298,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Segurança P&ID"
+        "Segurança"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -41391,7 +41391,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Máquinas P&ID"
+        "Máquinas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -41484,7 +41484,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Segurança P&ID"
+        "Segurança"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -41577,7 +41577,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -41670,7 +41670,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -41763,7 +41763,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -41856,7 +41856,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -41949,7 +41949,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -42042,7 +42042,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -42135,7 +42135,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -42228,7 +42228,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -42321,7 +42321,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -42414,7 +42414,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -42507,7 +42507,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -42600,7 +42600,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -42693,7 +42693,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -42786,7 +42786,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -42879,7 +42879,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -42972,7 +42972,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -43065,7 +43065,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -43158,7 +43158,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -43251,7 +43251,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Válvulas P&ID"
+        "Válvulas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -43344,7 +43344,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Vasos P&ID"
+        "Vasos"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -43437,7 +43437,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Vasos P&ID"
+        "Vasos"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -43530,7 +43530,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Vasos P&ID"
+        "Vasos"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -43623,7 +43623,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Vasos P&ID"
+        "Vasos"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -43716,7 +43716,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Vasos P&ID"
+        "Vasos"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -43809,7 +43809,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Vasos P&ID"
+        "Vasos"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -43902,7 +43902,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Vasos P&ID"
+        "Vasos"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -43995,7 +43995,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Vasos P&ID"
+        "Vasos"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -44088,7 +44088,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Vasos P&ID"
+        "Vasos"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -44181,7 +44181,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Vasos P&ID"
+        "Vasos"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -44274,7 +44274,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Vasos P&ID"
+        "Vasos"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -44367,7 +44367,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Vasos P&ID"
+        "Vasos"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -44460,7 +44460,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Vasos P&ID"
+        "Vasos"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -44553,7 +44553,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Vasos P&ID"
+        "Vasos"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
@@ -44646,7 +44646,7 @@
       "graphical": true,
       "folderPath": [
         "P&ID",
-        "Máquinas P&ID"
+        "Máquinas"
       ],
       "category": "P&ID",
       "workspaceSection": "misc",
