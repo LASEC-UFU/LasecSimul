@@ -1,3 +1,5 @@
+import * as fs from "fs";
+import * as path from "path";
 import { createTestRunner, assert } from "../ipc/testSupport/MockCoreServer";
 import { loadUnifiedCatalog } from "./UnifiedCatalog";
 import { componentBox, packageSymbolSvg, registerPackage } from "../ui/webview/componentSymbols";
@@ -69,10 +71,38 @@ function filledRectHeight(svg: string, fill: string): number {
       assert(svg.length > 0, `${entry.typeId} nao renderizou nada`);
       assert(!svg.includes("NaN"), `${entry.typeId} gerou NaN em algum atributo`);
       assert(!svg.includes("undefined"), `${entry.typeId} gerou undefined em algum atributo`);
-      assert(!/<image\b/.test(svg), `${entry.typeId} usa bitmap -- a biblioteca e vetorial`);
+      if (entry.typeId === "graphics.tank_svg") {
+        assert(/<image\b[^>]*href="data:image\/svg\+xml;base64,/.test(svg), "o tanque deve usar SVG vetorial empacotado");
+      } else {
+        assert(!/<image\b/.test(svg), `${entry.typeId} usa bitmap -- a biblioteca e vetorial`);
+      }
       const box = componentBox(entry.typeId, entry.defaultProperties);
       assert(box.width > 0 && box.height > 0, `${entry.typeId} tem caixa degenerada`);
     }
+  });
+
+  await test("o novo tanque SVG aparece em Grafico > Tanques e Vasos e renderiza o arquivo empacotado", () => {
+    const tank = byTypeId.get("graphics.tank_svg");
+    assert(Boolean(tank), "tanque vetorial ausente do catalogo");
+    const tree = buildPaletteTree(graphics, "", "misc");
+    const graphic = tree.find((node) => node.kind === "folder" && node.label === "Grafico");
+    const vessels = graphic?.kind === "folder"
+      ? graphic.children.find((node) => node.kind === "folder" && node.label === "Tanques e Vasos")
+      : undefined;
+    assert(vessels?.kind === "folder" && vessels.children.some((node) => node.kind === "component" && node.typeId === tank?.typeId),
+      "tanque vetorial fora da pasta Tanques e Vasos");
+    const artwork = fs.readFileSync(path.resolve(process.cwd(), "..", "subcircuits", "tank.svg"));
+    const prefix = "data:image/svg+xml;base64,";
+    const image = tank?.package?.shapes?.find((shape) => shape.kind === "image");
+    assert(Boolean(image?.href?.startsWith(prefix)), "imagem SVG nao foi resolvida no catalogo");
+    assert(Buffer.from(image?.href?.slice(prefix.length) ?? "", "base64").equals(artwork), "imagem diferente do SVG empacotado");
+    assert(tank?.iconFilePath === path.resolve(process.cwd(), "..", "subcircuits", "tank.svg"), "icone da paleta nao usa o SVG");
+    assert(tank?.pinCount === 0, "elemento grafico nao deve ter terminais");
+    const english = loadUnifiedCatalog(process.cwd(), "en").catalog.find((entry) => entry.typeId === "graphics.tank_svg");
+    assert(english?.label === "Vector Tank" && JSON.stringify(english.folderPath) === JSON.stringify(["Graphical", "Tanks & Vessels"]),
+      "traducao inglesa do tanque vetorial");
+    const bigger = componentBox(tank!.typeId, { ...tank!.defaultProperties, width: 240, height: 360 });
+    assert(bigger.width === 240 && bigger.height === 360, "tanque nao pode ser redimensionado");
   });
 
   await test("redimensionar e por instancia: width/height mudam a caixa e o desenho escala", () => {
@@ -148,7 +178,10 @@ function filledRectHeight(svg: string, fill: string): number {
       if (!entry.package) continue;
       const groups = new Set((entry.propertySchema ?? []).map((schema) => schema.group));
       assert(groups.has("Geometria"), `${entry.typeId} deveria expor o grupo Geometria no Inspector`);
-      assert(groups.has("Aparência") || groups.has("Componente"), `${entry.typeId} deveria expor Aparencia ou Componente`);
+      // Arte SVG fornecida pelo usuário preserva as próprias cores; só o tamanho é editável.
+      if (entry.typeId !== "graphics.tank_svg") {
+        assert(groups.has("Aparência") || groups.has("Componente"), `${entry.typeId} deveria expor Aparencia ou Componente`);
+      }
     }
   });
 
@@ -279,10 +312,12 @@ function filledRectHeight(svg: string, fill: string): number {
   await test("o icone da paleta existe para todo simbolo", () => {
     // O gerador renderiza o icone a partir do MESMO paint spec, entao o item nunca cai no
     // `generic-component.svg` do fallback (`ComponentPaletteViewProvider::resolveIconReference`).
-    const fs = require("node:fs") as typeof import("node:fs");
-    const path = require("node:path") as typeof import("node:path");
     for (const entry of graphics) {
       if (!entry.package) continue;
+      if (entry.iconFilePath) {
+        assert(fs.existsSync(entry.iconFilePath), `icone externo ausente: ${entry.iconFilePath}`);
+        continue;
+      }
       for (const theme of ["light", "dark"]) {
         const file = path.join(process.cwd(), "media", "components", theme, `${entry.icon}.svg`);
         assert(fs.existsSync(file), `icone ausente: ${theme}/${entry.icon}.svg (${entry.typeId})`);

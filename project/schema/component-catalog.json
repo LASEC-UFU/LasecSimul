@@ -469,6 +469,13 @@
             "Tanks & Vessels"
           ]
         },
+        "graphics.tank_svg": {
+          "label": "Vector Tank",
+          "folderPath": [
+            "Graphical",
+            "Tanks & Vessels"
+          ]
+        },
         "graphics.tank_horizontal": {
           "label": "Horizontal Tank",
           "folderPath": [
@@ -10342,6 +10349,46 @@
         ],
         "sourceCommit": "744cb5420fdf126efd7a09b1d7082ca3e12c0841",
         "adaptation": "independent native LasecSimul geometry; no draw.io XML or path copied"
+      }
+    },
+    {
+      "typeId": "graphics.tank_svg",
+      "label": "Tanque vetorial",
+      "pinCount": 0,
+      "icon": "graphic-tank",
+      "iconFilePath": "../../subcircuits/tank.svg",
+      "graphical": true,
+      "folderPath": [
+        "Grafico",
+        "Tanques e Vasos"
+      ],
+      "category": "Grafico",
+      "workspaceSection": "misc",
+      "defaultProperties": {
+        "width": 120,
+        "height": 180
+      },
+      "propertySchema": [
+        {"id": "width", "label": "Largura", "group": "Geometria", "unit": "px", "editor": "number", "default": 120, "min": 4, "max": 4000, "step": 1},
+        {"id": "height", "label": "Altura", "group": "Geometria", "unit": "px", "editor": "number", "default": 180, "min": 4, "max": 4000, "step": 1}
+      ],
+      "package": {
+        "width": 120,
+        "height": 180,
+        "border": false,
+        "background": {"kind": "none"},
+        "pins": [],
+        "shapes": [
+          {"kind": "image", "href": "../../subcircuits/tank.svg", "x": 0, "y": 0, "w": 120, "h": 180, "preserveAspectRatio": "xMidYMid meet"}
+        ],
+        "aspect": "fixed",
+        "dynamicLayout": {
+          "schematicWidth": {"prop": "width", "fallback": 120},
+          "schematicHeight": {"prop": "height", "fallback": 180}
+        }
+      },
+      "help": {
+        "description": "Tanque vetorial fornecido em tank.svg. Elemento gráfico sem pinos ou simulação de nível."
       }
     },
     {
