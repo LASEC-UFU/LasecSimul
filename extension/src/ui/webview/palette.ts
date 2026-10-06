@@ -187,10 +187,14 @@ function collectVisibleComponents(nodes: PaletteTreeNode[]): PaletteComponentNod
   return items;
 }
 
+const PALETTE_INDENT_STEP_PX = 12;
+
 function renderTreeNode(node: PaletteTreeNode, depth: number): HTMLElement {
+  const indent = `${depth * PALETTE_INDENT_STEP_PX}px`;
   if (node.kind === "folder") {
     const details = document.createElement("details");
-    details.className = `palette-folder palette-folder--depth-${Math.min(depth, 3)}`;
+    details.className = `palette-folder${depth === 0 ? " palette-folder--depth-0" : ""}`;
+    details.style.setProperty("--palette-indent", indent);
     details.open = depth === 0;
 
     const summary = document.createElement("summary");
@@ -214,7 +218,8 @@ function renderTreeNode(node: PaletteTreeNode, depth: number): HTMLElement {
 
   const rowTag = node.disabled ? "div" : "button";
   const row = document.createElement(rowTag);
-  row.className = `palette-item palette-item--depth-${Math.min(depth, 3)}${node.disabled ? " palette-item--disabled" : " palette-item--button"}`;
+  row.className = `palette-item${node.disabled ? " palette-item--disabled" : " palette-item--button"}`;
+  row.style.setProperty("--palette-indent", indent);
   if (!node.disabled) {
     row.setAttribute("type", "button");
     row.addEventListener("click", () => vscode?.postMessage({ type: "startPlacingComponent", typeId: node.typeId }));

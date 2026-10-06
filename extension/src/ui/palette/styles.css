@@ -126,7 +126,7 @@ body {
   align-items: center;
   gap: 6px;
   min-height: 26px;
-  padding: 4px 8px;
+  padding: 4px 8px 4px calc(8px + var(--palette-indent, 0px));
   cursor: pointer;
   user-select: none;
   color: var(--vscode-sideBarSectionHeader-foreground, var(--vscode-sideBar-foreground));
@@ -143,8 +143,7 @@ body {
   text-transform: none;
 }
 
-.palette-folder--depth-1 > .palette-folder__summary {
-  padding-left: 16px;
+.palette-folder__children .palette-folder > .palette-folder__summary {
   color: var(--vscode-sideBarTitle-foreground, var(--vscode-sideBar-foreground));
   font-weight: 600;
 }
@@ -170,27 +169,11 @@ body {
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 4px 8px;
+  padding: 4px 8px 4px calc(8px + var(--palette-indent, 0px));
   border: none;
   background: transparent;
   color: inherit;
   text-align: left;
-}
-
-.palette-item--depth-0 {
-  padding-left: 8px;
-}
-
-.palette-item--depth-1 {
-  padding-left: 20px;
-}
-
-.palette-item--depth-2 {
-  padding-left: 32px;
-}
-
-.palette-item--depth-3 {
-  padding-left: 44px;
 }
 
 .palette-item--button {
