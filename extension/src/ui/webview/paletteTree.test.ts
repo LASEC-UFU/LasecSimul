@@ -156,7 +156,8 @@ const catalog: PaletteRenderableEntry[] = [
   await test("catalogo real expoe Modbus e HART em Process/Protocolos Industriais", () => {
     const processTree = JSON.stringify(buildPaletteTree(defaultComponentCatalog, "", "process"));
     assert(processTree.includes("protocol.modbus.server") && processTree.includes("protocol.modbus.client"), "Processo deveria conter servidor e cliente Modbus");
-    assert(processTree.includes("protocol.hart.transmitter") && processTree.includes("protocol.hart.communicator"), "Processo deveria conter os blocos HART");
+    assert(!processTree.includes("protocol.hart.transmitter") && !processTree.includes("protocol.hart.communicator"),
+      "os blocos HART de barramento virtual antigo não devem aparecer na paleta");
     const miscTree = JSON.stringify(buildPaletteTree(defaultComponentCatalog, "", "misc"));
     // O UDP direto no dispositivo saiu: o UDP agora é uma opção do Modem HART.
     assert(!miscTree.includes("peripherals.udp"), "a porta UDP direta (legado) não deveria aparecer na paleta");

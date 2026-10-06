@@ -1118,10 +1118,6 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
                        "Modbus Server");
     registerIndustrial("protocol.modbus.client", "Cliente Modbus", protocols::IndustrialComponentKind::ModbusClient,
                        "Modbus Client");
-    registerIndustrial("protocol.hart.transmitter", "Transmissor HART",
-                       protocols::IndustrialComponentKind::HartTransmitter, "HART Transmitter");
-    registerIndustrial("protocol.hart.communicator", "Comunicador HART",
-                       protocols::IndustrialComponentKind::HartCommunicator, "HART Communicator");
     const auto registerHartTransport = [&](const char* typeId, const char* label,
                                            protocols::HartCommunicationComponent::Mode mode,
                                            const char* englishLabel) {

@@ -134,8 +134,8 @@ async function domClick(locator) {
     const requiredProcessTypeIds = [
       "protocol.modbus.server",
       "protocol.modbus.client",
-      "protocol.hart.transmitter",
-      "protocol.hart.communicator",
+      "protocol.hart.device.standard",
+      "protocol.hart.modem",
       "subcircuits.process.fopdt",
       "subcircuits.tdps.basic_flow_loop",
       "subcircuits.tdps.smith_predictor",

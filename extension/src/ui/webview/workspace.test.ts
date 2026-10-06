@@ -46,7 +46,7 @@ import {
     assert(workspaceSectionForCatalogEntry({ typeId: "digital.generic_fpga" }) === "digital", "FPGA/GHDL deveria ser digital");
     assert(workspaceSectionForCatalogEntry({ typeId: "plc.instance", workspaceSection: "control" }) === "control", "PLC deveria ser controle");
     assert(workspaceSectionForCatalogEntry({ typeId: "protocol.modbus.server", workspaceSection: "process" }) === "process", "Modbus deveria estar em Processo");
-    assert(workspaceSectionForCatalogEntry({ typeId: "protocol.hart.transmitter", workspaceSection: "process" }) === "process", "HART deveria estar em Processo");
+    assert(workspaceSectionForCatalogEntry({ typeId: "protocol.hart.device.standard", workspaceSection: "process" }) === "process", "HART deveria estar em Processo");
     assert(workspaceSectionForCatalogEntry({ typeId: "outputs.hd44780" }) === "analog", "display legado sem workspaceSection deveria ser analógico (só logic./digital. ficam em Digital)");
   });
 

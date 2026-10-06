@@ -52,32 +52,9 @@ std::optional<double> VirtualIndustrialBus::readModbus(const VirtualModbusPoint&
     return found->value;
 }
 
-void VirtualIndustrialBus::publishHart(const VirtualHartPoint& point, VirtualHartValue value, uint64_t virtualNowNs) {
-    if (point.channel.empty() || value.uniqueId.empty() || !std::isfinite(value.primaryValue))
-        throw std::invalid_argument("invalid virtual HART point/value");
-    std::lock_guard<std::mutex> lock(m_mutex);
-    const auto found = std::find_if(m_hart.begin(), m_hart.end(), [&](const HartEntry& entry) {
-        return entry.point == point;
-    });
-    if (found == m_hart.end()) m_hart.push_back({point, std::move(value), virtualNowNs});
-    else { found->value = std::move(value); found->timestampNs = virtualNowNs; }
-}
-
-std::optional<VirtualHartValue> VirtualIndustrialBus::readHart(const VirtualHartPoint& point, uint64_t virtualNowNs,
-                                                                uint64_t maximumAgeNs) const {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    const auto found = std::find_if(m_hart.begin(), m_hart.end(), [&](const HartEntry& entry) {
-        return entry.point == point;
-    });
-    if (found == m_hart.end() || found->timestampNs > virtualNowNs || virtualNowNs - found->timestampNs > maximumAgeNs)
-        return std::nullopt;
-    return found->value;
-}
-
 void VirtualIndustrialBus::clear() {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_modbus.clear();
-    m_hart.clear();
 }
 
 VariableHandle VariableRegistry::registerVariable(VariableDescriptor descriptor, ProtocolValue initialValue) {

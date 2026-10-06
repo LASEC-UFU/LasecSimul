@@ -407,20 +407,6 @@
             "Modbus"
           ]
         },
-        "protocol.hart.transmitter": {
-          "label": "HART Transmitter",
-          "folderPath": [
-            "Industrial Protocols",
-            "HART"
-          ]
-        },
-        "protocol.hart.communicator": {
-          "label": "HART Communicator",
-          "folderPath": [
-            "Industrial Protocols",
-            "HART"
-          ]
-        },
         "instruments.voltmeter": {
           "label": "Voltmeter",
           "folderPath": [
@@ -20141,63 +20127,6 @@
       },
       "help": {
         "description": "Le um ponto do barramento Modbus virtual e o entrega no pino eletrico value."
-      }
-    },
-    {
-      "typeId": "protocol.hart.transmitter",
-      "label": "Transmissor HART",
-      "pinCount": 2,
-      "pinIds": [
-        "value",
-        "gnd"
-      ],
-      "icon": "package",
-      "folderPath": [
-        "Protocolos Industriais",
-        "HART"
-      ],
-      "workspaceSection": "process",
-      "defaultProperties": {
-        "channel": "hart-1",
-        "enabled": true,
-        "scanPeriodMs": 100,
-        "timeoutMs": 1000,
-        "pollingAddress": 0,
-        "uniqueId": "0011223344",
-        "tag": "TIC101",
-        "unit": "V"
-      },
-      "help": {
-        "description": "Publica PV, tag e unidade no barramento HART semantico da sessao."
-      }
-    },
-    {
-      "typeId": "protocol.hart.communicator",
-      "label": "Comunicador HART",
-      "pinCount": 2,
-      "pinIds": [
-        "value",
-        "gnd"
-      ],
-      "icon": "package",
-      "folderPath": [
-        "Protocolos Industriais",
-        "HART"
-      ],
-      "workspaceSection": "process",
-      "defaultProperties": {
-        "channel": "hart-1",
-        "enabled": true,
-        "scanPeriodMs": 100,
-        "timeoutMs": 1000,
-        "pollingAddress": 0,
-        "uniqueId": "0011223344",
-        "tag": "TIC101",
-        "unit": "V",
-        "hartCommand": "1"
-      },
-      "help": {
-        "description": "Consulta o transmissor HART virtual selecionado e entrega a PV no pino value."
       }
     },
     {

@@ -123,11 +123,13 @@ test("catalogo canonico registra PLC, Modbus e HART nas areas visiveis", () => {
   // mais em Controle -- reorganização que tirou também o nível redundante "Process" de folderPath.
   assert(byTypeId.get("plc.instance")?.workspaceSection === "process", "PLC deve existir na aba Processo");
   assert(byTypeId.get("plc.instance")?.folderPath?.[0] === "PLC IEC 61131-3", "PLC deve ficar na sua própria subseção, direto em Processo");
-  for (const typeId of ["protocol.modbus.server", "protocol.modbus.client", "protocol.hart.transmitter", "protocol.hart.communicator"]) {
+  for (const typeId of ["protocol.modbus.server", "protocol.modbus.client", "protocol.hart.device.standard", "protocol.hart.device.smar_tt301", "protocol.hart.device.smar_fy301", "protocol.hart.modem"]) {
     const entry = byTypeId.get(typeId);
     assert(entry?.workspaceSection === "process", `${typeId} deve existir na aba Processo`);
     assert(entry?.folderPath?.[0] === "Protocolos Industriais", `${typeId} deve ficar sob Processo/Protocolos Industriais, sem nível redundante "Process"`);
   }
+  assert(!byTypeId.has("protocol.hart.transmitter") && !byTypeId.has("protocol.hart.communicator"),
+    "os blocos HART de barramento virtual antigo não devem existir no catálogo");
   const udp = byTypeId.get("peripherals.udp");
   assert(udp?.workspaceSection === "misc", "peripherals.udp deve existir na aba Miscelâneos");
   assert(udp?.folderPath?.[0] === "peripherals", "peripherals.udp deve ficar na pasta output");
@@ -169,4 +171,3 @@ test("propertySchema estatico do catalogo real (devices/subcircuitos) so usa edi
 
 console.log(`\nResultado: ${passed} passaram, ${failed} falharam\n`);
 process.exitCode = failed > 0 ? 1 : 0;
-

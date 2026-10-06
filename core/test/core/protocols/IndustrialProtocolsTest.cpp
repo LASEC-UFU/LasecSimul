@@ -76,7 +76,7 @@ void namespacesBindingsAndHartAreIndependent() {
     CHECK(primary.fields.size() == 2 && primary.fields[1] == "degC", "HART command 1 primary variable golden");
 }
 
-void virtualIndustrialBusUsesAddressingTimeoutAndResetIsolation() {
+void virtualModbusBusUsesAddressingTimeoutAndResetIsolation() {
     VirtualIndustrialBus bus;
     const VirtualModbusPoint register100{"line-a", 7, ModbusArea::HoldingRegister, 100};
     const VirtualModbusPoint register101{"line-a", 7, ModbusArea::HoldingRegister, 101};
@@ -86,16 +86,11 @@ void virtualIndustrialBusUsesAddressingTimeoutAndResetIsolation() {
     CHECK(!bus.readModbus(register100, 1'501, 500), "virtual Modbus point must expire by virtual time");
     CHECK(!bus.readModbus(register100, 0, 500), "data from before a simulation reset must not leak into the new timeline");
 
-    const VirtualHartPoint device{"hart-loop", 3};
-    bus.publishHart(device, {"AABBCCDD", "FT101", "m3/h", 18.75}, 2'000);
-    const auto hart = bus.readHart(device, 2'100, 100);
-    CHECK(hart && hart->uniqueId == "AABBCCDD" && hart->primaryValue == 18.75,
-          "virtual HART device must preserve identity and primary value");
     bus.clear();
-    CHECK(!bus.readHart(device, 2'100, 100), "clearing a session bus must remove all HART state");
+    CHECK(!bus.readModbus(register100, 1'500, 500), "clearing a session bus must remove all Modbus state");
 }
 
-void visibleProtocolComponentsExchangeElectricalValues() {
+void visibleModbusComponentsExchangeElectricalValues() {
     lasecsimul::simulation::Scheduler scheduler(8, [] { return true; });
     auto bus = std::make_shared<VirtualIndustrialBus>();
     IndustrialProtocolComponent server(IndustrialComponentKind::ModbusServer, scheduler, bus,
@@ -107,23 +102,14 @@ void visibleProtocolComponentsExchangeElectricalValues() {
     server.stamp(source); client.stamp(destination);
     CHECK(server.online() && client.online(), "visible Modbus server/client components must become online");
     CHECK(std::abs(destination.drivenVoltage - 12.345) < 1e-9, "Modbus component pair must preserve scaled electrical value");
-
-    IndustrialProtocolComponent transmitter(IndustrialComponentKind::HartTransmitter, scheduler, bus,
-        std::array<lasecsimul::Pin, 2>{{{"value", 0, 0}, {"gnd", 0, 0}}});
-    IndustrialProtocolComponent communicator(IndustrialComponentKind::HartCommunicator, scheduler, bus,
-        std::array<lasecsimul::Pin, 2>{{{"value", 0, 0}, {"gnd", 0, 0}}});
-    source.voltages["value"] = 4.2;
-    transmitter.stamp(source); communicator.stamp(destination);
-    CHECK(transmitter.online() && communicator.online(), "visible HART transmitter/communicator components must become online");
-    CHECK(std::abs(destination.drivenVoltage - 4.2) < 1e-9, "HART command 1 component pair must expose the primary value");
 }
 } // namespace
 
 int main() {
     modbusWorksWithoutPlcAndUsesVirtualTime();
     namespacesBindingsAndHartAreIndependent();
-    virtualIndustrialBusUsesAddressingTimeoutAndResetIsolation();
-    visibleProtocolComponentsExchangeElectricalValues();
+    virtualModbusBusUsesAddressingTimeoutAndResetIsolation();
+    visibleModbusComponentsExchangeElectricalValues();
     if (failures == 0) std::printf("Semantic Modbus/HART/explicit bindings (PLC-independent): OK\n");
     return failures == 0 ? 0 : 1;
 }
