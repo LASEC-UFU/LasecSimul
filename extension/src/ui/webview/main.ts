@@ -46,6 +46,7 @@ import { formatHartHex, hartCommonTableForType, hartVariableTypeOptions } from "
 const SVG_NS = "http://www.w3.org/2000/svg";
 const FINE_WIRE_STEP = WIRE_GRID_SIZE / 10;
 let editingTerminalsComponentId: string | undefined;
+let editingTerminalsPinId: string | undefined;
 
 interface WindowWithInitialState extends Window {
   __LASECSIMUL_INITIAL_STATE__?: WebviewProjectState;
@@ -230,7 +231,6 @@ const UI_TEXT = {
     componentProperties: "Propriedades do componente",
     editTerminals: "Editar terminais",
     finishTerminalEditing: "Concluir edição dos terminais",
-    rotateTerminal: "Girar terminal",
     restoreTerminal: "Restaurar terminal",
     deleteSelectedWire: "Apagar fio selecionado",
     deleteSelectedComponent: "Apagar componente selecionado",
@@ -385,7 +385,6 @@ const UI_TEXT = {
     componentProperties: "Component properties",
     editTerminals: "Edit terminals",
     finishTerminalEditing: "Finish editing terminals",
-    rotateTerminal: "Rotate terminal",
     restoreTerminal: "Reset terminal",
     deleteSelectedWire: "Delete selected wire",
     deleteSelectedComponent: "Delete selected component",
@@ -4565,6 +4564,34 @@ function updateInstanceTerminal(component: WebviewComponentModel, pinId: string,
   render();
 }
 
+function transformEditedTerminal(component: WebviewComponentModel, pinId: string,
+  operation: "cw" | "ccw" | "half" | "flipH" | "flipV"): void {
+  const placement = terminalPlacement(component, pinId);
+  if (!placement) return;
+  const angle = placement.angle;
+  // Ângulos de pino: 0=saída à direita, 90=acima, 180=esquerda, 270=abaixo.
+  const nextAngle = operation === "cw" ? (angle + 270) % 360
+    : operation === "ccw" ? (angle + 90) % 360
+    : operation === "half" ? (angle + 180) % 360
+    : operation === "flipH" ? (180 - angle + 360) % 360
+    : (360 - angle) % 360;
+  updateInstanceTerminal(component, pinId, { ...placement, angle: nextAngle });
+}
+
+function editedTerminalMenuItems(component: WebviewComponentModel, pinId: string): ContextMenuItem[] {
+  return [
+    { label: t("finishTerminalEditing"), onClick: () => { editingTerminalsComponentId = undefined; editingTerminalsPinId = undefined; render(); } },
+    { kind: "separator" },
+    { label: t("rotateCw"), icon: "rotateCw", shortcut: "Ctrl+R", onClick: () => transformEditedTerminal(component, pinId, "cw") },
+    { label: t("rotateCcw"), icon: "rotateCcw", shortcut: "Ctrl+Shift+R", onClick: () => transformEditedTerminal(component, pinId, "ccw") },
+    { label: t("rotate180"), icon: "rotate180", onClick: () => transformEditedTerminal(component, pinId, "half") },
+    { label: t("flipHorizontal"), icon: "flipHorizontal", shortcut: "Ctrl+L", onClick: () => transformEditedTerminal(component, pinId, "flipH") },
+    { label: t("flipVertical"), icon: "flipVertical", shortcut: "Ctrl+Shift+L", onClick: () => transformEditedTerminal(component, pinId, "flipV") },
+    { kind: "separator" },
+    { label: `${t("restoreTerminal")} ${pinId}`, onClick: () => updateInstanceTerminal(component, pinId) },
+  ];
+}
+
 function terminalPlacement(component: WebviewComponentModel, pinId: string): { x: number; y: number; angle: number } | undefined {
   const index = component.pins.findIndex((pin) => pin.id === pinId);
   if (index < 0) return undefined;
@@ -7765,8 +7792,16 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       hideContextMenu();
       return;
     }
-    const terminalPinId = event.target instanceof Element
-      ? event.target.closest<SVGCircleElement>(".pin-terminal")?.dataset.pinId : undefined;
+    const terminalPinId = editingTerminalsComponentId === component.id
+      ? (event.target instanceof Element
+        ? event.target.closest<SVGCircleElement>(".pin-terminal")?.dataset.pinId : undefined) ?? editingTerminalsPinId
+      : undefined;
+    if (terminalPinId && component.pins.some((pin) => pin.id === terminalPinId)) {
+      editingTerminalsPinId = terminalPinId;
+      render();
+      showContextMenu(event, editedTerminalMenuItems(component, terminalPinId));
+      return;
+    }
     const catalogEntry = catalogEntryFor(component.typeId);
     if (!isComponentSelected(component.id)) selectOnlyComponent(component.id);
     persistState();
@@ -7901,14 +7936,8 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     const menuItems: ContextMenuItem[] = [
       ...(!isGroup && component.pins.length > 0 ? [
         { label: editingTerminalsComponentId === component.id ? t("finishTerminalEditing") : t("editTerminals"),
-          onClick: () => { editingTerminalsComponentId = editingTerminalsComponentId === component.id ? undefined : component.id; render(); } } satisfies ContextMenuItem,
-        ...(editingTerminalsComponentId === component.id && terminalPinId ? [
-          { label: `${t("rotateTerminal")} ${terminalPinId} 90°`, onClick: () => {
-            const placement = terminalPlacement(component, terminalPinId);
-            if (placement) updateInstanceTerminal(component, terminalPinId, { ...placement, angle: (placement.angle + 90) % 360 });
-          } } satisfies ContextMenuItem,
-          { label: `${t("restoreTerminal")} ${terminalPinId}`, onClick: () => updateInstanceTerminal(component, terminalPinId) } satisfies ContextMenuItem,
-        ] : []),
+          onClick: () => { editingTerminalsComponentId = editingTerminalsComponentId === component.id ? undefined : component.id;
+            editingTerminalsPinId = undefined; render(); } } satisfies ContextMenuItem,
         { kind: "separator" } satisfies ContextMenuItem,
       ] : []),
       ...exposedSubmenuItems,
@@ -8701,7 +8730,7 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
     circle.setAttribute("cy", String(local.y));
     circle.setAttribute("r", String(PIN_RADIUS));
     const isEditingTerminal = editingTerminalsComponentId === component.id;
-    circle.setAttribute("class", `pin-terminal ${isActive ? "pin-terminal--active" : ""} ${isEditingTerminal ? "pin-terminal--editing" : ""}`);
+    circle.setAttribute("class", `pin-terminal ${isActive ? "pin-terminal--active" : ""} ${isEditingTerminal ? "pin-terminal--editing" : ""} ${isEditingTerminal && editingTerminalsPinId === pin.id ? "pin-terminal--selected" : ""}`);
     circle.dataset.componentId = component.id;
     circle.dataset.pinId = pin.id;
     const titleEl = document.createElementNS(SVG_NS, "title");
@@ -8721,9 +8750,12 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
         startPinConnectionDrag(event, component, pin.id);
         return;
       }
+      editingTerminalsPinId = pin.id;
+      event.stopPropagation();
+      svg.querySelectorAll(".pin-terminal--selected").forEach((element) => element.classList.remove("pin-terminal--selected"));
+      circle.classList.add("pin-terminal--selected");
       if (event.button !== 0) return;
       event.preventDefault();
-      event.stopPropagation();
       circle.setPointerCapture(event.pointerId);
       const move = (pointer: PointerEvent): void => {
         const canvas = document.querySelector<HTMLElement>(".canvas");
@@ -10664,11 +10696,17 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   }
 
   if (message.type === "requestRotateSelection") {
-    rotateSelectedComponents(message.direction === "cw" ? 1 : -1);
+    const editedComponent = editingTerminalsComponentId
+      ? activeSceneComponents().find((component) => component.id === editingTerminalsComponentId) : undefined;
+    if (editedComponent && editingTerminalsPinId) transformEditedTerminal(editedComponent, editingTerminalsPinId, message.direction === "cw" ? "cw" : "ccw");
+    else rotateSelectedComponents(message.direction === "cw" ? 1 : -1);
   }
 
   if (message.type === "requestFlipSelection") {
-    flipSelectedComponents(message.axis);
+    const editedComponent = editingTerminalsComponentId
+      ? activeSceneComponents().find((component) => component.id === editingTerminalsComponentId) : undefined;
+    if (editedComponent && editingTerminalsPinId) transformEditedTerminal(editedComponent, editingTerminalsPinId, message.axis === "horizontal" ? "flipH" : "flipV");
+    else flipSelectedComponents(message.axis);
   }
 
   if (message.type === "requestUndo") {
@@ -11222,7 +11260,10 @@ window.addEventListener("keydown", (event) => {
 
   if (ctrl && event.key.toLowerCase() === "l") {
     event.preventDefault();
-    flipSelectedComponents(event.shiftKey ? "vertical" : "horizontal");
+    const editedComponent = editingTerminalsComponentId
+      ? activeSceneComponents().find((component) => component.id === editingTerminalsComponentId) : undefined;
+    if (editedComponent && editingTerminalsPinId) transformEditedTerminal(editedComponent, editingTerminalsPinId, event.shiftKey ? "flipV" : "flipH");
+    else flipSelectedComponents(event.shiftKey ? "vertical" : "horizontal");
     return;
   }
 

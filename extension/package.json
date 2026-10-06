@@ -435,6 +435,7 @@
     "test:connections:visual": "tsc -p ./tsconfig.test.json && node test/e2e/render-connection-engine.cjs",
     "test:line-styles:visual": "tsc -p ./tsconfig.test.json && node test/e2e/render-ipd-line-style-gallery.cjs",
     "test:connections:e2e": "npm run compile && node test/e2e/run-connection-e2e.cjs",
+    "test:terminals:e2e": "npm run compile && node test/e2e/run-terminal-editor-e2e.cjs",
     "test:connections:performance": "tsc -p ./tsconfig.test.json && node test/performance/benchmark-connection-engine.cjs",
     "test:hmi:visual": "tsc -p ./tsconfig.test.json && node test/e2e/render-hmi-widget-sheet.cjs"
   },
