@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    { "id": "source", "typeId": "passive.resistor", "label": "SOURCE", "properties": { "resistance": 1000 }, "visual": { "x": 100, "y": 130, "rotation": 0 } },
+    { "id": "obstacle", "typeId": "graphics.slider", "label": "SLIDER", "properties": { "width": 212, "height": 34, "value": 940, "actionMin": 190, "actionMax": 1690 }, "visual": { "x": 100, "y": 250, "rotation": 0 } },
+    { "id": "rotated", "typeId": "graphics.slider", "label": "SLIDER 270", "properties": { "width": 212, "height": 34, "value": 1000, "actionMin": 190, "actionMax": 1690 }, "visual": { "x": 200, "y": 480, "rotation": 270 } },
+    { "id": "ammeter", "typeId": "meters.ampmeter", "label": "mA", "properties": { "displayUnit": "mA" }, "visual": { "x": 35, "y": 455, "rotation": 0 } }
+  ],
+  "topology": { "revision": 0, "nodes": [], "conductors": [] },
+  "visual": { "components": [], "wires": [], "viewport": { "x": 0, "y": 0, "zoom": 1 } },
+  "simulationSettings": { "frequencyHz": 1000, "timeScale": 1, "paused": false }
+}

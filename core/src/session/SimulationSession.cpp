@@ -1106,6 +1106,10 @@ void SimulationSession::onStableStepUnlocked(uint64_t timestampNs) {
     publishHartOutputsToSignalUnlocked();
     publishElectricalBridgeSensorsToSignalUnlocked();
     m_runtimeState.signals.executeUntil(timestampNs);
+    // Process inputs must reach HART field devices during normal simulation.
+    // Sampling only inside hartTransact left the LCD and loop current frozen
+    // until an external HART master happened to issue a command.
+    sampleHartInputsFromSignalUnlocked();
     scheduleNextSignalBoundaryUnlocked(timestampNs);
     publishSnapshot();
     publishTelemetrySnapshotIfRequested(timestampNs);
@@ -1726,7 +1730,13 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
             const simulation::SignalScalarType scalar = port.kind == SignalValueKind::Digital
                 ? simulation::SignalScalarType::Bool : simulation::SignalScalarType::Real;
             block.output = {"out", {scalar, 1}, port.unit};
-            block.rate = {1, 0, 0};
+            // Process transmitters and their manual pressure sources change on
+            // operator/property updates, not at nanosecond frequency. A 1 ns
+            // Probe rate kept the whole LD301 circuit at <0.01% real time.
+            // Other signal ports retain their existing fast rate.
+            const bool processSignal = dynamic_cast<const components::ManualSignalSlider*>(component) != nullptr ||
+                                       dynamic_cast<const protocols::HartCommunicationComponent*>(component) != nullptr;
+            block.rate = {processSignal ? 1'000'000ull : 1ull, 0, 0};
             // Túnel de sinal (`connectors.signal_tunnel`):
             // sua declared `direction` só descreve o papel de FRONTEIRA (quem de fora pode dirigi-lo),
             // nunca decide sozinha se o BLOCO precisa de um `"in"` -- é `wiredInputTargets` (o fato de
@@ -1974,9 +1984,10 @@ std::optional<std::string> SimulationSession::setPropertyUnlocked(uint32_t compo
         }
 
         descriptor.set(value);
-        if (propertyName == "value" && dynamic_cast<components::ManualSignalSlider*>(instance)) {
+        if (auto* slider = dynamic_cast<components::ManualSignalSlider*>(instance);
+            slider && (propertyName == "value" || propertyName == "actionMin" || propertyName == "actionMax")) {
             try {
-                m_runtimeState.signals.setExternalReal(signalPortBlockId(component, "out"), std::get<double>(value));
+                m_runtimeState.signals.setExternalReal(signalPortBlockId(component, "out"), slider->value());
             } catch (...) { /* Signal plan is not bound until simulation starts. */ }
         }
         if ((schema.flags & PropertySchemaAffectsPinCount) != 0) reregisterPinsIfChanged(component, instance);

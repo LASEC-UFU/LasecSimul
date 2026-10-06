@@ -1,4 +1,4 @@
-import { flipLocalTerminal, localToScene, resizedComponentSize, sceneToLocal, snapScenePoint, svgLocalTransform, transformedLocalBounds, transformLocalPoint } from "./componentGeometry.js";
+import { localToScene, resizedComponentSize, sceneToLocal, snapScenePoint, svgLocalTransform, transformedLocalBounds, transformLocalPoint } from "./componentGeometry.js";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -30,20 +30,6 @@ async function main(): Promise<void> {
   await test("espelhamento acontece antes da rotação, como no renderer", () => {
     const actual = transformLocalPoint({ x: 0, y: 0 }, { size: { width: 40, height: 20 }, rotation: 90, flipH: true });
     assert(actual.x === 30 && actual.y === 30, `recebido ${JSON.stringify(actual)}`);
-  });
-
-  await test("inversão horizontal move terminal vertical e seu rótulo para o outro lado", () => {
-    const size = { width: 150, height: 228 };
-    const top = { x: 12, y: 168, angle: 90 };
-    const horizontal = flipLocalTerminal(top, size, 0, "horizontal");
-    assert(horizontal.x === 138 && horizontal.y === 168 && horizontal.angle === 90,
-      `espelho horizontal do pino vertical: ${JSON.stringify(horizontal)}`);
-    const vertical = flipLocalTerminal(top, size, 0, "vertical");
-    assert(vertical.x === 12 && vertical.y === 60 && vertical.angle === 270,
-      `espelho vertical: ${JSON.stringify(vertical)}`);
-    const rotated = flipLocalTerminal(top, size, 90, "horizontal");
-    assert(rotated.x === 12 && rotated.y === 60 && rotated.angle === 270,
-      `eixo visual deve seguir rotação do componente: ${JSON.stringify(rotated)}`);
   });
 
   await test("localToScene e sceneToLocal são inversas", () => {

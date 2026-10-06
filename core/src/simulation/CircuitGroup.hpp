@@ -184,6 +184,56 @@ public:
                 m_scaledAdmittance(row, column) *= m_scale(row) * columnScale;
         }
 
+        // A closed, floating circuit has one free common-mode voltage. Its
+        // voltage differences and branch currents are nevertheless defined.
+        // Pick the first node as an internal 0 V reference only when shifting
+        // every node by the same amount leaves every equation unchanged.
+        // Grounded circuits retain their authored reference and unrelated
+        // singular matrices still fail normally.
+        const Eigen::Index nodeCount = static_cast<Eigen::Index>(m_nodeIndices.size());
+        std::vector<bool> visited(static_cast<size_t>(n), false);
+        for (Eigen::Index root = 0; root < n; ++root) {
+            if (visited[static_cast<size_t>(root)]) continue;
+            std::vector<Eigen::Index> block{root};
+            visited[static_cast<size_t>(root)] = true;
+            for (size_t head = 0; head < block.size(); ++head) {
+                const Eigen::Index row = block[head];
+                for (Eigen::Index column = 0; column < n; ++column) {
+                    if (visited[static_cast<size_t>(column)] ||
+                        (m_admittance(row, column) == 0.0 && m_admittance(column, row) == 0.0)) continue;
+                    visited[static_cast<size_t>(column)] = true;
+                    block.push_back(column);
+                }
+            }
+            std::vector<Eigen::Index> nodes;
+            for (const Eigen::Index index : block) if (index < nodeCount) nodes.push_back(index);
+            // A declared but unconnected pin contributes an all-zero equation.
+            // With no injected current its only consistent voltage is an
+            // arbitrary reference; choose zero so it cannot poison an otherwise
+            // valid circuit group that happens to contain that pin.
+            if (block.size() == 1 && nodes.size() == 1 &&
+                m_admittance.row(root).cwiseAbs().sum() == 0.0 && m_rhs(root) == 0.0) {
+                m_scaledAdmittance(root, root) = 1.0;
+                continue;
+            }
+            if (nodes.size() < 2) continue;
+            bool floatingGauge = true;
+            for (const Eigen::Index row : block) {
+                double sum = 0.0;
+                double magnitude = 0.0;
+                for (const Eigen::Index column : nodes) {
+                    const double value = m_admittance(row, column);
+                    sum += value;
+                    magnitude += std::abs(value);
+                }
+                if (magnitude == 0.0 || std::abs(sum) > magnitude * 1e-12) {
+                    floatingGauge = false;
+                    break;
+                }
+            }
+            if (floatingGauge) m_scaledAdmittance(nodes.front(), nodes.front()) += 1.0;
+        }
+
         if (static_cast<size_t>(n) >= kSparseThreshold) {
             Eigen::SparseMatrix<double> sparse = m_scaledAdmittance.sparseView(0.0, 1e-15);
             sparse.makeCompressed();

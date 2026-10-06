@@ -774,6 +774,10 @@ html, body {
 }
 
 .component--hmi-operator-run[data-type-id="graphics.slider"] {
+  cursor: pointer;
+}
+
+.component--hmi-operator-run.selected[data-type-id="graphics.slider"] .slider-thumb-hit {
   cursor: ew-resize;
 }
 

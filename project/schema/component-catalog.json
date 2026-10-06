@@ -16330,8 +16330,8 @@
         },
         {
           "id": "value",
-          "label": "Valor",
-          "group": "Componente",
+          "label": "Valor em OUT",
+          "group": "Sinal",
           "unit": "",
           "editor": "number",
           "default": 50,
@@ -16492,8 +16492,8 @@
         },
         {
           "id": "actionMin",
-          "label": "Limite mínimo",
-          "group": "Ação",
+          "label": "Valor mínimo em OUT",
+          "group": "Sinal",
           "unit": "",
           "editor": "number",
           "default": 0,
@@ -16503,8 +16503,8 @@
         },
         {
           "id": "actionMax",
-          "label": "Limite máximo",
-          "group": "Ação",
+          "label": "Valor máximo em OUT",
+          "group": "Sinal",
           "unit": "",
           "editor": "number",
           "default": 100,
@@ -16514,7 +16514,7 @@
         }
       ],
       "help": {
-        "description": "Controle manual com saída de sinal OUT. Conecte OUT à entrada de processo de um transmissor ou planta. Ajuste Limite mínimo e Limite máximo na seção Ação para a unidade do processo; para a faixa inicial do LD301, use 190 e 1690 mmH2O@20C."
+        "description": "Controle manual com saída de sinal OUT. Conecte OUT à entrada de processo de um transmissor ou planta. Valor mínimo e Valor máximo em OUT definem a faixa do cursor e o sinal enviado na unidade do processo. Para testar a saturação do LD301, use uma faixa que ultrapasse 190 a 1690 mmH2O@20C."
       },
       "package": {
         "width": 212,
@@ -16626,6 +16626,21 @@
               "fill": "#f8fafc",
               "stroke": "#475569",
               "strokeWidth": 1.2
+            },
+            {
+              "kind": "rect",
+              "x": {
+                "prop": "__g_pct",
+                "multiplier": 1.98,
+                "offset": -2,
+                "fallback": 0
+              },
+              "y": 0,
+              "w": 18,
+              "h": 24,
+              "fill": "transparent",
+              "stroke": "none",
+              "cssClass": "slider-thumb-hit"
             }
           ]
         }

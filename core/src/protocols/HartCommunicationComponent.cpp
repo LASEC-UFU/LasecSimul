@@ -1094,6 +1094,7 @@ std::string HartCommunicationComponent::signalBlockId(std::string_view variableI
 
 bool HartCommunicationComponent::setSignalInput(std::string_view variableId, double value) noexcept {
     if (m_fieldDevice && variableId == "PV" && std::isfinite(value)) {
+        if (m_rawPrimary == value) return true;
         feedPrimary(value);
         // The loop current follows the PV: re-stamp (called outside stamp()).
         m_scheduler.dirtySet().insert(m_componentIndex);

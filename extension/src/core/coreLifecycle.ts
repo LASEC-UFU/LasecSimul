@@ -684,7 +684,7 @@ export async function pollComponentVisualStates(expectedGeneration?: number): Pr
   state.schematicPanel.postMessage({ version: 1, type: "componentVisualState", statesByComponentId });
 }
 
-/** Quais componentes internos de um `.lssubcircuit` são "exposto + gráfico + com `readoutFormat`"
+/** Quais componentes internos de um `.lssubcircuit` são expostos e possuem leitura ou estado visual
  * (candidatos a acender de verdade no overlay de Modo Placa) -- cacheado por `sourceId` pra não bater
  * disco (`gatherInternalComponentSnapshots` lê o arquivo JSON inteiro) a cada tick de telemetria
  * (~300ms enquanto rodando). Igual a `boardOverlayDataByComponentId` do lado Webview: a lista de
@@ -705,9 +705,12 @@ function exposedReadableItemsForSource(sourceId: string): InternalComponentSnaps
         .map((item) => item.properties?.bindSource)
         .filter((value): value is string => typeof value === "string" && value.length > 0)
     );
-    cached = items.filter((item) =>
-      isReadableInstrument(item.typeId) && ((item.exposed && item.graphical) || bindingSources.has(item.id))
-    );
+    cached = items.filter((item) => {
+      const entry = findCatalogEntry(item.typeId);
+      const hasVisualState = Boolean(entry?.package?.runtimeState || entry?.boardPackage?.runtimeState);
+      return (isReadableInstrument(item.typeId) || hasVisualState)
+        && ((item.exposed && item.graphical) || bindingSources.has(item.id));
+    });
     boardOverlayExposedItemsBySourceId.set(sourceId, cached);
   }
   return cached;

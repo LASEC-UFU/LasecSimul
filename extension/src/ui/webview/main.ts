@@ -5,7 +5,7 @@ import { graphicalRuntimeProperties, isGraphicalTypeId } from "./graphicsBinding
 import { GraphicalActionPhase, GraphicalActionValue, graphicalActionConfig, isGraphicalActionTypeId, resolveGraphicalActionValue } from "./graphicsAction.js";
 import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, instancePinPlacements, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage, resolvedPackageFor, runtimeSurfaceImageHref } from "./componentSymbols.js";
 import { ExternalLabelKind, SYMBOL_PIN_LABEL_ALIGN_KEY, formatProbeVoltage, genericExternalLabelFontSize, isExternalProbeReadout, labelPropertyKey, nextLabelRotation, resolveDefaultExternalLabelOffset, resolveExternalLabelColor, symbolPinLabelPackageFields } from "./componentLabels.js";
-import { flipLocalTerminal, resizedComponentSize, sceneToLocal, svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
+import { resizedComponentSize, sceneToLocal, svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
 import { detectChannelTrigger, digitalStepPath, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
 import { analogSampleHoldPath, clampInstrumentWindow, decodeInstrumentState, encodeInstrumentState, panInstrumentTime, zoomInstrumentTimeAt } from "./instrumentViewport.js";
 import {
@@ -696,6 +696,7 @@ const activePushShortcutIds = new Set<string>();
  * `render()` (ainda atualizam os dados em cache -- a tela só fica "atrasada" até o solte do mouse,
  * que já chama `render()` no fim do gesto). */
 let isDraggingComponent = false;
+let isDraggingGraphicalOperator = false;
 
 /** Guarda de render concorrente GENÉRICA (UI-1) -- `true` durante QUALQUER gesto de arrastar em
  * andamento (componente OU canto/segmento de fio, ver `wireCornerDrag`/`wireSegmentDrag`), não só
@@ -704,7 +705,7 @@ let isDraggingComponent = false;
  * arrasto de componente, então um `render()` de telemetria no meio de um arrasto de fio (agora
  * incremental via `updateWireVisual`, ver UI-2/UI-3) reconstruiria o canvas inteiro à toa. */
 function isInteractiveGestureInProgress(): boolean {
-  return isDraggingComponent || wireCornerDrag !== undefined || wireSegmentDrag !== undefined;
+  return isDraggingComponent || isDraggingGraphicalOperator || wireCornerDrag !== undefined || wireSegmentDrag !== undefined;
 }
 
 function serialTerminalLogText(runtime: SerialTerminalRuntime): string {
@@ -1820,7 +1821,8 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
     // Qualquer item cujo desenho dependa de telemetria precisa do `<svg>` registrado aqui -- é o que
     // permite o patch PONTUAL a cada tick (`patchBoardOverlayRuntimeVisuals`) em vez de um
     // `render()` do esquemático inteiro.
-    if (item.typeId === "outputs.led" || item.typeId === "outputs.led_bar" || isGraphicalTypeId(item.typeId)) {
+    if (item.typeId === "outputs.led" || item.typeId === "outputs.led_bar" || isGraphicalTypeId(item.typeId)
+        || catalogEntryFor(item.typeId)?.package?.runtimeState || catalogEntryFor(item.typeId)?.boardPackage?.runtimeState) {
       boardOverlaySvgByKey.set(`${component.id}:${item.id}`, svg);
     }
 
@@ -2099,6 +2101,7 @@ function renderExposedComponentProjections(canvasContent: HTMLElement): void {
     // (e o rótulo do pino) saindo pra fora da caixa tracejada, junto de 2+ botões idênticos -- achado
     // real relatado (pedido original: "os pinos e rótulos aqui estão aparecendo").
     svg.innerHTML = packageSymbolSvg(source.typeId, source.properties, source.id, "board") ?? componentSymbolSvg(source.typeId, source.properties);
+    keepSvgReadoutsUpright(svg, Boolean(entry.flipH), Boolean(entry.flipV));
     el.appendChild(svg);
 
     let dragStartX = 0;
@@ -4568,17 +4571,13 @@ function transformEditedTerminal(component: WebviewComponentModel, pinId: string
   operation: "cw" | "ccw" | "half" | "flipH" | "flipV"): void {
   const placement = terminalPlacement(component, pinId);
   if (!placement) return;
-  if (operation === "flipH" || operation === "flipV") {
-    updateInstanceTerminal(component, pinId, flipLocalTerminal(placement,
-      componentBox(component.typeId, component.properties), component.rotation,
-      operation === "flipH" ? "horizontal" : "vertical"));
-    return;
-  }
   const angle = placement.angle;
   // Ângulos de pino: 0=saída à direita, 90=acima, 180=esquerda, 270=abaixo.
   const nextAngle = operation === "cw" ? (angle + 270) % 360
     : operation === "ccw" ? (angle + 90) % 360
-    : (angle + 180) % 360;
+    : operation === "half" ? (angle + 180) % 360
+    : operation === "flipH" ? (180 - angle + 360) % 360
+    : (360 - angle) % 360;
   updateInstanceTerminal(component, pinId, { ...placement, angle: nextAngle });
 }
 
@@ -5806,7 +5805,10 @@ function runtimeSymbolProperties(component: WebviewComponentModel): Record<strin
   // leitura própria (`pinCount: 0` o mantém fora do Core): ele só PROJETA a leitura de outro
   // componente, resolvida por id estável em `readoutsByComponentId`.
   if (isGraphicalTypeId(component.typeId)) {
-    return { ...component.properties, ...graphicalRuntimeProperties(component.properties, (id) => readoutsByComponentId[id]) };
+    const graphicalProperties = component.typeId === "graphics.slider" && !component.properties.bindSource
+      ? { ...component.properties, bindMin: component.properties.actionMin ?? 0, bindMax: component.properties.actionMax ?? 100 }
+      : component.properties;
+    return { ...component.properties, ...graphicalRuntimeProperties(graphicalProperties, (id) => readoutsByComponentId[id]) };
   }
   const readout = readoutsByComponentId[component.id];
   const scopeHistory = scopeHistoryByComponentId[component.id];
@@ -7591,6 +7593,11 @@ function attachGraphicalOperatorInteraction(
 
   el.addEventListener("pointerdown", (event) => {
     if (!(event instanceof PointerEvent) || event.button !== 0) return;
+    // The first click selects the slider. Only a subsequent drag on its thumb
+    // operates it; a click on the track must never jump the process value.
+    if (typeId === "graphics.slider" &&
+        (!el.classList.contains("selected") ||
+         !(event.target instanceof Element) || !event.target.closest(".slider-thumb-hit"))) return;
     const component = consumeInRun(event);
     if (!component) return;
     const resolved = graphicalActionTarget(component);
@@ -7599,31 +7606,47 @@ function attachGraphicalOperatorInteraction(
     el.setPointerCapture(event.pointerId);
 
     if (typeId === "graphics.slider") {
+      isDraggingGraphicalOperator = true;
       const initialTargetValue = resolved.target.properties[resolved.config.property];
       const initialDisplayValue = component.properties.value;
-      const applyPointer = (pointer: PointerEvent, preview: boolean): void => {
+      const minimum = resolved.config.minimum ?? 0;
+      const maximum = resolved.config.maximum ?? 100;
+      const rawStartValue = Number(initialTargetValue ?? initialDisplayValue ?? minimum);
+      const startValue = Number.isFinite(rawStartValue)
+        ? Math.max(Math.min(minimum, maximum), Math.min(Math.max(minimum, maximum), rawStartValue))
+        : minimum;
+      const localX = (pointer: PointerEvent): number => {
+        const body = el.querySelector<SVGGElement>(".component__symbol-body");
+        const matrix = body?.getScreenCTM();
+        if (matrix) return new DOMPoint(pointer.clientX, pointer.clientY).matrixTransform(matrix.inverse()).x;
         const rect = el.getBoundingClientRect();
-        const ratio = Math.max(0, Math.min(1, (pointer.clientX - rect.left) / Math.max(1, rect.width)));
-        const minimum = resolved.config.minimum ?? 0;
-        const maximum = resolved.config.maximum ?? 100;
-        const value = minimum + ratio * (maximum - minimum);
+        return (pointer.clientX - rect.left) * 212 / Math.max(1, rect.width);
+      };
+      const startX = localX(event);
+      let moved = false;
+      const applyPointer = (pointer: PointerEvent, preview: boolean): void => {
+        const delta = localX(pointer) - startX;
+        if (!moved && Math.abs(delta) < 1) return;
+        moved = true;
+        const value = Math.max(Math.min(minimum, maximum), Math.min(Math.max(minimum, maximum), startValue + delta * (maximum - minimum) / 198));
         applyGraphicalOperatorAction(component, "input", value, preview);
         el.classList.add("component--operator-active");
       };
-      applyPointer(event, true);
       const onMove = (moveEvent: PointerEvent): void => applyPointer(moveEvent, true);
       const finish = (upEvent: PointerEvent): void => {
         el.removeEventListener("pointermove", onMove);
         el.removeEventListener("pointerup", finish);
         el.removeEventListener("pointercancel", cancel);
         el.classList.remove("component--operator-active");
-        applyPointer(upEvent, false);
+        if (moved) applyPointer(upEvent, false);
+        isDraggingGraphicalOperator = false;
       };
       const cancel = (): void => {
         el.removeEventListener("pointermove", onMove);
         el.removeEventListener("pointerup", finish);
         el.removeEventListener("pointercancel", cancel);
         el.classList.remove("component--operator-active");
+        isDraggingGraphicalOperator = false;
         // Preview is intentionally transient. If the pointer gesture is
         // cancelled, restore both local models so the next paint cannot leave
         // a value on screen that was never committed to the project/Core.
@@ -8533,6 +8556,24 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
   return el;
 }
 
+/** Mirror the device and terminals while keeping every SVG reading legible.
+ * A wrapper preserves any rotation/transform already defined on the text itself. */
+function keepSvgReadoutsUpright(root: SVGElement, flipH: boolean, flipV: boolean): void {
+  if (!flipH && !flipV) return;
+  root.querySelectorAll<SVGElement>("text, foreignObject").forEach((readout) => {
+    if (readout.tagName.toLowerCase() === "text" && readout.closest("foreignObject")) return;
+    const parent = readout.parentNode;
+    if (!parent) return;
+    const wrapper = document.createElementNS(SVG_NS, "g");
+    wrapper.classList.add("component__readable-overlay");
+    wrapper.style.transformBox = "fill-box";
+    wrapper.style.transformOrigin = "center";
+    wrapper.style.transform = `scale(${flipH ? -1 : 1}, ${flipV ? -1 : 1})`;
+    parent.insertBefore(wrapper, readout);
+    wrapper.appendChild(readout);
+  });
+}
+
 /** Atualização VISUAL pura do `.component` já existente -- roda em TODO `render()` (ver
  * `componentElementsById`), nunca toca os listeners de `createComponentElement`. Reconstrói o
  * `<svg>` inteiro (símbolo/pinos/seleção) porque rotação/flip/propriedades podem ter mudado desde a
@@ -8569,8 +8610,6 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
 
   // CSS aplica da direita pra esquerda: scale (flip) primeiro, rotate depois -- mesma ordem usada
   // em flipPoint/rotatePoint pra calcular posição de pino, ver componentPinLocalPosition.
-  const scaleX = component.flipH ? -1 : 1;
-  const scaleY = component.flipV ? -1 : 1;
   const localOrigin = componentLocalOrigin(component.typeId, symbolProperties);
   // Caixa REAL (canvas-local, já rotacionada/espelhada) -- usada pro hit-box do `<div>` (o que o
   // navegador de fato considera clicável) e pro `viewBox`, ver `rotatedComponentLocalBox`. `bodyGroup`
@@ -8625,6 +8664,7 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
     : isMissingSubcircuitRef || isUnknownComponent
       ? missingSubcircuitPlaceholderSvg(box)
       : packageSymbolSvg(component.typeId, symbolProperties, component.id, boardVariant) ?? catalogEntry?.symbolSvg ?? componentSymbolSvg(component.typeId, symbolProperties);
+  keepSvgReadoutsUpright(bodyGroup, Boolean(component.flipH), Boolean(component.flipV));
   const dialInteraction = viewSpecInteractionFor(component.typeId, "dragAngular");
   const dialFocusTarget = bodyGroup.querySelector<SVGElement>(".viewspec-interaction-dragAngular");
   if (dialInteraction && dialFocusTarget) {
@@ -8696,12 +8736,6 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
     });
   });
   svg.appendChild(bodyGroup);
-  const tunnelLabel = bodyGroup.querySelector<SVGTextElement>(".tunnel-name");
-  if (tunnelLabel && (component.flipH || component.flipV)) {
-    tunnelLabel.style.transformBox = "fill-box";
-    tunnelLabel.style.transformOrigin = "center";
-    tunnelLabel.style.transform = `scale(${scaleX}, ${scaleY})`;
-  }
 
   if (isComponentSelected(component.id)) {
     // Coordenadas ABSOLUTAS de `rotatedBox` (não `0%/100%`) -- percentual de POSIÇÃO em SVG (`x`/`y`)
@@ -9521,10 +9555,32 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
       return;
     }
     component.properties[field.key] = value;
+    // A manual slider's current OUT must stay inside its configured process
+    // range, including immediately after an inspector edit to either limit.
+    let clampedSliderValue: number | undefined;
+    if (component.typeId === "graphics.slider" &&
+        (field.key === "value" || field.key === "actionMin" || field.key === "actionMax")) {
+      const minimum = Number(component.properties.actionMin ?? 0);
+      const maximum = Number(component.properties.actionMax ?? 100);
+      const current = Number(component.properties.value ?? 50);
+      if (Number.isFinite(minimum) && Number.isFinite(maximum) && minimum <= maximum && Number.isFinite(current)) {
+        const clamped = Math.max(minimum, Math.min(maximum, current));
+        if (clamped !== current) {
+          component.properties.value = clamped;
+          if (field.key === "value") value = clamped;
+          else clampedSliderValue = clamped;
+        }
+      }
+    }
     if (options.onPropertyChange) {
       options.onPropertyChange(field.key, value);
+      if (clampedSliderValue !== undefined) options.onPropertyChange("value", clampedSliderValue);
     } else {
       send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: field.key, value });
+      if (clampedSliderValue !== undefined) {
+        send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty",
+          componentId: component.id, name: "value", value: clampedSliderValue });
+      }
       persistState();
       // Sem isto, o corpo do símbolo (curva do gate, bolha de inversão, etc. -- tudo que depende de
       // `properties` mas não de `pins[]`) só reaparecia depois de ALGUM outro gatilho de render

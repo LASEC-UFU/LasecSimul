@@ -328,7 +328,8 @@ void hartComponentsUseGenericInfrastructureForInputAndOutput() {
     check(plan != nullptr && plan->signal && plan->signal->engine,
           "sessao com dois HartCommunicationComponent reais fiados compila (nenhum caso especial de HART no compilador)");
 
-    session.scheduler().runUntil(1);
+    // HART signal ports use a 1 ms process sampling period.
+    session.scheduler().runUntil(1'000'000);
 
     const std::string receiverBlock = signalPortBlockId(receiver, "setpoint");
     const double receiverObserved = session.signalRuntime().real(session.signalRuntime().output(receiverBlock));

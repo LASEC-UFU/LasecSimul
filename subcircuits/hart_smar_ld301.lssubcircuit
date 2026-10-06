@@ -106,7 +106,7 @@
     {
       "id": "differential_pressure",
       "typeId": "control.subtract",
-      "properties": { "inputs": "high,low", "samplePeriodNs": 1000 },
+      "properties": { "inputs": "high,low", "samplePeriodNs": 1000000 },
       "visual": { "x": 240, "y": 180, "rotation": 0 }
     },
     {
