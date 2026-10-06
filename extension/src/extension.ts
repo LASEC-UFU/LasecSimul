@@ -2518,6 +2518,17 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
         openSchematicEditor,
         syncSchematicPanel,
       });
+      // E2E: exercise project replacement while the webview is already open.
+      if (process.env.LASECSIMUL_E2E_REOPEN_FIXTURE) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        await openProjectFile(process.env.LASECSIMUL_E2E_REOPEN_FIXTURE, {
+          extensionUri: context.extensionUri,
+          beforeOpen: closeAllMcuSerialMonitors,
+          resolveExternalDeviceReferences,
+          openSchematicEditor,
+          syncSchematicPanel,
+        });
+      }
     }
   });
 

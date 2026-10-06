@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    { "id": "left", "typeId": "passive.resistor", "label": "R1", "properties": { "resistance": 1000 }, "visual": { "x": 100, "y": 140, "rotation": 0 } },
+    { "id": "right", "typeId": "passive.resistor", "label": "R2", "properties": { "resistance": 1000 }, "visual": { "x": 320, "y": 140, "rotation": 0 } }
+  ],
+  "topology": { "revision": 0, "nodes": [], "conductors": [] },
+  "visual": { "components": [], "wires": [], "viewport": { "x": 0, "y": 0, "zoom": 1 } },
+  "simulationSettings": { "frequencyHz": 1000, "timeScale": 1, "paused": false }
+}

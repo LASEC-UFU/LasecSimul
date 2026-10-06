@@ -366,7 +366,10 @@ export async function openRecentProjectCommand(options: {
   state.schematicState = projectToWebviewState(project, path.dirname(picked.filePath));
   await resolveProjectSubcircuitReferences(path.dirname(picked.filePath));
   await options.resolveExternalDeviceReferences?.(path.dirname(picked.filePath));
-  if (!state.schematicPanel) options.openSchematicEditor(options.extensionUri);
+  // Opening a project replaces the entire document. Send a full snapshot even
+  // when the schematic panel already exists: an incremental patch assumes the
+  // webview still has the previous document and can preserve stale topology.
+  options.openSchematicEditor(options.extensionUri);
   options.syncSchematicPanel();
   markProjectSaved();
   await addRecentProjectPath(picked.filePath);
@@ -557,7 +560,9 @@ export async function openProjectFile(filePath: string, options: {
   state.schematicState = projectToWebviewState(project, path.dirname(filePath));
   await resolveProjectSubcircuitReferences(path.dirname(filePath));
   await options.resolveExternalDeviceReferences?.(path.dirname(filePath));
-  if (!state.schematicPanel) options.openSchematicEditor(options.extensionUri);
+  // Opening a project replaces the whole document, including its conductors.
+  // A full snapshot repairs any stale state retained by an existing webview.
+  options.openSchematicEditor(options.extensionUri);
   options.syncSchematicPanel();
   markProjectSaved();
   await addRecentProjectPath(filePath);
