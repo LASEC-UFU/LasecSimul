@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    { "id": "wired-left", "typeId": "passive.resistor", "properties": { "resistance": 1000 }, "visual": { "x": 500, "y": 600, "rotation": 0 } },
+    { "id": "wired-right", "typeId": "passive.resistor", "properties": { "resistance": 1000 }, "visual": { "x": 650, "y": 600, "rotation": 0 } },
+    { "id": "left", "typeId": "passive.resistor", "properties": { "resistance": 1000 }, "visual": { "x": 500, "y": 700, "rotation": 0 } },
+    { "id": "right", "typeId": "passive.resistor", "properties": { "resistance": 1000 }, "visual": { "x": 650, "y": 700, "rotation": 0 } }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": [
+      { "id": "wire-outside-svg-viewport", "from": { "kind": "port", "componentId": "wired-left", "pinId": "pin-2" }, "to": { "kind": "port", "componentId": "wired-right", "pinId": "pin-1" }, "vertices": [] }
+    ]
+  },
+  "visual": {
+    "components": [],
+    "wires": [],
+    "viewport": { "x": -900, "y": -1000, "zoom": 2 }
+  },
+  "simulationSettings": { "frequencyHz": 1000, "timeScale": 1, "paused": false }
+}
