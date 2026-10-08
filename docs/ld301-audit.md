@@ -515,4 +515,5 @@ execução serial todos passam — são do ambiente, não regressões.
 5. Cmd 11 genérico (byte de status antes da identidade; não silencia com tag divergente) e endereço de broadcast — fora do log.
 6. Validação visual no PACTware/DTM (§8).
 7. Laço elétrico: fonte de corrente ideal (sem tensão mínima/lift‑off).
-8. TT301 e FY301 ainda são presets built‑in antigos (a refazer como subcircuitos do dispositivo padrão).
+8. O TT301 já é subcircuito do dispositivo padrão (`docs/tt301-audit.md`); o FY301 ainda é preset built‑in antigo (a refazer).
+9. Entradas HART por sinal: só uma porta com fio de sinal de verdade é amostrada a cada passo. Uma porta sem fio não zera mais o PV do aparelho; antes isso deixava o `hart_wire_loop` em 3,8 mA.

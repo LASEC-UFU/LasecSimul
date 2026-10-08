@@ -801,6 +801,8 @@ private:
         uint64_t planGeneration = UINT64_MAX;
         uint64_t topologyRevision = UINT64_MAX;
         std::vector<uint32_t> hartIndices;
+        /** Per entry of hartIndices: the input ports a generic signal wire actually drives. */
+        std::vector<std::vector<std::string>> hartWiredInputs;
         std::vector<uint32_t> sensorIndices;    ///< signal sensors with a generic wire out of "value"
         std::vector<uint32_t> actuatorIndices;  ///< signal actuators with a generic wire into "command"
     } m_bridgeCache;

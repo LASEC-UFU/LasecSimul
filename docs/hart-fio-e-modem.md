@@ -96,6 +96,16 @@ laço**.
   O pedido não aparece sobre o resistor externo: o transmissor é uma fonte de
   corrente, então a tensão em série do modem não muda a corrente do laço. Esse
   é o comportamento físico de um modem em série.
+- **Como ligar** (propriedade **Entrada** do osciloscópio):
+  - **Convencional**: CH1 num lado do resistor e **G** no outro. G é a referência
+    comum dos 4 canais, como a garra de terra de um osciloscópio de bancada.
+    Todos os canais passam a medir contra esse ponto.
+  - **Diferencial** (2 canais isolados): CH1+ (borne 1) e CH1− (borne 2) nos dois
+    lados do resistor; CH2+/CH2− (bornes 3 e 4) podem medir ao mesmo tempo os
+    terminais do transmissor. Nada é ligado ao terra e G fica sem uso, como
+    uma ponta diferencial.
+- O transmissor só modula quando **responde** a um pedido do mestre (PC pelo
+  modem). Sem tráfego HART, o traço é só o nível DC.
 - **Intervalo de amostra do osciloscópio**: para ver bem a senoide, use 10–20 µs.
   O transmissor e o modem calculam a portadora a cada 20 µs, e o padrão de
   50 µs fica serrilhado.

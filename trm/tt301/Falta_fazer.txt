@@ -1,0 +1,49 @@
+Abaixo está o roteiro, um item por vez, para fechar o TT301. Ele parte do que a captura atual já cobre. A captura tem os comandos universais 0, 12, 13, 14, 15 e 16 e os do fabricante 130, 131, 136, 138, 140, 152, 162–165, 168, 169, 173, 186, 187, 198 e 223. Todo o resto o simulador hoje responde por inferência, pelas regras do dispositivo padrão ou do LD301.
+
+Preparação (vale para todos os itens)
+Mesma bancada da captura atual: PACTware → modem → TT301, com o mesmo programa que gerou saida do trm hart TT301.txt, gravando SERIAL RX e UDP RX.
+Um log por item, com o nome do item (ex.: tt301_01_burnout_low.txt). Se preferir um log único, escreva uma linha de marcação antes de cada item, como você fez com "Fazendo o topology scan - fig01.png".
+Para cada item, mande:
+o log;
+o print da tela do DTM antes de aplicar e depois de aplicar;
+uma foto do LCD do TT301, quando o item mexer no display ou na saída;
+a corrente do laço medida no multímetro, quando o item mexer na saída.
+Uma mudança por vez. Ao terminar cada item, volte a configuração ao que estava (ou me diga que não voltou). Assim cada log mostra um único efeito.
+Se tiver, ligue nos bornes do sensor um resistor de 100 Ω (≈ 0 °C num Pt100) ou de 138,5 Ω (≈ 100 °C), em 2 fios. Com isso o TT301 sai do burnout e mede um PV de verdade. Sem resistor, os itens marcados com 🔌 ficam presos no burnout.
+Grupo A: fecham as inferências que já estão no simulador
+#	O que fazer no DTM	O que eu fecho com isso
+A1	Configuration › Burnout = Low → aplicar. Depois volte para High.	Código de Low no Comando 163/162 e no byte 0 do Comando 15 (hoje suponho 00) e a corrente de Low no multímetro (suponho 3,6 mA).
+A2	Configuration › W.Protect = read only (ou o nome equivalente) → aplicar. Depois tente gravar algo simples, como o Tag. Por fim volte a proteção para gravável.	Qual código bloqueia (suponho 00), o código de erro que o aparelho devolve na escrita recusada (suponho RC 7) e o byte 15 do Comando 15.
+A3	LCD › First Variable = PV(%) → aplicar. Depois repita com Out (mA) e com Second Variable = None. Inclua foto do LCD.	Confirma os códigos 4, 0 e 251 do Comando 165 e como o vidro mostra cada um.
+A4	Sensor › troque um campo por vez e aplique, nesta ordem:<br>• RTD Pt100 IEC com 3 fios<br>• RTD Pt100 IEC com 4 fios<br>• RTD Pt100 IEC diferencial<br>• outro RTD (Pt100 DIN, Pt500, Ni120, Cu10…, quantos o DTM oferecer)<br>• termopares K, T, E, B, R, S, N, L, U<br>• mV<br>• Ohm<br>Depois de cada um, abra a tela Range e me mande o print.	Bytes do Comando 131 de cada sensor (hoje só Pt100 IEC e J são capturados) e os limites, a faixa e o span mínimo que o aparelho carrega sozinho em cada troca. Hoje esses valores vêm da Tabela 6.1 do manual.
+A5	Sensor › com termopar, Cold Junction = Disabled e depois Enabled.	Valores dos Comandos 186/187 e o efeito no PV.
+A6	PID › ligar o PID. Depois, uma escrita por vez: Kp, Tr, Td, Auto/Manual, SP. Desligue no final.	Comandos 137, 139, 141 e 142 e o formato de cada um. Hoje o 139 e o 142 vêm do LD301.
+A7	Gravar o mesmo Tag duas vezes seguidas e depois ler a identificação (Comando 0).	Se o contador de configuração conta uma escrita repetida. É a única diferença que sobrou no replay (troca #101).
+Grupo B: comandos que o TT301 real nunca respondeu na captura
+#	O que fazer no DTM	Comando
+B1	Deixe a tela Monitoring (ou Process Variables) aberta uns 10 s. 🔌	1, 2 e 3 (PV, corrente, %, variáveis dinâmicas)
+B2	Abra Device Variables / Dynamic Variables (HART 7).	9 e 33. Fecha os códigos das 9 variáveis de dispositivo (hoje suponho PV = 246 e borneira = 1).
+B3	Abra Additional/Device Status (Diagnóstico), com o sensor aberto e depois com o resistor. 🔌	48: quais bits de status adicionais o burnout liga.
+B4	Altere o Damping (ex.: 2 s).	34
+B5	Altere a Unidade para °F e depois volte para °C.	44: confere a conversão da faixa.
+B6	Faixa: escreva LRV/URV manualmente; depois use Set LRV/URV pelo valor aplicado. 🔌	35, 36 e 37
+B7	Loop Test / Corrente fixa: 4, 12 e 20 mA (multímetro em cada) e depois sair.	40: incluindo o bit de corrente fixa e a foto do LCD em "Fix".
+B8	Trim de corrente (4 e 20 mA), se o DTM oferecer.	45 e 46
+B9	Calibration › LO−/HI+ (trim do sensor com referência) e a tela Methods (a fig09 não veio). 🔌	Comandos de calibração e trim do sensor
+B10	Altere o Polling Address para 1 e volte para 0. Foto do LCD e multímetro com 1.	6 e 7: confirma se a corrente fica parada em 4 mA no multidrop.
+B11	Grave o Long Tag (HART 7), se o DTM tiver.	20 e 22
+B12	Maintenance › Operations Counter.	Comando e layout dos contadores
+B13	Reset de configuração alterada ou Device Reset (comando 38/42), se o DTM tiver.	38 e 42
+B14	Burst mode: ligar, deixar uns 5 s e desligar, se o DTM permitir.	103 a 109
+Grupo C: comportamento físico e display (sem DTM)
+#	O que fazer	O que fecha
+C1	Foto do LCD durante a inicialização do TT301 (ligar a fonte).	Sequência de inicialização do vidro
+C2	Com o resistor (🔌), tire o sensor com o aparelho ligado. Filme ou fotografe o LCD e meça a corrente.	Quanto tempo leva para entrar em burnout, o AL_0 e o ACK
+C3	Se o TT301 tiver os alarmes AL_H/AL_L configuráveis pelo DTM, configure um e provoque. 🔌	Alarmes 1 e 2, que hoje não são simulados
+C4	Ajuste local pelo menu do display (chave magnética), se você usar. Uma foto por tela.	Menu local (Tabela 4.3 do manual)
+Ordem que eu sugiro
+A1, A2, A3, A7 primeiro: são rápidos e fecham comportamentos que o simulador já faz por inferência.
+A4: é o maior, mas é o que mais aparece em aula (troca de sensor).
+B1, B2, B3, B4, B5, B6, B7: os comandos universais e de prática comum que todo mestre HART usa.
+O resto quando der.
+Pode me mandar por partes, um item ou um grupo por vez. A cada log eu confiro byte a byte, ajusto o subcircuito ou a DSL e incluo a troca no replay do teste hart_tt301. Quer que eu grave este roteiro também na seção 7 de docs/tt301-audit.md?

@@ -35,6 +35,15 @@ namespace lasecsimul::components {
  * `filter`/`autoSC`/`tracks` continuam expostos como propriedades pra bater "todas as propriedades"
  * do original, mesmo sem efeito visual ainda (decisão de escopo inalterada, só a base de tempo do
  * histórico mudou).
+ *
+ * **Entrada (`inputMode`)**, como nos instrumentos reais:
+ * - `single` (convencional, padrão): os 4 canais medem contra o borne G, que é a referência comum
+ *   do aparelho (num osciloscópio de bancada, o terra). Sem G ligado, os canais medem contra o
+ *   terra do circuito.
+ * - `differential`: 2 canais com entrada diferencial isolada (ponta diferencial / canais
+ *   isolados): CH1 = pino 1 (+) − pino 2 (−), CH2 = pino 3 (+) − pino 4 (−). Nenhum borne é ligado
+ *   ao terra e G não é usado, então medir sobre um resistor de um laço 4-20 mA flutuante não
+ *   altera o circuito. O histórico mantém 4 colunas; as 2 últimas ficam em 0.
  */
 class Oscope final : public IComponentModel {
 public:
@@ -60,6 +69,25 @@ public:
     void stamp(MnaMatrixView& matrix) override {
         const uint64_t now = m_scheduler.nowNs();
         const bool dueSample = now - m_lastSampleNs >= m_sampleIntervalNs;
+        if (m_differential) {
+            for (size_t ch = 0; ch < kChannelCount; ++ch) {
+                if (ch < kDifferentialChannels) {
+                    const Pin& plus = m_pins[2 * ch];
+                    const Pin& minus = m_pins[2 * ch + 1];
+                    m_lastVoltages[ch] = matrix.getNodeVoltage(plus) - matrix.getNodeVoltage(minus);
+                    matrix.addConductance(plus, minus, kInputConductance);
+                } else {
+                    m_lastVoltages[ch] = 0.0;
+                }
+                if (dueSample) m_history[ch][m_writeIndex] = Sample{now, m_lastVoltages[ch]};
+            }
+            if (dueSample) {
+                m_lastSampleNs = now;
+                m_writeIndex = (m_writeIndex + 1) % kHistoryCapacity;
+                if (m_count < kHistoryCapacity) ++m_count;
+            }
+            return;
+        }
         const double reference = m_referenceConnected ? matrix.getNodeVoltage(m_pins[kReferencePin]) : 0.0;
         for (size_t ch = 0; ch < kChannelCount; ++ch) {
             m_lastVoltages[ch] = matrix.getNodeVoltage(m_pins[ch]) - reference;
@@ -125,7 +153,20 @@ public:
         const PropertySchema tracksSchema = schemaById(schemas, "tracks");
         const PropertySchema sampleIntervalSchema = schemaById(schemas, "sampleIntervalNs");
         const PropertySchema tunnelsSchema = schemaById(schemas, "tunnels");
+        const PropertySchema inputModeSchema = schemaById(schemas, "inputMode");
         return {
+            PropertyDefinition{
+                inputModeSchema,
+                [this] { return PropertyValue{std::string(m_differential ? "differential" : "single")}; },
+                [this, inputModeSchema](const PropertyValue& v) -> PropertyBindResult {
+                    if (const std::optional<std::string> error = validatePropertyValue(inputModeSchema, v)) return {false, *error};
+                    m_differential = std::get<std::string>(v) == "differential";
+                    m_lastVoltages.fill(0.0);
+                    m_count = 0;
+                    m_writeIndex = 0;
+                    return {true, {}};
+                },
+            },
             PropertyDefinition{
                 filterSchema,
                 [this] { return PropertyValue{m_filter}; },
@@ -186,6 +227,18 @@ public:
     }
 
     static std::vector<PropertySchema> propertySchema() {
+        PropertySchema inputMode;
+        inputMode.id = "inputMode";
+        inputMode.label = "Entrada";
+        inputMode.group = "Leitura";
+        inputMode.valueKind = PropertyValueKind::String;
+        inputMode.editor = "select";
+        inputMode.defaultValue = std::string("single");
+        inputMode.options = {{"single", "Convencional (4 canais, referência G)"},
+                             {"differential", "Diferencial (2 canais isolados)"}};
+        // Troca quais bornes o instrumento acopla: o grupo elétrico é refeito com a simulação parada.
+        inputMode.flags = PropertySchemaAffectsTopology;
+
         PropertySchema filter;
         filter.id = "filter";
         filter.label = "Filtro";
@@ -223,7 +276,7 @@ public:
         sampleInterval.defaultValue = 50000.0;
         sampleInterval.minValue = 1.0;
 
-        return {filter, autoSc, tracks, sampleInterval, instrument_tunnels::schema()};
+        return {inputMode, filter, autoSc, tracks, sampleInterval, instrument_tunnels::schema()};
     }
 
 private:
@@ -244,6 +297,7 @@ private:
 
     simulation::Scheduler& m_scheduler;
     static constexpr size_t kReferencePin = kChannelCount;
+    static constexpr size_t kDifferentialChannels = kChannelCount / 2;
     std::array<Pin, kPinCount> m_pins;
     std::array<double, kChannelCount> m_lastVoltages{};
     std::array<std::array<Sample, kHistoryCapacity>, kChannelCount> m_history{};
@@ -256,6 +310,7 @@ private:
     int m_tracks = 4;
     std::array<std::string, kChannelCount> m_tunnelNames{};
     bool m_referenceConnected = false;
+    bool m_differential = false;
 };
 
 } // namespace lasecsimul::components

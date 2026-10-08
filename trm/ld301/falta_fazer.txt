@@ -1,0 +1,63 @@
+O pente fino do LD301 está pronto, no mesmo formato do TT301. Ele parte da auditoria (docs/ld301-audit.md) e das 23 capturas versionadas.
+
+O que já está fechado (não precisa refazer)
+Comandos universais já capturados: 0, 1, 12, 13, 14, 15, 16, 17 e 18.
+Comandos de prática comum já capturados: 33, 34, 40, 43 e 47.
+Comandos proprietários já capturados: 128, 129, 133–136, 138, 140, 142, 156, 157, 160, 163–166, 173, 176–180, 183, 185–191, 203 e 204.
+Escritas já capturadas: Flange e selo remoto; Display (1ª e 2ª variável); Tabela (pontos e Y2); Caracterização On/Off; Function Sqrt/Linear; corte Hard/Bumpless e 6→5; User Unit On/Off; Totalization (vazão máxima, fator, On/Off).
+Replay: 130 trocas exatas de 135; as 5 restantes são equivalentes, por defeitos da própria captura.
+Preparação (a mesma do TT301)
+Mesma bancada: pactware_udp_bridge.py, com SERIAL RX e UDP RX.
+Um log por item, com o nome do item (ex.: ld301_A1_pid_on.txt), ou uma linha de marcação antes de cada item.
+Para cada item, mande:
+o log;
+o print do DTM antes e depois de aplicar;
+foto do LCD, quando o item mexer no display;
+a corrente no multímetro, quando o item mexer na saída.
+Uma mudança por vez, e volte a configuração ao que estava no final.
+🔧 = precisa de pressão aplicada (bomba manual ou calibrador nas tomadas H/L). Sem isso o PV fica em ~0 e a saída presa em 3,8 mA. Se não tiver como aplicar pressão, pule esses itens por enquanto.
+Grupo A: fecham o que hoje é inferência no simulador
+#	O que fazer no DTM	O que eu fecho com isso
+A1	PID › ligar o controlador (modo PID) e aplicar. Depois, uma escrita por vez: Kp, Tr, Td, SP, Auto ↔ Manual e MV em manual. Desligue no final.	Comandos de escrita do PID. Significado de pid.operatingMode, pid.modeCode e do byte do Comando 139 (hoje desconhecido). Condição do aviso RC 112. Códigos 6, 7 e 8 do display (SP%, SP, ER%) com foto do LCD.
+A2	Characterization (já On) › editar um ponto (medido e desejado) e aplicar. Depois mudar a quantidade de pontos.	Comandos de escrita dos pontos (só o modo On/Off está capturado).
+A3	Totalization On › deixar uns 30 s, lendo a tela 3 a 4 vezes, e depois Reset do total. 🔧 ajuda, porque o total só cresce com vazão.	Dinâmica de acumulação (hoje o total fica parado) e o comando de reset.
+A4	Depois de A1, A2 e A3, abra Maintenance › Operation Counters.	Quais contadores do Comando 166 sobem com escritas de PID, Função, Totalização e Caracterização. Hoje só os ligados aos comandos padrão incrementam.
+A5	Configuration › Alarm = High e aplicar (multímetro com o sensor em falha, se der). Depois volte para Low.	Código do Comando 203 para High e a corrente de burnout High medida no aparelho. Hoje só existe a do manual.
+A6	Proteção de escrita = Sim pelo DTM. Depois tente gravar o Tag e volte para Não.	Qual comando liga a proteção, o código de erro (RC) devolvido na escrita recusada e o contador de proteção de escrita no Comando 166.
+A7	Calibration › Lower Trim e Upper Trim com pressão de referência. Depois Trim de temperatura. 🔧	Comandos dos trims (hoje só o Zero, Comando 43, está capturado) e os últimos pontos de calibração no Comando 128.
+A8	Calibration › Trim de corrente 4 mA e 20 mA (Output Trim), com o multímetro.	Comandos 45 e 46 e os contadores Trim 4 mA / Trim 20 mA (hoje estão pelo manual).
+A9	Factory (a tela que você tiver acesso; senha/nível).	Comandos e o byte Senha/Nível do Comando 166 (= 3).
+Grupo B: comandos universais e de prática comum que o LD301 real nunca respondeu
+#	O que fazer no DTM	Comando
+B1	Tela Monitoring (ou Process Variables) aberta uns 10 s. 🔧 opcional	2 e 3 (corrente e %, variáveis dinâmicas PV/SV/TV/QV)
+B2	Range: escreva LRV/URV à mão; depois Set LRV/URV pela pressão aplicada. 🔧 para o segundo	35, 36 e 37, incluindo as rejeições (faixa acima de 125 % do limite, span abaixo de 90 % do mínimo)
+B3	Altere a unidade de pressão (mmH2O → kPa) e volte.	44: confere a conversão da faixa e o texto da unidade no LCD
+B4	Polling Address 1 e volte para 0. Foto do LCD e multímetro com 1.	6: layout HART 5, de 1 byte (hoje sigo a especificação), e corrente parada em 4 mA
+B5	Abra Device Status / Diagnóstico, com uma condição anormal (sensor fora da faixa ou caracterização On).	48: explica o bit 0x10 (More Status Available), que apareceu nas capturas sem causa conhecida
+B6	Reset do dispositivo e Reset de Configuration Changed, se o DTM tiver.	42 e 38
+B7	Self test, se o DTM tiver.	41
+B8	Grave o Final Assembly Number (Main board serial).	19
+B9	Mudar número de preâmbulos de resposta, se o DTM permitir.	59
+B10	No PACTware, busca por Tag (Topology scan por tag), se houver a opção.	11, que hoje é genérico
+Grupo C: físico e display (sem DTM)
+#	O que fazer	O que fecha
+C1	Fotos do LCD em cada página: PV%, OUT, PRES, PV na unidade do usuário, TEMP, Total.	Texto exato de cada página e abreviações de unidade além de mmH2O
+C2	Foto do LCD ao ligar (sequência de inicialização).	Confere 5 00 → LD301 → V7.02
+C3	Forçar saturação: pressão acima do URV e abaixo do LRV. Foto e multímetro. 🔧	SAT no LCD e 20,5 mA / 3,8 mA medidos
+C4	Function Sqrt: aplicar 25 % de pressão. Multímetro e foto. 🔧	Valida no aparelho a curva 10√X (25 % → 12 mA) e o corte
+C5	Fonte variável: baixar a tensão até o LD301 parar de funcionar e anotar o valor.	Tensão mínima de operação; hoje a fonte de corrente é ideal
+C6	Ajuste local com a chave magnética (zero/span), se você usar. Uma foto por tela.	Ajuste local (⇕) e contadores ligados a ele
+O que eu faço sem precisar de captura
+Teste hart_wire_loop quebrado (8 de 26 falhas):
+A auditoria de 2026-10-05 registra 26/26; o teste quebrou depois.
+Pelo que vi, desde a mudança do LD301 para receber a pressão pelos sinais HIGH/LOW, o teste não liga esses sinais. Com isso a pressão fica 0, a saída vai para 3,8 mA e aparecem 0,95 V no resistor em vez de 3 V.
+Vou corrigir o teste para alimentar HIGH/LOW.
+Validação visual no PACTware com o LD301 simulado (§8, ainda não verificada): preciso que você abra as telas, porque o PACTware está na sua sessão RDP e eu não mexo nela.
+Docs: a frase da §10.8 da auditoria, que ainda diz que o TT301 é preset antigo, e a §9 com os números de hoje.
+Ordem que eu sugiro
+A5, A6, B4, B3: rápidos e sem pressão aplicada.
+A1 (PID) e A4 (contadores): fecham o maior bloco de inferências.
+B1, B2, B5: comandos que todo mestre HART usa.
+A2, A3: caracterização e totalização.
+Itens 🔧 e grupo C, quando tiver pressão de referência na bancada.
+Quer que eu já corrija o hart_wire_loop enquanto você faz as capturas?

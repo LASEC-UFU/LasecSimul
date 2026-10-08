@@ -171,62 +171,75 @@ public:
         // fonte de tensão ideal) têm diagonal exatamente 0 por construção (MNA padrão) -- escala 1,
         // sem tocar essas linhas, que já são bem-condicionadas sozinhas (±1 nos off-diagonais).
         const Eigen::Index n = m_admittance.rows();
-        m_scale = Eigen::VectorXd::Ones(n);
-        for (Eigen::Index i = 0; i < n; ++i) {
-            const double diag = std::abs(m_admittance(i, i));
-            if (diag > 0.0) m_scale(i) = 1.0 / std::sqrt(diag);
-        }
-        // Reutiliza o buffer e escala in-place. A expressão S*A*S criava duas matrizes diagonais
-        // temporárias e um resultado novo em toda refatoração.
-        m_scaledAdmittance = m_admittance;
-        for (Eigen::Index column = 0; column < n; ++column) {
-            const double columnScale = m_scale(column);
-            for (Eigen::Index row = 0; row < n; ++row)
-                m_scaledAdmittance(row, column) *= m_scale(row) * columnScale;
-        }
-
-        applyFloatingGauge(m_admittance, m_rhs, static_cast<Eigen::Index>(m_nodeIndices.size()), m_scaledAdmittance,
-                           m_gaugeWorkspace);
-
-        if (static_cast<size_t>(n) >= kSparseThreshold) {
-            Eigen::SparseMatrix<double> sparse = m_scaledAdmittance.sparseView(0.0, 1e-15);
-            sparse.makeCompressed();
-            size_t patternHash = static_cast<size_t>(sparse.nonZeros());
-            for (int outer = 0; outer < sparse.outerSize(); ++outer)
-                for (Eigen::SparseMatrix<double>::InnerIterator it(sparse, outer); it; ++it)
-                    patternHash ^= (static_cast<size_t>(it.row()) * 1315423911u + static_cast<size_t>(it.col()))
-                                   + 0x9e3779b9u + (patternHash << 6) + (patternHash >> 2);
-            if (!m_sparseFactorization) m_sparseFactorization = std::make_unique<SparseSolver>();
-            if (!m_sparsePatternInitialized || patternHash != m_sparsePatternHash) {
-                m_sparseFactorization->analyzePattern(sparse);
-                m_sparsePatternHash = patternHash;
-                m_sparsePatternInitialized = true;
+        // A circuit whose only tie to ground is a 1 GOhm instrument input (oscilloscope G, probe,
+        // frequency meter, logic analyzer) next to a 1e6 S ammeter has a ~1e15 condition number:
+        // strictly it is grounded, numerically it is singular and the whole group used to read 0 V.
+        // Only then retry treating such a nearly floating block as floating: its differences and
+        // currents are unchanged and the absolute level of a 1 GOhm-grounded loop is arbitrary.
+        // Circuits that factor today never take the retry.
+        int strictReferences = -1;
+        for (const double floatingTolerance : {1e-12, kNearlyFloatingTolerance}) {
+            m_scale = Eigen::VectorXd::Ones(n);
+            for (Eigen::Index i = 0; i < n; ++i) {
+                const double diag = std::abs(m_admittance(i, i));
+                if (diag > 0.0) m_scale(i) = 1.0 / std::sqrt(diag);
             }
-            m_sparseFactorization->factorize(sparse);
-            m_singular = m_sparseFactorization->info() != Eigen::Success;
-            m_useSparse = !m_singular;
-            m_factorization.reset();
-            m_lastRcond = m_singular ? 0.0 : 1.0;
+            // Reutiliza o buffer e escala in-place. A expressão S*A*S criava duas matrizes diagonais
+            // temporárias e um resultado novo em toda refatoração.
+            m_scaledAdmittance = m_admittance;
+            for (Eigen::Index column = 0; column < n; ++column) {
+                const double columnScale = m_scale(column);
+                for (Eigen::Index row = 0; row < n; ++row)
+                    m_scaledAdmittance(row, column) *= m_scale(row) * columnScale;
+            }
+
+            const int references = applyFloatingGauge(m_admittance, m_rhs, static_cast<Eigen::Index>(m_nodeIndices.size()),
+                                                      m_scaledAdmittance, m_gaugeWorkspace, floatingTolerance);
+            if (strictReferences >= 0 && references <= strictReferences) break; // relaxing found nothing new
+            strictReferences = references;
+
+            if (static_cast<size_t>(n) >= kSparseThreshold) {
+                Eigen::SparseMatrix<double> sparse = m_scaledAdmittance.sparseView(0.0, 1e-15);
+                sparse.makeCompressed();
+                size_t patternHash = static_cast<size_t>(sparse.nonZeros());
+                for (int outer = 0; outer < sparse.outerSize(); ++outer)
+                    for (Eigen::SparseMatrix<double>::InnerIterator it(sparse, outer); it; ++it)
+                        patternHash ^= (static_cast<size_t>(it.row()) * 1315423911u + static_cast<size_t>(it.col()))
+                                       + 0x9e3779b9u + (patternHash << 6) + (patternHash >> 2);
+                if (!m_sparseFactorization) m_sparseFactorization = std::make_unique<SparseSolver>();
+                if (!m_sparsePatternInitialized || patternHash != m_sparsePatternHash) {
+                    m_sparseFactorization->analyzePattern(sparse);
+                    m_sparsePatternHash = patternHash;
+                    m_sparsePatternInitialized = true;
+                }
+                m_sparseFactorization->factorize(sparse);
+                m_singular = m_sparseFactorization->info() != Eigen::Success;
+                m_useSparse = !m_singular;
+                m_factorization.reset();
+                m_lastRcond = m_singular ? 0.0 : 1.0;
+                m_admittanceChanged = false;
+                if (m_singular) continue;
+                return;
+            }
+            m_useSparse = false;
+
+            // PartialPivLU já calcula a fatoração usada pelo solve e fornece rcond(). O código
+            // anterior fazia antes uma FullPivLU O(n³) completa apenas para descartar seu resultado,
+            // duplicando quase todo o custo dos grupos densos.
+            m_factorization.emplace(m_scaledAdmittance);
+            m_lastRcond = m_factorization->rcond();
+            if (!std::isfinite(m_lastRcond) || m_lastRcond <= 1e-14) {
+                m_factorization.reset();
+                m_lastSolution.setZero();
+                m_singular = true;
+                m_admittanceChanged = false;
+                continue;
+            }
+
+            m_singular = false;
             m_admittanceChanged = false;
             return;
         }
-        m_useSparse = false;
-
-        // PartialPivLU já calcula a fatoração usada pelo solve e fornece rcond(). O código
-        // anterior fazia antes uma FullPivLU O(n³) completa apenas para descartar seu resultado,
-        // duplicando quase todo o custo dos grupos densos.
-        m_factorization.emplace(m_scaledAdmittance);
-        m_lastRcond = m_factorization->rcond();
-        if (!std::isfinite(m_lastRcond) || m_lastRcond <= 1e-14) {
-            m_factorization.reset();
-            m_lastSolution.setZero();
-            m_singular = true;
-            m_admittanceChanged = false;
-            return;
-        }
-
-        m_singular = false;
-        m_admittanceChanged = false;
     }
 
     /** Reusable buffers of applyFloatingGauge() (no allocation per factor()). */
@@ -248,8 +261,8 @@ public:
      * One column-major pass (contiguous in Eigen's storage) plus union-find over the nonzero
      * couplings: the former breadth-first search read the matrix row-wise and allocated two
      * vectors per connected block on every factor(), i.e. on every admittance change. */
-    static void applyFloatingGauge(const Eigen::MatrixXd& admittance, const Eigen::VectorXd& rhs, Eigen::Index nodeCount,
-                                   Eigen::MatrixXd& scaled, GaugeWorkspace& w) {
+    static int applyFloatingGauge(const Eigen::MatrixXd& admittance, const Eigen::VectorXd& rhs, Eigen::Index nodeCount,
+                                  Eigen::MatrixXd& scaled, GaugeWorkspace& w, double floatingTolerance = 1e-12) {
         const Eigen::Index n = admittance.rows();
         const size_t count = static_cast<size_t>(n);
         w.parent.resize(count);
@@ -290,8 +303,10 @@ public:
             ++w.size[root];
             if (i < nodeCount) ++w.nodes[root];
             const double magnitude = w.rowNodeMagnitude[static_cast<size_t>(i)];
-            if (magnitude == 0.0 || std::abs(w.rowNodeSum[static_cast<size_t>(i)]) > magnitude * 1e-12) w.floating[root] = 0;
+            if (magnitude == 0.0 || std::abs(w.rowNodeSum[static_cast<size_t>(i)]) > magnitude * floatingTolerance)
+                w.floating[root] = 0;
         }
+        int floatingReferences = 0;
         for (Eigen::Index root = 0; root < n; ++root) {
             const size_t r = static_cast<size_t>(root);
             if (w.parent[r] != root) continue;
@@ -300,8 +315,12 @@ public:
                 continue;
             }
             // root is the block's lowest index, hence its first node whenever it has nodes.
-            if (w.nodes[r] >= 2 && w.floating[r]) scaled(root, root) += 1.0;
+            if (w.nodes[r] >= 2 && w.floating[r]) {
+                scaled(root, root) += 1.0;
+                ++floatingReferences;
+            }
         }
+        return floatingReferences;
     }
 
     const Eigen::VectorXd& solve() {
@@ -340,6 +359,7 @@ private:
     Eigen::VectorXd m_scale; // fatores de equilibração da última factor() -- ver factor()/solve()
     Eigen::MatrixXd m_scaledAdmittance;
     GaugeWorkspace m_gaugeWorkspace;
+    static constexpr double kNearlyFloatingTolerance = 1e-6;
     Eigen::VectorXd m_scaledRhs;
     Eigen::VectorXd m_scaledSolution;
     std::optional<Eigen::PartialPivLU<Eigen::MatrixXd>> m_factorization;

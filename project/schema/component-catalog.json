@@ -21174,6 +21174,7 @@
         "Meters"
       ],
       "defaultProperties": {
+        "inputMode": "single",
         "filter": 0,
         "autoScale": true,
         "tracks": 4,
@@ -21181,7 +21182,7 @@
         "tunnels": ""
       },
       "help": {
-        "description": "Osciloscópio de até 4 canais. Conecte CH1–CH4 por fio ou digite nos campos coloridos o nome de um Tunnel existente. O fio físico tem prioridade."
+        "description": "Osciloscópio com entrada convencional ou diferencial (propriedade Entrada). Convencional: até 4 canais medidos contra o borne G, a referência comum do aparelho (sem G, contra o terra do circuito). Diferencial: 2 canais isolados, CH1 = borne 1+ − 1− e CH2 = 2+ − 2−, sem ligação ao terra e com G sem uso; use para medir sobre um elemento que não está no terra, como o resistor de 250 Ω de um laço 4-20 mA/HART. Conecte os bornes por fio ou digite nos campos coloridos o nome de um Tunnel existente; o fio físico tem prioridade."
       },
       "package": {
         "width": 227,

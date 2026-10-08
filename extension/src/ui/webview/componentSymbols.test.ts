@@ -260,7 +260,14 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
     const logicSvg = packageSymbolSvg("meters.logic_analyzer", { tunnels: "CLK,DATA" }, "logic-render") ?? "";
     assert(probeHigh.includes('fill="#ffa600"'), `Probe acima do threshold deveria ficar laranja por stateFill numerico, markup: ${probeHigh}`);
     assert(probeLow.includes('fill="#0064ff"'), `Probe abaixo do threshold negativo deveria ficar azul por stateFill numerico, markup: ${probeLow}`);
-    assert(scopeSvg.includes('width="219" height="153"') && scopeSvg.includes(">0 Hz</text>"), `Oscope deveria renderizar DataWidget/PlotDisplay colapsado, markup: ${scopeSvg}`);
+    assert(scopeSvg.includes('width="219" height="153"') && scopeSvg.includes(">0 V</text>"), `Oscope deveria renderizar DataWidget/PlotDisplay colapsado (leitura em volts), markup: ${scopeSvg}`);
+    // Entrada diferencial: 2 canais isolados -- bornes 1+/1−/2+/2−, leitura do par, selo e G sem uso.
+    const scopeDiff = packageSymbolSvg("meters.oscope", { inputMode: "differential", __readout: [4.8, 19.2, 0, 0] }, "scope-diff") ?? "";
+    assert(scopeDiff.includes(">CH1+  4.8 V</text>") && scopeDiff.includes(">CH1−</text>") &&
+           scopeDiff.includes(">CH2+  19.2 V</text>") && scopeDiff.includes(">CH2−</text>"),
+           `Oscope diferencial deveria rotular os bornes 1+/1−/2+/2− com a leitura do par: ${scopeDiff}`);
+    assert(scopeDiff.includes(">DIFERENCIAL</text>") && !scopeSvg.includes("DIFERENCIAL"),
+           `só o modo diferencial mostra o selo DIFERENCIAL na tela: ${scopeDiff}`);
     assert(logicSvg.includes('width="219" height="153"') && logicSvg.includes('class="meter-channel-input"'), `Logic analyzer deveria renderizar DataLaWidget/PlotDisplay colapsado, markup: ${logicSvg}`);
     assert(scopeSvg.includes('data-instrument-channel="0"') && scopeSvg.includes('value="SINAL_A"'), `QLineEdit CH1 deveria exibir o túnel persistido: ${scopeSvg}`);
     assert(logicSvg.includes('value="CLK"') && logicSvg.includes('value="DATA"'), `QLineEdit digitais deveriam exibir os túneis persistidos: ${logicSvg}`);

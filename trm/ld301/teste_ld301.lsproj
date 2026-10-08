@@ -150,7 +150,7 @@
       "id": "component-1791298650899-835065",
       "typeId": "passive.resistor",
       "properties": {
-        "resistance": 1000,
+        "resistance": 250,
         "__ui_valueLabelX": 16,
         "__ui_valueLabelY": 11
       },
@@ -244,7 +244,7 @@
     }
   ],
   "topology": {
-    "revision": 352,
+    "revision": 356,
     "nodes": [],
     "conductors": [
       {
@@ -468,9 +468,9 @@
   },
   "visual": {
     "viewport": {
-      "x": -353.09487736479514,
-      "y": -668.7625721848069,
-      "zoom": 1.1953531310906287
+      "x": -450.82590865599377,
+      "y": -636.6425660667354,
+      "zoom": 1.6088260093985671
     }
   },
   "simulationSettings": {}

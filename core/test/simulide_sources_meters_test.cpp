@@ -592,6 +592,63 @@ void testLogicAnalyzerHysteresisHoldsStateInDeadZone() {
 
 } // namespace
 
+/** Laço 4-20 mA típico SEM terra: fonte de 24 V, amperímetro quase ideal (1 µΩ = 1e6 S),
+ * 250 Ω e 1 kΩ em série. Antes, ligar o G do osciloscópio sobre o resistor deixava o laço "quase
+ * aterrado" por 1 GΩ: condicionamento ~1e15, o grupo inteiro era dado como singular e lido como
+ * 0 V (amperímetro em zero, traço reto, HART mudo). O modo diferencial não toca o terra. */
+void testOscopeOnFloatingLoopInBothInputModes() {
+    for (const bool differential : {false, true}) {
+        GlobalPluginCache cache;
+        SimulationSession session(cache);
+        registerCommon(session.components());
+        session.components().registerFactory("sources.dc_voltage", [](const ComponentParams& p) {
+            return std::make_unique<components::DcVoltageSource>(std::array<Pin, 2>{Pin{"p1"}, Pin{"p2"}}, p.property("voltage", 5.0));
+        });
+        session.components().registerFactory("meters.ampmeter", [](const ComponentParams& p) {
+            return std::make_unique<components::Ampmeter>(std::array<Pin, 3>{Pin{"lPin"}, Pin{"rPin"}, Pin{"outPin"}},
+                                                           p.property("resistance", 1e-6));
+        });
+        session.components().registerFactory("meters.oscope", [&session](const ComponentParams&) {
+            return std::make_unique<components::Oscope>(
+                session.scheduler(), std::array<Pin, 5>{Pin{"ch0"}, Pin{"ch1"}, Pin{"ch2"}, Pin{"ch3"}, Pin{"ref"}});
+        });
+        ComponentParams scopeParams;
+        if (differential) scopeParams.properties["inputMode"] = std::string("differential");
+        const uint32_t source = session.addComponent("sources.dc_voltage", withProp("voltage", 24.0));
+        const uint32_t amp = session.addComponent("meters.ampmeter", {});
+        const uint32_t r250 = session.addComponent("passive.resistor", withProp("resistance", 250.0));
+        const uint32_t r1k = session.addComponent("passive.resistor", withProp("resistance", 1000.0));
+        const uint32_t scope = session.addComponent("meters.oscope", scopeParams);
+        session.connectWire(source, "p1", amp, "lPin");
+        session.connectWire(amp, "rPin", r250, "p1");
+        session.connectWire(r250, "p2", r1k, "p1");
+        session.connectWire(r1k, "p2", source, "p2");
+        if (differential) {
+            session.connectWire(scope, "ch0", r250, "p1");
+            session.connectWire(scope, "ch1", r250, "p2");
+            session.connectWire(scope, "ch2", r1k, "p1");
+            session.connectWire(scope, "ch3", r1k, "p2");
+        } else {
+            session.connectWire(scope, "ch0", r250, "p1");
+            session.connectWire(scope, "ref", r250, "p2");
+        }
+        for (int i = 0; i < 10 && session.settleStep(); ++i) {}
+        const std::vector<uint8_t> state = session.getComponentState(scope);
+        if (differential) {
+            check(std::get<std::string>(*session.propertyValueOf(scope, "inputMode")) == "differential",
+                  "Oscope diferencial: a propriedade Entrada é hidratada ao reabrir");
+            check(nearlyEqual(readF64(state, 0), 4.8, 1e-4), "Oscope diferencial: CH1 (1+ - 1-) = 4,8 V sobre 250 ohm do laço flutuante");
+            check(nearlyEqual(readF64(state, 8), 19.2, 1e-4), "Oscope diferencial: CH2 (2+ - 2-) = 19,2 V sobre 1 kohm, ao mesmo tempo");
+            check(readF64(state, 16) == 0.0 && readF64(state, 24) == 0.0, "Oscope diferencial: colunas 3 e 4 ficam em 0");
+        } else {
+            check(nearlyEqual(readF64(state, 0), 4.8, 1e-4),
+                  "Oscope convencional: G sobre o resistor de um laço sem terra mede 4,8 V (antes: grupo singular, 0 V)");
+        }
+        checkCurrent(session, amp, 24.0 / 1250.0, 1e-7, differential ? "Oscope diferencial: laço continua com 19,2 mA"
+                                                                       : "Oscope convencional: laço continua com 19,2 mA");
+    }
+}
+
 int main() {
     testBatteryDividesVoltageWithInternalResistance();
     testRailForcesFixedVoltageReferencedToGround();
@@ -603,6 +660,7 @@ int main() {
     testClockTogglesOverTime();
     testWaveGenSquareWaveOutputsExpectedVoltageAndCurrent();
     testOscopeRecordsTimestampedHistoryWithWraparound();
+    testOscopeOnFloatingLoopInBothInputModes();
     testInstrumentChannelUsesNamedTunnelWithPhysicalWirePrecedence();
     testLogicAnalyzerRecordsTimestampedHistory();
     testLogicAnalyzerHysteresisHoldsStateInDeadZone();

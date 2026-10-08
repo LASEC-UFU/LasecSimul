@@ -1552,6 +1552,11 @@ function qtButtonSvg(x: number, y: number, w: number, h: number, text: string, i
   );
 }
 
+/** `meters.oscope` com `inputMode = "differential"` (2 canais isolados, ver Oscope.hpp). */
+export function isDifferentialOscope(properties?: Record<string, unknown>): boolean {
+  return properties?.inputMode === "differential";
+}
+
 function instrumentTunnelNames(properties: Record<string, unknown>, channels: number): string[] {
   const serialized = typeof properties.tunnels === "string" ? properties.tunnels : "";
   const names = serialized.split(",");
@@ -1644,15 +1649,38 @@ function simulideQtWidgetSvg(widget: SimulideQtWidgetSpec, properties: Record<st
     markup += qtButtonSvg(widgetX + 8, expandY, 60, 16, "Expande", `${scopeId}-logic`);
     markup += plotDisplaySvg(displayX, displayY, displayW, displayH, 8, 8, [], logicHistory, colors, false);
   } else {
+    // Entrada diferencial (`inputMode`, ver Oscope.hpp): os 4 bornes viram 2 pares isolados,
+    // CH1 = 1+ − 1− e CH2 = 2+ − 2−; G não é usado. O rótulo de cada linha mostra a tensão lida
+    // (V), não frequência -- o Core publica tensões por canal.
+    const differential = isDifferentialOscope(properties);
+    const traceColors = ["#00c864", "#f6f65a", "#ffd06a", "#d9d7ff"];
     for (let i = 0; i < 4; i += 1) {
       const y = widgetY + 18 + i * 29;
-      const latestValue = latest[i];
-      const label = typeof latestValue === "number" && latestValue !== 0 ? `${formatRailVoltage(latestValue)} Hz` : "0 Hz";
+      const channel = differential ? Math.floor(i / 2) : i;
+      const latestValue = latest[channel];
+      const volts = typeof latestValue === "number" && latestValue !== 0 ? `${formatRailVoltage(latestValue)} V` : "0 V";
+      const label = differential
+        ? (i % 2 === 0 ? `CH${channel + 1}+  ${volts}` : `CH${channel + 1}−`)
+        : volts;
       markup += `<text x="${widgetX + 8}" y="${y}" font-family="Segoe UI,Arial,sans-serif" font-size="9" font-weight="700" fill="#000">${escapeXmlText(label)}</text>`;
-      markup += qtTunnelInputSvg(widgetX + 8, y + 5, 60, 15, i, colors[i] ?? "#ddd", tunnelNames[i] ?? "");
+      markup += qtTunnelInputSvg(widgetX + 8, y + 5, 60, 15, i, colors[channel] ?? "#ddd", tunnelNames[i] ?? "");
+    }
+    if (differential) {
+      // Colchete ligando os dois bornes de cada canal diferencial.
+      for (let channel = 0; channel < 2; channel += 1) {
+        // Mesmos y dos pinos do pacote (pin-1..pin-4 em 25/57/89/121).
+        const top = 25 + channel * 64;
+        const bottom = top + 32;
+        markup += `<path d="M ${widgetX + 4} ${top} H ${widgetX + 1} V ${bottom} H ${widgetX + 4}" fill="none" stroke="${traceColors[channel]}" stroke-width="2"/>`;
+      }
     }
     markup += qtButtonSvg(widgetX + 8, widgetY + 130, 60, 16, "Expande", `${scopeId}-scope`);
-    markup += plotDisplaySvg(displayX, displayY, displayW, displayH, 4, widget.tracks ?? 1, histories, [], ["#00c864", "#f6f65a", "#ffd06a", "#d9d7ff"], false);
+    markup += plotDisplaySvg(displayX, displayY, displayW, displayH, differential ? 2 : 4, widget.tracks ?? 1, histories, [], traceColors, false);
+    if (differential) {
+      markup += `<text x="${displayX + displayW - 6}" y="${displayY + 12}" text-anchor="end" font-family="Segoe UI,Arial,sans-serif" font-size="8" font-weight="700" fill="#f6f65a">DIFERENCIAL</text>`;
+      // G fica sem uso: um "×" sobre o borne deixa isso visível no próprio corpo.
+      markup += `<text x="${widgetX + 1}" y="${widgetY + 139}" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-size="9" font-weight="700" fill="#b00020">×</text>`;
+    }
   }
   return markup;
 }

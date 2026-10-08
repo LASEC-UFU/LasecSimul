@@ -3,7 +3,7 @@ import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, Mcu
 import { reorderedZOrder, zOrderModeForKey, type ZOrderMode } from "./zOrder.js";
 import { graphicalRuntimeProperties, isGraphicalTypeId } from "./graphicsBinding.js";
 import { GraphicalActionPhase, GraphicalActionValue, graphicalActionConfig, isGraphicalActionTypeId, resolveGraphicalActionValue } from "./graphicsAction.js";
-import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, instancePinPlacements, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage, resolvedPackageFor, runtimeSurfaceImageHref } from "./componentSymbols.js";
+import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, instancePinPlacements, isDifferentialOscope, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage, resolvedPackageFor, runtimeSurfaceImageHref } from "./componentSymbols.js";
 import { ExternalLabelKind, SYMBOL_PIN_LABEL_ALIGN_KEY, formatProbeVoltage, genericExternalLabelFontSize, isExternalProbeReadout, labelPropertyKey, nextLabelRotation, resolveDefaultExternalLabelOffset, resolveExternalLabelColor, symbolPinLabelPackageFields } from "./componentLabels.js";
 import { resizedComponentSize, sceneToLocal, svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
 import { detectChannelTrigger, digitalStepPath, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
@@ -6156,6 +6156,12 @@ function instrumentPlotGridSvg(plotW: number, plotH: number, divisions = 10, row
  * recalculados a cada atualização a partir do período/amplitude detectados -- mutação deliberada
  * de `popup` durante o render, mesma semântica de "os botões/diais se movem sozinhos" do osciloscópio
  * de bancada real enquanto "Auto" está ativo. */
+/** Canais visíveis do osciloscópio: 4 na entrada convencional, 2 na diferencial (ver Oscope.hpp). */
+function scopeChannelCount(componentId: string): 2 | 4 {
+  const component = state.components.find((candidate) => candidate.id === componentId);
+  return component && isDifferentialOscope(component.properties) ? 2 : 4;
+}
+
 function renderScopePopupPlot(popup: ScopePopupState, channels: Array<{ timestampsNs: number[]; values: number[] }>): SVGSVGElement {
   // 560x448 -- MESMO tamanho de `.instrument-plot-svg` (styles.css), pra 10x8 divisões ficarem
   // quadradas (56x56px cada) em vez de esticadas -- bug corrigido 2026-07-09, ver comentário lá.
@@ -6185,7 +6191,7 @@ function renderScopePopupPlot(popup: ScopePopupState, channels: Array<{ timestam
   const trigger = triggerChannelHistory ? detectChannelTrigger(triggerChannelHistory.timestampsNs, triggerChannelHistory.values, popup.filterThreshold) : undefined;
   const sharedWindowEndNs = trigger ? triggerAlignedWindowEndNs(latestSampleNs, trigger, timeFrameNs) : latestSampleNs;
 
-  const channelIndices = popup.activeTab === "all" ? [0, 1, 2, 3] : [popup.activeTab];
+  const channelIndices = popup.activeTab === "all" ? [0, 1, 2, 3].slice(0, scopeChannelCount(popup.componentId)) : [popup.activeTab];
   for (const channel of channelIndices) {
     const settings = popup.channels[channel];
     if (!settings || settings.hidden) continue;
@@ -6509,7 +6515,7 @@ function updateInstrumentTunnel(component: WebviewComponentModel, channel: numbe
   send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: "tunnels", value: names.join(",") });
 }
 
-function makeInstrumentTunnelRows(component: WebviewComponentModel, channelCount: number): HTMLDivElement {
+function makeInstrumentTunnelRows(component: WebviewComponentModel, channelCount: number, captions?: readonly string[]): HTMLDivElement {
   const rows = document.createElement("div");
   rows.className = "instrument-tunnel-rows";
   const names = instrumentTunnelNames(component, channelCount);
@@ -6517,7 +6523,7 @@ function makeInstrumentTunnelRows(component: WebviewComponentModel, channelCount
     const label = document.createElement("label");
     label.className = "instrument-tunnel-row";
     const caption = document.createElement("span");
-    caption.textContent = channelCount === 4 ? `CH${channel + 1}` : `D${channel}`;
+    caption.textContent = captions?.[channel] ?? (channelCount === 4 ? `CH${channel + 1}` : `D${channel}`);
     const input = document.createElement("input");
     input.type = "text";
     input.maxLength = 64;
@@ -6586,7 +6592,8 @@ function makeAnalyzerSourceRows(component: WebviewComponentModel, history: Analy
 function makeExclusiveDotRow(
   labelText: string,
   selected: 0 | 1 | 2 | 3 | "none",
-  onSelect: (value: 0 | 1 | 2 | 3 | "none") => void
+  onSelect: (value: 0 | 1 | 2 | 3 | "none") => void,
+  channelCount = 4,
 ): HTMLDivElement {
   const row = document.createElement("div");
   row.className = "instrument-radio-row";
@@ -6594,7 +6601,7 @@ function makeExclusiveDotRow(
   label.className = "instrument-radio-row__label";
   label.textContent = labelText;
   row.appendChild(label);
-  ([0, 1, 2, 3] as const).forEach((channel) => {
+  ([0, 1, 2, 3] as const).slice(0, channelCount).forEach((channel) => {
     const dot = document.createElement("span");
     dot.className = `instrument-radio-dot${selected === channel ? " instrument-radio-dot--selected" : ""}`;
     dot.style.background = INSTRUMENT_CHANNEL_COLORS[channel] ?? "#888";
@@ -6614,14 +6621,14 @@ function makeExclusiveDotRow(
 /** Linha "Esconder" -- TOGGLE independente por canal (não exclusivo), uma bolinha colorida por
  * canal -- réplica de `hideGroup` (`exclusive=false`) de `oscwidget.ui`: vários canais podem ficar
  * escondidos ao mesmo tempo. */
-function makeToggleDotRow(labelText: string, hiddenByChannel: boolean[], onToggle: (channel: number) => void): HTMLDivElement {
+function makeToggleDotRow(labelText: string, hiddenByChannel: boolean[], onToggle: (channel: number) => void, channelCount = 4): HTMLDivElement {
   const row = document.createElement("div");
   row.className = "instrument-radio-row";
   const label = document.createElement("span");
   label.className = "instrument-radio-row__label";
   label.textContent = labelText;
   row.appendChild(label);
-  hiddenByChannel.slice(0, 4).forEach((hidden, channel) => {
+  hiddenByChannel.slice(0, channelCount).forEach((hidden, channel) => {
     const dot = document.createElement("span");
     dot.className = `instrument-radio-dot${hidden ? " instrument-radio-dot--selected" : ""}`;
     dot.style.background = INSTRUMENT_CHANNEL_COLORS[channel] ?? "#888";
@@ -6716,6 +6723,14 @@ function instrumentPopupIndexSuffix(component: WebviewComponentModel): string {
 
 function buildScopePopup(popup: ScopePopupState, component: WebviewComponentModel): HTMLDivElement {
   const { container, body } = makePopupChrome(`Oscope-${instrumentPopupIndexSuffix(component)}`, popup);
+  // Entrada diferencial: só CH1 (1+ − 1−) e CH2 (2+ − 2−) existem; seleções em CH3/CH4 caem.
+  const differential = isDifferentialOscope(component.properties);
+  const channelCount = differential ? 2 : 4;
+  if (differential) {
+    if (popup.activeTab !== "all" && popup.activeTab >= 2) popup.activeTab = "all";
+    if (popup.triggerSource !== "none" && popup.triggerSource >= 2) popup.triggerSource = "none";
+    if (popup.autoScaleChannel !== "none" && popup.autoScaleChannel >= 2) popup.autoScaleChannel = "none";
+  }
 
   const plotWrap = document.createElement("div");
   plotWrap.className = "instrument-popup__plot";
@@ -6724,7 +6739,8 @@ function buildScopePopup(popup: ScopePopupState, component: WebviewComponentMode
   plotWrap.append(
     makeInstrumentPlotHeader("oscope", `${popup.timeDivMs.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} ms/div · 10 × 8 div`),
     plot,
-    makeInstrumentLegend(4, popup.channels.map((channel) => channel.hidden)),
+    makeInstrumentLegend(channelCount, popup.channels.map((channel) => channel.hidden),
+      differential ? ["CH1 (1+ − 1−)", "CH2 (2+ − 2−)"] : undefined),
   );
 
   const controls = document.createElement("div");
@@ -6736,7 +6752,7 @@ function buildScopePopup(popup: ScopePopupState, component: WebviewComponentMode
   // Tempo/Tensão abaixo editam (mesmo papel do `m_channel` em `OscWidget`).
   const tabs = document.createElement("div");
   tabs.className = "instrument-tabs";
-  ([0, 1, 2, 3] as const).forEach((channel) => {
+  ([0, 1, 2, 3] as const).slice(0, channelCount).forEach((channel) => {
     tabs.appendChild(makeChannelButton(`Ch${channel + 1}`, INSTRUMENT_CHANNEL_COLORS[channel] ?? "#888", popup.activeTab === channel, () => {
       popup.activeTab = channel;
       renderInstrumentPopups();
@@ -6747,7 +6763,8 @@ function buildScopePopup(popup: ScopePopupState, component: WebviewComponentMode
     renderInstrumentPopups();
   }));
   controls.appendChild(tabs);
-  controls.append(makeInstrumentSectionLabel("Túneis dos canais"), makeInstrumentTunnelRows(component, 4));
+  controls.append(makeInstrumentSectionLabel("Túneis dos canais"), makeInstrumentTunnelRows(component, 4,
+    differential ? ["1+", "1−", "2+", "2−"] : undefined));
 
   // Knobs (disco + spinner) -- réplica do layout QDial+QLabel+PlotSpinBox de `oscwidget.ui`.
   const knobs = document.createElement("div");
@@ -6782,12 +6799,12 @@ function buildScopePopup(popup: ScopePopupState, component: WebviewComponentMode
 
   // Auto/Trigger/Esconder -- bolinhas coloridas por canal, igual `oscwidget.ui` real (réplica de
   // `autoGroup`/`triggerGroup`/`hideGroup`, ver makeExclusiveDotRow/makeToggleDotRow).
-  controls.appendChild(makeExclusiveDotRow("Auto", popup.autoScaleChannel, (value) => { popup.autoScaleChannel = value; renderInstrumentPopups(); }));
-  controls.appendChild(makeExclusiveDotRow("Trigger", popup.triggerSource, (value) => { popup.triggerSource = value; renderInstrumentPopups(); }));
+  controls.appendChild(makeExclusiveDotRow("Auto", popup.autoScaleChannel, (value) => { popup.autoScaleChannel = value; renderInstrumentPopups(); }, channelCount));
+  controls.appendChild(makeExclusiveDotRow("Trigger", popup.triggerSource, (value) => { popup.triggerSource = value; renderInstrumentPopups(); }, channelCount));
   controls.appendChild(makeToggleDotRow("Esconder", popup.channels.map((c) => c.hidden), (channel) => {
     popup.channels[channel]!.hidden = !popup.channels[channel]!.hidden;
     renderInstrumentPopups();
-  }));
+  }, channelCount));
   controls.appendChild(makeInstrumentSectionLabel("Visualização"));
 
   const tracksRow = document.createElement("div");

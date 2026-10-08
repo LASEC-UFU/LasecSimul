@@ -1847,12 +1847,18 @@ const SimulationSession::BridgeCache& SimulationSession::bridgeCacheUnlocked() {
     m_bridgeCache.planGeneration = m_runtimeState.planGeneration;
     m_bridgeCache.topologyRevision = m_bridgeTopologyRevision;
     m_bridgeCache.hartIndices.clear();
+    m_bridgeCache.hartWiredInputs.clear();
     m_bridgeCache.sensorIndices.clear();
     m_bridgeCache.actuatorIndices.clear();
     for (uint32_t index : m_activeComponentIndices) {
         IComponentModel* component = index < m_componentInstances.size() ? m_componentInstances[index].get() : nullptr;
         if (!component) continue;
-        if (dynamic_cast<protocols::HartCommunicationComponent*>(component)) m_bridgeCache.hartIndices.push_back(index);
+        if (dynamic_cast<protocols::HartCommunicationComponent*>(component)) {
+            m_bridgeCache.hartIndices.push_back(index);
+            std::vector<std::string>& wired = m_bridgeCache.hartWiredInputs.emplace_back();
+            for (const SignalWireDefinition& wire : m_signalWires)
+                if (wire.targetComponent == index) wired.push_back(wire.targetPort);
+        }
         if ((dynamic_cast<const components::SignalVoltageSensor*>(component) ||
              dynamic_cast<const components::SignalCurrentSensor*>(component) ||
              dynamic_cast<const components::SignalDigitalInput*>(component)) &&
@@ -1868,11 +1874,19 @@ const SimulationSession::BridgeCache& SimulationSession::bridgeCacheUnlocked() {
 }
 
 void SimulationSession::sampleHartInputsFromSignalUnlocked() {
-    for (uint32_t index : bridgeCacheUnlocked().hartIndices) {
+    const BridgeCache& cache = bridgeCacheUnlocked();
+    for (size_t entry = 0; entry < cache.hartIndices.size(); ++entry) {
+        const uint32_t index = cache.hartIndices[entry];
         auto* hart = dynamic_cast<protocols::HartCommunicationComponent*>(m_componentInstances[index].get());
         if (!hart) continue;
+        const std::vector<std::string>& wired = cache.hartWiredInputs[entry];
+        if (wired.empty()) continue;
         for (const SignalPortDescriptor& port : hart->cachedSignalPorts()) {
             if (port.direction != SignalPortDirection::Input) continue;
+            // Same rule as the electrical actuators below: only a port a real wire drives. An
+            // unwired input's auto-generated relay reads 0 and used to overwrite, on every stable
+            // step, the PV the device holds (set by its owner or by HART), e.g. 3.8 mA forever.
+            if (std::find(wired.begin(), wired.end(), port.id) == wired.end()) continue;
             try {
                 const auto slot = m_runtimeState.signals.output(hart->signalBlockId(port.id));
                 const double value = port.kind == SignalValueKind::Digital
