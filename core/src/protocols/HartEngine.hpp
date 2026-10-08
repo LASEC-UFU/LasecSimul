@@ -168,6 +168,32 @@ struct HartDeviceProfile {
      * NaN: no failure current, the output keeps following the PV. */
     float analogAlarmLowMilliamps = std::numeric_limits<float>::quiet_NaN();
     float analogAlarmHighMilliamps = std::numeric_limits<float>::quiet_NaN();
+    /** Alarm Selection Codes that pick the high / low burnout current.
+     * Common Table 6 is 0 High, 1 Low; a manufacturer may store its own
+     * code (the Smar TT301 reports 1 for its "High" burnout). */
+    uint8_t analogAlarmHighCode = 0;
+    uint8_t analogAlarmLowCode = 1;
+    /** Device Status bits reported while the burnout current is driven:
+     * Loop Current Saturated by default; the Smar TT301 reports PV Out Of
+     * Limits instead (captured 0xC1 with its sensor open). */
+    uint8_t burnoutStatus = 0x04;
+    /** Command 0 leaves Cold Start set for the next command (the TT301
+     * capture: E1 to Command 0, still E1 to the following Command 13). */
+    bool coldStartKeptByCommand0 = false;
+    /** In burnout the PV percent of range reports the output percent (the
+     * TT301 capture: PV % = MV % = 106.25 % = 21 mA whatever the range). */
+    bool burnoutPercentFollowsOutput = false;
+    /** HART 6/7 Command 0 trailer (bytes 12-21): maximum number of Device
+     * Variables, Private Label Distributor and Device Profile (Common
+     * Table 57; 1 = HART process automation device). */
+    uint8_t maximumDeviceVariables = 0;
+    uint16_t privateLabelDistributor = 0;
+    uint8_t deviceProfile = 1;
+    /** At most this many response data bytes for a command: a firmware
+     * that answers a shorter layout than its revision defines (the TT301's
+     * HART 7 Command 15 ends at the reserved byte 250: 17 bytes). */
+    struct ResponseDataLimit { HartCommandId command = 0; uint8_t bytes = 0; };
+    std::vector<ResponseDataLimit> responseDataLimits;
     /** Commands 35/36/37: range values may exceed the transducer limits by
      * this percent of each limit's magnitude (LD301 manual: "valores que
      * excedam até 25% destes limites são aceitos"). */
@@ -511,6 +537,11 @@ struct HartDevicePlan {
     uint8_t pvTransferFunctionCode = 0x00;
     uint8_t alarmSelectionCode = 0xFB;
     uint8_t writeProtectCode = 0xFB;
+    /** The Write Protect Code value that refuses writes (Common Table 7:
+     * 1). A manufacturer code may differ: a Smar TT301 reports 01 while
+     * writable. Above 255 nothing is refused. */
+    uint16_t writeProtectActiveCode = 1;
+    bool writeProtected() const noexcept { return writeProtectCode == writeProtectActiveCode; }
     uint8_t responsePreambles = 5;
     std::array<uint8_t, 4> dynamicVariableAssignments{{246, 250, 250, 250}};
     // Analog Channel 0 is the mandatory Primary/Loop Current channel. The

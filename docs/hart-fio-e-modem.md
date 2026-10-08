@@ -22,7 +22,8 @@ laço**.
 - **Transmissor**: terminais **LOOP+ / LOOP-** no laço. No LD301, conecte
   dois sliders ou saídas da planta às entradas de sinal **HIGH** e **LOW**.
   A pressão medida é HIGH menos LOW, em mmH2O@20C. Para simular pressão
-  manométrica, mantenha LOW em zero. O
+  manométrica, mantenha LOW em zero. No TT301 (HART 7), conecte um slider ou a
+  saída da planta à entrada de sinal **TEMP**, em °C (`docs/tt301-audit.md`). O
   dispositivo HART padrão mantém as entradas elétricas **S+ / S-**.
 - **PC**: em *Ligação com o PC*, escolha **Serial (COM / CNC)** ou **UDP**.
   - **Serial**: *Porta serial* é uma lista com as portas que existem no PC
@@ -50,7 +51,8 @@ laço**.
   - Num transmissor HART 5, como o LD301, endereço ≠ 0 coloca o aparelho em
     multiponto: a corrente fica fixa em 4 mA e o laço passa a medir N × 4 mA
     (3 aparelhos = 12 mA = 3,0 V sobre 250 Ω).
-  - Num dispositivo HART 7, desmarque também *Corrente de loop habilitada*.
+  - Num dispositivo HART 7, como o TT301, desmarque também *Corrente de loop
+    habilitada*.
 - **Device ID**: dê a cada um um *Unique ID* diferente (ex.: 000101, 000202…).
   É o endereço longo que o PACTware usa depois da varredura. Duas instâncias
   com o mesmo ID responderiam juntas, gerando colisão, como no campo.

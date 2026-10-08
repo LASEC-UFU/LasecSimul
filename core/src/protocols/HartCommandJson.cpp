@@ -11,7 +11,7 @@ namespace lasecsimul::protocols {
 namespace {
 
 struct VarIdName { HartVarId id; const char* name; };
-constexpr std::array<VarIdName, 14> kVarIdNames{{
+constexpr std::array<VarIdName, 15> kVarIdNames{{
     {HartVarId::ManufacturerId, "ManufacturerId"},
     {HartVarId::DeviceType, "DeviceType"},
     {HartVarId::DeviceId, "DeviceId"},
@@ -26,6 +26,7 @@ constexpr std::array<VarIdName, 14> kVarIdNames{{
     {HartVarId::PrimaryVariable, "PrimaryVariable"},
     {HartVarId::AlarmSelectionCode, "AlarmSelectionCode"},
     {HartVarId::PvTransferFunctionCode, "PvTransferFunctionCode"},
+    {HartVarId::WriteProtectCode, "WriteProtectCode"},
 }};
 
 std::optional<HartVarId> parseVarId(const std::string& name) noexcept {
@@ -229,6 +230,9 @@ bool parseStatement(const nlohmann::json& node, std::vector<HartStatement>& out,
         else if (field == "value") target = HartDeviceVariableField::Value;
         else if (field == "damping") target = HartDeviceVariableField::Damping;
         else if (field == "writeMode") target = HartDeviceVariableField::WriteMode;
+        else if (field == "upperLimit") target = HartDeviceVariableField::UpperLimit;
+        else if (field == "lowerLimit") target = HartDeviceVariableField::LowerLimit;
+        else if (field == "minimumSpan") target = HartDeviceVariableField::MinimumSpan;
         else { error = "unknown writable deviceVariable field \"" + field + "\""; return false; }
         if (!node.contains("value")) { error = "setDeviceVariable requires a \"value\" expression"; return false; }
         auto value = parseExpr(node["value"], error);

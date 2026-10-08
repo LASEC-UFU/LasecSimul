@@ -1,7 +1,7 @@
 QEMU source: C:\SourceCode\qemu_lasecSimul-invalid-state (https://github.com/josuemoraisgh/qemu_lasecSimul)
-QEMU HEAD: 7ead728b3d6393c63ec414915a1962aa173232ee (= 2f244a3 + devices/qemu-esp32/patches/0010)
-Executable SHA-256: B77C1D0FF9B80FD10C897C47E1F71CB9703DA3ABCF8EAEE95D1D830D5E76EF81
-Build: MSYS2 UCRT64, ninja -j8 qemu-system-xtensa.exe (build-i2c-invalid-state), xtensa-softmmu, gcrypt, slirp
-Etapa: vCPU que envia I2C aguarda a resposta do Core sem cobrar o tempo de transporte do relógio do firmware
-Anterior: 0AD7016B45277B34C8AC54D0813ACC54EDA8A69C476F8201B5B0EEDD3E1F7A2F (2f244a3)
+QEMU HEAD: 7ead728b3d6393c63ec414915a1962aa173232ee + devices/qemu-esp32/patches/0011 (uncommitted working tree)
+Executable SHA-256: ADE3DF01B4B1DA8EEE39634E5794AB91C3AB2CC6DD849E750B1F16EAEF6C9A67
+Build: MSYS2 UCRT64, ninja -j6 -l24 qemu-system-xtensa.exe (build-i2c-invalid-state), xtensa-softmmu, gcrypt, slirp
+Etapa: vNext-B usa a espera ociosa precisa (sub-ms) com timer de alta resolucao; duracao I2C por byte como no legado
+Anterior: B77C1D0FF9B80FD10C897C47E1F71CB9703DA3ABCF8EAEE95D1D830D5E76EF81 (7ead728)
 Historical provenance preserved in BUILD-PROVENANCE.txt.

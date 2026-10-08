@@ -200,11 +200,19 @@ export function startMdnsResponder(options: MdnsResponderOptions): MdnsResponder
   const learn = (name: string, ip: string, source: string): void => {
     const prev = known.get(name);
     known.set(name, { ip, lastSeen: Date.now() });
-    if (!prev || prev.ip !== ip) {
-      logSimulation("info", `mDNS (${source}): ${name} -> ${ip}`, { stage: "network-mdns" });
-      announce(name, ip); // cache-flush answer so the OS replaces any stale entry at once
-    }
+    if (prev && prev.ip === ip) return;
+    // lab-router learns from announcements already on the LAN -- every PC and
+    // phone of the lab, not just the simulated ESP32s. Re-announcing them
+    // repeated what each host had just multicast, and logging them filled
+    // the Output with the whole classroom. Only the isolated feed (a name the
+    // LAN never saw) is announced here; lab-router names are logged when this
+    // PC actually resolves one (query branch below).
+    if (!options.loopbackOnly) return;
+    logSimulation("info", `mDNS (${source}): ${name} -> ${ip}`, { stage: "network-mdns" });
+    announce(name, ip); // cache-flush answer so the OS replaces any stale entry at once
   };
+  /** lab-router: names already reported as resolved for this PC (name -> ip). */
+  const reported = new Map<string, string>();
 
   responder.on("error", (err) => {
     logSimulation("warning", `Responder mDNS desativado: ${err.message}`, { stage: "network-mdns" });
@@ -250,6 +258,10 @@ export function startMdnsResponder(options: MdnsResponderOptions): MdnsResponder
         // don't learn from -- and ping-pong with -- our answers.
         try { responder.send(buildAnswer(parsed.name, entry.ip), rinfo.port, rinfo.address); }
         catch { /* querier gone */ }
+        if (!options.loopbackOnly && reported.get(parsed.name) !== entry.ip) {
+          reported.set(parsed.name, entry.ip);
+          logSimulation("info", `mDNS (lab-router): ${parsed.name} -> ${entry.ip}`, { stage: "network-mdns" });
+        }
       }
     }
   });

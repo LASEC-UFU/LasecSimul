@@ -55,10 +55,14 @@ public:
     std::span<Pin> pins() override { return m_fieldDevice ? std::span<Pin>{m_pins} : std::span<Pin>{}; }
     void onAssignedIndex(uint32_t index) override;
     std::vector<SignalPortDescriptor> signalPorts() const override;
+    /** signalPorts() without the copy, for the per-step Signal Graph bridges. */
+    const std::vector<SignalPortDescriptor>& cachedSignalPorts() const;
 private:
     std::vector<SignalPortDescriptor> parseSignalPorts() const;
-    mutable std::string m_signalPortsSource;
-    mutable bool m_signalPortsCached = false;
+    /** Bumped on every assignment of m_hartVariablesJson: validating the port cache by comparing
+     * the whole JSON (18 KB for the LD301) on every stable step cost microseconds per step. */
+    uint64_t m_hartVariablesRevision = 1;
+    mutable uint64_t m_signalPortsRevision = 0;
     mutable std::vector<SignalPortDescriptor> m_signalPortsCache;
 public:
     std::string signalBlockId(std::string_view variableId) const;
@@ -178,7 +182,19 @@ private:
         std::string commandSet;
         /** "43=counter.zero;35,36,37=counter.range": operation counters. */
         std::string operationCounters;
+        /** Alarm Selection Codes of the high/low burnout current; the Write
+         * Protect Code that refuses writes (above 255: none). */
+        double alarmHighCode = 0, alarmLowCode = 1, writeProtectActiveCode = 1, burnoutStatus = 0x04;
+        bool coldStartKeptByCommand0 = false, burnoutPercentFollowsOutput = false;
+        /** HART 6/7 Command 0 trailer. */
+        double maxDeviceVariables = 0, privateLabel = 0, deviceProfile = 1;
+        /** "15=17": at most 17 response data bytes for Command 15. */
+        std::string responseDataLimits;
     } m_traits;
+    /** Configuration Change Counter (HART 6/7 Command 0), persisted. */
+    uint32_t m_configChangeCounter = 0;
+    /** HartLcdGlass: which indicator glass the device has. */
+    double m_displayGlass = 0;
     void resolveProfileTraits(const registry::ComponentParams& params, const std::string& defaultsJson);
     uint8_t m_configurationChangedFlags = 0;
     uint32_t m_componentIndex = 0;

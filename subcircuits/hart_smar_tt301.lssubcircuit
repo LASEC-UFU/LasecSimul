@@ -1,0 +1,266 @@
+{
+  "schemaVersion": 3,
+  "typeId": "subcircuits.hart.smar_tt301",
+  "name": "SMAR TT301",
+  "language": "pt-BR",
+  "translations": {
+    "en": {
+      "name": "SMAR TT301"
+    }
+  },
+  "folderPath": [
+    "Protocolos Industriais",
+    "HART"
+  ],
+  "workspaceSection": "process",
+  "help": {
+    "description": "Transmissor de temperatura SMAR TT301 (HART 7). A entrada de sinal TEMP recebe a temperatura medida em graus Celsius; ligue um slider ou a saída de uma planta. LOOP+/LOOP- formam o laço elétrico de 4-20 mA com alimentação externa."
+  },
+  "components": [
+    {
+      "id": "tt301",
+      "typeId": "protocol.hart.device.standard",
+      "label": "TT301",
+      "properties": {
+        "enabled": true,
+        "pollingAddress": 0,
+        "profileId": "lasecsimul.hart.standard-field-device",
+        "alarmSelectionCode": 1,
+        "configurationChangedFlags": 3,
+        "dateDay": 15,
+        "dateMonth": 4,
+        "dateYear": 113,
+        "descriptor": "16 CHARACTERS",
+        "finalAssemblyNumber": 0,
+        "message": "32 CHARACTERS",
+        "sensorHighValue": 850.0,
+        "sensorHighVolts": 5.0,
+        "sensorLowValue": -200.0,
+        "sensorLowVolts": 0.0,
+        "tag": "TAG",
+        "uniqueId": "010C3A",
+        "unit": "C",
+        "writeProtectCode": 255,
+        "hartManufacturerId": 62,
+        "hartDeviceType": 2,
+        "hartRequestPreambles": 5,
+        "hartUniversalRevision": 7,
+        "hartDeviceRevision": 8,
+        "hartSoftwareRevision": 96,
+        "hartHardwareRevision": 16,
+        "hartFlags": 0,
+        "hartImplementedRevision": 7,
+        "hartCommandSet": "0-3,6-9,11-22,33-48,50-54,59,71,76",
+        "hartMaxDeviceVariables": 9,
+        "hartConfigChangeCounter": 40,
+        "hartPrivateLabel": 62,
+        "hartDeviceProfile": 1,
+        "hartResponseDataLimits": "15=17",
+        "hartAlarmHighCode": 1,
+        "hartAlarmLowCode": 0,
+        "hartWriteProtectActiveCode": 0,
+        "hartBurnoutStatus": 1,
+        "hartColdStartKeptByCommand0": true,
+        "hartBurnoutPercentFollowsOutput": true,
+        "analogSaturationLowPercent": -1.25,
+        "analogSaturationHighPercent": 103.125,
+        "analogFixedLowMilliamps": 3.6,
+        "analogFixedHighMilliamps": 21.0,
+        "analogAlarmLowMilliamps": 3.6,
+        "analogAlarmHighMilliamps": 21.0,
+        "rangeLimitTolerancePercent": 0.0,
+        "minimumSpanAcceptPercent": 100.0,
+        "hartOperationCounters": "",
+        "sensorFault": false,
+        "hartVariablesJson": "[{\"id\":\"PV\",\"name\":\"Temperatura\",\"role\":\"PV\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":25.0,\"deviceVariableCode\":246,\"deviceVariableUnit\":32,\"classification\":64,\"family\":4,\"lowerRangeValue\":0.0,\"upperRangeValue\":800.0,\"upperTransducerLimit\":850.0,\"lowerTransducerLimit\":-200.0,\"minimumSpan\":10.0,\"transducerSerialNumber\":0,\"dampingValue\":0.0},{\"id\":\"terminalTemperature\",\"name\":\"Temperatura da borneira\",\"role\":\"SV\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"C\",\"value\":25.0,\"deviceVariableCode\":1,\"deviceVariableUnit\":32,\"classification\":64,\"family\":4},{\"id\":\"sensor.type\",\"name\":\"Tipo do sensor (01 RTD, 83 TC)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":1,\"codes\":{\"1\":\"RTD\",\"131\":\"TC\"}},{\"id\":\"sensor.model\",\"name\":\"Sensor (indice na lista do tipo: 2 = Pt 100 IEC no RTD, J NBS no TC)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":2},{\"id\":\"sensor.connection\",\"name\":\"Conexao do sensor\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":1,\"codes\":{\"1\":\"Two wires\"}},{\"id\":\"sensor.byte4\",\"name\":\"Cmd 130 byte 4 (somente leitura)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":1},{\"id\":\"sensor.coldJunction\",\"name\":\"Junta fria (00 habilitada; FF com RTD)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255,\"codes\":{\"0\":\"Enabled\",\"255\":\"Not applicable (RTD)\"}},{\"id\":\"sensor.cmd198\",\"name\":\"Cmd 198 (tela Sensor): valor\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"cvd.r0\",\"name\":\"Callendar-Van Dusen R0\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"Ohm\",\"value\":100.0},{\"id\":\"cvd.a\",\"name\":\"Callendar-Van Dusen A\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.003908299840986729},{\"id\":\"cvd.b\",\"name\":\"Callendar-Van Dusen B\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":-5.774999749519338e-07},{\"id\":\"cvd.c\",\"name\":\"Callendar-Van Dusen C\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":-4.182999866625403e-12},{\"id\":\"writeProtect.localAdjust\",\"name\":\"Protecao do ajuste local (Cmd 168 byte 2)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255},{\"id\":\"display.firstVariable\",\"name\":\"Display 1a variavel\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":2,\"codes\":{\"0\":\"Out (mA)\",\"1\":\"Out (%)\",\"2\":\"Temp. PV\",\"3\":\"Temp.\",\"4\":\"PV (%)\",\"5\":\"SP (%)\",\"6\":\"SP\",\"7\":\"SP Time (min)\",\"8\":\"Error (%)\",\"9\":\"Kp\",\"10\":\"Tr (min)\",\"11\":\"Td (s)\",\"12\":\"MV (%)\"}},{\"id\":\"display.secondVariable\",\"name\":\"Display 2a variavel\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":2,\"codes\":{\"0\":\"Out (mA)\",\"1\":\"Out (%)\",\"2\":\"Temp. PV\",\"3\":\"Temp.\",\"4\":\"PV (%)\",\"5\":\"SP (%)\",\"6\":\"SP\",\"7\":\"SP Time (min)\",\"8\":\"Error (%)\",\"9\":\"Kp\",\"10\":\"Tr (min)\",\"11\":\"Td (s)\",\"12\":\"MV (%)\",\"251\":\"None\"}},{\"id\":\"pid.operatingMode0\",\"name\":\"PID modo de operacao byte 0\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255},{\"id\":\"pid.operatingMode1\",\"name\":\"PID modo de operacao byte 1\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255},{\"id\":\"pid.operatingMode2\",\"name\":\"PID modo de operacao byte 2\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255},{\"id\":\"controller.mode\",\"name\":\"Modo do controlador (Off)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255},{\"id\":\"controller.modeWriteCode\",\"name\":\"Codigo de escrita do modo do controlador\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":1},{\"id\":\"pid.setpoint\",\"name\":\"PID setpoint\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"%\",\"value\":0.0,\"deviceVariableUnit\":57},{\"id\":\"pid.modeCode\",\"name\":\"PID codigo de modo\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255},{\"id\":\"pid.spTracking\",\"name\":\"SP tracking\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255},{\"id\":\"pid.error\",\"name\":\"PID erro\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"%\",\"value\":0.0,\"deviceVariableUnit\":57},{\"id\":\"pid.kp\",\"name\":\"Kp\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1.0},{\"id\":\"pid.tr\",\"name\":\"Tr\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"min\",\"value\":0.01,\"deviceVariableUnit\":50},{\"id\":\"pid.td\",\"name\":\"Td\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"s\",\"value\":0.0,\"deviceVariableUnit\":51},{\"id\":\"pid.param4\",\"name\":\"PID parametro 4\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"pid.param5\",\"name\":\"PID parametro 5\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.1},{\"id\":\"spGenerator.time\",\"name\":\"Gerador de SP: tempo\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"min\",\"value\":0.0,\"deviceVariableUnit\":50},{\"id\":\"spGenerator.mode\",\"name\":\"Gerador de SP (FF Off)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255,\"codes\":{\"0\":\"On\",\"255\":\"Off\"}},{\"id\":\"spGenerator.state\",\"name\":\"Gerador de SP: estado\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255},{\"id\":\"orderingCode\",\"name\":\"Codigo de pedido\",\"role\":\"VendorSpecific\",\"type\":\"Ascii\",\"direction\":\"Internal\",\"width\":21,\"text\":\"                     \"}]",
+        "hartCommandsJson": "[{\"enabled\":true,\"id\":130,\"name\":\"TT301 Read Sensor\",\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"sensor.type\"},{\"kind\":\"variable\",\"variable\":\"sensor.model\"},{\"kind\":\"variable\",\"variable\":\"sensor.connection\"},{\"kind\":\"variable\",\"variable\":\"sensor.byte4\"}]},{\"enabled\":true,\"id\":131,\"name\":\"TT301 Write Sensor\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"sensor.type\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":1}},{\"kind\":\"set\",\"target\":\"sensor.model\",\"value\":{\"kind\":\"bodySlice\",\"offset\":2,\"length\":1}},{\"kind\":\"set\",\"target\":\"sensor.connection\",\"value\":{\"kind\":\"bodySlice\",\"offset\":3,\"length\":1}},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":2},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"0102\"},\"then\":[{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"upperRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44548000\"}},{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"lowerRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C3480000\"}},{\"kind\":\"forCodes\",\"source\":{\"kind\":\"hex\",\"bytes\":\"F6\"},\"maxIterations\":1,\"prefix\":[],\"body\":[{\"kind\":\"setDeviceVariable\",\"field\":\"upperLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44548000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"lowerLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C3480000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"minimumSpan\",\"value\":{\"kind\":\"hex\",\"bytes\":\"41200000\"}}]}]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":2},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"8300\"},\"then\":[{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"upperRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44E10000\"}},{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"lowerRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"42C80000\"}},{\"kind\":\"forCodes\",\"source\":{\"kind\":\"hex\",\"bytes\":\"F6\"},\"maxIterations\":1,\"prefix\":[],\"body\":[{\"kind\":\"setDeviceVariable\",\"field\":\"upperLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44E10000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"lowerLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"42C80000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"minimumSpan\",\"value\":{\"kind\":\"hex\",\"bytes\":\"42480000\"}}]}]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":2},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"8301\"},\"then\":[{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"upperRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"447A0000\"}},{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"lowerRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C2C80000\"}},{\"kind\":\"forCodes\",\"source\":{\"kind\":\"hex\",\"bytes\":\"F6\"},\"maxIterations\":1,\"prefix\":[],\"body\":[{\"kind\":\"setDeviceVariable\",\"field\":\"upperLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"447A0000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"lowerLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C2C80000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"minimumSpan\",\"value\":{\"kind\":\"hex\",\"bytes\":\"41A00000\"}}]}]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":2},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"8302\"},\"then\":[{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"upperRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"443B8000\"}},{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"lowerRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C3160000\"}},{\"kind\":\"forCodes\",\"source\":{\"kind\":\"hex\",\"bytes\":\"F6\"},\"maxIterations\":1,\"prefix\":[],\"body\":[{\"kind\":\"setDeviceVariable\",\"field\":\"upperLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"443B8000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"lowerLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C3160000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"minimumSpan\",\"value\":{\"kind\":\"hex\",\"bytes\":\"41F00000\"}}]}]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":2},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"8303\"},\"then\":[{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"upperRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44A8C000\"}},{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"lowerRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C3480000\"}},{\"kind\":\"forCodes\",\"source\":{\"kind\":\"hex\",\"bytes\":\"F6\"},\"maxIterations\":1,\"prefix\":[],\"body\":[{\"kind\":\"setDeviceVariable\",\"field\":\"upperLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44A8C000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"lowerLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C3480000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"minimumSpan\",\"value\":{\"kind\":\"hex\",\"bytes\":\"42700000\"}}]}]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":2},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"8304\"},\"then\":[{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"upperRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44A28000\"}},{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"lowerRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C2C80000\"}},{\"kind\":\"forCodes\",\"source\":{\"kind\":\"hex\",\"bytes\":\"F6\"},\"maxIterations\":1,\"prefix\":[],\"body\":[{\"kind\":\"setDeviceVariable\",\"field\":\"upperLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44A28000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"lowerLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C2C80000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"minimumSpan\",\"value\":{\"kind\":\"hex\",\"bytes\":\"42480000\"}}]}]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":2},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"8305\"},\"then\":[{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"upperRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44DAC000\"}},{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"lowerRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"00000000\"}},{\"kind\":\"forCodes\",\"source\":{\"kind\":\"hex\",\"bytes\":\"F6\"},\"maxIterations\":1,\"prefix\":[],\"body\":[{\"kind\":\"setDeviceVariable\",\"field\":\"upperLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44DAC000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"lowerLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"00000000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"minimumSpan\",\"value\":{\"kind\":\"hex\",\"bytes\":\"42200000\"}}]}]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":2},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"8306\"},\"then\":[{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"upperRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44DAC000\"}},{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"lowerRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"00000000\"}},{\"kind\":\"forCodes\",\"source\":{\"kind\":\"hex\",\"bytes\":\"F6\"},\"maxIterations\":1,\"prefix\":[],\"body\":[{\"kind\":\"setDeviceVariable\",\"field\":\"upperLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44DAC000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"lowerLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"00000000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"minimumSpan\",\"value\":{\"kind\":\"hex\",\"bytes\":\"42200000\"}}]}]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":2},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"8307\"},\"then\":[{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"upperRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"43C80000\"}},{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"lowerRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C3480000\"}},{\"kind\":\"forCodes\",\"source\":{\"kind\":\"hex\",\"bytes\":\"F6\"},\"maxIterations\":1,\"prefix\":[],\"body\":[{\"kind\":\"setDeviceVariable\",\"field\":\"upperLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"43C80000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"lowerLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C3480000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"minimumSpan\",\"value\":{\"kind\":\"hex\",\"bytes\":\"41700000\"}}]}]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":2},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"8308\"},\"then\":[{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"upperRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44610000\"}},{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"lowerRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C3480000\"}},{\"kind\":\"forCodes\",\"source\":{\"kind\":\"hex\",\"bytes\":\"F6\"},\"maxIterations\":1,\"prefix\":[],\"body\":[{\"kind\":\"setDeviceVariable\",\"field\":\"upperLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44610000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"lowerLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C3480000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"minimumSpan\",\"value\":{\"kind\":\"hex\",\"bytes\":\"420C0000\"}}]}]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":2},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"8309\"},\"then\":[{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"upperRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44160000\"}},{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"lowerRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C3480000\"}},{\"kind\":\"forCodes\",\"source\":{\"kind\":\"hex\",\"bytes\":\"F6\"},\"maxIterations\":1,\"prefix\":[],\"body\":[{\"kind\":\"setDeviceVariable\",\"field\":\"upperLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44160000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"lowerLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C3480000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"minimumSpan\",\"value\":{\"kind\":\"hex\",\"bytes\":\"42480000\"}}]}]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":2},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"830A\"},\"then\":[{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"upperRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"45098000\"}},{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"lowerRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"00000000\"}},{\"kind\":\"forCodes\",\"source\":{\"kind\":\"hex\",\"bytes\":\"F6\"},\"maxIterations\":1,\"prefix\":[],\"body\":[{\"kind\":\"setDeviceVariable\",\"field\":\"upperLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"45098000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"lowerLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"00000000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"minimumSpan\",\"value\":{\"kind\":\"hex\",\"bytes\":\"42700000\"}}]}]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":2},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"830B\"},\"then\":[{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"upperRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44480000\"}},{\"kind\":\"set\",\"target\":\"PV\",\"field\":\"lowerRange\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C3480000\"}},{\"kind\":\"forCodes\",\"source\":{\"kind\":\"hex\",\"bytes\":\"F6\"},\"maxIterations\":1,\"prefix\":[],\"body\":[{\"kind\":\"setDeviceVariable\",\"field\":\"upperLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"44480000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"lowerLimit\",\"value\":{\"kind\":\"hex\",\"bytes\":\"C3480000\"}},{\"kind\":\"setDeviceVariable\",\"field\":\"minimumSpan\",\"value\":{\"kind\":\"hex\",\"bytes\":\"42700000\"}}]}]}],\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"sensor.type\"},{\"kind\":\"variable\",\"variable\":\"sensor.model\"},{\"kind\":\"variable\",\"variable\":\"sensor.connection\"}]},{\"enabled\":true,\"id\":136,\"name\":\"TT301 Read PID Operating Mode\",\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"responseCode\",\"code\":112,\"abort\":false},{\"kind\":\"variable\",\"variable\":\"pid.operatingMode0\"},{\"kind\":\"variable\",\"variable\":\"pid.operatingMode1\"},{\"kind\":\"variable\",\"variable\":\"pid.operatingMode2\"}]},{\"enabled\":true,\"id\":138,\"name\":\"TT301 Read Controller Mode\",\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"controller.mode\"}]},{\"enabled\":true,\"id\":139,\"name\":\"TT301 Write Controller Mode Code\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"controller.modeWriteCode\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":1}}],\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"controller.modeWriteCode\"}]},{\"enabled\":true,\"id\":140,\"name\":\"TT301 Read PID Loop Values\",\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"responseCode\",\"code\":112,\"abort\":false},{\"kind\":\"hex\",\"bytes\":\"39\"},{\"kind\":\"percentOfRange\"},{\"kind\":\"hex\",\"bytes\":\"39\"},{\"kind\":\"variable\",\"variable\":\"pid.setpoint\"},{\"kind\":\"hex\",\"bytes\":\"39\"},{\"kind\":\"outputPercent\"},{\"kind\":\"variable\",\"variable\":\"pid.modeCode\"},{\"kind\":\"variable\",\"variable\":\"pid.spTracking\"},{\"kind\":\"hex\",\"bytes\":\"39\"},{\"kind\":\"variable\",\"variable\":\"pid.error\"}]},{\"enabled\":true,\"id\":142,\"name\":\"TT301 Read PID Tuning\",\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"responseCode\",\"code\":112,\"abort\":false},{\"kind\":\"variable\",\"variable\":\"pid.kp\"},{\"kind\":\"variable\",\"variable\":\"pid.tr\"},{\"kind\":\"variable\",\"variable\":\"pid.td\"},{\"kind\":\"variable\",\"variable\":\"pid.param4\"},{\"kind\":\"variable\",\"variable\":\"pid.param5\"}]},{\"enabled\":true,\"id\":152,\"name\":\"TT301 Read Setpoint Generator\",\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"spGenerator.time\"},{\"kind\":\"variable\",\"variable\":\"spGenerator.mode\"},{\"kind\":\"variable\",\"variable\":\"spGenerator.state\"}]},{\"enabled\":true,\"id\":162,\"name\":\"TT301 Read Burnout\",\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"AlarmSelectionCode\"}]},{\"enabled\":true,\"id\":163,\"name\":\"TT301 Write Burnout\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"AlarmSelectionCode\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":1}}],\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"AlarmSelectionCode\"}]},{\"enabled\":true,\"id\":164,\"name\":\"TT301 Read Display Configuration\",\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"display.firstVariable\"},{\"kind\":\"variable\",\"variable\":\"display.secondVariable\"}]},{\"enabled\":true,\"id\":165,\"name\":\"TT301 Write Display Configuration\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"display.firstVariable\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":1}},{\"kind\":\"set\",\"target\":\"display.secondVariable\",\"value\":{\"kind\":\"bodySlice\",\"offset\":2,\"length\":1}}],\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"display.firstVariable\"},{\"kind\":\"variable\",\"variable\":\"display.secondVariable\"}]},{\"enabled\":true,\"id\":168,\"name\":\"TT301 Read Write Protection\",\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"WriteProtectCode\"},{\"kind\":\"variable\",\"variable\":\"writeProtect.localAdjust\"}]},{\"enabled\":true,\"id\":169,\"name\":\"TT301 Write Write Protection\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"WriteProtectCode\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":1}},{\"kind\":\"set\",\"target\":\"writeProtect.localAdjust\",\"value\":{\"kind\":\"bodySlice\",\"offset\":2,\"length\":1}}],\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"WriteProtectCode\"},{\"kind\":\"variable\",\"variable\":\"writeProtect.localAdjust\"}]},{\"enabled\":true,\"id\":173,\"name\":\"TT301 Read Ordering Code\",\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"orderingCode\"}]},{\"enabled\":true,\"id\":186,\"name\":\"TT301 Write Cold Junction\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"sensor.coldJunction\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":1}}],\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"sensor.coldJunction\"}]},{\"enabled\":true,\"id\":187,\"name\":\"TT301 Read Cold Junction\",\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"sensor.coldJunction\"}]},{\"enabled\":true,\"id\":198,\"name\":\"TT301 Read Command 198\",\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"sensor.cmd198\"}]},{\"enabled\":true,\"id\":223,\"name\":\"TT301 Read Callendar-Van Dusen Coefficients\",\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"cvd.r0\"},{\"kind\":\"variable\",\"variable\":\"cvd.a\"},{\"kind\":\"variable\",\"variable\":\"cvd.b\"},{\"kind\":\"variable\",\"variable\":\"cvd.c\"}]}]",
+        "displayInstalled": true,
+        "displayModelName": "TT301",
+        "displayVariable1": "var:display.firstVariable",
+        "displayVariable2": "var:display.secondVariable",
+        "displayCodeMap": "0=current,1=output,2=pv/1,3=dv:1/1,4=percent,5=value:pid.setpoint,7=value:spGenerator.time,8=value:pid.error,9=value:pid.kp,10=value:pid.tr,11=value:pid.td,12=output",
+        "displayGlass": 1
+      },
+      "visual": {
+        "x": 320,
+        "y": 200,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel_temperature",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "temperature",
+        "pinId": "temperature",
+        "direction": "Input",
+        "valueType": "Real",
+        "unit": ""
+      },
+      "visual": {
+        "x": 160,
+        "y": 200,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel_loop_plus",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "loop_plus",
+        "pinId": "loop_plus"
+      },
+      "visual": {
+        "x": 480,
+        "y": 160,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel_loop_minus",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "loop_minus",
+        "pinId": "loop_minus"
+      },
+      "visual": {
+        "x": 480,
+        "y": 200,
+        "rotation": 0
+      }
+    }
+  ],
+  "topology": {
+    "revision": 1,
+    "nodes": [],
+    "conductors": [
+      {
+        "id": "wire-temperature",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel_temperature",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tt301",
+          "pinId": "PV"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-loop_plus",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel_loop_plus",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tt301",
+          "pinId": "loop_plus"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-loop_minus",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel_loop_minus",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tt301",
+          "pinId": "loop_minus"
+        },
+        "points": []
+      }
+    ]
+  },
+  "interface": [
+    {
+      "pinId": "temperature",
+      "label": "TEMP",
+      "internalTunnel": "temperature",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "loop_plus",
+      "label": "LOOP+",
+      "internalTunnel": "loop_plus",
+      "domain": "electrical"
+    },
+    {
+      "pinId": "loop_minus",
+      "label": "LOOP-",
+      "internalTunnel": "loop_minus",
+      "domain": "electrical"
+    }
+  ],
+  "symbolMode": "custom",
+  "iconPath": "./tt301.svg",
+  "symbol": {
+    "width": 150,
+    "height": 200,
+    "border": false,
+    "shapes": [
+      {
+        "kind": "image",
+        "href": "./tt301.svg",
+        "x": 0,
+        "y": 66,
+        "w": 150,
+        "h": 125,
+        "preserveAspectRatio": "xMidYMid meet"
+      }
+    ],
+    "pins": [
+      {
+        "id": "temperature",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 150,
+        "angle": 180,
+        "length": 8,
+        "label": "TEMP"
+      },
+      {
+        "id": "loop_plus",
+        "kind": "POWER",
+        "x": 150,
+        "y": 140,
+        "angle": 0,
+        "length": 8,
+        "label": "LOOP+"
+      },
+      {
+        "id": "loop_minus",
+        "kind": "POWER",
+        "x": 150,
+        "y": 160,
+        "angle": 0,
+        "length": 8,
+        "label": "LOOP-"
+      }
+    ]
+  },
+  "exposedComponents": [
+    {
+      "componentId": "tt301",
+      "x": 23,
+      "y": 4,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 0
+    }
+  ],
+  "exportedPropertyComponentIds": [
+    "tt301"
+  ]
+}

@@ -1144,6 +1144,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
         vars.analogLowerSaturationPercent = profile.analogLowerSaturationPercent;
         vars.analogUpperSaturationPercent = profile.analogUpperSaturationPercent;
         vars.alarmMilliamps = hartAlarmMilliamps(profile, plan);
+        vars.burnoutPercentFollowsOutput = profile.burnoutPercentFollowsOutput;
         vars.loopCurrentZeroTrim = plan.loopCurrentZeroTrim;
         vars.loopCurrentGainTrim = plan.loopCurrentGainTrim;
         vars.diagnosticStatus = plan.diagnosticStatus;
@@ -1286,7 +1287,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                     putFloat(metadata.cvdC) && putFloat(metadata.cvdR0);
             }
             const size_t expected = command == 1152 ? 3 : (command == 1153 || command == 1154 || command == 1155 ? 2 : (command == 1556 ? 6 : 17));
-            if (request.size() != expected || plan.writeProtectCode == 0x01) return false;
+            if (request.size() != expected || plan.writeProtected()) return false;
             if (plan.lockCode != 0 && plan.lockOwner != masterRole) return false;
             auto next = metadata;
             if (command == 1152) {
@@ -1343,7 +1344,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
             auto& w = plan.wireless;
             if (!w.capable || !plan.rtcSupported) return false;
             if (command == 793) {
-                if (request.size() != 7 || plan.writeProtectCode == 0x01) return false;
+                if (request.size() != 7 || plan.writeProtected()) return false;
                 uint64_t seconds = 0; if (!decodeDateTime(request, seconds)) return false;
                 plan.rtcValueSeconds = seconds; plan.rtcSetVirtualSeconds = plan.virtualTimeSeconds; plan.rtcLastSetSeconds = seconds; plan.rtcInitialized = true;
                 ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u); return response.writeBytes(request);
@@ -1356,7 +1357,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
             if (request.size() != (command == 795 ? 5u : 1u)) return false;
             const uint8_t type = request[0]; if (type >= w.timerIntervals.size()) return false;
             if (command == 795) {
-                const uint32_t interval = static_cast<uint32_t>(request[1] << 24 | request[2] << 16 | request[3] << 8 | request[4]); if (interval == 0 || plan.writeProtectCode == 0x01) return false;
+                const uint32_t interval = static_cast<uint32_t>(request[1] << 24 | request[2] << 16 | request[3] << 8 | request[4]); if (interval == 0 || plan.writeProtected()) return false;
                 w.timerIntervals[type] = interval; ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
             }
             return response.writeByte(type) && response.writeByte(static_cast<uint8_t>(w.timerIntervals[type] >> 24)) && response.writeByte(static_cast<uint8_t>(w.timerIntervals[type] >> 16)) && response.writeByte(static_cast<uint8_t>(w.timerIntervals[type] >> 8)) && response.writeByte(static_cast<uint8_t>(w.timerIntervals[type]));
@@ -1398,7 +1399,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
 
         if (command >= 960 && command <= 962 || command == 978 || command == 979) {
             auto& wireless = plan.wireless;
-            if (!wireless.capable || plan.writeProtectCode == 0x01) return false;
+            if (!wireless.capable || plan.writeProtected()) return false;
             const auto put40 = [&](uint64_t value) { for (int shift = 32; shift >= 0; shift -= 8) if (!response.writeByte(static_cast<uint8_t>(value >> shift))) return false; return true; };
             const auto read40 = [](std::span<const uint8_t> bytes, size_t offset) { uint64_t value = 0; for (size_t i = 0; i < 5; ++i) value = (value << 8) | bytes[offset + i]; return value; };
             const auto changed = [&]() { ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u); };
@@ -1446,7 +1447,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                     (static_cast<uint32_t>(bytes[offset + 2]) << 8) | static_cast<uint32_t>(bytes[offset + 3]);
             };
             if (command == 768) {
-                if (request.size() != wireless.joinKey.size() || plan.writeProtectCode == 0x01) return false;
+                if (request.size() != wireless.joinKey.size() || plan.writeProtected()) return false;
                 std::copy(request.begin(), request.end(), wireless.joinKey.begin());
                 ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
                 return response.writeBytes(request);
@@ -1465,7 +1466,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 return writeU32(shed) && writeU32(wireless.advertisingPeriod) && response.writeByte(wireless.advertisingNeighbors);
             }
             if (command == 771) {
-                if (request.size() != 5 && request.size() != 6 || plan.writeProtectCode == 0x01) return false;
+                if (request.size() != 5 && request.size() != 6 || plan.writeProtected()) return false;
                 const uint8_t mode = request[0];
                 if (mode > 3) return false;
                 wireless.joinMode = mode; wireless.activeSearchShedTime = readU32(request, 1);
@@ -1478,7 +1479,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 return response.writeByte(wireless.joinMode) && writeU32(wireless.activeSearchShedTime) && response.writeByte(wireless.maxJoinRetries);
             }
             if (command == 773) {
-                if (request.size() != 2 || plan.writeProtectCode == 0x01) return false;
+                if (request.size() != 2 || plan.writeProtected()) return false;
                 const uint16_t id = static_cast<uint16_t>(request[0] << 8 | request[1]);
                 if (id >= 0xE000 && id <= 0xEFFF) return false;
                 wireless.pendingNetworkId = id; wireless.networkId = id;
@@ -1492,7 +1493,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                     response.writeByte(static_cast<uint8_t>(wireless.networkId >> 8)) && response.writeByte(static_cast<uint8_t>(wireless.networkId));
             }
             if (command == 775) {
-                if (request.size() != wireless.networkTag.size() || plan.writeProtectCode == 0x01) return false;
+                if (request.size() != wireless.networkTag.size() || plan.writeProtected()) return false;
                 std::copy(request.begin(), request.end(), wireless.networkTag.begin());
                 ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
                 return response.writeBytes(request);
@@ -1509,37 +1510,37 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
             };
             if (command == 797) {
-                if (request.size() != 1 || plan.writeProtectCode == 0x01 || static_cast<int8_t>(request[0]) < -10 || static_cast<int8_t>(request[0]) > 10) return false;
+                if (request.size() != 1 || plan.writeProtected() || static_cast<int8_t>(request[0]) < -10 || static_cast<int8_t>(request[0]) > 10) return false;
                 wireless.radioTransmitPower = request[0]; changed(); return response.writeByte(request[0]);
             }
             if (command == 798) return request.empty() && response.writeByte(wireless.radioTransmitPower);
             if (command == 804) return request.empty() && response.writeByte(wireless.ccaMode);
             if (command == 805) {
-                if (request.size() != 1 || request[0] > 1 || plan.writeProtectCode == 0x01) return false;
+                if (request.size() != 1 || request[0] > 1 || plan.writeProtected()) return false;
                 wireless.ccaMode = request[0]; changed(); return response.writeByte(request[0]);
             }
             if (command == 808) return request.empty() && response.writeByte(static_cast<uint8_t>(wireless.packetTimeToLive));
             if (command == 809) {
-                if (request.size() != 1 || plan.writeProtectCode == 0x01) return false;
+                if (request.size() != 1 || plan.writeProtected()) return false;
                 wireless.packetTimeToLive = std::max<uint8_t>(request[0], static_cast<uint8_t>(8)); changed(); return response.writeByte(static_cast<uint8_t>(wireless.packetTimeToLive));
             }
             if (command == 810) return request.empty() && response.writeByte(wireless.joinPriority);
             if (command == 811) {
-                if (request.size() != 1 || plan.writeProtectCode == 0x01) return false;
+                if (request.size() != 1 || plan.writeProtected()) return false;
                 wireless.joinPriority = std::min<uint8_t>(request[0], 15); changed(); return response.writeByte(wireless.joinPriority);
             }
             if (command == 812) return request.empty() && response.writeByte(wireless.packetReceivePriority);
             if (command == 813) {
-                if (request.size() != 1 || request[0] > 3 || plan.writeProtectCode == 0x01) return false;
+                if (request.size() != 1 || request[0] > 3 || plan.writeProtected()) return false;
                 wireless.packetReceivePriority = request[0]; changed(); return response.writeByte(request[0]);
             }
             if (command == 821) {
-                if (request.size() != 1 || request[0] > 5 || plan.writeProtectCode == 0x01) return false;
+                if (request.size() != 1 || request[0] > 5 || plan.writeProtected()) return false;
                 wireless.networkAccessMode = request[0]; changed(); return response.writeByte(request[0]);
             }
             if (command == 822) return request.empty() && response.writeByte(wireless.networkAccessMode);
             if (command == 860) return request.empty() && response.writeByte(wireless.joinKeyMode);
-            if (request.size() != 1 || request[0] > 1 || plan.writeProtectCode == 0x01) return false;
+            if (request.size() != 1 || request[0] > 1 || plan.writeProtected()) return false;
             wireless.joinKeyMode = request[0]; changed(); return response.writeByte(request[0]);
         }
         if (command == 778 || command == 781 || command == 857 || command == 859) {
@@ -1592,7 +1593,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 if (!request.empty()) return false;
                 return response.writeByte(16) && response.writeBytes(wireless.channelBlacklist) && response.writeBytes(wireless.pendingChannelBlacklist);
             }
-            if (request.size() != 3 || request[0] != 16 || plan.writeProtectCode == 0x01) return false;
+            if (request.size() != 3 || request[0] != 16 || plan.writeProtected()) return false;
             std::array<uint8_t, 2> next{{request[1], request[2]}};
             wireless.pendingChannelBlacklist = next;
             ++plan.configurationChangedCounter;
@@ -1630,7 +1631,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 payload[1] = static_cast<uint8_t>(emitted);
                 return response.writeBytes(payload);
             }
-            if (request.size() != 6 || !validList(request[0]) || plan.writeProtectCode == 0x01) return false;
+            if (request.size() != 6 || !validList(request[0]) || plan.writeProtected()) return false;
             const uint8_t code = request[0];
             std::array<uint8_t, 5> uid{};
             std::copy(request.begin() + 1, request.end(), uid.begin());
@@ -1673,7 +1674,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 for (size_t i = 0; i < sr.hopCount; ++i) if (!put16(sr.hops[i])) return false;
                 return true;
             }
-            if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+            if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (command == 974) {
                 if (request.size() != 5 || request[1] == 0 || request[2] == 0xFF && request[3] == 0xFF) return false;
                 size_t index = wireless.routeCount;
@@ -1752,7 +1753,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
             const auto read40 = [](std::span<const uint8_t> bytes, size_t offset) { uint64_t value = 0; for (size_t i = 0; i < 5; ++i) value = (value << 8) | bytes[offset + i]; return value; };
             const auto changed = [&]() { ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u); };
             if (command == 972) {
-                if (request.size() != 10 || plan.writeProtectCode == 0x01) return false;
+                if (request.size() != 10 || plan.writeProtected()) return false;
                 const uint64_t suspendAt = read40(request, 0), resumeAt = read40(request, 5);
                 if (suspendAt == 0 || resumeAt <= suspendAt) return false;
                 wireless.suspendAtAsn = suspendAt; wireless.resumeAtAsn = resumeAt; changed();
@@ -1764,13 +1765,13 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 return response.writeBytes(bytes) && response.writeByte(wireless.staleDataCountSetpoint);
             }
             if (command == 853) {
-                if (request.size() != 4 || plan.writeProtectCode == 0x01) return false;
+                if (request.size() != 4 || plan.writeProtected()) return false;
                 const float value = HartTypeCodec::decodeFloat32BE(request);
                 if (!std::isfinite(value) || value < 0.0f) return false;
                 wireless.staleDataTimer = value; changed(); return response.writeBytes(request);
             }
             if (command == 854) {
-                if (request.size() != 1 || request[0] == 0 || plan.writeProtectCode == 0x01) return false;
+                if (request.size() != 1 || request[0] == 0 || plan.writeProtected()) return false;
                 wireless.staleDataCountSetpoint = request[0]; changed(); return response.writeByte(request[0]);
             }
             if (command == 855) {
@@ -1788,7 +1789,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
 
         if (command == 963) {
             auto& wireless = plan.wireless;
-            if (!wireless.capable || masterRole != 2 || plan.writeProtectCode == 0x01) return false;
+            if (!wireless.capable || masterRole != 2 || plan.writeProtected()) return false;
             if (request.size() != 29 && request.size() != 34) return false;
             const uint8_t type = request[0];
             const uint16_t peer = static_cast<uint16_t>(request[1] << 8 | request[2]);
@@ -1812,7 +1813,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
 
         if (command == 964) {
             auto& wireless = plan.wireless;
-            if (!wireless.capable || masterRole != 2 || plan.writeProtectCode == 0x01) return false;
+            if (!wireless.capable || masterRole != 2 || plan.writeProtected()) return false;
             if (request.size() != 3) return false;
             const uint8_t type = request[0];
             const uint16_t peer = static_cast<uint16_t>(request[1] << 8 | request[2]);
@@ -1831,7 +1832,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
 
         if (command == 965 || command == 966) {
             auto& wireless = plan.wireless;
-            if (!wireless.capable || masterRole != 2 || plan.writeProtectCode == 0x01) return false;
+            if (!wireless.capable || masterRole != 2 || plan.writeProtected()) return false;
             const auto put16 = [&](uint16_t value) { return response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value)); };
             const auto put40 = [&](uint64_t value) { for (int shift = 32; shift >= 0; shift -= 8) if (!response.writeByte(static_cast<uint8_t>(value >> shift))) return false; return true; };
             if (command == 966) {
@@ -1863,7 +1864,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
 
         if (command >= 967 && command <= 971) {
             auto& wireless = plan.wireless;
-            if (!wireless.capable || masterRole != 2 || plan.writeProtectCode == 0x01) return false;
+            if (!wireless.capable || masterRole != 2 || plan.writeProtected()) return false;
             const auto put16 = [&](uint16_t value) { return response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value)); };
             if (command == 967) {
                 if (request.size() != 8) return false;
@@ -2000,7 +2001,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 guideline(variable->minimumTrimDifferential);
         }
         if (command == 0x52) {
-            if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+            if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 7) return false;
             auto variable = findTrimVariable(request[0]);
             if (variable == plan.variables.end() || request[1] == 0 || request[1] > 2) return false;
@@ -2025,7 +2026,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 response.writeBytes(HartTypeCodec::encodeFloat32BE(value));
         }
         if (command == 0x53) {
-            if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+            if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 1) return false;
             auto variable = findTrimVariable(request[0]);
             if (variable == plan.variables.end() || variable->trimPointsSupported == 0) return false;
@@ -2035,12 +2036,12 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
             return response.writeByte(request[0]);
         }
         if (command == 0x57) {
-            if (!plan.ioSystem || plan.writeProtectCode == 0x01 || request.size() != 1 || request[0] > 1) return false;
+            if (!plan.ioSystem || plan.writeProtected() || request.size() != 1 || request[0] > 1) return false;
             plan.ioMasterMode = request[0];
             return response.writeByte(plan.ioMasterMode);
         }
         if (command == 0x58) {
-            if (!plan.ioSystem || plan.writeProtectCode == 0x01 || request.size() != 1 || request[0] < 2 || request[0] > 5) return false;
+            if (!plan.ioSystem || plan.writeProtected() || request.size() != 1 || request[0] < 2 || request[0] > 5) return false;
             plan.ioRetryCount = request[0];
             return response.writeByte(plan.ioRetryCount);
         }
@@ -2147,7 +2148,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
         }
         if (command >= 1408 && command <= 1410) {
             const size_t expected = command == 1408 ? 11 : (command == 1409 ? 4 : 8);
-            if (request.size() != expected || plan.writeProtectCode == 0x01) return false;
+            if (request.size() != expected || plan.writeProtected()) return false;
             const auto validPressureEnum = [](uint8_t value) { return value <= 249 || value == 251; };
             const bool lockedByOtherMaster = plan.lockCode != 0 && plan.lockOwner != masterRole;
             if (lockedByOtherMaster) return false;
@@ -2199,7 +2200,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                     response.writeByte(plan.siUnitsControl);
             }
             if (command == 513) {
-                if (plan.writeProtectCode == 0x01 || request.size() != 3 || !validLatinCountry(request[0]) ||
+                if (plan.writeProtected() || request.size() != 3 || !validLatinCountry(request[0]) ||
                     !validLatinCountry(request[1]) || request[2] > 1) return false;
                 if (request[2] == 1) {
                     for (const auto& variable : plan.variables) {
@@ -2240,7 +2241,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                     response.writeByte(plan.deviceLocation.method) && putFloat(plan.deviceLocation.altitude);
             }
             if (command == 517) {
-                if (!plan.deviceLocationSupported || plan.writeProtectCode == 0x01 || request.size() != 13) return false;
+                if (!plan.deviceLocationSupported || plan.writeProtected() || request.size() != 13) return false;
                 const float latitude = HartTypeCodec::decodeFloat32BE(request.subspan(0, 4));
                 const float longitude = HartTypeCodec::decodeFloat32BE(request.subspan(4, 4));
                 const float altitude = HartTypeCodec::decodeFloat32BE(request.subspan(9, 4));
@@ -2254,7 +2255,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 return response.writeBytes(plan.locationDescription);
             }
             if (command == 519) {
-                if (!plan.locationDescriptionSupported || plan.writeProtectCode == 0x01 || request.size() != 32) return false;
+                if (!plan.locationDescriptionSupported || plan.writeProtected() || request.size() != 32) return false;
                 std::copy(request.begin(), request.end(), plan.locationDescription.begin());
                 return response.writeBytes(plan.locationDescription);
             }
@@ -2263,12 +2264,12 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 return response.writeBytes(plan.processUnitTag);
             }
             if (command == 521) {
-                if (!plan.processUnitTagSupported || plan.writeProtectCode == 0x01 || request.size() != 32) return false;
+                if (!plan.processUnitTagSupported || plan.writeProtected() || request.size() != 32) return false;
                 std::copy(request.begin(), request.end(), plan.processUnitTag.begin());
                 return response.writeBytes(plan.processUnitTag);
             }
             if (command == 522) {
-                if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 2 || request[1] < 100 || request[1] > 107) return false;
                 auto variable = std::find_if(plan.variables.begin(), plan.variables.end(), [&](const auto& item) {
                     return item.deviceVariableCode == request[0] && item.classification == 66;
@@ -2302,7 +2303,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                     return defaults;
                 };
                 if (command == 525) {
-                    if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                    if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (!request.empty()) return false;
                     plan.condensedStatusMapping = normativeDefaultMap();
                     return true;
@@ -2316,7 +2317,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 count = static_cast<uint8_t>(count & 0xFE);
                 if (count < 2) return false;
                 if (command == 523) return packMaps(start, count, plan.condensedStatusMapping);
-                if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 2 + (request[1] + 1) / 2 || request[1] < 2 || (request[1] & 1) != 0) return false;
                 if (start + request[1] > plan.condensedStatusMapping.size()) return false;
                 std::array<uint8_t, 208> staged = plan.condensedStatusMapping;
@@ -2329,7 +2330,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 return packMaps(start, request[1], plan.condensedStatusMapping);
             }
             if (command == 526) {
-                if (!plan.condensedStatusSupported || plan.writeProtectCode == 0x01 || request.size() != 1 || request[0] > 1) return false;
+                if (!plan.condensedStatusSupported || plan.writeProtected() || request.size() != 1 || request[0] > 1) return false;
                 if (request[0] == 0) {
                     plan.statusSimulationEnabled = false;
                     plan.simulatedStatusMask.fill(0);
@@ -2364,7 +2365,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
             };
             auto put16 = [&](uint16_t value) { return response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value)); };
             if (command == 0x64) {
-                if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 1 || request[0] > 3) return false;
                 plan.alarmSelectionCode = request[0];
                 return response.writeByte(plan.alarmSelectionCode);
@@ -2375,7 +2376,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 return response.writeByte(request[0]) && put16(burstSubDeviceIndex(configuration));
             }
             if (command == 0x66) {
-                if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 3 || !validBurstIndex(request[0])) return false;
                 const uint16_t subIndex = static_cast<uint16_t>(request[1] << 8 | request[2]);
                 if (subIndex > plan.subDevices.size()) return false;
@@ -2384,7 +2385,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 return response.writeBytes(request);
             }
             if (command == 0x67) {
-                if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 9 || !validBurstIndex(request[0])) return false;
                 const uint32_t update = (static_cast<uint32_t>(request[1]) << 24) | (static_cast<uint32_t>(request[2]) << 16) |
                     (static_cast<uint32_t>(request[3]) << 8) | request[4];
@@ -2401,7 +2402,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 return response.writeBytes(request);
             }
             if (command == 0x68) {
-                if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 8 || !validBurstIndex(request[0])) return false;
                 const uint8_t mode = request[1];
                 const uint8_t classification = request[2];
@@ -2446,7 +2447,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 // Used", and the response must still be the full, untruncated
                 // 9 bytes (footnote 76) -- never mirror the short request.
                 const bool legacy = !request.empty() && request.size() <= 4;
-                if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (!(legacy || request.size() == 9)) return false;
                 const uint8_t index = legacy ? 0 : request[8];
                 if (!validBurstIndex(index)) return false;
@@ -2467,7 +2468,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
             }
             if (command == 0x6C) {
                 const bool legacy = request.size() == 1;
-                if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if ((request.size() != 1 && request.size() != 3)) return false;
                 const HartCommandId target = legacy ? request[0] : static_cast<HartCommandId>(request[0] << 8 | request[1]);
                 const uint8_t index = legacy ? 0 : request[2];
@@ -2487,7 +2488,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 if ((request.size() != 1 && request.size() != 2) || (legacy && request[0] > 1)) return false;
                 const uint8_t control = request[0];
                 const uint8_t index = legacy ? 0 : request[1];
-                if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (!validBurstIndex(index) || control > 3) return false;
                 burst(index).control = control;
                 if (legacy) return response.writeByte(control);
@@ -2545,7 +2546,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                     // bytes 13-14 (handled below via `sourceCommand`, which
                     // becomes the single value written to both places).
                     const bool legacy = request.size() == 13;
-                    if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                    if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (!(legacy || request.size() == 15) || request[1] > 2) return false;
                     if (findVariable(request[0]) == plan.variables.end() || request[8] > 7) return false;
                     const HartCommandId sourceCommand = legacy ? static_cast<HartCommandId>(request[7])
@@ -2587,14 +2588,14 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                     response.writeByte(event.deviceStatusMask) && response.writeBytes(event.eventMask);
             }
             if (command == 0x74) {
-                if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() < 2 || request.size() > 27 || request[0] != 0) return false;
                 event.deviceStatusMask = request[1]; event.eventMask.fill(0);
                 std::copy(request.begin() + 2, request.end(), event.eventMask.begin());
                 return response.writeBytes(request);
             }
             if (command == 0x75) {
-                if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 13 || request[0] != 0) return false;
                 const uint32_t retry = (static_cast<uint32_t>(request[1]) << 24) | (static_cast<uint32_t>(request[2]) << 16) | (static_cast<uint32_t>(request[3]) << 8) | request[4];
                 const uint32_t maximum = (static_cast<uint32_t>(request[5]) << 24) | (static_cast<uint32_t>(request[6]) << 16) | (static_cast<uint32_t>(request[7]) << 8) | request[8];
@@ -2604,7 +2605,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 return response.writeBytes(request);
             }
             if (command == 0x76) {
-                if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 2 || request[0] != 0 || request[1] > 3) return false;
                 event.control = request[1];
                 return response.writeBytes(request);
@@ -2699,7 +2700,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
         // says range units do not change PV units. Invalid requests therefore
         // fail without touching the canonical VariableConfiguration.
         if (command == 0x23 || command == 0x24 || command == 0x25) {
-            if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+            if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (primary == plan.variables.end()) return false;
             const auto& authored = *primary;
             auto validUnit = [&](uint8_t unit) {
@@ -2783,7 +2784,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
             return true;
         }
         if (command == 0x2C) {
-            if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+            if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 1 || primary == plan.variables.end()) return false;
             const auto& authored = *primary;
             const uint8_t unit = request[0];
@@ -2812,7 +2813,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
             return true;
         }
         if (command >= 0x27 && command <= 0x2F) {
-            if (plan.writeProtectCode == 0x01 && command != 0x2A) return response.fail(HartResponseCodes::InWriteProtectMode);
+            if (plan.writeProtected() && command != 0x2A) return response.fail(HartResponseCodes::InWriteProtectMode);
             switch (command) {
                 case 0x27: // EEPROM control: virtual device has no separate EEPROM; echo validated control.
                     if (request.size() != 1 || request[0] > 1) return false;
@@ -2894,7 +2895,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                            variable.id == "PV" || variable.id == "primary";
                 });
             };
-            if (plan.writeProtectCode == 0x01 && command != 0x32) return response.fail(HartResponseCodes::InWriteProtectMode);
+            if (plan.writeProtected() && command != 0x32) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (command == 0x31) {
                 if (request.size() != 3) return false;
                 auto pv = findPrimary(); if (pv == plan.variables.end()) return false;
@@ -3020,7 +3021,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                     writeFloat(plan.analogChannel0AdditionalDamping) && response.writeByte(plan.analogChannel0Flags);
             }
             if (command == 0x40) {
-                if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 5 || !channelOk(request[0])) return false;
                 const float damping = HartTypeCodec::decodeFloat32BE(request.subspan(1, 4));
                 if (!std::isfinite(damping) || damping < 0.0f) return false;
@@ -3028,7 +3029,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 return response.writeByte(0) && writeFloat(damping);
             }
             if (command == 0x41) {
-                if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 10 || !channelOk(request[0])) return false;
                 const uint8_t unit = request[1];
                 const float upper = HartTypeCodec::decodeFloat32BE(request.subspan(2, 4));
@@ -3040,7 +3041,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 return response.writeByte(0) && response.writeByte(unit) && writeFloat(upper) && writeFloat(lower);
             }
             if (command == 0x42) {
-                if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 6 || !channelOk(request[0])) return false;
                 const uint8_t unit = request[1];
                 const auto valueBytes = request.subspan(2, 4);
@@ -3055,7 +3056,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 return response.writeByte(0) && response.writeByte(unit) && response.writeBytes(valueBytes);
             }
             if (command == 0x43 || command == 0x44) {
-                if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 6 || !channelOk(request[0]) || request[1] == 0xFA || request[1] == 0xFF) return false;
                 if (!plan.fixedCurrentMode) return false;
                 const float measured = HartTypeCodec::decodeFloat32BE(request.subspan(2, 4));
@@ -3066,7 +3067,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 return response.writeByte(0) && response.writeByte(request[1]) && writeFloat(measured);
             }
             if (command == 0x45) {
-                if (plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+                if (plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 2 || !channelOk(request[0]) || request[1] > 1) return false;
                 plan.pvTransferFunctionCode = request[1];
                 return response.writeByte(0) && response.writeByte(request[1]);
@@ -3095,7 +3096,7 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
         if (!program) return response.fail(HartResponseCodes::CommandNotImplemented);
         // A program with a write stage changes configuration: refused while
         // the device is write protected (Common Table 7 code 1), RC 7.
-        if (!program->definition.write.empty() && plan.writeProtectCode == 0x01)
+        if (!program->definition.write.empty() && plan.writeProtected())
             return response.fail(HartResponseCodes::InWriteProtectMode);
         // HCF_SPEC-127 6.7.1: a single-byte Command 6 comes from a HART 5
         // master -- loop current enabled at address 0, disabled otherwise,
@@ -3113,6 +3114,28 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
             response = HartResponseBuilder(16);
             response.setResponseCode(code);
             if (!response.writeByte(address)) return false;
+        }
+        // HART 6/7 Command 0 continues the identity block: response
+        // preambles, maximum Device Variables, Configuration Change Counter
+        // and Extended Field Device Status; revision 7 adds the 16-bit
+        // manufacturer, Private Label Distributor and Device Profile.
+        if (command == 0x00 && profile.identity.universalCommandRevision >= 6) {
+            const auto put16 = [&](uint16_t value) {
+                return response.writeByte(static_cast<uint8_t>(value >> 8)) && response.writeByte(static_cast<uint8_t>(value));
+            };
+            if (!response.writeByte(plan.responsePreambles) || !response.writeByte(profile.maximumDeviceVariables) ||
+                !put16(static_cast<uint16_t>(plan.configurationChangedCounter)) || !response.writeByte(0x00)) return false;
+            if (profile.identity.universalCommandRevision >= 7 &&
+                (!put16(profile.manufacturerId) || !put16(profile.privateLabelDistributor) || !response.writeByte(profile.deviceProfile)))
+                return false;
+        }
+        for (const auto& limit : profile.responseDataLimits) {
+            if (limit.command != command || response.size() <= limit.bytes) continue;
+            const std::vector<uint8_t> kept(response.bytes().begin(), response.bytes().begin() + limit.bytes);
+            const uint8_t code = response.responseCode();
+            response = HartResponseBuilder(kept.size());
+            response.setResponseCode(code);
+            if (!response.writeBytes(kept)) return false;
         }
         // A program whose write stage ran, or that SET an authored variable,
         // changed the device configuration.
@@ -3172,6 +3195,9 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 authored.dampingValue = variable.damping;
                 authored.deviceVariableStatus = variable.status;
                 authored.writable = variable.writable;
+                authored.upperTransducerLimit = variable.upperLimit;
+                authored.lowerTransducerLimit = variable.lowerLimit;
+                authored.minimumSpan = variable.minimumSpan;
             }
         }
         return true;

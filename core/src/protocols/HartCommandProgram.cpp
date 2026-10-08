@@ -9,12 +9,16 @@
 namespace lasecsimul::protocols {
 
 HartAnalogOutput hartAnalogOutput(const HartExecutionVariables& variables) noexcept {
-    return hartEvaluateAnalogOutput(variables.primaryVariable, variables.lowerRangeValue, variables.upperRangeValue,
+    HartAnalogOutput output = hartEvaluateAnalogOutput(variables.primaryVariable, variables.lowerRangeValue, variables.upperRangeValue,
                                     variables.analogLowerSaturationPercent, variables.analogUpperSaturationPercent,
                                     variables.fixedCurrentMode, variables.fixedCurrentMilliamps,
                                     variables.loopCurrentZeroTrim, variables.loopCurrentGainTrim, variables.loopCurrentMode,
                                     variables.alarmMilliamps,
                                     {variables.pvTransferFunctionCode, variables.transferCutoffPercent, variables.transferCutoffMode});
+    if (variables.burnoutPercentFollowsOutput && std::isfinite(variables.alarmMilliamps) && !variables.fixedCurrentMode &&
+        variables.loopCurrentMode != 0)
+        output.percentOfRange = output.outputPercent;
+    return output;
 }
 
 float hartPercentOfRange(const HartExecutionVariables& variables) noexcept {
@@ -476,6 +480,20 @@ bool execStatement(const HartStatement& statement, HartExecutionVariables& vars,
                         if (bytes->size() != 4) return false;
                         variable->damping = HartTypeCodec::decodeFloat32BE(*bytes);
                         return std::isfinite(variable->damping) && variable->damping >= 0.0f;
+                    case HartDeviceVariableField::UpperLimit:
+                    case HartDeviceVariableField::LowerLimit:
+                    case HartDeviceVariableField::MinimumSpan: {
+                        // Transducer limits: e.g. a sensor change on a
+                        // temperature transmitter loads the new sensor's limits.
+                        if (bytes->size() != 4) return false;
+                        const float limit = HartTypeCodec::decodeFloat32BE(*bytes);
+                        if (!std::isfinite(limit)) return false;
+                        if (node.target == HartDeviceVariableField::UpperLimit) variable->upperLimit = limit;
+                        else if (node.target == HartDeviceVariableField::LowerLimit) variable->lowerLimit = limit;
+                        else if (limit < 0.0f) return false;
+                        else variable->minimumSpan = limit;
+                        return true;
+                    }
                     case HartDeviceVariableField::WriteMode:
                         if (bytes->size() != 1 || ((*bytes)[0] != 0 && (*bytes)[0] != 1)) return false;
                         if ((*bytes)[0]) variable->properties |= 0x80; else variable->properties &= static_cast<uint8_t>(~0x80u);

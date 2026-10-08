@@ -8,8 +8,11 @@
  *
  * Payload (little-endian, from `payloadOffset`): u32 enabled, 6 numeric chars
  * (sign, half digit, 4 digits), u8 decimal-point mask (bit p = point after
- * numeric position p), u8 reserved, 5 alpha chars, 3 reserved, u32
+ * numeric position p), u8 glass, 5 alpha chars, 3 reserved, u32
  * annunciator mask.
+ *
+ * Glass 0 is the LD301 indicator (sqrt marks); glass 1 the TT301 one (TT301
+ * manual Fig. 2.9: ACK instead of the sqrt marks).
  */
 export interface SegmentLcdFrame {
   enabled: boolean;
@@ -17,6 +20,7 @@ export interface SegmentLcdFrame {
   decimalPoints: number;
   alpha: string;
   annunciators: number;
+  glass: number;
 }
 
 export const SEGMENT_LCD_PAYLOAD_BYTES = 24;
@@ -25,8 +29,11 @@ export const SEGMENT_LCD_PAYLOAD_BYTES = 24;
 export const SegmentLcdAnnunciator = {
   pid: 1 << 0, fix: 1 << 1, total: 1 << 2, table: 1 << 3, multidrop: 1 << 4, sqrt: 1 << 5, sqrtCube: 1 << 6,
   sqrtFifth: 1 << 7, automatic: 1 << 8, manual: 1 << 9, percent: 1 << 10, minutes: 1 << 11, degree: 1 << 12,
-  adjust: 1 << 13, setpoint: 1 << 14, processVariable: 1 << 15,
+  adjust: 1 << 13, setpoint: 1 << 14, processVariable: 1 << 15, acknowledge: 1 << 16,
 } as const;
+
+/** Glass of the indicator (HartLcdGlass in the Core). */
+export const SegmentLcdGlass = { ld301: 0, tt301: 1 } as const;
 
 export function decodeSegmentLcd(bytes: Uint8Array, offset: number): SegmentLcdFrame | undefined {
   if (offset < 0 || offset + SEGMENT_LCD_PAYLOAD_BYTES > bytes.byteLength) return undefined;
@@ -38,6 +45,7 @@ export function decodeSegmentLcd(bytes: Uint8Array, offset: number): SegmentLcdF
     decimalPoints: bytes[offset + 10]!,
     alpha: text(12, 5),
     annunciators: view.getUint32(offset + 20, true),
+    glass: bytes[offset + 11]!,
   };
 }
 
@@ -127,9 +135,13 @@ export function segmentLcdSvg(frame: SegmentLcdFrame | undefined, x: number, y: 
   markup += annunciator("Fix", U(0.06), V(0.25), small, on(A.fix), lit, ghost);
   markup += annunciator("F(t)", U(0.24), V(0.25), small, on(A.total), lit, ghost);
   markup += annunciator("F(x)", U(0.43), V(0.25), small, on(A.table), lit, ghost);
-  markup += annunciator("√", U(0.64), V(0.25), small * 1.15, on(A.sqrt), lit, ghost);
-  markup += annunciator("3", U(0.71), V(0.21), small * 0.7, on(A.sqrtCube), lit, ghost);
-  markup += annunciator("5", U(0.76), V(0.21), small * 0.7, on(A.sqrtFifth), lit, ghost);
+  if (frame.glass === SegmentLcdGlass.tt301) {
+    markup += annunciator("ACK", U(0.40), V(0.12), small, on(A.acknowledge), lit, ghost);
+  } else {
+    markup += annunciator("√", U(0.64), V(0.25), small * 1.15, on(A.sqrt), lit, ghost);
+    markup += annunciator("3", U(0.71), V(0.21), small * 0.7, on(A.sqrtCube), lit, ghost);
+    markup += annunciator("5", U(0.76), V(0.21), small * 0.7, on(A.sqrtFifth), lit, ghost);
+  }
   // Numeric field: A / sign / M, half digit, four digits with points, %.
   markup += annunciator("A", U(0.035), V(0.37), small, on(A.automatic), lit, ghost);
   markup += annunciator("M", U(0.035), V(0.60), small, on(A.manual), lit, ghost);

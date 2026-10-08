@@ -1,14 +1,14 @@
 # TT301 e FY301: base visual e diferenças para a próxima coleta
 
-Os dois dispositivos usam os SVGs fornecidos em `ld301/tt301.svg` e
-`ld301/Fy301.svg`, copiados para `subcircuits/` para entrar no pacote da
+Os dois dispositivos usam os SVGs fornecidos em `trm/tt301/tt301.svg` e
+`trm/fy301/Fy301.svg`, copiados para `subcircuits/` para entrar no pacote da
 extensão. O esquemático mostra o LCD dinâmico acima de cada imagem, com a
 mesma moldura compacta do LD301. Os quatro IDs de pino do Core são preservados:
 `sensor_plus`, `sensor_minus`, `loop_plus` e `loop_minus`.
 
 ## TT301
 
-- O manual `ld301/tt301mp.pdf`, página PDF 11 (seção 1.3), identifica os
+- O manual `trm/tt301/tt301mp.pdf`, página PDF 11 (seção 1.3), identifica os
   bornes superiores +/− para alimentação de 12 a 45 Vcc e os bornes inferiores
   1 a 4 para sensores. TEST permite medir a corrente sem abrir o laço e COMM
   recebe o configurador HART.
@@ -20,7 +20,7 @@ mesma moldura compacta do LD301. Os quatro IDs de pino do Core são preservados:
 
 ## FY301
 
-- O manual `ld301/fy301mp.pdf`, páginas PDF 16–18, mostra os bornes do sinal
+- O manual `trm/fy301/fy301mp.pdf`, páginas PDF 16–18, mostra os bornes do sinal
   4–20 mA, TEST, COMM e terra. O posicionador apresenta impedância equivalente
   aproximada de 550 Ω, segundo a página 18.
 - A página PDF 22 descreve a opção especial K2 de retorno de posição em

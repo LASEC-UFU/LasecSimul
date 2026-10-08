@@ -439,8 +439,14 @@ void McuController::start(const std::filesystem::path& firmwarePath, const std::
     m_arenaBridge.open(qemu::QemuArenaOpenOptions{arenaName, true});
     m_processManager.start(spec);
     if (m_arenaBridge.protocolMajor() == LSDN_QEMU_ARENA_ABI_MAJOR) {
+        // QEMU normally answers in ~0.2 s, but a loaded PC (antivirus scanning
+        // the executable and its DLLs, parallel builds, a classroom machine)
+        // can take several seconds. A 5 s limit made the ESP32 start only
+        // sometimes. A QEMU that dies is still reported at once (isRunning).
+        const long long handshakeMs = std::clamp(
+            std::atoll(environmentValue("LASECSIMUL_QEMU_HANDSHAKE_TIMEOUT_MS", "30000").c_str()), 1000LL, 600000LL);
         const auto deadline =
-            std::chrono::steady_clock::now() + std::chrono::seconds(5);
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(handshakeMs);
         while (m_processManager.isRunning() &&
                !m_arenaBridge.peerReady() &&
                std::chrono::steady_clock::now() < deadline) {

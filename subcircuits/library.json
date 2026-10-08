@@ -212,6 +212,10 @@
     {
       "typeId": "subcircuits.hart.smar_ld301",
       "manifest": "hart_smar_ld301.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.hart.smar_tt301",
+      "manifest": "hart_smar_tt301.lssubcircuit"
     }
   ]
 }

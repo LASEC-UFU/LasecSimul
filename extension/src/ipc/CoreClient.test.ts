@@ -1,5 +1,5 @@
 import * as net from "net";
-import { CoreClient } from "./CoreClient";
+import { CoreClient, LOAD_MCU_FIRMWARE_TIMEOUT_MS } from "./CoreClient";
 import { PROTOCOL_VERSION, RequestEnvelope, ResponseEnvelope } from "./protocol";
 import { MockCoreServer, serverPath, cleanupServerPath as cleanup, createTestRunner, assert } from "./testSupport/MockCoreServer";
 
@@ -75,6 +75,41 @@ const { test, finish } = createTestRunner("CoreClient — testes de IPC");
     let threw = false;
     try { await client.request("pausar", {}); } catch { threw = true; }
     assert(threw, "request sem resposta deve expirar com erro");
+    acceptedSocket?.destroy();
+    await new Promise<void>((r) => srv.close(() => { cleanup(name); r(); }));
+  });
+
+  await test("loadMcuFirmware espera a partida lenta do QEMU além do prazo comum de IPC", async () => {
+    const name = `lasecsimul-test-slow-qemu-${process.pid}`;
+    cleanup(name);
+    // O Core responde a loadMcuFirmware só depois de 600 ms (QEMU lento num PC
+    // ocupado); o prazo comum do cliente é 200 ms neste teste.
+    let acceptedSocket: net.Socket | undefined;
+    const srv = net.createServer((s) => {
+      acceptedSocket = s;
+      let buf = "";
+      s.on("data", (d: Buffer) => {
+        buf += d.toString();
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const msg = JSON.parse(line) as RequestEnvelope;
+          const reply = (payload: unknown) => s.write(JSON.stringify({ id: msg.id, ok: true, payload }) + "\n");
+          if (msg.type === "hello") reply({ serverVersion: "0.1.0", protocolVersion: PROTOCOL_VERSION });
+          else setTimeout(() => reply({ gdbPort: 0, debug: false }), 600);
+        }
+      });
+    });
+    await new Promise<void>((r) => srv.listen(serverPath(name), r));
+    const client = new CoreClient(name, { requestTimeoutMs: 200 });
+    await client.start();
+    let commonTimedOut = false;
+    try { await client.request("pausar", {}); } catch { commonTimedOut = true; }
+    const loaded = await client.loadMcuFirmware("mcu", "firmware.bin").then(() => true, () => false);
+    assert(commonTimedOut, "uma requisição comum ainda expira no prazo curto");
+    assert(loaded, "loadMcuFirmware não pode desistir antes do Core (handshake do QEMU até 30 s)");
+    assert(LOAD_MCU_FIRMWARE_TIMEOUT_MS > 30_000, "prazo do cliente maior que o do handshake no Core");
     acceptedSocket?.destroy();
     await new Promise<void>((r) => srv.close(() => { cleanup(name); r(); }));
   });

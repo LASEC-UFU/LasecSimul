@@ -132,6 +132,7 @@ HartCommunicationComponent::HartCommunicationComponent(Mode mode, simulation::Sc
     // device instance, or a test constructing directly with an empty ComponentParams) -- the
     // preset's Signal Graph ports/Device Variable roles apply out of the box, never an empty "[]".
     m_hartVariablesJson = stringProperty(p, "hartVariablesJson", preset ? preset->hartVariablesJson : "[]");
+    ++m_hartVariablesRevision;
     m_hartCommandsJson = stringProperty(p, "hartCommandsJson", "[]");
     m_hartBurstJson = stringProperty(p, "hartBurstJson", "[]");
     m_hartAdditionalJson = stringProperty(p, "hartAdditionalJson", "{}");
@@ -152,6 +153,7 @@ HartCommunicationComponent::HartCommunicationComponent(Mode mode, simulation::Sc
     m_alarmSelectionCode = static_cast<uint8_t>(std::clamp(numberProperty(p, "alarmSelectionCode", defaultNumber("alarmSelectionCode", 0xFB)), 0.0, 255.0));
     m_writeProtectCode = static_cast<uint8_t>(std::clamp(numberProperty(p, "writeProtectCode", defaultNumber("writeProtectCode", 0xFB)), 0.0, 255.0));
     m_configurationChangedFlags = static_cast<uint8_t>(std::clamp(numberProperty(p, "configurationChangedFlags", defaultNumber("configurationChangedFlags", 0)), 0.0, 3.0));
+    m_configChangeCounter = static_cast<uint32_t>(std::clamp(numberProperty(p, "hartConfigChangeCounter", defaultNumber("hartConfigChangeCounter", 0)), 0.0, 65535.0));
     // Universal Command 12/13/16/20/6 identity fields (Anexo F.6): read on
     // construction for the exact same reopen reason as variables/commands
     // above -- without this, a HART write command's effect from a PRIOR
@@ -170,6 +172,7 @@ HartCommunicationComponent::HartCommunicationComponent(Mode mode, simulation::Sc
     m_displayVariable1 = stringProperty(p, "displayVariable1", defaultText("displayVariable1", "pv"));
     m_displayVariable2 = stringProperty(p, "displayVariable2", defaultText("displayVariable2", ""));
     m_displayCodeMap = stringProperty(p, "displayCodeMap", defaultText("displayCodeMap", ""));
+    m_displayGlass = numberProperty(p, "displayGlass", defaultNumber("displayGlass", 0));
     m_displayModelName = stringProperty(p, "displayModelName", defaultText("displayModelName", "HART"));
     m_powerOnNs = m_scheduler.nowNs();
     const double nan = std::numeric_limits<double>::quiet_NaN();
@@ -231,6 +234,20 @@ void HartCommunicationComponent::resolveProfileTraits(const registry::ComponentP
     t.operationCounters = stringProperty(p, "hartOperationCounters",
         defaults.contains("hartOperationCounters") && defaults["hartOperationCounters"].is_string()
             ? defaults["hartOperationCounters"].get<std::string>() : "");
+    t.alarmHighCode = number("hartAlarmHighCode", base ? base->analogAlarmHighCode : 0);
+    t.alarmLowCode = number("hartAlarmLowCode", base ? base->analogAlarmLowCode : 1);
+    t.writeProtectActiveCode = number("hartWriteProtectActiveCode", 1);
+    t.burnoutStatus = number("hartBurnoutStatus", base ? base->burnoutStatus : 0x04);
+    t.coldStartKeptByCommand0 = p.property("hartColdStartKeptByCommand0",
+        defaults.contains("hartColdStartKeptByCommand0") && defaults["hartColdStartKeptByCommand0"].is_boolean()
+            ? defaults["hartColdStartKeptByCommand0"].get<bool>() : (base && base->coldStartKeptByCommand0));
+    t.burnoutPercentFollowsOutput = p.property("hartBurnoutPercentFollowsOutput", base && base->burnoutPercentFollowsOutput);
+    t.maxDeviceVariables = number("hartMaxDeviceVariables", base ? base->maximumDeviceVariables : 0);
+    t.privateLabel = number("hartPrivateLabel", base ? base->privateLabelDistributor : 0);
+    t.deviceProfile = number("hartDeviceProfile", base ? base->deviceProfile : 1);
+    t.responseDataLimits = stringProperty(p, "hartResponseDataLimits",
+        defaults.contains("hartResponseDataLimits") && defaults["hartResponseDataLimits"].is_string()
+            ? defaults["hartResponseDataLimits"].get<std::string>() : "");
 }
 
 HartLcdPage HartCommunicationComponent::displayPage(const std::string& source, const HartDevicePlan& plan, double pv,
@@ -255,6 +272,12 @@ HartLcdPage HartCommunicationComponent::displayPage(const std::string& source, c
             const size_t equals = entry.find('=');
             if (equals != std::string::npos && entry.substr(0, equals) == code) token = entry.substr(equals + 1);
         }
+    }
+    // "2=pv/1": at most 1 decimal on the numeric field for this page.
+    int maxDecimals = 3;
+    if (const size_t slash = token.rfind('/'); slash != std::string::npos) {
+        maxDecimals = std::clamp(std::atoi(token.c_str() + slash + 1), 0, 3);
+        token.erase(slash);
     }
     const auto primary = std::find_if(plan.variables.begin(), plan.variables.end(), [](const auto& v) { return v.id == "PV"; });
     if (token == "pv") {
@@ -293,6 +316,7 @@ HartLcdPage HartCommunicationComponent::displayPage(const std::string& source, c
         page.value = value;
         page.label = hartLcdUnitLabel(variable->deviceVariableUnit, page.annunciators);
     }
+    page.maxDecimals = maxDecimals;
     return page;
 }
 
@@ -328,8 +352,13 @@ HartLcdFrame HartCommunicationComponent::displayFrame(std::optional<uint64_t> el
     input.fixedCurrent = plan->fixedCurrentMode;
     input.multidrop = plan->loopCurrentMode == 0;
     input.transferFunctionCode = plan->pvTransferFunctionCode;
-    input.first = displayPage(m_displayVariable1, *plan, pv, driven);
-    input.second = displayPage(m_displayVariable2, *plan, pv, driven);
+    input.glass = static_cast<uint8_t>(std::clamp(m_displayGlass, 0.0, 1.0));
+    HartAnalogOutput shown = driven;
+    if (profile && profile->burnoutPercentFollowsOutput && std::isfinite(hartAlarmMilliamps(*profile, *plan)) &&
+        !plan->fixedCurrentMode && plan->loopCurrentMode != 0)
+        shown.percentOfRange = shown.outputPercent;
+    input.first = displayPage(m_displayVariable1, *plan, pv, shown);
+    input.second = displayPage(m_displayVariable2, *plan, pv, shown);
     return hartLcdCompose(input);
 }
 
@@ -510,6 +539,8 @@ void HartCommunicationComponent::rebuildConfiguredPlan() {
     if (m_traits.implementedRevision < 6 && m_pollingAddress != 0) device.loopCurrentMode = 0;
     device.alarmSelectionCode = m_alarmSelectionCode;
     device.writeProtectCode = m_writeProtectCode;
+    device.writeProtectActiveCode = static_cast<uint16_t>(std::clamp(m_traits.writeProtectActiveCode, 0.0, 256.0));
+    device.configurationChangedCounter = m_configChangeCounter;
     device.configurationChangedMasters = m_configurationChangedFlags;
     device.sensorFault = m_sensorFault;
     if (m_configurationChangedFlags != 0) device.diagnosticStatus = static_cast<uint8_t>(device.diagnosticStatus | 0x40u);
@@ -540,6 +571,27 @@ void HartCommunicationComponent::rebuildConfiguredPlan() {
     instance.analogAlarmHighMilliamps = current(m_traits.alarmHighMilliamps);
     instance.rangeLimitTolerancePercent = static_cast<float>(std::clamp(m_traits.rangeTolerancePercent, 0.0, 1000.0));
     instance.minimumSpanAcceptPercent = static_cast<float>(std::clamp(m_traits.minimumSpanAcceptPercent, 0.0, 100.0));
+    instance.analogAlarmHighCode = byte(m_traits.alarmHighCode);
+    instance.analogAlarmLowCode = byte(m_traits.alarmLowCode);
+    instance.burnoutStatus = byte(m_traits.burnoutStatus);
+    instance.coldStartKeptByCommand0 = m_traits.coldStartKeptByCommand0;
+    instance.burnoutPercentFollowsOutput = m_traits.burnoutPercentFollowsOutput;
+    instance.maximumDeviceVariables = byte(m_traits.maxDeviceVariables);
+    instance.privateLabelDistributor = static_cast<uint16_t>(std::clamp(m_traits.privateLabel, 0.0, 65535.0));
+    instance.deviceProfile = byte(m_traits.deviceProfile);
+    // "15=17;9=20": a response data length cap per command.
+    instance.responseDataLimits.clear();
+    for (size_t at = 0; at < m_traits.responseDataLimits.size();) {
+        const size_t semicolon = std::min(m_traits.responseDataLimits.find(';', at), m_traits.responseDataLimits.size());
+        const std::string entry = m_traits.responseDataLimits.substr(at, semicolon - at);
+        at = semicolon + 1;
+        const size_t equals = entry.find('=');
+        if (equals == std::string::npos) continue;
+        try {
+            instance.responseDataLimits.push_back({static_cast<HartCommandId>(std::stoul(entry.substr(0, equals))),
+                                                   static_cast<uint8_t>(std::min(255ul, std::stoul(entry.substr(equals + 1))))});
+        } catch (...) {}
+    }
     // "43=counter.zero;35,36,37=counter.range": which command's
     // configuration change increments which UInt8 variable.
     instance.operationCounters.clear();
@@ -880,12 +932,16 @@ std::string signalUnitFor(const std::string& hartUnit) {
 } // namespace
 
 std::vector<SignalPortDescriptor> HartCommunicationComponent::signalPorts() const {
-    // Called on every stable step (HART outputs -> Signal Graph): parse the
+    return cachedSignalPorts();
+}
+
+const std::vector<SignalPortDescriptor>& HartCommunicationComponent::cachedSignalPorts() const {
+    // Called on every stable step (HART <-> Signal Graph): parse the
     // variables JSON only when it changed.
-    if (m_signalPortsSource == m_hartVariablesJson && m_signalPortsCached) return m_signalPortsCache;
-    m_signalPortsSource = m_hartVariablesJson;
-    m_signalPortsCached = true;
-    m_signalPortsCache = parseSignalPorts();
+    if (m_signalPortsRevision != m_hartVariablesRevision) {
+        m_signalPortsCache = parseSignalPorts();
+        m_signalPortsRevision = m_hartVariablesRevision;
+    }
     return m_signalPortsCache;
 }
 
@@ -938,6 +994,7 @@ void HartCommunicationComponent::syncPersistedStateFromEngine() {
     m_loopCurrentModeEnabled = plan->loopCurrentMode != 0;
     m_alarmSelectionCode = plan->alarmSelectionCode;
     m_writeProtectCode = plan->writeProtectCode;
+    m_configChangeCounter = plan->configurationChangedCounter & 0xFFFFu;
     // HART-5 rules make the per-master Configuration Changed bits
     // non-volatile: they survive save/reopen like any other device state.
     m_configurationChangedFlags = plan->configurationChangedMasters;
@@ -1015,6 +1072,11 @@ void HartCommunicationComponent::syncPersistedStateFromEngine() {
                 if (it->rangeUnitCode != 0xFF) item["rangeUnitCode"] = it->rangeUnitCode;
                 if (std::isfinite(it->lowerRangeValue)) item["lowerRangeValue"] = it->lowerRangeValue;
                 if (std::isfinite(it->upperRangeValue)) item["upperRangeValue"] = it->upperRangeValue;
+                if (it->upperTransducerLimit > it->lowerTransducerLimit) {
+                    item["upperTransducerLimit"] = it->upperTransducerLimit;
+                    item["lowerTransducerLimit"] = it->lowerTransducerLimit;
+                    item["minimumSpan"] = it->minimumSpan;
+                }
                 item["trimPointsSupported"] = it->trimPointsSupported;
                 item["trimPointsUnit"] = it->trimPointsUnit;
                 const auto& pressure = it->pressure;
@@ -1067,7 +1129,12 @@ void HartCommunicationComponent::syncPersistedStateFromEngine() {
                 item["trimAdjustment"] = it->trimAdjustment;
                 item["factoryTrimAdjustment"] = it->factoryTrimAdjustment;
             }
-            m_hartVariablesJson = variables.dump();
+            // Runs after every transaction, reads included: keep the port cache unless something changed.
+            std::string dumped = variables.dump();
+            if (dumped != m_hartVariablesJson) {
+                m_hartVariablesJson = std::move(dumped);
+                ++m_hartVariablesRevision;
+            }
         }
     } catch (...) {
         // The rebuild path already exposes malformed authoring via the
@@ -1180,6 +1247,17 @@ std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode
         numberSchema("rangeLimitTolerancePercent", "Tolerancia da faixa alem dos limites (Cmd 35-37)", "HART Perfil", "%", 0, 0, 1000),
         numberSchema("minimumSpanAcceptPercent", "Span aceito com aviso (% do span minimo)", "HART Perfil", "%", 100, 0, 100),
         textSchema("hartOperationCounters", "Contadores de operacao (ex.: 43=counter.zero;35,36,37=counter.range)", "HART Perfil", ""),
+        numberSchema("hartAlarmHighCode", "Codigo de alarme da corrente de falha alta (Cmd 15 byte 0)", "HART Perfil", "", 0, 0, 255),
+        numberSchema("hartAlarmLowCode", "Codigo de alarme da corrente de falha baixa (Cmd 15 byte 0)", "HART Perfil", "", 1, 0, 255),
+        {"hartColdStartKeptByCommand0", "Command 0 mantem o bit Cold Start", "HART Perfil", "", PropertyValueKind::Bool, "checkbox", false},
+        {"hartBurnoutPercentFollowsOutput", "Em burnout o PV % acompanha a saida", "HART Perfil", "", PropertyValueKind::Bool, "checkbox", false},
+        numberSchema("hartBurnoutStatus", "Bits de status durante o burnout (4 = saturada)", "HART Perfil", "", 4, 0, 255),
+        numberSchema("hartWriteProtectActiveCode", "Codigo de protecao de escrita que bloqueia escritas (256 = nenhum)", "HART Perfil", "", 1, 0, 256),
+        numberSchema("hartMaxDeviceVariables", "Maximo de variaveis de dispositivo (Command 0, HART 6/7)", "HART Perfil", "", 0, 0, 255),
+        numberSchema("hartPrivateLabel", "Private Label Distributor (Command 0, HART 7)", "HART Perfil", "", 0, 0, 65535),
+        numberSchema("hartDeviceProfile", "Device Profile (Command 0, HART 7)", "HART Perfil", "", 1, 0, 255),
+        textSchema("hartResponseDataLimits", "Bytes de dados maximos por comando (ex.: 15=17)", "HART Perfil", ""),
+        numberSchema("hartConfigChangeCounter", "Contador de mudancas de configuracao (Command 0, HART 6/7)", "HART", "", 0, 0, 65535),
         {"sensorFault", "Simular falha do sensor", "Sensor", "", PropertyValueKind::Bool, "checkbox", false},
         // Universal Command 12/17 (Message), 13/18 (Descriptor/Date), 16/19
         // (Final Assembly Number), 20/22 (Long Tag), 6/7 (Loop Current Mode)
@@ -1247,7 +1325,8 @@ std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode
         out.push_back({"displayInstalled", "Indicador instalado", "Display", "", PropertyValueKind::Bool, "checkbox", true});
         out.push_back(textSchema("displayVariable1", "1a variavel (pv, percent, current, output, dv:N, var:id)", "Display", "pv"));
         out.push_back(textSchema("displayVariable2", "2a variavel (vazio = nenhuma)", "Display", ""));
-        out.push_back(textSchema("displayCodeMap", "Mapa de codigos (ex.: 3=percent,5=dv:5)", "Display", ""));
+        out.push_back(textSchema("displayCodeMap", "Mapa de codigos (ex.: 3=percent,5=dv:5,2=pv/1)", "Display", ""));
+        out.push_back(numberSchema("displayGlass", "Vidro do display (0 LD301: raiz, SAT/SFAIL; 1 TT301: ACK, alarme AL_0)", "Display", "", 0, 0, 1));
         out.push_back(textSchema("displayModelName", "Nome no indicador ao ligar", "Display", "HART"));
     }
     return out;
@@ -1305,6 +1384,14 @@ HartCommunicationComponent::DevicePreset HartCommunicationComponent::smarFy301Pr
 }
 
 PropertyValue HartCommunicationComponent::propertyValue(const std::string& id) const {
+    if (id == "hartAlarmHighCode") return m_traits.alarmHighCode; if (id == "hartAlarmLowCode") return m_traits.alarmLowCode;
+    if (id == "hartWriteProtectActiveCode") return m_traits.writeProtectActiveCode; if (id == "hartBurnoutStatus") return m_traits.burnoutStatus;
+    if (id == "hartColdStartKeptByCommand0") return m_traits.coldStartKeptByCommand0;
+    if (id == "hartBurnoutPercentFollowsOutput") return m_traits.burnoutPercentFollowsOutput;
+    if (id == "hartMaxDeviceVariables") return m_traits.maxDeviceVariables; if (id == "hartPrivateLabel") return m_traits.privateLabel;
+    if (id == "hartDeviceProfile") return m_traits.deviceProfile; if (id == "hartResponseDataLimits") return m_traits.responseDataLimits;
+    if (id == "hartConfigChangeCounter") return static_cast<double>(m_configChangeCounter);
+    if (id == "displayGlass") return m_displayGlass;
     if (id == "bus") return m_bus; if (id == "endpoint") return m_endpointName; if (id == "enabled") return m_enabled;
     if (id == "pollingAddress") return static_cast<double>(m_pollingAddress); if (id == "uniqueId") return m_uniqueId;
     if (id == "tag") return m_tag; if (id == "unit") return m_unit; if (id == "profileId") return m_profileId; if (id == "hartVariablesJson") return m_hartVariablesJson; if (id == "hartCommandsJson") return m_hartCommandsJson; if (id == "hartBurstJson") return m_hartBurstJson; if (id == "hartAdditionalJson") return m_hartAdditionalJson; if (id == "alarmSelectionCode") return static_cast<double>(m_alarmSelectionCode); if (id == "writeProtectCode") return static_cast<double>(m_writeProtectCode); if (id == "hartManufacturerId") return m_traits.manufacturerId; if (id == "hartDeviceType") return m_traits.deviceType; if (id == "hartRequestPreambles") return m_traits.requestPreambles; if (id == "hartUniversalRevision") return m_traits.universalRevision; if (id == "hartDeviceRevision") return m_traits.deviceRevision; if (id == "hartSoftwareRevision") return m_traits.softwareRevision; if (id == "hartHardwareRevision") return m_traits.hardwareRevision; if (id == "hartFlags") return m_traits.flags; if (id == "hartImplementedRevision") return m_traits.implementedRevision; if (id == "analogSaturationLowPercent") return m_traits.saturationLowPercent; if (id == "analogSaturationHighPercent") return m_traits.saturationHighPercent; if (id == "hartCommandSet") return m_traits.commandSet; if (id == "analogFixedLowMilliamps") return m_traits.fixedLowMilliamps; if (id == "analogFixedHighMilliamps") return m_traits.fixedHighMilliamps; if (id == "analogAlarmLowMilliamps") return m_traits.alarmLowMilliamps; if (id == "analogAlarmHighMilliamps") return m_traits.alarmHighMilliamps; if (id == "rangeLimitTolerancePercent") return m_traits.rangeTolerancePercent; if (id == "minimumSpanAcceptPercent") return m_traits.minimumSpanAcceptPercent; if (id == "hartOperationCounters") return m_traits.operationCounters; if (id == "sensorFault") return m_sensorFault; if (id == "displayInstalled") return m_displayInstalled; if (id == "displayVariable1") return m_displayVariable1; if (id == "displayVariable2") return m_displayVariable2; if (id == "displayCodeMap") return m_displayCodeMap; if (id == "displayModelName") return m_displayModelName; if (id == "sensorLowVolts") return m_sensorLowVolts; if (id == "sensorHighVolts") return m_sensorHighVolts; if (id == "sensorLowValue") return m_sensorLowValue; if (id == "sensorHighValue") return m_sensorHighValue; if (id == "loopCurrentMilliamps") return std::to_string(m_loopCurrent * 1000.0); if (id == "configurationChangedFlags") return static_cast<double>(m_configurationChangedFlags); if (id == "hartCommandsStatus") return m_hartCommandsStatus; if (id == "hartVariablesStatus") return m_hartVariablesStatus; if (id == "baudRate") return static_cast<double>(m_baudRate);
@@ -1331,7 +1418,7 @@ void HartCommunicationComponent::setPropertyValue(const std::string& id, const P
     else if (id == "tag") { m_tag = std::get<std::string>(v); rebuildConfiguredPlan(); }
     else if (id == "unit") { m_unit = std::get<std::string>(v); rebuildConfiguredPlan(); }
     else if (id == "profileId") { m_profileId = std::get<std::string>(v); rebuildConfiguredPlan(); }
-    else if (id == "hartVariablesJson") { m_hartVariablesJson = std::get<std::string>(v); rebuildConfiguredPlan(); }
+    else if (id == "hartVariablesJson") { m_hartVariablesJson = std::get<std::string>(v); ++m_hartVariablesRevision; rebuildConfiguredPlan(); }
     else if (id == "hartCommandsJson") { m_hartCommandsJson = std::get<std::string>(v); rebuildCommandPrograms(); }
     else if (id == "hartBurstJson") { m_hartBurstJson = std::get<std::string>(v); rebuildConfiguredPlan(); }
     else if (id == "hartAdditionalJson") { m_hartAdditionalJson = std::get<std::string>(v); rebuildConfiguredPlan(); }
@@ -1355,11 +1442,23 @@ void HartCommunicationComponent::setPropertyValue(const std::string& id, const P
     else if (id == "rangeLimitTolerancePercent") { m_traits.rangeTolerancePercent = std::get<double>(v); rebuildConfiguredPlan(); }
     else if (id == "minimumSpanAcceptPercent") { m_traits.minimumSpanAcceptPercent = std::get<double>(v); rebuildConfiguredPlan(); }
     else if (id == "hartOperationCounters") { m_traits.operationCounters = std::get<std::string>(v); rebuildConfiguredPlan(); }
+    else if (id == "hartAlarmHighCode") { m_traits.alarmHighCode = std::get<double>(v); rebuildConfiguredPlan(); }
+    else if (id == "hartAlarmLowCode") { m_traits.alarmLowCode = std::get<double>(v); rebuildConfiguredPlan(); }
+    else if (id == "hartBurnoutPercentFollowsOutput") { m_traits.burnoutPercentFollowsOutput = std::get<bool>(v); rebuildConfiguredPlan(); }
+    else if (id == "hartColdStartKeptByCommand0") { m_traits.coldStartKeptByCommand0 = std::get<bool>(v); rebuildConfiguredPlan(); }
+    else if (id == "hartBurnoutStatus") { m_traits.burnoutStatus = std::get<double>(v); rebuildConfiguredPlan(); }
+    else if (id == "hartWriteProtectActiveCode") { m_traits.writeProtectActiveCode = std::get<double>(v); rebuildConfiguredPlan(); }
+    else if (id == "hartMaxDeviceVariables") { m_traits.maxDeviceVariables = std::get<double>(v); rebuildConfiguredPlan(); }
+    else if (id == "hartPrivateLabel") { m_traits.privateLabel = std::get<double>(v); rebuildConfiguredPlan(); }
+    else if (id == "hartDeviceProfile") { m_traits.deviceProfile = std::get<double>(v); rebuildConfiguredPlan(); }
+    else if (id == "hartResponseDataLimits") { m_traits.responseDataLimits = std::get<std::string>(v); rebuildConfiguredPlan(); }
+    else if (id == "hartConfigChangeCounter") { m_configChangeCounter = static_cast<uint32_t>(std::clamp(std::get<double>(v), 0.0, 65535.0)); rebuildConfiguredPlan(); }
     else if (id == "sensorFault") { m_sensorFault = std::get<bool>(v); m_engine.setSensorFault(m_deviceId, m_sensorFault); }
     else if (id == "displayInstalled") m_displayInstalled = std::get<bool>(v);
     else if (id == "displayVariable1") m_displayVariable1 = std::get<std::string>(v);
     else if (id == "displayVariable2") m_displayVariable2 = std::get<std::string>(v);
     else if (id == "displayCodeMap") m_displayCodeMap = std::get<std::string>(v);
+    else if (id == "displayGlass") m_displayGlass = std::get<double>(v);
     else if (id == "displayModelName") m_displayModelName = std::get<std::string>(v);
     else if (id == "sensorLowVolts") m_sensorLowVolts = std::get<double>(v);
     else if (id == "sensorHighVolts") m_sensorHighVolts = std::max(m_sensorLowVolts + 1e-9, std::get<double>(v));

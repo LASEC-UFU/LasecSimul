@@ -250,6 +250,21 @@ async function main() {
     }, 25);
   }
 
+  // LASECSIMUL_BENCHMARK_WIRE_PROBES=1: probe every wire like the VS Code
+  // schematic does (wire colors), so observed-pin costs are measured too.
+  const wireProbes = [];
+  if (process.env.LASECSIMUL_BENCHMARK_WIRE_PROBES === "1") {
+    for (const conductor of project.topology?.conductors ?? []) {
+      for (const endpoint of [conductor.from, conductor.to]) {
+        if (endpoint.kind !== "port") continue;
+        try {
+          const resolved = resolveEndpoint(endpoint);
+          wireProbes.push({ key: conductor.id, instanceId: resolved.instanceId, pinId: resolved.pinId });
+          break;
+        } catch { /* endpoint without a pin */ }
+      }
+    }
+  }
   const samples = [];
   let previousWall = performance.now();
   benchmarkWallOrigin = previousWall;
@@ -258,7 +273,7 @@ async function main() {
       if (displayPollInFlight) return;
       displayPollInFlight = true;
       void client.getTelemetryFrame(
-        { items: [{ key: "display", instanceId: displayId }], probes: [] },
+        { items: [{ key: "display", instanceId: displayId }], probes: wireProbes },
         displayTelemetryGeneration,
       )
         .then((frame) => {

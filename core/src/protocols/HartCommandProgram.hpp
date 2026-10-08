@@ -273,6 +273,8 @@ struct HartExecutionVariables {
     float analogUpperSaturationPercent = std::numeric_limits<float>::quiet_NaN();
     /** Burnout current while in sensor fault (hartAlarmMilliamps), else NaN. */
     float alarmMilliamps = std::numeric_limits<float>::quiet_NaN();
+    /** Burnout: the PV percent of range reports the output percent. */
+    bool burnoutPercentFollowsOutput = false;
     float loopCurrentZeroTrim = 0.0f;
     float loopCurrentGainTrim = 1.0f;
     uint8_t diagnosticStatus = 0;

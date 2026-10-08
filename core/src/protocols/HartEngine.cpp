@@ -784,7 +784,7 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
                                  assignment.expandedDeviceType, assignment.deviceId, assignment.longTag, assignment.deviceRevision);
         }
         if (command == 530) {
-            if (selected->plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+            if (selected->plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 44) return false;
             const uint16_t requestedIndex = static_cast<uint16_t>(request[0] << 8 | request[1]);
             const uint8_t card = request[2], channel = request[3];
@@ -838,7 +838,7 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
                                    committed.expandedDeviceType, committed.deviceId, committed.longTag, committed.deviceRevision);
         }
         if (command == 531) {
-            if (selected->plan.writeProtectCode == 0x01) return response.fail(HartResponseCodes::InWriteProtectMode);
+            if (selected->plan.writeProtected()) return response.fail(HartResponseCodes::InWriteProtectMode);
             if (request.size() != 1 || request[0] > 1) return false;
             if (selected->plan.subDevices.size() > selected->plan.assignmentCapacity || selected->plan.subDevices.size() > selected->plan.assignments.size()) return false;
             std::array<HartSubDeviceAssignment, 32> staged{};
@@ -1201,8 +1201,8 @@ HartAnalogOutput hartEvaluateAnalogOutput(double primaryValue, float lowerRangeV
 
 float hartAlarmMilliamps(const HartDeviceProfile& profile, const HartDevicePlan& plan) noexcept {
     if (!plan.sensorFault) return std::numeric_limits<float>::quiet_NaN();
-    if (plan.alarmSelectionCode == 0) return profile.analogAlarmHighMilliamps;
-    if (plan.alarmSelectionCode == 1) return profile.analogAlarmLowMilliamps;
+    if (plan.alarmSelectionCode == profile.analogAlarmHighCode) return profile.analogAlarmHighMilliamps;
+    if (plan.alarmSelectionCode == profile.analogAlarmLowCode) return profile.analogAlarmLowMilliamps;
     return std::numeric_limits<float>::quiet_NaN();
 }
 
@@ -1228,11 +1228,16 @@ uint8_t HartEngine::fieldDeviceStatus(RuntimeDevice& device, uint8_t masterBit) 
         ? primary->upperRangeValue : device.profile->upperRangeValue;
     // Saturation is a property of the PV-driven output: a transmitter held
     // in fixed-current mode keeps reporting it (ld301 capture: 0x4C).
+    const float alarmMilliamps = hartAlarmMilliamps(*device.profile, plan);
     const HartAnalogOutput analog = hartEvaluateAnalogOutput(pv, lower, upper, device.profile->analogLowerSaturationPercent,
                                                              device.profile->analogUpperSaturationPercent, false, 0.0f,
                                                              0.0f, 1.0f, plan.loopCurrentMode,
-                                                             hartAlarmMilliamps(*device.profile, plan), hartTransferSettings(plan));
-    if (analog.saturated) status |= HartDeviceStatusBits::LoopCurrentSaturated;
+                                                             alarmMilliamps, hartTransferSettings(plan));
+    // Burnout (sensor fault with a failure current) reports the profile's
+    // own status bits instead of the PV-driven saturation.
+    const bool burnout = std::isfinite(alarmMilliamps) && plan.loopCurrentMode != 0;
+    if (analog.saturated && !burnout) status |= HartDeviceStatusBits::LoopCurrentSaturated;
+    if (burnout) status |= device.profile->burnoutStatus;
     if (plan.sensorFault) status |= HartDeviceStatusBits::DeviceMalfunction;
     for (size_t i = 0; i < plan.variables.size(); ++i) {
         const auto& variable = plan.variables[i];
@@ -1282,7 +1287,10 @@ HartAddressedReply HartEngine::executeAddressed(std::string_view bus, const Hart
         reply.responseCode = request.empty() ? HartResponseCodes::TooFewDataBytes : HartResponseCodes::InvalidSelection;
     }
     reply.deviceStatus = fieldDeviceStatus(*selected, masterBit);
-    selected->plan.coldStartMasters = static_cast<uint8_t>(selected->plan.coldStartMasters & ~masterBit);
+    // Cold Start is reported once to each master; a device may keep it
+    // through the identity poll (the TT301 still reports it after Command 0).
+    if (command != 0x00 || !selected->profile->coldStartKeptByCommand0)
+        selected->plan.coldStartMasters = static_cast<uint8_t>(selected->plan.coldStartMasters & ~masterBit);
     if (executed && command == 0x2A) selected->plan.coldStartMasters = 0x03; // Command 42: device reset
     return reply;
 }

@@ -311,6 +311,9 @@ simulation::PlanDomain SimulationSession::refreshComponentExecutionLists(uint32_
 
     simulation::PlanDomain changed = simulation::PlanDomain::None;
     const bool activeChanged = setMembership(m_activeComponentIndices, component != nullptr);
+    // The bridge cache depends on active membership (a component's type is fixed per instance);
+    // setProperty() also lands here on every slider move, which must not rebuild it.
+    if (activeChanged) ++m_bridgeTopologyRevision;
     const bool reactiveChanged = setMembership(m_reactiveComponentIndices, component && component->isReactive());
     const bool nonlinearChanged = setMembership(m_nonlinearComponentIndices, component && component->isNonlinear());
     if (activeChanged || reactiveChanged || nonlinearChanged) {
@@ -399,6 +402,7 @@ bool SimulationSession::publishSimulationPlan() {
     // Staging: nenhuma referência publicada muda antes de compile() concluir integralmente.
     std::shared_ptr<const simulation::SimulationPlan> staged = simulation::PlanCompiler::compile(input);
     m_runtimeState.bind(staged);
+    ++m_bridgeTopologyRevision; // a new plan may re-number or re-list components
     m_runtimeState.signals.executeUntil(m_runtimeState.virtualTimeNs);
     if (const std::optional<uint64_t> next = m_runtimeState.signals.nextEventNs();
         next && *next > m_runtimeState.virtualTimeNs &&
@@ -1444,6 +1448,7 @@ uint64_t SimulationSession::applyWireTopologyTransactionUnlocked(uint64_t baseRe
     } catch (...) {
         m_netlist = std::move(staged);
         m_signalWires = signalWiresBefore;
+        ++m_bridgeTopologyRevision;
         m_topologyDirty = dirtyBefore;
         m_topologyReuseSafe = reuseSafeBefore;
         m_wireTopologyRevision = revisionBefore;
@@ -1557,6 +1562,7 @@ void SimulationSession::connectSignalWireUnlocked(uint32_t componentA, const Sig
         }
     }
     m_signalWires.push_back(SignalWireDefinition{sourceComponent, sourcePort.id, targetComponent, targetPort.id});
+    ++m_bridgeTopologyRevision;
     ++m_wireTopologyRevision;
     invalidatePlan(simulation::PlanDomain::Signal);
 }
@@ -1572,6 +1578,7 @@ bool SimulationSession::disconnectSignalWireUnlocked(uint32_t componentA, const 
     const auto it = std::find_if(m_signalWires.begin(), m_signalWires.end(), matches);
     if (it == m_signalWires.end()) return false;
     m_signalWires.erase(it);
+    ++m_bridgeTopologyRevision;
     ++m_wireTopologyRevision;
     invalidatePlan(simulation::PlanDomain::Signal);
     return true;
@@ -1834,11 +1841,37 @@ void SimulationSession::sampleSignalMathOutputsUnlocked(const std::vector<uint32
     }
 }
 
-void SimulationSession::sampleHartInputsFromSignalUnlocked() {
+const SimulationSession::BridgeCache& SimulationSession::bridgeCacheUnlocked() {
+    if (m_bridgeCache.planGeneration == m_runtimeState.planGeneration &&
+        m_bridgeCache.topologyRevision == m_bridgeTopologyRevision) return m_bridgeCache;
+    m_bridgeCache.planGeneration = m_runtimeState.planGeneration;
+    m_bridgeCache.topologyRevision = m_bridgeTopologyRevision;
+    m_bridgeCache.hartIndices.clear();
+    m_bridgeCache.sensorIndices.clear();
+    m_bridgeCache.actuatorIndices.clear();
     for (uint32_t index : m_activeComponentIndices) {
+        IComponentModel* component = index < m_componentInstances.size() ? m_componentInstances[index].get() : nullptr;
+        if (!component) continue;
+        if (dynamic_cast<protocols::HartCommunicationComponent*>(component)) m_bridgeCache.hartIndices.push_back(index);
+        if ((dynamic_cast<const components::SignalVoltageSensor*>(component) ||
+             dynamic_cast<const components::SignalCurrentSensor*>(component) ||
+             dynamic_cast<const components::SignalDigitalInput*>(component)) &&
+            hasGenericSignalWireUnlocked(index, "value", false))
+            m_bridgeCache.sensorIndices.push_back(index);
+        if ((dynamic_cast<components::SignalControlledVoltageSource*>(component) ||
+             dynamic_cast<components::SignalControlledCurrentSource*>(component) ||
+             dynamic_cast<components::SignalDigitalOutput*>(component)) &&
+            hasGenericSignalWireUnlocked(index, "command", true))
+            m_bridgeCache.actuatorIndices.push_back(index);
+    }
+    return m_bridgeCache;
+}
+
+void SimulationSession::sampleHartInputsFromSignalUnlocked() {
+    for (uint32_t index : bridgeCacheUnlocked().hartIndices) {
         auto* hart = dynamic_cast<protocols::HartCommunicationComponent*>(m_componentInstances[index].get());
         if (!hart) continue;
-        for (const SignalPortDescriptor& port : hart->signalPorts()) {
+        for (const SignalPortDescriptor& port : hart->cachedSignalPorts()) {
             if (port.direction != SignalPortDirection::Input) continue;
             try {
                 const auto slot = m_runtimeState.signals.output(hart->signalBlockId(port.id));
@@ -1852,10 +1885,10 @@ void SimulationSession::sampleHartInputsFromSignalUnlocked() {
 }
 
 void SimulationSession::publishHartOutputsToSignalUnlocked() {
-    for (uint32_t index : m_activeComponentIndices) {
+    for (uint32_t index : bridgeCacheUnlocked().hartIndices) {
         auto* hart = dynamic_cast<protocols::HartCommunicationComponent*>(m_componentInstances[index].get());
         if (!hart) continue;
-        for (const SignalPortDescriptor& port : hart->signalPorts()) {
+        for (const SignalPortDescriptor& port : hart->cachedSignalPorts()) {
             if (port.direction != SignalPortDirection::Output) continue;
             const auto value = hart->signalOutput(port.id);
             if (!value) continue;
@@ -1883,9 +1916,8 @@ void SimulationSession::publishElectricalBridgeSensorsToSignalUnlocked() {
     // Só publica quem tem de fato um fio comum saindo de "value" -- caso contrário nada lê esse
     // relay mesmo (a autoria antiga por `setElectricalSignalBridges`/binding nunca usa este id, ver
     // `hasGenericSignalWireUnlocked`), então não há necessidade nem risco em pular.
-    for (uint32_t index : m_activeComponentIndices) {
+    for (uint32_t index : bridgeCacheUnlocked().sensorIndices) {
         IComponentModel* component = m_componentInstances[index].get();
-        if (!hasGenericSignalWireUnlocked(index, "value", false)) continue;
         try {
             if (auto* sensor = dynamic_cast<const components::SignalVoltageSensor*>(component)) {
                 m_runtimeState.signals.setExternalReal(signalPortBlockId(index, "value"), sensor->measuredValue());
@@ -1909,14 +1941,14 @@ void SimulationSession::sampleElectricalBridgeActuatorsFromSignalUnlocked() {
             return m_runtimeState.signals.boolean(m_runtimeState.signals.output(signalPortBlockId(index, "command")));
         } catch (...) { return fallback; }
     };
-    for (uint32_t index : m_activeComponentIndices) {
+    for (uint32_t index : bridgeCacheUnlocked().actuatorIndices) {
         // CRÍTICO: só age em quem tem um fio comum de verdade dirigindo "command" -- sem isto, este
         // hook lê o relay AUTO-GERADO (`ExternalInput` default 0.0 pra todo `signalPorts()`
         // declarado, mesmo sem fio nenhum) e SOBRESCREVE o comando de quem ainda usa a autoria
         // antiga (`setElectricalSignalBridges`, ver `SignalBridgeTest.cpp`) -- os dois mecanismos
         // convivem no mesmo componente sem saber um do outro, então cada um só pode tocar quem
         // efetivamente autorou por ELE.
-        if (!hasGenericSignalWireUnlocked(index, "command", true)) continue;
+        // (the cache only lists components with such a wire; see bridgeCacheUnlocked()).
         IComponentModel* component = m_componentInstances[index].get();
         bool changed = false;
         if (auto* voltage = dynamic_cast<components::SignalControlledVoltageSource*>(component)) {
@@ -2103,6 +2135,7 @@ void SimulationSession::removeComponentUnlocked(uint32_t componentIndex) {
     // referência pendente até `materializeSignalGraphUnlocked` silenciosamente ignorá-lo a cada
     // compilação (correto lá, mas deixar crescer indefinidamente aqui seria um leak de autoria).
     const size_t signalWiresBefore = m_signalWires.size();
+    ++m_bridgeTopologyRevision;
     m_signalWires.erase(std::remove_if(m_signalWires.begin(), m_signalWires.end(),
                                         [componentIndex](const SignalWireDefinition& wire) {
                                             return wire.sourceComponent == componentIndex ||

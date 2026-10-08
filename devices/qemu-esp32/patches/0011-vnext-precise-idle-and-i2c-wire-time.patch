@@ -1,0 +1,162 @@
+diff --git a/hw/i2c/esp32_i2c.c b/hw/i2c/esp32_i2c.c
+index 831a6d2..6ebd078 100644
+--- a/hw/i2c/esp32_i2c.c
++++ b/hw/i2c/esp32_i2c.c
+@@ -38,9 +38,10 @@ void esp32_i2c_vnext_complete(uint32_t bus, uint32_t status, uint32_t first_nack
+     s->burstFirstNack = first_nack;
+     s->burstRxLen = rx_len > 32 ? 32 : rx_len;
+     if (s->burstRxLen && rx) memcpy(s->burstRxBuf, rx, s->burstRxLen);
+-    const uint64_t duration = s->period_ns +
+-        (uint64_t)(s->burstWriteCmdCount + s->burstReadCmdCount) * (9 * s->period_ns) +
+-        (s->burstReadCmdCount ? 0 : s->period_ns) + stretch_ns;
++    /* Wire time per BYTE, as the legacy mailbox reserves it (the former formula counted
++     * commands: a 31-byte WRITE cost 2 bit periods instead of 279, so an SSD1306 frame
++     * ran ~2.5x faster than a real 400 kHz bus once the reply latency was removed). */
++    const uint64_t duration = s->vnextBurstNs + stretch_ns;
+     timer_mod(&s->event_timer, getQemu_ns() + duration);
+ }
+ 
+@@ -174,6 +175,8 @@ static bool esp32_i2c_try_burst(Esp32I2CState *s)
+     req.rx_len = plan.rxBytes;
+ 
+     if (vnext_b_active()) {
++        s->vnextBurstNs = s->period_ns + (uint64_t)(plan.txBytes + plan.rxBytes) * (9 * s->period_ns) +
++                          (plan.stop ? s->period_ns : 0);
+         if (!vnext_b_i2c_submit(s->busIndex, 1u | (plan.rxBytes ? 4u : 0u) |
+                                 (logicalStop ? 2u : 0u), s->period_ns, txbuf,
+                                 plan.txBytes, plan.rxBytes)) return false;
+@@ -249,6 +252,7 @@ static bool esp32_i2c_try_read_burst(Esp32I2CState *s)
+     uint8_t address = fifo8_num_used(&s->tx_fifo) ? fifo8_peek(&s->tx_fifo) :
+                       (uint8_t)(s->burstAddressByte | 1u);
+     if (!(address & 1u) || !vnext_b_active()) return false;
++    s->vnextBurstNs = s->period_ns + (uint64_t)(1u + rxBytes) * (9 * s->period_ns) + s->period_ns;
+     if (!vnext_b_i2c_submit(s->busIndex, 1u | 2u | 4u, s->period_ns,
+                             &address, 1, rxBytes)) return false;
+     if (fifo8_num_used(&s->tx_fifo)) fifo8_pop(&s->tx_fifo);
+@@ -294,6 +298,8 @@ static bool esp32_i2c_try_continuation_burst(Esp32I2CState *s)
+     const bool logicalStop = !partial && (plan.stop || terminalOpcode == I2C_OPCODE_END);
+ 
+     if (vnext_b_active()) {
++        s->vnextBurstNs = (uint64_t)(payloadBytes + plan.rxBytes) * (9 * s->period_ns) +
++                          (logicalStop ? s->period_ns : 0);
+         const bool submitted = vnext_b_i2c_submit(s->busIndex, (plan.rxBytes ? 4u : 0u) |
+                                                    (logicalStop ? 2u : 0u), s->period_ns, txbuf,
+                                                    payloadBytes + 1, plan.rxBytes);
+diff --git a/include/hw/i2c/esp32_i2c.h b/include/hw/i2c/esp32_i2c.h
+index fbe2d82..38012c6 100644
+--- a/include/hw/i2c/esp32_i2c.h
++++ b/include/hw/i2c/esp32_i2c.h
+@@ -51,6 +51,9 @@ typedef struct Esp32I2CState {
+     uint32_t burstFirstNack;
+     uint32_t burstWriteCmdCount;
+     uint32_t burstReadCmdCount;
++    /* vNext-B: wire time of the in-flight burst, set when it is submitted (same formula as the
++     * synchronous legacy mailbox). The completion timer fires this long after the Core reply. */
++    uint64_t vnextBurstNs;
+     uint8_t burstRxBuf[32];
+     uint32_t burstRxLen;
+ 
+diff --git a/softmmu/runstate.c b/softmmu/runstate.c
+index c09dcce..171fddc 100644
+--- a/softmmu/runstate.c
++++ b/softmmu/runstate.c
+@@ -62,6 +62,7 @@
+ #include "trace.h"
+ 
+ #include "simuliface.h"
++#include "vnext_b.h"
+ 
+ static NotifierList exit_notifiers =
+     NOTIFIER_LIST_INITIALIZER(exit_notifiers);
+@@ -731,6 +732,20 @@ int qemu_main_loop(void)
+     int status = EXIT_SUCCESS;
+ 
+     if (!m_arena) {
++        /* vNext-B maps its own transport, not the legacy arena, and used to fall into the
++         * stock main_loop_wait(): on Windows every sub-ms device timer then waited a whole
++         * ~1 ms poll quantum. An ESP32 I2C transaction completes through such a timer, so
++         * each 31/1/0-byte FIFO slice paid ~0.6 ms (SSD1306 frame ~54 ms instead of ~31 ms).
++         * Use the same precise, BQL-free idle wait as the legacy transport; the Core's
++         * response still wakes the loop through its wait object. */
++        if (vnext_b_active()) {
++            extern bool main_loop_precise_idle_can_block;
++            main_loop_precise_idle_can_block = true;
++            while (!main_loop_should_exit(&status)) {
++                main_loop_timeout(1000);
++            }
++            return status;
++        }
+         while (!main_loop_should_exit(&status)) {
+             main_loop_wait(false);
+         }
+diff --git a/softmmu/simuliface.c b/softmmu/simuliface.c
+index 63cf9d8..1474755 100644
+--- a/softmmu/simuliface.c
++++ b/softmmu/simuliface.c
+@@ -749,7 +749,11 @@ extern bool (*main_loop_idle_wake_hook)(void);
+  * do próximo timer quando o Core pede uma IRQ ou encerra o Run (ver qemu_main_loop()). */
+ static bool simuMainLoopWakeRequested(void)
+ {
+-    return !m_arena || !m_arena->running || m_arena->irqNumber;
++    /* vNext-B has no legacy arena: Core requests arrive through the loop's wait objects,
++     * which the idle wait already polls. Returning true here would end every idle wait at
++     * once and spin the main loop with the BQL taken. */
++    if (!m_arena) return !vnext_b_active();
++    return !m_arena->running || m_arena->irqNumber;
+ }
+ 
+ uint64_t getQemu_ns(void)
+diff --git a/util/main-loop.c b/util/main-loop.c
+index fcf9329..36723ce 100644
+--- a/util/main-loop.c
++++ b/util/main-loop.c
+@@ -470,6 +470,39 @@ bool (*main_loop_idle_wake_hook)(void);
+ /* Tempo máximo, em ns, que a próxima volta de os_host_main_loop_wait() pode esperar SEM o BQL pelo
+  * próximo timer (ver main_loop_timeout()). Zero = uma única consulta, comportamento anterior. */
+ static int64_t precise_idle_wait_ns;
++/* vNext-B: everything that can end the idle wait is a Windows handle (Core reply wait object,
++ * GLib/AIO sources, a timer armed by a vCPU through qemu_notify_event), so the wait may block on
++ * them plus a high-resolution timer instead of spinning; only the last PRECISE_IDLE_SPIN_NS are
++ * spun. The legacy transport also needs main_loop_idle_wake_hook (an arena IRQ has no handle), so
++ * it keeps the pure spin. */
++bool main_loop_precise_idle_can_block;
++#define PRECISE_IDLE_SPIN_NS 300000
++#ifdef _WIN32
++static HANDLE precise_idle_timer;
++
++/* Blocks until a poll handle is signalled or `remaining_ns - PRECISE_IDLE_SPIN_NS` passes. */
++static void precise_idle_block(GPollFD *fds, int nfds, int64_t remaining_ns)
++{
++    if (remaining_ns <= PRECISE_IDLE_SPIN_NS) return;
++    if (!precise_idle_timer) {
++        precise_idle_timer = CreateWaitableTimerExW(NULL, NULL, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
++                                                    TIMER_ALL_ACCESS);
++        if (!precise_idle_timer) return;
++    }
++    HANDLE handles[MAXIMUM_WAIT_OBJECTS];
++    DWORD count = 0;
++    for (int i = 0; i < nfds; ++i) {
++        if (fds[i].fd == G_WIN32_MSG_HANDLE) continue;
++        if (count == MAXIMUM_WAIT_OBJECTS - 1) return; /* too many sources: keep spinning */
++        handles[count++] = (HANDLE)(intptr_t)fds[i].fd;
++    }
++    LARGE_INTEGER due;
++    due.QuadPart = -(LONGLONG)((remaining_ns - PRECISE_IDLE_SPIN_NS) / 100); /* relative, 100 ns */
++    if (!SetWaitableTimer(precise_idle_timer, &due, 0, NULL, NULL, FALSE)) return;
++    handles[count++] = precise_idle_timer;
++    WaitForMultipleObjects(count, handles, FALSE, 2 /* ms safety cap */);
++}
++#endif
+ 
+ static int os_host_main_loop_wait(int64_t timeout)
+ {
+@@ -549,6 +582,9 @@ static int os_host_main_loop_wait(int64_t timeout)
+         const int64_t idle_until = precise_idle_wait_ns > 0 ? get_clock() + precise_idle_wait_ns : 0;
+         while (g_poll_ret == 0 && idle_until && get_clock() < idle_until &&
+                !(main_loop_idle_wake_hook && main_loop_idle_wake_hook())) {
++            if (main_loop_precise_idle_can_block) {
++                precise_idle_block(poll_fds, n_poll_fds + w->num, idle_until - get_clock());
++            }
+             g_poll_ret = qemu_poll_ns(poll_fds, n_poll_fds + w->num, 0);
+             if (g_poll_ret == 0) SwitchToThread();
+         }

@@ -17,6 +17,12 @@ The bundled `qemu-system-xtensa.exe` is built from:
     (`2f244a3`)
   - [`patches/0010-vnext-i2c-submit-wait-pause.patch`](patches/0010-vnext-i2c-submit-wait-pause.patch)
     (`7ead728`)
+  - [`patches/0011-vnext-precise-idle-and-i2c-wire-time.patch`](patches/0011-vnext-precise-idle-and-i2c-wire-time.patch)
+    (2026-10-07, sobre `7ead728`): o laço principal do vNext-B usa a mesma espera ociosa precisa
+    do transporte legado (antes cada timer sub-ms esperava ~1 ms do Windows), dormindo num timer
+    de alta resolução e girando só os últimos 300 us; e a duração de uma rajada I2C conta bytes
+    (9 períodos por byte), como o mailbox legado. SSD1306 a 400 kHz: 18 -> 27,6 px/s de rolagem
+    (real ~29), QEMU 0,44 -> 0,81 núcleo.
 
 The realtime MTTCG build disables only Timer Group 1's interrupt watchdog by default because it
 otherwise measures host wall-time stalls instead of equivalent ESP32 progress. Timer Group 0 and

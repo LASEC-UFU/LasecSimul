@@ -8,9 +8,10 @@ import { buildPaletteTree, PaletteTreeNode } from "../ui/webview/paletteTree";
 import { livePackagePreviewSymbolSvg } from "../ui/webview/componentSymbols";
 
 // The standard HART field device is the base every transmitter is built
-// from; LD301 is the subcircuit subcircuits/hart_smar_ld301 (the old built-in
-// LD301 type stays registered, hidden, so saved projects still open).
-const smarTypeIds = ["protocol.hart.device.standard", "protocol.hart.device.smar_tt301", "protocol.hart.device.smar_fy301"];
+// from; LD301 and TT301 are the subcircuits subcircuits/hart_smar_ld301 and
+// hart_smar_tt301 (the old built-in types stay registered, hidden, so saved
+// projects still open).
+const smarTypeIds = ["protocol.hart.device.standard", "protocol.hart.device.smar_fy301"];
 
 function findFolder(nodes: PaletteTreeNode[], label: string): Extract<PaletteTreeNode, { kind: "folder" }> | undefined {
   return nodes.find((node): node is Extract<PaletteTreeNode, { kind: "folder" }> => node.kind === "folder" && node.label === label);
@@ -21,7 +22,7 @@ function findFolder(nodes: PaletteTreeNode[], label: string): Extract<PaletteTre
   const extensionRoot = path.resolve(__dirname, "../..");
   const { catalog } = loadUnifiedCatalog(extensionRoot, "pt-BR");
 
-  await test("the standard HART device, TT301 and FY301 are enabled entries in the shared HART folder", () => {
+  await test("the standard HART device and FY301 are enabled entries in the shared HART folder", () => {
     for (const typeId of smarTypeIds) {
       const matches = catalog.filter((entry) => entry.typeId === typeId);
       assert(matches.length === 1, `esperava exatamente uma entrada para ${typeId}`);
@@ -48,6 +49,7 @@ function findFolder(nodes: PaletteTreeNode[], label: string): Extract<PaletteTre
     const standard = catalog.find((entry) => entry.typeId === "protocol.hart.device.standard");
     assert(JSON.stringify(standard?.pinIds) === JSON.stringify(["sensor_plus", "sensor_minus", "loop_plus", "loop_minus"]), "4 terminais");
     assert(catalog.find((entry) => entry.typeId === "protocol.hart.device.smar_ld301")?.hidden === true, "LD301 legado oculto");
+    assert(catalog.find((entry) => entry.typeId === "protocol.hart.device.smar_tt301")?.hidden === true, "TT301 legado oculto");
   });
 
   await test("the HART modem is in the HART folder, wired in series (L+/L-), with the LasecPlot look", () => {
@@ -75,9 +77,11 @@ function findFolder(nodes: PaletteTreeNode[], label: string): Extract<PaletteTre
       const text = fs.readFileSync(path.join(repoRoot, "devices", "simulide-peripherals", name), "utf8");
       assert(!/hart/i.test(text), `${name} não deveria ter modo HART`);
     }
-    const ld301 = JSON.parse(fs.readFileSync(path.join(repoRoot, "subcircuits", "hart_smar_ld301.lssubcircuit"), "utf8"));
-    const inner = (ld301.components as Array<{ id: string; properties: Record<string, unknown> }>).find((component) => component.id === "ld301");
-    for (const key of ["endpoint", "baudRate", "bus"]) assert(!(key in (inner?.properties ?? {})), `LD301 não deveria ter ${key}`);
+    for (const [file, id] of [["hart_smar_ld301.lssubcircuit", "ld301"], ["hart_smar_tt301.lssubcircuit", "tt301"]] as const) {
+      const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "subcircuits", file), "utf8"));
+      const inner = (manifest.components as Array<{ id: string; properties: Record<string, unknown> }>).find((component) => component.id === id);
+      for (const key of ["endpoint", "baudRate", "bus"]) assert(!(key in (inner?.properties ?? {})), `${id} não deveria ter ${key}`);
+    }
   });
 
   await test("the LD301 subcircuit wraps one standard HART device that HART transports can target", () => {
@@ -119,7 +123,41 @@ function findFolder(nodes: PaletteTreeNode[], label: string): Extract<PaletteTre
     assert(display.x + screenPreview.offsetX === 31, "LCD centralizado sobre o transmissor");
   });
 
-  await test("TT301 and FY301 load their SVG artwork, LCD and four Core terminals", () => {
+  await test("the TT301 subcircuit wraps one standard HART device, with a temperature signal input and the loop terminals", () => {
+    const subcircuitsDir = path.resolve(__dirname, "../../../..", "subcircuits");
+    const manifest = JSON.parse(fs.readFileSync(path.join(subcircuitsDir, "hart_smar_tt301.lssubcircuit"), "utf8")) as Record<string, unknown>;
+    assert(manifestHartDeviceComponentId(manifest) === "tt301", "hartDeviceComponentId do dispositivo interno");
+    const pins = (manifest.interface as Array<{ pinId: string; domain: string }>).map((entry) => `${entry.pinId}:${entry.domain}`);
+    assert(JSON.stringify(pins) === JSON.stringify(["temperature:signal", "loop_plus:electrical", "loop_minus:electrical"]),
+      "entrada TEMP por sinal e bornes elétricos do laço");
+    assert(JSON.stringify(manifest.folderPath) === JSON.stringify(["Protocolos Industriais", "HART"]), "pasta HART");
+    assert(manifest.name === "SMAR TT301", "nome do transmissor");
+    const library = JSON.parse(fs.readFileSync(path.join(subcircuitsDir, "library.json"), "utf8")) as { subcircuits: Array<{ typeId: string; manifest: string }> };
+    assert(library.subcircuits.some((entry) => entry.typeId === "subcircuits.hart.smar_tt301" && entry.manifest === "hart_smar_tt301.lssubcircuit"),
+      "TT301 publicado na biblioteca de subcircuitos");
+  });
+
+  await test("TT301 uses its packaged SVG on the schematic and in the palette, with the LCD above it", () => {
+    const subcircuitsDir = path.resolve(__dirname, "../../../..", "subcircuits");
+    const manifest = JSON.parse(fs.readFileSync(path.join(subcircuitsDir, "hart_smar_tt301.lssubcircuit"), "utf8"));
+    const symbol = sanitizePackage(manifest.symbol, subcircuitsDir);
+    const artwork = fs.readFileSync(path.join(subcircuitsDir, "tt301.svg"));
+    const image = symbol?.shapes?.find((shape) => shape.kind === "image");
+    const prefix = "data:image/svg+xml;base64,";
+    assert(Buffer.from(image?.href?.slice(prefix.length) ?? "", "base64").equals(artwork), "símbolo usa o SVG empacotado");
+    assert(manifest.iconPath === "./tt301.svg", "paleta aponta para o mesmo SVG empacotado");
+    assert(symbol?.pins.length === 3 && symbol.pins[0]?.id === "temperature", "TEMP, LOOP+ e LOOP-");
+    const projectCatalog = JSON.parse(fs.readFileSync(path.join(subcircuitsDir, "..", "project", "schema", "component-catalog.json"), "utf8"));
+    const standard = projectCatalog.items.find((entry: { typeId: string }) => entry.typeId === "protocol.hart.device.standard")?.package;
+    const display = manifest.exposedComponents.find((entry: { componentId: string }) => entry.componentId === "tt301");
+    assert(Boolean(display && standard), "LCD e posição exposta presentes");
+    assert(display.y + standard!.height < image!.y!, "LCD acima da imagem, sem sobreposição");
+    assert(display.x + livePackagePreviewSymbolSvg(standard!).offsetX === 31, "LCD centralizado sobre o transmissor");
+    const inner = manifest.components.find((component: { id: string }) => component.id === "tt301");
+    assert(inner?.properties?.displayModelName === "TT301", "identificação TT301 no LCD");
+  });
+
+  await test("the legacy TT301 and FY301 built-ins load their SVG artwork, LCD and four Core terminals", () => {
     const repoRoot = path.resolve(__dirname, "../../../..");
     const realCatalog = loadUnifiedCatalog(path.join(repoRoot, "extension"), "pt-BR").catalog;
     const prefix = "data:image/svg+xml;base64,";

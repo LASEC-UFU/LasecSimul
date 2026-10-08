@@ -2,6 +2,7 @@
 
 #include <Eigen/Dense>
 #include <Eigen/SparseLU>
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <optional>
@@ -184,55 +185,8 @@ public:
                 m_scaledAdmittance(row, column) *= m_scale(row) * columnScale;
         }
 
-        // A closed, floating circuit has one free common-mode voltage. Its
-        // voltage differences and branch currents are nevertheless defined.
-        // Pick the first node as an internal 0 V reference only when shifting
-        // every node by the same amount leaves every equation unchanged.
-        // Grounded circuits retain their authored reference and unrelated
-        // singular matrices still fail normally.
-        const Eigen::Index nodeCount = static_cast<Eigen::Index>(m_nodeIndices.size());
-        std::vector<bool> visited(static_cast<size_t>(n), false);
-        for (Eigen::Index root = 0; root < n; ++root) {
-            if (visited[static_cast<size_t>(root)]) continue;
-            std::vector<Eigen::Index> block{root};
-            visited[static_cast<size_t>(root)] = true;
-            for (size_t head = 0; head < block.size(); ++head) {
-                const Eigen::Index row = block[head];
-                for (Eigen::Index column = 0; column < n; ++column) {
-                    if (visited[static_cast<size_t>(column)] ||
-                        (m_admittance(row, column) == 0.0 && m_admittance(column, row) == 0.0)) continue;
-                    visited[static_cast<size_t>(column)] = true;
-                    block.push_back(column);
-                }
-            }
-            std::vector<Eigen::Index> nodes;
-            for (const Eigen::Index index : block) if (index < nodeCount) nodes.push_back(index);
-            // A declared but unconnected pin contributes an all-zero equation.
-            // With no injected current its only consistent voltage is an
-            // arbitrary reference; choose zero so it cannot poison an otherwise
-            // valid circuit group that happens to contain that pin.
-            if (block.size() == 1 && nodes.size() == 1 &&
-                m_admittance.row(root).cwiseAbs().sum() == 0.0 && m_rhs(root) == 0.0) {
-                m_scaledAdmittance(root, root) = 1.0;
-                continue;
-            }
-            if (nodes.size() < 2) continue;
-            bool floatingGauge = true;
-            for (const Eigen::Index row : block) {
-                double sum = 0.0;
-                double magnitude = 0.0;
-                for (const Eigen::Index column : nodes) {
-                    const double value = m_admittance(row, column);
-                    sum += value;
-                    magnitude += std::abs(value);
-                }
-                if (magnitude == 0.0 || std::abs(sum) > magnitude * 1e-12) {
-                    floatingGauge = false;
-                    break;
-                }
-            }
-            if (floatingGauge) m_scaledAdmittance(nodes.front(), nodes.front()) += 1.0;
-        }
+        applyFloatingGauge(m_admittance, m_rhs, static_cast<Eigen::Index>(m_nodeIndices.size()), m_scaledAdmittance,
+                           m_gaugeWorkspace);
 
         if (static_cast<size_t>(n) >= kSparseThreshold) {
             Eigen::SparseMatrix<double> sparse = m_scaledAdmittance.sparseView(0.0, 1e-15);
@@ -275,6 +229,81 @@ public:
         m_admittanceChanged = false;
     }
 
+    /** Reusable buffers of applyFloatingGauge() (no allocation per factor()). */
+    struct GaugeWorkspace {
+        std::vector<Eigen::Index> parent, size, nodes;
+        std::vector<double> rowNodeSum, rowNodeMagnitude, rowMagnitude;
+        std::vector<uint8_t> floating;
+    };
+
+    /** Reference choices for the scaled matrix `scaled` of `admittance` (nodes are the first
+     * `nodeCount` rows/columns, extra MNA variables follow):
+     * - a closed, floating circuit has one free common-mode voltage; its differences and branch
+     *   currents are still defined. Its lowest node gets an internal 0 V reference when shifting
+     *   every node by the same amount leaves every equation of the circuit unchanged (every row's
+     *   node coefficients sum to zero). Grounded circuits keep their authored reference and
+     *   unrelated singular matrices still fail normally;
+     * - a declared but unconnected node (all-zero row and column, no injected current) is pinned
+     *   to 0 V so it cannot poison a valid group.
+     * One column-major pass (contiguous in Eigen's storage) plus union-find over the nonzero
+     * couplings: the former breadth-first search read the matrix row-wise and allocated two
+     * vectors per connected block on every factor(), i.e. on every admittance change. */
+    static void applyFloatingGauge(const Eigen::MatrixXd& admittance, const Eigen::VectorXd& rhs, Eigen::Index nodeCount,
+                                   Eigen::MatrixXd& scaled, GaugeWorkspace& w) {
+        const Eigen::Index n = admittance.rows();
+        const size_t count = static_cast<size_t>(n);
+        w.parent.resize(count);
+        for (size_t i = 0; i < count; ++i) w.parent[i] = static_cast<Eigen::Index>(i);
+        w.rowNodeSum.assign(count, 0.0);
+        w.rowNodeMagnitude.assign(count, 0.0);
+        w.rowMagnitude.assign(count, 0.0);
+        const auto find = [&w](Eigen::Index i) {
+            while (w.parent[static_cast<size_t>(i)] != i) {
+                w.parent[static_cast<size_t>(i)] = w.parent[static_cast<size_t>(w.parent[static_cast<size_t>(i)])];
+                i = w.parent[static_cast<size_t>(i)];
+            }
+            return i;
+        };
+        for (Eigen::Index column = 0; column < n; ++column) {
+            const double* values = admittance.data() + column * n;
+            for (Eigen::Index row = 0; row < n; ++row) {
+                const double value = values[row];
+                if (value == 0.0) continue;
+                const double magnitude = std::abs(value);
+                w.rowMagnitude[static_cast<size_t>(row)] += magnitude;
+                if (column < nodeCount) {
+                    w.rowNodeSum[static_cast<size_t>(row)] += value;
+                    w.rowNodeMagnitude[static_cast<size_t>(row)] += magnitude;
+                }
+                if (row != column) {
+                    const Eigen::Index a = find(row), b = find(column);
+                    // The smaller index becomes the root: every root is its block's lowest index.
+                    if (a != b) w.parent[static_cast<size_t>(std::max(a, b))] = std::min(a, b);
+                }
+            }
+        }
+        w.size.assign(count, 0);
+        w.nodes.assign(count, 0);
+        w.floating.assign(count, 1);
+        for (Eigen::Index i = 0; i < n; ++i) {
+            const size_t root = static_cast<size_t>(find(i));
+            ++w.size[root];
+            if (i < nodeCount) ++w.nodes[root];
+            const double magnitude = w.rowNodeMagnitude[static_cast<size_t>(i)];
+            if (magnitude == 0.0 || std::abs(w.rowNodeSum[static_cast<size_t>(i)]) > magnitude * 1e-12) w.floating[root] = 0;
+        }
+        for (Eigen::Index root = 0; root < n; ++root) {
+            const size_t r = static_cast<size_t>(root);
+            if (w.parent[r] != root) continue;
+            if (w.size[r] == 1 && w.nodes[r] == 1 && w.rowMagnitude[r] == 0.0 && rhs(root) == 0.0) {
+                scaled(root, root) = 1.0;
+                continue;
+            }
+            // root is the block's lowest index, hence its first node whenever it has nodes.
+            if (w.nodes[r] >= 2 && w.floating[r]) scaled(root, root) += 1.0;
+        }
+    }
+
     const Eigen::VectorXd& solve() {
         m_currentChanged = false;
         if (m_singular || (!m_useSparse && !m_factorization) || (m_useSparse && !m_sparseFactorization)) {
@@ -310,6 +339,7 @@ private:
     Eigen::VectorXd m_lastSolution;
     Eigen::VectorXd m_scale; // fatores de equilibração da última factor() -- ver factor()/solve()
     Eigen::MatrixXd m_scaledAdmittance;
+    GaugeWorkspace m_gaugeWorkspace;
     Eigen::VectorXd m_scaledRhs;
     Eigen::VectorXd m_scaledSolution;
     std::optional<Eigen::PartialPivLU<Eigen::MatrixXd>> m_factorization;

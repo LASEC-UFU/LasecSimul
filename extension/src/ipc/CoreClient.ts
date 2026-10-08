@@ -84,6 +84,9 @@ interface PendingRequest {
  * Único ponto da Extension que sabe que existe um processo LasecSimul Core nativo.
  * Toda a UI fala com CoreClient; nenhum outro módulo abre socket/pipe diretamente.
  */
+/** Longer than the Core's QEMU handshake limit (30 s), see McuController::start. */
+export const LOAD_MCU_FIRMWARE_TIMEOUT_MS = 45_000;
+
 export class CoreClient {
   private wireTopologyRevision = 0;
   private socket: net.Socket | undefined;
@@ -447,11 +450,13 @@ export class CoreClient {
 
   async loadMcuFirmware(instanceId: string, firmwarePath: string, qemuBinaryOverride?: string,
     debug?: { gdbPort: number; startPaused?: boolean }): Promise<{ gdbPort: number; debug: boolean }> {
+    // Launching QEMU waits up to 30 s for its handshake in the Core (slow or
+    // busy PCs); the default 5 s IPC timeout gave up before the Core did.
     return await this.request("loadMcuFirmware", {
       instanceId, firmwarePath, qemuBinaryOverride,
       gdbPort: debug?.gdbPort,
       startPaused: debug?.startPaused ?? false,
-    }) as { gdbPort: number; debug: boolean };
+    }, LOAD_MCU_FIRMWARE_TIMEOUT_MS) as { gdbPort: number; debug: boolean };
   }
 
   async getMcuLogs(instanceId: string): Promise<string> {

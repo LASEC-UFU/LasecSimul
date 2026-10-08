@@ -792,6 +792,21 @@ private:
 
     std::vector<std::unique_ptr<IComponentModel>> m_componentInstances;
     simulation::RuntimeState m_runtimeState;
+    /** Per-step signal<->electrical bridges, resolved once instead of every stable step: the
+     * scheduler thread used to dynamic_cast every active component four times per step and scan
+     * every signal wire (string compares) for each component -- O(components x wires) per step.
+     * Rebuilt when the bound plan or `m_bridgeTopologyRevision` changes; read and written only
+     * on the scheduler thread / under the same locks as the functions that use it. */
+    struct BridgeCache {
+        uint64_t planGeneration = UINT64_MAX;
+        uint64_t topologyRevision = UINT64_MAX;
+        std::vector<uint32_t> hartIndices;
+        std::vector<uint32_t> sensorIndices;    ///< signal sensors with a generic wire out of "value"
+        std::vector<uint32_t> actuatorIndices;  ///< signal actuators with a generic wire into "command"
+    } m_bridgeCache;
+    /** Bumped wherever signal wires or component execution lists change. */
+    uint64_t m_bridgeTopologyRevision = 0;
+    const BridgeCache& bridgeCacheUnlocked();
     // Serializa apenas as transições cold-path de identidade (start/stop). Não participa
     // do settle-loop nem do caminho I2C.
     mutable std::mutex m_executionIdentityMutex;

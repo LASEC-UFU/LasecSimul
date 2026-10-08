@@ -484,6 +484,34 @@ target_compile_definitions(hart_ld301_test PRIVATE
     LASECSIMUL_TEST_LD301_SUBCIRCUIT="${CMAKE_CURRENT_SOURCE_DIR}/../subcircuits/hart_smar_ld301.lssubcircuit")
 add_test(NAME hart_ld301 COMMAND hart_ld301_test)
 
+# TT301 reference audit: the subcircuit subcircuits/hart_smar_tt301 (standard
+# HART device + TT301 data) against the real capture in trm/tt301 (fixture).
+# See docs/tt301-audit.md.
+add_executable(hart_tt301_test
+    test/core/protocols/HartTt301Test.cpp
+    src/protocols/HartEngine.cpp
+    src/protocols/HartReferenceCatalog.cpp
+    src/protocols/HartCommandProgram.cpp
+    src/protocols/HartCommandJson.cpp
+    src/protocols/HartCommandClassification.cpp
+    src/protocols/HartTypeCodec.cpp
+    src/protocols/HartTransport.cpp
+    src/protocols/HartLcd.cpp
+    src/protocols/HartCommunicationComponent.cpp
+    src/protocols/HartPhysicalLayer.cpp
+    src/protocols/HartModemComponent.cpp
+    src/protocols/HostSerialPort.cpp
+    src/protocols/HostUdpSocket.cpp
+    src/simulation/SignalEngine.cpp
+    src/simulation/Scheduler.cpp
+)
+target_include_directories(hart_tt301_test PRIVATE include src)
+target_link_libraries(hart_tt301_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(hart_tt301_test PRIVATE
+    LASECSIMUL_TEST_TT301_CAPTURE="${CMAKE_CURRENT_SOURCE_DIR}/test/core/protocols/fixtures/tt301_capture.txt"
+    LASECSIMUL_TEST_TT301_SUBCIRCUIT="${CMAKE_CURRENT_SOURCE_DIR}/../subcircuits/hart_smar_tt301.lssubcircuit")
+add_test(NAME hart_tt301 COMMAND hart_tt301_test)
+
 # Camada fisica HART (Bell 202 FSK): transmissor, receptor e recorte de quadros.
 add_executable(hart_physical_layer_test
     test/core/protocols/HartPhysicalLayerTest.cpp
@@ -811,6 +839,12 @@ add_executable(circuit_group_test
 target_include_directories(circuit_group_test PRIVATE include src)
 target_link_libraries(circuit_group_test PRIVATE Eigen3::Eigen)
 add_test(NAME circuit_group COMMAND circuit_group_test)
+add_executable(circuit_gauge_equivalence_test
+    test/core/simulation/CircuitGaugeEquivalenceTest.cpp
+)
+target_include_directories(circuit_gauge_equivalence_test PRIVATE include src)
+target_link_libraries(circuit_gauge_equivalence_test PRIVATE Eigen3::Eigen)
+add_test(NAME circuit_gauge_equivalence COMMAND circuit_gauge_equivalence_test)
 
 # Passo 1 do plano FPGA/VHDL (.claude/plans/golden-puzzling-quasar.md): LogicValue isolado.
 add_executable(logic_value_test
@@ -1874,8 +1908,8 @@ add_test(NAME plugin_watchdog COMMAND plugin_watchdog_test)
 set(LASECSIMUL_HERMETIC_TESTS
     pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues shared_host_capacity simulation_plan signal_engine signal_dynamics signal_bridge signal_graph_wiring signal_graph_subcircuit_boundary process_subcircuit simulation_plan_session dense_hot_path voltage_divider circuit_group_reuse diode zener_led
     inert_components_fix probe_pause_on_change subcircuit simulide_sources_meters voltmeter
-    component_removal netlist union_find scheduler sparse_set core_bootstrap circuit_group logic_value
-    session_execution_identity vnext_b_arbiter vnext_b_wait_dispatcher drain_cutoff_gate dynamic_component_dispatch i2c_fast_path_dispatch mcu_pin_transition_observers hart_engine hart_ld301 hart_physical_layer hart_wire_loop
+    component_removal netlist union_find scheduler sparse_set core_bootstrap circuit_group circuit_gauge_equivalence logic_value
+    session_execution_identity vnext_b_arbiter vnext_b_wait_dispatcher drain_cutoff_gate dynamic_component_dispatch i2c_fast_path_dispatch mcu_pin_transition_observers hart_engine hart_ld301 hart_tt301 hart_physical_layer hart_wire_loop
     ghdl_arena_bridge ghdl_process_manager fpga_port_mapper mna_solver sha256 passive_components
     transient_rc transient_rlc simulation_performance_smoke property_definition dynamic_pins
     logic_components plugin_loader plugin_loader_real_dll plugin_checksum plugin_duplicate_device_id

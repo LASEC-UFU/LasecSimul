@@ -28,6 +28,16 @@ inline constexpr uint32_t Degree = 1u << 12;      ///< degree mark of the alphan
 inline constexpr uint32_t Adjust = 1u << 13;      ///< arrows: variable/mode can be adjusted
 inline constexpr uint32_t Setpoint = 1u << 14;    ///< SP: setpoint is being shown
 inline constexpr uint32_t ProcessVariable = 1u << 15; ///< PV: process variable is being shown
+inline constexpr uint32_t Acknowledge = 1u << 16; ///< ACK: an alarm is not acknowledged yet (TT301 glass)
+}
+
+/** Glass of the indicator: which annunciators exist and how failures are
+ * shown. 0 = LD301 glass (sqrt marks; SAT/SFAIL alternate with the unit);
+ * 1 = TT301 glass (TT301 manual Fig. 2.9: ACK instead of the sqrt marks; a
+ * sensor burnout is alarm 0, "AL_0" with ACK, Fig. 2.8). */
+namespace HartLcdGlass {
+inline constexpr uint8_t Ld301 = 0;
+inline constexpr uint8_t Tt301 = 1;
 }
 
 /** One frame of the display, exactly what the glass shows. */
@@ -40,11 +50,13 @@ struct HartLcdFrame {
     uint8_t decimalPoints = 0;
     std::array<char, 5> alpha{{' ', ' ', ' ', ' ', ' '}};
     uint32_t annunciators = 0;
+    uint8_t glass = HartLcdGlass::Ld301;
 };
 
-/** 4 1/2 digit field: the most decimals that keep |value| <= 19999 counts.
- * Returns false (and dashes) when even 0 decimals overflow. */
-bool hartLcdFormatNumber(double value, HartLcdFrame& frame);
+/** 4 1/2 digit field: the most decimals (up to `maxDecimals`) that keep
+ * |value| <= 19999 counts. Returns false (and dashes) when even 0 decimals
+ * overflow. */
+bool hartLcdFormatNumber(double value, HartLcdFrame& frame, int maxDecimals = 3);
 
 /** Alphanumeric label (<= 5 chars) for a HART Common Table 2 unit code; sets
  * the %, min or degree annunciator instead when the glass has one. */
@@ -59,6 +71,7 @@ struct HartLcdPage {
     double value = 0.0;
     std::string label;          ///< alphanumeric text (unit or function)
     uint32_t annunciators = 0;  ///< e.g. PV, %, degree
+    int maxDecimals = 3;        ///< e.g. 1: the TT301 shows 25.0 degC (manual Fig. 2.7)
 };
 
 /** Device state the display reflects. */
@@ -76,6 +89,7 @@ struct HartLcdInput {
     bool fixedCurrent = false;
     bool multidrop = false;
     uint8_t transferFunctionCode = 0; ///< Common Table 3
+    uint8_t glass = HartLcdGlass::Ld301;
     HartLcdPage first;
     HartLcdPage second;
 };
@@ -94,7 +108,7 @@ HartLcdFrame hartLcdCompose(const HartLcdInput& input);
 
 /** Telemetry payload of a frame (little-endian), consumed by the webview
  * `segment-lcd` surface: u32 enabled, 6 numeric chars, u8 decimal points,
- * u8 reserved, 5 alpha chars, 3 reserved, u32 annunciators = 24 bytes. */
+ * u8 glass, 5 alpha chars, 3 reserved, u32 annunciators = 24 bytes. */
 inline constexpr size_t kHartLcdPayloadBytes = 24;
 void hartLcdSerialize(const HartLcdFrame& frame, uint8_t* out);
 

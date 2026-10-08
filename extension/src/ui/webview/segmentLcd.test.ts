@@ -1,13 +1,14 @@
 import { assert, createTestRunner } from "../../ipc/testSupport/MockCoreServer";
-import { decodeSegmentLcd, fourteenSegments, segmentLcdSvg, SegmentLcdAnnunciator, sevenSegments } from "./segmentLcd";
+import { decodeSegmentLcd, fourteenSegments, segmentLcdSvg, SegmentLcdAnnunciator, SegmentLcdGlass, sevenSegments } from "./segmentLcd";
 
 /** Payload as the Core writes it (HartLcd.cpp::hartLcdSerialize). */
-function payload(numeric: string, decimalPoints: number, alpha: string, annunciators: number, enabled = true): Uint8Array {
+function payload(numeric: string, decimalPoints: number, alpha: string, annunciators: number, enabled = true, glass = 0): Uint8Array {
   const bytes = new Uint8Array(12 + 24);
   const view = new DataView(bytes.buffer);
   view.setUint32(12, enabled ? 1 : 0, true);
   for (let i = 0; i < 6; i += 1) bytes[16 + i] = numeric.charCodeAt(i);
   bytes[22] = decimalPoints;
+  bytes[23] = glass;
   for (let i = 0; i < 5; i += 1) bytes[24 + i] = alpha.charCodeAt(i);
   view.setUint32(32, annunciators, true);
   return bytes;
@@ -42,6 +43,16 @@ function count(markup: string, pattern: RegExp): number {
       if (char === ".") continue;
       assert(fourteenSegments(char).length > 0, `14 segmentos para '${char}'`);
     }
+  });
+
+  await test("vidro do TT301 (manual Fig. 2.9): ACK no lugar da raiz quadrada; burnout AL_0 com ACK", () => {
+    const ld301 = segmentLcdSvg(decodeSegmentLcd(payload("  2500", 1 << 3, "    C", SegmentLcdAnnunciator.degree), 12), 0, 0, 100, 70);
+    assert(ld301.includes('data-lcd-annunciator="√"') && !ld301.includes('data-lcd-annunciator="ACK"'), "LD301: raiz, sem ACK");
+    const frame = decodeSegmentLcd(payload("      ", 0, "AL_0 ", SegmentLcdAnnunciator.acknowledge, true, SegmentLcdGlass.tt301), 12);
+    assert(frame?.glass === SegmentLcdGlass.tt301, "byte do vidro decodificado");
+    const tt301 = segmentLcdSvg(frame, 0, 0, 100, 70);
+    assert(!tt301.includes('data-lcd-annunciator="√"') && /data-lit="1" data-lcd-annunciator="ACK"/.test(tt301), "TT301: ACK aceso, sem raiz");
+    assert(fourteenSegments("_") === "d", "sublinhado de AL_0");
   });
 
   await test("indicador não instalado ou desligado: vidro apagado", () => {

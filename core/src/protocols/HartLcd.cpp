@@ -1,5 +1,6 @@
 #include "HartLcd.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -15,7 +16,7 @@ void put32(uint8_t* out, uint32_t value) {
 }
 } // namespace
 
-bool hartLcdFormatNumber(double value, HartLcdFrame& frame) {
+bool hartLcdFormatNumber(double value, HartLcdFrame& frame, int maxDecimals) {
     frame.numeric = {{' ', ' ', ' ', ' ', ' ', ' '}};
     frame.decimalPoints = 0;
     const auto dashes = [&] {
@@ -26,7 +27,7 @@ bool hartLcdFormatNumber(double value, HartLcdFrame& frame) {
     const double magnitude = std::fabs(value);
     int decimals = -1;
     long long counts = 0;
-    for (int d = 3; d >= 0; --d) {
+    for (int d = std::clamp(maxDecimals, 0, 3); d >= 0; --d) {
         counts = std::llround(magnitude * std::pow(10.0, d));
         if (counts <= 19999) { decimals = d; break; }
     }
@@ -62,7 +63,7 @@ std::string hartLcdUnitLabel(uint8_t unitCode, uint32_t& annunciators) {
         case 34: annunciators |= HartLcdAnnunciator::Degree; return "R";
         case 35: return "K";
         case 36: return "mV";
-        case 37: return "OHM";
+        case 37: return "Ohm"; // TT301 manual Table 4.2
         case 38: return "Hz";
         case 39: return "mA";
         case 40: return "gal";
@@ -93,6 +94,7 @@ void hartLcdSetAlpha(HartLcdFrame& frame, const std::string& text, bool rightAli
 HartLcdFrame hartLcdCompose(const HartLcdInput& input) {
     HartLcdFrame frame;
     frame.enabled = input.installed && input.powered;
+    frame.glass = input.glass;
     if (!frame.enabled) return frame;
     if (input.fixedCurrent) frame.annunciators |= HartLcdAnnunciator::Fix;
     if (input.multidrop) frame.annunciators |= HartLcdAnnunciator::Multidrop;
@@ -127,8 +129,19 @@ HartLcdFrame hartLcdCompose(const HartLcdInput& input) {
         hartLcdFormatNumber(std::nan(""), frame);
         return frame;
     }
-    hartLcdFormatNumber(page.value, frame);
+    if (input.glass == HartLcdGlass::Tt301 && input.sensorFault) {
+        // TT301 manual 2.8: an alarm interrupts monitoring; alarm 0 is the
+        // burnout and has no automatic acknowledgement (ACK stays lit).
+        frame.annunciators |= HartLcdAnnunciator::Acknowledge;
+        hartLcdSetAlpha(frame, "AL_0");
+        return frame;
+    }
+    hartLcdFormatNumber(page.value, frame, page.maxDecimals);
     frame.annunciators |= page.annunciators;
+    if (input.glass == HartLcdGlass::Tt301) {
+        hartLcdSetAlpha(frame, page.label, true);
+        return frame;
+    }
     const bool blink = (input.elapsedNs / kBlinkNs) % 2 == 1;
     if (input.sensorFault && blink) hartLcdSetAlpha(frame, "SFAIL", true);
     else if (input.outputSaturated && blink) hartLcdSetAlpha(frame, "SAT", true);
@@ -141,6 +154,7 @@ void hartLcdSerialize(const HartLcdFrame& frame, uint8_t* out) {
     put32(out, frame.enabled ? 1u : 0u);
     std::memcpy(out + 4, frame.numeric.data(), frame.numeric.size());
     out[10] = frame.decimalPoints;
+    out[11] = frame.glass;
     std::memcpy(out + 12, frame.alpha.data(), frame.alpha.size());
     put32(out + 20, frame.annunciators);
 }
