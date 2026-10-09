@@ -2,7 +2,7 @@
 
 > Arquivo gerado por `node .spec/governance/generate-status.mjs`. Não editar manualmente.
 
-Total: 42 documentos. accepted: 8; active: 30; deferred: 1; planned: 2; superseded: 1.
+Total: 44 documentos. accepted: 8; active: 33; planned: 2; superseded: 1.
 
 | ID | Kind | Status | Documento | Dependências |
 |---|---|---|---|---|
@@ -36,12 +36,14 @@ Total: 42 documentos. accepted: 8; active: 30; deferred: 1; planned: 2; supersed
 | FEAT-005 | feature | active | [FPGA/VHDL com GHDL](features/fpga-ghdl.md) | ARCH-001, ARCH-003, ARCH-004, ARCH-009, FEAT-011 |
 | FEAT-006 | feature | active | [Runtime Python](features/python-runtime.md) | FEAT-001, ARCH-004, ARCH-005, ARCH-009 |
 | FEAT-007 | feature | active | [PLC IEC 61131-3 integrado ao LasecSimul](features/iec61131-plc.md) | FEAT-001, ARCH-002, ARCH-003, ARCH-006, ARCH-009, SCHEMA-003, ADR-0007 |
-| FEAT-008 | feature | deferred | [Visualização animada de processo](features/process-visualization.md) | FEAT-001, ARCH-005, FEAT-011 |
+| FEAT-008 | feature | active | [Visualização animada de processo](features/process-visualization.md) | FEAT-001, ARCH-005, FEAT-011 |
 | FEAT-009 | feature | active | [Protocolos industriais](features/industrial-protocols.md) | FEAT-001, ARCH-003, ARCH-006 |
 | FEAT-010 | feature | active | [Editor IEC 61131-3 e biblioteca comum de POUs](features/iec61131-editor.md) | FEAT-007, ADR-0007, SCHEMA-003 |
 | FEAT-011 | feature | active | [Navegação por domínio na paleta](features/workspace-navigation.md) | ARCH-001 |
 | FEAT-012 | feature | active | [Biblioteca de controle/processo inspirada no TDPS e importação `.smp`](features/tdps-reference-library.md) | FEAT-001, FEAT-002, FEAT-004, SCHEMA-002, ADR-0008 |
 | FEAT-013 | feature | planned | [Anexo F.14.10 — Common Practice Commands 80–90 (HCF_SPEC-151 Rev. 10.0)](features/hart-device-engine.md) | FEAT-001, ARCH-002, ARCH-004, ARCH-005, ARCH-006, FEAT-009 |
+| FEAT-014 | feature | active | [Modo de rede `lab-router` da ESP32](features/esp32-network-lab-router.md) | ARCH-001 |
+| FEAT-015 | feature | active | [IPD Studio graphical/editor port](features/ipd-studio-port.md) | FEAT-008, ARCH-001, ARCH-006 |
 | AUD-001 | governance | active | [Auditoria independente dos comandos HART](audits/hart-command-audit.md) | FEAT-013 |
 | GOV-001 | governance | active | [Governança das especificações](governance/governance.md) | — |
 | ROADMAP-001 | roadmap | active | [Roadmap arquitetural F0–F10](ROADMAP.md) | GOV-001, BENCH-001, BENCH-005 |
