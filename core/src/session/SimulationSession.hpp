@@ -805,6 +805,7 @@ private:
         std::vector<std::vector<std::string>> hartWiredInputs;
         std::vector<uint32_t> sensorIndices;    ///< signal sensors with a generic wire out of "value"
         std::vector<uint32_t> actuatorIndices;  ///< signal actuators with a generic wire into "command"
+        std::vector<uint32_t> solutionObserverIndices; ///< IComponentModel::observesSolution()
     } m_bridgeCache;
     /** Bumped wherever signal wires or component execution lists change. */
     uint64_t m_bridgeTopologyRevision = 0;

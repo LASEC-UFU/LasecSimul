@@ -58,7 +58,7 @@
         "strokeWidth": 1.5,
         "opacity": 1,
         "showTicks": true,
-        "value": 540.3269264397671,
+        "value": 552.8151896546178,
         "bindSource": "",
         "bindChannel": 0,
         "bindScale": 1,
@@ -81,8 +81,8 @@
       "showValue": false,
       "showDialValue": false,
       "visual": {
-        "x": 443.4761808733695,
-        "y": 570.3520656256536,
+        "x": 443.9860777492376,
+        "y": 570.8619625015217,
         "rotation": 270
       }
     },
@@ -97,7 +97,7 @@
         "strokeWidth": 1.5,
         "opacity": 1,
         "showTicks": true,
-        "value": 1584.1988050054244,
+        "value": 1576.7729943609818,
         "bindSource": "",
         "bindChannel": 0,
         "bindScale": 1,
@@ -119,6 +119,7 @@
       "label": "Slider HMI-2",
       "showValue": false,
       "showDialValue": false,
+      "flipH": false,
       "visual": {
         "x": 368.0934736277779,
         "y": 570.9509632535252,
@@ -164,25 +165,6 @@
       }
     },
     {
-      "id": "component-1791374280574-716360",
-      "typeId": "meters.oscope",
-      "properties": {
-        "filter": 0,
-        "autoScale": true,
-        "tracks": 4,
-        "sampleIntervalNs": 50000,
-        "tunnels": ""
-      },
-      "label": "Oscope-1",
-      "showValue": false,
-      "showDialValue": false,
-      "visual": {
-        "x": 591.2983856964661,
-        "y": 728.0004310536542,
-        "rotation": 0
-      }
-    },
-    {
       "id": "component-1791374315637-835373",
       "typeId": "connectors.tunnel",
       "properties": {
@@ -192,8 +174,8 @@
       "showValue": false,
       "showDialValue": false,
       "visual": {
-        "x": 549.2007984783339,
-        "y": 746.7204009783984,
+        "x": 556.3116678766052,
+        "y": 747.5569738487833,
         "rotation": 0
       }
     },
@@ -237,14 +219,34 @@
       "showValue": false,
       "showDialValue": false,
       "visual": {
-        "x": 549.9711458414503,
-        "y": 859.321731208321,
+        "x": 553.7005733649667,
+        "y": 780.1174681987999,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791478193390-287006",
+      "typeId": "meters.oscope",
+      "properties": {
+        "inputMode": "differential",
+        "filter": 0,
+        "autoScale": true,
+        "tracks": 4,
+        "sampleIntervalNs": 50000,
+        "tunnels": ""
+      },
+      "label": "Oscope-1",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 601.1994642004439,
+        "y": 729.0604507522371,
         "rotation": 0
       }
     }
   ],
   "topology": {
-    "revision": 356,
+    "revision": 435,
     "nodes": [],
     "conductors": [
       {
@@ -345,6 +347,10 @@
         "vertices": [
           {
             "x": 566.4761808733695,
+            "y": 687.6619625015217
+          },
+          {
+            "x": 566.4761808733695,
             "y": 645.1040895136738
           }
         ]
@@ -396,34 +402,6 @@
         ]
       },
       {
-        "id": "wire-1791374396505-3704",
-        "from": {
-          "kind": "port",
-          "componentId": "component-1791374384819-700152",
-          "pinId": "pin"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "component-1791374280574-716360",
-          "pinId": "pin-5"
-        },
-        "vertices": []
-      },
-      {
-        "id": "wire-1791374399729-716429",
-        "from": {
-          "kind": "port",
-          "componentId": "component-1791374315637-835373",
-          "pinId": "pin"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "component-1791374280574-716360",
-          "pinId": "pin-1"
-        },
-        "vertices": []
-      },
-      {
         "id": "wire-1791374421440-436107",
         "from": {
           "kind": "port",
@@ -439,10 +417,6 @@
           {
             "x": 824,
             "y": 702.7710276585746
-          },
-          {
-            "x": 824,
-            "y": 696
           },
           {
             "x": 824,
@@ -462,15 +436,48 @@
           "componentId": "component-1791298650899-835065",
           "pinId": "pin-2"
         },
+        "vertices": [
+          {
+            "x": 882.1868755684786,
+            "y": 645.3796861568541
+          }
+        ]
+      },
+      {
+        "id": "wire-1791478211710-287323",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791478193390-287006",
+          "pinId": "pin-1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791374315637-835373",
+          "pinId": "pin"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791478214574-959464",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791374384819-700152",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791478193390-287006",
+          "pinId": "pin-2"
+        },
         "vertices": []
       }
     ]
   },
   "visual": {
     "viewport": {
-      "x": -450.82590865599377,
-      "y": -636.6425660667354,
-      "zoom": 1.6088260093985671
+      "x": -452.9743713757455,
+      "y": -501.6231198329891,
+      "zoom": 1.3197768571743205
     }
   },
   "simulationSettings": {}

@@ -276,6 +276,18 @@ void testAmpmeterMeasuresSeriesCurrentAndForwardsToOutputPin() {
     const auto unitError = session.setProperty(amp, "displayUnit", PropertyValue{std::string("mA")});
     check(!unitError.has_value(), "Ampmeter: aceita escala exibida em mA sem alterar a corrente do circuito");
     checkCurrent(session, amp, 0.01, 1e-4, "Ampmeter: escala exibida nao altera a medida fisica em ampères");
+
+    // A corrente muda sem que a tensão nos pinos do amperímetro mude além do limiar de propagação
+    // (1 µΩ). Antes ele não era reestampado e a leitura ficava
+    // congelada em 10 mA (bug do laço do LD301: osciloscópio mudava, amperímetro não).
+    // Com µA a queda em 1 µΩ fica em picovolts, abaixo do limiar de 1 nV.
+    check(!session.setProperty(r1, "resistance", 1e6).has_value(), "Ampmeter: resistor da malha muda para 1M");
+    for (int i = 0; i < 50 && session.settleStep(); ++i) {}
+    checkCurrent(session, amp, 10e-6, 1e-10, "Ampmeter: 10V/1M = 10uA");
+    check(!session.setProperty(r1, "resistance", 2e6).has_value(), "Ampmeter: resistor da malha muda para 2M");
+    for (int i = 0; i < 50 && session.settleStep(); ++i) {}
+    checkCurrent(session, amp, 5e-6, 1e-10, "Ampmeter: leitura acompanha a solução nova (10V/2M = 5uA), sem ficar congelada");
+    check(nearlyEqual(session.nodeVoltageOfPin(amp, "outPin"), 5e-6, 1e-10), "Ampmeter: outPin acompanha a leitura nova");
 }
 
 void testClockTogglesOverTime() {
@@ -640,6 +652,14 @@ void testOscopeOnFloatingLoopInBothInputModes() {
             check(nearlyEqual(readF64(state, 0), 4.8, 1e-4), "Oscope diferencial: CH1 (1+ - 1-) = 4,8 V sobre 250 ohm do laço flutuante");
             check(nearlyEqual(readF64(state, 8), 19.2, 1e-4), "Oscope diferencial: CH2 (2+ - 2-) = 19,2 V sobre 1 kohm, ao mesmo tempo");
             check(readF64(state, 16) == 0.0 && readF64(state, 24) == 0.0, "Oscope diferencial: colunas 3 e 4 ficam em 0");
+            // Laço parado em DC: nada é resolvido, mas a tela "Expande" precisa mostrar o nível
+            // (amostra e retém). Antes o histórico ficava vazio e a janela abria sem traço.
+            session.scheduler().runUntil(session.scheduler().nowNs() + 50'000'000);
+            const std::vector<uint8_t> held = session.getComponentState(scope);
+            const uint32_t heldCount = readU32(held, sizeof(double) * 4);
+            const size_t lastSample = sizeof(double) * 4 + sizeof(uint32_t) + (heldCount - 1) * 16;
+            check(heldCount > 200 && nearlyEqual(readF64(held, lastSample + 8), 4.8, 1e-4),
+                  "Oscope: em regime DC o histórico continua sendo preenchido com o nível (amostra e retém)");
         } else {
             check(nearlyEqual(readF64(state, 0), 4.8, 1e-4),
                   "Oscope convencional: G sobre o resistor de um laço sem terra mede 4,8 V (antes: grupo singular, 0 V)");

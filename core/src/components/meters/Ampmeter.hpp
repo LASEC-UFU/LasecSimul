@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <optional>
 #include <string>
@@ -34,6 +35,15 @@ public:
 
         matrix.addConductanceToGround(m_pins[kOut], kOutConductance);
         matrix.addCurrentToGround(m_pins[kOut], m_lastCurrent * kOutConductance);
+    }
+
+    bool observesSolution() const override { return true; }
+    bool observeSolution(const MnaMatrixView& matrix) override {
+        const double current = (matrix.getNodeVoltage(m_pins[kLeft]) - matrix.getNodeVoltage(m_pins[kRight])) / m_resistance;
+        // A saída analógica (outPin) foi estampada com a leitura anterior: reestampa se mudou.
+        const bool changed = std::abs(current - m_lastCurrent) > 1e-12 + 1e-9 * std::abs(current);
+        m_lastCurrent = current;
+        return changed;
     }
 
     void postStep(uint64_t) override {}

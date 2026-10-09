@@ -67,43 +67,53 @@ public:
     }
 
     void stamp(MnaMatrixView& matrix) override {
-        const uint64_t now = m_scheduler.nowNs();
-        const bool dueSample = now - m_lastSampleNs >= m_sampleIntervalNs;
         if (m_differential) {
-            for (size_t ch = 0; ch < kChannelCount; ++ch) {
-                if (ch < kDifferentialChannels) {
-                    const Pin& plus = m_pins[2 * ch];
-                    const Pin& minus = m_pins[2 * ch + 1];
-                    m_lastVoltages[ch] = matrix.getNodeVoltage(plus) - matrix.getNodeVoltage(minus);
-                    matrix.addConductance(plus, minus, kInputConductance);
-                } else {
-                    m_lastVoltages[ch] = 0.0;
-                }
-                if (dueSample) m_history[ch][m_writeIndex] = Sample{now, m_lastVoltages[ch]};
-            }
-            if (dueSample) {
-                m_lastSampleNs = now;
-                m_writeIndex = (m_writeIndex + 1) % kHistoryCapacity;
-                if (m_count < kHistoryCapacity) ++m_count;
-            }
+            for (size_t ch = 0; ch < kDifferentialChannels; ++ch)
+                matrix.addConductance(m_pins[2 * ch], m_pins[2 * ch + 1], kInputConductance);
             return;
         }
-        const double reference = m_referenceConnected ? matrix.getNodeVoltage(m_pins[kReferencePin]) : 0.0;
         for (size_t ch = 0; ch < kChannelCount; ++ch) {
-            m_lastVoltages[ch] = matrix.getNodeVoltage(m_pins[ch]) - reference;
             if (m_referenceConnected) matrix.addConductance(m_pins[ch], m_pins[kReferencePin], kInputConductance);
             else matrix.addConductanceToGround(m_pins[ch], kInputConductance);
-            if (dueSample) m_history[ch][m_writeIndex] = Sample{now, m_lastVoltages[ch]};
         }
         matrix.addConductanceToGround(m_pins[kReferencePin], kInputConductance);
-        if (dueSample) {
-            m_lastSampleNs = now;
-            m_writeIndex = (m_writeIndex + 1) % kHistoryCapacity;
-            if (m_count < kHistoryCapacity) ++m_count;
-        }
     }
 
-    void postStep(uint64_t) override {}
+    /** Lê os canais da solução NOVA, depois de cada solve (ver IComponentModel::observesSolution):
+     * ler dentro do stamp() devolvia a solução anterior e só acontecia quando o próprio osciloscópio
+     * era reestampado. */
+    bool observesSolution() const override { return true; }
+    bool observeSolution(const MnaMatrixView& matrix) override {
+        if (m_differential) {
+            for (size_t ch = 0; ch < kChannelCount; ++ch) {
+                m_lastVoltages[ch] = ch < kDifferentialChannels
+                    ? matrix.getNodeVoltage(m_pins[2 * ch]) - matrix.getNodeVoltage(m_pins[2 * ch + 1])
+                    : 0.0;
+            }
+        } else {
+            const double reference = m_referenceConnected ? matrix.getNodeVoltage(m_pins[kReferencePin]) : 0.0;
+            for (size_t ch = 0; ch < kChannelCount; ++ch) m_lastVoltages[ch] = matrix.getNodeVoltage(m_pins[ch]) - reference;
+        }
+        m_hasReading = true;
+        const uint64_t now = m_scheduler.nowNs();
+        if (m_count == 0 || now - m_lastSampleNs >= m_sampleIntervalNs) record(now);
+        return false;
+    }
+
+    /** Amostra e retém: com o circuito parado nada é resolvido e nada seria gravado, e a janela
+     * "Expande" ficava vazia num nível DC (ex.: laço 4-20 mA sem HART). Um osciloscópio real
+     * continua desenhando o nível: completa o intervalo desde a última amostra com a leitura atual,
+     * no intervalo de amostra, limitado ao tamanho do buffer. */
+    bool isDynamic() const override { return true; }
+    void postStep(uint64_t) override {
+        if (!m_hasReading) return;
+        const uint64_t now = m_scheduler.nowNs();
+        if (m_count > 0 && now < m_lastSampleNs + m_sampleIntervalNs) return;
+        uint64_t next = m_count == 0 ? now : m_lastSampleNs + m_sampleIntervalNs;
+        const uint64_t window = m_sampleIntervalNs * (kHistoryCapacity - 1);
+        if (now - next > window) next = now - window;
+        for (; next <= now; next += m_sampleIntervalNs) record(next);
+    }
 
     /** Formato: [0..32) 4 doubles (última leitura, compatível com leitores antigos que só olhavam
      * isso) + [32..36) uint32 nº de amostras gravadas por canal + histórico CHANNEL-MAJOR (canal 0
@@ -164,6 +174,7 @@ public:
                     m_lastVoltages.fill(0.0);
                     m_count = 0;
                     m_writeIndex = 0;
+                    m_hasReading = false;
                     return {true, {}};
                 },
             },
@@ -295,6 +306,13 @@ private:
         return m_history[channel][physical];
     }
 
+    void record(uint64_t timestampNs) {
+        for (size_t ch = 0; ch < kChannelCount; ++ch) m_history[ch][m_writeIndex] = Sample{timestampNs, m_lastVoltages[ch]};
+        m_lastSampleNs = timestampNs;
+        m_writeIndex = (m_writeIndex + 1) % kHistoryCapacity;
+        if (m_count < kHistoryCapacity) ++m_count;
+    }
+
     simulation::Scheduler& m_scheduler;
     static constexpr size_t kReferencePin = kChannelCount;
     static constexpr size_t kDifferentialChannels = kChannelCount / 2;
@@ -311,6 +329,7 @@ private:
     std::array<std::string, kChannelCount> m_tunnelNames{};
     bool m_referenceConnected = false;
     bool m_differential = false;
+    bool m_hasReading = false;
 };
 
 } // namespace lasecsimul::components

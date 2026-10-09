@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cmath>
 #include <cstring>
 #include "lasecsimul/IComponentModel.hpp"
 
@@ -26,6 +27,14 @@ public:
 
         matrix.addConductanceToGround(m_pins[kOut], kOutConductance);
         matrix.addCurrentToGround(m_pins[kOut], m_lastVolt * kOutConductance);
+    }
+
+    bool observesSolution() const override { return true; }
+    bool observeSolution(const MnaMatrixView& matrix) override {
+        const double volts = matrix.getNodeVoltage(m_pins[kRight]) - matrix.getNodeVoltage(m_pins[kLeft]);
+        const bool changed = std::abs(volts - m_lastVolt) > 1e-12 + 1e-9 * std::abs(volts);
+        m_lastVolt = volts;
+        return changed; // a saída analógica (kOut) depende da leitura
     }
 
     void postStep(uint64_t) override {}

@@ -1850,9 +1850,11 @@ const SimulationSession::BridgeCache& SimulationSession::bridgeCacheUnlocked() {
     m_bridgeCache.hartWiredInputs.clear();
     m_bridgeCache.sensorIndices.clear();
     m_bridgeCache.actuatorIndices.clear();
+    m_bridgeCache.solutionObserverIndices.clear();
     for (uint32_t index : m_activeComponentIndices) {
         IComponentModel* component = index < m_componentInstances.size() ? m_componentInstances[index].get() : nullptr;
         if (!component) continue;
+        if (component->observesSolution()) m_bridgeCache.solutionObserverIndices.push_back(index);
         if (dynamic_cast<protocols::HartCommunicationComponent*>(component)) {
             m_bridgeCache.hartIndices.push_back(index);
             std::vector<std::string>& wired = m_bridgeCache.hartWiredInputs.emplace_back();
@@ -3350,6 +3352,17 @@ bool SimulationSession::settleStep() {
         m_solverCalls.fetch_add(1, std::memory_order_relaxed);
         m_solverNanoseconds.fetch_add(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now() - solverStart).count()), std::memory_order_relaxed);
+    }
+
+    // 2b. Instrumentos que leem a solução (amperímetro, voltímetro): a leitura acompanha TODA
+    //     solução, não só quando o próprio componente é reestampado (ver observesSolution()).
+    for (uint32_t componentIndex : bridgeCacheUnlocked().solutionObserverIndices) {
+        if (componentIndex >= m_topology.stampResolutionByComponent.size()) continue;
+        IComponentModel* component = m_componentInstances[componentIndex].get();
+        const simulation::ComponentStampResolution& resolution = m_topology.stampResolutionByComponent[componentIndex];
+        if (!component || resolution.groupIndex == UINT32_MAX) continue;
+        const simulation::ComponentMatrixView view(m_topology.groups[resolution.groupIndex], resolution.localIndexByPinId);
+        if (component->observeSolution(view)) m_scheduler.dirtySet().insert(componentIndex);
     }
 
     // 3. Nó cuja tensão de fato mudou: marca dirty quem tem pino lá (listenersByNode).

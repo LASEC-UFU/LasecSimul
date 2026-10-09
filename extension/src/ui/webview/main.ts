@@ -6515,7 +6515,8 @@ function updateInstrumentTunnel(component: WebviewComponentModel, channel: numbe
   send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name: "tunnels", value: names.join(",") });
 }
 
-function makeInstrumentTunnelRows(component: WebviewComponentModel, channelCount: number, captions?: readonly string[]): HTMLDivElement {
+function makeInstrumentTunnelRows(component: WebviewComponentModel, channelCount: number, captions?: readonly string[],
+                                  colorIndices?: readonly number[]): HTMLDivElement {
   const rows = document.createElement("div");
   rows.className = "instrument-tunnel-rows";
   const names = instrumentTunnelNames(component, channelCount);
@@ -6529,7 +6530,7 @@ function makeInstrumentTunnelRows(component: WebviewComponentModel, channelCount
     input.maxLength = 64;
     input.value = names[channel] ?? "";
     input.placeholder = "nome do túnel";
-    input.style.setProperty("--channel-color", INSTRUMENT_CHANNEL_COLORS[channel] ?? "#888");
+    input.style.setProperty("--channel-color", INSTRUMENT_CHANNEL_COLORS[colorIndices?.[channel] ?? channel] ?? "#888");
     input.title = "Usado quando o canal não possui fio físico";
     input.addEventListener("change", () => updateInstrumentTunnel(component, channel, channelCount, input.value));
     label.append(caption, input);
@@ -6764,7 +6765,7 @@ function buildScopePopup(popup: ScopePopupState, component: WebviewComponentMode
   }));
   controls.appendChild(tabs);
   controls.append(makeInstrumentSectionLabel("Túneis dos canais"), makeInstrumentTunnelRows(component, 4,
-    differential ? ["1+", "1−", "2+", "2−"] : undefined));
+    differential ? ["1+", "1−", "2+", "2−"] : undefined, differential ? [0, 0, 1, 1] : undefined));
 
   // Knobs (disco + spinner) -- réplica do layout QDial+QLabel+PlotSpinBox de `oscwidget.ui`.
   const knobs = document.createElement("div");

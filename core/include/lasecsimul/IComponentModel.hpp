@@ -214,6 +214,16 @@ public:
      * componente NÃO declarou aqui continua produzindo "sistema singular" de verdade -- não mascara
      * erro de fiação real do usuário em componentes que nunca pediram essa rede de segurança. */
     virtual std::span<const uint32_t> leakagePinIndices() const { return {}; }
+
+    /** Instrumento cuja leitura vem do circuito RESOLVIDO, não do próprio `stamp()` (amperímetro,
+     * voltímetro). `settleStep()` só reestampa quem tem pino num nó cuja tensão mudou: a queda num
+     * amperímetro de 1 µΩ muda nanovolts quando a corrente do laço muda, então a leitura feita no
+     * `stamp()` ficava congelada. Quem devolve `true` aqui recebe `observeSolution()` depois de
+     * TODA solução, com uma vista só de leitura (apenas `getNodeVoltage`/`getBranchCurrent`).
+     * `observeSolution()` devolve `true` quando algo que o componente estampa depende da leitura
+     * (ex.: o pino de saída analógica) e ele precisa ser estampado de novo. */
+    virtual bool observesSolution() const { return false; }
+    virtual bool observeSolution(const MnaMatrixView&) { return false; }
 };
 
 /** The ONE naming authority for a generic `SignalPortDescriptor`'s materialized
