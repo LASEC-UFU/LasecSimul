@@ -246,7 +246,12 @@ function openSchematicEditor(extensionUri: vscode.Uri): void {
   setSimulationStatus(state.simulationStatus);
 }
 
-function setEffectiveCatalog(entries: WebviewComponentCatalogEntry[]): void {
+function setEffectiveCatalog(libraryEntries: WebviewComponentCatalogEntry[]): void {
+  // Subcircuitos do projeto aberto (por caminho ou incorporados) não vêm da biblioteca: recarregar o
+  // catálogo (ex.: quando o Core termina de subir) não pode apagá-los, senão o bloco vira "?".
+  const libraryTypeIds = new Set(libraryEntries.map((entry) => entry.typeId));
+  const projectEntries = state.schematicState.catalog.filter((entry) => entry.projectLocal && !libraryTypeIds.has(entry.typeId));
+  const entries = [...libraryEntries, ...projectEntries];
   state.schematicState = { ...state.schematicState, catalog: entries };
   // `componentSymbols.ts` é compilado duas vezes (host via `out/`, Webview via `out-webview/`) --
   // são DUAS instâncias de módulo totalmente separadas, cada uma com seu próprio registro de

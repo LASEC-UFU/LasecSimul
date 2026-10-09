@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { filePathFromSourceId } from "../project/embeddedSubcircuits";
 import { childPropertyOverrides, parseChildPropertyKey, withoutChildPropertyOverrides } from "../ui/webview/childPropertyOverrides";
 import * as path from "path";
 import { IpcError } from "../ipc/protocol";
@@ -1200,6 +1201,23 @@ export function rebuildCoreFromSchematicState(): Promise<void> {
   return queueCoreRebuild();
 }
 
+/** Registra no Core os subcircuitos do projeto (por caminho ou incorporados ao `.lsproj`). O Core
+ * não guarda nada entre reinícios e o projeto pode ter sido aberto antes de ele subir; registrar a
+ * cada reconstrução (com `replace`) é idempotente e cobre os dois casos. */
+async function registerProjectSubcircuitsInCore(): Promise<void> {
+  if (!state.coreClient) return;
+  for (const entry of state.schematicState.catalog) {
+    if (!entry.projectLocal) continue;
+    const filePath = filePathFromSourceId(entry.registeredSourceId ?? "");
+    if (!filePath) continue;
+    try {
+      await state.coreClient.registerAdhocSubcircuitDefinition(filePath, { replace: true });
+    } catch (err) {
+      reportCoreWarning(`registrar o subcircuito do projeto "${entry.label}"`, err);
+    }
+  }
+}
+
 async function rebuildCoreFromSchematicStateNow(options: { alreadyStopped?: boolean; resumeAfter?: boolean } = {}): Promise<void> {
   if (!state.coreClient) return;
   // Espera a carga inicial de bibliotecas de dispositivo terminar antes de recriar componentes --
@@ -1208,6 +1226,7 @@ async function rebuildCoreFromSchematicStateNow(options: { alreadyStopped?: bool
   // corrida real encontrada 2026-07-19 (ver comentário em state.ts::catalogReadyPromise). Resolve
   // imediatamente se já tiver terminado (ou nunca foi disparada).
   if (state.catalogReadyPromise) await state.catalogReadyPromise;
+  await registerProjectSubcircuitsInCore();
 
   const runningBeforeRebuild = options.resumeAfter ?? state.simulationStatus === "running";
   // Controle vem antes de configuração e mutações. Assim uma reconstrução nunca deixa add/remove

@@ -216,17 +216,19 @@ async function resolveProjectSubcircuitReferences(projectDir: string): Promise<v
   for (const component of componentsWithRef) {
     const ref = component.subcircuitRef!;
     const absolutePath = ref.embedded ? materializeEmbeddedSubcircuit(ref.embedded) : normalizeAbsolutePath(projectDir, ref.path);
-    if (!fileExists(absolutePath) || !state.coreClient) {
+    if (!fileExists(absolutePath)) {
       missingCount++;
       continue;
     }
-
-    try {
-      // Incorporado: o conteúdo do projeto manda (dois projetos podem trazer versões diferentes).
-      await state.coreClient.registerAdhocSubcircuitDefinition(absolutePath, ref.embedded ? { replace: true } : undefined);
-    } catch {
-      missingCount++;
-      continue;
+    // O catálogo sai do arquivo; o Core pode ainda estar subindo (projeto restaurado na ativação
+    // da extensão): a definição é registrada de novo em toda reconstrução do Core
+    // (`registerProjectSubcircuitsInCore`), então aqui é só uma tentativa antecipada.
+    if (state.coreClient) {
+      try {
+        await state.coreClient.registerAdhocSubcircuitDefinition(absolutePath, { replace: true });
+      } catch {
+        // Core ainda não pronto ou manifesto recusado: a reconstrução tenta de novo e relata.
+      }
     }
     const parsed = parseSubcircuitManifest(
       readJsonFile(absolutePath) as Record<string, unknown>,
@@ -265,6 +267,7 @@ async function resolveProjectSubcircuitReferences(projectDir: string): Promise<v
       // vivo, propriedades exportadas, "Abrir Subcircuito") resolvidos pelo arquivo.
       registeredSourceKind: "subcircuit-file",
       registeredSourceId: fileSourceId(absolutePath),
+      projectLocal: true,
     });
     updatedComponents.set(component.id, {
       ...component,

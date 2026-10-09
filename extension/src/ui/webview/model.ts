@@ -996,6 +996,9 @@ export interface WebviewComponentCatalogEntry {
   disabledReason?: string;
   /** Identifica entrada adicionada pelo usuário via registro de arquivo. */
   isRegistered?: boolean;
+  /** Subcircuito do PROJETO aberto (por caminho ou incorporado ao `.lsproj`): sobrevive à recarga do
+   * catálogo da biblioteca e é registrado no Core a cada reconstrução (`coreLifecycle.ts`). */
+  projectLocal?: boolean;
   /** ID estável da fonte registrada (usado para remoção por menu de contexto). */
   registeredSourceId?: string;
   /** False quando o item é integrado ao catálogo base e não pode ser removido pela UI. */
