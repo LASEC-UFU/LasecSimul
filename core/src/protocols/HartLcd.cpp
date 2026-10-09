@@ -80,6 +80,37 @@ std::string hartLcdUnitLabel(uint8_t unitCode, uint32_t& annunciators) {
         case 53: return "d";
         case 57: annunciators |= HartLcdAnnunciator::Percent; return "";
         case 58: return "V";
+        // "Unidade do Usuário" do LD301 (manual, Tabela 3.4): vazão, velocidade, volume, massa e
+        // densidade, em até 5 caracteres do campo alfanumérico. O texto exato do aparelho para
+        // estas ainda não foi fotografado (trm/ld301/falta_fazer.txt, item C1).
+        case 15: return "CFM";
+        case 16: return "GPM";
+        case 17: return "L/min";
+        case 19: return "m3/h";
+        case 20: return "ft/s";
+        case 21: return "m/s";
+        case 24: return "L/s";
+        case 28: return "m3/s";
+        case 29: return "m3/d";
+        case 46: return "bbl";
+        case 54: return "cSt";
+        case 55: return "cP";
+        case 60: return "g";
+        case 61: return "kg";
+        case 62: return "t";
+        case 63: return "lb";
+        case 73: return "kg/s";
+        case 74: return "kgmin";
+        case 75: return "kg/h";
+        case 78: return "t/h";
+        case 90: return "SGU";
+        case 92: return "kg/m3";
+        case 120: return "m/h";
+        case 121: return "Nm3/h";
+        case 131: return "m3min";
+        case 136: return "gal/h";
+        case 138: return "L/h";
+        case 236: return "hl";
         default: return "";
     }
 }

@@ -2527,16 +2527,28 @@ std::optional<uint32_t> SimulationSession::findSubcircuitChildByLocalId(uint32_t
     // "ocupado agora" tem que LANÇAR (distinguível), nunca virar silenciosamente o mesmo nullopt de
     // "não existe", senão um usuário editando uma propriedade de Modo Placa bem na hora errada veria
     // "componente interno não encontrado" pra um componente que existe perfeitamente.
-    auto result = m_scheduler.trySynchronized([&]() -> std::optional<uint32_t> {
-        const uint32_t rawId = subcircuitInstanceId & ~kSubcircuitInstanceFlag;
-        const auto it = m_subcircuitChildIndexByLocalId.find(rawId);
-        if (it == m_subcircuitChildIndexByLocalId.end()) return std::nullopt;
-        const auto childIt = it->second.find(localId);
-        if (childIt == it->second.end()) return std::nullopt;
-        return childIt->second;
-    });
+    auto result = m_scheduler.trySynchronized([&] { return findSubcircuitChildByLocalIdUnlocked(subcircuitInstanceId, localId); });
     if (!result) throw std::runtime_error("simulacao ocupada; tente novamente");
     return *result;
+}
+
+std::optional<uint32_t> SimulationSession::findSubcircuitChildByLocalIdUnlocked(uint32_t subcircuitInstanceId,
+                                                                                const std::string& localId) const {
+    const uint32_t rawId = subcircuitInstanceId & ~kSubcircuitInstanceFlag;
+    const auto it = m_subcircuitChildIndexByLocalId.find(rawId);
+    if (it == m_subcircuitChildIndexByLocalId.end()) return std::nullopt;
+    const auto childIt = it->second.find(localId);
+    if (childIt == it->second.end()) return std::nullopt;
+    return childIt->second;
+}
+
+std::optional<std::string> SimulationSession::setSubcircuitChildProperty(uint32_t subcircuitInstanceId, const std::string& localId,
+                                                                         const std::string& propertyName, const PropertyValue& value) {
+    return runViaCommandQueue([subcircuitInstanceId, localId, propertyName, value](SimulationSession& self) -> std::optional<std::string> {
+        const std::optional<uint32_t> child = self.findSubcircuitChildByLocalIdUnlocked(subcircuitInstanceId, localId);
+        if (!child) return "child_not_found|" + localId;
+        return self.setPropertyUnlocked(*child, propertyName, value);
+    });
 }
 
 std::vector<uint8_t> SimulationSession::getComponentState(uint32_t componentIndex) const {

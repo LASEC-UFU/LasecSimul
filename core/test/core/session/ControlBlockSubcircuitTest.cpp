@@ -298,6 +298,98 @@ void pressurizedTankParametersChangeWhileRunning() {
     check(session.simulationPlan()->generation == generation, "(6) mudar a constante nao recompila o plano");
 }
 
+// (7) Placa de orificio (process_orifice_flow_dp): a cadeia de blocos reproduz a ISO 5167-2. Os
+// valores esperados vem da biblioteca `fluids` (C de Reader-Harris/Gallagher e epsilon da norma,
+// independentes das expressoes do manifesto) -- ver docs/placa-orificio-ld301.md.
+void orificePlateFollowsIso5167() {
+    GlobalPluginCache cache;
+    SimulationSession session(cache);
+    registerControlFactories(session);
+    session.subcircuits().registerDefinition(loadManifest("process_orifice_flow_dp.lssubcircuit"));
+    const SubcircuitExpansionResult expansion = session.addSubcircuitInstance("subcircuits.process.orifice_flow_dp");
+    const auto& valve = expansion.exposedSignalPins.at("valve");
+    const uint32_t source = addConstantSource(session, 100.0, 10'000'000.0);
+    session.connectWire(source, "out", valve.instanceId, valve.pinId);
+
+    const auto read = [&](const char* pin) {
+        const auto& exposed = expansion.exposedSignalPins.at(pin);
+        return session.signalRuntime().real(session.signalRuntime().output(signalPortBlockId(exposed.instanceId, exposed.pinId)));
+    };
+    const auto child = [&](const char* localId) {
+        const std::optional<uint32_t> index = session.findSubcircuitChildByLocalId(expansion.subcircuitInstanceId, localId);
+        if (!index) throw std::runtime_error(std::string("filho ausente: ") + localId);
+        return *index;
+    };
+    const auto inner = [&](const char* localId) {
+        return session.signalRuntime().real(session.signalRuntime().output(signalPortBlockId(child(localId), "out")));
+    };
+    const auto setConstant = [&](const char* localId, double value) {
+        return !session.setProperty(child(localId), "value", PropertyValue{value}).has_value();
+    };
+    const auto matches = [](double actual, double expected, double relative) {
+        return std::abs(actual - expected) <= relative * std::abs(expected);
+    };
+    uint64_t now = 0;
+    const auto runFor = [&](uint64_t ns) { now += ns; session.scheduler().runUntil(now); };
+
+    // Agua a 20 C, D 52,5 mm, d 31,5 mm (beta 0,6), tomadas de flange, valvula 100 % -> 15 m3/h.
+    runFor(40'000'000'000ull);
+    check(matches(read("flow"), 15.0, 1e-9), "(7) valvula 100 % -> Q = Qmax = 15 m3/h");
+    check(matches(inner("c_iso"), 0.612422441827, 1e-8), "(7) C de Reader-Harris/Gallagher (flange) igual ao da biblioteca fluids");
+    check(matches(read("dp"), 3376.285174987, 1e-6), "(7) dP a 15 m3/h = 3376,29 mmH2O (fluids)");
+    check(matches(read("high"), 101.97162 * 200.0, 1e-12), "(7) HIGH = pressao a montante (200 kPa em mmH2O)");
+    check(matches(read("high") - read("low"), 3376.285174987, 1e-6), "(7) HIGH - LOW = dP");
+    check(matches(inner("loss"), 20.728212903, 1e-6), "(7) perda de carga permanente (ISO 5167-1)");
+    check(inner("ok_up") > 0.5 && inner("ok_dn") > 0.5 && inner("ok_rough") > 0.5 && inner("ok_iso") > 0.5,
+          "(7) instalacao padrao (44D/8D, aco carbono) conforme a norma");
+    check(inner("dev_total") == 0.0, "(7) sem desvio didatico com a instalacao conforme");
+
+    const auto generation = session.simulationPlan()->generation;
+    check(setConstant("c_tap", 2.0), "(7) tomada D e D/2 aceita");
+    runFor(100'000'000ull);
+    check(matches(inner("c_iso"), 0.612965722556, 1e-8), "(7) C com tomadas D e D/2 igual ao da fluids");
+    check(matches(read("dp"), 3370.302922692, 1e-6), "(7) dP com tomadas D e D/2");
+    check(setConstant("c_tap", 3.0), "(7) tomada de canto aceita");
+    runFor(100'000'000ull);
+    check(matches(inner("c_iso"), 0.611526303754, 1e-8), "(7) C com tomadas de canto igual ao da fluids");
+    check(session.simulationPlan()->generation == generation, "(7) trocar a tomada nao recompila o plano");
+    // Caminho do verbo IPC "setSubcircuitChildProperty": busca do filho + escrita pela fila de
+    // comandos (com a simulacao rodando espera o passo em vez de falhar com "ocupada").
+    check(!session.setSubcircuitChildProperty(expansion.subcircuitInstanceId, "c_tap", "value", PropertyValue{2.0}).has_value(),
+          "(7) setSubcircuitChildProperty por id local aceito");
+    runFor(100'000'000ull);
+    check(matches(inner("c_iso"), 0.612965722556, 1e-8), "(7) a escrita por id local chega ao bloco");
+    const std::optional<std::string> missing =
+        session.setSubcircuitChildProperty(expansion.subcircuitInstanceId, "nao_existe", "value", PropertyValue{1.0});
+    check(missing.has_value() && missing->rfind("child_not_found|", 0) == 0, "(7) filho inexistente devolve child_not_found");
+
+    // Montante curto: 10 D com beta 0,6 (Tabela 3: A 42, B 13) -> desvio +0,5 + 1,5*(13-10)/13 %.
+    check(setConstant("c_tap", 1.0) && setConstant("c_lup", 10.0), "(7) montante de 10 D aceito");
+    runFor(100'000'000ull);
+    check(inner("ok_up") < 0.5, "(7) montante de 10 D fora da norma acende o alarme");
+    check(matches(inner("dev_total"), 0.5 + 1.5 * 3.0 / 13.0, 1e-9), "(7) desvio didatico do trecho a montante");
+    check(matches(read("dp"), 3319.865147240, 1e-6), "(7) dP com o C real desviado");
+    check(setConstant("c_inst", 0.0), "(7) desligar o desvio didatico aceito");
+    runFor(100'000'000ull);
+    check(matches(read("dp"), 3376.285174987, 1e-6), "(7) sem o desvio o dP volta ao da norma");
+    check(setConstant("c_lup", 44.0) && setConstant("c_inst", 1.0), "(7) montante 44 D de volta");
+
+    // Gas: ar a ~3 bar abs (rho 3,57 kg/m3, mu 0,0181 cP), 150 m3/h -> epsilon pela ISO 5167-2.
+    check(setConstant("c_fluid", 1.0) && setConstant("c_rho", 3.57) && setConstant("c_mu", 0.0181) && setConstant("c_qmax", 150.0),
+          "(7) parametros de gas aceitos");
+    runFor(40'000'000'000ull);
+    check(matches(inner("epsilon"), 0.988368449177, 1e-5), "(7) epsilon do gas igual ao da fluids");
+    check(matches(read("dp"), 1244.199774964, 1e-4), "(7) dP do gas com epsilon (fluids)");
+
+    // Valvula a 50 %: metade da vazao, um quarto do dP (com o C do Re menor).
+    check(setConstant("c_fluid", 0.0) && setConstant("c_rho", 998.2) && setConstant("c_mu", 1.002) && setConstant("c_qmax", 15.0),
+          "(7) agua de volta");
+    check(!session.setProperty(source, "bias", PropertyValue{50.0}).has_value(), "(7) valvula em 50 %");
+    runFor(40'000'000'000ull);
+    check(matches(read("flow"), 7.5, 1e-9), "(7) valvula 50 % -> 7,5 m3/h");
+    check(matches(read("dp"), 836.081491565, 1e-6), "(7) dP a 7,5 m3/h = 836,08 mmH2O (fluids)");
+}
+
 int main() {
     try {
         processFopdtInstantiatesThroughTheRealPath();
@@ -306,6 +398,7 @@ int main() {
         handWiredControlLoopCompilesAndConverges();
         expressionInputListSurvivesPropertyTransport();
         pressurizedTankParametersChangeWhileRunning();
+        orificePlateFollowsIso5167();
     } catch (const std::exception& ex) {
         std::fprintf(stderr, "EXCECAO NAO TRATADA: %s\n", ex.what());
         return 2;

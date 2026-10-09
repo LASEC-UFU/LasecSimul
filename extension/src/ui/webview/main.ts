@@ -3,7 +3,7 @@ import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, Mcu
 import { reorderedZOrder, zOrderModeForKey, type ZOrderMode } from "./zOrder.js";
 import { graphicalRuntimeProperties, isGraphicalTypeId } from "./graphicsBinding.js";
 import { GraphicalActionPhase, GraphicalActionValue, graphicalActionConfig, isGraphicalActionTypeId, resolveGraphicalActionValue } from "./graphicsAction.js";
-import { childPropertyKey, effectiveChildProperties } from "./childPropertyOverrides.js";
+import { childPropertyKey, effectiveChildProperties, isChildPropertyKey } from "./childPropertyOverrides.js";
 import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, instancePinPlacements, isDifferentialOscope, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage, resolvedPackageFor, runtimeSurfaceImageHref } from "./componentSymbols.js";
 import { ExternalLabelKind, SYMBOL_PIN_LABEL_ALIGN_KEY, formatProbeVoltage, genericExternalLabelFontSize, isExternalProbeReadout, labelPropertyKey, nextLabelRotation, resolveDefaultExternalLabelOffset, resolveExternalLabelColor, symbolPinLabelPackageFields } from "./componentLabels.js";
 import { resizedComponentSize, sceneToLocal, svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
@@ -1371,6 +1371,18 @@ function renderPropertyDock(): void {
   if (exported) propertyDock.appendChild(exported);
 }
 
+/** "1=Aço carbono;2=Aço inox 316" -> [{value: 1, label: "Aço carbono"}, ...]. */
+function parseConstantOptions(raw: unknown): Array<{ value: number; label: string }> {
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  return raw.split(";").flatMap((entry) => {
+    const separator = entry.indexOf("=");
+    if (separator <= 0) return [];
+    const value = Number(entry.slice(0, separator).trim());
+    const label = entry.slice(separator + 1).trim();
+    return Number.isFinite(value) && label ? [{ value, label }] : [];
+  });
+}
+
 /** Propriedades exportadas de um subcircuito (LD301, TT301, tanque...) no próprio painel da
  * instância -- antes só existiam no menu de contexto, que nas primeiras aberturas vinha vazio
  * enquanto os dados internos ainda chegavam. Constantes (parâmetros de modelo) viram campos
@@ -1397,17 +1409,33 @@ function renderExportedChildSection(component: WebviewComponentModel): HTMLEleme
       const caption = document.createElement("span");
       const unit = typeof effective.unit === "string" && effective.unit ? ` (${effective.unit})` : "";
       caption.textContent = `${item.label}${unit}`;
-      const input = document.createElement("input");
-      input.type = "number";
-      input.step = "any";
-      input.value = String(effective.value ?? 0);
-      input.addEventListener("change", () => {
-        const value = Number(input.value.replace(",", "."));
+      const commit = (value: number) => {
         if (!Number.isFinite(value)) return;
         const name = childPropertyKey(item.id, "value");
         component.properties[name] = value;
         send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name, value });
-      });
+      };
+      // `options` = "1=Aço carbono;2=Aço inox 316;..." -> escolha por nome; o valor segue numérico.
+      const choices = parseConstantOptions(effective.options);
+      if (choices.length > 0) {
+        const select = document.createElement("select");
+        for (const choice of choices) {
+          const option = document.createElement("option");
+          option.value = String(choice.value);
+          option.textContent = choice.label;
+          option.selected = Number(effective.value) === choice.value;
+          select.appendChild(option);
+        }
+        select.addEventListener("change", () => commit(Number(select.value)));
+        row.append(caption, select);
+        details.appendChild(row);
+        continue;
+      }
+      const input = document.createElement("input");
+      input.type = "number";
+      input.step = "any";
+      input.value = String(effective.value ?? 0);
+      input.addEventListener("change", () => commit(Number(input.value.replace(",", "."))));
       row.append(caption, input);
       details.appendChild(row);
       continue;
@@ -9558,6 +9586,9 @@ function inferPropertyFields(component: WebviewComponentModel): PropertyField[] 
   const fields: PropertyField[] = [];
   for (const [key, value] of Object.entries(component.properties)) {
     if (key.startsWith("__ui_")) continue;
+    // `@<filho>.<prop>`: edição por instância de uma propriedade exportada -- já aparece (com o
+    // rótulo e o editor certos) em "Propriedades exportadas", nunca como campo cru aqui.
+    if (isChildPropertyKey(key)) continue;
     // `pinId` de `symbol.pin` é a identidade ELÉTRICA (join key com o túnel interno, ver
     // `renamePinIdCascade`) -- rótulo genérico "Pin Id" ficava fácil de confundir com "Titulo"
     // (`component.label`, só o texto exibido). Label explícito, mesmo termo do diálogo real do

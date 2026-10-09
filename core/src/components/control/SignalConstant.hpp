@@ -30,6 +30,8 @@ public:
         if (!std::isfinite(m_value)) m_value = 0.0;
         if (const auto it = params.properties.find("unit"); it != params.properties.end())
             if (const auto* unit = std::get_if<std::string>(&it->second)) m_unit = *unit;
+        if (const auto it = params.properties.find("options"); it != params.properties.end())
+            if (const auto* options = std::get_if<std::string>(&it->second)) m_options = *options;
     }
 
     const char* typeId() const override { return kTypeId; }
@@ -74,7 +76,14 @@ public:
         unit.set = [this](const PropertyValue& next) {
             if (const auto* text = std::get_if<std::string>(&next)) m_unit = *text;
         };
-        return {std::move(value), std::move(unit)};
+        PropertyDescriptor options;
+        options.name = "options";
+        options.schema = schemas[2];
+        options.get = [this] { return PropertyValue{m_options}; };
+        options.set = [this](const PropertyValue& next) {
+            if (const auto* text = std::get_if<std::string>(&next)) m_options = *text;
+        };
+        return {std::move(value), std::move(unit), std::move(options)};
     }
 
     static std::vector<PropertySchema> propertySchema() {
@@ -92,12 +101,22 @@ public:
         unit.valueKind = PropertyValueKind::String;
         unit.editor = "text";
         unit.defaultValue = std::string();
-        return {value, unit};
+        // Lista de escolha opcional "1=Aço carbono;2=Aço inox 316;..." -- o valor continua sendo o
+        // número; a Extension mostra uma caixa de seleção com os nomes (material, tipo de tomada...).
+        PropertySchema options;
+        options.id = "options";
+        options.label = "Opções (valor=nome;...)";
+        options.group = "Sinal";
+        options.valueKind = PropertyValueKind::String;
+        options.editor = "text";
+        options.defaultValue = std::string();
+        return {value, unit, options};
     }
 
 private:
     double m_value = 0.0;
     std::string m_unit;
+    std::string m_options;
 };
 
 } // namespace lasecsimul::components

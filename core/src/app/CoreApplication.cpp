@@ -2143,18 +2143,16 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             const uint32_t outerInstanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
             const std::string localId = payload.value("localId", std::string{});
             const std::string name = payload.value("name", std::string{});
-            const std::optional<uint32_t> childIndex = session.findSubcircuitChildByLocalId(outerInstanceId, localId);
-            if (!childIndex) {
-                resp.ok = false;
-                resp.error = "setSubcircuitChildProperty: componente interno '" + localId + "' não encontrado";
-                return resp;
-            }
+            // Busca do filho + escrita numa só passagem pela fila de comandos (como "setProperty"):
+            // com a simulação rodando a edição espera o passo em vez de falhar com "ocupada".
             const std::optional<std::string> error =
-                session.setProperty(*childIndex, name, jsonToPropertyValue(payload.at("value")));
+                session.setSubcircuitChildProperty(outerInstanceId, localId, name, jsonToPropertyValue(payload.at("value")));
             if (error) {
                 const ParsedPropertyError parsed = parsePropertyError(*error);
                 resp.ok = false;
-                resp.error = parsed.message;
+                resp.error = parsed.code == "child_not_found"
+                    ? "setSubcircuitChildProperty: componente interno '" + localId + "' não encontrado"
+                    : parsed.message;
                 resp.payloadJson = nlohmann::json{{"errorCode", parsed.code}}.dump();
             } else {
                 resp.ok = true;

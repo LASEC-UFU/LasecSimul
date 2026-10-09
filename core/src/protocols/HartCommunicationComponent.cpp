@@ -314,6 +314,9 @@ HartLcdPage HartCommunicationComponent::displayPage(const std::string& source, c
                 : analog.percentOfRange;
         page.valid = true;
         page.value = value;
+        // A variable derived from the percent of range is the PV re-expressed (LD301 "Unidade do
+        // Usuário"): the manual lights the PV icon whenever that PV is on the display.
+        if (variable->derivedSource == HartDerivedSource::PercentRange) page.annunciators |= HartLcdAnnunciator::ProcessVariable;
         page.label = hartLcdUnitLabel(variable->deviceVariableUnit, page.annunciators);
     }
     page.maxDecimals = maxDecimals;

@@ -1044,6 +1044,39 @@ int main(int argc, char** argv) {
         check(std::string(totalPage.numeric.begin(), totalPage.numeric.end()) == " 12345" &&
                   totalPage.decimalPoints == (1u << 4),
               "W27 Display code 9 shows the configured Total value on the LCD");
+
+        // Flow by orifice plate (docs/placa-orificio-ld301.md), configured exactly as the PACTware DTM
+        // does: Calibration (Cmd 35), Function Sqrt + cutoff (47, 191, 157 -- ld301_function_sqrt_write),
+        // User Unit On + unit + 0 %/100 % (180, 177, 179 -- ld301_user_unit_on) and Display (165).
+        Device flow;
+        flow.component->setSignalInput("PV", 0.25 * 3376.3); // dP of 25 % -> sqrt -> 50 % of the flow
+        const std::vector<std::pair<uint8_t, Bytes>> pactware = {
+            {35, cat({Bytes{0x04}, f32(3376.3f), f32(0.0f)})},
+            {47, Bytes{0x01}}, {191, Bytes{0x00}}, {157, f32(6.0f)},
+            {180, Bytes{0x00}}, {177, Bytes{19, 'm', '3', '/', 'h', 0, 0, 0, 0, 0, 0, 0, 0}}, {179, cat({f32(15.0f), f32(0.0f)})},
+            {165, Bytes{0x04, 0x00}},
+        };
+        bool accepted = true;
+        for (const auto& [command, data] : pactware) {
+            const Reply reply = flow.cmd(command, data);
+            if (!reply.wellFormed || reply.responseCode != 0) {
+                std::fprintf(stderr, "  Cmd %u RC %u\n", command, reply.responseCode);
+                accepted = false;
+            }
+        }
+        check(accepted, "W28 flow setup as PACTware sends it: range, Sqrt + cutoff, User Unit On in m3/h (code 19), display PV/OUT");
+        const Reply userPv = flow.cmd(33, Bytes{0x04});
+        check(userPv.data.size() >= 6 && userPv.data[0] == 4 && userPv.data[1] == 19 && std::fabs(floatAt(userPv.data, 2) - 7.5f) < 1e-3f,
+              "W29 the user-unit PV (DV 4) is the flow: 25 % of dP -> 7.5 m3/h of 15");
+        check(std::fabs(floatAt(flow.cmd(2).data, 0) - 12.0f) < 1e-3f, "W30 the loop transmits the flow: 50 % -> 12 mA");
+        const HartLcdFrame flowPage = flow.component->displayFrame(3 * second);
+        check(std::string(flowPage.numeric.begin(), flowPage.numeric.end()) == "  7500" &&
+                  std::string(flowPage.alpha.begin(), flowPage.alpha.end()) == " m3/h" &&
+                  (flowPage.annunciators & HartLcdAnnunciator::ProcessVariable),
+              "W31 the LCD shows PV in the user unit: 7.500 m3/h, with the PV icon (manual 3.9)");
+        check(flow.cmd(180, Bytes{0x01}).responseCode == 0 && flow.cmd(33, Bytes{0x04}).data.size() >= 2 &&
+                  flow.cmd(33, Bytes{0x04}).data[1] == 57,
+              "W32 User Unit Off: the PV goes back to percent");
     }
 
     // ------------------- X. write commands captured on the real LD301 (PACTware)

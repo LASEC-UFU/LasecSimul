@@ -478,6 +478,14 @@ public:
      * local não existem (instância removida, id digitado errado etc.). */
     std::optional<uint32_t> findSubcircuitChildByLocalId(uint32_t subcircuitInstanceId, const std::string& localId) const;
 
+    /** Edita uma propriedade de um componente interno (id LOCAL) pela MESMA fila de comandos de
+     * `setProperty`: a busca do filho e a escrita rodam juntas no Scheduler, então editar uma
+     * propriedade exportada com a simulação rodando espera um passo em vez de falhar com "simulacao
+     * ocupada" (`findSubcircuitChildByLocalId` só TENTA o lock). Filho inexistente devolve o erro
+     * "child_not_found|<localId>"; os demais erros são os de `setProperty`. */
+    std::optional<std::string> setSubcircuitChildProperty(uint32_t subcircuitInstanceId, const std::string& localId,
+                                                          const std::string& propertyName, const PropertyValue& value);
+
     std::optional<PropertySchema> propertySchemaOf(uint32_t component, const std::string& propertyName) const;
     std::optional<PropertyValue> propertyValueOf(uint32_t component, const std::string& propertyName) const;
 
@@ -599,6 +607,7 @@ private:
 
     std::optional<std::string> setPropertyUnlocked(uint32_t component, const std::string& propertyName,
                                                    const PropertyValue& value);
+    std::optional<uint32_t> findSubcircuitChildByLocalIdUnlocked(uint32_t subcircuitInstanceId, const std::string& localId) const;
     std::optional<PropertyValue> propertyValueOfUnlocked(uint32_t component, const std::string& propertyName) const;
     ResolvedSignal resolveSignalUnlocked(const std::string& reference, std::optional<uint32_t> self) const;
     simulation::SignalPlan::Route compileSignalRouteUnlocked(const std::string& reference,
