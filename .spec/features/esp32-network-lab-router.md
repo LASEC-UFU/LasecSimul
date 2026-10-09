@@ -1,14 +1,14 @@
 ---
 id: FEAT-014
 kind: feature
-status: draft
+status: active
 dependsOn: [ARCH-001]
 supersedes: []
 ---
 
 # Modo de rede `lab-router` da ESP32
 
-## Requisito de aceitação
+## Aceitação
 
 Com o simulador rodando e um firmware OpenETH que chamou `mdns_hostname_set("aluno42")`, o usuário
 abre o browser **no próprio PC que roda o LasecSimul**, digita `http://aluno42.local/` e recebe a
