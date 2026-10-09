@@ -40,7 +40,7 @@ import {
  * arquivo); o resto é máquina interna de apoio, exportada só por uniformidade/testabilidade. */
 
 const PACKAGE_SHAPE_KINDS = new Set(["rect", "text", "line", "ellipse", "polygon", "path", "image", "svg"]);
-const SIMULIDE_PAINT_PRIMITIVE_KINDS = new Set(["line", "rect", "roundedRect", "ellipse", "arc", "path", "polygon", "polyline", "text", "image", "repeat"]);
+const SIMULIDE_PAINT_PRIMITIVE_KINDS = new Set(["line", "rect", "roundedRect", "ellipse", "arc", "path", "polygon", "polyline", "text", "image", "repeat", "clip"]);
 const VIEW_SPEC_GRADIENT_KINDS = new Set(["radial", "linear"]);
 const VIEW_SPEC_PROJECTION_KINDS = new Set(["translate", "rotate", "fill", "visible"]);
 const VIEW_SPEC_HIT_TEST_KINDS = new Set(["rect", "circle", "ellipse", "polygon", "path"]);
@@ -202,8 +202,18 @@ export function sanitizeSimulidePaintStateFill(value: unknown): SimulidePaintSta
         })
         .filter((rule): rule is { op: ">" | ">=" | "<" | "<=" | "==" | "!="; value?: number; valueProp?: string; color: string } => Boolean(rule))
     : undefined;
-  return (map && Object.keys(map).length > 0) || (numeric && numeric.length > 0)
-    ? { prop: raw.prop, ...(map && Object.keys(map).length > 0 ? { map } : {}), ...(numeric && numeric.length > 0 ? { numeric } : {}), ...(typeof raw.fallback === "string" ? { fallback: raw.fallback } : {}) }
+  // `raw` (a propriedade já é a cor, ex.: "Cor do valor"/"Cor do líquido") e `applyToStroke` eram
+  // descartados aqui: toda cor configurável de símbolo carregado do catálogo ficava sem efeito.
+  const rawColor = raw.raw === true;
+  return (map && Object.keys(map).length > 0) || (numeric && numeric.length > 0) || rawColor
+    ? {
+        prop: raw.prop,
+        ...(map && Object.keys(map).length > 0 ? { map } : {}),
+        ...(numeric && numeric.length > 0 ? { numeric } : {}),
+        ...(rawColor ? { raw: true } : {}),
+        ...(raw.applyToStroke === true ? { applyToStroke: true } : {}),
+        ...(typeof raw.fallback === "string" ? { fallback: raw.fallback } : {}),
+      }
     : undefined;
 }
 
@@ -306,6 +316,14 @@ export function sanitizeSimulidePaintPrimitive(value: unknown): SimulidePaintPri
     };
   }
 
+  if (raw.kind === "clip") {
+    if (typeof raw.d !== "string" || !raw.d.trim() || !Array.isArray(raw.primitives)) return undefined;
+    const primitives = raw.primitives.map(sanitizeSimulidePaintPrimitive).filter((primitive): primitive is SimulidePaintPrimitive => Boolean(primitive));
+    if (primitives.length === 0) return undefined;
+    const stateVisibleClip = sanitizeSimulidePaintStateVisible(raw.stateVisible);
+    return { kind: "clip", d: raw.d, primitives, ...(stateVisibleClip ? { stateVisible: stateVisibleClip } : {}) };
+  }
+
   const style = sanitizeSimulidePaintStyle(raw);
   const stateFill = sanitizeSimulidePaintStateFill(raw.stateFill);
   const stateVisible = sanitizeSimulidePaintStateVisible(raw.stateVisible);
@@ -352,6 +370,7 @@ export function sanitizeSimulidePaintPrimitive(value: unknown): SimulidePaintPri
       y,
       value: raw.value,
       ...(sanitizeNumberValue(raw.fontSize) !== undefined ? { fontSize: sanitizeNumberValue(raw.fontSize) } : {}),
+      ...(sanitizeNumberValue(raw.maxWidth) !== undefined ? { maxWidth: sanitizeNumberValue(raw.maxWidth) } : {}),
       ...(textAnchor ? { textAnchor } : {}),
       ...(sanitizeDominantBaseline(raw.dominantBaseline) ? { dominantBaseline: sanitizeDominantBaseline(raw.dominantBaseline) } : {}),
       ...(sanitizeOptionalString(raw.fontFamily) ? { fontFamily: sanitizeOptionalString(raw.fontFamily) } : {}),
@@ -365,6 +384,29 @@ export function sanitizeSimulidePaintPrimitive(value: unknown): SimulidePaintPri
   if (x === undefined || y === undefined || w === undefined || h === undefined || typeof raw.href !== "string" || !raw.href.trim()) return undefined;
   const stateHref = sanitizeSimulidePaintStateHref(raw.stateHref);
   return { kind: "image", x, y, w, h, href: raw.href, ...(sanitizeOptionalString(raw.preserveAspectRatio) ? { preserveAspectRatio: sanitizeOptionalString(raw.preserveAspectRatio) } : {}), ...stateAttrs, ...(stateHref ? { stateHref } : {}), ...style };
+}
+
+/** Mesma regra de `sanitizePackageShape` para a arte das primitivas `image` de um `simulidePaint`
+ * (inclusive dentro de `repeat`/`clip`): caminho relativo ao manifesto vira `data:` embutido, porque a
+ * Webview não lê arquivos (ex.: o tanque vetorial com o líquido recortado na janela). */
+export function inlineSimulidePaintImages(spec: SimulidePaintSpec | undefined, assetBasePath?: string): SimulidePaintSpec | undefined {
+  if (!spec || !assetBasePath) return spec;
+  const inline = (primitive: SimulidePaintPrimitive): SimulidePaintPrimitive => {
+    if (primitive.kind === "repeat" || primitive.kind === "clip") return { ...primitive, primitives: primitive.primitives.map(inline) };
+    if (primitive.kind !== "image" || /^(?:data:|#|https?:|file:)/i.test(primitive.href)) return primitive;
+    const assetPath = normalizeAbsolutePath(assetBasePath, primitive.href);
+    if (!fileExists(assetPath)) return primitive;
+    return { ...primitive, href: `data:${imageMimeForFile(assetPath)};base64,${fs.readFileSync(assetPath).toString("base64")}` };
+  };
+  return { ...spec, primitives: spec.primitives.map(inline) };
+}
+
+/** `true` quando alguma primitiva `image` (em qualquer nível) aponta para um arquivo relativo. */
+export function simulidePaintHasRelativeImage(spec: SimulidePaintSpec | undefined): boolean {
+  const visit = (primitive: SimulidePaintPrimitive): boolean =>
+    primitive.kind === "repeat" || primitive.kind === "clip" ? primitive.primitives.some(visit)
+      : primitive.kind === "image" && typeof primitive.href === "string" && primitive.href.startsWith(".");
+  return Boolean(spec?.primitives.some(visit));
 }
 
 export function sanitizeSimulidePaintSpec(value: unknown): SimulidePaintSpec | undefined {
@@ -1049,7 +1091,7 @@ export function sanitizePackage(value: unknown, assetBasePath?: string): Package
     }
   }
   const viewSpec = sanitizeComponentViewSpec(raw.viewSpec);
-  const simulidePaint = sanitizeSimulidePaintSpec(raw.simulidePaint);
+  const simulidePaint = inlineSimulidePaintImages(sanitizeSimulidePaintSpec(raw.simulidePaint), assetBasePath);
   const qtWidget = sanitizeSimulideQtWidgetSpec(raw.qtWidget);
 
   const background = sanitizePackageBackground(raw.background, assetBasePath);

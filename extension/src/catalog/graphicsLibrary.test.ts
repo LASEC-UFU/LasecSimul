@@ -115,7 +115,7 @@ function filledRectHeight(svg: string, fill: string): number {
       "tanque vetorial fora da pasta Tanques e Vasos");
     const artwork = fs.readFileSync(path.resolve(process.cwd(), "..", "subcircuits", "tank.svg"));
     const prefix = "data:image/svg+xml;base64,";
-    const image = tank?.package?.shapes?.find((shape) => shape.kind === "image");
+    const image = tank?.package?.simulidePaint?.primitives.find((primitive) => primitive.kind === "image") as { href?: string } | undefined;
     assert(Boolean(image?.href?.startsWith(prefix)), "imagem SVG nao foi resolvida no catalogo");
     assert(Buffer.from(image?.href?.slice(prefix.length) ?? "", "base64").equals(artwork), "imagem diferente do SVG empacotado");
     assert(tank?.iconFilePath === path.resolve(process.cwd(), "..", "subcircuits", "tank.svg"), "icone da paleta nao usa o SVG");
@@ -139,7 +139,7 @@ function filledRectHeight(svg: string, fill: string): number {
       "válvula vetorial fora da pasta Valvulas");
     const assetPath = path.resolve(process.cwd(), "..", "subcircuits", "valveGlobe.svg");
     const prefix = "data:image/svg+xml;base64,";
-    const image = valve?.package?.shapes?.find((shape) => shape.kind === "image");
+    const image = valve?.package?.simulidePaint?.primitives.find((primitive) => primitive.kind === "image") as { href?: string } | undefined;
     assert(Boolean(image?.href?.startsWith(prefix)), "SVG da válvula não foi resolvido no catálogo");
     assert(Buffer.from(image?.href?.slice(prefix.length) ?? "", "base64").equals(fs.readFileSync(assetPath)),
       "imagem da válvula difere do SVG fornecido");
@@ -149,6 +149,33 @@ function filledRectHeight(svg: string, fill: string): number {
       "tradução inglesa da válvula vetorial");
     const bigger = componentBox(valve!.typeId, { ...valve!.defaultProperties, width: 240, height: 240 });
     assert(bigger.width === 240 && bigger.height === 240, "válvula vetorial não pode ser redimensionada");
+  });
+
+  await test("tanque vetorial: o líquido sobe recortado na janela conforme o nível (fixo ou ligado)", () => {
+    const tank = byTypeId.get("graphics.tank_svg")!;
+    const liquid = "#1e88e5";
+    const empty = render(tank, { value: 0 }, "tank-0");
+    const half = render(tank, { value: 50 }, "tank-50");
+    const full = render(tank, { value: 100 }, "tank-100");
+    const h0 = filledRectHeight(empty, liquid), h50 = filledRectHeight(half, liquid), h100 = filledRectHeight(full, liquid);
+    assert(h0 === 0 && h50 > 0 && h100 > h50, `alturas do líquido 0/50/100 %: ${h0} ${h50} ${h100}`);
+    assert(/<clipPath id="[^"]+"><path d="M/.test(half) && /<g clip-path="url\(#[^)]+\)">/.test(half), "o líquido deve ficar dentro do recorte da janela");
+    assert(filledRectHeight(render(tank, { value: 50, liquidColor: "#ff0000" }, "tank-red"), "#ff0000") === h50, "cor do líquido configurável");
+  });
+
+  await test("válvula vetorial: abertura só aparece com 'Mostrar abertura'", () => {
+    const valve = byTypeId.get("graphics.valve_globe_svg")!;
+    assert(!render(valve, { value: 45 }).includes("45 %"), "válvula decorativa não mostra valor");
+    assert(render(valve, { value: 45, showValue: true }).includes(">45 %</text>"), "abertura de 45 % no selo da válvula");
+  });
+
+  await test("display numérico: valor longo encolhe a fonte para caber na caixa", () => {
+    const display = byTypeId.get("graphics.value_display")!;
+    const fontOf = (svg: string, text: string) => Number(new RegExp(`font-size="([\\d.]+)"[^>]*>${text}</text>`).exec(svg)?.[1] ?? NaN);
+    const short = render(display, { value: 7, bindUnit: "%", bindDecimals: 0 });
+    const long = render(display, { value: -1325, bindUnit: "mmH2O", bindDecimals: 0 });
+    const shortSize = fontOf(short, "7 %"), longSize = fontOf(long, "-1325 mmH2O");
+    assert(shortSize > 0 && longSize > 0 && longSize < shortSize, `fonte curta ${shortSize}, longa ${longSize}`);
   });
 
   await test("redimensionar e por instancia: width/height mudam a caixa e o desenho escala", () => {

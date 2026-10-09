@@ -19,6 +19,7 @@
 
 #include "components/connectors/SignalTunnel.hpp"
 #include "components/connectors/Tunnel.hpp"
+#include "components/control/SignalConstant.hpp"
 #include "components/control/SignalMathBlock.hpp"
 #include "plugins/GlobalPluginCache.hpp"
 #include "registry/SubcircuitRegistry.hpp"
@@ -56,6 +57,9 @@ void registerControlFactories(SimulationSession& session) {
             return std::make_unique<components::SignalMathBlock>(typeId, p);
         });
     }
+    session.components().registerFactory(components::SignalConstant::kTypeId, [](const ComponentParams& p) {
+        return std::make_unique<components::SignalConstant>(p);
+    });
 }
 
 SubcircuitDefinition loadManifest(const std::string& fileName) {
@@ -266,6 +270,34 @@ void expressionInputListSurvivesPropertyTransport() {
 
 } // namespace
 
+// (6) Tanque pressurizado (process_pressurized_tank_dp): parametros sao blocos `control.constant`
+// que mudam com a simulacao rodando, sem recompilar o plano, e as pernas HIGH/LOW seguem a
+// hidrostatica (perna molhada no topo, capilar abaixo do nivel minimo).
+void pressurizedTankParametersChangeWhileRunning() {
+    GlobalPluginCache cache;
+    SimulationSession session(cache);
+    registerControlFactories(session);
+    session.subcircuits().registerDefinition(loadManifest("process_pressurized_tank_dp.lssubcircuit"));
+    const SubcircuitExpansionResult expansion = session.addSubcircuitInstance("subcircuits.process.pressurized_tank_dp");
+    const auto read = [&](const char* pin) {
+        const auto& exposed = expansion.exposedSignalPins.at(pin);
+        return session.signalRuntime().real(session.signalRuntime().output(signalPortBlockId(exposed.instanceId, exposed.pinId)));
+    };
+    session.scheduler().runUntil(200'000'000ull);
+    const double gas = 101.972 * 50.0;
+    check(std::abs(read("high") - (1000.0 * (1.5 + 0.2) + gas)) < 1e-6, "(6) HIGH = 1000*(SGp*h + SGcap*Lcap) + Pgas");
+    check(std::abs(read("low") - (1000.0 * 3.2 + gas)) < 1e-6, "(6) LOW = 1000*SGselo*(H + Lcap) + Pgas");
+    check(std::abs(read("level_pct") - 50.0) < 1e-9, "(6) nivel inicial 1,5 m de 3 m = 50 %");
+
+    const auto generation = session.simulationPlan()->generation;
+    const std::optional<uint32_t> seal = session.findSubcircuitChildByLocalId(expansion.subcircuitInstanceId, "c_sg_seal");
+    check(seal.has_value() && !session.setProperty(*seal, "value", PropertyValue{0.9}).has_value(),
+          "(6) a constante da densidade do selo aceita o valor novo");
+    session.scheduler().runUntil(300'000'000ull);
+    check(std::abs(read("low") - (900.0 * 3.2 + gas)) < 1e-6, "(6) LOW acompanha o selo 0,9 com a simulacao rodando");
+    check(session.simulationPlan()->generation == generation, "(6) mudar a constante nao recompila o plano");
+}
+
 int main() {
     try {
         processFopdtInstantiatesThroughTheRealPath();
@@ -273,6 +305,7 @@ int main() {
         everyPublishedControlLibrarySubcircuitInstantiates();
         handWiredControlLoopCompilesAndConverges();
         expressionInputListSurvivesPropertyTransport();
+        pressurizedTankParametersChangeWhileRunning();
     } catch (const std::exception& ex) {
         std::fprintf(stderr, "EXCECAO NAO TRATADA: %s\n", ex.what());
         return 2;

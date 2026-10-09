@@ -487,8 +487,9 @@ symbol({
   ],
   paint: () => [
     { kind: "roundedRect", x: 2, y: 2, w: 106, h: 42, rx: 5, ry: 5, fill: { prop: "fill" } },
-    { kind: "text", x: 8, y: 16, value: "", fontSize: 10, textAnchor: "start", fill: C.accent, stateText: { kind: "property", prop: "label" } },
-    boundText({ x: 102, y: 36, fontSize: 18, textAnchor: "end", fill: { prop: "valueColor" } }),
+    { kind: "text", x: 8, y: 16, value: "", fontSize: 10, maxWidth: 94, textAnchor: "start", fill: C.accent, stateText: { kind: "property", prop: "label" } },
+    // `maxWidth`: valores longos ("-1325 mmH2O") encolhem a fonte em vez de sair da caixa.
+    boundText({ x: 102, y: 36, fontSize: 18, maxWidth: 94, textAnchor: "end", fill: { prop: "valueColor" } }),
   ],
 });
 

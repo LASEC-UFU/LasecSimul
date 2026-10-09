@@ -4,7 +4,7 @@ import { McuSerialPortEntry, PackageDescriptor, PackageProvenance, PropertySchem
 import { defaultComponentCatalog } from "../ui/webview/catalog";
 import { controlGraphCatalog } from "./controlGraphCatalog";
 import { sanitizeMcuSerialPorts } from "./catalogMetadata";
-import { sanitizePackage } from "./packageSanitizers";
+import { sanitizePackage, simulidePaintHasRelativeImage } from "./packageSanitizers";
 import { WorkspaceSection } from "../ui/webview/workspace";
 
 export type RegisteredSourceKind = "abi-device" | "mcu-adapter" | "subcircuit-file";
@@ -126,7 +126,8 @@ export function sanitizeStringArray(value: unknown): string[] | undefined {
 
 function resolvePackageArtwork(descriptor: PackageDescriptor | undefined, assetBasePath: string | undefined): PackageDescriptor | undefined {
   if (!descriptor || !assetBasePath ||
-      !descriptor.shapes?.some((shape) => shape.kind === "image" && typeof shape.href === "string" && shape.href.startsWith("."))) {
+      (!descriptor.shapes?.some((shape) => shape.kind === "image" && typeof shape.href === "string" && shape.href.startsWith(".")) &&
+       !simulidePaintHasRelativeImage(descriptor.simulidePaint))) {
     return descriptor;
   }
   return sanitizePackage(descriptor, assetBasePath) ?? descriptor;

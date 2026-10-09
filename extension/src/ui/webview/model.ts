@@ -88,6 +88,8 @@ export interface WebviewComponentModel {
     path: string;
     lastKnownTypeId?: string;
     lastKnownPinIds?: string[];
+    /** Manifesto incorporado ao projeto (ver `ProjectTypes.ts::ProjectSubcircuitRef.embedded`). */
+    embedded?: Record<string, unknown>;
   };
   /** Marcador do Device genérico que referencia um .lsdevice sem cadastrá-lo na paleta. */
   deviceRef?: {
@@ -580,7 +582,9 @@ export type SimulidePaintPrimitive =
   | ({ kind: "path"; d: string; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
   | ({ kind: "polygon"; points: Array<{ x: number; y: number }>; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
   | ({ kind: "polyline"; points: Array<{ x: number; y: number }>; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible } & SimulidePaintStyle)
-  | ({ kind: "text"; x: PackageNumberValue; y: PackageNumberValue; value: string; fontSize?: PackageNumberValue; textAnchor?: PackageShape["textAnchor"]; dominantBaseline?: PackageShape["dominantBaseline"]; fontFamily?: string; fontWeight?: string | number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible; stateText?: SimulidePaintStateText } & SimulidePaintStyle)
+  /** `maxWidth` (unidades de `bounds`): o texto encolhe a fonte para caber nessa largura -- ex.: o
+   * valor de um display que cresce com o número de dígitos ("−1325 mmH2O") não sai da caixa. */
+  | ({ kind: "text"; x: PackageNumberValue; y: PackageNumberValue; value: string; fontSize?: PackageNumberValue; maxWidth?: PackageNumberValue; textAnchor?: PackageShape["textAnchor"]; dominantBaseline?: PackageShape["dominantBaseline"]; fontFamily?: string; fontWeight?: string | number; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible; stateText?: SimulidePaintStateText } & SimulidePaintStyle)
   | ({ kind: "image"; x: PackageNumberValue; y: PackageNumberValue; w: PackageNumberValue; h: PackageNumberValue; href: string; preserveAspectRatio?: string; stateFill?: SimulidePaintStateFill; stateVisible?: SimulidePaintStateVisible; stateHref?: SimulidePaintStateHref } & SimulidePaintStyle)
   /** Duplica `primitives[]` `count` vezes, deslocando `stepX`/`stepY` (coordenadas ORIGINAIS, mesma
    * unidade de `bounds`) por repetição -- traduz diretamente os laços `for` que o SimulIDE real usa
@@ -600,6 +604,14 @@ export type SimulidePaintPrimitive =
       indexName?: string;
       stepX?: number;
       stepY?: number;
+      primitives: SimulidePaintPrimitive[];
+      stateVisible?: SimulidePaintStateVisible;
+    }
+  /** Recorta `primitives[]` pelo contorno `d` (path SVG nas MESMAS coordenadas originais de
+   * `bounds`) -- ex.: o líquido que sobe só dentro da janela de um tanque desenhado. */
+  | {
+      kind: "clip";
+      d: string;
       primitives: SimulidePaintPrimitive[];
       stateVisible?: SimulidePaintStateVisible;
     };

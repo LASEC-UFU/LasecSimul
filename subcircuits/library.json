@@ -18,6 +18,10 @@
       "manifest": "process_fopdt.lssubcircuit"
     },
     {
+      "typeId": "subcircuits.process.pressurized_tank_dp",
+      "manifest": "process_pressurized_tank_dp.lssubcircuit"
+    },
+    {
       "typeId": "subcircuits.tdps.basic_flow_loop",
       "manifest": "tdps_basic_flow_loop.lssubcircuit"
     },

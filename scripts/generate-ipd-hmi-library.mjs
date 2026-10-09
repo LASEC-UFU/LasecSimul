@@ -285,7 +285,8 @@ const WIDGETS = [];
       },
       txt(8, 14, "", { fill: T.textMuted, fontSize: F.xs, stateText: { kind: "property", prop: "tag" } }),
       boundText(w - 8, 14, "__g_b_text", { textAnchor: "end", fill: T.sp, fontSize: 9, stateVisible: whenProp("showSp", true) }),
-      boundText(w - 8, h - 8, "__g_text_q", { textAnchor: "end", fill: T.text, fontSize: F.lg, fontWeight: WT.bold }),
+      // `maxWidth`: valores longos encolhem a fonte em vez de sair da caixa.
+      boundText(w - 8, h - 8, "__g_text_q", { textAnchor: "end", fill: T.text, fontSize: F.lg, fontWeight: WT.bold, maxWidth: w - 16 }),
     ],
   });
 })();

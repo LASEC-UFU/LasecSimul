@@ -2210,3 +2210,6 @@ rect.meter-expand-button:hover {
 .placement-ghost.visible {
   display: flex;
 }
+.property-dock__exported-row { display: grid; grid-template-columns: 1fr 110px; gap: 8px; align-items: center; padding: 4px 0; font-size: 12px; }
+.property-dock__exported-row input { width: 100%; }
+.property-dock__exported-button { display: block; width: 100%; margin: 6px 0; text-align: left; }

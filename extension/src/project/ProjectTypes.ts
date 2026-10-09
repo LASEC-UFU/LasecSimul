@@ -54,6 +54,10 @@ export interface ProjectSubcircuitRef {
   path: string;
   lastKnownTypeId?: string;
   lastKnownPinIds?: string[];
+  /** Manifesto `.lssubcircuit` INCORPORADO ao projeto: o `.lsproj` carrega o modelo e não depende
+   * de biblioteca instalada nem de arquivo ao lado. Tem precedência sobre `path`, que fica só como
+   * nome de referência (ver `project/embeddedSubcircuits.ts`). */
+  embedded?: Record<string, unknown>;
 }
 
 /** Referência não registrada do componente genérico Externos/Device. */

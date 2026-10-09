@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { childPropertyOverrides, parseChildPropertyKey, withoutChildPropertyOverrides } from "../ui/webview/childPropertyOverrides";
 import * as path from "path";
 import { IpcError } from "../ipc/protocol";
 import { ComponentReadoutValue, InstrumentHistoryPayload, InternalComponentSnapshot, SimulationStatus } from "../ui/webview/messages";
@@ -159,6 +160,19 @@ export function enqueueCoreMutation<T>(operation: () => Promise<T> | T): Promise
   return queued;
 }
 
+/** Aplica as propriedades exportadas guardadas NA INSTÂNCIA (`@interno.prop`, ver
+ * `childPropertyOverrides.ts`) aos componentes internos do subcircuito recém-criado no Core. */
+async function applyChildPropertyOverridesToCore(coreInstanceId: string, properties: Record<string, unknown>): Promise<void> {
+  if (!state.coreClient) return;
+  for (const override of childPropertyOverrides(properties)) {
+    try {
+      await state.coreClient.setSubcircuitChildProperty(coreInstanceId, override.innerComponentId, override.name, override.value);
+    } catch (err) {
+      reportCoreWarning(`aplicar "${override.innerComponentId}.${override.name}" da instância`, err);
+    }
+  }
+}
+
 /** Cria a instância no Core e só resolve depois que o id da instância foi registrado. Chamadores que
  * não dependem da ordem podem continuar usando `void pushComponentToCore(...)`; fluxos que inserem
  * fios na mesma transação devem aguardar isto antes de chamar `pushWireToCore`. */
@@ -172,7 +186,7 @@ async function pushComponentToCoreNow(
   try {
     const model = state.schematicState.components.find((component) => component.id === componentId);
     const runtimeProperties = Object.fromEntries(
-      Object.entries(properties).filter(([name]) => !name.startsWith("__ui_"))
+      Object.entries(withoutChildPropertyOverrides(properties)).filter(([name]) => !name.startsWith("__ui_"))
     );
     // `fpga` resolvido FRESCO a cada push -- toolchain (ghdlBinary/vpiModulePath/cacheRootDir)
     // nunca é persistido, sempre lido de `lasecsimul.fpga.*`/caminho vendorizado do VPI (mesma
@@ -188,6 +202,7 @@ async function pushComponentToCoreNow(
       typeId, runtimeProperties, pins, componentId, model?.label ? [model.label] : [], fpgaPayload
     );
     registerCoreIdsForComponent(componentId, typeId, response);
+    await applyChildPropertyOverridesToCore(response.instanceId, properties);
     if (typeId === "plc.instance") await publishConfiguredPlcArtifact(model, response.instanceId);
     if (typeId === TUNNEL_TYPE_ID) {
       const name = String(properties.name ?? "");
@@ -299,6 +314,15 @@ export function pushPropertyToCore(componentId: string, name: string, value: str
     if (isUiOnlyRuntimeProperty(component, name)) return;
     const coreId = coreInstanceIdByComponentId.get(componentId);
     if (!coreId) return;
+    const child = parseChildPropertyKey(name);
+    if (child) {
+      try {
+        await state.coreClient.setSubcircuitChildProperty(coreId, child.innerComponentId, child.name, value);
+      } catch (err) {
+        reportCoreWarning(`atualizar "${child.innerComponentId}.${child.name}"`, err);
+      }
+      return;
+    }
     try {
       const { requiresRestart } = await state.coreClient.setProperty(coreId, name, value);
       if (requiresRestart) {
@@ -345,7 +369,9 @@ export function previewPropertyInCore(componentId: string, name: string, value: 
         const coreId = coreInstanceIdByComponentId.get(preview.componentId);
         if (!coreId) continue;
         try {
-          await state.coreClient.setProperty(coreId, preview.name, preview.value);
+          const child = parseChildPropertyKey(preview.name);
+          if (child) await state.coreClient.setSubcircuitChildProperty(coreId, child.innerComponentId, child.name, preview.value);
+          else await state.coreClient.setProperty(coreId, preview.name, preview.value);
         } catch (err) {
           reportCoreWarning(`pré-visualizar propriedade "${preview.name}"`, err);
         }
@@ -1231,13 +1257,14 @@ async function rebuildCoreFromSchematicStateNow(options: { alreadyStopped?: bool
         : undefined;
       const response = await state.coreClient.addComponent(
         component.typeId,
-        component.properties,
+        withoutChildPropertyOverrides(component.properties),
         pinsForProjectComponent(component),
         component.id,
         component.label ? [component.label] : [],
         fpgaPayload
       );
       registerCoreIdsForComponent(component.id, component.typeId, response);
+      await applyChildPropertyOverridesToCore(response.instanceId, component.properties);
       if (component.typeId === "plc.instance") {
         await publishConfiguredPlcArtifact(component, response.instanceId);
       }

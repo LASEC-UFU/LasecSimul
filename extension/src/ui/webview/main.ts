@@ -3,6 +3,7 @@ import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, Mcu
 import { reorderedZOrder, zOrderModeForKey, type ZOrderMode } from "./zOrder.js";
 import { graphicalRuntimeProperties, isGraphicalTypeId } from "./graphicsBinding.js";
 import { GraphicalActionPhase, GraphicalActionValue, graphicalActionConfig, isGraphicalActionTypeId, resolveGraphicalActionValue } from "./graphicsAction.js";
+import { childPropertyKey, effectiveChildProperties } from "./childPropertyOverrides.js";
 import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, instancePinPlacements, isDifferentialOscope, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage, resolvedPackageFor, runtimeSurfaceImageHref } from "./componentSymbols.js";
 import { ExternalLabelKind, SYMBOL_PIN_LABEL_ALIGN_KEY, formatProbeVoltage, genericExternalLabelFontSize, isExternalProbeReadout, labelPropertyKey, nextLabelRotation, resolveDefaultExternalLabelOffset, resolveExternalLabelColor, symbolPinLabelPackageFields } from "./componentLabels.js";
 import { resizedComponentSize, sceneToLocal, svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
@@ -1366,6 +1367,60 @@ function renderPropertyDock(): void {
   if (components[0]!.typeId.startsWith("protocol.hart.")) {
     propertyDock.appendChild(renderHartAuthoringSections(components[0]!));
   }
+  const exported = renderExportedChildSection(components[0]!);
+  if (exported) propertyDock.appendChild(exported);
+}
+
+/** Propriedades exportadas de um subcircuito (LD301, TT301, tanque...) no próprio painel da
+ * instância -- antes só existiam no menu de contexto, que nas primeiras aberturas vinha vazio
+ * enquanto os dados internos ainda chegavam. Constantes (parâmetros de modelo) viram campos
+ * diretos; os demais componentes exportados abrem a folha completa. Tudo é da INSTÂNCIA
+ * (`childPropertyOverrides.ts`). */
+function renderExportedChildSection(component: WebviewComponentModel): HTMLElement | undefined {
+  const sourceId = catalogEntryFor(component.typeId)?.registeredSourceId;
+  if (!sourceId) return undefined;
+  ensureBoardOverlayData(component);
+  const items = (boardOverlayDataByComponentId.get(component.id) ?? []).filter((item) => item.exported);
+  if (items.length === 0) return undefined;
+  const shell = document.createElement("section");
+  shell.className = "property-dock__hart property-dock__exported";
+  const details = document.createElement("details");
+  details.open = true;
+  const summary = document.createElement("summary");
+  summary.textContent = "Propriedades exportadas";
+  details.appendChild(summary);
+  for (const item of items) {
+    const effective = effectiveChildProperties(item.properties, component.properties, item.id);
+    if (item.typeId === "control.constant") {
+      const row = document.createElement("label");
+      row.className = "property-dock__exported-row";
+      const caption = document.createElement("span");
+      const unit = typeof effective.unit === "string" && effective.unit ? ` (${effective.unit})` : "";
+      caption.textContent = `${item.label}${unit}`;
+      const input = document.createElement("input");
+      input.type = "number";
+      input.step = "any";
+      input.value = String(effective.value ?? 0);
+      input.addEventListener("change", () => {
+        const value = Number(input.value.replace(",", "."));
+        if (!Number.isFinite(value)) return;
+        const name = childPropertyKey(item.id, "value");
+        component.properties[name] = value;
+        send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: component.id, name, value });
+      });
+      row.append(caption, input);
+      details.appendChild(row);
+      continue;
+    }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "property-dock__exported-button";
+    button.textContent = `${item.label} — propriedades…`;
+    button.addEventListener("click", () => openExposedInternalPropertyDialog(component.id, sourceId, item));
+    details.appendChild(button);
+  }
+  shell.appendChild(details);
+  return shell;
 }
 
 /** HART has two structured authoring collections that must remain visible in
@@ -2839,6 +2894,12 @@ function snapshotToDialogComponent(snapshot: InternalComponentSnapshot): Webview
 
 function openExposedInternalPropertyDialog(outerComponentId: string, sourceId: string, snapshot: InternalComponentSnapshot): void {
   const model = snapshotToDialogComponent(snapshot);
+  // Propriedade exportada é da INSTÂNCIA (ver `childPropertyOverrides.ts`): o valor mostrado é o do
+  // modelo com o da instância por cima, e a edição vai para a instância, nunca para o `.lssubcircuit`.
+  // O MCU interno de uma placa segue pelo caminho próprio (firmware/QEMU resolvidos pela extensão).
+  const outer = state.components.find((entry) => entry.id === outerComponentId);
+  const perInstance = outer !== undefined && !isMcuHostTypeId(snapshot.typeId);
+  if (perInstance) model.properties = effectiveChildProperties(snapshot.properties, outer.properties, snapshot.id);
   activePropertyTarget = { kind: "exposed-internal", outerComponentId, sourceId, snapshot, model };
   propertyDialog.innerHTML = "";
   propertyDialog.append(
@@ -2847,8 +2908,14 @@ function openExposedInternalPropertyDialog(outerComponentId: string, sourceId: s
       allowTitleEdit: false,
       showVisibilityToggle: false,
       onPropertyChange: (key, value) => {
-        snapshot.properties[key] = value;
         model.properties[key] = value;
+        if (perInstance) {
+          const name = childPropertyKey(snapshot.id, key);
+          outer.properties[name] = value;
+          send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: outerComponentId, name, value });
+          return;
+        }
+        snapshot.properties[key] = value;
         send({
           version: WEBVIEW_MESSAGE_VERSION,
           type: "requestUpdateExposedComponentProperty",
@@ -10638,6 +10705,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   if (message.type === "boardOverlayData") {
     boardOverlayDataByComponentId.set(message.componentId, message.items);
     if (!isInteractiveGestureInProgress()) render();
+    if (state.selectedComponentIds.length === 1 && state.selectedComponentIds[0] === message.componentId) renderPropertyDock();
   }
 
   if (message.type === "boardOverlayReadouts") {

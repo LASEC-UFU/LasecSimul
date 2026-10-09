@@ -46,6 +46,7 @@ function validateSubcircuitRef(value: unknown): ProjectSubcircuitRef | undefined
     path,
     lastKnownTypeId: asString(value.lastKnownTypeId),
     lastKnownPinIds: asStringArray(value.lastKnownPinIds),
+    ...(isObject(value.embedded) ? { embedded: value.embedded } : {}),
   };
 }
 

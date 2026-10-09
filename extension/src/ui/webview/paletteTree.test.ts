@@ -174,7 +174,7 @@ const catalog: PaletteRenderableEntry[] = [
     assert(processTree.includes("Protocolos Industriais"), "protocolos deveriam ficar sob Process/Protocolos Industriais");
   });
 
-  await test("primitivos control.* somem da paleta de Processo e so os 3 usados pelos modelos aparecem na raiz de Controle", () => {
+  await test("primitivos control.* somem da paleta de Processo e so os usados pelos modelos (e a Constante) aparecem na raiz de Controle", () => {
     const processTree = JSON.stringify(buildPaletteTree(controlGraphCatalog, "", "process"));
     assert(!processTree.includes("Controle"), "Processo nao deveria mais ter a subsecao Controle");
     assert(!processTree.includes("control."), "nenhum primitivo control.* deveria aparecer em Processo");
@@ -182,8 +182,8 @@ const catalog: PaletteRenderableEntry[] = [
     const controlTree = buildPaletteTree(controlGraphCatalog, "", "control");
     const typeIds = controlTree.map((node) => (node.kind === "component" ? node.typeId : `folder:${node.label}`)).sort();
     assert(
-      JSON.stringify(typeIds) === JSON.stringify(["control.calc_expression", "control.observer", "control.process"]),
-      `Controle deveria expor so Sonda/Expressao/Processo na raiz, sem subpasta -- veio ${JSON.stringify(typeIds)}`
+      JSON.stringify(typeIds) === JSON.stringify(["control.calc_expression", "control.constant", "control.observer", "control.process"]),
+      `Controle deveria expor so Sonda/Expressao/Processo/Constante na raiz, sem subpasta -- veio ${JSON.stringify(typeIds)}`
     );
 
     // `paletteHidden` some SO da paleta: `hidden` apagaria a instancia do render (ver

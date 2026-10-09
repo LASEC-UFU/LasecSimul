@@ -154,6 +154,23 @@ import { resolveProjectSourcePaths } from "../../src/project/projectPathPolicy";
     lastKnownPinIds: ["VIN", "VOUT", "GND"],
   });
 
+  // Subcircuito INCORPORADO (`subcircuitRef.embedded`): o manifesto inteiro viaja no `.lsproj`, junto
+  // com as propriedades exportadas da instância (`@interno.prop`) -- o projeto abre sem biblioteca.
+  const embeddedManifest = { schemaVersion: 3, typeId: "subcircuits.local.tank", components: [{ id: "c_height", typeId: "control.constant", properties: { value: 3, unit: "m" } }] };
+  const embeddedProject = createEmptyProject();
+  embeddedProject.components.push({
+    id: "tank1",
+    typeId: "subcircuits.local.tank",
+    properties: { "@c_height.value": 2.5 },
+    visual: { x: 0, y: 0, rotation: 0 },
+    subcircuitRef: { path: "tank.lssubcircuit", lastKnownTypeId: "subcircuits.local.tank", lastKnownPinIds: ["high", "low"], embedded: embeddedManifest },
+  });
+  const embeddedPath = path.join(tmpDir, "embedded-subcircuit.lsproj");
+  await serializer.save(embeddedPath, embeddedProject);
+  const embeddedRoundTrip = await serializer.load(embeddedPath);
+  assert.deepStrictEqual(embeddedRoundTrip.components[0]?.subcircuitRef?.embedded, embeddedManifest, "o manifesto incorporado sobrevive a save->load");
+  assert.strictEqual(embeddedRoundTrip.components[0]?.properties["@c_height.value"], 2.5, "a propriedade exportada da instância sobrevive a save->load");
+
   const deviceRefProject = createEmptyProject();
   deviceRefProject.components.push({
     id: "dev1",

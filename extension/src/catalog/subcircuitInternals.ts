@@ -6,6 +6,7 @@ import { InternalComponentSnapshot } from "../ui/webview/messages";
 import { JUNCTION_TYPE_ID, TUNNEL_TYPE_ID } from "../ui/webview/model";
 import { loadUnifiedCatalog } from "./UnifiedCatalog";
 import { findRegisteredSourceById } from "./catalogCommands";
+import { filePathFromSourceId } from "../project/embeddedSubcircuits";
 
 interface VisualPosition {
   x: number;
@@ -81,6 +82,9 @@ function extractInternalComponents(json: Record<string, unknown>): InternalCompo
 }
 
 export function resolveSourceFilePath(sourceId: string): string | undefined {
+  // Subcircuito por caminho ou incorporado ao projeto: o próprio id carrega o arquivo.
+  const filePath = filePathFromSourceId(sourceId);
+  if (filePath) return filePath;
   if (!state.extensionContext) return undefined;
   const unifiedCatalog = loadUnifiedCatalog(state.extensionContext.extensionPath, currentLasecSimulLanguage());
   const source = findRegisteredSourceById(state.extensionContext.extensionPath, unifiedCatalog, sourceId);

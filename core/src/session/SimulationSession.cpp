@@ -5,6 +5,7 @@
 #include "../components/connectors/Tunnel.hpp"
 #include "../components/control/SignalMathBlock.hpp"
 #include "../components/control/ManualSignalSlider.hpp"
+#include "../components/control/SignalConstant.hpp"
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -1742,6 +1743,7 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
             // Probe rate kept the whole LD301 circuit at <0.01% real time.
             // Other signal ports retain their existing fast rate.
             const bool processSignal = dynamic_cast<const components::ManualSignalSlider*>(component) != nullptr ||
+                                       dynamic_cast<const components::SignalConstant*>(component) != nullptr ||
                                        dynamic_cast<const protocols::HartCommunicationComponent*>(component) != nullptr;
             block.rate = {processSignal ? 1'000'000ull : 1ull, 0, 0};
             // Túnel de sinal (`connectors.signal_tunnel`):
@@ -1766,7 +1768,8 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
                 block.kind = simulation::SignalBlockKind::ExternalInput;
                 if (scalar == simulation::SignalScalarType::Real) {
                     const auto* slider = dynamic_cast<const components::ManualSignalSlider*>(component);
-                    block.realParameters = {slider ? slider->value() : 0.0};
+                    const auto* constant = dynamic_cast<const components::SignalConstant*>(component);
+                    block.realParameters = {slider ? slider->value() : constant ? constant->value() : 0.0};
                 }
                 else block.boolParameters = {0};
             }
@@ -2036,6 +2039,13 @@ std::optional<std::string> SimulationSession::setPropertyUnlocked(uint32_t compo
             slider && (propertyName == "value" || propertyName == "actionMin" || propertyName == "actionMax")) {
             try {
                 m_runtimeState.signals.setExternalReal(signalPortBlockId(component, "out"), slider->value());
+            } catch (...) { /* Signal plan is not bound until simulation starts. */ }
+        }
+        // Constante: parâmetro de modelo (densidade, altura...) que muda com a simulação rodando,
+        // pelo mesmo caminho do slider -- sem recompilar o plano.
+        if (auto* constant = dynamic_cast<components::SignalConstant*>(instance); constant && propertyName == "value") {
+            try {
+                m_runtimeState.signals.setExternalReal(signalPortBlockId(component, "out"), constant->value());
             } catch (...) { /* Signal plan is not bound until simulation starts. */ }
         }
         if ((schema.flags & PropertySchemaAffectsPinCount) != 0) reregisterPinsIfChanged(component, instance);
@@ -2533,6 +2543,10 @@ std::vector<uint8_t> SimulationSession::getComponentState(uint32_t componentInde
     auto result = m_scheduler.trySynchronized([&] {
     IComponentModel* instance = m_componentInstances.at(componentIndex).get();
     if (!instance) throw std::runtime_error("getComponentState: componente removido");
+    // Mesma regra da telemetria (`captureComponentTelemetryStatesUnlocked`): a saída de um bloco de
+    // controle vive no SignalRuntime e só é copiada para o bloco quando alguém a lê -- sem isto a
+    // leitura direta devolvia 0 para nível/vazão/pressão de um modelo de processo.
+    const_cast<SimulationSession*>(this)->sampleSignalMathOutputsUnlocked({componentIndex});
 
     // 64KiB cobre com folga o maior caso real hoje (Oscope::kHistoryCapacity=512 * 4 canais * 16
     // bytes/amostra ~= 32KiB, ver Oscope.hpp) -- componentes com estado pequeno (a maioria) só

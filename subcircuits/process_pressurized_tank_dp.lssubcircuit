@@ -1,0 +1,1972 @@
+{
+  "schemaVersion": 3,
+  "typeId": "subcircuits.process.pressurized_tank_dp",
+  "name": "Tanque pressurizado (nível por ΔP)",
+  "language": "pt-BR",
+  "folderPath": [
+    "Modelos"
+  ],
+  "workspaceSection": "process",
+  "help": {
+    "description": "Tanque fechado e pressurizado com válvula de entrada e de saída (abertura 0–100 % pelos pinos) e as duas tomadas de um transmissor de pressão diferencial (LD301) abaixo do tanque. HIGH: tomada no nível mínimo + capilar de comprimento Lcap até o transmissor; LOW: perna molhada do topo até o transmissor (H + Lcap), sempre cheia de selo. Saídas em mmH2O: HIGH = 1000·(SGp·h + SGcap·Lcap) + 101,97·Pgás; LOW = 1000·SGselo·(H + Lcap) + 101,97·Pgás. Com os padrões (H 3 m, SG 1, Lcap 0,2 m) o ΔP vai de −3000 (vazio) a 0 mmH2O (cheio): ajuste LRV/URV do LD301 a essa faixa. Altura, diâmetro, densidades, capilar, pressão do gás e vazões máximas ficam em Propriedades Exportadas e mudam com a simulação rodando."
+  },
+  "components": [
+    {
+      "id": "t_valve_in",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "valve_in",
+        "pinId": "valve_in",
+        "direction": "Input",
+        "valueType": "Real",
+        "defaultValue": 0
+      },
+      "visual": {
+        "x": 40,
+        "y": 80,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "t_valve_out",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "valve_out",
+        "pinId": "valve_out",
+        "direction": "Input",
+        "valueType": "Real",
+        "defaultValue": 0
+      },
+      "visual": {
+        "x": 40,
+        "y": 160,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "c_height",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 3.0,
+        "unit": "m"
+      },
+      "visual": {
+        "x": 200,
+        "y": 40,
+        "rotation": 0
+      },
+      "label": "Altura do tanque (tomada de baixo até a de cima)"
+    },
+    {
+      "id": "c_diameter",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 1.0,
+        "unit": "m"
+      },
+      "visual": {
+        "x": 200,
+        "y": 100,
+        "rotation": 0
+      },
+      "label": "Diâmetro do tanque"
+    },
+    {
+      "id": "c_sg_process",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 1.0,
+        "unit": ""
+      },
+      "visual": {
+        "x": 200,
+        "y": 160,
+        "rotation": 0
+      },
+      "label": "Densidade relativa do líquido de processo"
+    },
+    {
+      "id": "c_sg_seal",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 1.0,
+        "unit": ""
+      },
+      "visual": {
+        "x": 200,
+        "y": 220,
+        "rotation": 0
+      },
+      "label": "Densidade relativa do selo da perna molhada (LOW, topo)"
+    },
+    {
+      "id": "c_sg_capillary",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 1.0,
+        "unit": ""
+      },
+      "visual": {
+        "x": 200,
+        "y": 280,
+        "rotation": 0
+      },
+      "label": "Densidade relativa do fluido do capilar de alta (HIGH)"
+    },
+    {
+      "id": "c_capillary",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 0.2,
+        "unit": "m"
+      },
+      "visual": {
+        "x": 200,
+        "y": 340,
+        "rotation": 0
+      },
+      "label": "Capilar de alta abaixo do nível mínimo (até o transmissor)"
+    },
+    {
+      "id": "c_gas",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 50.0,
+        "unit": "kPa"
+      },
+      "visual": {
+        "x": 200,
+        "y": 400,
+        "rotation": 0
+      },
+      "label": "Pressão do gás no topo (manométrica)"
+    },
+    {
+      "id": "c_qin_max",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 36.0,
+        "unit": "m³/h"
+      },
+      "visual": {
+        "x": 200,
+        "y": 460,
+        "rotation": 0
+      },
+      "label": "Vazão máxima de entrada (válvula 100 %)"
+    },
+    {
+      "id": "c_qout_max",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 36.0,
+        "unit": "m³/h"
+      },
+      "visual": {
+        "x": 200,
+        "y": 520,
+        "rotation": 0
+      },
+      "label": "Vazão máxima de saída (válvula 100 %, tanque cheio)"
+    },
+    {
+      "id": "u_in",
+      "typeId": "control.observer",
+      "properties": {
+        "unit": "%",
+        "observerOnly": true,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 200,
+        "y": 620,
+        "rotation": 0
+      },
+      "label": "Abertura da válvula de entrada"
+    },
+    {
+      "id": "u_out",
+      "typeId": "control.observer",
+      "properties": {
+        "unit": "%",
+        "observerOnly": true,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 200,
+        "y": 680,
+        "rotation": 0
+      },
+      "label": "Abertura da válvula de saída"
+    },
+    {
+      "id": "q_in",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "Qmax*((u>0)*u)/100*(h<H)",
+        "inputs": [
+          "u",
+          "h",
+          "H",
+          "Qmax"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 420,
+        "y": 80,
+        "rotation": 0
+      },
+      "label": "Vazão de entrada (m³/h)"
+    },
+    {
+      "id": "q_out",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "Qmax*((u>0)*u)/100*((h>0.02)+(h<0.02)*h/0.02)*((((SG*h+0.101972*Pg)>0)*(SG*h+0.101972*Pg))/(SG*H+0.101972*Pg))^0.5",
+        "inputs": [
+          "u",
+          "h",
+          "H",
+          "SG",
+          "Pg",
+          "Qmax"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 420,
+        "y": 160,
+        "rotation": 0
+      },
+      "label": "Vazão de saída (m³/h)"
+    },
+    {
+      "id": "dh_in",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "q/3600/(0.785398163*D^2)",
+        "inputs": [
+          "q",
+          "D"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 620,
+        "y": 80,
+        "rotation": 0
+      },
+      "label": "Entrada (m/s)"
+    },
+    {
+      "id": "dh_out",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "q/3600/(0.785398163*D^2)",
+        "inputs": [
+          "q",
+          "D"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 620,
+        "y": 160,
+        "rotation": 0
+      },
+      "label": "Saída (m/s)"
+    },
+    {
+      "id": "tank",
+      "typeId": "control.tank",
+      "properties": {
+        "area": 1,
+        "initial": 1.5,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 820,
+        "y": 120,
+        "rotation": 0
+      },
+      "label": "Nível (m)"
+    },
+    {
+      "id": "level_percent",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "100*h/H",
+        "inputs": [
+          "h",
+          "H"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 1020,
+        "y": 80,
+        "rotation": 0
+      },
+      "label": "Nível (%)"
+    },
+    {
+      "id": "p_high",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "1000*(SG*h+SGc*Lc)+101.972*Pg",
+        "inputs": [
+          "h",
+          "SG",
+          "SGc",
+          "Lc",
+          "Pg"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 1020,
+        "y": 200,
+        "rotation": 0
+      },
+      "label": "Pressão na tomada de alta (mmH2O)"
+    },
+    {
+      "id": "p_low",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "1000*SGs*(H+Lc)+101.972*Pg",
+        "inputs": [
+          "H",
+          "SGs",
+          "Lc",
+          "Pg"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 1020,
+        "y": 280,
+        "rotation": 0
+      },
+      "label": "Pressão na tomada de baixa (mmH2O)"
+    },
+    {
+      "id": "dp",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "a-b",
+        "inputs": [
+          "a",
+          "b"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 1220,
+        "y": 240,
+        "rotation": 0
+      },
+      "label": "ΔP alta − baixa (mmH2O)"
+    },
+    {
+      "id": "t_high",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "high",
+        "pinId": "high",
+        "direction": "Output",
+        "valueType": "Real"
+      },
+      "visual": {
+        "x": 1420,
+        "y": 80,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "t_low",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "low",
+        "pinId": "low",
+        "direction": "Output",
+        "valueType": "Real"
+      },
+      "visual": {
+        "x": 1420,
+        "y": 160,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "t_level",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "level",
+        "pinId": "level",
+        "direction": "Output",
+        "valueType": "Real"
+      },
+      "visual": {
+        "x": 1420,
+        "y": 240,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "t_level_pct",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "level_pct",
+        "pinId": "level_pct",
+        "direction": "Output",
+        "valueType": "Real"
+      },
+      "visual": {
+        "x": 1420,
+        "y": 320,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_tank",
+      "typeId": "graphics.tank_svg",
+      "properties": {
+        "width": 160,
+        "height": 240,
+        "value": 0,
+        "liquidColor": "#1e88e5",
+        "bindSource": "level_percent",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 200,
+        "y": 90,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_valve_in",
+      "typeId": "graphics.valve_globe_svg",
+      "properties": {
+        "width": 90,
+        "height": 90,
+        "value": 0,
+        "showValue": true,
+        "bindSource": "u_in",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 0
+      },
+      "visual": {
+        "x": 150,
+        "y": 11.549999999999997,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_valve_out",
+      "typeId": "graphics.valve_globe_svg",
+      "properties": {
+        "width": 90,
+        "height": 90,
+        "value": 0,
+        "showValue": true,
+        "bindSource": "u_out",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 0
+      },
+      "visual": {
+        "x": 150,
+        "y": 289.55,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_level",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 172,
+        "height": 44,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Nível",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "tank",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000.0,
+        "bindMax": 1000000000.0,
+        "bindUnit": "m",
+        "bindDecimals": 3
+      },
+      "visual": {
+        "x": 432,
+        "y": 46,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_level_pct",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 172,
+        "height": 44,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Nível",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "level_percent",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000.0,
+        "bindMax": 1000000000.0,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 432,
+        "y": 96,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_dp",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 172,
+        "height": 44,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "ΔP (alta − baixa)",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "dp",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000.0,
+        "bindMax": 1000000000.0,
+        "bindUnit": "mmH2O",
+        "bindDecimals": 0
+      },
+      "visual": {
+        "x": 432,
+        "y": 146,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_qin",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 172,
+        "height": 44,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Vazão de entrada",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "q_in",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000.0,
+        "bindMax": 1000000000.0,
+        "bindUnit": "m³/h",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 432,
+        "y": 196,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_qout",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 172,
+        "height": 44,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Vazão de saída",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "q_out",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000.0,
+        "bindMax": 1000000000.0,
+        "bindUnit": "m³/h",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 432,
+        "y": 246,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_phigh",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 172,
+        "height": 44,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Tomada de alta",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "p_high",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000.0,
+        "bindMax": 1000000000.0,
+        "bindUnit": "mmH2O",
+        "bindDecimals": 0
+      },
+      "visual": {
+        "x": 432,
+        "y": 296,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_plow",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 172,
+        "height": 44,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Tomada de baixa",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "p_low",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000.0,
+        "bindMax": 1000000000.0,
+        "bindUnit": "mmH2O",
+        "bindDecimals": 0
+      },
+      "visual": {
+        "x": 432,
+        "y": 346,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_par_height",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 150,
+        "height": 44,
+        "stroke": "#64748b",
+        "fill": "#fefce8",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "label": "H tanque",
+        "valueColor": "#713f12",
+        "value": 0,
+        "bindSource": "c_height",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000.0,
+        "bindMax": 1000000000.0,
+        "bindUnit": "m",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 618,
+        "y": 46,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_par_sgp",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 150,
+        "height": 44,
+        "stroke": "#64748b",
+        "fill": "#fefce8",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "label": "SG processo",
+        "valueColor": "#713f12",
+        "value": 0,
+        "bindSource": "c_sg_process",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000.0,
+        "bindMax": 1000000000.0,
+        "bindUnit": "",
+        "bindDecimals": 3
+      },
+      "visual": {
+        "x": 618,
+        "y": 96,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_par_sgs",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 150,
+        "height": 44,
+        "stroke": "#64748b",
+        "fill": "#fefce8",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "label": "SG selo (LOW)",
+        "valueColor": "#713f12",
+        "value": 0,
+        "bindSource": "c_sg_seal",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000.0,
+        "bindMax": 1000000000.0,
+        "bindUnit": "",
+        "bindDecimals": 3
+      },
+      "visual": {
+        "x": 618,
+        "y": 146,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_par_sgc",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 150,
+        "height": 44,
+        "stroke": "#64748b",
+        "fill": "#fefce8",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "label": "SG capilar (HIGH)",
+        "valueColor": "#713f12",
+        "value": 0,
+        "bindSource": "c_sg_capillary",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000.0,
+        "bindMax": 1000000000.0,
+        "bindUnit": "",
+        "bindDecimals": 3
+      },
+      "visual": {
+        "x": 618,
+        "y": 196,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_par_cap",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 150,
+        "height": 44,
+        "stroke": "#64748b",
+        "fill": "#fefce8",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "label": "Capilar",
+        "valueColor": "#713f12",
+        "value": 0,
+        "bindSource": "c_capillary",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000.0,
+        "bindMax": 1000000000.0,
+        "bindUnit": "m",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 618,
+        "y": 246,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_par_gas",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 150,
+        "height": 44,
+        "stroke": "#64748b",
+        "fill": "#fefce8",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "label": "Gás no topo",
+        "valueColor": "#713f12",
+        "value": 0,
+        "bindSource": "c_gas",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000.0,
+        "bindMax": 1000000000.0,
+        "bindUnit": "kPa",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 618,
+        "y": 296,
+        "rotation": 0
+      }
+    }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": [
+      {
+        "id": "w-1",
+        "from": {
+          "kind": "port",
+          "componentId": "t_valve_in",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "u_in",
+          "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "w-2",
+        "from": {
+          "kind": "port",
+          "componentId": "t_valve_out",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "u_out",
+          "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "w-3",
+        "from": {
+          "kind": "port",
+          "componentId": "u_in",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_in",
+          "pinId": "u"
+        },
+        "points": []
+      },
+      {
+        "id": "w-4",
+        "from": {
+          "kind": "port",
+          "componentId": "tank",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_in",
+          "pinId": "h"
+        },
+        "points": []
+      },
+      {
+        "id": "w-5",
+        "from": {
+          "kind": "port",
+          "componentId": "c_height",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_in",
+          "pinId": "H"
+        },
+        "points": []
+      },
+      {
+        "id": "w-6",
+        "from": {
+          "kind": "port",
+          "componentId": "c_qin_max",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_in",
+          "pinId": "Qmax"
+        },
+        "points": []
+      },
+      {
+        "id": "w-7",
+        "from": {
+          "kind": "port",
+          "componentId": "u_out",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_out",
+          "pinId": "u"
+        },
+        "points": []
+      },
+      {
+        "id": "w-8",
+        "from": {
+          "kind": "port",
+          "componentId": "tank",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_out",
+          "pinId": "h"
+        },
+        "points": []
+      },
+      {
+        "id": "w-9",
+        "from": {
+          "kind": "port",
+          "componentId": "c_height",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_out",
+          "pinId": "H"
+        },
+        "points": []
+      },
+      {
+        "id": "w-10",
+        "from": {
+          "kind": "port",
+          "componentId": "c_sg_process",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_out",
+          "pinId": "SG"
+        },
+        "points": []
+      },
+      {
+        "id": "w-11",
+        "from": {
+          "kind": "port",
+          "componentId": "c_gas",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_out",
+          "pinId": "Pg"
+        },
+        "points": []
+      },
+      {
+        "id": "w-12",
+        "from": {
+          "kind": "port",
+          "componentId": "c_qout_max",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_out",
+          "pinId": "Qmax"
+        },
+        "points": []
+      },
+      {
+        "id": "w-13",
+        "from": {
+          "kind": "port",
+          "componentId": "q_in",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dh_in",
+          "pinId": "q"
+        },
+        "points": []
+      },
+      {
+        "id": "w-14",
+        "from": {
+          "kind": "port",
+          "componentId": "c_diameter",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dh_in",
+          "pinId": "D"
+        },
+        "points": []
+      },
+      {
+        "id": "w-15",
+        "from": {
+          "kind": "port",
+          "componentId": "q_out",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dh_out",
+          "pinId": "q"
+        },
+        "points": []
+      },
+      {
+        "id": "w-16",
+        "from": {
+          "kind": "port",
+          "componentId": "c_diameter",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dh_out",
+          "pinId": "D"
+        },
+        "points": []
+      },
+      {
+        "id": "w-17",
+        "from": {
+          "kind": "port",
+          "componentId": "dh_in",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tank",
+          "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "w-18",
+        "from": {
+          "kind": "port",
+          "componentId": "dh_out",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tank",
+          "pinId": "outflow"
+        },
+        "points": []
+      },
+      {
+        "id": "w-19",
+        "from": {
+          "kind": "port",
+          "componentId": "tank",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "level_percent",
+          "pinId": "h"
+        },
+        "points": []
+      },
+      {
+        "id": "w-20",
+        "from": {
+          "kind": "port",
+          "componentId": "c_height",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "level_percent",
+          "pinId": "H"
+        },
+        "points": []
+      },
+      {
+        "id": "w-21",
+        "from": {
+          "kind": "port",
+          "componentId": "tank",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "p_high",
+          "pinId": "h"
+        },
+        "points": []
+      },
+      {
+        "id": "w-22",
+        "from": {
+          "kind": "port",
+          "componentId": "c_sg_process",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "p_high",
+          "pinId": "SG"
+        },
+        "points": []
+      },
+      {
+        "id": "w-23",
+        "from": {
+          "kind": "port",
+          "componentId": "c_sg_capillary",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "p_high",
+          "pinId": "SGc"
+        },
+        "points": []
+      },
+      {
+        "id": "w-24",
+        "from": {
+          "kind": "port",
+          "componentId": "c_capillary",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "p_high",
+          "pinId": "Lc"
+        },
+        "points": []
+      },
+      {
+        "id": "w-25",
+        "from": {
+          "kind": "port",
+          "componentId": "c_gas",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "p_high",
+          "pinId": "Pg"
+        },
+        "points": []
+      },
+      {
+        "id": "w-26",
+        "from": {
+          "kind": "port",
+          "componentId": "c_height",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "p_low",
+          "pinId": "H"
+        },
+        "points": []
+      },
+      {
+        "id": "w-27",
+        "from": {
+          "kind": "port",
+          "componentId": "c_sg_seal",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "p_low",
+          "pinId": "SGs"
+        },
+        "points": []
+      },
+      {
+        "id": "w-28",
+        "from": {
+          "kind": "port",
+          "componentId": "c_capillary",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "p_low",
+          "pinId": "Lc"
+        },
+        "points": []
+      },
+      {
+        "id": "w-29",
+        "from": {
+          "kind": "port",
+          "componentId": "c_gas",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "p_low",
+          "pinId": "Pg"
+        },
+        "points": []
+      },
+      {
+        "id": "w-30",
+        "from": {
+          "kind": "port",
+          "componentId": "p_high",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dp",
+          "pinId": "a"
+        },
+        "points": []
+      },
+      {
+        "id": "w-31",
+        "from": {
+          "kind": "port",
+          "componentId": "p_low",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dp",
+          "pinId": "b"
+        },
+        "points": []
+      },
+      {
+        "id": "w-32",
+        "from": {
+          "kind": "port",
+          "componentId": "p_high",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "t_high",
+          "pinId": "value"
+        },
+        "points": []
+      },
+      {
+        "id": "w-33",
+        "from": {
+          "kind": "port",
+          "componentId": "p_low",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "t_low",
+          "pinId": "value"
+        },
+        "points": []
+      },
+      {
+        "id": "w-34",
+        "from": {
+          "kind": "port",
+          "componentId": "tank",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "t_level",
+          "pinId": "value"
+        },
+        "points": []
+      },
+      {
+        "id": "w-35",
+        "from": {
+          "kind": "port",
+          "componentId": "level_percent",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "t_level_pct",
+          "pinId": "value"
+        },
+        "points": []
+      }
+    ]
+  },
+  "interface": [
+    {
+      "pinId": "valve_in",
+      "label": "Válvula de entrada (%)",
+      "internalTunnel": "valve_in",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "valve_out",
+      "label": "Válvula de saída (%)",
+      "internalTunnel": "valve_out",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "level",
+      "label": "Nível (m)",
+      "internalTunnel": "level",
+      "domain": "signal",
+      "direction": "out",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "level_pct",
+      "label": "Nível (%)",
+      "internalTunnel": "level_pct",
+      "domain": "signal",
+      "direction": "out",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "high",
+      "label": "HIGH (mmH2O)",
+      "internalTunnel": "high",
+      "domain": "signal",
+      "direction": "out",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "low",
+      "label": "LOW (mmH2O)",
+      "internalTunnel": "low",
+      "domain": "signal",
+      "direction": "out",
+      "valueType": "Real",
+      "width": 1
+    }
+  ],
+  "symbolMode": "custom",
+  "symbol": {
+    "width": 780,
+    "height": 600,
+    "border": true,
+    "shapes": [
+      {
+        "kind": "text",
+        "x": 250,
+        "y": 22,
+        "value": "Tanque pressurizado — nível por pressão diferencial",
+        "fontSize": 13,
+        "textAnchor": "start",
+        "color": "#0f172a"
+      },
+      {
+        "kind": "line",
+        "x1": 112,
+        "y1": 40,
+        "x2": 176,
+        "y2": 40,
+        "stroke": "#0f172a",
+        "strokeWidth": 1.2,
+        "strokeDasharray": "6 4"
+      },
+      {
+        "kind": "line",
+        "x1": 112,
+        "y1": 318,
+        "x2": 176,
+        "y2": 318,
+        "stroke": "#0f172a",
+        "strokeWidth": 1.2,
+        "strokeDasharray": "6 4"
+      },
+      {
+        "kind": "line",
+        "x1": 8,
+        "y1": 84,
+        "x2": 280.0,
+        "y2": 84,
+        "stroke": "#64748b",
+        "strokeWidth": 6
+      },
+      {
+        "kind": "line",
+        "x1": 280.0,
+        "y1": 84,
+        "x2": 280.0,
+        "y2": 102.125,
+        "stroke": "#64748b",
+        "strokeWidth": 6
+      },
+      {
+        "kind": "text",
+        "x": 30,
+        "y": 76,
+        "value": "entrada",
+        "fontSize": 10,
+        "textAnchor": "start",
+        "color": "#334155"
+      },
+      {
+        "kind": "line",
+        "x1": 280.0,
+        "y1": 311.78125,
+        "x2": 280.0,
+        "y2": 362,
+        "stroke": "#64748b",
+        "strokeWidth": 6
+      },
+      {
+        "kind": "line",
+        "x1": 8,
+        "y1": 362,
+        "x2": 280.0,
+        "y2": 362,
+        "stroke": "#64748b",
+        "strokeWidth": 6
+      },
+      {
+        "kind": "text",
+        "x": 30,
+        "y": 380,
+        "value": "saída",
+        "fontSize": 10,
+        "textAnchor": "start",
+        "color": "#334155"
+      },
+      {
+        "kind": "text",
+        "x": 280.0,
+        "y": 92.125,
+        "value": "gás pressurizado",
+        "fontSize": 9,
+        "textAnchor": "middle",
+        "color": "#475569"
+      },
+      {
+        "kind": "line",
+        "x1": 316.25,
+        "y1": 108.4375,
+        "x2": 328,
+        "y2": 108.4375,
+        "stroke": "#eab308",
+        "strokeWidth": 4
+      },
+      {
+        "kind": "rect",
+        "x": 328,
+        "y": 98.4375,
+        "w": 16,
+        "h": 20,
+        "fill": "#eab308",
+        "stroke": "#713f12",
+        "strokeWidth": 1.2
+      },
+      {
+        "kind": "line",
+        "x1": 344,
+        "y1": 108.4375,
+        "x2": 412,
+        "y2": 108.4375,
+        "stroke": "#eab308",
+        "strokeWidth": 4
+      },
+      {
+        "kind": "line",
+        "x1": 412,
+        "y1": 108.4375,
+        "x2": 412,
+        "y2": 550,
+        "stroke": "#eab308",
+        "strokeWidth": 4
+      },
+      {
+        "kind": "line",
+        "x1": 412,
+        "y1": 550,
+        "x2": 780,
+        "y2": 550,
+        "stroke": "#eab308",
+        "strokeWidth": 4
+      },
+      {
+        "kind": "text",
+        "x": 418,
+        "y": 138.4375,
+        "value": "selo (LOW)",
+        "fontSize": 9,
+        "textAnchor": "start",
+        "color": "#713f12"
+      },
+      {
+        "kind": "line",
+        "x1": 316.25,
+        "y1": 300.9375,
+        "x2": 328,
+        "y2": 300.9375,
+        "stroke": "#f97316",
+        "strokeWidth": 4
+      },
+      {
+        "kind": "rect",
+        "x": 328,
+        "y": 290.9375,
+        "w": 16,
+        "h": 20,
+        "fill": "#f97316",
+        "stroke": "#7c2d12",
+        "strokeWidth": 1.2
+      },
+      {
+        "kind": "line",
+        "x1": 344,
+        "y1": 300.9375,
+        "x2": 388,
+        "y2": 300.9375,
+        "stroke": "#f97316",
+        "strokeWidth": 4
+      },
+      {
+        "kind": "line",
+        "x1": 388,
+        "y1": 300.9375,
+        "x2": 388,
+        "y2": 520,
+        "stroke": "#f97316",
+        "strokeWidth": 4
+      },
+      {
+        "kind": "line",
+        "x1": 388,
+        "y1": 520,
+        "x2": 780,
+        "y2": 520,
+        "stroke": "#f97316",
+        "strokeWidth": 4
+      },
+      {
+        "kind": "text",
+        "x": 300,
+        "y": 340.9375,
+        "value": "capilar (HIGH)",
+        "fontSize": 9,
+        "textAnchor": "start",
+        "color": "#7c2d12"
+      },
+      {
+        "kind": "line",
+        "x1": 186,
+        "y1": 108.4375,
+        "x2": 186,
+        "y2": 300.9375,
+        "stroke": "#0f172a",
+        "strokeWidth": 1
+      },
+      {
+        "kind": "line",
+        "x1": 180,
+        "y1": 108.4375,
+        "x2": 192,
+        "y2": 108.4375,
+        "stroke": "#0f172a",
+        "strokeWidth": 1
+      },
+      {
+        "kind": "line",
+        "x1": 180,
+        "y1": 300.9375,
+        "x2": 192,
+        "y2": 300.9375,
+        "stroke": "#0f172a",
+        "strokeWidth": 1
+      },
+      {
+        "kind": "text",
+        "x": 178,
+        "y": 204.6875,
+        "value": "H",
+        "fontSize": 13,
+        "textAnchor": "end",
+        "color": "#0f172a"
+      },
+      {
+        "kind": "line",
+        "x1": 270,
+        "y1": 300.9375,
+        "x2": 270,
+        "y2": 520,
+        "stroke": "#0f172a",
+        "strokeWidth": 1,
+        "strokeDasharray": "4 3"
+      },
+      {
+        "kind": "text",
+        "x": 264,
+        "y": 440.46875,
+        "value": "Lcap",
+        "fontSize": 12,
+        "textAnchor": "end",
+        "color": "#0f172a"
+      },
+      {
+        "kind": "line",
+        "x1": 180,
+        "y1": 520,
+        "x2": 384,
+        "y2": 520,
+        "stroke": "#0f172a",
+        "strokeWidth": 1,
+        "strokeDasharray": "4 3"
+      },
+      {
+        "kind": "text",
+        "x": 180,
+        "y": 536,
+        "value": "nível do transmissor (ligue HIGH/LOW no LD301)",
+        "fontSize": 9,
+        "textAnchor": "start",
+        "color": "#0f172a"
+      },
+      {
+        "kind": "text",
+        "x": 618,
+        "y": 36,
+        "value": "Parâmetros (Propriedades exportadas)",
+        "fontSize": 9,
+        "textAnchor": "start",
+        "color": "#713f12"
+      }
+    ],
+    "pins": [
+      {
+        "id": "valve_in",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 40,
+        "angle": 180,
+        "length": 8,
+        "label": "Válv. entrada (%)"
+      },
+      {
+        "id": "valve_out",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 318,
+        "angle": 180,
+        "length": 8,
+        "label": "Válv. saída (%)"
+      },
+      {
+        "id": "level",
+        "kind": "ANALOG_OUT",
+        "x": 780,
+        "y": 420,
+        "angle": 0,
+        "length": 8,
+        "label": "Nível (m)"
+      },
+      {
+        "id": "level_pct",
+        "kind": "ANALOG_OUT",
+        "x": 780,
+        "y": 450,
+        "angle": 0,
+        "length": 8,
+        "label": "Nível (%)"
+      },
+      {
+        "id": "high",
+        "kind": "ANALOG_OUT",
+        "x": 780,
+        "y": 520,
+        "angle": 0,
+        "length": 8,
+        "label": "HIGH"
+      },
+      {
+        "id": "low",
+        "kind": "ANALOG_OUT",
+        "x": 780,
+        "y": 550,
+        "angle": 0,
+        "length": 8,
+        "label": "LOW"
+      }
+    ]
+  },
+  "exposedComponents": [
+    {
+      "componentId": "g_tank",
+      "x": 200,
+      "y": 90,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 0
+    },
+    {
+      "componentId": "g_valve_in",
+      "x": 150,
+      "y": 11.549999999999997,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 1
+    },
+    {
+      "componentId": "g_valve_out",
+      "x": 150,
+      "y": 289.55,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 2
+    },
+    {
+      "componentId": "g_level",
+      "x": 432,
+      "y": 46,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 3
+    },
+    {
+      "componentId": "g_level_pct",
+      "x": 432,
+      "y": 96,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 4
+    },
+    {
+      "componentId": "g_dp",
+      "x": 432,
+      "y": 146,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 5
+    },
+    {
+      "componentId": "g_qin",
+      "x": 432,
+      "y": 196,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 6
+    },
+    {
+      "componentId": "g_qout",
+      "x": 432,
+      "y": 246,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 7
+    },
+    {
+      "componentId": "g_phigh",
+      "x": 432,
+      "y": 296,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 8
+    },
+    {
+      "componentId": "g_plow",
+      "x": 432,
+      "y": 346,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 9
+    },
+    {
+      "componentId": "g_par_height",
+      "x": 618,
+      "y": 46,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 10
+    },
+    {
+      "componentId": "g_par_sgp",
+      "x": 618,
+      "y": 96,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 11
+    },
+    {
+      "componentId": "g_par_sgs",
+      "x": 618,
+      "y": 146,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 12
+    },
+    {
+      "componentId": "g_par_sgc",
+      "x": 618,
+      "y": 196,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 13
+    },
+    {
+      "componentId": "g_par_cap",
+      "x": 618,
+      "y": 246,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 14
+    },
+    {
+      "componentId": "g_par_gas",
+      "x": 618,
+      "y": 296,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 15
+    }
+  ],
+  "exportedPropertyComponentIds": [
+    "c_height",
+    "c_diameter",
+    "c_sg_process",
+    "c_sg_seal",
+    "c_sg_capillary",
+    "c_capillary",
+    "c_gas",
+    "c_qin_max",
+    "c_qout_max"
+  ]
+}

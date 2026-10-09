@@ -2,7 +2,7 @@ import { PackageNumberValue, PackageShape, SimulidePaintGradient, SimulidePaintP
 
 /** Todas as primitivas desenháveis (têm `SimulidePaintStyle` -- stroke/fill/stateFill/...), exceto
  * `repeat`, que é só um laço de repetição resolvido em `pushPrimitive` antes de chegar aqui. */
-type DrawablePrimitive = Exclude<SimulidePaintPrimitive, { kind: "repeat" }>;
+type DrawablePrimitive = Exclude<SimulidePaintPrimitive, { kind: "repeat" } | { kind: "clip" }>;
 
 interface PaintTransform {
   x: (value: number) => number;
@@ -287,6 +287,19 @@ function simulidePaintArcPathD(
   return `M ${transform.x(startX)} ${transform.y(startY)} A ${Math.abs(transform.sx(rx))} ${Math.abs(transform.sy(ry))} 0 ${largeArc} ${sweep} ${transform.x(endX)} ${transform.y(endY)}`;
 }
 
+/** Largura média de um caractere em fração do tamanho da fonte -- estimativa conservadora para as
+ * fontes sem serifa da Webview (dígitos e letras ~0,55 em; 0,6 deixa folga). Não há medição de texto
+ * no lado que gera o SVG, e a estimativa basta para nunca deixar o valor sair da caixa. */
+const AVERAGE_CHAR_WIDTH_EM = 0.6;
+
+/** Tamanho de fonte que faz `text` caber em `maxWidth` (mesmas unidades), nunca maior que `fontSize`. */
+export function fittedFontSize(text: string, fontSize: number | undefined, maxWidth: number | undefined): number | undefined {
+  if (fontSize === undefined || maxWidth === undefined || !(maxWidth > 0)) return fontSize;
+  const characters = [...text].length;
+  if (characters === 0) return fontSize;
+  return Math.min(fontSize, maxWidth / (characters * AVERAGE_CHAR_WIDTH_EM));
+}
+
 function transformPathData(d: string, transform: PaintTransform): string {
   const tokens = d.match(/[a-zA-Z]|[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?/g) ?? [];
   const out: string[] = [];
@@ -347,6 +360,7 @@ export function simulidePaintToPackageShapes(
   const shapes: PackageShape[] = [];
   const defs: string[] = [];
   let gradientIndex = 0;
+  let clipIndex = 0;
 
   function pushPrimitive(primitive: SimulidePaintPrimitive, activeTransform: PaintTransform, context: RepeatContext): void {
     if (!stateVisibleFor(primitive, properties)) return;
@@ -358,6 +372,16 @@ export function simulidePaintToPackageShapes(
         const childContext = primitive.indexName ? { ...context, [primitive.indexName]: i } : context;
         for (const child of primitive.primitives) pushPrimitive(child, shifted, childContext);
       }
+      return;
+    }
+    if (primitive.kind === "clip") {
+      // `<g clip-path>` em volta dos filhos: as formas são concatenadas como texto SVG, então abrir
+      // e fechar o grupo em duas formas `svg` envolve exatamente as que ficam entre elas.
+      const clipId = `${scopeId}-clip-${clipIndex++}`;
+      defs.push(`<clipPath id="${clipId}"><path d="${transformPathData(primitive.d, activeTransform)}"/></clipPath>`);
+      shapes.push({ kind: "svg", value: `<g clip-path="url(#${clipId})">` });
+      for (const child of primitive.primitives) pushPrimitive(child, activeTransform, context);
+      shapes.push({ kind: "svg", value: "</g>" });
       return;
     }
     const gradientId = primitive.fillGradient ? `${scopeId}-grad-${gradientIndex++}` : undefined;
@@ -423,13 +447,15 @@ export function simulidePaintToPackageShapes(
       case "polyline":
         shapes.push({ kind: "path", d: polylinePath(pointList(primitive.points, activeTransform)), fill: "none", ...style });
         break;
-      case "text":
+      case "text": {
+        const text = stateTextFor(primitive, properties, context) ?? primitive.value;
         shapes.push({
           kind: "text",
           x: activeTransform.x(numericValue(primitive.x, properties, context)),
           y: activeTransform.y(numericValue(primitive.y, properties, context)),
-          value: stateTextFor(primitive, properties, context) ?? primitive.value,
-          fontSize: activeTransform.sw(numericValue(primitive.fontSize, properties, context, 11)),
+          value: text,
+          fontSize: activeTransform.sw(fittedFontSize(text, numericValue(primitive.fontSize, properties, context, 11),
+            primitive.maxWidth === undefined ? undefined : numericValue(primitive.maxWidth, properties, context))),
           textAnchor: primitive.textAnchor,
           dominantBaseline: primitive.dominantBaseline,
           // Texto é a Única primitiva cuja cor sai por `color` (e não por `fill`, ver
@@ -443,6 +469,7 @@ export function simulidePaintToPackageShapes(
           ...style,
         });
         break;
+      }
       case "image":
         shapes.push({
           kind: "image",

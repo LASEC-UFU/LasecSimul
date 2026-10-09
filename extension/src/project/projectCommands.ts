@@ -13,6 +13,7 @@ import { decideSaveTarget } from "./savePolicy";
 import { resolveProjectSourcePaths } from "./projectPathPolicy";
 import { isSimulideCircuitPath } from "../import/simulide/SimulideImporter";
 import { openSimulideAsLsproj } from "../import/simulide/SimulideOpenWorkflow";
+import { fileSourceId, filePathFromSourceId, materializeEmbeddedSubcircuit, readMaterializedSubcircuit } from "./embeddedSubcircuits";
 
 export function absoluteSubcircuitRefPath(refPath: string): string {
   if (path.isAbsolute(refPath)) return path.normalize(refPath);
@@ -32,9 +33,17 @@ function projectWithRelativeExternalRefs(project: ProjectDocument, targetProject
         const relativePath = path.relative(targetDir, absolutePath);
         return relativePath && !path.isAbsolute(relativePath) ? relativePath : absolutePath;
       };
+      const embeddedSource = component.subcircuitRef?.embedded
+        ? filePathFromSourceId(state.schematicState.catalog.find((entry) => entry.typeId === component.typeId)?.registeredSourceId ?? "")
+        : undefined;
       return {
         ...component,
-        ...(component.subcircuitRef?.path ? { subcircuitRef: {
+        ...(component.subcircuitRef?.embedded ? { subcircuitRef: {
+          ...component.subcircuitRef,
+          // Incorporado: o manifesto vai no próprio projeto (com as edições feitas no editor de
+          // subcircuito, que trabalha sobre o arquivo materializado); `path` é só o nome de referência.
+          embedded: (embeddedSource ? readMaterializedSubcircuit(embeddedSource) : undefined) ?? component.subcircuitRef.embedded,
+        } } : component.subcircuitRef?.path ? { subcircuitRef: {
           ...component.subcircuitRef,
           path: portable(component.subcircuitRef.path),
         } } : {}),
@@ -206,21 +215,23 @@ async function resolveProjectSubcircuitReferences(projectDir: string): Promise<v
 
   for (const component of componentsWithRef) {
     const ref = component.subcircuitRef!;
-    const absolutePath = normalizeAbsolutePath(projectDir, ref.path);
+    const absolutePath = ref.embedded ? materializeEmbeddedSubcircuit(ref.embedded) : normalizeAbsolutePath(projectDir, ref.path);
     if (!fileExists(absolutePath) || !state.coreClient) {
       missingCount++;
       continue;
     }
 
     try {
-      await state.coreClient.registerAdhocSubcircuitDefinition(absolutePath);
+      // Incorporado: o conteúdo do projeto manda (dois projetos podem trazer versões diferentes).
+      await state.coreClient.registerAdhocSubcircuitDefinition(absolutePath, ref.embedded ? { replace: true } : undefined);
     } catch {
       missingCount++;
       continue;
     }
     const parsed = parseSubcircuitManifest(
       readJsonFile(absolutePath) as Record<string, unknown>,
-      path.dirname(absolutePath),
+      // Arte relativa de um manifesto incorporado mora ao lado do projeto, não no cache.
+      ref.embedded ? projectDir : path.dirname(absolutePath),
       language,
       new Set(state.schematicState.catalog.filter((entry) => entry.registeredSourceKind === "mcu-adapter").map((entry) => entry.typeId))
     );
@@ -250,12 +261,16 @@ async function resolveProjectSubcircuitReferences(projectDir: string): Promise<v
       mcuHost: parsed.mcuHost,
       ...(parsed.hartDeviceComponentId ? { hartDeviceComponentId: parsed.hartDeviceComponentId } : {}),
       serialPorts: parsed.serialPorts,
+      // Mesmo contrato dos subcircuitos da biblioteca: componentes internos expostos (gráficos ao
+      // vivo, propriedades exportadas, "Abrir Subcircuito") resolvidos pelo arquivo.
+      registeredSourceKind: "subcircuit-file",
+      registeredSourceId: fileSourceId(absolutePath),
     });
     updatedComponents.set(component.id, {
       ...component,
       typeId: parsed.typeId,
       pins: newPinIds.map((id, index) => ({ id, x: 0, y: index * 12 })),
-      subcircuitRef: { path: ref.path, lastKnownTypeId: parsed.typeId, lastKnownPinIds: newPinIds },
+      subcircuitRef: { path: ref.path, lastKnownTypeId: parsed.typeId, lastKnownPinIds: newPinIds, ...(ref.embedded ? { embedded: ref.embedded } : {}) },
     });
   }
 

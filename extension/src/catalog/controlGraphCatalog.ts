@@ -30,6 +30,16 @@ function packageFor(label: string, pins: readonly string[]): PackageDescriptor {
     pins: [...inputPins, ...output] };
 }
 
+/** Constante: só a saída, com o valor e a unidade da instância escritos no corpo. */
+function constantPackage(): PackageDescriptor {
+  return { width: 112, height: 48, border: false,
+    shapes: [{ kind: "rect", x: 8, y: 4, w: 96, h: 40, fill: "#e0f2fe", stroke: "#0369a1", strokeWidth: 1.5 },
+      { kind: "text", x: 56, y: 17, value: "Constante", fontSize: 9, textAnchor: "middle", fill: "#0c4a6e" },
+      { kind: "text", x: 48, y: 34, value: "0", fontSize: 11, textAnchor: "end", fill: "#0c4a6e", stateText: { kind: "property", prop: "value" } },
+      { kind: "text", x: 52, y: 34, value: "", fontSize: 10, textAnchor: "start", fill: "#0c4a6e", stateText: { kind: "property", prop: "unit" } }],
+    pins: [{ id: "out", x: 112, y: 24, angle: 0, length: 8, label: "OUT" }] };
+}
+
 function observerPackage(label: string): PackageDescriptor {
   return { width: 112, height: 48, border: false,
     shapes: [{ kind: "rect", x: 8, y: 4, w: 96, h: 40, fill: "#e0f2fe", stroke: "#0369a1", strokeWidth: 1.5 }, { kind: "text", x: 56, y: 20, value: label, fontSize: 10, textAnchor: "middle", fill: "#0c4a6e" }],
@@ -42,7 +52,7 @@ function observerPackage(label: string): PackageDescriptor {
  * biblioteca. Todo o resto de `control.*` é a implementação interna desses 24 blocos (o "stage"
  * de cada `.lssubcircuit`) -- duplicar isso na paleta era justamente a subseção "Controle" que
  * aparecia dentro de Processo. */
-const PALETTE_VISIBLE_TYPE_IDS = new Set(["control.observer", "control.calc_expression", "control.process"]);
+const PALETTE_VISIBLE_TYPE_IDS = new Set(["control.observer", "control.calc_expression", "control.process", "control.constant"]);
 
 function entry(definition: ControlDefinition): WebviewComponentCatalogEntry {
   const [typeId, label, pins, defaults = {}] = definition;
@@ -54,6 +64,9 @@ function entry(definition: ControlDefinition): WebviewComponentCatalogEntry {
 }
 
 export const controlGraphCatalog: WebviewComponentCatalogEntry[] = [
+  // Parâmetro de modelo (altura, densidade, pressão...): muda com a simulação rodando (ver
+  // core/src/components/control/SignalConstant.hpp).
+  { typeId: "control.constant", label: "Constante", category: "Controle", folderPath: [], workspaceSection: "control", icon: "package", hidden: false, graphical: true, pinCount: 1, pinIds: ["out"], defaultProperties: { value: 0, unit: "" }, package: constantPackage() },
   { typeId: "control.observer", label: "Sonda", category: "Controle", folderPath: [], workspaceSection: "control", icon: "package", hidden: false, graphical: true, pinCount: 1, pinIds: ["in"], defaultProperties: { observerOnly: true }, package: observerPackage("Sonda") },
   { typeId: "connectors.signal_tunnel", label: "Túnel de sinal", category: "Conectores", folderPath: ["Conectores"], workspaceSection: "misc", icon: "tunel", hidden: false, graphical: true, pinCount: 1, pinIds: ["value"], defaultProperties: { name: "signal", direction: "Input", valueType: "Real" }, package: packageFor("SINAL", ["value"]) },
   ...unary.map(entry), ...multi.map(entry),

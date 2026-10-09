@@ -33,6 +33,7 @@
 #include "../components/connectors/SignalTunnel.hpp"
 #include "../components/control/SignalMathBlock.hpp"
 #include "../components/control/ManualSignalSlider.hpp"
+#include "../components/control/SignalConstant.hpp"
 #include "../components/connectors/Tunnel.hpp"
 #include "../components/connectors/Bus.hpp"
 #include "../components/logic/Button.hpp"
@@ -303,6 +304,13 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
                                 components::SignalMathBlock::readoutFormat(), std::nullopt,
                                 std::vector<std::string>{});
     }
+
+    reg.registerFactory(components::SignalConstant::kTypeId, [](const ComponentParams& p) {
+        return std::make_unique<components::SignalConstant>(p);
+    });
+    registerBuiltinMetadata(components::SignalConstant::kTypeId, "Constante", components::SignalConstant::propertySchema(),
+                            R"json({"en":{"name":"Constant"}})json", components::SignalConstant::readoutFormat(), std::nullopt,
+                            std::vector<std::string>{});
 
     reg.registerFactory("graphics.slider", [](const ComponentParams& p) {
         return std::make_unique<components::ManualSignalSlider>(p);
