@@ -545,7 +545,7 @@ void HartCommunicationComponent::rebuildConfiguredPlan() {
     device.writeProtectActiveCode = static_cast<uint16_t>(std::clamp(m_traits.writeProtectActiveCode, 0.0, 256.0));
     device.configurationChangedCounter = m_configChangeCounter;
     device.configurationChangedMasters = m_configurationChangedFlags;
-    device.sensorFault = m_sensorFault;
+    device.sensorFault = m_sensorFault || m_signalSensorFault;
     if (m_configurationChangedFlags != 0) device.diagnosticStatus = static_cast<uint8_t>(device.diagnosticStatus | 0x40u);
     const HartDeviceProfile* base = m_profiles.find(device.profileId);
     if (!base) { m_profileId = "lasecsimul.hart.process-simul-compatible"; device.profileId = m_profileId; base = m_profiles.find(device.profileId); }
@@ -1163,6 +1163,16 @@ std::string HartCommunicationComponent::signalBlockId(std::string_view variableI
 }
 
 bool HartCommunicationComponent::setSignalInput(std::string_view variableId, double value) noexcept {
+    // A model's input stage reports a broken sensor through the `sensorFault` input variable: the
+    // device goes to burnout exactly as with the `sensorFault` property.
+    if (variableId == "sensorFault") {
+        const bool fault = std::isfinite(value) && value > 0.5;
+        if (fault == m_signalSensorFault) return true;
+        m_signalSensorFault = fault;
+        m_engine.setSensorFault(m_deviceId, m_sensorFault || m_signalSensorFault);
+        m_scheduler.dirtySet().insert(m_componentIndex);
+        return true;
+    }
     if (m_fieldDevice && variableId == "PV" && std::isfinite(value)) {
         if (m_rawPrimary == value) return true;
         feedPrimary(value);
@@ -1456,7 +1466,7 @@ void HartCommunicationComponent::setPropertyValue(const std::string& id, const P
     else if (id == "hartDeviceProfile") { m_traits.deviceProfile = std::get<double>(v); rebuildConfiguredPlan(); }
     else if (id == "hartResponseDataLimits") { m_traits.responseDataLimits = std::get<std::string>(v); rebuildConfiguredPlan(); }
     else if (id == "hartConfigChangeCounter") { m_configChangeCounter = static_cast<uint32_t>(std::clamp(std::get<double>(v), 0.0, 65535.0)); rebuildConfiguredPlan(); }
-    else if (id == "sensorFault") { m_sensorFault = std::get<bool>(v); m_engine.setSensorFault(m_deviceId, m_sensorFault); }
+    else if (id == "sensorFault") { m_sensorFault = std::get<bool>(v); m_engine.setSensorFault(m_deviceId, m_sensorFault || m_signalSensorFault); }
     else if (id == "displayInstalled") m_displayInstalled = std::get<bool>(v);
     else if (id == "displayVariable1") m_displayVariable1 = std::get<std::string>(v);
     else if (id == "displayVariable2") m_displayVariable2 = std::get<std::string>(v);

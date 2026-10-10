@@ -1,0 +1,361 @@
+{
+  "schemaVersion": 1,
+  "typeId": "sensors.thermocouple",
+  "graphical": true,
+  "name": "Termopar",
+  "language": "pt-BR",
+  "icon": "thermocouple",
+  "folderPath": [
+    "Sensores"
+  ],
+  "translations": {
+    "en": {
+      "name": "Thermocouple (NIST ITS-90: B, E, J, K, N, R, S, T)",
+      "properties": {
+        "temp": {
+          "label": "Measuring junction (°C)",
+          "group": "Main"
+        },
+        "ref_temp": {
+          "label": "Reference junction (°C)",
+          "group": "Main"
+        },
+        "tc_type": {
+          "label": "Type",
+          "group": "Main"
+        },
+        "min_temp": {
+          "label": "Min Temp (°C)",
+          "group": "Main"
+        },
+        "max_temp": {
+          "label": "Max Temp (°C)",
+          "group": "Main"
+        },
+        "r_loop": {
+          "label": "Loop resistance (Ω)",
+          "group": "Parameters"
+        },
+        "broken": {
+          "label": "Broken (open circuit)",
+          "group": "Parameters"
+        },
+        "emf_mv": {
+          "label": "Generated EMF (mV)",
+          "group": "Main"
+        }
+      }
+    }
+  },
+  "abiVersion": {
+    "major": 4,
+    "minor": 0
+  },
+  "nativeEntry": {
+    "win32-x64": "build/win-x64/device.dll",
+    "linux-x64": "build/linux-x64/device.so",
+    "darwin-universal": "build/macos-universal/device.dylib"
+  },
+  "package": {
+    "width": 64,
+    "height": 60,
+    "border": false,
+    "background": {
+      "kind": "color",
+      "value": "transparent"
+    },
+    "shapes": [
+      {
+        "kind": "line",
+        "x1": 10,
+        "y1": 12,
+        "x2": 22,
+        "y2": 12,
+        "stroke": "#444"
+      },
+      {
+        "kind": "line",
+        "x1": 22,
+        "y1": 12,
+        "x2": 32,
+        "y2": 30,
+        "stroke": "#444",
+        "strokeWidth": 2.5
+      },
+      {
+        "kind": "line",
+        "x1": 54,
+        "y1": 12,
+        "x2": 42,
+        "y2": 12,
+        "stroke": "#444"
+      },
+      {
+        "kind": "line",
+        "x1": 42,
+        "y1": 12,
+        "x2": 32,
+        "y2": 30,
+        "stroke": "#444"
+      },
+      {
+        "kind": "ellipse",
+        "cx": 32,
+        "cy": 30,
+        "rx": 2.5,
+        "ry": 2.5,
+        "fill": "#444",
+        "stroke": "#444",
+        "strokeWidth": 1
+      },
+      {
+        "kind": "text",
+        "x": 14,
+        "y": 8,
+        "value": "+",
+        "fontSize": 8,
+        "color": "#444"
+      },
+      {
+        "kind": "text",
+        "x": 47,
+        "y": 8,
+        "value": "−",
+        "fontSize": 8,
+        "color": "#444"
+      },
+      {
+        "kind": "text",
+        "x": 26,
+        "y": 10,
+        "value": "TC",
+        "fontSize": 6,
+        "color": "#444"
+      }
+    ],
+    "pins": [
+      {
+        "id": "p",
+        "x": 0,
+        "y": 12,
+        "angle": 180,
+        "length": 10,
+        "label": "+"
+      },
+      {
+        "id": "n",
+        "x": 64,
+        "y": 12,
+        "angle": 0,
+        "length": 10,
+        "label": "−"
+      }
+    ],
+    "viewSpec": {
+      "overlayPaint": true,
+      "dialWidget": {
+        "cx": 32,
+        "cy": 47,
+        "r": 11
+      },
+      "paint": [],
+      "hitTest": {
+        "dial": {
+          "kind": "circle",
+          "cx": 32,
+          "cy": 47,
+          "r": 11,
+          "cursor": "grab"
+        }
+      },
+      "interaction": {
+        "dial": {
+          "kind": "dragAngular",
+          "hitTest": "dial",
+          "prop": "temp",
+          "cx": 32,
+          "cy": 47,
+          "stepsPerRev": 1000,
+          "continuous": true,
+          "limits": "dial"
+        }
+      },
+      "limits": {
+        "dial": {
+          "min": -270,
+          "max": 1820,
+          "minProp": "min_temp",
+          "maxProp": "max_temp",
+          "minAngleDeg": -150,
+          "maxAngleDeg": 150,
+          "clamp": true
+        }
+      }
+    }
+  },
+  "pins": [
+    {
+      "id": "p",
+      "kind": "ANALOG_IN",
+      "x": 0,
+      "y": 12,
+      "angle": 180,
+      "length": 10,
+      "label": "+"
+    },
+    {
+      "id": "n",
+      "kind": "ANALOG_IN",
+      "x": 64,
+      "y": 12,
+      "angle": 0,
+      "length": 10,
+      "label": "−"
+    }
+  ],
+  "properties": [
+    {
+      "id": "temp",
+      "label": "Junta de medição (°C)",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 25,
+      "min": -270,
+      "max": 1820,
+      "step": 1,
+      "unit": "°C"
+    },
+    {
+      "id": "ref_temp",
+      "label": "Junta de referência (°C)",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 25,
+      "min": -50,
+      "max": 200,
+      "step": 0.5,
+      "unit": "°C"
+    },
+    {
+      "id": "tc_type",
+      "label": "Tipo",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "select",
+      "default": 3,
+      "options": [
+        {
+          "label": "B (Pt30%Rh/Pt6%Rh)",
+          "value": 0
+        },
+        {
+          "label": "E (NiCr/CuNi)",
+          "value": 1
+        },
+        {
+          "label": "J (Fe/CuNi)",
+          "value": 2
+        },
+        {
+          "label": "K (NiCr/NiAl)",
+          "value": 3
+        },
+        {
+          "label": "N (NiCrSi/NiSi)",
+          "value": 4
+        },
+        {
+          "label": "R (Pt13%Rh/Pt)",
+          "value": 5
+        },
+        {
+          "label": "S (Pt10%Rh/Pt)",
+          "value": 6
+        },
+        {
+          "label": "T (Cu/CuNi)",
+          "value": 7
+        }
+      ]
+    },
+    {
+      "id": "emf_mv",
+      "label": "Tensão gerada (mV)",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "readonly",
+      "default": 0,
+      "unit": "mV",
+      "readOnly": true,
+      "noCopy": true,
+      "hidden": true
+    },
+    {
+      "id": "min_temp",
+      "label": "Mín. Temp (°C)",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 0,
+      "min": -270,
+      "max": 1820,
+      "step": 1,
+      "unit": "°C"
+    },
+    {
+      "id": "max_temp",
+      "label": "Máx. Temp (°C)",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 1200,
+      "min": -270,
+      "max": 1820,
+      "step": 1,
+      "unit": "°C"
+    },
+    {
+      "id": "r_loop",
+      "label": "Resistência dos fios (Ω)",
+      "group": "Parameters",
+      "valueKind": "number",
+      "editor": "number",
+      "default": 5,
+      "min": 0.001,
+      "max": 10000,
+      "step": 0.5,
+      "unit": "Ω"
+    },
+    {
+      "id": "broken",
+      "label": "Rompido (circuito aberto)",
+      "group": "Parameters",
+      "valueKind": "bool",
+      "editor": "checkbox",
+      "default": false
+    },
+    {
+      "id": "dialStep",
+      "label": "Passo do Dial",
+      "group": "Main",
+      "valueKind": "number",
+      "editor": "number",
+      "unit": "°C",
+      "default": 1,
+      "min": 0.001,
+      "step": 1
+    }
+  ],
+  "help": {
+    "description": "Termopar: dois fios de ligas diferentes unidos na junta de medição. Gera entre + e − a tensão de Seebeck E(junta de medição) − E(junta de referência), pelas funções de referência NIST ITS-90 (IEC 60584-1) do tipo escolhido, em série com a resistência dos fios. A junta de referência é onde os fios do termopar (ou o cabo de extensão) encontram o cobre: os bornes do instrumento. Rompido = circuito aberto (o transmissor vai para burnout)."
+  },
+  "limits": {
+    "stepTimeoutMs": 4,
+    "expectedComplexity": "low"
+  },
+  "defaultProperties": {
+    "dialStep": 1
+  }
+}

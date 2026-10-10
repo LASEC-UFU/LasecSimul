@@ -270,6 +270,10 @@
       "manifest": "simulide-sensors/rtd.lsdevice"
     },
     {
+      "typeId": "sensors.thermocouple",
+      "manifest": "simulide-sensors/thermocouple.lsdevice"
+    },
+    {
       "typeId": "sensors.strain",
       "manifest": "simulide-sensors/strain.lsdevice"
     },

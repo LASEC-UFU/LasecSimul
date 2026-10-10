@@ -18,6 +18,7 @@
 #include <nlohmann/json.hpp>
 
 #include "components/connectors/SignalTunnel.hpp"
+#include "components/bridges/SignalBridges.hpp"
 #include "components/connectors/Tunnel.hpp"
 #include "components/control/SignalConstant.hpp"
 #include "components/control/SignalMathBlock.hpp"
@@ -59,6 +60,25 @@ void registerControlFactories(SimulationSession& session) {
     }
     session.components().registerFactory(components::SignalConstant::kTypeId, [](const ComponentParams& p) {
         return std::make_unique<components::SignalConstant>(p);
+    });
+    // Process models with an electrical side (heated tank: Pt100 element and cable leads; furnace: thermocouple).
+    // Without the Core's metadata the pin list comes from the wires (the signal port `command` too):
+    // pick the electrical terminals by name.
+    session.components().registerFactory("bridges.controlled_resistor", [](const ComponentParams& p) {
+        const auto named = [&](const char* id) {
+            for (const Pin& pin : p.pinList) if (pin.id == id) return pin;
+            return Pin{id};
+        };
+        return std::make_unique<components::SignalControlledResistor>(std::array<Pin, 2>{named("p"), named("n")},
+                                                                      p.property("resistance", 100.0));
+    });
+    // Electric furnace: the thermocouple EMF is a signal-controlled voltage source.
+    session.components().registerFactory("bridges.controlled_voltage_source", [](const ComponentParams& p) {
+        const auto named = [&](const char* id) {
+            for (const Pin& pin : p.pinList) if (pin.id == id) return pin;
+            return Pin{id};
+        };
+        return std::make_unique<components::SignalControlledVoltageSource>(std::array<Pin, 2>{named("p"), named("n")});
     });
 }
 

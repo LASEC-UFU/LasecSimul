@@ -187,6 +187,38 @@ private:
     double m_command = 0.0;
 };
 
+/** Resistor cuja resistência (Ω) vem de uma porta de sinal: o elemento de um sensor resistivo
+ * (Pt100, NTC, strain gauge) ou um fio de cabo com resistência ajustável dentro de um modelo de
+ * processo. Até o primeiro sinal chegar vale a resistência inicial da propriedade `resistance`.
+ * Resistência não positiva vira `kMinimumOhm` (nunca condutância infinita). */
+class SignalControlledResistor final : public IComponentModel {
+public:
+    static constexpr double kMinimumOhm = 1e-6;
+    SignalControlledResistor(std::array<Pin, 2> pins, double initialOhm) : m_pins(std::move(pins)), m_command(initialOhm) {}
+    const char* typeId() const override { return "bridges.controlled_resistor"; }
+    std::span<Pin> pins() override { return m_pins; }
+    void stamp(MnaMatrixView& matrix) override { matrix.addConductance(m_pins[0], m_pins[1], 1.0 / resistance()); }
+    void postStep(uint64_t) override {}
+    bool setCommand(double value) {
+        if (!std::isfinite(value) || value == m_command) return false; m_command = value; return true;
+    }
+    double command() const { return m_command; }
+    double resistance() const { return std::max(kMinimumOhm, m_command); }
+    std::vector<SignalPortDescriptor> signalPorts() const override {
+        return {{"command", SignalPortDirection::Input, SignalValueKind::Analog, ""}};
+    }
+    size_t getState(uint8_t* out, size_t cap) const override {
+        if (cap < sizeof(m_command)) return 0;
+        std::memcpy(out, &m_command, sizeof(m_command)); return sizeof(m_command);
+    }
+    void setState(const uint8_t* in, size_t len) override {
+        if (len >= sizeof(m_command)) std::memcpy(&m_command, in, sizeof(m_command));
+    }
+private:
+    std::array<Pin, 2> m_pins;
+    double m_command;
+};
+
 class SignalDigitalOutput final : public IComponentModel {
 public:
     SignalDigitalOutput(std::array<Pin, 2> pins, double lowVolts = 0.0, double highVolts = 5.0)

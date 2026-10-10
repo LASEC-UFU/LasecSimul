@@ -145,6 +145,10 @@ sensor. Os limites vêm da Tabela 6.1 do manual.
 Os códigos dos termopares seguem a ordem da Tabela 4.7. Essa ordem põe o J no
 índice 2, como capturado; os demais códigos são inferidos.
 
+O estágio de entrada do subcircuito usa esses códigos (`sensor.type`, `sensor.model` e
+`sensor.coldJunction` viraram sinais) para medir o termopar nos bornes 2 e 3 pela tabela NIST do tipo:
+ver `docs/forno-termopar-tt301.md`.
+
 Os outros RTDs, mV e Ohm ficam para captura. A ordem da Tabela 4.5 não bate
 com o `02` do Pt100 IEC capturado. Um código desconhecido é gravado, mas não
 muda a faixa nem os limites.

@@ -1,0 +1,3916 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    {
+      "id": "component-1791289162830-859519",
+      "typeId": "sources.dc_voltage",
+      "properties": {
+        "voltage": 24,
+        "__ui_valueLabelX": 56,
+        "__ui_valueLabelY": 10
+      },
+      "label": "Voltage Source-1",
+      "showValue": true,
+      "showDialValue": false,
+      "visual": {
+        "x": 892.8550428314728,
+        "y": 625.1144957168527,
+        "rotation": 90
+      }
+    },
+    {
+      "id": "component-1791289285255-920511",
+      "typeId": "meters.ampmeter",
+      "properties": {
+        "resistance": 0.000001
+      },
+      "label": "Ampmeter-1",
+      "showValue": false,
+      "showDialValue": false,
+      "flipH": true,
+      "visual": {
+        "x": 855.007350089845,
+        "y": 539.8879543130956,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791298567681-219290",
+      "typeId": "protocol.hart.modem",
+      "properties": {
+        "pc_link": "serial",
+        "port_name": "CNCB0",
+        "udp_address": "127.0.0.1",
+        "udp_port": 5094,
+        "auto_open": false,
+        "senseResistance": 250,
+        "transmitAmplitudeMvpp": 500
+      },
+      "label": "Modem HART-1",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 854.1868755684786,
+        "y": 728.3013488537568,
+        "rotation": 90
+      }
+    },
+    {
+      "id": "component-1791298650899-835065",
+      "typeId": "passive.resistor",
+      "properties": {
+        "resistance": 250,
+        "__ui_valueLabelX": 16,
+        "__ui_valueLabelY": 11
+      },
+      "label": "Resistor-1",
+      "showValue": true,
+      "showDialValue": false,
+      "visual": {
+        "x": 791.2441122111177,
+        "y": 640.8796861568541,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791374315637-835373",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "NetA"
+      },
+      "label": "Tunnel.-1",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 556.3116678766052,
+        "y": 747.5569738487833,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791374334324-929938",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "NetA"
+      },
+      "label": "Tunnel.-2",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 743.8058750557734,
+        "y": 679.9491629183711,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791374352508-941802",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "NetB"
+      },
+      "label": "Tunnel.-3",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 786.1207502783213,
+        "y": 696.7710276585746,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791374384819-700152",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "NetB"
+      },
+      "label": "Tunnel.-4",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 553.7005733649667,
+        "y": 780.1174681987999,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791478193390-287006",
+      "typeId": "meters.oscope",
+      "properties": {
+        "inputMode": "differential",
+        "filter": 0,
+        "autoScale": true,
+        "tracks": 4,
+        "sampleIntervalNs": 50000,
+        "tunnels": ""
+      },
+      "label": "Oscope-1",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 601.1994642004439,
+        "y": 729.0604507522371,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791626134669-tt301",
+      "typeId": "subcircuits.hart.smar_tt301",
+      "label": "SMAR TT301 (HART)",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 610.7044360945629,
+        "y": 485.1040895136738,
+        "rotation": 0
+      },
+      "properties": {}
+    },
+    {
+      "id": "component-1791626134669-heat01",
+      "typeId": "graphics.slider",
+      "label": "Aquecimento (%)",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": -685.2955639054371,
+        "y": 74.10408951367378,
+        "rotation": 0
+      },
+      "properties": {
+        "width": 212,
+        "height": 34,
+        "stroke": "currentColor",
+        "fill": "#ffffff",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "showTicks": true,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 0,
+        "actionTarget": "",
+        "actionProperty": "",
+        "actionMode": "set",
+        "actionValue": "50",
+        "actionReleaseValue": "0",
+        "actionStep": 1,
+        "actionMin": 0,
+        "actionMax": 100
+      }
+    },
+    {
+      "id": "component-1791630045461-forno1",
+      "typeId": "subcircuits.local.electric_furnace_tc",
+      "label": "Forno elétrico",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": -395.2955639054371,
+        "y": 51.104089513673784,
+        "rotation": 0
+      },
+      "properties": {},
+      "subcircuitRef": {
+        "path": "forno_eletrico_termopar.lssubcircuit",
+        "lastKnownTypeId": "subcircuits.local.electric_furnace_tc",
+        "lastKnownPinIds": [
+          "heater",
+          "tc_p",
+          "tc_n",
+          "temperature"
+        ],
+        "embedded": {
+          "schemaVersion": 3,
+          "typeId": "subcircuits.local.electric_furnace_tc",
+          "name": "Forno elétrico com termopar",
+          "language": "pt-BR",
+          "folderPath": [
+            "Modelos"
+          ],
+          "workspaceSection": "process",
+          "help": {
+            "description": "Forno elétrico tipo mufla com resistências de aquecimento (pino Aquecimento, 0–100 %) e um termopar em tubo de proteção cerâmico, ligado por cabo de extensão aos bornes 2 (+) e 3 (−) de um transmissor de temperatura (TT301). Balanço de energia C·dT/dt = P − UA·(T − Tamb), atraso do tubo e FEM de Seebeck E(T) − E(T_referência) pelas funções de referência NIST ITS-90 do tipo escolhido (B, E, J, K, N, R, S, T). A junta de referência fica nos bornes do transmissor (ambiente) com cabo de extensão, ou no cabeçote quando o cabo é de cobre comum. A FEM e os fios são elementos do circuito: o transmissor mede tensão de verdade, inclusive com polaridade invertida ou termopar rompido. Potência, capacidade térmica, perdas, ambiente, tubo, tipo, fios, desvio, cabo, temperatura do cabeçote, polaridade e ruptura ficam em Propriedades Exportadas."
+          },
+          "components": [
+            {
+              "id": "t_heater",
+              "typeId": "connectors.signal_tunnel",
+              "properties": {
+                "name": "heater",
+                "pinId": "heater",
+                "direction": "Input",
+                "valueType": "Real",
+                "defaultValue": 0
+              },
+              "visual": {
+                "x": 40,
+                "y": 80,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "c_pmax",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 3,
+                "unit": "kW"
+              },
+              "visual": {
+                "x": 200,
+                "y": 40,
+                "rotation": 0
+              },
+              "label": "Potência máxima das resistências (100 %)"
+            },
+            {
+              "id": "c_cap",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 1.5,
+                "unit": "kJ/K"
+              },
+              "visual": {
+                "x": 200,
+                "y": 100,
+                "rotation": 0
+              },
+              "label": "Capacidade térmica do forno com a carga"
+            },
+            {
+              "id": "c_ua",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 2.5,
+                "unit": "W/K"
+              },
+              "visual": {
+                "x": 200,
+                "y": 160,
+                "rotation": 0
+              },
+              "label": "Coeficiente de perdas para o ambiente UA"
+            },
+            {
+              "id": "c_tamb",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 25,
+                "unit": "°C"
+              },
+              "visual": {
+                "x": 200,
+                "y": 220,
+                "rotation": 0
+              },
+              "label": "Temperatura ambiente (onde fica o transmissor)"
+            },
+            {
+              "id": "c_tau",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 20,
+                "unit": "s"
+              },
+              "visual": {
+                "x": 200,
+                "y": 280,
+                "rotation": 0
+              },
+              "label": "Constante de tempo do termopar (tubo de proteção)"
+            },
+            {
+              "id": "c_type",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 3,
+                "unit": "",
+                "options": "0=B;1=E;2=J;3=K;4=N;5=R;6=S;7=T"
+              },
+              "visual": {
+                "x": 200,
+                "y": 340,
+                "rotation": 0
+              },
+              "label": "Tipo do termopar"
+            },
+            {
+              "id": "c_lead",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 2.5,
+                "unit": "Ω"
+              },
+              "visual": {
+                "x": 200,
+                "y": 400,
+                "rotation": 0
+              },
+              "label": "Resistência de cada fio (termopar + cabo)"
+            },
+            {
+              "id": "c_dev",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 0,
+                "unit": "°C"
+              },
+              "visual": {
+                "x": 200,
+                "y": 460,
+                "rotation": 0
+              },
+              "label": "Desvio do termopar (erro do sensor)"
+            },
+            {
+              "id": "c_cable",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 0,
+                "unit": "",
+                "options": "0=Extensão/compensação (correto);1=Cobre comum (erro)"
+              },
+              "visual": {
+                "x": 200,
+                "y": 520,
+                "rotation": 0
+              },
+              "label": "Cabo do cabeçote ao transmissor"
+            },
+            {
+              "id": "c_thead",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 60,
+                "unit": "°C"
+              },
+              "visual": {
+                "x": 200,
+                "y": 580,
+                "rotation": 0
+              },
+              "label": "Temperatura no cabeçote do termopar"
+            },
+            {
+              "id": "c_reverse",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 0,
+                "unit": "",
+                "options": "0=Não;1=Sim (+ e − trocados)"
+              },
+              "visual": {
+                "x": 200,
+                "y": 640,
+                "rotation": 0
+              },
+              "label": "Polaridade invertida nos bornes"
+            },
+            {
+              "id": "c_broken",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 0,
+                "unit": "",
+                "options": "0=Não;1=Sim (circuito aberto)"
+              },
+              "visual": {
+                "x": 200,
+                "y": 700,
+                "rotation": 0
+              },
+              "label": "Termopar rompido"
+            },
+            {
+              "id": "u",
+              "typeId": "control.observer",
+              "properties": {
+                "unit": "%",
+                "observerOnly": true,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 40,
+                "y": 200,
+                "rotation": 0
+              },
+              "label": "Aquecimento"
+            },
+            {
+              "id": "q_heat",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "1000*P*((u>0)*(u<100)*u+(u>99.9999)*100)/100",
+                "inputs": [
+                  "u",
+                  "P"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 40,
+                "rotation": 0
+              },
+              "label": "Potência das resistências (W)"
+            },
+            {
+              "id": "q_loss",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "UA*(T-Ta)",
+                "inputs": [
+                  "T",
+                  "UA",
+                  "Ta"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 100,
+                "rotation": 0
+              },
+              "label": "Perdas para o ambiente (W)"
+            },
+            {
+              "id": "heat_in",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "q/(1000*C)",
+                "inputs": [
+                  "q",
+                  "C"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 160,
+                "rotation": 0
+              },
+              "label": "Ganho de temperatura (K/s)"
+            },
+            {
+              "id": "heat_out",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "l/(1000*C)",
+                "inputs": [
+                  "l",
+                  "C"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 220,
+                "rotation": 0
+              },
+              "label": "Perda de temperatura (K/s)"
+            },
+            {
+              "id": "temp",
+              "typeId": "control.tank",
+              "properties": {
+                "area": 1,
+                "initial": 25,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 40,
+                "y": 320,
+                "rotation": 0
+              },
+              "label": "Temperatura do forno (°C)"
+            },
+            {
+              "id": "tau_th",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "1000*C/UA/60",
+                "inputs": [
+                  "C",
+                  "UA"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 280,
+                "rotation": 0
+              },
+              "label": "Constante de tempo térmica (min)"
+            },
+            {
+              "id": "t_steady",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "Ta+1000*P/UA",
+                "inputs": [
+                  "P",
+                  "UA",
+                  "Ta"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 340,
+                "rotation": 0
+              },
+              "label": "Temperatura de regime a 100 % (°C)"
+            },
+            {
+              "id": "well_in",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "T/((tau>0.1)*tau+(tau<0.1)*0.1)",
+                "inputs": [
+                  "T",
+                  "tau"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 400,
+                "rotation": 0
+              },
+              "label": "Tubo: entrada"
+            },
+            {
+              "id": "well_out",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "Ts/((tau>0.1)*tau+(tau<0.1)*0.1)",
+                "inputs": [
+                  "Ts",
+                  "tau"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 460,
+                "rotation": 0
+              },
+              "label": "Tubo: saída"
+            },
+            {
+              "id": "sensor_temp",
+              "typeId": "control.tank",
+              "properties": {
+                "area": 1,
+                "initial": 25,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 40,
+                "y": 440,
+                "rotation": 0
+              },
+              "label": "Temperatura da junta de medição (°C)"
+            },
+            {
+              "id": "t_lo",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(m>-0.5)*(m<0.5)*0.0+(m>0.5)*(m<1.5)*(-270.0)+(m>1.5)*(m<2.5)*(-210.0)+(m>2.5)*(m<3.5)*(-270.0)+(m>3.5)*(m<4.5)*(-270.0)+(m>4.5)*(m<5.5)*(-50.0)+(m>5.5)*(m<6.5)*(-50.0)+(m>6.5)*(m<7.5)*(-270.0)",
+                "inputs": [
+                  "m"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 520,
+                "rotation": 0
+              },
+              "label": "Limite inferior do tipo (°C)"
+            },
+            {
+              "id": "t_hi",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(m>-0.5)*(m<0.5)*1820.0+(m>0.5)*(m<1.5)*1000.0+(m>1.5)*(m<2.5)*1200.0+(m>2.5)*(m<3.5)*1372.0+(m>3.5)*(m<4.5)*1300.0+(m>4.5)*(m<5.5)*1768.1+(m>5.5)*(m<6.5)*1768.1+(m>6.5)*(m<7.5)*400.0",
+                "inputs": [
+                  "m"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 580,
+                "rotation": 0
+              },
+              "label": "Limite superior do tipo (°C)"
+            },
+            {
+              "id": "t_hot",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(Ts+d)+((Ts+d)<lo)*(lo-(Ts+d))+((Ts+d)>hi)*(hi-(Ts+d))",
+                "inputs": [
+                  "Ts",
+                  "d",
+                  "lo",
+                  "hi"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 640,
+                "rotation": 0
+              },
+              "label": "Junta de medição limitada à faixa do tipo (°C)"
+            },
+            {
+              "id": "t_ref",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "((cable<0.5)*Ta+(cable>0.5)*Th)+(((cable<0.5)*Ta+(cable>0.5)*Th)<lo)*(lo-((cable<0.5)*Ta+(cable>0.5)*Th))+(((cable<0.5)*Ta+(cable>0.5)*Th)>hi)*(hi-((cable<0.5)*Ta+(cable>0.5)*Th))",
+                "inputs": [
+                  "cable",
+                  "Ta",
+                  "Th",
+                  "lo",
+                  "hi"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 700,
+                "rotation": 0
+              },
+              "label": "Junta de referência: bornes do transmissor (extensão) ou cabeçote (cobre) (°C)"
+            },
+            {
+              "id": "e_hot_b",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t<630.615)*(t*((-0.00024650818346)+t*(5.9040421171e-06+t*((-1.3257931636e-09)+t*(1.5668291901e-12+t*((-1.694452924e-15)+t*(6.2990347094e-19)))))))+(1-(t<630.615))*((-3.8938168621)+t*(0.02857174747+t*((-8.4885104785e-05)+t*(1.5785280164e-07+t*((-1.6835344864e-10)+t*(1.1109794013e-13+t*((-4.4515431033e-17)+t*(9.8975640821e-21+t*((-9.3791330289e-25))))))))))",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 40,
+                "rotation": 0
+              },
+              "label": "Tipo B: E(junta de medição) (mV)"
+            },
+            {
+              "id": "e_ref_b",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t<630.615)*(t*((-0.00024650818346)+t*(5.9040421171e-06+t*((-1.3257931636e-09)+t*(1.5668291901e-12+t*((-1.694452924e-15)+t*(6.2990347094e-19)))))))+(1-(t<630.615))*((-3.8938168621)+t*(0.02857174747+t*((-8.4885104785e-05)+t*(1.5785280164e-07+t*((-1.6835344864e-10)+t*(1.1109794013e-13+t*((-4.4515431033e-17)+t*(9.8975640821e-21+t*((-9.3791330289e-25))))))))))",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 100,
+                "rotation": 0
+              },
+              "label": "Tipo B: E(junta de referência) (mV)"
+            },
+            {
+              "id": "e_hot_e",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t<0.0)*(t*(0.058665508708+t*(4.5410977124e-05+t*((-7.7998048686e-07)+t*((-2.5800160843e-08)+t*((-5.9452583057e-10)+t*((-9.3214058667e-12)+t*((-1.0287605534e-13)+t*((-8.0370123621e-16)+t*((-4.3979497391e-18)+t*((-1.6414776355e-20)+t*((-3.9673619516e-23)+t*((-5.5827328721e-26)+t*((-3.4657842013e-29)))))))))))))))+(1-(t<0.0))*(t*(0.05866550871+t*(4.5032275582e-05+t*(2.8908407212e-08+t*((-3.3056896652e-10)+t*(6.502440327e-13+t*((-1.9197495504e-16)+t*((-1.2536600497e-18)+t*(2.1489217569e-21+t*((-1.4388041782e-24)+t*(3.5960899481e-28)))))))))))",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 160,
+                "rotation": 0
+              },
+              "label": "Tipo E: E(junta de medição) (mV)"
+            },
+            {
+              "id": "e_ref_e",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t<0.0)*(t*(0.058665508708+t*(4.5410977124e-05+t*((-7.7998048686e-07)+t*((-2.5800160843e-08)+t*((-5.9452583057e-10)+t*((-9.3214058667e-12)+t*((-1.0287605534e-13)+t*((-8.0370123621e-16)+t*((-4.3979497391e-18)+t*((-1.6414776355e-20)+t*((-3.9673619516e-23)+t*((-5.5827328721e-26)+t*((-3.4657842013e-29)))))))))))))))+(1-(t<0.0))*(t*(0.05866550871+t*(4.5032275582e-05+t*(2.8908407212e-08+t*((-3.3056896652e-10)+t*(6.502440327e-13+t*((-1.9197495504e-16)+t*((-1.2536600497e-18)+t*(2.1489217569e-21+t*((-1.4388041782e-24)+t*(3.5960899481e-28)))))))))))",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 220,
+                "rotation": 0
+              },
+              "label": "Tipo E: E(junta de referência) (mV)"
+            },
+            {
+              "id": "e_hot_j",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t<760.0)*(t*(0.050381187815+t*(3.047583693e-05+t*((-8.568106572e-08)+t*(1.3228195295e-10+t*((-1.7052958337e-13)+t*(2.0948090697e-16+t*((-1.2538395336e-19)+t*(1.5631725697e-23)))))))))+(1-(t<760.0))*(296.45625681+t*((-1.4976127786)+t*(0.0031787103924+t*((-3.1847686701e-06)+t*(1.5720819004e-09+t*((-3.0691369056e-13)))))))",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 280,
+                "rotation": 0
+              },
+              "label": "Tipo J: E(junta de medição) (mV)"
+            },
+            {
+              "id": "e_ref_j",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t<760.0)*(t*(0.050381187815+t*(3.047583693e-05+t*((-8.568106572e-08)+t*(1.3228195295e-10+t*((-1.7052958337e-13)+t*(2.0948090697e-16+t*((-1.2538395336e-19)+t*(1.5631725697e-23)))))))))+(1-(t<760.0))*(296.45625681+t*((-1.4976127786)+t*(0.0031787103924+t*((-3.1847686701e-06)+t*(1.5720819004e-09+t*((-3.0691369056e-13)))))))",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 340,
+                "rotation": 0
+              },
+              "label": "Tipo J: E(junta de referência) (mV)"
+            },
+            {
+              "id": "e_hot_k",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t<0.0)*(t*(0.039450128025+t*(2.3622373598e-05+t*((-3.2858906784e-07)+t*((-4.9904828777e-09)+t*((-6.7509059173e-11)+t*((-5.7410327428e-13)+t*((-3.1088872894e-15)+t*((-1.0451609365e-17)+t*((-1.9889266878e-20)+t*((-1.6322697486e-23))))))))))))+(1-(t<0.0))*((-0.017600413686)+t*(0.038921204975+t*(1.8558770032e-05+t*((-9.9457592874e-08)+t*(3.1840945719e-10+t*((-5.6072844889e-13)+t*(5.6075059059e-16+t*((-3.2020720003e-19)+t*(9.7151147152e-23+t*((-1.2104721275e-26)))))))))))+(1-(t<0))*0.1185976*2.718281828459045^((-0.0001183432)*(t-126.9686)*(t-126.9686))",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 400,
+                "rotation": 0
+              },
+              "label": "Tipo K: E(junta de medição) (mV)"
+            },
+            {
+              "id": "e_ref_k",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t<0.0)*(t*(0.039450128025+t*(2.3622373598e-05+t*((-3.2858906784e-07)+t*((-4.9904828777e-09)+t*((-6.7509059173e-11)+t*((-5.7410327428e-13)+t*((-3.1088872894e-15)+t*((-1.0451609365e-17)+t*((-1.9889266878e-20)+t*((-1.6322697486e-23))))))))))))+(1-(t<0.0))*((-0.017600413686)+t*(0.038921204975+t*(1.8558770032e-05+t*((-9.9457592874e-08)+t*(3.1840945719e-10+t*((-5.6072844889e-13)+t*(5.6075059059e-16+t*((-3.2020720003e-19)+t*(9.7151147152e-23+t*((-1.2104721275e-26)))))))))))+(1-(t<0))*0.1185976*2.718281828459045^((-0.0001183432)*(t-126.9686)*(t-126.9686))",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 460,
+                "rotation": 0
+              },
+              "label": "Tipo K: E(junta de referência) (mV)"
+            },
+            {
+              "id": "e_hot_n",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t<0.0)*(t*(0.026159105962+t*(1.0957484228e-05+t*((-9.3841111554e-08)+t*((-4.6412039759e-11)+t*((-2.6303357716e-12)+t*((-2.2653438003e-14)+t*((-7.6089300791e-17)+t*((-9.3419667835e-20))))))))))+(1-(t<0.0))*(t*(0.025929394601+t*(1.571014188e-05+t*(4.3825627237e-08+t*((-2.5261169794e-10)+t*(6.4311819339e-13+t*((-1.0063471519e-15)+t*(9.9745338992e-19+t*((-6.0863245607e-22)+t*(2.0849229339e-25+t*((-3.0682196151e-29))))))))))))",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 520,
+                "rotation": 0
+              },
+              "label": "Tipo N: E(junta de medição) (mV)"
+            },
+            {
+              "id": "e_ref_n",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t<0.0)*(t*(0.026159105962+t*(1.0957484228e-05+t*((-9.3841111554e-08)+t*((-4.6412039759e-11)+t*((-2.6303357716e-12)+t*((-2.2653438003e-14)+t*((-7.6089300791e-17)+t*((-9.3419667835e-20))))))))))+(1-(t<0.0))*(t*(0.025929394601+t*(1.571014188e-05+t*(4.3825627237e-08+t*((-2.5261169794e-10)+t*(6.4311819339e-13+t*((-1.0063471519e-15)+t*(9.9745338992e-19+t*((-6.0863245607e-22)+t*(2.0849229339e-25+t*((-3.0682196151e-29))))))))))))",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 580,
+                "rotation": 0
+              },
+              "label": "Tipo N: E(junta de referência) (mV)"
+            },
+            {
+              "id": "e_hot_r",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t<1064.18)*(t*(0.00528961729765+t*(1.39166589782e-05+t*((-2.38855693017e-08)+t*(3.56916001063e-11+t*((-4.62347666298e-14)+t*(5.00777441034e-17+t*((-3.73105886191e-20)+t*(1.57716482367e-23+t*((-2.81038625251e-27)))))))))))+(1-(t<1064.18))*(t<1664.5)*(2.95157925316+t*((-0.00252061251332)+t*(1.59564501865e-05+t*((-7.64085947576e-09)+t*(2.05305291024e-12+t*((-2.93359668173e-16)))))))+(1-(t<1664.5))*(152.232118209+t*((-0.268819888545)+t*(0.000171280280471+t*((-3.45895706453e-08)+t*((-9.34633971046e-15))))))",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 640,
+                "rotation": 0
+              },
+              "label": "Tipo R: E(junta de medição) (mV)"
+            },
+            {
+              "id": "e_ref_r",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t<1064.18)*(t*(0.00528961729765+t*(1.39166589782e-05+t*((-2.38855693017e-08)+t*(3.56916001063e-11+t*((-4.62347666298e-14)+t*(5.00777441034e-17+t*((-3.73105886191e-20)+t*(1.57716482367e-23+t*((-2.81038625251e-27)))))))))))+(1-(t<1064.18))*(t<1664.5)*(2.95157925316+t*((-0.00252061251332)+t*(1.59564501865e-05+t*((-7.64085947576e-09)+t*(2.05305291024e-12+t*((-2.93359668173e-16)))))))+(1-(t<1664.5))*(152.232118209+t*((-0.268819888545)+t*(0.000171280280471+t*((-3.45895706453e-08)+t*((-9.34633971046e-15))))))",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 700,
+                "rotation": 0
+              },
+              "label": "Tipo R: E(junta de referência) (mV)"
+            },
+            {
+              "id": "e_hot_s",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t<1064.18)*(t*(0.00540313308631+t*(1.2593428974e-05+t*((-2.32477968689e-08)+t*(3.22028823036e-11+t*((-3.31465196389e-14)+t*(2.55744251786e-17+t*((-1.25068871393e-20)+t*(2.71443176145e-24)))))))))+(1-(t<1064.18))*(t<1664.5)*(1.32900444085+t*(0.00334509311344+t*(6.54805192818e-06+t*((-1.64856259209e-09)+t*(1.29989605174e-14)))))+(1-(t<1664.5))*(146.628232636+t*((-0.258430516752)+t*(0.000163693574641+t*((-3.30439046987e-08)+t*((-9.43223690612e-15))))))",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 40,
+                "rotation": 0
+              },
+              "label": "Tipo S: E(junta de medição) (mV)"
+            },
+            {
+              "id": "e_ref_s",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t<1064.18)*(t*(0.00540313308631+t*(1.2593428974e-05+t*((-2.32477968689e-08)+t*(3.22028823036e-11+t*((-3.31465196389e-14)+t*(2.55744251786e-17+t*((-1.25068871393e-20)+t*(2.71443176145e-24)))))))))+(1-(t<1064.18))*(t<1664.5)*(1.32900444085+t*(0.00334509311344+t*(6.54805192818e-06+t*((-1.64856259209e-09)+t*(1.29989605174e-14)))))+(1-(t<1664.5))*(146.628232636+t*((-0.258430516752)+t*(0.000163693574641+t*((-3.30439046987e-08)+t*((-9.43223690612e-15))))))",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 100,
+                "rotation": 0
+              },
+              "label": "Tipo S: E(junta de referência) (mV)"
+            },
+            {
+              "id": "e_hot_t",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t<0.0)*(t*(0.038748106364+t*(4.4194434347e-05+t*(1.1844323105e-07+t*(2.0032973554e-08+t*(9.0138019559e-10+t*(2.2651156593e-11+t*(3.6071154205e-13+t*(3.8493939883e-15+t*(2.8213521925e-17+t*(1.4251594779e-19+t*(4.8768662286e-22+t*(1.079553927e-24+t*(1.3945027062e-27+t*(7.9795153927e-31)))))))))))))))+(1-(t<0.0))*(t*(0.038748106364+t*(3.329222788e-05+t*(2.0618243404e-07+t*((-2.1882256846e-09)+t*(1.0996880928e-11+t*((-3.0815758772e-14)+t*(4.547913529e-17+t*((-2.7512901673e-20))))))))))",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 160,
+                "rotation": 0
+              },
+              "label": "Tipo T: E(junta de medição) (mV)"
+            },
+            {
+              "id": "e_ref_t",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t<0.0)*(t*(0.038748106364+t*(4.4194434347e-05+t*(1.1844323105e-07+t*(2.0032973554e-08+t*(9.0138019559e-10+t*(2.2651156593e-11+t*(3.6071154205e-13+t*(3.8493939883e-15+t*(2.8213521925e-17+t*(1.4251594779e-19+t*(4.8768662286e-22+t*(1.079553927e-24+t*(1.3945027062e-27+t*(7.9795153927e-31)))))))))))))))+(1-(t<0.0))*(t*(0.038748106364+t*(3.329222788e-05+t*(2.0618243404e-07+t*((-2.1882256846e-09)+t*(1.0996880928e-11+t*((-3.0815758772e-14)+t*(4.547913529e-17+t*((-2.7512901673e-20))))))))))",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 220,
+                "rotation": 0
+              },
+              "label": "Tipo T: E(junta de referência) (mV)"
+            },
+            {
+              "id": "e_hot",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(m>-0.5)*(m<0.5)*b+(m>0.5)*(m<1.5)*e+(m>1.5)*(m<2.5)*j+(m>2.5)*(m<3.5)*k+(m>3.5)*(m<4.5)*n+(m>4.5)*(m<5.5)*r+(m>5.5)*(m<6.5)*s+(m>6.5)*(m<7.5)*t",
+                "inputs": [
+                  "m",
+                  "b",
+                  "e",
+                  "j",
+                  "k",
+                  "n",
+                  "r",
+                  "s",
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 280,
+                "rotation": 0
+              },
+              "label": "E(junta de medição) do tipo (mV)"
+            },
+            {
+              "id": "e_ref",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(m>-0.5)*(m<0.5)*b+(m>0.5)*(m<1.5)*e+(m>1.5)*(m<2.5)*j+(m>2.5)*(m<3.5)*k+(m>3.5)*(m<4.5)*n+(m>4.5)*(m<5.5)*r+(m>5.5)*(m<6.5)*s+(m>6.5)*(m<7.5)*t",
+                "inputs": [
+                  "m",
+                  "b",
+                  "e",
+                  "j",
+                  "k",
+                  "n",
+                  "r",
+                  "s",
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 340,
+                "rotation": 0
+              },
+              "label": "E(junta de referência) do tipo (mV)"
+            },
+            {
+              "id": "e_tc",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(1-2*(rev>0.5))*(h-r)",
+                "inputs": [
+                  "h",
+                  "r",
+                  "rev"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 400,
+                "rotation": 0
+              },
+              "label": "FEM nos bornes do transmissor (mV)"
+            },
+            {
+              "id": "emf_v",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "e/1000",
+                "inputs": [
+                  "e"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 460,
+                "rotation": 0
+              },
+              "label": "FEM (V)"
+            },
+            {
+              "id": "r_plus",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(b<0.5)*r+(b>0.5)*1000000000",
+                "inputs": [
+                  "r",
+                  "b"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 520,
+                "rotation": 0
+              },
+              "label": "Fio + (rompido = 1 GΩ)"
+            },
+            {
+              "id": "emf",
+              "typeId": "bridges.controlled_voltage_source",
+              "properties": {},
+              "visual": {
+                "x": 420,
+                "y": 700,
+                "rotation": 0
+              },
+              "label": "FEM do termopar (Seebeck)"
+            },
+            {
+              "id": "lead_p",
+              "typeId": "bridges.controlled_resistor",
+              "properties": {
+                "resistance": 2.5
+              },
+              "visual": {
+                "x": 600,
+                "y": 690,
+                "rotation": 0
+              },
+              "label": "Fio + (termopar + cabo)"
+            },
+            {
+              "id": "lead_n",
+              "typeId": "bridges.controlled_resistor",
+              "properties": {
+                "resistance": 2.5
+              },
+              "visual": {
+                "x": 600,
+                "y": 740,
+                "rotation": 0
+              },
+              "label": "Fio − (termopar + cabo)"
+            },
+            {
+              "id": "t_tc_p",
+              "typeId": "connectors.tunnel",
+              "properties": {
+                "name": "tc_p",
+                "pinId": "tc_p"
+              },
+              "visual": {
+                "x": 780,
+                "y": 690,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "t_tc_n",
+              "typeId": "connectors.tunnel",
+              "properties": {
+                "name": "tc_n",
+                "pinId": "tc_n"
+              },
+              "visual": {
+                "x": 780,
+                "y": 740,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "t_temperature",
+              "typeId": "connectors.signal_tunnel",
+              "properties": {
+                "name": "temperature",
+                "pinId": "temperature",
+                "direction": "Output",
+                "valueType": "Real"
+              },
+              "visual": {
+                "x": 1340,
+                "y": 80,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_heating",
+              "typeId": "graphics.status_lamp",
+              "properties": {
+                "width": 34,
+                "height": 42,
+                "stroke": "currentColor",
+                "fill": "#94a3b8",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "onColor": "#f97316",
+                "offColor": "#cbd5e1",
+                "label": "Aquecendo",
+                "value": 0,
+                "bindSource": "u",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": 0,
+                "bindMax": 100,
+                "bindUnit": "",
+                "bindDecimals": 0,
+                "bindThreshold": 0.5,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 40,
+                "y": 210,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_gauge",
+              "typeId": "graphics.hmi.gauge",
+              "properties": {
+                "width": 120,
+                "height": 136,
+                "tag": "TI-201",
+                "stroke": "#4a4a4a",
+                "fill": "#c2c2c2",
+                "opacity": 1,
+                "value": 0,
+                "bindSource": "temp",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": 0,
+                "bindMax": 1200,
+                "bindUnit": "°C",
+                "bindDecimals": 0,
+                "bindThreshold": 50,
+                "bindInvert": false,
+                "limitLL": "",
+                "limitL": "",
+                "limitH": "1000",
+                "limitHH": "1150"
+              },
+              "visual": {
+                "x": 410,
+                "y": 48,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_bar",
+              "typeId": "graphics.level_bar",
+              "properties": {
+                "width": 36,
+                "height": 130,
+                "stroke": "currentColor",
+                "fill": "#ffffff",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "barColor": "#ef4444",
+                "highLimit": 90,
+                "lowLimit": 10,
+                "showLimits": false,
+                "showValue": true,
+                "value": 0,
+                "bindSource": "sensor_temp",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": 0,
+                "bindMax": 1200,
+                "bindUnit": "°C",
+                "bindDecimals": 0,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 548,
+                "y": 52,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_t",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 168,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "Temperatura do forno",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "temp",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "°C",
+                "bindDecimals": 1,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 410,
+                "y": 200,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_ts",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 168,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "Temperatura no termopar",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "sensor_temp",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "°C",
+                "bindDecimals": 1,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 410,
+                "y": 248,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_e",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 168,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "FEM nos bornes",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "e_tc",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "mV",
+                "bindDecimals": 3,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 410,
+                "y": 296,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_tref",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 168,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "Junta de referência",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "t_ref",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "°C",
+                "bindDecimals": 1,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 410,
+                "y": 344,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_q",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 168,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "Potência das resistências",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "q_heat",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "W",
+                "bindDecimals": 0,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 410,
+                "y": 392,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_loss",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 168,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "Perdas para o ambiente",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "q_loss",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "W",
+                "bindDecimals": 0,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 410,
+                "y": 440,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_tau",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 168,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "Constante de tempo térmica",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "tau_th",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "min",
+                "bindDecimals": 1,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 410,
+                "y": 488,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_p_p",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 150,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "Potência máxima",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "c_pmax",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "kW",
+                "bindDecimals": 2,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 600,
+                "y": 200,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_p_c",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 150,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "Capacidade térmica",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "c_cap",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "kJ/K",
+                "bindDecimals": 2,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 760,
+                "y": 200,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_p_ua",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 150,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "Perdas UA",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "c_ua",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "W/K",
+                "bindDecimals": 2,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 600,
+                "y": 248,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_p_ta",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 150,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "Temperatura ambiente",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "c_tamb",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "°C",
+                "bindDecimals": 1,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 760,
+                "y": 248,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_p_tau",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 150,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "τ do termopar",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "c_tau",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "s",
+                "bindDecimals": 1,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 600,
+                "y": 296,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_p_type",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 150,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "Tipo (3 = K)",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "c_type",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "",
+                "bindDecimals": 0,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 760,
+                "y": 296,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_p_lead",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 150,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "R de cada fio",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "c_lead",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "Ω",
+                "bindDecimals": 2,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 600,
+                "y": 344,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_p_dev",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 150,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "Desvio do termopar",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "c_dev",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "°C",
+                "bindDecimals": 2,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 760,
+                "y": 344,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_p_cable",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 150,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "Cabo (0 ext., 1 cobre)",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "c_cable",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "",
+                "bindDecimals": 0,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 600,
+                "y": 392,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_p_head",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 150,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "T no cabeçote",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "c_thead",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "°C",
+                "bindDecimals": 1,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 760,
+                "y": 392,
+                "rotation": 0
+              }
+            }
+          ],
+          "topology": {
+            "revision": 0,
+            "nodes": [],
+            "conductors": [
+              {
+                "id": "w-1",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_heater",
+                  "pinId": "value"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "u",
+                  "pinId": "in"
+                },
+                "points": []
+              },
+              {
+                "id": "w-2",
+                "from": {
+                  "kind": "port",
+                  "componentId": "u",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "q_heat",
+                  "pinId": "u"
+                },
+                "points": []
+              },
+              {
+                "id": "w-3",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_pmax",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "q_heat",
+                  "pinId": "P"
+                },
+                "points": []
+              },
+              {
+                "id": "w-4",
+                "from": {
+                  "kind": "port",
+                  "componentId": "temp",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "q_loss",
+                  "pinId": "T"
+                },
+                "points": []
+              },
+              {
+                "id": "w-5",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_ua",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "q_loss",
+                  "pinId": "UA"
+                },
+                "points": []
+              },
+              {
+                "id": "w-6",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_tamb",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "q_loss",
+                  "pinId": "Ta"
+                },
+                "points": []
+              },
+              {
+                "id": "w-7",
+                "from": {
+                  "kind": "port",
+                  "componentId": "q_heat",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "heat_in",
+                  "pinId": "q"
+                },
+                "points": []
+              },
+              {
+                "id": "w-8",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_cap",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "heat_in",
+                  "pinId": "C"
+                },
+                "points": []
+              },
+              {
+                "id": "w-9",
+                "from": {
+                  "kind": "port",
+                  "componentId": "q_loss",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "heat_out",
+                  "pinId": "l"
+                },
+                "points": []
+              },
+              {
+                "id": "w-10",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_cap",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "heat_out",
+                  "pinId": "C"
+                },
+                "points": []
+              },
+              {
+                "id": "w-11",
+                "from": {
+                  "kind": "port",
+                  "componentId": "heat_in",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "temp",
+                  "pinId": "in"
+                },
+                "points": []
+              },
+              {
+                "id": "w-12",
+                "from": {
+                  "kind": "port",
+                  "componentId": "heat_out",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "temp",
+                  "pinId": "outflow"
+                },
+                "points": []
+              },
+              {
+                "id": "w-13",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_cap",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "tau_th",
+                  "pinId": "C"
+                },
+                "points": []
+              },
+              {
+                "id": "w-14",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_ua",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "tau_th",
+                  "pinId": "UA"
+                },
+                "points": []
+              },
+              {
+                "id": "w-15",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_pmax",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_steady",
+                  "pinId": "P"
+                },
+                "points": []
+              },
+              {
+                "id": "w-16",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_ua",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_steady",
+                  "pinId": "UA"
+                },
+                "points": []
+              },
+              {
+                "id": "w-17",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_tamb",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_steady",
+                  "pinId": "Ta"
+                },
+                "points": []
+              },
+              {
+                "id": "w-18",
+                "from": {
+                  "kind": "port",
+                  "componentId": "temp",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "well_in",
+                  "pinId": "T"
+                },
+                "points": []
+              },
+              {
+                "id": "w-19",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_tau",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "well_in",
+                  "pinId": "tau"
+                },
+                "points": []
+              },
+              {
+                "id": "w-20",
+                "from": {
+                  "kind": "port",
+                  "componentId": "sensor_temp",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "well_out",
+                  "pinId": "Ts"
+                },
+                "points": []
+              },
+              {
+                "id": "w-21",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_tau",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "well_out",
+                  "pinId": "tau"
+                },
+                "points": []
+              },
+              {
+                "id": "w-22",
+                "from": {
+                  "kind": "port",
+                  "componentId": "well_in",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "sensor_temp",
+                  "pinId": "in"
+                },
+                "points": []
+              },
+              {
+                "id": "w-23",
+                "from": {
+                  "kind": "port",
+                  "componentId": "well_out",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "sensor_temp",
+                  "pinId": "outflow"
+                },
+                "points": []
+              },
+              {
+                "id": "w-24",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_type",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_lo",
+                  "pinId": "m"
+                },
+                "points": []
+              },
+              {
+                "id": "w-25",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_type",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_hi",
+                  "pinId": "m"
+                },
+                "points": []
+              },
+              {
+                "id": "w-26",
+                "from": {
+                  "kind": "port",
+                  "componentId": "sensor_temp",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_hot",
+                  "pinId": "Ts"
+                },
+                "points": []
+              },
+              {
+                "id": "w-27",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_dev",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_hot",
+                  "pinId": "d"
+                },
+                "points": []
+              },
+              {
+                "id": "w-28",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_lo",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_hot",
+                  "pinId": "lo"
+                },
+                "points": []
+              },
+              {
+                "id": "w-29",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_hi",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_hot",
+                  "pinId": "hi"
+                },
+                "points": []
+              },
+              {
+                "id": "w-30",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_cable",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_ref",
+                  "pinId": "cable"
+                },
+                "points": []
+              },
+              {
+                "id": "w-31",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_tamb",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_ref",
+                  "pinId": "Ta"
+                },
+                "points": []
+              },
+              {
+                "id": "w-32",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_thead",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_ref",
+                  "pinId": "Th"
+                },
+                "points": []
+              },
+              {
+                "id": "w-33",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_lo",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_ref",
+                  "pinId": "lo"
+                },
+                "points": []
+              },
+              {
+                "id": "w-34",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_hi",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_ref",
+                  "pinId": "hi"
+                },
+                "points": []
+              },
+              {
+                "id": "w-35",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_hot",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_hot_b",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-36",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_ref",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_ref_b",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-37",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_hot",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_hot_e",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-38",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_ref",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_ref_e",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-39",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_hot",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_hot_j",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-40",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_ref",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_ref_j",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-41",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_hot",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_hot_k",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-42",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_ref",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_ref_k",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-43",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_hot",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_hot_n",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-44",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_ref",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_ref_n",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-45",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_hot",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_hot_r",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-46",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_ref",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_ref_r",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-47",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_hot",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_hot_s",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-48",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_ref",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_ref_s",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-49",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_hot",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_hot_t",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-50",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_ref",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_ref_t",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-51",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_type",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_hot",
+                  "pinId": "m"
+                },
+                "points": []
+              },
+              {
+                "id": "w-52",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_hot_b",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_hot",
+                  "pinId": "b"
+                },
+                "points": []
+              },
+              {
+                "id": "w-53",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_hot_e",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_hot",
+                  "pinId": "e"
+                },
+                "points": []
+              },
+              {
+                "id": "w-54",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_hot_j",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_hot",
+                  "pinId": "j"
+                },
+                "points": []
+              },
+              {
+                "id": "w-55",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_hot_k",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_hot",
+                  "pinId": "k"
+                },
+                "points": []
+              },
+              {
+                "id": "w-56",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_hot_n",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_hot",
+                  "pinId": "n"
+                },
+                "points": []
+              },
+              {
+                "id": "w-57",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_hot_r",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_hot",
+                  "pinId": "r"
+                },
+                "points": []
+              },
+              {
+                "id": "w-58",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_hot_s",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_hot",
+                  "pinId": "s"
+                },
+                "points": []
+              },
+              {
+                "id": "w-59",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_hot_t",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_hot",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-60",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_type",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_ref",
+                  "pinId": "m"
+                },
+                "points": []
+              },
+              {
+                "id": "w-61",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_ref_b",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_ref",
+                  "pinId": "b"
+                },
+                "points": []
+              },
+              {
+                "id": "w-62",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_ref_e",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_ref",
+                  "pinId": "e"
+                },
+                "points": []
+              },
+              {
+                "id": "w-63",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_ref_j",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_ref",
+                  "pinId": "j"
+                },
+                "points": []
+              },
+              {
+                "id": "w-64",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_ref_k",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_ref",
+                  "pinId": "k"
+                },
+                "points": []
+              },
+              {
+                "id": "w-65",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_ref_n",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_ref",
+                  "pinId": "n"
+                },
+                "points": []
+              },
+              {
+                "id": "w-66",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_ref_r",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_ref",
+                  "pinId": "r"
+                },
+                "points": []
+              },
+              {
+                "id": "w-67",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_ref_s",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_ref",
+                  "pinId": "s"
+                },
+                "points": []
+              },
+              {
+                "id": "w-68",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_ref_t",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_ref",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-69",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_hot",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_tc",
+                  "pinId": "h"
+                },
+                "points": []
+              },
+              {
+                "id": "w-70",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_ref",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_tc",
+                  "pinId": "r"
+                },
+                "points": []
+              },
+              {
+                "id": "w-71",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_reverse",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "e_tc",
+                  "pinId": "rev"
+                },
+                "points": []
+              },
+              {
+                "id": "w-72",
+                "from": {
+                  "kind": "port",
+                  "componentId": "e_tc",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "emf_v",
+                  "pinId": "e"
+                },
+                "points": []
+              },
+              {
+                "id": "w-73",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_lead",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "r_plus",
+                  "pinId": "r"
+                },
+                "points": []
+              },
+              {
+                "id": "w-74",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_broken",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "r_plus",
+                  "pinId": "b"
+                },
+                "points": []
+              },
+              {
+                "id": "w-75",
+                "from": {
+                  "kind": "port",
+                  "componentId": "emf_v",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "emf",
+                  "pinId": "command"
+                },
+                "points": []
+              },
+              {
+                "id": "w-76",
+                "from": {
+                  "kind": "port",
+                  "componentId": "r_plus",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "lead_p",
+                  "pinId": "command"
+                },
+                "points": []
+              },
+              {
+                "id": "w-77",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_lead",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "lead_n",
+                  "pinId": "command"
+                },
+                "points": []
+              },
+              {
+                "id": "w-78",
+                "from": {
+                  "kind": "port",
+                  "componentId": "emf",
+                  "pinId": "p"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "lead_p",
+                  "pinId": "p"
+                },
+                "points": []
+              },
+              {
+                "id": "w-79",
+                "from": {
+                  "kind": "port",
+                  "componentId": "lead_p",
+                  "pinId": "n"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_tc_p",
+                  "pinId": "pin"
+                },
+                "points": []
+              },
+              {
+                "id": "w-80",
+                "from": {
+                  "kind": "port",
+                  "componentId": "emf",
+                  "pinId": "n"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "lead_n",
+                  "pinId": "p"
+                },
+                "points": []
+              },
+              {
+                "id": "w-81",
+                "from": {
+                  "kind": "port",
+                  "componentId": "lead_n",
+                  "pinId": "n"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_tc_n",
+                  "pinId": "pin"
+                },
+                "points": []
+              },
+              {
+                "id": "w-82",
+                "from": {
+                  "kind": "port",
+                  "componentId": "temp",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_temperature",
+                  "pinId": "value"
+                },
+                "points": []
+              }
+            ]
+          },
+          "interface": [
+            {
+              "pinId": "heater",
+              "label": "Aquecimento (%)",
+              "internalTunnel": "heater",
+              "domain": "signal",
+              "direction": "in",
+              "valueType": "Real",
+              "width": 1
+            },
+            {
+              "pinId": "tc_p",
+              "label": "Termopar + (verde)",
+              "internalTunnel": "tc_p",
+              "domain": "electrical"
+            },
+            {
+              "pinId": "tc_n",
+              "label": "Termopar − (branco)",
+              "internalTunnel": "tc_n",
+              "domain": "electrical"
+            },
+            {
+              "pinId": "temperature",
+              "label": "Temperatura do forno (°C)",
+              "internalTunnel": "temperature",
+              "domain": "signal",
+              "direction": "out",
+              "valueType": "Real",
+              "width": 1
+            }
+          ],
+          "symbolMode": "custom",
+          "symbol": {
+            "width": 920,
+            "height": 640,
+            "border": true,
+            "shapes": [
+              {
+                "kind": "text",
+                "x": 150,
+                "y": 22,
+                "value": "Forno elétrico (mufla) — temperatura por termopar tipo K (IEC 60584 / NIST ITS-90)",
+                "fontSize": 13,
+                "textAnchor": "start",
+                "color": "#0f172a"
+              },
+              {
+                "kind": "line",
+                "x1": 112,
+                "y1": 40,
+                "x2": 120,
+                "y2": 40,
+                "stroke": "#0f172a",
+                "strokeWidth": 1.2,
+                "strokeDasharray": "6 4"
+              },
+              {
+                "kind": "rect",
+                "x": 40,
+                "y": 120,
+                "w": 76,
+                "h": 44,
+                "fill": "#fff7ed",
+                "stroke": "#c2410c",
+                "strokeWidth": 1.5
+              },
+              {
+                "kind": "text",
+                "x": 78,
+                "y": 138,
+                "value": "Controle de",
+                "fontSize": 9,
+                "textAnchor": "middle",
+                "color": "#7c2d12"
+              },
+              {
+                "kind": "text",
+                "x": 78,
+                "y": 152,
+                "value": "potência",
+                "fontSize": 9,
+                "textAnchor": "middle",
+                "color": "#7c2d12"
+              },
+              {
+                "kind": "path",
+                "d": "M120 40 V120",
+                "stroke": "#0f172a",
+                "strokeWidth": 1.2,
+                "strokeDasharray": "6 4",
+                "fill": "none"
+              },
+              {
+                "kind": "path",
+                "d": "M78 164 V432 H176 V380",
+                "stroke": "#c2410c",
+                "strokeWidth": 3,
+                "fill": "none"
+              },
+              {
+                "kind": "path",
+                "d": "M96 164 V424 H354 V380",
+                "stroke": "#c2410c",
+                "strokeWidth": 3,
+                "fill": "none"
+              },
+              {
+                "kind": "rect",
+                "x": 150,
+                "y": 110,
+                "w": 230,
+                "h": 300,
+                "fill": "#475569",
+                "stroke": "#1e293b",
+                "strokeWidth": 2
+              },
+              {
+                "kind": "rect",
+                "x": 164,
+                "y": 124,
+                "w": 202,
+                "h": 272,
+                "fill": "#e7d3b1",
+                "stroke": "#a8875a",
+                "strokeWidth": 1.5
+              },
+              {
+                "kind": "rect",
+                "x": 190,
+                "y": 156,
+                "w": 150,
+                "h": 214,
+                "fill": "#1f2937",
+                "stroke": "#111827",
+                "strokeWidth": 1.5
+              },
+              {
+                "kind": "rect",
+                "x": 196,
+                "y": 310,
+                "w": 138,
+                "h": 54,
+                "fill": "#7c2d12",
+                "stroke": "none",
+                "opacity": 0.55
+              },
+              {
+                "kind": "text",
+                "x": 265,
+                "y": 176,
+                "value": "câmara",
+                "fontSize": 9,
+                "textAnchor": "middle",
+                "color": "#e2e8f0"
+              },
+              {
+                "kind": "text",
+                "x": 265,
+                "y": 142,
+                "value": "refratário",
+                "fontSize": 9,
+                "textAnchor": "middle",
+                "color": "#7c5a2b"
+              },
+              {
+                "kind": "text",
+                "x": 265,
+                "y": 392,
+                "value": "porta",
+                "fontSize": 9,
+                "textAnchor": "middle",
+                "color": "#7c5a2b"
+              },
+              {
+                "kind": "rect",
+                "x": 235,
+                "y": 398,
+                "w": 60,
+                "h": 6,
+                "fill": "#94a3b8",
+                "stroke": "#1e293b",
+                "strokeWidth": 1
+              },
+              {
+                "kind": "path",
+                "d": "M176 168 L186 184 L176 200 L186 216 L176 232 L186 248 L176 264 L186 280 L176 296 L186 312 L176 328 L186 344 L176 360",
+                "stroke": "#dc2626",
+                "strokeWidth": 2,
+                "fill": "none"
+              },
+              {
+                "kind": "path",
+                "d": "M344 168 L354 184 L344 200 L354 216 L344 232 L354 248 L344 264 L354 280 L344 296 L354 312 L344 328 L354 344 L344 360",
+                "stroke": "#dc2626",
+                "strokeWidth": 2,
+                "fill": "none"
+              },
+              {
+                "kind": "text",
+                "x": 384,
+                "y": 450,
+                "value": "resistências de aquecimento",
+                "fontSize": 9,
+                "textAnchor": "end",
+                "color": "#7c2d12"
+              },
+              {
+                "kind": "rect",
+                "x": 212,
+                "y": 336,
+                "w": 56,
+                "h": 30,
+                "fill": "#64748b",
+                "stroke": "#0f172a",
+                "strokeWidth": 1.2
+              },
+              {
+                "kind": "text",
+                "x": 240,
+                "y": 355,
+                "value": "carga",
+                "fontSize": 9,
+                "textAnchor": "middle",
+                "color": "#ffffff"
+              },
+              {
+                "kind": "rect",
+                "x": 301,
+                "y": 92,
+                "w": 10,
+                "h": 156,
+                "fill": "#f8fafc",
+                "stroke": "#475569",
+                "strokeWidth": 1.2
+              },
+              {
+                "kind": "ellipse",
+                "cx": 306,
+                "cy": 244,
+                "rx": 4,
+                "ry": 4,
+                "fill": "#facc15",
+                "stroke": "#92400e",
+                "strokeWidth": 1
+              },
+              {
+                "kind": "rect",
+                "x": 292,
+                "y": 70,
+                "w": 28,
+                "h": 22,
+                "fill": "#e2e8f0",
+                "stroke": "#334155",
+                "strokeWidth": 1.5
+              },
+              {
+                "kind": "text",
+                "x": 306,
+                "y": 85,
+                "value": "TE",
+                "fontSize": 9,
+                "textAnchor": "middle",
+                "color": "#0f172a"
+              },
+              {
+                "kind": "text",
+                "x": 324,
+                "y": 66,
+                "value": "TE-201 (cabeçote)",
+                "fontSize": 9,
+                "textAnchor": "start",
+                "color": "#334155"
+              },
+              {
+                "kind": "text",
+                "x": 298,
+                "y": 260,
+                "value": "junta de medição",
+                "fontSize": 8,
+                "textAnchor": "end",
+                "color": "#fde68a"
+              },
+              {
+                "kind": "path",
+                "d": "M320 78 H396 V576 H920",
+                "stroke": "#14532d",
+                "strokeWidth": 5,
+                "fill": "none"
+              },
+              {
+                "kind": "path",
+                "d": "M320 78 H396 V576 H920",
+                "stroke": "#16a34a",
+                "strokeWidth": 3,
+                "fill": "none"
+              },
+              {
+                "kind": "path",
+                "d": "M320 84 H400 V592 H920",
+                "stroke": "#14532d",
+                "strokeWidth": 5,
+                "fill": "none"
+              },
+              {
+                "kind": "path",
+                "d": "M320 84 H400 V592 H920",
+                "stroke": "#ffffff",
+                "strokeWidth": 3,
+                "fill": "none"
+              },
+              {
+                "kind": "text",
+                "x": 600,
+                "y": 190,
+                "value": "Parâmetros (Propriedades exportadas)",
+                "fontSize": 9,
+                "textAnchor": "start",
+                "color": "#713f12"
+              },
+              {
+                "kind": "text",
+                "x": 410,
+                "y": 562,
+                "value": "cabo de extensão tipo K (+ verde, − branco) até os bornes 2 e 3 do TT301",
+                "fontSize": 9,
+                "textAnchor": "start",
+                "color": "#0f172a"
+              }
+            ],
+            "pins": [
+              {
+                "id": "heater",
+                "kind": "ANALOG_IN",
+                "x": 0,
+                "y": 40,
+                "angle": 180,
+                "length": 8,
+                "label": "Aquecimento (%)"
+              },
+              {
+                "id": "tc_p",
+                "kind": "ANALOG_OUT",
+                "x": 920,
+                "y": 576,
+                "angle": 0,
+                "length": 8,
+                "label": "+"
+              },
+              {
+                "id": "tc_n",
+                "kind": "ANALOG_OUT",
+                "x": 920,
+                "y": 592,
+                "angle": 0,
+                "length": 8,
+                "label": "−"
+              },
+              {
+                "id": "temperature",
+                "kind": "ANALOG_OUT",
+                "x": 920,
+                "y": 120,
+                "angle": 0,
+                "length": 8,
+                "label": "Temperatura (°C)"
+              }
+            ]
+          },
+          "exposedComponents": [
+            {
+              "componentId": "g_heating",
+              "x": 40,
+              "y": 210,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 0
+            },
+            {
+              "componentId": "g_gauge",
+              "x": 410,
+              "y": 48,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 1
+            },
+            {
+              "componentId": "g_bar",
+              "x": 548,
+              "y": 52,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 2
+            },
+            {
+              "componentId": "g_t",
+              "x": 410,
+              "y": 200,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 3
+            },
+            {
+              "componentId": "g_ts",
+              "x": 410,
+              "y": 248,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 4
+            },
+            {
+              "componentId": "g_e",
+              "x": 410,
+              "y": 296,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 5
+            },
+            {
+              "componentId": "g_tref",
+              "x": 410,
+              "y": 344,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 6
+            },
+            {
+              "componentId": "g_q",
+              "x": 410,
+              "y": 392,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 7
+            },
+            {
+              "componentId": "g_loss",
+              "x": 410,
+              "y": 440,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 8
+            },
+            {
+              "componentId": "g_tau",
+              "x": 410,
+              "y": 488,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 9
+            },
+            {
+              "componentId": "g_p_p",
+              "x": 600,
+              "y": 200,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 10
+            },
+            {
+              "componentId": "g_p_c",
+              "x": 760,
+              "y": 200,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 11
+            },
+            {
+              "componentId": "g_p_ua",
+              "x": 600,
+              "y": 248,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 12
+            },
+            {
+              "componentId": "g_p_ta",
+              "x": 760,
+              "y": 248,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 13
+            },
+            {
+              "componentId": "g_p_tau",
+              "x": 600,
+              "y": 296,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 14
+            },
+            {
+              "componentId": "g_p_type",
+              "x": 760,
+              "y": 296,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 15
+            },
+            {
+              "componentId": "g_p_lead",
+              "x": 600,
+              "y": 344,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 16
+            },
+            {
+              "componentId": "g_p_dev",
+              "x": 760,
+              "y": 344,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 17
+            },
+            {
+              "componentId": "g_p_cable",
+              "x": 600,
+              "y": 392,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 18
+            },
+            {
+              "componentId": "g_p_head",
+              "x": 760,
+              "y": 392,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 19
+            }
+          ],
+          "exportedPropertyComponentIds": [
+            "c_pmax",
+            "c_cap",
+            "c_ua",
+            "c_tamb",
+            "c_tau",
+            "c_type",
+            "c_lead",
+            "c_dev",
+            "c_cable",
+            "c_thead",
+            "c_reverse",
+            "c_broken"
+          ]
+        }
+      }
+    }
+  ],
+  "topology": {
+    "revision": 460,
+    "nodes": [],
+    "conductors": [
+      {
+        "id": "wire-1791289319738-917151",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791289162830-859519",
+          "pinId": "pin-1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791289285255-920511",
+          "pinId": "pin-1"
+        },
+        "vertices": [
+          {
+            "x": 924.8550428314728,
+            "y": 592
+          },
+          {
+            "x": 904,
+            "y": 592
+          },
+          {
+            "x": 904,
+            "y": 579.8879543130956
+          }
+        ]
+      },
+      {
+        "id": "wire-1791289326470-913544",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791626134669-tt301",
+          "pinId": "loop_plus"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791289285255-920511",
+          "pinId": "pin-2"
+        },
+        "vertices": [
+          {
+            "x": 887.007350089845,
+            "y": 625.1040895136738
+          }
+        ]
+      },
+      {
+        "id": "wire-1791298588001-91206",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791298567681-219290",
+          "pinId": "loop_plus"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791289162830-859519",
+          "pinId": "pin-2"
+        },
+        "vertices": [
+          {
+            "x": 898.1868755684786,
+            "y": 688
+          },
+          {
+            "x": 924.8550428314728,
+            "y": 688
+          }
+        ]
+      },
+      {
+        "id": "wire-1791298748828-934933",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791298650899-835065",
+          "pinId": "pin-1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791626134669-tt301",
+          "pinId": "loop_minus"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791374348388-270274",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791374334324-929938",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791298650899-835065",
+          "pinId": "pin-1"
+        },
+        "vertices": [
+          {
+            "x": 792,
+            "y": 685.9491629183711
+          },
+          {
+            "x": 792,
+            "y": 645.3796861568541
+          }
+        ]
+      },
+      {
+        "id": "wire-1791374421440-436107",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791374352508-941802",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791298650899-835065",
+          "pinId": "pin-2"
+        },
+        "vertices": [
+          {
+            "x": 824,
+            "y": 702.7710276585746
+          },
+          {
+            "x": 824,
+            "y": 645.3796861568541
+          }
+        ]
+      },
+      {
+        "id": "wire-1791374425471-750644",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791298567681-219290",
+          "pinId": "loop_minus"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791298650899-835065",
+          "pinId": "pin-2"
+        },
+        "vertices": [
+          {
+            "x": 882.1868755684786,
+            "y": 645.3796861568541
+          }
+        ]
+      },
+      {
+        "id": "wire-1791478211710-287323",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791478193390-287006",
+          "pinId": "pin-1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791374315637-835373",
+          "pinId": "pin"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791478214574-959464",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791374384819-700152",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791478193390-287006",
+          "pinId": "pin-2"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791630045461-heater",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791626134669-heat01",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791630045461-forno1",
+          "pinId": "heater"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791630045461-tcp",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791630045461-forno1",
+          "pinId": "tc_p"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791626134669-tt301",
+          "pinId": "s2"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791630045461-tcn",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791630045461-forno1",
+          "pinId": "tc_n"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791626134669-tt301",
+          "pinId": "s3"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791630045461-jumper14",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791626134669-tt301",
+          "pinId": "s1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791626134669-tt301",
+          "pinId": "s4"
+        },
+        "vertices": [
+          {
+            "x": 576.7044360945629,
+            "y": 611.1040895136738
+          },
+          {
+            "x": 576.7044360945629,
+            "y": 669.1040895136738
+          },
+          {
+            "x": 590.7044360945629,
+            "y": 669.1040895136738
+          },
+          {
+            "x": 590.7044360945629,
+            "y": 659.1040895136738
+          }
+        ]
+      },
+      {
+        "id": "wire-1791630045461-jumper34",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791626134669-tt301",
+          "pinId": "s3"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791626134669-tt301",
+          "pinId": "s4"
+        },
+        "vertices": [
+          {
+            "x": 590.7044360945629,
+            "y": 643.1040895136738
+          },
+          {
+            "x": 590.7044360945629,
+            "y": 659.1040895136738
+          }
+        ]
+      }
+    ]
+  },
+  "visual": {
+    "viewport": {
+      "x": 337.3830037574467,
+      "y": 6.003159718846797,
+      "zoom": 0.45
+    }
+  },
+  "simulationSettings": {}
+}

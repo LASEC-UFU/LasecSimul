@@ -1720,11 +1720,49 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
         }
     }
 
+    // Pontes elétricas (sensor de tensão/corrente, fontes e resistor por sinal) trocam valores com
+    // o MNA a cada passo aceito; a porta delas não precisa de um bloco de 1 ns quando o outro lado
+    // do fio só amostra a cada período (bloco de controle) ou muda por operador (slider, constante,
+    // HART). Sem isto, uma ponte ligada a um bloco de 1 ms prendia toda a simulação em passos de
+    // 1 ns (estágio de entrada RTD do TT301: 1 ms simulado custava 1 milhão de passos). Fica o
+    // menor período entre os vizinhos; sem vizinho conhecido, continua o rate rápido de sempre.
+    const auto isElectricalBridge = [](const IComponentModel* component) {
+        return dynamic_cast<const components::SignalVoltageSensor*>(component) ||
+               dynamic_cast<const components::SignalCurrentSensor*>(component) ||
+               dynamic_cast<const components::SignalDigitalInput*>(component) ||
+               dynamic_cast<const components::SignalControlledVoltageSource*>(component) ||
+               dynamic_cast<const components::SignalControlledCurrentSource*>(component) ||
+               dynamic_cast<const components::SignalControlledResistor*>(component) ||
+               dynamic_cast<const components::SignalDigitalOutput*>(component);
+    };
+    std::unordered_map<uint32_t, uint64_t> bridgeRateByComponent;
+    for (const SignalWireDefinition& wire : m_signalWires) {
+        for (const auto& [bridge, neighbor] : {std::pair{wire.sourceComponent, wire.targetComponent},
+                                               std::pair{wire.targetComponent, wire.sourceComponent}}) {
+            if (bridge >= m_componentInstances.size() || neighbor >= m_componentInstances.size() ||
+                !m_componentInstances[bridge] || !m_componentInstances[neighbor] ||
+                !isElectricalBridge(m_componentInstances[bridge].get()))
+                continue;
+            const IComponentModel* other = m_componentInstances[neighbor].get();
+            std::optional<uint64_t> rate;
+            if (const auto control = controlRateByComponent.find(neighbor); control != controlRateByComponent.end())
+                rate = control->second;
+            else if (dynamic_cast<const components::ManualSignalSlider*>(other) ||
+                     dynamic_cast<const components::SignalConstant*>(other) ||
+                     dynamic_cast<const protocols::HartCommunicationComponent*>(other))
+                rate = 1'000'000ull;
+            if (!rate || *rate == 0) continue;
+            const auto [it, inserted] = bridgeRateByComponent.emplace(bridge, *rate);
+            if (!inserted) it->second = std::min(it->second, *rate);
+        }
+    }
+
     for (uint32_t index : m_activeComponentIndices) {
         IComponentModel* component = m_componentInstances[index].get();
         if (isRelayTunnelTypeId(component->typeId()) && activeSignalTunnels.count(index) == 0)
             continue;
         const auto* mathBlock = dynamic_cast<const components::SignalMathBlock*>(component);
+        const auto bridgeRate = bridgeRateByComponent.find(index);
         for (const SignalPortDescriptor& port : component->signalPorts()) {
             // A porta de SAÍDA de um bloco de controle não vira relay: quem publica
             // `signalPortBlockId(index, "out")` é o próprio bloco de cálculo (ver `computeGraph`),
@@ -1745,7 +1783,7 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
             const bool processSignal = dynamic_cast<const components::ManualSignalSlider*>(component) != nullptr ||
                                        dynamic_cast<const components::SignalConstant*>(component) != nullptr ||
                                        dynamic_cast<const protocols::HartCommunicationComponent*>(component) != nullptr;
-            block.rate = {processSignal ? 1'000'000ull : 1ull, 0, 0};
+            block.rate = {processSignal ? 1'000'000ull : bridgeRate != bridgeRateByComponent.end() ? bridgeRate->second : 1ull, 0, 0};
             // Túnel de sinal (`connectors.signal_tunnel`):
             // sua declared `direction` só descreve o papel de FRONTEIRA (quem de fora pode dirigi-lo),
             // nunca decide sozinha se o BLOCO precisa de um `"in"` -- é `wiredInputTargets` (o fato de
@@ -1871,6 +1909,7 @@ const SimulationSession::BridgeCache& SimulationSession::bridgeCacheUnlocked() {
             m_bridgeCache.sensorIndices.push_back(index);
         if ((dynamic_cast<components::SignalControlledVoltageSource*>(component) ||
              dynamic_cast<components::SignalControlledCurrentSource*>(component) ||
+             dynamic_cast<components::SignalControlledResistor*>(component) ||
              dynamic_cast<components::SignalDigitalOutput*>(component)) &&
             hasGenericSignalWireUnlocked(index, "command", true))
             m_bridgeCache.actuatorIndices.push_back(index);
@@ -1974,6 +2013,8 @@ void SimulationSession::sampleElectricalBridgeActuatorsFromSignalUnlocked() {
             changed = voltage->setCommand(realCommandOr(index, voltage->command()));
         } else if (auto* current = dynamic_cast<components::SignalControlledCurrentSource*>(component)) {
             changed = current->setCommand(realCommandOr(index, current->command()));
+        } else if (auto* resistor = dynamic_cast<components::SignalControlledResistor*>(component)) {
+            changed = resistor->setCommand(realCommandOr(index, resistor->command()));
         } else if (auto* digital = dynamic_cast<components::SignalDigitalOutput*>(component)) {
             changed = digital->setCommand(boolCommandOr(index, digital->command()));
         }

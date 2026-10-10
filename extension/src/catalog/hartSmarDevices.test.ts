@@ -123,13 +123,13 @@ function findFolder(nodes: PaletteTreeNode[], label: string): Extract<PaletteTre
     assert(display.x + screenPreview.offsetX === 31, "LCD centralizado sobre o transmissor");
   });
 
-  await test("the TT301 subcircuit wraps one standard HART device, with a temperature signal input and the loop terminals", () => {
+  await test("the TT301 subcircuit wraps one standard HART device, with the sensor terminals 1-4 and the loop terminals", () => {
     const subcircuitsDir = path.resolve(__dirname, "../../../..", "subcircuits");
     const manifest = JSON.parse(fs.readFileSync(path.join(subcircuitsDir, "hart_smar_tt301.lssubcircuit"), "utf8")) as Record<string, unknown>;
     assert(manifestHartDeviceComponentId(manifest) === "tt301", "hartDeviceComponentId do dispositivo interno");
     const pins = (manifest.interface as Array<{ pinId: string; domain: string }>).map((entry) => `${entry.pinId}:${entry.domain}`);
-    assert(JSON.stringify(pins) === JSON.stringify(["temperature:signal", "loop_plus:electrical", "loop_minus:electrical"]),
-      "entrada TEMP por sinal e bornes elétricos do laço");
+    assert(JSON.stringify(pins) === JSON.stringify(["s1:electrical", "s2:electrical", "s3:electrical", "s4:electrical", "loop_plus:electrical", "loop_minus:electrical"]),
+      "bornes 1-4 do sensor (RTD a 2, 3 ou 4 fios) e bornes elétricos do laço");
     assert(JSON.stringify(manifest.folderPath) === JSON.stringify(["Protocolos Industriais", "HART"]), "pasta HART");
     assert(manifest.name === "SMAR TT301", "nome do transmissor");
     const library = JSON.parse(fs.readFileSync(path.join(subcircuitsDir, "library.json"), "utf8")) as { subcircuits: Array<{ typeId: string; manifest: string }> };
@@ -146,7 +146,7 @@ function findFolder(nodes: PaletteTreeNode[], label: string): Extract<PaletteTre
     const prefix = "data:image/svg+xml;base64,";
     assert(Buffer.from(image?.href?.slice(prefix.length) ?? "", "base64").equals(artwork), "símbolo usa o SVG empacotado");
     assert(manifest.iconPath === "./tt301.svg", "paleta aponta para o mesmo SVG empacotado");
-    assert(symbol?.pins.length === 3 && symbol.pins[0]?.id === "temperature", "TEMP, LOOP+ e LOOP-");
+    assert(symbol?.pins.map((pin) => pin.id).join(",") === "s1,s2,s3,s4,loop_plus,loop_minus", "bornes 1-4 do sensor, LOOP+ e LOOP-");
     const projectCatalog = JSON.parse(fs.readFileSync(path.join(subcircuitsDir, "..", "project", "schema", "component-catalog.json"), "utf8"));
     const standard = projectCatalog.items.find((entry: { typeId: string }) => entry.typeId === "protocol.hart.device.standard")?.package;
     const display = manifest.exposedComponents.find((entry: { componentId: string }) => entry.componentId === "tt301");

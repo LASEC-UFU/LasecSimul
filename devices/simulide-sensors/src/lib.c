@@ -1,5 +1,6 @@
 #include "lasecsimul/device_abi.h"
 #include <stdint.h>
+#include "thermocouple_its90.h"
 
 /*
  * Windows-only: replace every CRT dependency with Windows API (kernel32) or
@@ -119,6 +120,7 @@ enum {
     KIND_DHT22      = 5,
     KIND_DS1621     = 6,
     KIND_DS18B20    = 7,
+    KIND_THERMOCOUPLE = 8,
 };
 
 typedef struct {
@@ -163,6 +165,12 @@ typedef struct {
     char   rom_hex[17];
     double ds18b20_temp;
     int    ds18b20_state;
+
+    /* Thermocouple: measuring junction at tc_temp, reference junction (where the thermocouple wires
+     * meet copper: the instrument terminals) at tc_ref; tc_type indexes kTcTypes (B E J K N R S T). */
+    double tc_temp, tc_ref, tc_rloop;
+    double tc_min, tc_max;
+    int    tc_type, tc_broken;
 } SensorState;
 
 static const char *cfg_str(SensorState *s, const char *name, const char *fallback) {
@@ -212,6 +220,28 @@ static double rtd_R(SensorState *s) {
     return R < 0.01 ? 0.01 : R;
 }
 
+/* NIST ITS-90 reference function: E (mV) for t (degC), reference junction at 0 degC. Outside the
+ * type's range t is clamped to it. */
+static double tc_emf_mv(int type, double t) {
+    const TcType *tc = &kTcTypes[(type >= 0 && type < 8) ? type : 3];
+    const TcSegment *seg = &tc->seg[0];
+    double low = tc->seg[0].t_low, high = tc->seg[tc->segments - 1].t_high, e = 0.0;
+    int i;
+    if (t < low)  t = low;
+    if (t > high) t = high;
+    for (i = 1; i < tc->segments; i++)
+        if (t >= tc->seg[i].t_low) seg = &tc->seg[i];
+    for (i = seg->count - 1; i >= 0; i--) e = e * t + seg->c[i];
+    if (tc->letter == 'K' && t >= 0.0)
+        e += kTcKExp[0] * exp(kTcKExp[1] * (t - kTcKExp[2]) * (t - kTcKExp[2]));
+    return e;
+}
+
+/* Seebeck EMF at the thermocouple's terminals (V): E(measuring) - E(reference). */
+static double tc_emf_v(SensorState *s) {
+    return (tc_emf_mv(s->tc_type, s->tc_temp) - tc_emf_mv(s->tc_type, s->tc_ref)) * 1e-3;
+}
+
 static double strain_R(SensorState *s) {
     double range = s->max_force - s->min_force;
     double strain = range > 0.0 ? (s->force_n - s->min_force) / range - 0.5 : 0.0;
@@ -248,6 +278,7 @@ static void sens_init(LsdnDevice *dev) {
 
     const char *tid = cfg_str(s, "__typeId", "sensors.ldr");
     if      (strstr(tid, "thermistor")) s->kind = KIND_THERMISTOR;
+    else if (strstr(tid, "thermocouple")) s->kind = KIND_THERMOCOUPLE;
     else if (strstr(tid, "rtd"))        s->kind = KIND_RTD;
     else if (strstr(tid, "strain"))     s->kind = KIND_STRAIN;
     else if (strstr(tid, "sr04"))       s->kind = KIND_SR04;
@@ -273,6 +304,14 @@ static void sens_init(LsdnDevice *dev) {
     s->r0_rtd    = cfg_num(s, "r0",      100.0);
     s->rtd_min   = cfg_num(s, "min_temp",-200.0);
     s->rtd_max   = cfg_num(s, "max_temp", 850.0);
+
+    s->tc_temp   = cfg_num(s, "temp",     25.0);
+    s->tc_ref    = cfg_num(s, "ref_temp", 25.0);
+    s->tc_type   = (int)cfg_num(s, "tc_type", 3.0);
+    s->tc_rloop  = cfg_num(s, "r_loop",    5.0);
+    s->tc_min    = cfg_num(s, "min_temp",  0.0);
+    s->tc_max    = cfg_num(s, "max_temp", 1200.0);
+    s->tc_broken = (int)cfg_num(s, "broken", 0.0);
 
     s->force_n   = cfg_num(s, "force_n",   0.0);
     s->min_force = cfg_num(s, "min_force",-1000.0);
@@ -321,6 +360,19 @@ static void sens_stamp(LsdnDevice *dev, LsdnMatrixView *m) {
         case KIND_STRAIN:
             m->add_conductance(m->opaque, 0, 1, 1.0 / R);
             break;
+        case KIND_THERMOCOUPLE: {
+            /* Norton equivalent of the EMF in series with the loop resistance: pin 0 (+), pin 1 (-). */
+            double rloop = s->tc_rloop > 0.001 ? s->tc_rloop : 0.001;
+            if (s->tc_broken) {
+                m->add_conductance(m->opaque, 0, 1, 1e-12);
+            } else {
+                double g = 1.0 / rloop, i = tc_emf_v(s) * g;
+                m->add_conductance(m->opaque, 0, 1, g);
+                m->add_current_to_ground(m->opaque, 0, i);
+                m->add_current_to_ground(m->opaque, 1, -i);
+            }
+            break;
+        }
         default:
             break;
     }
@@ -458,6 +510,16 @@ static uint32_t sens_get_property(LsdnDevice *dev, const char *name, LsdnPropert
             if (!strcmp(name,"max_temp")) RET_NUM(s->rtd_max);
             if (!strcmp(name,"r0"))       RET_NUM(s->r0_rtd);
             break;
+        case KIND_THERMOCOUPLE:
+            if (!strcmp(name,"temp"))     RET_NUM(s->tc_temp);
+            if (!strcmp(name,"ref_temp")) RET_NUM(s->tc_ref);
+            if (!strcmp(name,"tc_type"))  RET_NUM(s->tc_type);
+            if (!strcmp(name,"r_loop"))   RET_NUM(s->tc_rloop);
+            if (!strcmp(name,"min_temp")) RET_NUM(s->tc_min);
+            if (!strcmp(name,"max_temp")) RET_NUM(s->tc_max);
+            if (!strcmp(name,"broken"))   RET_BOOL(s->tc_broken);
+            if (!strcmp(name,"emf_mv"))   RET_NUM(tc_emf_v(s) * 1e3);
+            break;
         case KIND_STRAIN:
             if (!strcmp(name,"force_n"))   RET_NUM(s->force_n);
             if (!strcmp(name,"min_force")) RET_NUM(s->min_force);
@@ -521,6 +583,15 @@ static uint32_t sens_set_property(LsdnDevice *dev, const char *name, const LsdnP
             if (!strcmp(name,"max_temp")) { s->rtd_max  = n; return 1; }
             if (!strcmp(name,"r0"))       { s->r0_rtd = n; return 1; }
             break;
+        case KIND_THERMOCOUPLE:
+            if (!strcmp(name,"temp"))     { s->tc_temp  = n; return 1; }
+            if (!strcmp(name,"ref_temp")) { s->tc_ref   = n; return 1; }
+            if (!strcmp(name,"tc_type"))  { s->tc_type  = (int)n; return 1; }
+            if (!strcmp(name,"r_loop"))   { s->tc_rloop = n; return 1; }
+            if (!strcmp(name,"min_temp")) { s->tc_min   = n; return 1; }
+            if (!strcmp(name,"max_temp")) { s->tc_max   = n; return 1; }
+            if (!strcmp(name,"broken"))   { s->tc_broken = val->kind == LSDN_PROPERTY_BOOL ? b : (n != 0.0); return 1; }
+            break;
         case KIND_STRAIN:
             if (!strcmp(name,"force_n"))   { s->force_n   = n; return 1; }
             if (!strcmp(name,"min_force")) { s->min_force = n; return 1; }
@@ -557,7 +628,7 @@ static uint32_t sens_set_property(LsdnDevice *dev, const char *name, const LsdnP
     return 0;
 }
 
-#define STATE_VERSION 1u
+#define STATE_VERSION 2u
 
 static uint32_t sens_get_state(LsdnDevice *dev, uint8_t *out, uint32_t cap) {
     SensorState *s = (SensorState *)dev;

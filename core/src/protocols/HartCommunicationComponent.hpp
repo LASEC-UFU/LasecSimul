@@ -252,6 +252,9 @@ private:
     void onWireCarrierSample();
     /** Simulated sensor failure (property `sensorFault`). */
     bool m_sensorFault = false;
+    /** Sensor failure detected by the model's input stage (signal input `sensorFault`, e.g. an open
+     * RTD seen by the 4-wire measurement of a TT301); the device fails when either is set. */
+    bool m_signalSensorFault = false;
     /** Raw (undamped) process input and the damped value fed to the engine. */
     double m_rawPrimary = std::numeric_limits<double>::quiet_NaN();
     double m_dampedPrimary = std::numeric_limits<double>::quiet_NaN();

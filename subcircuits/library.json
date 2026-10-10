@@ -18,6 +18,14 @@
       "manifest": "process_fopdt.lssubcircuit"
     },
     {
+      "typeId": "subcircuits.process.heated_tank_pt100",
+      "manifest": "process_heated_tank_pt100.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.process.electric_furnace_tc",
+      "manifest": "process_electric_furnace_tc.lssubcircuit"
+    },
+    {
       "typeId": "subcircuits.process.orifice_flow_dp",
       "manifest": "process_orifice_flow_dp.lssubcircuit"
     },

@@ -8253,6 +8253,92 @@
       "workspaceSection": "misc"
     },
     {
+      "typeId": "bridges.controlled_resistor",
+      "label": "Sinal2Resistência",
+      "pinCount": 3,
+      "pinIds": [
+        "command",
+        "p",
+        "n"
+      ],
+      "icon": "resistor",
+      "graphical": true,
+      "folderPath": [
+        "Conversores"
+      ],
+      "defaultProperties": {
+        "resistance": 100
+      },
+      "help": {
+        "description": "Converte Sinal -> MNA: resistência entre P e N igual ao valor (Ω) recebido pela porta de sinal \"command\" (pino IN, à esquerda). Elemento de sensor resistivo (Pt100, NTC) ou fio com resistência ajustável num modelo de processo. Sem fio ligado, vale a resistência inicial (100 Ω)."
+      },
+      "package": {
+        "width": 128,
+        "height": 64,
+        "border": false,
+        "shapes": [
+          {
+            "kind": "rect",
+            "x": 8,
+            "y": 8,
+            "w": 112,
+            "h": 48,
+            "fill": "#e0f2fe",
+            "stroke": "#0369a1",
+            "strokeWidth": 1.5
+          },
+          {
+            "kind": "text",
+            "x": 64,
+            "y": 30,
+            "value": "Sinal2Resistência",
+            "fontSize": 10,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          },
+          {
+            "kind": "text",
+            "x": 64,
+            "y": 44,
+            "value": "Sinal -> Ω",
+            "fontSize": 7,
+            "textAnchor": "middle",
+            "fill": "#0c4a6e"
+          }
+        ],
+        "pins": [
+          {
+            "id": "command",
+            "x": 0,
+            "y": 32,
+            "angle": 180,
+            "length": 8,
+            "label": "IN",
+            "leadColor": "#ea580c",
+            "labelColor": "#ea580c"
+          },
+          {
+            "id": "p",
+            "x": 128,
+            "y": 20,
+            "angle": 0,
+            "length": 8,
+            "label": "P"
+          },
+          {
+            "id": "n",
+            "x": 128,
+            "y": 44,
+            "angle": 0,
+            "length": 8,
+            "label": "N"
+          }
+        ]
+      },
+      "category": "Conversores",
+      "workspaceSection": "misc"
+    },
+    {
       "typeId": "bridges.digital_output",
       "label": "Sinal2Digital",
       "pinCount": 3,

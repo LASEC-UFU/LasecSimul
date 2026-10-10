@@ -1,0 +1,2241 @@
+{
+  "schemaVersion": 3,
+  "typeId": "subcircuits.process.heated_tank_pt100",
+  "name": "Tanque aquecido com Pt100",
+  "language": "pt-BR",
+  "folderPath": [
+    "Modelos"
+  ],
+  "workspaceSection": "process",
+  "help": {
+    "description": "Tanque de água com resistência de aquecimento (pino Aquecimento, 0–100 %) e um Pt100 em poço termométrico, ligado por cabo de 4 fios aos bornes 1 a 4 de um transmissor de temperatura (TT301). Balanço de energia m·c·dT/dt = P − UA·(T − Tamb), fervura a 100 °C, atraso do poço e curva IEC 60751 (Callendar-Van Dusen). O elemento e os fios do cabo são resistências de verdade no circuito: a 2 fios o transmissor soma os dois fios, a 3 fios compensa e a 4 fios ignora. Volume, potência, perdas, poço, R0, resistência dos fios, desvio do sensor e sensor rompido ficam em Propriedades Exportadas."
+  },
+  "components": [
+    {
+      "id": "t_heater",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "heater",
+        "pinId": "heater",
+        "direction": "Input",
+        "valueType": "Real",
+        "defaultValue": 0
+      },
+      "visual": {
+        "x": 40,
+        "y": 80,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "c_volume",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 10,
+        "unit": "L"
+      },
+      "visual": {
+        "x": 200,
+        "y": 40,
+        "rotation": 0
+      },
+      "label": "Volume de água no tanque"
+    },
+    {
+      "id": "c_pmax",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 6,
+        "unit": "kW"
+      },
+      "visual": {
+        "x": 200,
+        "y": 100,
+        "rotation": 0
+      },
+      "label": "Potência máxima do aquecedor (100 %)"
+    },
+    {
+      "id": "c_ua",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 80,
+        "unit": "W/K"
+      },
+      "visual": {
+        "x": 200,
+        "y": 160,
+        "rotation": 0
+      },
+      "label": "Coeficiente de perdas para o ambiente UA"
+    },
+    {
+      "id": "c_tamb",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 25,
+        "unit": "°C"
+      },
+      "visual": {
+        "x": 200,
+        "y": 220,
+        "rotation": 0
+      },
+      "label": "Temperatura ambiente"
+    },
+    {
+      "id": "c_tau",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 15,
+        "unit": "s"
+      },
+      "visual": {
+        "x": 200,
+        "y": 280,
+        "rotation": 0
+      },
+      "label": "Constante de tempo do poço termométrico"
+    },
+    {
+      "id": "c_r0",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 100,
+        "unit": "Ω"
+      },
+      "visual": {
+        "x": 200,
+        "y": 340,
+        "rotation": 0
+      },
+      "label": "R0 do sensor (resistência a 0 °C)"
+    },
+    {
+      "id": "c_lead",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 0.5,
+        "unit": "Ω"
+      },
+      "visual": {
+        "x": 200,
+        "y": 400,
+        "rotation": 0
+      },
+      "label": "Resistência de cada fio do cabo do sensor"
+    },
+    {
+      "id": "c_dev",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 0,
+        "unit": "°C"
+      },
+      "visual": {
+        "x": 200,
+        "y": 460,
+        "rotation": 0
+      },
+      "label": "Desvio do sensor (erro do Pt100)"
+    },
+    {
+      "id": "c_broken",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 0,
+        "unit": "",
+        "options": "0=Não;1=Sim (circuito aberto)"
+      },
+      "visual": {
+        "x": 200,
+        "y": 520,
+        "rotation": 0
+      },
+      "label": "Sensor rompido"
+    },
+    {
+      "id": "c_level",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 80,
+        "unit": "%"
+      },
+      "visual": {
+        "x": 200,
+        "y": 640,
+        "rotation": 0
+      },
+      "label": "Nível de água (desenho)"
+    },
+    {
+      "id": "u",
+      "typeId": "control.observer",
+      "properties": {
+        "unit": "%",
+        "observerOnly": true,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 40,
+        "y": 200,
+        "rotation": 0
+      },
+      "label": "Aquecimento"
+    },
+    {
+      "id": "q_heat",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "1000*P*((u>0)*(u<100)*u+(u>99.9999)*100)/100",
+        "inputs": [
+          "u",
+          "P"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 620,
+        "y": 40,
+        "rotation": 0
+      },
+      "label": "Potência do aquecedor (W)"
+    },
+    {
+      "id": "q_loss",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "UA*(T-Ta)",
+        "inputs": [
+          "T",
+          "UA",
+          "Ta"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 620,
+        "y": 100,
+        "rotation": 0
+      },
+      "label": "Perdas para o ambiente (W)"
+    },
+    {
+      "id": "mc",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "4186*V",
+        "inputs": [
+          "V"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 620,
+        "y": 160,
+        "rotation": 0
+      },
+      "label": "Capacidade térmica m·c (J/K)"
+    },
+    {
+      "id": "heat_in",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "((T<100)*q+(T>99.9999)*((q<l)*q+(q>l-0.000001)*l))/mc",
+        "inputs": [
+          "q",
+          "l",
+          "T",
+          "mc"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 620,
+        "y": 220,
+        "rotation": 0
+      },
+      "label": "Ganho de temperatura (K/s)"
+    },
+    {
+      "id": "heat_out",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "l/mc",
+        "inputs": [
+          "l",
+          "mc"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 620,
+        "y": 280,
+        "rotation": 0
+      },
+      "label": "Perda de temperatura (K/s)"
+    },
+    {
+      "id": "temp",
+      "typeId": "control.tank",
+      "properties": {
+        "area": 1,
+        "initial": 25,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 40,
+        "y": 320,
+        "rotation": 0
+      },
+      "label": "Temperatura da água (°C)"
+    },
+    {
+      "id": "tau_th",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "mc/UA/60",
+        "inputs": [
+          "mc",
+          "UA"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 620,
+        "y": 340,
+        "rotation": 0
+      },
+      "label": "Constante de tempo térmica (min)"
+    },
+    {
+      "id": "well_in",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "T/((tau>0.1)*tau+(tau<0.1)*0.1)",
+        "inputs": [
+          "T",
+          "tau"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 620,
+        "y": 400,
+        "rotation": 0
+      },
+      "label": "Poço: entrada"
+    },
+    {
+      "id": "well_out",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "Ts/((tau>0.1)*tau+(tau<0.1)*0.1)",
+        "inputs": [
+          "Ts",
+          "tau"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 620,
+        "y": 460,
+        "rotation": 0
+      },
+      "label": "Poço: saída"
+    },
+    {
+      "id": "sensor_temp",
+      "typeId": "control.tank",
+      "properties": {
+        "area": 1,
+        "initial": 25,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 40,
+        "y": 440,
+        "rotation": 0
+      },
+      "label": "Temperatura no sensor (°C)"
+    },
+    {
+      "id": "r_pt100",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "R0*(1+0.0039083*(Ts+d)+(-5.775e-07)*(Ts+d)^2+((Ts+d)<0)*(-4.183e-12)*((Ts+d)-100)*(Ts+d)^3)",
+        "inputs": [
+          "Ts",
+          "d",
+          "R0"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 620,
+        "y": 520,
+        "rotation": 0
+      },
+      "label": "Resistência do Pt100 (Ω)"
+    },
+    {
+      "id": "r_element",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(b<0.5)*r+(b>0.5)*1000000000",
+        "inputs": [
+          "r",
+          "b"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "visual": {
+        "x": 620,
+        "y": 580,
+        "rotation": 0
+      },
+      "label": "Elemento (rompido = 1 GΩ)"
+    },
+    {
+      "id": "element",
+      "typeId": "bridges.controlled_resistor",
+      "properties": {
+        "resistance": 109.73
+      },
+      "visual": {
+        "x": 420,
+        "y": 700,
+        "rotation": 0
+      },
+      "label": "Elemento Pt100"
+    },
+    {
+      "id": "lead1",
+      "typeId": "bridges.controlled_resistor",
+      "properties": {
+        "resistance": 0.5
+      },
+      "visual": {
+        "x": 600,
+        "y": 690,
+        "rotation": 0
+      },
+      "label": "Fio 1 do cabo"
+    },
+    {
+      "id": "t_rtd1",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "rtd1",
+        "pinId": "rtd1"
+      },
+      "visual": {
+        "x": 780,
+        "y": 690,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "lead2",
+      "typeId": "bridges.controlled_resistor",
+      "properties": {
+        "resistance": 0.5
+      },
+      "visual": {
+        "x": 600,
+        "y": 740,
+        "rotation": 0
+      },
+      "label": "Fio 2 do cabo"
+    },
+    {
+      "id": "t_rtd2",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "rtd2",
+        "pinId": "rtd2"
+      },
+      "visual": {
+        "x": 780,
+        "y": 740,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "lead3",
+      "typeId": "bridges.controlled_resistor",
+      "properties": {
+        "resistance": 0.5
+      },
+      "visual": {
+        "x": 600,
+        "y": 790,
+        "rotation": 0
+      },
+      "label": "Fio 3 do cabo"
+    },
+    {
+      "id": "t_rtd3",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "rtd3",
+        "pinId": "rtd3"
+      },
+      "visual": {
+        "x": 780,
+        "y": 790,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "lead4",
+      "typeId": "bridges.controlled_resistor",
+      "properties": {
+        "resistance": 0.5
+      },
+      "visual": {
+        "x": 600,
+        "y": 840,
+        "rotation": 0
+      },
+      "label": "Fio 4 do cabo"
+    },
+    {
+      "id": "t_rtd4",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "rtd4",
+        "pinId": "rtd4"
+      },
+      "visual": {
+        "x": 780,
+        "y": 840,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "t_temperature",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "temperature",
+        "pinId": "temperature",
+        "direction": "Output",
+        "valueType": "Real"
+      },
+      "visual": {
+        "x": 1340,
+        "y": 80,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_tank",
+      "typeId": "graphics.tank_svg",
+      "properties": {
+        "width": 200,
+        "height": 300,
+        "value": 0,
+        "liquidColor": "#1e88e5",
+        "bindSource": "c_level",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 0,
+        "bindThreshold": 50,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 150,
+        "y": 96,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_coil",
+      "typeId": "graphics.pid.hx_coil",
+      "properties": {
+        "width": 66,
+        "height": 22,
+        "opacity": 1
+      },
+      "visual": {
+        "x": 198.0,
+        "y": 336.2265625,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_heating",
+      "typeId": "graphics.status_lamp",
+      "properties": {
+        "width": 34,
+        "height": 42,
+        "stroke": "currentColor",
+        "fill": "#94a3b8",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "onColor": "#f97316",
+        "offColor": "#cbd5e1",
+        "label": "Aquecendo",
+        "value": 0,
+        "bindSource": "u",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 0,
+        "bindThreshold": 0.5,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 40,
+        "y": 210,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_gauge",
+      "typeId": "graphics.hmi.gauge",
+      "properties": {
+        "width": 120,
+        "height": 136,
+        "tag": "TI-101",
+        "stroke": "#4a4a4a",
+        "fill": "#c2c2c2",
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "temp",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 120,
+        "bindUnit": "°C",
+        "bindDecimals": 1,
+        "bindThreshold": 50,
+        "bindInvert": false,
+        "limitLL": "",
+        "limitL": "",
+        "limitH": "90",
+        "limitHH": "100"
+      },
+      "visual": {
+        "x": 410,
+        "y": 48,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_bar",
+      "typeId": "graphics.level_bar",
+      "properties": {
+        "width": 36,
+        "height": 130,
+        "stroke": "currentColor",
+        "fill": "#ffffff",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "barColor": "#ef4444",
+        "highLimit": 90,
+        "lowLimit": 10,
+        "showLimits": false,
+        "showValue": true,
+        "value": 0,
+        "bindSource": "temp",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 120,
+        "bindUnit": "°C",
+        "bindDecimals": 0,
+        "bindThreshold": 50,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 548,
+        "y": 52,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_t",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 168,
+        "height": 44,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Temperatura da água",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "temp",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000000.0,
+        "bindMax": 1000000000000.0,
+        "bindUnit": "°C",
+        "bindDecimals": 2,
+        "bindThreshold": 50,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 410,
+        "y": 210,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_ts",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 168,
+        "height": 44,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Temperatura no sensor",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "sensor_temp",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000000.0,
+        "bindMax": 1000000000000.0,
+        "bindUnit": "°C",
+        "bindDecimals": 2,
+        "bindThreshold": 50,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 410,
+        "y": 260,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_r",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 168,
+        "height": 44,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Resistência do Pt100",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "r_pt100",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000000.0,
+        "bindMax": 1000000000000.0,
+        "bindUnit": "Ω",
+        "bindDecimals": 3,
+        "bindThreshold": 50,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 410,
+        "y": 310,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_q",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 168,
+        "height": 44,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Potência do aquecedor",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "q_heat",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000000.0,
+        "bindMax": 1000000000000.0,
+        "bindUnit": "W",
+        "bindDecimals": 0,
+        "bindThreshold": 50,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 410,
+        "y": 360,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_loss",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 168,
+        "height": 44,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Perdas para o ambiente",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "q_loss",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000000.0,
+        "bindMax": 1000000000000.0,
+        "bindUnit": "W",
+        "bindDecimals": 0,
+        "bindThreshold": 50,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 410,
+        "y": 410,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_tau",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 168,
+        "height": 44,
+        "stroke": "currentColor",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "label": "Constante de tempo térmica",
+        "valueColor": "#0f172a",
+        "value": 0,
+        "bindSource": "tau_th",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000000.0,
+        "bindMax": 1000000000000.0,
+        "bindUnit": "min",
+        "bindDecimals": 1,
+        "bindThreshold": 50,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 410,
+        "y": 460,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_p_v",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 150,
+        "height": 44,
+        "stroke": "#64748b",
+        "fill": "#fefce8",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "label": "Volume de água",
+        "valueColor": "#713f12",
+        "value": 0,
+        "bindSource": "c_volume",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000000.0,
+        "bindMax": 1000000000000.0,
+        "bindUnit": "L",
+        "bindDecimals": 1,
+        "bindThreshold": 50,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 600,
+        "y": 210,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_p_p",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 150,
+        "height": 44,
+        "stroke": "#64748b",
+        "fill": "#fefce8",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "label": "Potência máxima",
+        "valueColor": "#713f12",
+        "value": 0,
+        "bindSource": "c_pmax",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000000.0,
+        "bindMax": 1000000000000.0,
+        "bindUnit": "kW",
+        "bindDecimals": 2,
+        "bindThreshold": 50,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 760,
+        "y": 210,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_p_ua",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 150,
+        "height": 44,
+        "stroke": "#64748b",
+        "fill": "#fefce8",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "label": "Perdas UA",
+        "valueColor": "#713f12",
+        "value": 0,
+        "bindSource": "c_ua",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000000.0,
+        "bindMax": 1000000000000.0,
+        "bindUnit": "W/K",
+        "bindDecimals": 1,
+        "bindThreshold": 50,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 600,
+        "y": 260,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_p_ta",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 150,
+        "height": 44,
+        "stroke": "#64748b",
+        "fill": "#fefce8",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "label": "Temperatura ambiente",
+        "valueColor": "#713f12",
+        "value": 0,
+        "bindSource": "c_tamb",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000000.0,
+        "bindMax": 1000000000000.0,
+        "bindUnit": "°C",
+        "bindDecimals": 1,
+        "bindThreshold": 50,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 760,
+        "y": 260,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_p_tau",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 150,
+        "height": 44,
+        "stroke": "#64748b",
+        "fill": "#fefce8",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "label": "τ do poço",
+        "valueColor": "#713f12",
+        "value": 0,
+        "bindSource": "c_tau",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000000.0,
+        "bindMax": 1000000000000.0,
+        "bindUnit": "s",
+        "bindDecimals": 1,
+        "bindThreshold": 50,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 600,
+        "y": 310,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_p_r0",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 150,
+        "height": 44,
+        "stroke": "#64748b",
+        "fill": "#fefce8",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "label": "R0 do sensor",
+        "valueColor": "#713f12",
+        "value": 0,
+        "bindSource": "c_r0",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000000.0,
+        "bindMax": 1000000000000.0,
+        "bindUnit": "Ω",
+        "bindDecimals": 1,
+        "bindThreshold": 50,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 760,
+        "y": 310,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_p_lead",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 150,
+        "height": 44,
+        "stroke": "#64748b",
+        "fill": "#fefce8",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "label": "R de cada fio",
+        "valueColor": "#713f12",
+        "value": 0,
+        "bindSource": "c_lead",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000000.0,
+        "bindMax": 1000000000000.0,
+        "bindUnit": "Ω",
+        "bindDecimals": 2,
+        "bindThreshold": 50,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 600,
+        "y": 360,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "g_p_dev",
+      "typeId": "graphics.value_display",
+      "properties": {
+        "width": 150,
+        "height": 44,
+        "stroke": "#64748b",
+        "fill": "#fefce8",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "label": "Desvio do sensor",
+        "valueColor": "#713f12",
+        "value": 0,
+        "bindSource": "c_dev",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": -1000000000000.0,
+        "bindMax": 1000000000000.0,
+        "bindUnit": "°C",
+        "bindDecimals": 2,
+        "bindThreshold": 50,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 760,
+        "y": 360,
+        "rotation": 0
+      }
+    }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": [
+      {
+        "id": "w-1",
+        "from": {
+          "kind": "port",
+          "componentId": "t_heater",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "u",
+          "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "w-2",
+        "from": {
+          "kind": "port",
+          "componentId": "u",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_heat",
+          "pinId": "u"
+        },
+        "points": []
+      },
+      {
+        "id": "w-3",
+        "from": {
+          "kind": "port",
+          "componentId": "c_pmax",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_heat",
+          "pinId": "P"
+        },
+        "points": []
+      },
+      {
+        "id": "w-4",
+        "from": {
+          "kind": "port",
+          "componentId": "temp",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_loss",
+          "pinId": "T"
+        },
+        "points": []
+      },
+      {
+        "id": "w-5",
+        "from": {
+          "kind": "port",
+          "componentId": "c_ua",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_loss",
+          "pinId": "UA"
+        },
+        "points": []
+      },
+      {
+        "id": "w-6",
+        "from": {
+          "kind": "port",
+          "componentId": "c_tamb",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_loss",
+          "pinId": "Ta"
+        },
+        "points": []
+      },
+      {
+        "id": "w-7",
+        "from": {
+          "kind": "port",
+          "componentId": "c_volume",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "mc",
+          "pinId": "V"
+        },
+        "points": []
+      },
+      {
+        "id": "w-8",
+        "from": {
+          "kind": "port",
+          "componentId": "q_heat",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "heat_in",
+          "pinId": "q"
+        },
+        "points": []
+      },
+      {
+        "id": "w-9",
+        "from": {
+          "kind": "port",
+          "componentId": "q_loss",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "heat_in",
+          "pinId": "l"
+        },
+        "points": []
+      },
+      {
+        "id": "w-10",
+        "from": {
+          "kind": "port",
+          "componentId": "temp",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "heat_in",
+          "pinId": "T"
+        },
+        "points": []
+      },
+      {
+        "id": "w-11",
+        "from": {
+          "kind": "port",
+          "componentId": "mc",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "heat_in",
+          "pinId": "mc"
+        },
+        "points": []
+      },
+      {
+        "id": "w-12",
+        "from": {
+          "kind": "port",
+          "componentId": "q_loss",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "heat_out",
+          "pinId": "l"
+        },
+        "points": []
+      },
+      {
+        "id": "w-13",
+        "from": {
+          "kind": "port",
+          "componentId": "mc",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "heat_out",
+          "pinId": "mc"
+        },
+        "points": []
+      },
+      {
+        "id": "w-14",
+        "from": {
+          "kind": "port",
+          "componentId": "heat_in",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "temp",
+          "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "w-15",
+        "from": {
+          "kind": "port",
+          "componentId": "heat_out",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "temp",
+          "pinId": "outflow"
+        },
+        "points": []
+      },
+      {
+        "id": "w-16",
+        "from": {
+          "kind": "port",
+          "componentId": "mc",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tau_th",
+          "pinId": "mc"
+        },
+        "points": []
+      },
+      {
+        "id": "w-17",
+        "from": {
+          "kind": "port",
+          "componentId": "c_ua",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tau_th",
+          "pinId": "UA"
+        },
+        "points": []
+      },
+      {
+        "id": "w-18",
+        "from": {
+          "kind": "port",
+          "componentId": "temp",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "well_in",
+          "pinId": "T"
+        },
+        "points": []
+      },
+      {
+        "id": "w-19",
+        "from": {
+          "kind": "port",
+          "componentId": "c_tau",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "well_in",
+          "pinId": "tau"
+        },
+        "points": []
+      },
+      {
+        "id": "w-20",
+        "from": {
+          "kind": "port",
+          "componentId": "sensor_temp",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "well_out",
+          "pinId": "Ts"
+        },
+        "points": []
+      },
+      {
+        "id": "w-21",
+        "from": {
+          "kind": "port",
+          "componentId": "c_tau",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "well_out",
+          "pinId": "tau"
+        },
+        "points": []
+      },
+      {
+        "id": "w-22",
+        "from": {
+          "kind": "port",
+          "componentId": "well_in",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sensor_temp",
+          "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "w-23",
+        "from": {
+          "kind": "port",
+          "componentId": "well_out",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sensor_temp",
+          "pinId": "outflow"
+        },
+        "points": []
+      },
+      {
+        "id": "w-24",
+        "from": {
+          "kind": "port",
+          "componentId": "sensor_temp",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "r_pt100",
+          "pinId": "Ts"
+        },
+        "points": []
+      },
+      {
+        "id": "w-25",
+        "from": {
+          "kind": "port",
+          "componentId": "c_dev",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "r_pt100",
+          "pinId": "d"
+        },
+        "points": []
+      },
+      {
+        "id": "w-26",
+        "from": {
+          "kind": "port",
+          "componentId": "c_r0",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "r_pt100",
+          "pinId": "R0"
+        },
+        "points": []
+      },
+      {
+        "id": "w-27",
+        "from": {
+          "kind": "port",
+          "componentId": "r_pt100",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "r_element",
+          "pinId": "r"
+        },
+        "points": []
+      },
+      {
+        "id": "w-28",
+        "from": {
+          "kind": "port",
+          "componentId": "c_broken",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "r_element",
+          "pinId": "b"
+        },
+        "points": []
+      },
+      {
+        "id": "w-29",
+        "from": {
+          "kind": "port",
+          "componentId": "r_element",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "element",
+          "pinId": "command"
+        },
+        "points": []
+      },
+      {
+        "id": "w-30",
+        "from": {
+          "kind": "port",
+          "componentId": "c_lead",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "lead1",
+          "pinId": "command"
+        },
+        "points": []
+      },
+      {
+        "id": "w-31",
+        "from": {
+          "kind": "port",
+          "componentId": "element",
+          "pinId": "p"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "lead1",
+          "pinId": "p"
+        },
+        "points": []
+      },
+      {
+        "id": "w-32",
+        "from": {
+          "kind": "port",
+          "componentId": "lead1",
+          "pinId": "n"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "t_rtd1",
+          "pinId": "pin"
+        },
+        "points": []
+      },
+      {
+        "id": "w-33",
+        "from": {
+          "kind": "port",
+          "componentId": "c_lead",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "lead2",
+          "pinId": "command"
+        },
+        "points": []
+      },
+      {
+        "id": "w-34",
+        "from": {
+          "kind": "port",
+          "componentId": "element",
+          "pinId": "p"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "lead2",
+          "pinId": "p"
+        },
+        "points": []
+      },
+      {
+        "id": "w-35",
+        "from": {
+          "kind": "port",
+          "componentId": "lead2",
+          "pinId": "n"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "t_rtd2",
+          "pinId": "pin"
+        },
+        "points": []
+      },
+      {
+        "id": "w-36",
+        "from": {
+          "kind": "port",
+          "componentId": "c_lead",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "lead3",
+          "pinId": "command"
+        },
+        "points": []
+      },
+      {
+        "id": "w-37",
+        "from": {
+          "kind": "port",
+          "componentId": "element",
+          "pinId": "n"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "lead3",
+          "pinId": "p"
+        },
+        "points": []
+      },
+      {
+        "id": "w-38",
+        "from": {
+          "kind": "port",
+          "componentId": "lead3",
+          "pinId": "n"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "t_rtd3",
+          "pinId": "pin"
+        },
+        "points": []
+      },
+      {
+        "id": "w-39",
+        "from": {
+          "kind": "port",
+          "componentId": "c_lead",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "lead4",
+          "pinId": "command"
+        },
+        "points": []
+      },
+      {
+        "id": "w-40",
+        "from": {
+          "kind": "port",
+          "componentId": "element",
+          "pinId": "n"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "lead4",
+          "pinId": "p"
+        },
+        "points": []
+      },
+      {
+        "id": "w-41",
+        "from": {
+          "kind": "port",
+          "componentId": "lead4",
+          "pinId": "n"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "t_rtd4",
+          "pinId": "pin"
+        },
+        "points": []
+      },
+      {
+        "id": "w-42",
+        "from": {
+          "kind": "port",
+          "componentId": "temp",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "t_temperature",
+          "pinId": "value"
+        },
+        "points": []
+      }
+    ]
+  },
+  "interface": [
+    {
+      "pinId": "heater",
+      "label": "Aquecimento (%)",
+      "internalTunnel": "heater",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "rtd1",
+      "label": "Fio 1 do Pt100",
+      "internalTunnel": "rtd1",
+      "domain": "electrical"
+    },
+    {
+      "pinId": "rtd2",
+      "label": "Fio 2 do Pt100",
+      "internalTunnel": "rtd2",
+      "domain": "electrical"
+    },
+    {
+      "pinId": "rtd3",
+      "label": "Fio 3 do Pt100",
+      "internalTunnel": "rtd3",
+      "domain": "electrical"
+    },
+    {
+      "pinId": "rtd4",
+      "label": "Fio 4 do Pt100",
+      "internalTunnel": "rtd4",
+      "domain": "electrical"
+    },
+    {
+      "pinId": "temperature",
+      "label": "Temperatura da água (°C)",
+      "internalTunnel": "temperature",
+      "domain": "signal",
+      "direction": "out",
+      "valueType": "Real",
+      "width": 1
+    }
+  ],
+  "symbolMode": "custom",
+  "symbol": {
+    "width": 920,
+    "height": 640,
+    "border": true,
+    "shapes": [
+      {
+        "kind": "text",
+        "x": 150,
+        "y": 22,
+        "value": "Tanque aquecido — temperatura por Pt100 a 4 fios (IEC 60751)",
+        "fontSize": 13,
+        "textAnchor": "start",
+        "color": "#0f172a"
+      },
+      {
+        "kind": "line",
+        "x1": 112,
+        "y1": 40,
+        "x2": 120,
+        "y2": 40,
+        "stroke": "#0f172a",
+        "strokeWidth": 1.2,
+        "strokeDasharray": "6 4"
+      },
+      {
+        "kind": "rect",
+        "x": 40,
+        "y": 120,
+        "w": 76,
+        "h": 44,
+        "fill": "#fff7ed",
+        "stroke": "#c2410c",
+        "strokeWidth": 1.5
+      },
+      {
+        "kind": "text",
+        "x": 78,
+        "y": 138,
+        "value": "Controle de",
+        "fontSize": 9,
+        "textAnchor": "middle",
+        "color": "#7c2d12"
+      },
+      {
+        "kind": "text",
+        "x": 78,
+        "y": 152,
+        "value": "potência",
+        "fontSize": 9,
+        "textAnchor": "middle",
+        "color": "#7c2d12"
+      },
+      {
+        "kind": "path",
+        "d": "M120 40 V120",
+        "stroke": "#0f172a",
+        "strokeWidth": 1.2,
+        "strokeDasharray": "6 4",
+        "fill": "none"
+      },
+      {
+        "kind": "path",
+        "d": "M78 164 V398.2265625 H220.0 V352.2265625",
+        "stroke": "#c2410c",
+        "strokeWidth": 3,
+        "fill": "none"
+      },
+      {
+        "kind": "path",
+        "d": "M96 164 V390.2265625 H228.0 V352.2265625",
+        "stroke": "#c2410c",
+        "strokeWidth": 3,
+        "fill": "none"
+      },
+      {
+        "kind": "text",
+        "x": 230.0,
+        "y": 414.2265625,
+        "value": "resistência de aquecimento",
+        "fontSize": 9,
+        "textAnchor": "start",
+        "color": "#7c2d12"
+      },
+      {
+        "kind": "rect",
+        "x": 275.0,
+        "y": 92.15625,
+        "w": 10,
+        "h": 216.0703125,
+        "fill": "#cbd5e1",
+        "stroke": "#475569",
+        "strokeWidth": 1.2
+      },
+      {
+        "kind": "rect",
+        "x": 276.0,
+        "y": 296.2265625,
+        "w": 8,
+        "h": 14,
+        "fill": "#f59e0b",
+        "stroke": "#92400e",
+        "strokeWidth": 1
+      },
+      {
+        "kind": "rect",
+        "x": 266.0,
+        "y": 72.15625,
+        "w": 28,
+        "h": 22,
+        "fill": "#e2e8f0",
+        "stroke": "#334155",
+        "strokeWidth": 1.5
+      },
+      {
+        "kind": "text",
+        "x": 280.0,
+        "y": 87.15625,
+        "value": "TE",
+        "fontSize": 9,
+        "textAnchor": "middle",
+        "color": "#0f172a"
+      },
+      {
+        "kind": "text",
+        "x": 292.0,
+        "y": 306.2265625,
+        "value": "Pt100",
+        "fontSize": 9,
+        "textAnchor": "start",
+        "color": "#92400e"
+      },
+      {
+        "kind": "text",
+        "x": 298.0,
+        "y": 68.15625,
+        "value": "TE-101 (poço termométrico)",
+        "fontSize": 9,
+        "textAnchor": "start",
+        "color": "#334155"
+      },
+      {
+        "kind": "path",
+        "d": "M294.0 76.65625 H392 V560 H920",
+        "stroke": "#475569",
+        "strokeWidth": 5,
+        "fill": "none"
+      },
+      {
+        "kind": "path",
+        "d": "M294.0 76.65625 H392 V560 H920",
+        "stroke": "#dc2626",
+        "strokeWidth": 3,
+        "fill": "none"
+      },
+      {
+        "kind": "path",
+        "d": "M294.0 81.65625 H396 V576 H920",
+        "stroke": "#475569",
+        "strokeWidth": 5,
+        "fill": "none"
+      },
+      {
+        "kind": "path",
+        "d": "M294.0 81.65625 H396 V576 H920",
+        "stroke": "#dc2626",
+        "strokeWidth": 3,
+        "fill": "none"
+      },
+      {
+        "kind": "path",
+        "d": "M294.0 86.65625 H400 V592 H920",
+        "stroke": "#475569",
+        "strokeWidth": 5,
+        "fill": "none"
+      },
+      {
+        "kind": "path",
+        "d": "M294.0 86.65625 H400 V592 H920",
+        "stroke": "#ffffff",
+        "strokeWidth": 3,
+        "fill": "none"
+      },
+      {
+        "kind": "path",
+        "d": "M294.0 91.65625 H404 V608 H920",
+        "stroke": "#475569",
+        "strokeWidth": 5,
+        "fill": "none"
+      },
+      {
+        "kind": "path",
+        "d": "M294.0 91.65625 H404 V608 H920",
+        "stroke": "#ffffff",
+        "strokeWidth": 3,
+        "fill": "none"
+      },
+      {
+        "kind": "text",
+        "x": 600,
+        "y": 200,
+        "value": "Parâmetros (Propriedades exportadas)",
+        "fontSize": 9,
+        "textAnchor": "start",
+        "color": "#713f12"
+      },
+      {
+        "kind": "text",
+        "x": 410,
+        "y": 548,
+        "value": "cabo de 4 fios até os bornes 1 a 4 do TT301 (vermelho, vermelho, branco, branco)",
+        "fontSize": 9,
+        "textAnchor": "start",
+        "color": "#0f172a"
+      }
+    ],
+    "pins": [
+      {
+        "id": "heater",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 40,
+        "angle": 180,
+        "length": 8,
+        "label": "Aquecimento (%)"
+      },
+      {
+        "id": "rtd1",
+        "kind": "ANALOG_OUT",
+        "x": 920,
+        "y": 560,
+        "angle": 0,
+        "length": 8,
+        "label": "1"
+      },
+      {
+        "id": "rtd2",
+        "kind": "ANALOG_OUT",
+        "x": 920,
+        "y": 576,
+        "angle": 0,
+        "length": 8,
+        "label": "2"
+      },
+      {
+        "id": "rtd3",
+        "kind": "ANALOG_OUT",
+        "x": 920,
+        "y": 592,
+        "angle": 0,
+        "length": 8,
+        "label": "3"
+      },
+      {
+        "id": "rtd4",
+        "kind": "ANALOG_OUT",
+        "x": 920,
+        "y": 608,
+        "angle": 0,
+        "length": 8,
+        "label": "4"
+      },
+      {
+        "id": "temperature",
+        "kind": "ANALOG_OUT",
+        "x": 920,
+        "y": 120,
+        "angle": 0,
+        "length": 8,
+        "label": "Temperatura (°C)"
+      }
+    ]
+  },
+  "exposedComponents": [
+    {
+      "componentId": "g_tank",
+      "x": 150,
+      "y": 96,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 0
+    },
+    {
+      "componentId": "g_coil",
+      "x": 198.0,
+      "y": 336.2265625,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 1
+    },
+    {
+      "componentId": "g_heating",
+      "x": 40,
+      "y": 210,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 2
+    },
+    {
+      "componentId": "g_gauge",
+      "x": 410,
+      "y": 48,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 3
+    },
+    {
+      "componentId": "g_bar",
+      "x": 548,
+      "y": 52,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 4
+    },
+    {
+      "componentId": "g_t",
+      "x": 410,
+      "y": 210,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 5
+    },
+    {
+      "componentId": "g_ts",
+      "x": 410,
+      "y": 260,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 6
+    },
+    {
+      "componentId": "g_r",
+      "x": 410,
+      "y": 310,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 7
+    },
+    {
+      "componentId": "g_q",
+      "x": 410,
+      "y": 360,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 8
+    },
+    {
+      "componentId": "g_loss",
+      "x": 410,
+      "y": 410,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 9
+    },
+    {
+      "componentId": "g_tau",
+      "x": 410,
+      "y": 460,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 10
+    },
+    {
+      "componentId": "g_p_v",
+      "x": 600,
+      "y": 210,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 11
+    },
+    {
+      "componentId": "g_p_p",
+      "x": 760,
+      "y": 210,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 12
+    },
+    {
+      "componentId": "g_p_ua",
+      "x": 600,
+      "y": 260,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 13
+    },
+    {
+      "componentId": "g_p_ta",
+      "x": 760,
+      "y": 260,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 14
+    },
+    {
+      "componentId": "g_p_tau",
+      "x": 600,
+      "y": 310,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 15
+    },
+    {
+      "componentId": "g_p_r0",
+      "x": 760,
+      "y": 310,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 16
+    },
+    {
+      "componentId": "g_p_lead",
+      "x": 600,
+      "y": 360,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 17
+    },
+    {
+      "componentId": "g_p_dev",
+      "x": 760,
+      "y": 360,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 18
+    }
+  ],
+  "exportedPropertyComponentIds": [
+    "c_volume",
+    "c_pmax",
+    "c_ua",
+    "c_tamb",
+    "c_tau",
+    "c_r0",
+    "c_lead",
+    "c_dev",
+    "c_broken"
+  ]
+}

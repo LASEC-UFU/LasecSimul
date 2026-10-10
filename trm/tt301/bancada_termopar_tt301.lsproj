@@ -1,0 +1,557 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    {
+      "id": "component-1791289162830-859519",
+      "typeId": "sources.dc_voltage",
+      "properties": {
+        "voltage": 24,
+        "__ui_valueLabelX": 56,
+        "__ui_valueLabelY": 10
+      },
+      "label": "Voltage Source-1",
+      "showValue": true,
+      "showDialValue": false,
+      "visual": {
+        "x": 892.8550428314728,
+        "y": 625.1144957168527,
+        "rotation": 90
+      }
+    },
+    {
+      "id": "component-1791289285255-920511",
+      "typeId": "meters.ampmeter",
+      "properties": {
+        "resistance": 0.000001
+      },
+      "label": "Ampmeter-1",
+      "showValue": false,
+      "showDialValue": false,
+      "flipH": true,
+      "visual": {
+        "x": 855.007350089845,
+        "y": 539.8879543130956,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791298567681-219290",
+      "typeId": "protocol.hart.modem",
+      "properties": {
+        "pc_link": "serial",
+        "port_name": "CNCB0",
+        "udp_address": "127.0.0.1",
+        "udp_port": 5094,
+        "auto_open": false,
+        "senseResistance": 250,
+        "transmitAmplitudeMvpp": 500
+      },
+      "label": "Modem HART-1",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 854.1868755684786,
+        "y": 728.3013488537568,
+        "rotation": 90
+      }
+    },
+    {
+      "id": "component-1791298650899-835065",
+      "typeId": "passive.resistor",
+      "properties": {
+        "resistance": 250,
+        "__ui_valueLabelX": 16,
+        "__ui_valueLabelY": 11
+      },
+      "label": "Resistor-1",
+      "showValue": true,
+      "showDialValue": false,
+      "visual": {
+        "x": 791.2441122111177,
+        "y": 640.8796861568541,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791374315637-835373",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "NetA"
+      },
+      "label": "Tunnel.-1",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 556.3116678766052,
+        "y": 747.5569738487833,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791374334324-929938",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "NetA"
+      },
+      "label": "Tunnel.-2",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 743.8058750557734,
+        "y": 679.9491629183711,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791374352508-941802",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "NetB"
+      },
+      "label": "Tunnel.-3",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 786.1207502783213,
+        "y": 696.7710276585746,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791374384819-700152",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "NetB"
+      },
+      "label": "Tunnel.-4",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 553.7005733649667,
+        "y": 780.1174681987999,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791478193390-287006",
+      "typeId": "meters.oscope",
+      "properties": {
+        "inputMode": "differential",
+        "filter": 0,
+        "autoScale": true,
+        "tracks": 4,
+        "sampleIntervalNs": 50000,
+        "tunnels": ""
+      },
+      "label": "Oscope-1",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 601.1994642004439,
+        "y": 729.0604507522371,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791626134669-tt301",
+      "typeId": "subcircuits.hart.smar_tt301",
+      "label": "SMAR TT301 (HART)",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 610.7044360945629,
+        "y": 485.1040895136738,
+        "rotation": 0
+      },
+      "properties": {}
+    },
+    {
+      "id": "component-1791630737549-tck01",
+      "typeId": "sensors.thermocouple",
+      "label": "Termopar K (calibrador em modo TC)",
+      "showValue": true,
+      "showDialValue": true,
+      "visual": {
+        "x": 372.7044360945629,
+        "y": 615.1040895136738,
+        "rotation": 0
+      },
+      "properties": {
+        "temp": 25,
+        "ref_temp": 25,
+        "tc_type": 3,
+        "emf_mv": 0,
+        "min_temp": 0,
+        "max_temp": 1200,
+        "r_loop": 5,
+        "broken": false,
+        "dialStep": 1
+      }
+    },
+    {
+      "id": "component-1791630737549-vm01",
+      "typeId": "instruments.voltmeter",
+      "label": "Multímetro em mV (FEM nos bornes)",
+      "showValue": true,
+      "showDialValue": false,
+      "visual": {
+        "x": 362.7044360945629,
+        "y": 733.1040895136738,
+        "rotation": 0
+      },
+      "properties": {}
+    }
+  ],
+  "topology": {
+    "revision": 460,
+    "nodes": [],
+    "conductors": [
+      {
+        "id": "wire-1791289319738-917151",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791289162830-859519",
+          "pinId": "pin-1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791289285255-920511",
+          "pinId": "pin-1"
+        },
+        "vertices": [
+          {
+            "x": 924.8550428314728,
+            "y": 592
+          },
+          {
+            "x": 904,
+            "y": 592
+          },
+          {
+            "x": 904,
+            "y": 579.8879543130956
+          }
+        ]
+      },
+      {
+        "id": "wire-1791289326470-913544",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791626134669-tt301",
+          "pinId": "loop_plus"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791289285255-920511",
+          "pinId": "pin-2"
+        },
+        "vertices": [
+          {
+            "x": 887.007350089845,
+            "y": 625.1040895136738
+          }
+        ]
+      },
+      {
+        "id": "wire-1791298588001-91206",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791298567681-219290",
+          "pinId": "loop_plus"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791289162830-859519",
+          "pinId": "pin-2"
+        },
+        "vertices": [
+          {
+            "x": 898.1868755684786,
+            "y": 688
+          },
+          {
+            "x": 924.8550428314728,
+            "y": 688
+          }
+        ]
+      },
+      {
+        "id": "wire-1791298748828-934933",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791298650899-835065",
+          "pinId": "pin-1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791626134669-tt301",
+          "pinId": "loop_minus"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791374348388-270274",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791374334324-929938",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791298650899-835065",
+          "pinId": "pin-1"
+        },
+        "vertices": [
+          {
+            "x": 792,
+            "y": 685.9491629183711
+          },
+          {
+            "x": 792,
+            "y": 645.3796861568541
+          }
+        ]
+      },
+      {
+        "id": "wire-1791374421440-436107",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791374352508-941802",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791298650899-835065",
+          "pinId": "pin-2"
+        },
+        "vertices": [
+          {
+            "x": 824,
+            "y": 702.7710276585746
+          },
+          {
+            "x": 824,
+            "y": 645.3796861568541
+          }
+        ]
+      },
+      {
+        "id": "wire-1791374425471-750644",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791298567681-219290",
+          "pinId": "loop_minus"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791298650899-835065",
+          "pinId": "pin-2"
+        },
+        "vertices": [
+          {
+            "x": 882.1868755684786,
+            "y": 645.3796861568541
+          }
+        ]
+      },
+      {
+        "id": "wire-1791478211710-287323",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791478193390-287006",
+          "pinId": "pin-1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791374315637-835373",
+          "pinId": "pin"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791478214574-959464",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791374384819-700152",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791478193390-287006",
+          "pinId": "pin-2"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791630045461-jumper14",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791626134669-tt301",
+          "pinId": "s1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791626134669-tt301",
+          "pinId": "s4"
+        },
+        "vertices": [
+          {
+            "x": 576.7044360945629,
+            "y": 611.1040895136738
+          },
+          {
+            "x": 576.7044360945629,
+            "y": 669.1040895136738
+          },
+          {
+            "x": 590.7044360945629,
+            "y": 669.1040895136738
+          },
+          {
+            "x": 590.7044360945629,
+            "y": 659.1040895136738
+          }
+        ]
+      },
+      {
+        "id": "wire-1791630045461-jumper34",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791626134669-tt301",
+          "pinId": "s3"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791626134669-tt301",
+          "pinId": "s4"
+        },
+        "vertices": [
+          {
+            "x": 590.7044360945629,
+            "y": 643.1040895136738
+          },
+          {
+            "x": 590.7044360945629,
+            "y": 659.1040895136738
+          }
+        ]
+      },
+      {
+        "id": "wire-1791630737549-tcp",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791630737549-tck01",
+          "pinId": "p"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791626134669-tt301",
+          "pinId": "s2"
+        },
+        "vertices": [
+          {
+            "x": 358.7044360945629,
+            "y": 627.1040895136738
+          },
+          {
+            "x": 358.7044360945629,
+            "y": 583.1040895136738
+          },
+          {
+            "x": 542.7044360945629,
+            "y": 583.1040895136738
+          },
+          {
+            "x": 542.7044360945629,
+            "y": 627.1040895136738
+          }
+        ]
+      },
+      {
+        "id": "wire-1791630737549-tcn",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791630737549-tck01",
+          "pinId": "n"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791626134669-tt301",
+          "pinId": "s3"
+        },
+        "vertices": [
+          {
+            "x": 456.7044360945629,
+            "y": 627.1040895136738
+          },
+          {
+            "x": 456.7044360945629,
+            "y": 643.1040895136738
+          }
+        ]
+      },
+      {
+        "id": "wire-1791630737549-vmp",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791630737549-vm01",
+          "pinId": "pin-2"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791630737549-tck01",
+          "pinId": "p"
+        },
+        "vertices": [
+          {
+            "x": 394.7044360945629,
+            "y": 785.1040895136738
+          },
+          {
+            "x": 350.7044360945629,
+            "y": 785.1040895136738
+          },
+          {
+            "x": 350.7044360945629,
+            "y": 627.1040895136738
+          }
+        ]
+      },
+      {
+        "id": "wire-1791630737549-vmn",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791630737549-vm01",
+          "pinId": "pin-1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791630737549-tck01",
+          "pinId": "n"
+        },
+        "vertices": [
+          {
+            "x": 378.7044360945629,
+            "y": 793.1040895136738
+          },
+          {
+            "x": 446.7044360945629,
+            "y": 793.1040895136738
+          },
+          {
+            "x": 446.7044360945629,
+            "y": 627.1040895136738
+          }
+        ]
+      }
+    ]
+  },
+  "visual": {
+    "viewport": {
+      "x": -166.16354887565032,
+      "y": -320.08327161093905,
+      "zoom": 0.8
+    }
+  },
+  "simulationSettings": {}
+}

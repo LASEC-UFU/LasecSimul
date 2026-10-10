@@ -15,7 +15,7 @@ const builtinGraphical = [
 ];
 
 const manifestGraphical = [
-  "sensors.ldr", "sensors.thermistor", "sensors.rtd", "sensors.strain", "sensors.ds1621", "sensors.dht22",
+  "sensors.ldr", "sensors.thermistor", "sensors.rtd", "sensors.thermocouple", "sensors.strain", "sensors.ds1621", "sensors.dht22",
   "sensors.sr04", "sensors.ds18b20", "peripherals.ds1307", "peripherals.touchpad", "peripherals.serialterm",
   "peripherals.serialport", "peripherals.ky040", "peripherals.ky023", "peripherals.esp01",
   "outputs.servo", "outputs.aip31068_i2c", "outputs.gc9a01a", "outputs.hd44780", "outputs.ks0108",
@@ -55,7 +55,7 @@ const manifestGraphical = [
   });
 
   await test("todos os sensores derivados de Dialed no SimulIDE expõem o mesmo controle giratório", () => {
-    for (const typeId of ["sensors.ldr", "sensors.thermistor", "sensors.rtd", "sensors.strain"]) {
+    for (const typeId of ["sensors.ldr", "sensors.thermistor", "sensors.rtd", "sensors.thermocouple", "sensors.strain"]) {
       const item = manifestById.get(typeId) as {
         package?: { viewSpec?: { interaction?: Record<string, { kind?: string; prop?: string }> } };
       } | undefined;

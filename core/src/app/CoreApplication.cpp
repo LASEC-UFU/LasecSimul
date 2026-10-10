@@ -344,6 +344,11 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
     });
     registerBuiltinMetadata("bridges.controlled_current_source", "Fonte de Corrente por Sinal", {},
                             R"json({"en":{"name":"Signal Controlled Current Source"}})json", std::nullopt, std::nullopt, {"p", "n"});
+    reg.registerFactory("bridges.controlled_resistor", [](const ComponentParams& p) {
+        return std::make_unique<components::SignalControlledResistor>(makePins2(p, "p", "n"), p.property("resistance", 100.0));
+    });
+    registerBuiltinMetadata("bridges.controlled_resistor", "Resistor por Sinal", {},
+                            R"json({"en":{"name":"Signal Controlled Resistor"}})json", std::nullopt, std::nullopt, {"p", "n"});
     reg.registerFactory("bridges.digital_output", [](const ComponentParams& p) {
         return std::make_unique<components::SignalDigitalOutput>(makePins2(p, "p", "n"));
     });

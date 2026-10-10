@@ -306,19 +306,20 @@ int main(int argc, char** argv) {
         check(device != nullptr && device->value("id", std::string{}) == "tt301" &&
                   device->at("properties").value("profileId", std::string{}) == "lasecsimul.hart.standard-field-device",
               "S2 it contains one standard HART field device (protocol.hart.device.standard), not a built-in TT301");
-        bool interfaceOk = document.contains("interface") && document["interface"].size() == 3;
+        // The sensor arrives at the terminals 1-4 like on the real transmitter (RTD at 2, 3 or 4 wires, or a
+        // thermocouple on 2 and 3): an input stage of generic blocks measures it and drives the device's PV.
+        bool interfaceOk = document.contains("interface") && document["interface"].size() == 6;
         for (const auto& entry : document["interface"]) {
             const std::string pin = entry.value("pinId", std::string{});
-            if (pin == "temperature") interfaceOk = interfaceOk && entry.value("domain", std::string{}) == "signal" &&
-                                                    entry.value("direction", std::string{}) == "in";
-            else interfaceOk = interfaceOk && (pin == "loop_plus" || pin == "loop_minus") &&
-                               entry.value("domain", std::string{}) == "electrical";
+            interfaceOk = interfaceOk && (pin == "s1" || pin == "s2" || pin == "s3" || pin == "s4" || pin == "loop_plus" || pin == "loop_minus") &&
+                          entry.value("domain", std::string{}) == "electrical";
         }
-        bool temperatureWired = false, loopWired = true;
+        bool temperatureWired = false, faultWired = false, loopWired = true;
         for (const auto& wire : document["topology"]["conductors"]) {
-            if (wire["from"].value("componentId", std::string{}) == "tunnel_temperature" &&
-                wire["to"].value("componentId", std::string{}) == "tt301" && wire["to"].value("pinId", std::string{}) == "PV")
-                temperatureWired = true;
+            const std::string from = wire["from"].value("componentId", std::string{});
+            const bool toDevice = wire["to"].value("componentId", std::string{}) == "tt301";
+            if (from == "pv_select" && toDevice && wire["to"].value("pinId", std::string{}) == "PV") temperatureWired = true;
+            if (from == "fault_select" && toDevice && wire["to"].value("pinId", std::string{}) == "sensorFault") faultWired = true;
         }
         for (const char* pin : {"loop_plus", "loop_minus"}) {
             bool found = false;
@@ -326,10 +327,12 @@ int main(int argc, char** argv) {
                 if (wire["to"].value("componentId", std::string{}) == "tt301" && wire["to"].value("pinId", std::string{}) == pin) found = true;
             loopWired = loopWired && found;
         }
-        check(interfaceOk && temperatureWired && loopWired,
-              "S3 the TEMP signal input drives the PV; LOOP+/LOOP- stay electrical (4-20 mA loop)");
+        check(interfaceOk && temperatureWired && faultWired && loopWired,
+              "S3 sensor terminals 1-4 (RTD 2/3/4 wires, thermocouple on 2-3) feed the PV and the burnout through the input stage; LOOP+/LOOP- stay the 4-20 mA loop");
         const auto exported = document.value("exportedPropertyComponentIds", nlohmann::json::array());
-        check(std::find(exported.begin(), exported.end(), "tt301") != exported.end(), "S4 the inner device's properties are exported");
+        check(std::find(exported.begin(), exported.end(), "tt301") != exported.end() &&
+                  std::find(exported.begin(), exported.end(), "c_tterm") != exported.end(),
+              "S4 the inner device's properties and the terminal block (cold junction) temperature are exported");
         nlohmann::json commands = nlohmann::json::array();
         try { commands = nlohmann::json::parse(device ? device->at("properties").value("hartCommandsJson", std::string{"[]"}) : "[]"); } catch (...) {}
         bool allDeviceSpecific = commands.size() == 19;
@@ -342,9 +345,21 @@ int main(int argc, char** argv) {
               "S6 the subcircuit's device compiles: standard C++ HART device, variables and commands accepted");
         check(document.value("iconPath", std::string{}) == "./tt301.svg", "S7 the TT301 artwork is the palette icon and symbol");
         const auto ports = tt301.component->signalPorts();
-        const auto pv = std::find_if(ports.begin(), ports.end(), [](const auto& port) { return port.id == "PV"; });
-        check(ports.size() == 1 && pv != ports.end() && pv->direction == lasecsimul::SignalPortDirection::Input && pv->unit.empty(),
-              "S8 one dimensionless PV input port: an unitless slider fits, and Command 44 may change the HART unit");
+        const auto port = [&](const char* id) { return std::find_if(ports.begin(), ports.end(), [&](const auto& p) { return p.id == id; }); };
+        const auto pv = port("PV");
+        const auto fault = port("sensorFault");
+        const auto connection = port("sensor.connection");
+        const auto terminal = port("terminalTemperature");
+        bool configurationOut = true;
+        for (const char* id : {"sensor.type", "sensor.model", "sensor.connection", "sensor.coldJunction"}) {
+            const auto entry = port(id);
+            configurationOut = configurationOut && entry != ports.end() && entry->direction == lasecsimul::SignalPortDirection::Output;
+        }
+        check(ports.size() == 7 && pv != ports.end() && pv->direction == lasecsimul::SignalPortDirection::Input && pv->unit.empty() &&
+                  fault != ports.end() && fault->direction == lasecsimul::SignalPortDirection::Input &&
+                  terminal != ports.end() && terminal->direction == lasecsimul::SignalPortDirection::Input && terminal->unit.empty() &&
+                  connection != ports.end() && configurationOut,
+              "S8 signal ports: dimensionless PV, sensorFault and terminal temperature inputs; sensor type, model, connection and cold junction as outputs for the input stage");
     }
 
     // ------------------------------------------------------------- A. identity

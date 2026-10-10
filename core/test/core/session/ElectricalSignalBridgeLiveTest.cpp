@@ -64,6 +64,9 @@ void registerFactories(SimulationSession& session) {
     session.components().registerFactory("bridges.controlled_current_source", [](const ComponentParams& p) {
         return std::make_unique<components::SignalControlledCurrentSource>(pins2(p, "p", "n"));
     });
+    session.components().registerFactory("bridges.controlled_resistor", [](const ComponentParams& p) {
+        return std::make_unique<components::SignalControlledResistor>(pins2(p, "p", "n"), p.property("resistance", 100.0));
+    });
     session.components().registerFactory("bridges.digital_output", [](const ComponentParams& p) {
         return std::make_unique<components::SignalDigitalOutput>(pins2(p, "p", "n"));
     });
@@ -204,6 +207,47 @@ void digitalSensorDrivesDigitalActuatorThroughSignalWire() {
           "(4c) sensor digital mede 12V como 'true' -> atuador liga em 5V -> 5mA no resistor de 1k, tudo via fio comum");
 }
 
+// (5) Resistor por sinal (elemento de um Pt100 num modelo de processo) alimentado por uma fonte de
+// corrente por sinal e lido por um sensor de tensão, os três ligados a blocos de 1 ms: a Lei de Ohm
+// fecha pelo caminho de sinal e a simulação anda em passos normais. Antes, as portas das pontes
+// nasciam com rate de 1 ns e prendiam o solver em 1 milhão de passos por milissegundo.
+void controlledResistorFollowsSignalWithoutNanosecondStall() {
+    GlobalPluginCache cache;
+    SimulationSession session(cache);
+    registerFactories(session);
+    const auto bias = [&](double value) {
+        ComponentParams params;
+        params.properties["bias"] = value;
+        params.properties["samplePeriodNs"] = 1'000'000.0;
+        return session.addComponent("control.bias", params);
+    };
+    const uint32_t ohms = bias(250.0);
+    const uint32_t amps = bias(0.001);
+    const uint32_t resistor = session.addComponent("bridges.controlled_resistor", {});
+    const uint32_t source = session.addComponent("bridges.controlled_current_source", {});
+    const uint32_t sensor = session.addComponent("bridges.voltage_sensor", {});
+    const uint32_t ground = session.addComponent("other.ground", {});
+    ComponentParams gainParams;
+    gainParams.properties["gain"] = 1.0;
+    gainParams.properties["samplePeriodNs"] = 1'000'000.0;
+    const uint32_t reader = session.addComponent("control.gain", gainParams);
+    session.connectWire(ohms, "out", resistor, "command");
+    session.connectWire(amps, "out", source, "command");
+    session.connectWire(source, "p", resistor, "p");
+    session.connectWire(source, "n", ground, "pin");
+    session.connectWire(resistor, "n", ground, "pin");
+    session.connectWire(sensor, "p", resistor, "p");
+    session.connectWire(sensor, "n", ground, "pin");
+    session.connectWire(sensor, "value", reader, "in");
+
+    session.resetPerformanceMetrics();
+    session.scheduler().runUntil(20'000'000ull);
+    const double volts = session.signalRuntime().real(session.signalRuntime().output(signalPortBlockId(reader, "out")));
+    check(std::abs(volts - 0.25) < 1e-6, "(5) 1 mA no resistor de 250 ohm comandado por sinal: o sensor publica 0,25 V");
+    check(session.acceptedTransientSteps() < 10'000,
+          "(5) pontes ligadas a blocos de 1 ms herdam o rate deles: 20 ms em passos normais, não em passos de 1 ns");
+}
+
 } // namespace
 
 int main() {
@@ -212,6 +256,7 @@ int main() {
         controlledVoltageSourceDrivesElectricalNodeFromSignal();
         currentSensorPublishesElectricalReadingAsSignal();
         digitalSensorDrivesDigitalActuatorThroughSignalWire();
+        controlledResistorFollowsSignalWithoutNanosecondStall();
     } catch (const std::exception& ex) {
         std::fprintf(stderr, "EXCECAO NAO TRATADA: %s\n", ex.what());
         return 2;
