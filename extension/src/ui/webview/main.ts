@@ -1,5 +1,5 @@
 import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
-import { CanonicalEndpoint, CanonicalTopologyDocument, InteractionKindEntry, McuSerialPortEntry, PackagePin, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
+import { CanonicalEndpoint, CanonicalTopologyDocument, HmiApplication, HmiPage, HmiPageElement, InteractionKindEntry, McuSerialPortEntry, PackagePin, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, defaultHmiNavigationVisual, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
 import { reorderedZOrder, zOrderModeForKey, type ZOrderMode } from "./zOrder.js";
 import { graphicalRuntimeProperties, isGraphicalTypeId } from "./graphicsBinding.js";
 import { GraphicalActionPhase, GraphicalActionValue, graphicalActionConfig, isGraphicalActionTypeId, resolveGraphicalActionValue } from "./graphicsAction.js";
@@ -168,8 +168,11 @@ let isApplyingUndoSnapshot = false;
  * `captureUndoSnapshot()`/`activeSceneComponents()` leem esta variável, e `let` fica em temporal
  * dead zone até sua própria linha de declaração executar (bug real: `resetUndoHistory` chamado no
  * escopo do módulo, antes da declaração, lançava "Cannot access before initialization"). */
-type SubcircuitEditorMode = "circuit" | "symbol" | "icon";
+type SubcircuitEditorMode = "circuit" | "symbol" | "icon" | "hmi";
 let subcircuitEditorMode: SubcircuitEditorMode = "circuit";
+let selectedHmiPageId: string | undefined;
+let hmiPresentationMode = false;
+let hmiSceneCache: { pageId: string; elements: WebviewComponentModel[]; sourceByElementId: Map<string, string> } | undefined;
 
 resetUndoHistory(mainUndoHistory);
 
@@ -352,6 +355,7 @@ const UI_TEXT = {
     subcircuitEditorModeSymbol: "Símbolo",
     subcircuitEditorModeIcon: "Ícone",
     createPin: "Criar Pino",
+    createHmiPage: "Criar página HMI com a seleção",
     genericEncapsulation: "Encapsulamento Genérico",
     customEncapsulation: "Encapsulamento Personalizado",
     replaceCustomEncapsulation: "Substituir o encapsulamento personalizado pelo genérico? O desenho atual será descartado.",
@@ -506,6 +510,7 @@ const UI_TEXT = {
     subcircuitEditorModeSymbol: "Symbol",
     subcircuitEditorModeIcon: "Icon",
     createPin: "Create Pin",
+    createHmiPage: "Create HMI page from selection",
     genericEncapsulation: "Generic Encapsulation",
     customEncapsulation: "Custom Encapsulation",
     replaceCustomEncapsulation: "Replace the custom encapsulation with the generic one? The current drawing will be discarded.",
@@ -538,6 +543,10 @@ function t(key: keyof typeof UI_TEXT["pt-BR"]): string {
 }
 
 let readoutsByComponentId: Record<string, ComponentReadoutValue> = {};
+let readoutTransportStatus: "connected" | "disconnected" = "connected";
+let readoutSampleTimestampNs: number | undefined;
+let telemetryLastFrameReceivedAtMs: number | undefined;
+let hmiTelemetryStale = false;
 /** Base64 do estado visual vivo, somente para packages que declaram `runtimeState`. */
 let visualStatesByComponentId: Record<string, string> = {};
 // Histórico APROXIMADO (1 amostra por poll de IPC, ~300ms de parede, sem relação com o tempo
@@ -570,6 +579,8 @@ let dcMotorLastAnimationMs: number | undefined;
  * chave `${outerComponentId}:${innerComponentId}`, ver `coreLifecycle.ts::pollBoardOverlayReadouts`.
  * Fix "LED onboard não acende quando exposto no símbolo" (2026-07-18). */
 let boardOverlayReadoutsByKey: Record<string, ComponentReadoutValue> = {};
+let boardOverlayTransportStatus: "connected" | "disconnected" = "connected";
+let boardOverlaySampleTimestampNs: number | undefined;
 /** Raw runtime state (base64) of exposed inner components whose package
  * projects live state (`runtimeState`, e.g. a transmitter LCD). */
 let boardOverlayVisualStatesByKey: Record<string, string> = {};
@@ -685,7 +696,7 @@ interface McuSerialMonitorRuntime {
 }
 const mcuSerialMonitorRuntime = new Map<string, McuSerialMonitorRuntime>();
 let mcuSerialMonitorLayer: HTMLDivElement | undefined;
-let clipboardItems: { components: WebviewComponentModel[]; wires: WebviewWireModel[] } | undefined;
+let clipboardItems: { components: WebviewComponentModel[]; wires: WebviewWireModel[]; hmiSourceByClipboardId?: Map<string, string> } | undefined;
 const activePushShortcutIds = new Set<string>();
 /** `true` durante QUALQUER gesto de arrastar componente em andamento (mouse ainda pressionado) --
  * mesmo com shell persistente, o render de telemetria pode trocar SVG interno e estado visual no
@@ -871,6 +882,7 @@ let placementGhostEl: HTMLElement | null = null;
  * operações genéricas de cena (seleção, hit-test, arrastar, girar, painel de propriedades, copiar/
  * colar, apagar, undo/redo, z-order, adicionar item da paleta, zoom/exportar) passam por aqui. */
 function activeSceneComponents(): WebviewComponentModel[] {
+  if (subcircuitEditorMode === "hmi") return hmiSceneComponents();
   if (subcircuitEditorMode === "symbol") return state.symbolElements;
   if (subcircuitEditorMode === "icon") return state.iconElements;
   return state.components;
@@ -880,7 +892,10 @@ function activeSceneComponents(): WebviewComponentModel[] {
  * muta os objetos individuais em-lugar) -- escreve de volta na mesma seção que `activeSceneComponents()`
  * leria, conforme o modo atual. */
 function setActiveSceneComponents(next: WebviewComponentModel[]): void {
-  if (subcircuitEditorMode === "symbol") {
+  if (subcircuitEditorMode === "hmi") {
+    hmiSceneCache = { pageId: selectedHmiPageId ?? "", elements: next, sourceByElementId: hmiSceneCache?.sourceByElementId ?? new Map() };
+    commitHmiSceneToPage();
+  } else if (subcircuitEditorMode === "symbol") {
     state = { ...state, symbolElements: next };
   } else if (subcircuitEditorMode === "icon") {
     state = { ...state, iconElements: next };
@@ -889,12 +904,80 @@ function setActiveSceneComponents(next: WebviewComponentModel[]): void {
   }
 }
 
+function hmiPageForEditing() {
+  const app = state.hmiApplication;
+  if (!app?.pages.length) return undefined;
+  const page = app.pages.find((entry) => entry.id === selectedHmiPageId) ?? app.pages.find((entry) => entry.id === app.startPageId) ?? app.pages[0];
+  if (page) selectedHmiPageId = page.id;
+  return page;
+}
+
+function hmiSceneComponents(): WebviewComponentModel[] {
+  const page = hmiPageForEditing();
+  if (!page) return [];
+  if (hmiSceneCache?.pageId === page.id) return hmiSceneCache.elements;
+  const sourceByElementId = new Map<string, string>();
+  const elements = page.elements.flatMap((item) => {
+    const source = item.componentId ? state.components.find((component) => component.id === item.componentId) : undefined;
+    const typeId = source?.typeId ?? item.typeId;
+    if (!typeId || (!source && !typeId.startsWith("graphics."))) return [];
+    if (source) sourceByElementId.set(item.id, source.id);
+    const catalogEntry = catalogEntryFor(typeId);
+    const properties = { ...(source?.properties ?? catalogEntry?.defaultProperties ?? {}), ...(item.properties ?? {}) };
+    const naturalBox = componentBox(typeId, source?.properties ?? catalogEntry?.defaultProperties ?? {});
+    if (item.visual.width > 0 && naturalBox.width > 0) properties.__simulideSceneScaleX = item.visual.width / naturalBox.width;
+    if (item.visual.height > 0 && naturalBox.height > 0) properties.__simulideSceneScaleY = item.visual.height / naturalBox.height;
+    return [{
+      ...(source ?? {}),
+      id: item.id,
+      typeId,
+      label: item.label ?? source?.label ?? catalogEntry?.label ?? typeId,
+      x: item.visual.x,
+      y: item.visual.y,
+      rotation: item.visual.rotation ?? source?.rotation ?? 0,
+      pins: [],
+      locked: false,
+      hiddenByUser: false,
+      properties,
+    } as WebviewComponentModel];
+  });
+  hmiSceneCache = { pageId: page.id, elements, sourceByElementId };
+  return elements;
+}
+
+function commitHmiSceneToPage(): void {
+  if (subcircuitEditorMode !== "hmi" || !hmiSceneCache?.pageId || !state.hmiApplication) return;
+  const currentPage = state.hmiApplication.pages.find((page) => page.id === hmiSceneCache!.pageId);
+  if (!currentPage) return;
+  const elements: HmiPageElement[] = hmiSceneCache.elements.flatMap<HmiPageElement>((component): HmiPageElement[] => {
+    const componentId = hmiSceneCache!.sourceByElementId.get(component.id);
+    const box = componentBox(component.typeId, component.properties);
+    const properties = { ...component.properties };
+    delete properties.__simulideSceneScaleX;
+    delete properties.__simulideSceneScaleY;
+    const visual = { x: component.x, y: component.y, width: box.width, height: box.height, rotation: component.rotation };
+    if (!componentId) return [{ id: component.id, typeId: component.typeId, label: component.label, properties, visual }];
+    const source = state.components.find((entry) => entry.id === componentId);
+    if (!source) return [];
+    const propertyOverrides = Object.fromEntries(Object.entries(properties).filter(([key, value]) =>
+      JSON.stringify(value) !== JSON.stringify(source.properties[key])));
+    return [{ id: component.id, componentId, ...(component.label !== source.label ? { label: component.label } : {}),
+      ...(Object.keys(propertyOverrides).length > 0 ? { properties: propertyOverrides } : {}), visual }];
+  });
+  const renderedElementIds = new Set(elements.map((element) => element.id));
+  const orphanReferences = currentPage.elements.filter((element) => element.componentId &&
+    !state.components.some((component) => component.id === element.componentId) && !renderedElementIds.has(element.id));
+  const pageElements = [...elements, ...orphanReferences];
+  const pages = state.hmiApplication.pages.map((page) => page.id === currentPage.id ? { ...page, elements: pageElements } : page);
+  state = { ...state, hmiApplication: { ...state.hmiApplication, pages } };
+}
+
 /** Traduz `subcircuitEditorMode` ("circuit"|"symbol"|"icon") pro vocabulário do modelo canônico do
  * host (`core/schematicModel.ts::ElementScope`, "schematic"|"symbol"|"icon") -- usado pelos verbos
  * IPC que precisam informar EXPLICITAMENTE em qual cena operar (`requestInsertItems`), já que o host
  * não pode adivinhar isso a partir de ids ainda inexistentes (itens recém-colados/duplicados). */
 function currentElementScope(): "schematic" | "symbol" | "icon" {
-  return subcircuitEditorMode === "circuit" ? "schematic" : subcircuitEditorMode;
+  return subcircuitEditorMode === "symbol" || subcircuitEditorMode === "icon" ? subcircuitEditorMode : "schematic";
 }
 
 /** Troca o modo do editor de subcircuito -- NUNCA salva, NUNCA recarrega o documento, NUNCA
@@ -905,10 +988,15 @@ function currentElementScope(): "schematic" | "symbol" | "icon" {
  * conteúdos INDEPENDENTES (túneis/componentes reais vs. formas do símbolo vs. formas do ícone);
  * sem isto, desfazer logo após trocar de modo comparia contra o baseline da cena ANTERIOR. */
 function setSubcircuitEditorMode(mode: SubcircuitEditorMode): void {
-  if (!state.subcircuitEditingContext || mode === subcircuitEditorMode) return;
+  if (mode === "hmi" && !state.hmiApplication?.pages.length) return;
+  if (mode !== "hmi" && !state.subcircuitEditingContext && subcircuitEditorMode !== "hmi") return;
+  if (mode === subcircuitEditorMode) return;
+  if (subcircuitEditorMode === "hmi") commitHmiSceneToPage();
+  hmiPresentationMode = false;
   cancelActiveTool();
   clearSelection();
   subcircuitEditorMode = mode;
+  hmiSceneCache = undefined;
   resetUndoHistory(mainUndoHistory);
   render();
   // Centraliza e enquadra automaticamente a cena inteira sempre que o modo troca (pedido original:
@@ -1215,6 +1303,7 @@ propertyDialog.addEventListener("click", (event) => {
 });
 propertyDialog.addEventListener("close", () => {
   activePropertyTarget = undefined;
+  propertyDialog.className = "property-dialog";
 });
 
 // The property editor is part of the schematic itself.  It does not depend on
@@ -1875,7 +1964,7 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
     if (isGraphicalTypeId(item.typeId)) {
       properties = {
         ...properties,
-        ...graphicalRuntimeProperties(properties, (sourceId) => boardOverlayReadoutsByKey[`${component.id}:${sourceId}`]),
+        ...graphicalRuntimeProperties(properties, (sourceId) => boardOverlayReadoutsByKey[`${component.id}:${sourceId}`], boardOverlayTransportStatus, hmiTelemetryStale, boardOverlaySampleTimestampNs),
       };
     }
     properties = { ...properties, ...boardOverlayRuntimeState(component.id, item) };
@@ -2127,7 +2216,7 @@ function patchBoardOverlayRuntimeVisuals(): void {
         // componente INTERNO, logo a chave leva o id da instância externa junto.
         properties = {
           ...properties,
-          ...graphicalRuntimeProperties(properties, (sourceId) => boardOverlayReadoutsByKey[`${outerComponentId}:${sourceId}`]),
+          ...graphicalRuntimeProperties(properties, (sourceId) => boardOverlayReadoutsByKey[`${outerComponentId}:${sourceId}`], boardOverlayTransportStatus, hmiTelemetryStale, boardOverlaySampleTimestampNs),
         } as Record<string, string | number | boolean>;
       }
       properties = { ...properties, ...runtimeState };
@@ -2263,6 +2352,8 @@ interface UndoSnapshot {
   selectedWireIds: string[];
   symbolMode?: WebviewProjectState["symbolMode"];
   symbolCanvas?: WebviewProjectState["symbolCanvas"];
+  hmiApplication?: HmiApplication;
+  selectedHmiPageId?: string;
 }
 
 interface UndoHistory {
@@ -2284,7 +2375,7 @@ function activeUndoHistory(): UndoHistory {
   return mainUndoHistory;
 }
 
-function snapshotOfProjectState(project: Pick<WebviewProjectState, "components" | "topology" | "selectedComponentIds" | "selectedWireIds" | "symbolMode" | "symbolCanvas">): UndoSnapshot {
+function snapshotOfProjectState(project: Pick<WebviewProjectState, "components" | "topology" | "selectedComponentIds" | "selectedWireIds" | "symbolMode" | "symbolCanvas" | "hmiApplication">): UndoSnapshot {
   return {
     components: structuredClone(project.components),
     topology: structuredClone(project.topology),
@@ -2292,6 +2383,10 @@ function snapshotOfProjectState(project: Pick<WebviewProjectState, "components" 
     selectedWireIds: [...project.selectedWireIds],
     symbolMode: project.symbolMode,
     symbolCanvas: project.symbolCanvas ? structuredClone(project.symbolCanvas) : undefined,
+    hmiApplication: project.hmiApplication ? structuredClone(project.hmiApplication) : undefined,
+    selectedHmiPageId: project.hmiApplication?.pages.some((page) => page.id === selectedHmiPageId)
+      ? selectedHmiPageId
+      : project.hmiApplication?.startPageId,
   };
 }
 
@@ -2300,8 +2395,8 @@ function captureUndoSnapshot(): UndoSnapshot {
 }
 
 /** Chave de comparação -- conteúdo da cena + política/canvas do símbolo (nunca seleção). */
-function undoContentKey(snapshot: { components: WebviewComponentModel[]; topology: CanonicalTopologyDocument; symbolMode?: WebviewProjectState["symbolMode"]; symbolCanvas?: WebviewProjectState["symbolCanvas"] }): string {
-  return JSON.stringify([snapshot.components, snapshot.topology, snapshot.symbolMode, snapshot.symbolCanvas]);
+function undoContentKey(snapshot: { components: WebviewComponentModel[]; topology: CanonicalTopologyDocument; symbolMode?: WebviewProjectState["symbolMode"]; symbolCanvas?: WebviewProjectState["symbolCanvas"]; hmiApplication?: HmiApplication }): string {
+  return JSON.stringify([snapshot.components, snapshot.topology, snapshot.symbolMode, snapshot.symbolCanvas, snapshot.hmiApplication]);
 }
 
 /** Reseta o histórico (undo E redo) pro estado ATUAL de `state` -- chamado ao entrar/sair da sessão
@@ -2350,7 +2445,7 @@ function recordUndoTransition(currentKey: string, captureCurrent: () => UndoSnap
  * mudança de SELEÇÃO apenas (nunca vira entrada de undo, ver `undoContentKey`) -- antes clonava
  * `components`/`wires` inteiros só pra descobrir isso a cada uma. */
 function recordUndoSnapshotIfChanged(): void {
-  const currentKey = undoContentKey({ components: activeSceneComponents(), topology: state.topology, symbolMode: state.symbolMode, symbolCanvas: state.symbolCanvas });
+  const currentKey = undoContentKey({ components: activeSceneComponents(), topology: state.topology, symbolMode: state.symbolMode, symbolCanvas: state.symbolCanvas, hmiApplication: state.hmiApplication });
   recordUndoTransition(currentKey, captureUndoSnapshot);
 }
 
@@ -2361,6 +2456,19 @@ function recordUndoSnapshotIfChanged(): void {
 function applyUndoSnapshot(snapshot: UndoSnapshot): void {
   isApplyingUndoSnapshot = true;
   try {
+    state = { ...state, hmiApplication: snapshot.hmiApplication ? structuredClone(snapshot.hmiApplication) : undefined };
+    selectedHmiPageId = snapshot.hmiApplication?.pages.some((page) => page.id === snapshot.selectedHmiPageId)
+      ? snapshot.selectedHmiPageId
+      : snapshot.hmiApplication?.startPageId;
+    const restoredHmiPage = snapshot.hmiApplication?.pages.find((page) => page.id === selectedHmiPageId);
+    hmiSceneCache = subcircuitEditorMode === "hmi" && restoredHmiPage
+      ? {
+          pageId: restoredHmiPage.id,
+          elements: snapshot.components,
+          sourceByElementId: new Map(restoredHmiPage.elements.flatMap((element) =>
+            element.componentId ? [[element.id, element.componentId] as const] : [])),
+        }
+      : undefined;
     setActiveSceneComponents(snapshot.components);
     state.topology = snapshot.topology;
     state.selectedComponentIds = snapshot.selectedComponentIds;
@@ -2401,6 +2509,7 @@ function redo(): void {
 // ────────────────────────────────────────────────────────────────────────────────────────────────
 
 function persistState(): void {
+  commitHmiSceneToPage();
   // Qualquer edição geométrica/visual direta sobre o resultado automático passa a ser uma edição
   // personalizada. Operações semânticas de pino regeneram antes de chegar aqui e continuam generic.
   if (state.symbolMode === "generic" && subcircuitEditorMode === "symbol") {
@@ -2420,7 +2529,380 @@ function storeWebviewState(): void {
 }
 
 function send(message: WebviewToHostMessage): void {
+  if (subcircuitEditorMode === "hmi" && (message.type === "requestUpdateProperty" || message.type === "requestPreviewProperty") &&
+      hmiSceneCache?.elements.some((component) => component.id === message.componentId)) return;
   vscode?.postMessage(message);
+}
+
+function createHmiPageFromSelection(): void {
+  if (subcircuitEditorMode === "hmi") commitHmiSceneToPage();
+  const selectedItems = activeSceneComponents().filter((component) =>
+    state.selectedComponentIds.includes(component.id) && component.typeId !== TUNNEL_TYPE_ID && component.typeId !== "connectors.signal_tunnel");
+  const name = window.prompt(currentLocale() === "pt-BR" ? "Nome da página HMI:" : "HMI page name:",
+    `${currentLocale() === "pt-BR" ? "Página" : "Page"} ${(state.hmiApplication?.pages.length ?? 0) + 1}`)?.trim();
+  if (!name) return;
+  const pageId = `hmi-page-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+  const page = {
+    id: pageId,
+    name,
+    width: 1920,
+    height: 1080,
+    elements: selectedItems.map((component) => {
+      const box = componentBox(component.typeId, component.properties);
+      const sourceComponentId = hmiSceneCache?.sourceByElementId.get(component.id) ??
+        (state.components.some((entry) => entry.id === component.id) ? component.id : undefined);
+      const properties = { ...component.properties };
+      delete properties.__simulideSceneScaleX; delete properties.__simulideSceneScaleY;
+      const source = sourceComponentId ? state.components.find((entry) => entry.id === sourceComponentId) : undefined;
+      const overrides = !source ? properties : JSON.stringify(properties) !== JSON.stringify(source.properties) ? properties : undefined;
+      return {
+        id: `hmi-element-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}-${component.id}`,
+        ...(sourceComponentId ? { componentId: sourceComponentId } : { typeId: component.typeId, label: component.label }),
+        ...(overrides ? { properties: overrides } : {}),
+        visual: { x: component.x, y: component.y, width: box.width, height: box.height, rotation: component.rotation },
+      };
+    }),
+    navigation: [],
+  };
+  const pages = [...(state.hmiApplication?.pages ?? []), page];
+  state = { ...state, hmiApplication: { startPageId: state.hmiApplication?.startPageId ?? pageId, pages } };
+  persistState();
+  render();
+  openHmiDesigner(pageId);
+}
+
+function openHmiDesigner(initialPageId?: string): void {
+  if (initialPageId && initialPageId !== selectedHmiPageId) {
+    if (subcircuitEditorMode === "hmi") commitHmiSceneToPage();
+    selectedHmiPageId = initialPageId;
+    hmiSceneCache = undefined;
+    clearSelection();
+  }
+  if (!state.hmiApplication?.pages.length) return;
+  if (subcircuitEditorMode === "hmi") { render(); zoomToFitAllDeferred(); }
+  else setSubcircuitEditorMode("hmi");
+}
+
+function setHmiStartPage(): void {
+  const page = hmiPageForEditing();
+  if (!page || !state.hmiApplication) return;
+  state = { ...state, hmiApplication: { ...state.hmiApplication, startPageId: page.id } };
+  persistState(); render();
+}
+
+function setHmiPageDimensions(): void {
+  const page = hmiPageForEditing();
+  if (!page || !state.hmiApplication) return;
+  const widthText = window.prompt(currentLocale() === "pt-BR" ? "Largura da página HMI:" : "HMI page width:", String(page.width))?.trim();
+  if (!widthText) return;
+  const heightText = window.prompt(currentLocale() === "pt-BR" ? "Altura da página HMI:" : "HMI page height:", String(page.height))?.trim();
+  if (!heightText) return;
+  const width = Number(widthText);
+  const height = Number(heightText);
+  if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
+    window.alert(currentLocale() === "pt-BR" ? "As dimensões devem ser números maiores que zero." : "Dimensions must be numbers greater than zero.");
+    return;
+  }
+  commitHmiSceneToPage();
+  state = { ...state, hmiApplication: { ...state.hmiApplication, pages: state.hmiApplication.pages.map((entry) =>
+    entry.id === page.id ? {
+      ...entry,
+      width,
+      height,
+      navigation: entry.navigation?.map((item) => {
+        const visualWidth = Math.min(item.visual.width, width);
+        const visualHeight = Math.min(item.visual.height, height);
+        return { ...item, visual: {
+          ...item.visual,
+          x: Math.max(0, Math.min(width - visualWidth, item.visual.x)),
+          y: Math.max(0, Math.min(height - visualHeight, item.visual.y)),
+          width: visualWidth,
+          height: visualHeight,
+        } };
+      }),
+    } : entry) } };
+  persistState();
+  render();
+  zoomToFitAllDeferred();
+}
+
+function setHmiStaleTimeout(): void {
+  const app = state.hmiApplication;
+  if (!app) return;
+  const response = window.prompt(
+    currentLocale() === "pt-BR"
+      ? "Marcar bindings como STALE apos quantos ms sem novo frame? Use 0 para desativar."
+      : "Mark bindings STALE after how many ms without a new frame? Use 0 to disable.",
+    String(app.staleAfterMs ?? 0),
+  );
+  if (response === null) return;
+  const value = Number(response.trim());
+  if (!Number.isFinite(value) || value < 0) {
+    window.alert(currentLocale() === "pt-BR" ? "Informe um numero finito nao negativo." : "Enter a finite non-negative number.");
+    return;
+  }
+  const { staleAfterMs: _staleAfterMs, ...rest } = app;
+  state = { ...state, hmiApplication: { ...rest, ...(value > 0 ? { staleAfterMs: value } : {}) } };
+  persistState();
+  updateTelemetryStaleness();
+  render();
+}
+
+function verifyHmiDesign(): void {
+  const app = state.hmiApplication;
+  if (!app) return;
+  type Finding = { pageId: string; pageName: string; message: string; elementId?: string };
+  const issues: Finding[] = [];
+  const warnings: Finding[] = [];
+  const addFinding = (target: Finding[], page: HmiPage, message: string, elementId?: string): void => {
+    target.push({ pageId: page.id, pageName: page.name, message, ...(elementId ? { elementId } : {}) });
+  };
+  const pageIds = new Set(app.pages.map((page) => page.id));
+  const firstPage = app.pages[0];
+  if (!pageIds.has(app.startPageId) && firstPage) {
+    addFinding(issues, firstPage, `página inicial inexistente (${app.startPageId})`);
+  }
+  for (const [pageId, duplicateCount] of app.pages.reduce((counts, page) => counts.set(page.id, (counts.get(page.id) ?? 0) + 1), new Map<string, number>())) {
+    if (duplicateCount > 1 && firstPage) addFinding(issues, firstPage, `ID de página duplicado (${pageId})`);
+  }
+  const reachablePageIds = new Set<string>([app.startPageId]);
+  const pendingPageIds = [app.startPageId];
+  while (pendingPageIds.length > 0) {
+    const pageId = pendingPageIds.pop()!;
+    const page = app.pages.find((candidate) => candidate.id === pageId);
+    for (const navigation of page?.navigation ?? []) {
+      if (pageIds.has(navigation.targetPageId) && !reachablePageIds.has(navigation.targetPageId)) {
+        reachablePageIds.add(navigation.targetPageId);
+        pendingPageIds.push(navigation.targetPageId);
+      }
+    }
+  }
+  for (const page of app.pages) {
+    if (!Number.isFinite(page.width) || page.width <= 0 || !Number.isFinite(page.height) || page.height <= 0) {
+      addFinding(issues, page, "dimensões da página inválidas; largura e altura devem ser positivas");
+    }
+    for (const element of page.elements) {
+      if (element.visual.x < 0 || element.visual.y < 0
+          || element.visual.x + element.visual.width > page.width
+          || element.visual.y + element.visual.height > page.height) {
+        addFinding(warnings, page, `${element.label ?? element.typeId ?? element.id}: elemento ultrapassa os limites da página`, element.id);
+      }
+      const sourceComponent = element.componentId
+        ? state.components.find((candidate) => candidate.id === element.componentId)
+        : undefined;
+      if (element.componentId && !sourceComponent) {
+        const elementLabel = element.label ?? element.typeId ?? element.id;
+        addFinding(issues, page, `${elementLabel}: referência de componente inexistente (${element.componentId})`, element.id);
+      }
+      const typeId = sourceComponent?.typeId ?? element.typeId;
+      if (!typeId || !isGraphicalTypeId(typeId)) continue;
+      const properties = { ...(sourceComponent?.properties ?? catalogEntryFor(typeId)?.defaultProperties ?? {}), ...(element.properties ?? {}) };
+      const elementLabel = element.label ?? sourceComponent?.label ?? catalogEntryFor(typeId)?.label ?? typeId;
+      for (const suffix of ["", "B", "C"]) {
+        const bindSource = properties[`bindSource${suffix}`];
+        if (typeof bindSource !== "string" || bindSource.trim() === "") continue;
+        const boundComponent = state.components.find((candidate) => candidate.id === bindSource);
+        if (!boundComponent) {
+          addFinding(issues, page, `${elementLabel} / bindSource${suffix}: fonte inexistente (${bindSource})`, element.id);
+          continue;
+        }
+        const readoutFormat = catalogEntryFor(boundComponent.typeId)?.readoutFormat;
+        if (!readoutFormat) {
+          addFinding(issues, page, `${elementLabel} / bindSource${suffix}: ${boundComponent.label} existe, mas não publica leitura compatível`, element.id);
+          continue;
+        }
+        const channel = Number(properties[`bindChannel${suffix}`] ?? 0);
+        const channelCount = readoutFormat.kind === "scalar" ? 1 : readoutFormat.channels;
+        if (!Number.isInteger(channel) || channel < 0 || channel >= channelCount) {
+          addFinding(issues, page, `${elementLabel} / bindChannel${suffix}: canal ${String(properties[`bindChannel${suffix}`] ?? 0)} inválido para ${boundComponent.label} (${readoutFormat.kind}, ${channelCount} canal(is))`, element.id);
+        }
+      }
+      if (isGraphicalActionTypeId(typeId)) {
+        const actionTargetId = typeof properties.actionTarget === "string" ? properties.actionTarget.trim() : "";
+        const actionProperty = typeof properties.actionProperty === "string" ? properties.actionProperty.trim() : "";
+        if (!actionTargetId || !actionProperty) {
+          addFinding(warnings, page, `${elementLabel}: controle sem alvo/propriedade de ação configurados`, element.id);
+        } else {
+          const actionTarget = state.components.find((candidate) => candidate.id === actionTargetId);
+          if (!actionTarget) {
+            addFinding(issues, page, `${elementLabel}: alvo de ação inexistente (${actionTargetId})`, element.id);
+          } else if (!graphicalActionPropertyNames(actionTarget).some((property) => property.id === actionProperty)) {
+            addFinding(issues, page, `${elementLabel}: propriedade de ação indisponível em ${actionTarget.label} (${actionProperty})`, element.id);
+          }
+        }
+      }
+    }
+    for (const navigation of page.navigation ?? []) {
+      if (navigation.visual.x < 0 || navigation.visual.y < 0
+          || navigation.visual.x + navigation.visual.width > page.width
+          || navigation.visual.y + navigation.visual.height > page.height) {
+        addFinding(warnings, page, `${navigation.label}: atalho ultrapassa os limites da página`);
+      }
+      if (!pageIds.has(navigation.targetPageId)) {
+        addFinding(issues, page, `${navigation.label}: destino de navegação inexistente (${navigation.targetPageId})`);
+      }
+    }
+    if (!reachablePageIds.has(page.id)) addFinding(warnings, page, "página sem caminho de navegação desde a página inicial");
+  }
+  if (issues.length === 0 && warnings.length === 0) {
+    window.alert(currentLocale() === "pt-BR"
+      ? "Verificação concluída: bindings, navegação e limites das páginas estão consistentes."
+      : "Verification complete: bindings, navigation, and page bounds are consistent.");
+    return;
+  }
+  propertyDialog.innerHTML = "";
+  propertyDialog.className = "property-dialog property-dialog--hmi-audit";
+  const sheet = document.createElement("section");
+  sheet.className = "property-sheet hmi-audit-results";
+  const title = document.createElement("div");
+  title.className = "property-sheet__titlebar";
+  const heading = document.createElement("div");
+  heading.className = "property-sheet__uid";
+  heading.textContent = currentLocale() === "pt-BR" ? "Resultado da verificação HMI" : "HMI verification results";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "property-sheet__window-close";
+  close.textContent = "×";
+  close.addEventListener("click", () => propertyDialog.close());
+  title.append(heading, close);
+  sheet.appendChild(title);
+  const summary = document.createElement("p");
+  summary.textContent = currentLocale() === "pt-BR"
+    ? `${issues.length} problema(s); ${warnings.length} aviso(s). Selecione um item para abrir sua página.`
+    : `${issues.length} issue(s); ${warnings.length} warning(s). Select a finding to open its page.`;
+  sheet.appendChild(summary);
+  const list = document.createElement("div");
+  list.className = "hmi-audit-results__list";
+  for (const [kind, findings] of [
+    ["issue", issues] as const,
+    ["warning", warnings] as const,
+  ]) {
+    if (findings.length === 0) continue;
+    const groupTitle = document.createElement("h3");
+    groupTitle.textContent = kind === "issue"
+      ? (currentLocale() === "pt-BR" ? "Problemas" : "Issues")
+      : (currentLocale() === "pt-BR" ? "Avisos" : "Warnings");
+    list.appendChild(groupTitle);
+    for (const finding of findings.slice(0, 100)) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `hmi-audit-results__finding hmi-audit-results__finding--${kind}`;
+      button.textContent = `${finding.pageName} · ${finding.message}`;
+      button.addEventListener("click", () => {
+        propertyDialog.close();
+        selectedHmiPageId = finding.pageId;
+        hmiSceneCache = undefined;
+        state.selectedComponentIds = finding.elementId ? [finding.elementId] : [];
+        state.selectedWireIds = [];
+        render();
+        zoomToFitAllDeferred();
+      });
+      list.appendChild(button);
+    }
+    if (findings.length > 100) {
+      const more = document.createElement("p");
+      more.textContent = currentLocale() === "pt-BR" ? `Mais ${findings.length - 100} item(ns) nesta seção.` : `${findings.length - 100} more item(s) in this section.`;
+      list.appendChild(more);
+    }
+  }
+  sheet.appendChild(list);
+  propertyDialog.appendChild(sheet);
+  if (!propertyDialog.open) propertyDialog.showModal();
+}
+
+function renameHmiPage(): void {
+  const page = hmiPageForEditing();
+  if (!page || !state.hmiApplication) return;
+  const name = window.prompt(currentLocale() === "pt-BR" ? "Nome da página HMI:" : "HMI page name:", page.name)?.trim();
+  if (!name) return;
+  state = { ...state, hmiApplication: { ...state.hmiApplication, pages: state.hmiApplication.pages.map((entry) => entry.id === page.id ? { ...entry, name } : entry) } };
+  persistState(); render();
+}
+
+function addHmiPageNavigation(): void {
+  const page = hmiPageForEditing();
+  const app = state.hmiApplication;
+  if (!page || !app) return;
+  const choices = app.pages.filter((entry) => entry.id !== page.id);
+  if (!choices.length) return;
+  const choiceList = choices.map((entry, index) => `${index + 1}. ${entry.name}`).join("\n");
+  const targetIndexText = window.prompt(currentLocale() === "pt-BR"
+    ? `Número da página de destino:\n${choiceList}`
+    : `Destination page number:\n${choiceList}`)?.trim();
+  if (!targetIndexText) return;
+  const targetIndex = Number(targetIndexText);
+  const target = Number.isInteger(targetIndex) && targetIndex >= 1 ? choices[targetIndex - 1] : undefined;
+  if (!target) {
+    window.alert(currentLocale() === "pt-BR" ? "Número de página inválido." : "Invalid page number.");
+    return;
+  }
+  const label = window.prompt(currentLocale() === "pt-BR" ? "Texto do atalho:" : "Shortcut label:", target.name)?.trim();
+  if (!label) return;
+  const navigation = [...(page.navigation ?? []).filter((item) => item.targetPageId !== target.id), {
+    id: `hmi-nav-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`, label, targetPageId: target.id,
+    visual: defaultHmiNavigationVisual(page.width, page.height, [
+      ...page.elements.map((element) => element.visual),
+      ...(page.navigation ?? []).map((item) => item.visual),
+    ]),
+  }];
+  state = { ...state, hmiApplication: { ...app, pages: app.pages.map((entry) => entry.id === page.id ? { ...entry, navigation } : entry) } };
+  persistState(); render();
+}
+
+function navigateHmiPage(targetPageId: string): void {
+  if (!state.hmiApplication?.pages.some((page) => page.id === targetPageId)) return;
+  if (subcircuitEditorMode === "hmi") commitHmiSceneToPage();
+  selectedHmiPageId = targetPageId;
+  hmiSceneCache = undefined;
+  clearSelection();
+  render();
+  zoomToFitAllDeferred();
+}
+
+function setHmiPresentationMode(enabled: boolean): void {
+  if (subcircuitEditorMode !== "hmi" || hmiPresentationMode === enabled) return;
+  if (enabled) {
+    commitHmiSceneToPage();
+    if (state.hmiApplication?.pages.some((page) => page.id === state.hmiApplication!.startPageId)) {
+      selectedHmiPageId = state.hmiApplication.startPageId;
+      hmiSceneCache = undefined;
+    }
+    cancelActiveTool();
+    clearSelection();
+  }
+  hmiPresentationMode = enabled;
+  render();
+  if (enabled) zoomToFitAllDeferred();
+}
+
+function removeHmiPageNavigation(navigationId: string): void {
+  const page = hmiPageForEditing();
+  const app = state.hmiApplication;
+  if (!page || !app) return;
+  state = { ...state, hmiApplication: { ...app, pages: app.pages.map((entry) => entry.id === page.id
+    ? { ...entry, navigation: entry.navigation?.filter((item) => item.id !== navigationId) }
+    : entry) } };
+  persistState(); render();
+}
+
+function deleteHmiPage(): void {
+  const appState = state.hmiApplication;
+  const page = hmiPageForEditing();
+  if (!appState || !page) return;
+  if (appState.pages.length <= 1) {
+    window.alert(currentLocale() === "pt-BR" ? "O projeto precisa manter ao menos uma página HMI." : "The project must keep at least one HMI page.");
+    return;
+  }
+  commitHmiSceneToPage();
+  const pages = state.hmiApplication!.pages.filter((entry) => entry.id !== page.id).map((entry) => ({
+    ...entry,
+    navigation: entry.navigation?.filter((item) => item.targetPageId !== page.id),
+  }));
+  const startPageId = state.hmiApplication!.startPageId === page.id ? pages[0]!.id : state.hmiApplication!.startPageId;
+  selectedHmiPageId = pages[0]!.id;
+  hmiSceneCache = undefined;
+  state = { ...state, hmiApplication: { startPageId, pages } };
+  clearSelection(); persistState(); render(); zoomToFitAllDeferred();
 }
 
 function isComponentSelected(componentId: string): boolean {
@@ -3314,6 +3796,7 @@ function renderAppBar(): HTMLElement {
     // grupo pra quem quiser conferir sem abrir o combobox.
     label.textContent = t("editingSubcircuit");
     subcircuitGroup.title = state.subcircuitEditingContext.name;
+    subcircuitGroup.hidden = hmiPresentationMode;
 
     // ComboBox Subcircuito/Símbolo/Ícone -- substitui o texto estático "Editando subcircuito:"
     // (pedido original). Troca SÓ a cena que o motor genérico enxerga (`setSubcircuitEditorMode`);
@@ -3324,6 +3807,7 @@ function renderAppBar(): HTMLElement {
       { value: "circuit", label: t("subcircuitEditorModeCircuit") },
       { value: "symbol", label: t("subcircuitEditorModeSymbol") },
       { value: "icon", label: t("subcircuitEditorModeIcon") },
+      ...(state.hmiApplication?.pages.length ? [{ value: "hmi" as const, label: "HMI" }] : []),
     ];
     for (const modeOption of modeOptions) {
       const option = document.createElement("option");
@@ -3405,6 +3889,74 @@ function renderAppBar(): HTMLElement {
 
   const editGroup = document.createElement("div");
   editGroup.className = "appbar__group";
+  const hmiNavigationButtons: HTMLButtonElement[] = [];
+  const hmiModeButtons: HTMLButtonElement[] = [];
+  const createPageButton = renderToolbarButton("createHmiPage", t("createHmiPage"), () => createHmiPageFromSelection());
+  createPageButton.hidden = hmiPresentationMode;
+  editGroup.appendChild(createPageButton);
+  if (state.hmiApplication?.pages.length) {
+    const activeHmiPageId = hmiPageForEditing()?.id ?? state.hmiApplication.startPageId;
+    const pageSelect = document.createElement("select");
+    pageSelect.className = "appbar__subcircuit-mode-select";
+    pageSelect.title = currentLocale() === "pt-BR" ? "Página HMI editada no canvas" : "HMI page edited on canvas";
+    for (const page of state.hmiApplication.pages) {
+      const option = document.createElement("option"); option.value = page.id; option.textContent = page.name; option.selected = page.id === activeHmiPageId; pageSelect.appendChild(option);
+    }
+    pageSelect.value = activeHmiPageId;
+    pageSelect.hidden = subcircuitEditorMode !== "hmi" || hmiPresentationMode;
+    pageSelect.addEventListener("change", () => {
+      if (subcircuitEditorMode === "hmi") commitHmiSceneToPage();
+      selectedHmiPageId = pageSelect.value; hmiSceneCache = undefined; clearSelection(); render(); zoomToFitAllDeferred();
+    });
+    editGroup.appendChild(pageSelect);
+    if (subcircuitEditorMode === "hmi") {
+      editGroup.append(
+        renderToolbarButton("save", currentLocale() === "pt-BR" ? "Definir página inicial" : "Set start page", () => setHmiStartPage()),
+        renderToolbarButton("properties", currentLocale() === "pt-BR" ? "Renomear página" : "Rename page", () => renameHmiPage()),
+        renderToolbarButton("createHmiPage", currentLocale() === "pt-BR" ? "Adicionar atalho de navegação" : "Add navigation shortcut", () => addHmiPageNavigation()),
+        renderToolbarButton("delete", currentLocale() === "pt-BR" ? "Excluir página" : "Delete page", () => deleteHmiPage(), state.hmiApplication.pages.length <= 1),
+      );
+      editGroup.appendChild(renderToolbarButton("properties", currentLocale() === "pt-BR" ? "Definir dimensões da página" : "Set page dimensions", () => setHmiPageDimensions()));
+      editGroup.appendChild(renderToolbarButton("properties", currentLocale() === "pt-BR" ? "Configurar indicação STALE" : "Configure STALE indication", () => setHmiStaleTimeout()));
+      if (!hmiPresentationMode) {
+        editGroup.appendChild(renderToolbarButton("properties", currentLocale() === "pt-BR" ? "Verificar HMI" : "Verify HMI", () => verifyHmiDesign()));
+      }
+      const currentPage = state.hmiApplication.pages.find((page) => page.id === activeHmiPageId);
+      for (const item of currentPage?.navigation ?? []) {
+        if (!state.hmiApplication.pages.some((page) => page.id === item.targetPageId)) continue;
+        const navigateButton = renderToolbarButton("forward", item.label, () => navigateHmiPage(item.targetPageId));
+        hmiNavigationButtons.push(navigateButton);
+        editGroup.appendChild(navigateButton);
+        const removeButton = renderToolbarButton("delete", currentLocale() === "pt-BR" ? `Remover atalho: ${item.label}` : `Remove shortcut: ${item.label}`, () => removeHmiPageNavigation(item.id));
+        removeButton.dataset.hmiNavigationEdit = "true";
+        editGroup.appendChild(removeButton);
+      }
+      const modeButton = hmiPresentationMode
+        ? renderToolbarButton("properties", currentLocale() === "pt-BR" ? "Voltar à edição HMI" : "Return to HMI editing", () => setHmiPresentationMode(false))
+        : renderToolbarButton("start", currentLocale() === "pt-BR" ? "Operar HMI" : "Operate HMI", () => setHmiPresentationMode(true));
+      hmiModeButtons.push(modeButton);
+      editGroup.appendChild(modeButton);
+      if (hmiPresentationMode) {
+        const pageName = document.createElement("span");
+        pageName.className = "appbar__hmi-page-name";
+        pageName.textContent = currentPage?.name ?? "HMI";
+        editGroup.appendChild(pageName);
+      }
+      if (hmiPresentationMode) {
+        const exitButton = renderToolbarButton("back", currentLocale() === "pt-BR" ? "Sair da tela HMI" : "Exit HMI screen", () => {
+          hmiPresentationMode = false;
+          setSubcircuitEditorMode("circuit");
+        });
+        hmiModeButtons.push(exitButton);
+        editGroup.appendChild(exitButton);
+      }
+    }
+    if (subcircuitEditorMode !== "hmi") {
+      editGroup.appendChild(renderToolbarButton("createHmiPage", currentLocale() === "pt-BR" ? "Editar HMI no canvas" : "Edit HMI on canvas", () => openHmiDesigner()));
+    } else if (!editingSubcircuit) {
+      editGroup.appendChild(renderToolbarButton("back", currentLocale() === "pt-BR" ? "Voltar ao esquemático" : "Back to schematic", () => setSubcircuitEditorMode("circuit")));
+    }
+  }
   editGroup.append(
     renderToolbarButton("blocksToDsl", t("blocksToDsl"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenDslEditor" }), false, "DSL"),
     renderToolbarButton("properties", t("componentProperties"), () => openSelectedProperties(), !getSelectedComponent()),
@@ -3415,6 +3967,11 @@ function renderAppBar(): HTMLElement {
       state.selectedWireIds.length === 0 && state.selectedComponentIds.length === 0,
     ),
   );
+  if (hmiPresentationMode) {
+    editGroup.querySelectorAll<HTMLButtonElement>("button").forEach((button) => { button.hidden = true; });
+    hmiNavigationButtons.forEach((button) => { button.hidden = true; });
+    hmiModeButtons.forEach((button) => { button.hidden = false; });
+  }
 
   const viewGroup = document.createElement("div");
   viewGroup.className = "appbar__group";
@@ -3454,7 +4011,7 @@ function renderAppBar(): HTMLElement {
   return bar;
 }
 
-type ToolbarIconKind = "open" | "save" | "saveProjectAs" | "start" | "pause" | "stop" | "properties" | "delete" | "zoomFitSelection" | "zoomFitAll" | "zoomReset" | "blocksToDsl" | "dslToBlocks" | "back" | "createPin" | "selectExposedComponents" | "selectExportedProperties";
+type ToolbarIconKind = "open" | "save" | "saveProjectAs" | "start" | "pause" | "stop" | "properties" | "delete" | "zoomFitSelection" | "zoomFitAll" | "zoomReset" | "blocksToDsl" | "dslToBlocks" | "back" | "forward" | "createPin" | "createHmiPage" | "selectExposedComponents" | "selectExportedProperties";
 
 function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, "svg");
@@ -3507,8 +4064,14 @@ function renderIcon(kind: ToolbarIconKind): SVGSVGElement {
     case "back":
       svg.innerHTML = '<path d="M19 12H5"></path><path d="m11 18-6-6 6-6"></path>';
       break;
+    case "forward":
+      svg.innerHTML = '<path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path>';
+      break;
     case "createPin":
       svg.innerHTML = '<circle cx="8" cy="7" r="2.5"></circle><path d="M8 9.5v7"></path><path d="M8 16.5h6"></path><path d="M17 5v6"></path><path d="M14 8h6"></path>';
+      break;
+    case "createHmiPage":
+      svg.innerHTML = '<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 9h18M7 13h4v4H7zM14 13h3M14 16h3"></path>';
       break;
     case "selectExposedComponents":
       svg.innerHTML = '<rect x="4" y="5" width="4" height="4" rx="0.5"></rect><path d="M5 7l1 1 2-2"></path><path d="M11 7h9"></path><rect x="4" y="15" width="4" height="4" rx="0.5"></rect><path d="M5 17l1 1 2-2"></path><path d="M11 17h9"></path>';
@@ -3533,6 +4096,11 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
   });
   canvas.addEventListener("keydown", (event) => {
     if (document.activeElement !== canvas) return;
+    if (hmiPresentationMode) {
+      event.preventDefault();
+      if (event.key === "Escape") setHmiPresentationMode(false);
+      return;
+    }
     if (event.key === "Tab") {
       const hasSelection = state.selectedComponentIds.length + state.selectedWireIds.length > 0;
       if (keyboardNavigationReleased && !hasSelection) return;
@@ -3564,6 +4132,7 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
   });
   canvas.addEventListener("click", (event) => {
     hideContextMenu();
+    if (hmiPresentationMode) return;
     if (placingTypeId) {
       const pt = eventToCanvasPoint(event, canvas);
       const snappedX = snapCoordinate(pt.x, WIRE_GRID_SIZE);
@@ -3599,6 +4168,7 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
     // nunca substitui um menu mais específico pelo genérico "Selecionar tudo".
     if (event.defaultPrevented) return;
     event.preventDefault();
+    if (hmiPresentationMode) return;
     if (placingTypeId) {
       // Mesmo padrão de Esc: botão direito cancela a ferramenta ativa, nunca deixa o modo de
       // posicionamento aberto por baixo do menu de contexto genérico.
@@ -3640,6 +4210,7 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
   // já chamam `stopPropagation()` nos próprios listeners, então nunca chegam aqui).
   canvas.addEventListener("pointerdown", (event) => {
     if (event.button !== 0 || state.pendingConnection) return;
+    if (hmiPresentationMode) return;
     // Pino/fio não chamam `stopPropagation()` no PRÓPRIO `pointerdown` (só no `click`) -- sem este
     // guard, o evento borbulha até aqui e `setPointerCapture` rouba o pointer do pino, quebrando o
     // clique que inicia um fio (mesma classe de bug já corrigida 2x antes nesta sessão, ver
@@ -3780,6 +4351,12 @@ function approximateBoundingBox(components: readonly WebviewComponentModel[]): {
 function activeSceneFitBoundingBox(): { minX: number; minY: number; maxX: number; maxY: number } | undefined {
   const componentsBox = approximateBoundingBox(activeSceneComponents());
   if (subcircuitEditorMode === "circuit") return componentsBox;
+  const hmiPage = subcircuitEditorMode === "hmi" ? hmiPageForEditing() : undefined;
+  if (hmiPage) {
+    const canvasBox = { minX: 0, minY: 0, maxX: hmiPage.width, maxY: hmiPage.height };
+    if (!componentsBox) return canvasBox;
+    return { minX: Math.min(componentsBox.minX, canvasBox.minX), minY: Math.min(componentsBox.minY, canvasBox.minY), maxX: Math.max(componentsBox.maxX, canvasBox.maxX), maxY: Math.max(componentsBox.maxY, canvasBox.maxY) };
+  }
   const canvas = subcircuitEditorMode === "symbol" ? state.symbolCanvas : state.iconCanvas;
   const canvasBox = canvas ? { minX: 0, minY: 0, maxX: canvas.width, maxY: canvas.height } : undefined;
   if (!componentsBox) return canvasBox;
@@ -3960,6 +4537,7 @@ function clearEphemeralCanvasChildren(canvasContent: HTMLDivElement): void {
       child.classList.contains("component-floating-label") ||
       child.classList.contains("component--exposed-projection") ||
       child.classList.contains("component--symbol-canvas-background") ||
+      child.classList.contains("hmi-page-navigation-control") ||
       // Sem isto as alças acumulavam: `renderResizeHandles` cria um jogo novo a cada `render()` e
       // nada apagava o anterior, então mover um componente selecionado deixava um rastro de
       // quadradinhos nas posições por onde ele passou ("quando eu movimento fica um ruído").
@@ -4028,6 +4606,15 @@ function compileLiveSymbolPins(elements: readonly WebviewComponentModel[]): Pack
  * de fundo declarada (bug real: um subcircuito com `symbol.background` de imagem real, ex.
  * `esp32_devkitc_v4.lssubcircuit`, aparecia sem nenhum corpo -- só os pinos soltos). */
 function renderSymbolCanvasBackground(canvasContent: HTMLElement): void {
+  if (subcircuitEditorMode === "hmi") {
+    const page = hmiPageForEditing();
+    if (!page) return;
+    const el = document.createElement("div");
+    el.className = "component--symbol-canvas-background hmi-page-canvas-background";
+    el.style.cssText = `position:absolute;left:0;top:0;width:${page.width}px;height:${page.height}px;background:#303840;border:1px solid #6a737b;box-sizing:border-box;pointer-events:none;`;
+    canvasContent.insertBefore(el, canvasContent.firstChild);
+    return;
+  }
   const canvas = subcircuitEditorMode === "symbol" ? state.symbolCanvas : subcircuitEditorMode === "icon" ? state.iconCanvas : undefined;
   if (!canvas) return;
   const pins = subcircuitEditorMode === "symbol" ? compileLiveSymbolPins(activeSceneComponents()) : [];
@@ -4057,6 +4644,75 @@ function renderSymbolCanvasBackground(canvasContent: HTMLElement): void {
   canvasContent.insertBefore(el, canvasContent.firstChild);
 }
 
+function renderHmiNavigationControls(canvasContent: HTMLElement): void {
+  if (subcircuitEditorMode !== "hmi") return;
+  const page = hmiPageForEditing();
+  const application = state.hmiApplication;
+  if (!page || !application) return;
+  for (const item of page.navigation ?? []) {
+    const target = application.pages.find((candidate) => candidate.id === item.targetPageId);
+    if (!target) continue;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "hmi-page-navigation-control";
+    button.textContent = item.label;
+    button.title = target.name;
+    button.setAttribute("aria-label", `${item.label}: ${target.name}`);
+    button.style.left = `${item.visual.x}px`;
+    button.style.top = `${item.visual.y}px`;
+    button.style.width = `${item.visual.width}px`;
+    button.style.height = `${item.visual.height}px`;
+    let moved = false;
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (moved) return;
+      navigateHmiPage(item.targetPageId);
+    });
+    button.addEventListener("contextmenu", (event) => { event.preventDefault(); event.stopPropagation(); });
+    button.addEventListener("pointerdown", (event) => {
+      if (hmiPresentationMode || event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const canvas = document.querySelector<HTMLElement>(".canvas");
+      if (!canvas) return;
+      const start = eventToCanvasPoint(event, canvas);
+      const startX = item.visual.x;
+      const startY = item.visual.y;
+      button.setPointerCapture(event.pointerId);
+      const move = (moveEvent: PointerEvent): void => {
+        const point = eventToCanvasPoint(moveEvent, canvas);
+        const dx = point.x - start.x;
+        const dy = point.y - start.y;
+        if (Math.hypot(dx, dy) > 3) moved = true;
+        if (!moved) return;
+        const x = Math.max(0, Math.min(page.width - item.visual.width, startX + dx));
+        const y = Math.max(0, Math.min(page.height - item.visual.height, startY + dy));
+        button.style.left = `${x}px`;
+        button.style.top = `${y}px`;
+      };
+      const finish = (): void => {
+        button.removeEventListener("pointermove", move);
+        button.removeEventListener("pointerup", finish);
+        button.removeEventListener("pointercancel", finish);
+        if (!moved) return;
+        const x = Number.parseFloat(button.style.left);
+        const y = Number.parseFloat(button.style.top);
+        commitHmiSceneToPage();
+        state = { ...state, hmiApplication: { ...state.hmiApplication!, pages: state.hmiApplication!.pages.map((entry) =>
+          entry.id === page.id ? { ...entry, navigation: entry.navigation?.map((nav) => nav.id === item.id
+            ? { ...nav, visual: { ...nav.visual, x, y } } : nav) } : entry) } };
+        persistState();
+        render();
+      };
+      button.addEventListener("pointermove", move);
+      button.addEventListener("pointerup", finish, { once: true });
+      button.addEventListener("pointercancel", finish, { once: true });
+    });
+    canvasContent.appendChild(button);
+  }
+}
+
 function render(): void {
   if (!app) return;
   normalizeSelectedWireSegment();
@@ -4065,6 +4721,7 @@ function render(): void {
   const shell = ensureRenderShell();
   if (!shell) return;
   const { canvasContent, wireLayer } = shell;
+  shell.canvas.classList.toggle("hmi-presentation-mode", hmiPresentationMode && subcircuitEditorMode === "hmi");
   clearEphemeralCanvasChildren(canvasContent);
   renderSymbolCanvasBackground(canvasContent);
   // Alças de segmento/canto E o preview de fio pendente (`renderPendingWirePreview`, sempre recriado
@@ -4191,6 +4848,7 @@ function render(): void {
     const dialLabel = renderExternalLabel(component, "dial");
     if (dialLabel) canvasContent.appendChild(dialLabel);
   }
+  renderHmiNavigationControls(canvasContent);
 
   // Nós de topologia (junções) são um conceito exclusivo do circuito interno REAL -- mesmo princípio
   // do loop de fios acima ("Modo Símbolo/Ícone nunca mostra o Subcircuito e vice-versa"). Sem este
@@ -4284,6 +4942,14 @@ function applyMarqueeSelection(start: Point, end: Point, additive: boolean): voi
 /** Remove TODOS os componentes e fios selecionados — uma mensagem IPC por item (reaproveita os
  * verbos `requestRemoveComponent`/`requestRemoveWire` já existentes; nenhum verbo em lote novo). */
 function deleteSelectedItems(): void {
+  if (subcircuitEditorMode === "hmi") {
+    const selectedIds = new Set(state.selectedComponentIds);
+    setActiveSceneComponents(activeSceneComponents().filter((component) => !selectedIds.has(component.id)));
+    clearSelection();
+    persistState();
+    render();
+    return;
+  }
   for (const wireId of state.selectedWireIds) {
     send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRemoveWire", wireId });
   }
@@ -4352,16 +5018,21 @@ function remintPinIdsAndBuildTunnels(components: readonly WebviewComponentModel[
 
 function copySelectedItems(): boolean {
   const selectedComponentIds = new Set(state.selectedComponentIds);
-  const components = activeSceneComponents()
-    .filter((component) => selectedComponentIds.has(component.id))
-    .map(cloneComponent);
+  const selected = activeSceneComponents().filter((component) => selectedComponentIds.has(component.id));
+  const components = selected.map(cloneComponent);
   if (components.length === 0) return false;
+  const hmiSourceByClipboardId = subcircuitEditorMode === "hmi" && hmiSceneCache
+    ? new Map(selected.flatMap((component) => {
+        const sourceId = hmiSceneCache!.sourceByElementId.get(component.id);
+        return sourceId ? [[component.id, sourceId] as const] : [];
+      }))
+    : undefined;
 
   const wires = state.topology.conductors
     .filter((wire) => selectedComponentIds.has(endpointId(wire.from)) && selectedComponentIds.has(endpointId(wire.to)))
     .map(cloneWire);
 
-  clipboardItems = { components, wires };
+  clipboardItems = { components, wires, hmiSourceByClipboardId };
   return true;
 }
 
@@ -4441,6 +5112,21 @@ function pasteClipboardItems(): void {
     wire.points = wire.points?.map((point) => ({ x: point.x + WIRE_GRID_SIZE, y: point.y + WIRE_GRID_SIZE }));
     return [wire];
   });
+
+  if (subcircuitEditorMode === "hmi") {
+    const sourceByElementId = hmiSceneCache?.sourceByElementId;
+    if (sourceByElementId) {
+      for (const [clipboardId, sourceId] of clipboardItems.hmiSourceByClipboardId ?? []) {
+        const pastedId = idMap.get(clipboardId);
+        if (pastedId) sourceByElementId.set(pastedId, sourceId);
+      }
+    }
+    setActiveSceneComponents([...activeSceneComponents(), ...components]);
+    state = { ...state, selectedComponentIds: components.map((component) => component.id), selectedWireIds: [] };
+    persistState();
+    render();
+    return;
+  }
 
   const { components: remintedComponents, newTunnels } = remintPinIdsAndBuildTunnels(components);
   setActiveSceneComponents([...activeSceneComponents(), ...remintedComponents]);
@@ -5575,14 +6261,17 @@ function updateWireVisual(wireId: string): void {
 }
 
 function numericReadout(component: WebviewComponentModel): number | undefined {
-  const readout = readoutsByComponentId[component.id];
+  const readout = readoutsByComponentId[runtimeComponentIdForSceneItem(component)];
   return typeof readout === "number" ? readout : undefined;
 }
 
 function voltageAtComponentPin(componentId: string, pinId: string): number | undefined {
+  const runtimeComponentId = subcircuitEditorMode === "hmi"
+    ? hmiSceneCache?.sourceByElementId.get(componentId) ?? componentId
+    : componentId;
   for (const wire of state.topology.conductors) {
-    const touchesFrom = endpointId(wire.from) === componentId && endpointPinId(wire.from) === pinId;
-    const touchesTo = endpointId(wire.to) === componentId && endpointPinId(wire.to) === pinId;
+    const touchesFrom = endpointId(wire.from) === runtimeComponentId && endpointPinId(wire.from) === pinId;
+    const touchesTo = endpointId(wire.to) === runtimeComponentId && endpointPinId(wire.to) === pinId;
     if (!touchesFrom && !touchesTo) continue;
     const voltage = voltagesByWireId[wire.id];
     if (typeof voltage === "number" && Number.isFinite(voltage)) return voltage;
@@ -5859,11 +6548,45 @@ function usesEmbeddedValueLabel(typeId: string): boolean {
  * tanque/indicador ligado a uma sonda nunca repintaria -- o id dele jamais aparece em
  * `readoutsByComponentId`, porque elemento gráfico não é instrumento. Continua sendo patch
  * PONTUAL (nunca `render()` global): só entra quem de fato depende de uma leitura que chegou. */
-function componentNeedsReadoutRepaint(component: WebviewComponentModel, readouts: Record<string, ComponentReadoutValue>): boolean {
-  if (usesRuntimeSymbolReadout(component.typeId)) return component.id in readouts;
+function componentNeedsReadoutRepaint(component: WebviewComponentModel, readoutIds: ReadonlySet<string>): boolean {
+  return componentDependsOnReadout(component, readoutIds);
+}
+
+function componentDependsOnReadout(component: WebviewComponentModel, readoutIds: ReadonlySet<string>, includeAllBindings = false): boolean {
+  const runtimeId = runtimeComponentIdForSceneItem(component);
+  if (usesRuntimeSymbolReadout(component.typeId)) return includeAllBindings || readoutIds.has(runtimeId);
   if (!isGraphicalTypeId(component.typeId)) return false;
-  const source = component.properties.bindSource;
-  return typeof source === "string" && source.length > 0 && source in readouts;
+  return ["", "B", "C"].some((suffix) => {
+    const source = component.properties[`bindSource${suffix}`];
+    return typeof source === "string" && source.length > 0 && (includeAllBindings || readoutIds.has(source));
+  });
+}
+
+function updateTelemetryStaleness(): void {
+  const staleAfterMs = state.hmiApplication?.staleAfterMs;
+  const nextStale = simulationStatus === "running"
+    && readoutTransportStatus === "connected"
+    && staleAfterMs !== undefined
+    && staleAfterMs > 0
+    && telemetryLastFrameReceivedAtMs !== undefined
+    && Date.now() - telemetryLastFrameReceivedAtMs >= staleAfterMs;
+  if (nextStale === hmiTelemetryStale) return;
+  hmiTelemetryStale = nextStale;
+  if (isInteractiveGestureInProgress()) return;
+  const components = subcircuitEditorMode === "hmi" ? activeSceneComponents() : state.components;
+  const noReadoutFilter = new Set<string>();
+  for (const component of components) {
+    if (!componentDependsOnReadout(component, noReadoutFilter, true)) continue;
+    const element = componentElementsById.get(component.id);
+    if (element) updateComponentElement(element, component);
+  }
+  patchBoardOverlayRuntimeVisuals();
+}
+
+window.setInterval(updateTelemetryStaleness, 250);
+
+function runtimeComponentIdForSceneItem(component: WebviewComponentModel): string {
+  return subcircuitEditorMode === "hmi" ? hmiSceneCache?.sourceByElementId.get(component.id) ?? component.id : component.id;
 }
 
 function usesRuntimeSymbolReadout(typeId: string): boolean {
@@ -5903,21 +6626,22 @@ function runtimeSymbolProperties(component: WebviewComponentModel): Record<strin
     const graphicalProperties = component.typeId === "graphics.slider" && !component.properties.bindSource
       ? { ...component.properties, bindMin: component.properties.actionMin ?? 0, bindMax: component.properties.actionMax ?? 100 }
       : component.properties;
-    return { ...component.properties, ...graphicalRuntimeProperties(graphicalProperties, (id) => readoutsByComponentId[id]) };
+    return { ...component.properties, ...graphicalRuntimeProperties(graphicalProperties, (id) => readoutsByComponentId[id], readoutTransportStatus, hmiTelemetryStale, readoutSampleTimestampNs) };
   }
-  const readout = readoutsByComponentId[component.id];
-  const scopeHistory = scopeHistoryByComponentId[component.id];
-  const logicHistory = logicHistoryByComponentId[component.id];
+  const runtimeComponentId = runtimeComponentIdForSceneItem(component);
+  const readout = readoutsByComponentId[runtimeComponentId];
+  const scopeHistory = scopeHistoryByComponentId[runtimeComponentId];
+  const logicHistory = logicHistoryByComponentId[runtimeComponentId];
   const serialRuntime = component.typeId === "peripherals.lasecplot"
-    ? lasecPlotRuntime.get(component.id)
+    ? lasecPlotRuntime.get(runtimeComponentId)
     : component.typeId === "peripherals.serialterm"
-      ? serialTerminalRuntime.get(component.id)
+      ? serialTerminalRuntime.get(runtimeComponentId)
       : component.typeId === "peripherals.serialport" || component.typeId === "protocol.hart.modem"
-        ? serialPortRuntime.get(component.id)
+        ? serialPortRuntime.get(runtimeComponentId)
         : undefined;
   const pinConnected = (pinId: string) => state.topology.conductors.some((wire) =>
-    (endpointId(wire.from) === component.id && endpointPinId(wire.from) === pinId) ||
-    (endpointId(wire.to) === component.id && endpointPinId(wire.to) === pinId));
+    (endpointId(wire.from) === runtimeComponentId && endpointPinId(wire.from) === pinId) ||
+    (endpointId(wire.to) === runtimeComponentId && endpointPinId(wire.to) === pinId));
   const now = Date.now();
   const serialState = serialRuntime ? {
     __serial_button_label: serialRuntime.opened ? "Fechar" : "Abrir",
@@ -5939,7 +6663,7 @@ function runtimeSymbolProperties(component: WebviewComponentModel): Record<strin
   const ledState = component.typeId === "outputs.led" || component.typeId === "outputs.led_bar"
     ? { __led_fill: ledFillFor(component) }
     : {};
-  const visualState = visualStatesByComponentId[component.id];
+  const visualState = visualStatesByComponentId[runtimeComponentId];
   const runtimeVisualState = visualState ? { __runtime_state: visualState } : {};
   if (readout === undefined && !scopeHistory && !logicHistory && Object.keys(serialState).length === 0 &&
       Object.keys(ledState).length === 0 && Object.keys(runtimeVisualState).length === 0) {
@@ -7616,7 +8340,8 @@ function graphicalActionTarget(component: WebviewComponentModel): {
   } : undefined);
   if (!config) return undefined;
   const target = state.components.find((entry) => entry.id === config.targetId);
-  return target ? { config, target } : undefined;
+  if (!target || !graphicalActionPropertyNames(target).some((property) => property.id === config.property)) return undefined;
+  return { config, target };
 }
 
 /**
@@ -7899,6 +8624,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
 
   el.addEventListener("click", (event) => {
     event.stopPropagation();
+    if (hmiPresentationMode) return;
     if (suppressNextDialComponentClick) {
       suppressNextDialComponentClick = false;
       event.preventDefault();
@@ -7927,6 +8653,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     // Webview ver `defaultPrevented` e não abrir o menu nativo (Cortar/Copiar/Colar) por cima do
     // nosso; `canvas` (ancestor) já ignora o evento quando `defaultPrevented` (ver seu handler).
     event.preventDefault();
+    if (hmiPresentationMode) return;
     const component = liveComponent();
     if (!component) {
       hideContextMenu();
@@ -8136,6 +8863,10 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     const component = liveComponent();
     if (!component) return;
     if (event.button !== 0) return;
+    if (hmiPresentationMode) {
+      event.stopPropagation();
+      return;
+    }
     // Bug real corrigido 2026-07-18 ("Abrir do LasecPlot -- nem parece um botão, nada acontece ao
     // clicar"): `.serial-toggle-hit-zone` (LasecPlot/Serial Terminal/Serial Port, ver
     // `updateComponentElement`) tem seu PRÓPRIO `click` listener direto no elemento, igual a
@@ -8572,11 +9303,22 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         // `setPointerCapture` já ativo) no meio do gesto libera a captura implicitamente (mesmo
         // bug documentado acima sobre `componentElementsById`/telemetria), quebrando o resto do
         // arrasto. Insere os componentes/fios duplicados diretamente no DOM/estado, sem tocar `el`.
-        const { components: duplicatedRaw, wires: duplicatedWires } = duplicateComponentsForDrag(dragTargets.map((target) => target.component));
-        const { components: duplicated, newTunnels } = remintPinIdsAndBuildTunnels(duplicatedRaw);
+        const duplicateSources = dragTargets.map((target) => target.component);
+        const { components: duplicatedRaw, wires: duplicatedWires } = duplicateComponentsForDrag(duplicateSources);
+        const { components: duplicated, newTunnels } = subcircuitEditorMode === "hmi"
+          ? { components: duplicatedRaw, newTunnels: [] as WebviewComponentModel[] }
+          : remintPinIdsAndBuildTunnels(duplicatedRaw);
         if (duplicated.length > 0 && canvasContentElement) {
+          if (subcircuitEditorMode === "hmi" && hmiSceneCache) {
+            duplicateSources.forEach((source, index) => {
+              const sourceId = hmiSceneCache!.sourceByElementId.get(source.id);
+              if (sourceId && duplicated[index]) hmiSceneCache!.sourceByElementId.set(duplicated[index]!.id, sourceId);
+            });
+          }
           setActiveSceneComponents([...activeSceneComponents(), ...duplicated]);
-          state = { ...state, components: [...state.components, ...newTunnels], topology: { ...state.topology, conductors: [...state.topology.conductors, ...duplicatedWires] } };
+          state = subcircuitEditorMode === "hmi"
+            ? { ...state, selectedComponentIds: duplicated.map((dup) => dup.id), selectedWireIds: [] }
+            : { ...state, components: [...state.components, ...newTunnels], topology: { ...state.topology, conductors: [...state.topology.conductors, ...duplicatedWires] } };
           for (const dup of duplicated) {
             const dupEl = createComponentElement(dup);
             componentElementsById.set(dup.id, dupEl);
@@ -8590,7 +9332,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
             // `render()`, e arrastá-las junto com a cópia as deixaria na posição errada).
             return { component: dup, startX: dup.x, startY: dup.y, offsetX: offset.x, offsetY: offset.y, siblingElements: [] };
           });
-          send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: currentElementScope(), components: duplicated, wires: duplicatedWires });
+          if (subcircuitEditorMode !== "hmi") send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: currentElementScope(), components: duplicated, wires: duplicatedWires });
           if (newTunnels.length > 0) send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: "schematic", components: newTunnels, wires: [] });
         }
       }
@@ -9548,7 +10290,24 @@ function resolvePropertyFields(component: WebviewComponentModel): PropertyField[
       });
       continue;
     }
-    const kind = propertyFieldKindFromEditor(propSchema.editor);
+    const bindingSourceField = (subcircuitEditorMode === "circuit" || subcircuitEditorMode === "hmi")
+      && isGraphicalTypeId(component.typeId)
+      && /^bindSource(?:B|C)?$/.test(propSchema.id);
+    const bindingChannelOptions = (subcircuitEditorMode === "circuit" || subcircuitEditorMode === "hmi")
+      && isGraphicalTypeId(component.typeId)
+      ? graphicalBindingChannelOptions(component, propSchema.id)
+      : undefined;
+    const actionTargetField = (subcircuitEditorMode === "circuit" || subcircuitEditorMode === "hmi")
+      && isGraphicalActionTypeId(component.typeId)
+      && propSchema.id === "actionTarget";
+    const actionPropertyOptions = (subcircuitEditorMode === "circuit" || subcircuitEditorMode === "hmi")
+      && isGraphicalActionTypeId(component.typeId)
+      && propSchema.id === "actionProperty"
+      ? graphicalActionPropertyOptions(component)
+      : undefined;
+    const kind = bindingSourceField || bindingChannelOptions || actionTargetField || actionPropertyOptions
+      ? "select"
+      : propertyFieldKindFromEditor(propSchema.editor);
     const isLiveReadout = kind === "readonly" && Boolean(propSchema.showOnSymbol);
     // "filePath" tem 2 fontes possíveis: o caso especial único `subcircuitPath` (bloco genérico de
     // subcircuito por caminho) nunca guarda o caminho em `properties` -- vem de
@@ -9565,6 +10324,11 @@ function resolvePropertyFields(component: WebviewComponentModel): PropertyField[
             ? (component.deviceRef?.path ?? "")
           : (component.properties[propSchema.id] ?? propSchema.default ?? "")
         : component.properties[propSchema.id] ?? propSchema.default;
+    const options = bindingSourceField
+      ? graphicalBindingSourceOptions(component, String(value ?? ""))
+      : actionTargetField
+        ? graphicalActionTargetOptions(String(value ?? ""))
+        : actionPropertyOptions ?? bindingChannelOptions ?? propSchema.options;
     fields.push({
       key: propSchema.id,
       label: propSchema.label,
@@ -9575,11 +10339,113 @@ function resolvePropertyFields(component: WebviewComponentModel): PropertyField[
       min: propSchema.min,
       max: propSchema.max,
       step: propSchema.step,
-      options: propSchema.options,
+      options,
       unit: propSchema.unit,
     });
   }
   return augmentRuntimePropertyFields(component, fields);
+}
+
+/** Fonte de binding é uma identidade de componente, então oferecemos os componentes da cena que
+ * publicam leitura decodificável pelo contrato ABI (`readoutFormat`). IDs ficam visíveis para
+ * desambiguar tags repetidas; uma referência antiga também permanece selecionável até o usuário
+ * corrigir ou limpar o binding. */
+function graphicalBindingSourceOptions(
+  component: WebviewComponentModel,
+  currentSourceId: string,
+): Array<{ value: string; label: string }> {
+  const noBindingLabel = currentLocale() === "pt-BR" ? "— sem binding —" : "— no binding —";
+  const options: Array<{ value: string; label: string }> = [{ value: "", label: noBindingLabel }];
+  const candidates = state.components
+    .filter((candidate) => candidate.id !== component.id && Boolean(catalogEntryFor(candidate.typeId)?.readoutFormat))
+    .sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
+  for (const candidate of candidates) {
+    const shortId = candidate.id.length > 12 ? `${candidate.id.slice(0, 8)}…` : candidate.id;
+    options.push({ value: candidate.id, label: `${candidate.label} (${candidate.typeId}) · ${shortId}` });
+  }
+  if (currentSourceId && !options.some((option) => option.value === currentSourceId)) {
+    const existingSource = state.components.find((candidate) => candidate.id === currentSourceId);
+    const issueLabel = existingSource
+      ? currentLocale() === "pt-BR" ? "fonte não publica leitura compatível" : "source has no compatible readout"
+      : currentLocale() === "pt-BR" ? "fonte não encontrada" : "source not found";
+    options.push({ value: currentSourceId, label: `${issueLabel} · ${currentSourceId}` });
+  }
+  return options;
+}
+
+function graphicalBindingChannelOptions(
+  component: WebviewComponentModel,
+  propertyId: string,
+): Array<{ value: string; label: string }> | undefined {
+  const match = /^bindChannel(B|C)?$/.exec(propertyId);
+  if (!match) return undefined;
+  const sourceId = component.properties[`bindSource${match[1] ?? ""}`];
+  if (typeof sourceId !== "string" || sourceId.length === 0) return undefined;
+  const source = state.components.find((candidate) => candidate.id === sourceId);
+  const format = source ? catalogEntryFor(source.typeId)?.readoutFormat : undefined;
+  if (!format) return undefined;
+  const count = format.kind === "scalar" ? 1 : format.channels;
+  if (!Number.isInteger(count) || count < 1) return undefined;
+  return Array.from({ length: count }, (_, index) => ({
+    value: String(index),
+    label: currentLocale() === "pt-BR" ? `Canal ${index + 1} (índice ${index})` : `Channel ${index + 1} (index ${index})`,
+  }));
+}
+
+function graphicalActionTargetOptions(currentTargetId: string): Array<{ value: string; label: string }> {
+  const noTargetLabel = currentLocale() === "pt-BR" ? "— selecione um alvo —" : "— select a target —";
+  const options: Array<{ value: string; label: string }> = [{ value: "", label: noTargetLabel }];
+  const candidates = state.components
+    .filter((candidate) => graphicalActionPropertyNames(candidate).length > 0)
+    .sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
+  for (const candidate of candidates) {
+    const shortId = candidate.id.length > 12 ? `${candidate.id.slice(0, 8)}…` : candidate.id;
+    options.push({ value: candidate.id, label: `${candidate.label} (${candidate.typeId}) · ${shortId}` });
+  }
+  if (currentTargetId && !options.some((option) => option.value === currentTargetId)) {
+    const missingLabel = currentLocale() === "pt-BR" ? "alvo inválido ou sem propriedades editáveis" : "invalid target or no editable properties";
+    options.push({ value: currentTargetId, label: `${missingLabel} · ${currentTargetId}` });
+  }
+  return options;
+}
+
+function graphicalActionPropertyNames(target: WebviewComponentModel): Array<{ id: string; label: string }> {
+  const schema = catalogEntryFor(target.typeId)?.propertySchema ?? [];
+  const writable = new Map<string, string>();
+  const blocked = new Set<string>();
+  for (const field of schema) {
+    if (field.readOnly || field.hidden || field.affectsPinCount || propertyFieldKindFromEditor(field.editor) === "readonly") {
+      blocked.add(field.id);
+      continue;
+    }
+    writable.set(field.id, field.label || field.id);
+  }
+  for (const key of Object.keys(target.properties)) {
+    if (key.startsWith("__") || blocked.has(key) || writable.has(key)) continue;
+    writable.set(key, humanizePropertyName(key));
+  }
+  return [...writable].map(([id, label]) => ({ id, label })).sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
+}
+
+function graphicalActionPropertyOptions(component: WebviewComponentModel): Array<{ value: string; label: string }> | undefined {
+  const targetId = component.properties.actionTarget;
+  if (typeof targetId !== "string" || targetId.length === 0) return undefined;
+  const target = state.components.find((candidate) => candidate.id === targetId);
+  if (!target) return undefined;
+  const propertyNames = graphicalActionPropertyNames(target);
+  if (propertyNames.length === 0) return undefined;
+  const options = [{
+    value: "",
+    label: currentLocale() === "pt-BR" ? "— selecione uma propriedade —" : "— select a property —",
+  }, ...propertyNames.map((property) => ({ value: property.id, label: `${property.label} (${property.id})` }))];
+  const currentProperty = component.properties.actionProperty;
+  if (typeof currentProperty === "string" && currentProperty.length > 0 && !options.some((option) => option.value === currentProperty)) {
+    options.push({
+      value: currentProperty,
+      label: `${currentLocale() === "pt-BR" ? "propriedade indisponível" : "property unavailable"} (${currentProperty})`,
+    });
+  }
+  return options;
 }
 
 function inferPropertyFields(component: WebviewComponentModel): PropertyField[] {
@@ -10553,12 +11419,18 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     }
     const previousSubcircuitEditingContext = state.subcircuitEditingContext;
     state = message.project;
+    hmiSceneCache = undefined;
+    if (subcircuitEditorMode === "hmi" && !state.hmiApplication?.pages.length) {
+      subcircuitEditorMode = "circuit";
+      hmiPresentationMode = false;
+    }
     // Sempre volta pra Subcircuito ao entrar/sair/trocar de sessão de edição (pedido original: "sempre
     // começa em Subcircuito") -- nunca reseta à toa em cada `syncState` de dentro da MESMA sessão (ex:
     // reconciliação de revisão de topologia, `requestConnectEndpoints`), senão editar em Modo Símbolo
     // seria interrompido por qualquer resync incidental.
     if (message.type === "init" || previousSubcircuitEditingContext?.sourceId !== state.subcircuitEditingContext?.sourceId) {
       subcircuitEditorMode = "circuit";
+      hmiPresentationMode = false;
     }
     syncPackageRegistry(state.catalog);
     if (!state.pendingConnection) {
@@ -10583,9 +11455,11 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     // `pendingConnection: null` é o sentinela de "limpar" (ver `extension.ts::computeProjectStatePatch`
     // -- `undefined` não sobrevive a um JSON.stringify, a chave some sem deixar rastro) -- convertido
     // de volta pra `undefined` aqui, único jeito de `WebviewProjectState` continuar tipado certo.
+    if (subcircuitEditorMode === "hmi") commitHmiSceneToPage();
     const merged: WebviewProjectState = {
       ...state,
       ...message.patch,
+      hmiApplication: message.patch.hmiApplication === null ? undefined : message.patch.hmiApplication ?? state.hmiApplication,
       pendingConnection: message.patch.pendingConnection === null ? undefined : message.patch.pendingConnection ?? state.pendingConnection,
       subcircuitEditingContext: message.patch.subcircuitEditingContext === null ? undefined : message.patch.subcircuitEditingContext ?? state.subcircuitEditingContext,
       symbolCanvas: message.patch.symbolCanvas === null ? undefined : message.patch.symbolCanvas ?? state.symbolCanvas,
@@ -10613,9 +11487,17 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     const enteringOrLeavingSubcircuitSession = previousSubcircuitSourceId !== merged.subcircuitEditingContext?.sourceId;
     if (!enteringOrLeavingSubcircuitSession) recordUndoTransition(undoContentKey(merged), () => snapshotOfProjectState(merged));
     state = merged;
+    if ("components" in message.patch || "hmiApplication" in message.patch || enteringOrLeavingSubcircuitSession) hmiSceneCache = undefined;
+    if (subcircuitEditorMode === "hmi" && !state.hmiApplication?.pages.length) {
+      subcircuitEditorMode = "circuit";
+      hmiPresentationMode = false;
+    }
     // Mesmo motivo do handler de "init"/"syncState" acima: sempre volta pra Subcircuito ao
     // entrar/sair da sessão, nunca num patch incremental dentro da MESMA sessão.
-    if (enteringOrLeavingSubcircuitSession) subcircuitEditorMode = "circuit";
+    if (enteringOrLeavingSubcircuitSession) {
+      subcircuitEditorMode = "circuit";
+      hmiPresentationMode = false;
+    }
     if (enteringOrLeavingSubcircuitSession) resetUndoHistory(mainUndoHistory);
     // Ao SAIR de uma sessão de "Abrir Subcircuito" de volta pro circuito principal, o overlay de
     // Modo Placa (`renderBoardOverlaysFor`) de QUALQUER instância deste subcircuito no circuito de
@@ -10663,7 +11545,15 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   }
 
   if (message.type === "componentReadout") {
+    const previousReadoutIds = new Set(Object.keys(readoutsByComponentId));
+    const transportStatusChanged = readoutTransportStatus !== (message.transportStatus ?? "connected");
     readoutsByComponentId = message.readoutsByComponentId;
+    readoutTransportStatus = message.transportStatus ?? "connected";
+    readoutSampleTimestampNs = message.sampleTimestampNs;
+    if (readoutTransportStatus === "connected") telemetryLastFrameReceivedAtMs = Date.now();
+    updateTelemetryStaleness();
+    const changedReadoutIds = new Set([...previousReadoutIds, ...Object.keys(message.readoutsByComponentId)]);
+    const currentReadoutIds = new Set(Object.keys(message.readoutsByComponentId));
     updateReadoutHistories(message.readoutsByComponentId);
     // `render()` reconstrói o DOM inteiro -- chamado SEM CONDIÇÃO a cada poll de telemetria (~300ms
     // durante a simulação) destruiria um arrasto em andamento (ver doc de
@@ -10676,8 +11566,9 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       // reconstruir o SVG inteiro a cada tick. Qualquer outro componente com leitura ao vivo usa só o
       // rótulo de valor FORA do SVG (`refreshReadouts`, texto simples), bem mais barato que um
       // `render()` completo do canvas -- sem isto, `refreshReadouts` nunca era chamado (função morta).
-      for (const component of state.components) {
-        if (!componentNeedsReadoutRepaint(component, message.readoutsByComponentId)) continue;
+      const readoutComponents = subcircuitEditorMode === "hmi" ? activeSceneComponents() : state.components;
+      for (const component of readoutComponents) {
+        if (!componentNeedsReadoutRepaint(component, currentReadoutIds) && !componentDependsOnReadout(component, changedReadoutIds, transportStatusChanged)) continue;
         const el = componentElementsById.get(component.id);
         if (el) updateComponentElement(el, component);
       }
@@ -10687,17 +11578,21 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   }
 
   if (message.type === "componentVisualState") {
+    const previousVisualStates = visualStatesByComponentId;
     const changedComponentIds = new Set(
-      Object.entries(message.statesByComponentId)
-        .filter(([componentId, encoded]) => visualStatesByComponentId[componentId] !== encoded)
-        .map(([componentId]) => componentId)
+      new Set([...Object.keys(previousVisualStates), ...Object.keys(message.statesByComponentId)])
+        .values()
     );
+    for (const componentId of [...changedComponentIds]) {
+      if (previousVisualStates[componentId] === message.statesByComponentId[componentId]) changedComponentIds.delete(componentId);
+    }
     visualStatesByComponentId = message.statesByComponentId;
     // Mesmo backpressure dos instrumentos: troca somente os símbolos afetados, preservando drag,
     // seleção, inputs e popups em vez de reconstruir o canvas inteiro a cada framebuffer.
     if (changedComponentIds.size > 0 && !isInteractiveGestureInProgress()) {
-      for (const component of state.components) {
-        if (!changedComponentIds.has(component.id)) continue;
+      const visualStateComponents = subcircuitEditorMode === "hmi" ? activeSceneComponents() : state.components;
+      for (const component of visualStateComponents) {
+        if (!changedComponentIds.has(runtimeComponentIdForSceneItem(component))) continue;
         const element = componentElementsById.get(component.id);
         if (!element) continue;
         const runtimeImage = element.querySelector<SVGImageElement>('image[data-runtime-surface="bitmap"]');
@@ -10742,6 +11637,8 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   if (message.type === "boardOverlayReadouts") {
     boardOverlayReadoutsByKey = message.readoutsByKey;
     boardOverlayVisualStatesByKey = message.visualStatesByKey ?? {};
+    boardOverlayTransportStatus = message.transportStatus ?? "connected";
+    boardOverlaySampleTimestampNs = message.sampleTimestampNs;
     // Fix real 2026-07-18 ("Parar" ficava sem resposta durante a simulação): NUNCA `render()` aqui
     // -- reconstruiria o esquemático INTEIRO a cada ~300ms só pra atualizar o brilho de 1 LED.
     // `patchBoardOverlayRuntimeVisuals` faz o patch pontual (mesmo princípio de `componentReadout`/
@@ -10754,7 +11651,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       voltagesByWireId,
       message.voltagesByWireId,
       new Set(state.topology.conductors.map((wire) => wire.id)),
-      simulationStatus === "stopped"
+      message.clear === true || simulationStatus === "stopped"
     );
     if (!isInteractiveGestureInProgress()) {
       for (const [wireId, polyline] of wirePolylineElementsById) {
@@ -10768,6 +11665,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
 
   if (message.type === "simulationStatus") {
     simulationStatus = message.status;
+    updateTelemetryStaleness();
     if (message.status === "stopped") {
       // Stop é a única transição que apaga o snapshot visual. Uma amostra de telemetria
       // vazia durante Run/Pause é apenas uma falha transitória e preserva a última cor válida.
@@ -10922,6 +11820,10 @@ function nextIndexedLabel(typeId: string, baseLabel: string, components: Webview
 /** Entra no modo de posicionamento de componente. A posição de rótulos de pinos do package vem do
  * próprio manifesto (`labelX`/`labelY`) e não é editada pelo esquemático. */
 function enterPlacementMode(typeId: string): void {
+  if (subcircuitEditorMode === "hmi" && !typeId.startsWith("graphics.")) {
+    window.alert(currentLocale() === "pt-BR" ? "No modo HMI, adicione elementos gráficos (graphics.*)." : "In HMI mode, place graphic elements (graphics.*).");
+    return;
+  }
   // Cancela qualquer derivação de fio em andamento primeiro -- as duas ferramentas nunca ficam
   // ativas ao mesmo tempo (ver `cancelActiveTool`). Sem isto, colocar um componente novo enquanto um
   // fio está em desenho deixava o preview/pino de origem pendurados na tela.
@@ -10991,7 +11893,8 @@ function makeComponentFromTypeId(typeId: string): WebviewComponentModel {
  * usuário viu "1.00 kΩ" duplicado/embaralhado num resistor comum após parar a simulação uma vez,
  * o que já bastava pra `stopVoltageReadoutPolling` mandar um `componentReadout` e disparar isto). */
 function refreshReadouts(): void {
-  for (const component of state.components) {
+  const readoutComponents = subcircuitEditorMode === "hmi" ? activeSceneComponents() : state.components;
+  for (const component of readoutComponents) {
     const text = externalLabelText(component, "value");
     const labelEl = canvasContentElement?.querySelector<HTMLElement>(
       `.component-floating-label--value[data-component-id="${component.id}"]`
@@ -11004,6 +11907,14 @@ function refreshReadouts(): void {
  * restante do canvas e qualquer gesto em andamento. */
 function refreshRuntimeComponent(componentId: string): void {
   if (isInteractiveGestureInProgress()) return;
+  if (subcircuitEditorMode === "hmi") {
+    for (const component of activeSceneComponents()) {
+      if (runtimeComponentIdForSceneItem(component) !== componentId) continue;
+      const element = componentElementsById.get(component.id);
+      if (element) updateComponentElement(element, component);
+    }
+    return;
+  }
   const component = state.components.find((entry) => entry.id === componentId);
   const el = componentElementsById.get(componentId);
   if (component && el) updateComponentElement(el, component);
@@ -11385,6 +12296,13 @@ function selectAll(): void {
 }
 
 window.addEventListener("keydown", (event) => {
+  if (hmiPresentationMode) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setHmiPresentationMode(false);
+    }
+    return;
+  }
   if (document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement) {
     return;
   }

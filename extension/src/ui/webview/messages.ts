@@ -99,18 +99,19 @@ export type HostToWebviewMessage =
   | {
       version: number;
       type: "syncStatePatch";
-      patch: Omit<Partial<WebviewProjectState>, "pendingConnection" | "subcircuitEditingContext" | "symbolCanvas" | "iconCanvas"> & {
+      patch: Omit<Partial<WebviewProjectState>, "pendingConnection" | "subcircuitEditingContext" | "symbolCanvas" | "iconCanvas" | "hmiApplication"> & {
+        hmiApplication?: WebviewProjectState["hmiApplication"] | null;
         pendingConnection?: WebviewProjectState["pendingConnection"] | null;
         subcircuitEditingContext?: WebviewProjectState["subcircuitEditingContext"] | null;
         symbolCanvas?: WebviewProjectState["symbolCanvas"] | null;
         iconCanvas?: WebviewProjectState["iconCanvas"] | null;
       };
     }
-  | { version: number; type: "componentReadout"; readoutsByComponentId: Record<string, ComponentReadoutValue> }
+  | { version: number; type: "componentReadout"; readoutsByComponentId: Record<string, ComponentReadoutValue>; transportStatus?: "connected" | "disconnected"; sampleTimestampNs?: number }
   /** Estado opaco de `getComponentState()` para packages com `runtimeState`. O package declara
    * offsets e encoding; esta mensagem não conhece nenhum dispositivo específico. */
   | { version: number; type: "componentVisualState"; statesByComponentId: Record<string, string> }
-  | { version: number; type: "wireVoltages"; voltagesByWireId: Record<string, number> }
+  | { version: number; type: "wireVoltages"; voltagesByWireId: Record<string, number>; clear?: boolean }
   | { version: number; type: "simulationStatus"; status: SimulationStatus }
   | { version: number; type: "lasecPlotStatus"; componentId: string; opened: boolean; clients: number; error?: string }
   | { version: number; type: "serialTerminalStatus"; componentId: string; opened: boolean; online: boolean; error?: string }
@@ -159,7 +160,7 @@ export type HostToWebviewMessage =
    * como bloco -- só dentro do próprio modo de edição do subcircuito (que usa `runtimeSymbolProperties`
    * normalmente). Chave = `${outerComponentId}:${innerComponentId}` (ver
    * `coreLifecycle.ts::pollBoardOverlayReadouts`). */
-  | { version: number; type: "boardOverlayReadouts"; readoutsByKey: Record<string, ComponentReadoutValue>; visualStatesByKey?: Record<string, string> }
+  | { version: number; type: "boardOverlayReadouts"; readoutsByKey: Record<string, ComponentReadoutValue>; visualStatesByKey?: Record<string, string>; transportStatus?: "connected" | "disconnected"; sampleTimestampNs?: number }
   /** Vem de `lasecsimul.rotateSelectionCw`/`Ccw` (`extension.ts`), disparado por keybinding do
    * VSCode com `when: activeWebviewPanelId == 'lasecsimul.schematic'` -- sobrepõe o `Ctrl+R`/
    * `Ctrl+Shift+R` nativo do VSCode SÓ enquanto o painel está em foco (`when` reverte sozinho ao

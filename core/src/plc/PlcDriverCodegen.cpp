@@ -57,6 +57,13 @@ std::string generatePlcWorkerDriverSource(const PlcParsedInterface& interface, c
         // mesma convencao (mesmo padrao que o proprio harness --build da STruCpp usa).
         resolved.push_back({toUpper(variable.name), *tag, variable.direction});
     }
+    // Locais escalares entram só na tabela de GET/SET/FORCE (monitoração do editor). Instâncias de
+    // FB, arrays e structs ficam de fora: não há VarTypeTag para elas.
+    for (const auto& variable : interface.locals) {
+        if (const auto tag = mapIecTypeToVarTypeTag(variable.iecType)) {
+            resolved.push_back({toUpper(variable.name), *tag, "local"});
+        }
+    }
 
     std::ostringstream out;
     out << "// GERADO por PlcCompiler (F9.3) -- nao editar manualmente. Driver proprio do\n";

@@ -16,6 +16,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "PlcNativeModule.hpp"
 
@@ -49,6 +50,12 @@ struct PlcCompileOptions {
     /** Stable authoring ioId by ST variable name. When absent (legacy standalone ST input), the
      * variable name is used for backward compatibility; project builds should always provide it. */
     std::unordered_map<std::string, std::string> ioIdByVariableName;
+
+    /** Quando não vazio, a STruCpp roda com `--no-default-libs` e só estes diretórios de `.stlib`.
+     * O pacote da STruCpp traz a OSCAT, cujos nomes (TOGGLE, BLINK, CLK_DIV...) colidem com FBs
+     * que o aluno escreve: as duas definições vão para o mesmo .hpp e o C++ recusa. O editor passa
+     * só as bibliotecas da norma (iec-standard-fb, iec-std-functions) e os blocos adicionais. */
+    std::vector<std::filesystem::path> strucppLibraryDirs;
 };
 
 struct PlcCompileDiagnostics {

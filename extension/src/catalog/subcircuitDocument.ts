@@ -4,6 +4,8 @@ import { ProjectComponent, ProjectTopology, ProjectTopologyEndpoint } from "../p
 import { sanitizePackage } from "./packageSanitizers";
 import { isIpdLineClass } from "../ui/webview/ipdLineStyle";
 import { migrateLegacySignalTunnels } from "./legacySignalTunnelMigration";
+import type { HmiApplication } from "../project/ProjectTypes";
+import { validateHmiApplication } from "../project/ProjectSerializer";
 
 /** Refatoração completa do editor de subcircuitos (Subcircuito/Símbolo/Ícone) -- substitui o modelo
  * anterior (`other.package`/`other.package_pin` como objetos ocultos dentro de `components[]`, ver
@@ -99,6 +101,8 @@ export interface SubcircuitDocument {
    * `components[].id`; granularidade por-componente (liga/desliga TODAS as propriedades daquele
    * componente), não por-propriedade-individual (escolha explícita do usuário). */
   exportedPropertyComponentIds: string[];
+  /** HMI opcional do subcircuito; elementos referenciam gráficos internos e guardam geometria por página. */
+  hmiApplication?: HmiApplication;
 }
 
 export type ParseSubcircuitDocumentResult =
@@ -199,6 +203,13 @@ export function parseSubcircuitDocument(raw: unknown, manifestDir: string): Pars
   const typeId = typeof obj.typeId === "string" ? obj.typeId.trim() : "";
   if (!typeId) return { ok: false, reason: "Documento sem typeId." };
 
+  const components = Array.isArray(obj.components) ? (obj.components as ProjectComponent[]) : [];
+  let hmiApplication: HmiApplication | undefined;
+  try {
+    hmiApplication = validateHmiApplication(obj.hmiApplication);
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : String(err) };
+  }
   const document: SubcircuitDocument = {
     schemaVersion: SUBCIRCUIT_SCHEMA_VERSION,
     typeId,
@@ -213,7 +224,7 @@ export function parseSubcircuitDocument(raw: unknown, manifestDir: string): Pars
     defaultProperties: typeof obj.defaultProperties === "object" && obj.defaultProperties !== null ? (obj.defaultProperties as Record<string, unknown>) : undefined,
     propertySchema: Array.isArray(obj.propertySchema) ? (obj.propertySchema as unknown[]) : undefined,
     help: typeof obj.help === "object" && obj.help !== null ? (obj.help as { description?: string }) : undefined,
-    components: Array.isArray(obj.components) ? (obj.components as ProjectComponent[]) : [],
+    components,
     topology: parseTopology(obj.topology),
     interface: Array.isArray(obj.interface)
       ? (obj.interface as unknown[]).map(parseInterfaceEntry).filter((entry): entry is SubcircuitInterfaceEntry => entry !== undefined)
@@ -227,6 +238,7 @@ export function parseSubcircuitDocument(raw: unknown, manifestDir: string): Pars
     exportedPropertyComponentIds: Array.isArray(obj.exportedPropertyComponentIds)
       ? (obj.exportedPropertyComponentIds as unknown[]).filter((id): id is string => typeof id === "string" && id.trim().length > 0)
       : [],
+    hmiApplication,
   };
     const migrated = migrateLegacySignalTunnels(document.components, document.topology, document.interface);
     return { ok: true, document: {
@@ -268,6 +280,7 @@ export function serializeSubcircuitDocument(document: SubcircuitDocument): Recor
     ...(document.symbol ? { symbol: document.symbol } : {}),
     exposedComponents: document.exposedComponents,
     exportedPropertyComponentIds: document.exportedPropertyComponentIds,
+    ...(document.hmiApplication ? { hmiApplication: document.hmiApplication } : {}),
     ...(document.icon ? { icon: document.icon } : {}),
     ...(document.folderPath ? { folderPath: document.folderPath } : {}),
     ...(document.workspaceSection ? { workspaceSection: document.workspaceSection } : {}),

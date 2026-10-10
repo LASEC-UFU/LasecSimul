@@ -144,7 +144,7 @@ function cloneState(): WebviewProjectState {
 }
 
 const PROJECT_STATE_KEYS = [
-  "locale", "catalog", "components", "topology", "viewport", "selectedComponentIds", "selectedWireIds", "pendingConnection",
+  "locale", "catalog", "components", "topology", "hmiApplication", "viewport", "selectedComponentIds", "selectedWireIds", "pendingConnection",
   "subcircuitEditingContext", "symbolMode", "symbolElements", "iconElements", "exposedComponents", "exportedPropertyComponentIds", "symbolCanvas", "iconCanvas",
 ] as const satisfies readonly (keyof WebviewProjectState)[];
 
@@ -164,7 +164,8 @@ const PROJECT_STATE_KEYS = [
  * typeId registrado, tipicamente o maior pedaço do estado) quase nunca muda, então a maioria das
  * chamadas nem chega a tocar nele. Devolve `undefined` quando nada mudou (chamador não manda
  * mensagem nenhuma nesse caso -- nunca um patch vazio). */
-type ProjectStatePatch = Omit<Partial<WebviewProjectState>, "pendingConnection" | "subcircuitEditingContext" | "symbolCanvas" | "iconCanvas"> & {
+type ProjectStatePatch = Omit<Partial<WebviewProjectState>, "pendingConnection" | "subcircuitEditingContext" | "symbolCanvas" | "iconCanvas" | "hmiApplication"> & {
+  hmiApplication?: WebviewProjectState["hmiApplication"] | null;
   pendingConnection?: WebviewProjectState["pendingConnection"] | null;
   subcircuitEditingContext?: WebviewProjectState["subcircuitEditingContext"] | null;
   symbolCanvas?: WebviewProjectState["symbolCanvas"] | null;
@@ -199,6 +200,10 @@ function computeProjectStatePatch(): ProjectStatePatch | undefined {
       continue;
     }
     if (key === "iconCanvas" && state.schematicState.iconCanvas === undefined) {
+      toClone[key] = null;
+      continue;
+    }
+    if (key === "hmiApplication" && state.schematicState.hmiApplication === undefined) {
       toClone[key] = null;
       continue;
     }
@@ -1248,6 +1253,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         : { ...message.project, topology: { ...message.project.topology, revision: previous.topology.revision } };
       enqueueProjectSnapshotSync(previous, state.schematicState);
       if (topologyChanged) syncSchematicPanel();
+      else refreshDirtyIndicator();
       return;
     }
     case "requestAddComponent": {
@@ -2138,6 +2144,7 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
     initialIconElements: iconElements,
     initialExposedComponents: document.exposedComponents,
     initialExportedPropertyComponentIds: document.exportedPropertyComponentIds,
+    initialHmiApplication: document.hmiApplication,
   });
 
   state.schematicState = {
@@ -2151,6 +2158,7 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
     iconCanvas,
     exposedComponents: document.exposedComponents,
     exportedPropertyComponentIds: document.exportedPropertyComponentIds,
+    hmiApplication: document.hmiApplication,
     viewport: { x: 0, y: 0, zoom: 1 },
     selectedComponentIds: [],
     selectedWireIds: [],
@@ -2178,6 +2186,7 @@ function isSubcircuitEditingSessionDirty(session: SubcircuitEditingSession): boo
     iconElements: state.schematicState.iconElements,
     exposedComponents: state.schematicState.exposedComponents,
     exportedPropertyComponentIds: state.schematicState.exportedPropertyComponentIds,
+    hmiApplication: state.schematicState.hmiApplication,
   });
   const initial = JSON.stringify({
     components: session.initialComponents,
@@ -2188,6 +2197,7 @@ function isSubcircuitEditingSessionDirty(session: SubcircuitEditingSession): boo
     iconElements: session.initialIconElements,
     exposedComponents: session.initialExposedComponents,
     exportedPropertyComponentIds: session.initialExportedPropertyComponentIds,
+    hmiApplication: session.initialHmiApplication,
   });
   return current !== initial;
 }
@@ -2267,6 +2277,7 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
     ...(iconResult.descriptor ? { icon: iconResult.descriptor } : {}),
     exposedComponents: state.schematicState.exposedComponents,
     exportedPropertyComponentIds: state.schematicState.exportedPropertyComponentIds,
+    hmiApplication: state.schematicState.hmiApplication,
   };
 
   // Força `properties.name === properties.pinId` em todo túnel ligado e re-deriva `interface[]`
@@ -2334,6 +2345,7 @@ async function saveActiveSchematicCommand(): Promise<void> {
   session.initialIconElements = state.schematicState.iconElements;
   session.initialExposedComponents = state.schematicState.exposedComponents;
   session.initialExportedPropertyComponentIds = state.schematicState.exportedPropertyComponentIds;
+  session.initialHmiApplication = state.schematicState.hmiApplication;
   session.savedDuringEditing = true;
   vscode.window.showInformationMessage(`Subcircuito salvo em ${session.filePath}`);
 }

@@ -79,6 +79,10 @@ set(CORE_SOURCES
     src/mcu/McuController.cpp
     src/mcu/McuComponent.cpp
     src/plc/PlcRuntime.cpp
+    src/plc/PlcCompiler.cpp
+    src/plc/PlcCompileCli.cpp
+    src/plc/PlcInterfaceParser.cpp
+    src/plc/PlcDriverCodegen.cpp
     src/protocols/IndustrialProtocols.cpp
     src/protocols/HartEngine.cpp
     src/protocols/HartReferenceCatalog.cpp

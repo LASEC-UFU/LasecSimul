@@ -1037,6 +1037,8 @@ export interface WebviewProjectState {
    * em vez de `{componentId,pinId}` plano assumindo por convenção que nó e porta compartilham o
    * mesmo espaço de string. */
   topology: CanonicalTopologyDocument;
+  /** Páginas HMI opcionais, separadas da geometria original dos componentes do esquemático. */
+  hmiApplication?: HmiApplication;
   locale?: "pt-BR" | "en";
   catalog: WebviewComponentCatalogEntry[];
   components: WebviewComponentModel[];
@@ -1103,4 +1105,75 @@ export interface WebviewProjectState {
    * visual, só um interruptor liga/desliga por componente (mesma granularidade escolhida pelo
    * usuário: "por componente", não por propriedade individual). */
   exportedPropertyComponentIds: string[];
+}
+
+/** Ocorrência visual numa página HMI. Pode projetar um componente real por id
+ * ou guardar um elemento gráfico independente. A geometria e as propriedades
+ * locais nunca movem nem alteram o componente do esquemático. A ordem define a
+ * camada. SVGs novos/redesenhados devem vir de ativos vetoriais aprovados. */
+export interface HmiPageElement {
+  id: string;
+  /** Referência viva a um gráfico do circuito; ausente quando o elemento é independente da cena esquemática. */
+  componentId?: string;
+  /** Tipo do elemento independente; por ora a autoria HMI aceita `graphics.*`. */
+  typeId?: string;
+  label?: string;
+  /** Propriedades sobrescritas apenas nesta ocorrência/página; ausência herda do gráfico interno. */
+  properties?: Record<string, unknown>;
+  visual: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotation?: 0 | 90 | 180 | 270;
+  };
+}
+
+export interface HmiPageNavigationItem {
+  id: string;
+  label: string;
+  targetPageId: string;
+  visual: { x: number; y: number; width: number; height: number };
+}
+
+export interface HmiPage {
+  id: string;
+  name: string;
+  /** Tamanho definido pelo projeto/posto de operação, sem resolução normativa implícita. */
+  width: number;
+  height: number;
+  elements: HmiPageElement[];
+  navigation?: HmiPageNavigationItem[];
+}
+
+/** Camada de apresentação HMI referenciada aos componentes gráficos do projeto.
+ * Os componentes e suas posições no esquemático permanecem na fonte original. */
+export interface HmiApplication {
+  startPageId: string;
+  pages: HmiPage[];
+  /** Sem nova amostra de frame por este intervalo durante Run, bindings configurados aparecem como stale. Ausente/desativado nao inventa prazo. */
+  staleAfterMs?: number;
+}
+
+/** Encontra uma caixa inicial livre para um atalho HMI sem mover nenhum elemento existente. */
+export function defaultHmiNavigationVisual(
+  pageWidth: number,
+  pageHeight: number,
+  obstacles: readonly { x: number; y: number; width: number; height: number }[],
+): HmiPageNavigationItem["visual"] {
+  const marginX = Math.min(16, pageWidth / 4);
+  const marginY = Math.min(16, pageHeight / 4);
+  const width = Math.max(1, Math.min(180, pageWidth - marginX * 2));
+  const height = Math.max(1, Math.min(36, pageHeight - marginY * 2));
+  const maxX = Math.max(marginX, pageWidth - marginX - width);
+  const maxY = Math.max(marginY, pageHeight - marginY - height);
+  const stepX = width + 8;
+  const stepY = height + 8;
+  for (let y = marginY; y <= maxY; y += stepY) {
+    for (let x = marginX; x <= maxX; x += stepX) {
+      const overlaps = obstacles.some((box) => x < box.x + box.width && x + width > box.x && y < box.y + box.height && y + height > box.y);
+      if (!overlaps) return { x, y, width, height };
+    }
+  }
+  return { x: marginX, y: marginY, width, height };
 }

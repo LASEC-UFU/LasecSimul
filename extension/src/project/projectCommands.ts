@@ -193,6 +193,7 @@ function projectToWebviewState(project: ProjectDocument, projectDir?: string): W
     locale: currentLasecSimulLanguage(),
     catalog,
     components,
+    hmiApplication: project.hmiApplication,
     topology,
     viewport: project.visual.viewport,
     selectedComponentIds: [],
@@ -299,8 +300,16 @@ async function resolveProjectSubcircuitReferences(projectDir: string): Promise<v
  * gravar o snapshot "salvo por último" (`markProjectSaved`) quanto pra decidir se há alteração não
  * salva (`isProjectDirty`). Comparação estrutural (`JSON.stringify`) é barata o bastante pro
  * tamanho típico de um esquemático e evita persistir/computar um diff campo a campo à parte. */
-function projectContentSnapshot(): { components: WebviewProjectState["components"]; topology: WebviewProjectState["topology"] } {
-  return { components: state.schematicState.components, topology: state.schematicState.topology };
+function projectContentSnapshot(): {
+  components: WebviewProjectState["components"];
+  topology: WebviewProjectState["topology"];
+  hmiApplication: WebviewProjectState["hmiApplication"];
+} {
+  return {
+    components: state.schematicState.components,
+    topology: state.schematicState.topology,
+    hmiApplication: state.schematicState.hmiApplication ? structuredClone(state.schematicState.hmiApplication) : undefined,
+  };
 }
 
 function markProjectSaved(): void {
@@ -312,7 +321,7 @@ function markProjectSaved(): void {
  * um esquemático vazio recém-aberto não deve disparar aviso nenhum. */
 export function isProjectDirty(): boolean {
   const current = projectContentSnapshot();
-  if (!state.lastSavedProjectState) return current.components.length > 0 || current.topology.conductors.length > 0;
+  if (!state.lastSavedProjectState) return current.components.length > 0 || current.topology.conductors.length > 0 || Boolean(current.hmiApplication);
   return JSON.stringify(current) !== JSON.stringify(state.lastSavedProjectState);
 }
 
@@ -459,6 +468,7 @@ async function writeProjectToFile(filePath: string): Promise<boolean> {
     components: state.schematicState.components.map(webviewComponentToProjectComponent),
     wires: [],
     topology: canonicalTopology,
+    hmiApplication: state.schematicState.hmiApplication,
     visual: {
       wires: state.schematicState.topology.conductors
         .filter((wire) => wire.points && wire.points.length > 0)

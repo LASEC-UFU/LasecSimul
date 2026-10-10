@@ -1,6 +1,7 @@
 import { TUNNEL_TYPE_ID } from "../ui/webview/model";
 import { SubcircuitDocument } from "./subcircuitDocument";
 import { pruneInvalidExportedPropertyRefs, pruneInvalidExposedComponentRefs } from "./subcircuitExposedComponents";
+import { validateHmiApplication } from "../project/ProjectSerializer";
 
 const SIGNAL_TUNNEL_TYPE_ID = "connectors.signal_tunnel";
 
@@ -48,6 +49,12 @@ const SUPPORTED_SHAPE_KINDS = new Set(["rect", "text", "line", "ellipse", "polyg
 export function validateSubcircuitDocument(document: SubcircuitDocument): SubcircuitValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
+
+  try {
+    validateHmiApplication(document.hmiApplication);
+  } catch (err) {
+    errors.push(`HMI inválido: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   // IDs duplicados -- components[] + symbol.pins[] JUNTOS, nunca só por namespace separado (um
   // pino e um componente interno com o MESMO id ainda é uma colisão de identidade no documento).

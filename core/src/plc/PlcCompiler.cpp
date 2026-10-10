@@ -557,10 +557,17 @@ PlcNativeModule PlcCompiler::compile(const PlcCompileOptions& options) {
     const fs::path generatedCppPath = options.workDir / (programNameLower + ".cpp");
     const fs::path generatedHppPath = options.workDir / (programNameLower + ".hpp");
 
+    std::vector<std::string> strucppArgs = {options.stSourcePath.string(), "-o", generatedCppPath.string(),
+                                            "--line-directives", "--source-comments"};
+    if (!options.strucppLibraryDirs.empty()) {
+        strucppArgs.push_back("--no-default-libs");
+        for (const auto& libraryDir : options.strucppLibraryDirs) {
+            strucppArgs.push_back("-L");
+            strucppArgs.push_back(libraryDir.string());
+        }
+    }
     ProcessRunResult strucppResult = runProcessCapturingOutput(
-        options.strucppBinaryPath.string(),
-        {options.stSourcePath.string(), "-o", generatedCppPath.string(), "--line-directives", "--source-comments"},
-        options.workDir, std::chrono::milliseconds(30000));
+        options.strucppBinaryPath.string(), strucppArgs, options.workDir, std::chrono::milliseconds(30000));
     if (strucppResult.spawnFailed) {
         fail("strucpp", strucppResult.spawnError, strucppResult.combinedOutput);
     }
@@ -615,6 +622,10 @@ PlcNativeModule PlcCompiler::compile(const PlcCompileOptions& options) {
         };
 #if defined(_WIN32)
         cxxArgs.push_back("-Wl,--no-insert-timestamp");
+        // O worker roda fora do PATH do MinGW (instalação do usuário, toolchain embutido): sem
+        // -static ele dependeria de libstdc++-6.dll/libgcc_s_seh-1.dll/libwinpthread-1.dll e o
+        // Windows recusaria iniciá-lo, ou pior, carregaria outra cópia achada no PATH.
+        cxxArgs.push_back("-static");
 #endif
     }
     ProcessRunResult cxxResult = cxxCompiler.flavor == CxxCompilerFlavor::Msvc
@@ -664,6 +675,7 @@ PlcNativeModule PlcCompiler::compile(const PlcCompileOptions& options) {
         std::istringstream versionStream(versionResult.combinedOutput);
         std::string firstLine;
         std::getline(versionStream, firstLine);
+        while (!firstLine.empty() && std::isspace(static_cast<unsigned char>(firstLine.back()))) firstLine.pop_back();
         module.cxxToolchainVersion = firstLine;
     }
     module.sourceHash = Sha256::hashFile(options.stSourcePath);

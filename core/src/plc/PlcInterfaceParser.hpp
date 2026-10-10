@@ -21,12 +21,15 @@ namespace lasecsimul::plc {
 struct PlcParsedVariable {
     std::string name;
     std::string iecType; // nome IEC como aparece no fonte (BOOL, INT, REAL, TIME, ...)
-    std::string direction; // "input" | "output"
+    std::string direction; // "input" | "output" | "local"
 };
 
 struct PlcParsedInterface {
     std::string programName;
     std::vector<PlcParsedVariable> variables; // só VAR_INPUT/VAR_OUTPUT, nessa ordem de declaração
+    /** `VAR`/`VAR RETAIN`/`VAR NON_RETAIN` do PROGRAM, para monitorar e forçar no editor; nunca
+     * viram pinos. Inclui instâncias de FB (TON...); o driver só publica os tipos escalares. */
+    std::vector<PlcParsedVariable> locals;
 };
 
 class PlcInterfaceParseError : public std::runtime_error {
@@ -34,7 +37,10 @@ public:
     using std::runtime_error::runtime_error;
 };
 
-/** Lança `PlcInterfaceParseError` se nenhum `PROGRAM <nome>` for encontrado, se um bloco
+/** Só os blocos do PROGRAM contam: VAR_INPUT de um FUNCTION_BLOCK declarado antes dele no mesmo
+ * arquivo não é entrada do programa.
+ *
+ * Lança `PlcInterfaceParseError` se nenhum `PROGRAM <nome>` for encontrado, se um bloco
  * `VAR_INPUT`/`VAR_OUTPUT` não fechar com `END_VAR`, ou se uma declaração dentro desses blocos não
  * seguir o formato `nome[, nome2, ...] : TIPO [:= inicial];`. */
 PlcParsedInterface parsePlcProgramInterface(const std::string& stSource);

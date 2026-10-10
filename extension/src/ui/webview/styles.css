@@ -153,6 +153,34 @@ html, body {
   padding-right: 0;
 }
 
+.appbar__hmi-page-name {
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--toolbar-text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hmi-page-navigation-control {
+  position: absolute;
+  z-index: 20;
+  overflow: hidden;
+  padding: 3px 8px;
+  border: 1px solid #62a1c2;
+  border-radius: 4px;
+  background: #245e7c;
+  color: #fff;
+  cursor: move;
+  font: 600 13px/1.2 sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas.hmi-presentation-mode .hmi-page-navigation-control {
+  cursor: pointer;
+}
+
 .appbar__button {
   display: inline-grid;
   place-items: center;
@@ -776,6 +804,18 @@ html, body {
   cursor: pointer;
 }
 
+.canvas.hmi-presentation-mode .component {
+  pointer-events: none;
+}
+
+.canvas.hmi-presentation-mode .component--hmi-operator-run {
+  pointer-events: auto;
+}
+
+.canvas.hmi-presentation-mode .component-floating-label {
+  pointer-events: none;
+}
+
 .component--hmi-operator-run[data-type-id="graphics.slider"] {
   cursor: pointer;
 }
@@ -1031,6 +1071,41 @@ rect.meter-expand-button:hover {
   background: #eeeeee;
   color: #000;
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+}
+
+.property-dialog--hmi-audit {
+  width: min(620px, 90vw);
+  min-width: min(620px, 90vw);
+  max-width: min(620px, 90vw);
+  max-height: 82vh;
+  overflow: auto;
+}
+
+.hmi-audit-results__list {
+  display: grid;
+  gap: 6px;
+  max-height: 65vh;
+  overflow: auto;
+}
+
+.hmi-audit-results__list h3 {
+  margin: 10px 0 2px;
+}
+
+.hmi-audit-results__finding {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--vscode-panel-border, #888);
+  background: var(--vscode-button-secondaryBackground, #ddd);
+  color: var(--vscode-button-secondaryForeground, #111);
+  text-align: left;
+  cursor: pointer;
+}
+
+.hmi-audit-results__finding:hover,
+.hmi-audit-results__finding:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder, #007acc);
+  outline-offset: 1px;
 }
 
 /** "Selecione os Componentes expostos" -- precisa de mais largura que `.property-dialog` (rótulos

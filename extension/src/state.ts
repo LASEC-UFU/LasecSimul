@@ -49,11 +49,15 @@ export const state = {
   trustStore: undefined as TrustStore | undefined,
   lastSyncedProjectState: undefined as WebviewProjectState | undefined,
   voltageReadoutTimer: undefined as ReturnType<typeof setInterval> | undefined,
-  /** Snapshot de `{components, wires}` (o que `ProjectSerializer` de fato persiste, ver
+  /** Snapshot dos componentes, topologia e aplicação HMI (o que `ProjectSerializer` de fato persiste, ver
    * `ProjectSerializer.ts`/`projectCommands.ts`) tirado logo após um save/load bem-sucedido --
    * comparado contra `schematicState` atual pra decidir se há alteração não salva (`isProjectDirty`
    * em `projectCommands.ts`). `undefined` == projeto novo/vazio ainda sem save nenhum. */
-  lastSavedProjectState: undefined as { components: WebviewProjectState["components"]; topology: WebviewProjectState["topology"] } | undefined,
+  lastSavedProjectState: undefined as {
+    components: WebviewProjectState["components"];
+    topology: WebviewProjectState["topology"];
+    hmiApplication: WebviewProjectState["hmiApplication"];
+  } | undefined,
   /** Pilha de sessões "Abrir Subcircuito" em andamento (ver `extension.ts::
    * openSubcircuitForEditingCommand`/`closeSubcircuitEditorCommand`) -- empilha em vez de um único
    * slot pra suportar abrir um subcircuito DENTRO de outro já em edição. `originalDocument` é o
@@ -81,6 +85,7 @@ export const state = {
     initialIconElements: WebviewProjectState["iconElements"];
     initialExposedComponents: WebviewProjectState["exposedComponents"];
     initialExportedPropertyComponentIds: WebviewProjectState["exportedPropertyComponentIds"];
+    initialHmiApplication: WebviewProjectState["hmiApplication"];
     /** A sessão já foi gravada ao menos uma vez por Ctrl+S sem sair do editor. Ao voltar para o
      * projeto, o catálogo/package precisa ser relido mesmo que não haja mais alterações sujas. */
     savedDuringEditing?: boolean;

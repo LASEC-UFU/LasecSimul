@@ -51,6 +51,9 @@ export interface GraphicalBindingProperties {
 }
 
 export interface GraphicalRuntimeProperties {
+  /** Timestamp simulado (ns) do frame coerente; consulte o campo `available` para distinguir timestamp zero valido. */
+  __g_sample_timestamp_ns: number;
+  __g_sample_timestamp_available: "true" | "false";
   /** Valor de engenharia já transformado (escala/offset). */
   __g_value: number;
   /** `__g_value` normalizado em 0..100 pela faixa `bindMin..bindMax`, saturado nas pontas. */
@@ -61,7 +64,7 @@ export interface GraphicalRuntimeProperties {
   __g_on: string;
   /** `"bound"` quando existe binding resolvido, `"static"` quando o valor veio da propriedade,
    * `"missing"` quando há `bindSource` mas a fonte não publicou leitura (ainda). */
-  __g_bind: "bound" | "static" | "missing";
+  __g_bind: "bound" | "static" | "missing" | "disconnected" | "stale";
   /** Cada limite normalizado em 0..100 pela MESMA faixa de `__g_pct`, para uma primitiva posicionar
    * a marca com uma expressão linear (`{prop, multiplier, offset}`) -- que é tudo que o IR tem.
    * Calcular aqui é o que permite o usuário digitar o limite na unidade do processo, como no IPD,
@@ -86,7 +89,7 @@ export interface GraphicalRuntimeProperties {
    * leitura. Um widget com qualidade ruim não desenha ponteiro nem preenchimento e imprime traços
    * (`__g_text_q`) -- mostrar o último número que ele tinha é como um instrumento morto passa um
    * turno inteiro despercebido. */
-  __g_quality: "ok" | "bad";
+  __g_quality: "ok" | "bad" | "disconnected" | "stale";
   /** `__g_text` com a qualidade aplicada. Deliberadamente um campo NOVO em vez de mudar
    * `__g_text`: os símbolos já publicados mostram o valor estático quando a fonte some, e trocar
    * isso agora seria uma mudança de comportamento em tela existente. */
@@ -99,11 +102,11 @@ export interface GraphicalRuntimeProperties {
   __g_b_value: number;
   __g_b_pct: number;
   __g_b_text: string;
-  __g_b_bind: "bound" | "static" | "missing";
+  __g_b_bind: "bound" | "static" | "missing" | "disconnected" | "stale";
   __g_c_value: number;
   __g_c_pct: number;
   __g_c_text: string;
-  __g_c_bind: "bound" | "static" | "missing";
+  __g_c_bind: "bound" | "static" | "missing" | "disconnected" | "stale";
 }
 
 function numberProperty(properties: GraphicalBindingProperties, key: string, fallback: number): number {
@@ -157,7 +160,7 @@ interface ResolvedSignal {
   value: number;
   pct: number;
   text: string;
-  bind: "bound" | "static" | "missing";
+  bind: "bound" | "static" | "missing" | "disconnected" | "stale";
   min: number;
   max: number;
   span: number;
@@ -175,13 +178,19 @@ function resolveSignal(
   properties: GraphicalBindingProperties,
   readoutOf: (componentId: string) => ComponentReadoutValue | undefined,
   suffix: string,
+  transportStatus: "connected" | "disconnected",
+  dataStale: boolean,
 ): ResolvedSignal {
   const source = stringProperty(properties, `bindSource${suffix}`);
   let value = numberProperty(properties, `${GRAPHICAL_VALUE_PROPERTY}${suffix}`, 0);
   let bind: ResolvedSignal["bind"] = "static";
   if (source) {
     const raw = scalarReadout(readoutOf(source), numberProperty(properties, `bindChannel${suffix}`, 0));
-    if (raw === undefined) {
+    if (transportStatus === "disconnected") {
+      bind = "disconnected";
+    } else if (dataStale) {
+      bind = "stale";
+    } else if (raw === undefined) {
       bind = "missing";
     } else {
       value = raw * numberProperty(properties, `bindScale${suffix}`, 1) + numberProperty(properties, `bindOffset${suffix}`, 0);
@@ -204,7 +213,10 @@ function resolveSignal(
 
 export function graphicalRuntimeProperties(
   properties: GraphicalBindingProperties,
-  readoutOf: (componentId: string) => ComponentReadoutValue | undefined
+  readoutOf: (componentId: string) => ComponentReadoutValue | undefined,
+  transportStatus: "connected" | "disconnected" = "connected",
+  dataStale = false,
+  sampleTimestampNs?: number
 ): GraphicalRuntimeProperties {
   const source = stringProperty(properties, "bindSource");
   const staticValue = numberProperty(properties, GRAPHICAL_VALUE_PROPERTY, 0);
@@ -213,7 +225,11 @@ export function graphicalRuntimeProperties(
   let bind: GraphicalRuntimeProperties["__g_bind"] = "static";
   if (source) {
     const raw = scalarReadout(readoutOf(source), numberProperty(properties, "bindChannel", 0));
-    if (raw === undefined) {
+    if (transportStatus === "disconnected") {
+      bind = "disconnected";
+    } else if (dataStale) {
+      bind = "stale";
+    } else if (raw === undefined) {
       // Fonte declarada mas sem leitura: mantém o valor estático (a tela continua legível) e marca
       // `missing`, que é o que um indicador de binding quebrado consome para se destacar.
       bind = "missing";
@@ -256,12 +272,18 @@ export function graphicalRuntimeProperties(
     (ll !== undefined && value <= ll) || (hh !== undefined && value >= hh) ? "high"
       : (l !== undefined && value <= l) || (h !== undefined && value >= h) ? "low"
       : "none";
-  const quality: GraphicalRuntimeProperties["__g_quality"] = bind === "missing" ? "bad" : "ok";
-  const signalB = resolveSignal(properties, readoutOf, "B");
-  const signalC = resolveSignal(properties, readoutOf, "C");
+  const signalB = resolveSignal(properties, readoutOf, "B", transportStatus, dataStale);
+  const signalC = resolveSignal(properties, readoutOf, "C", transportStatus, dataStale);
+  const hasConfiguredSource = [source, stringProperty(properties, "bindSourceB"), stringProperty(properties, "bindSourceC")].some(Boolean);
+  const quality: GraphicalRuntimeProperties["__g_quality"] = transportStatus === "disconnected" && hasConfiguredSource
+    ? "disconnected"
+    : dataStale && hasConfiguredSource ? "stale"
+    : bind === "missing" || signalB.bind === "missing" || signalC.bind === "missing" ? "bad" : "ok";
   const text = formatGraphicalValue(value, numberProperty(properties, "bindDecimals", 1), stringProperty(properties, "bindUnit"));
 
   return {
+    __g_sample_timestamp_ns: sampleTimestampNs !== undefined && Number.isFinite(sampleTimestampNs) ? sampleTimestampNs : 0,
+    __g_sample_timestamp_available: sampleTimestampNs !== undefined && Number.isFinite(sampleTimestampNs) ? "true" : "false",
     __g_value: value,
     __g_pct: pct,
     __g_text: text,
@@ -277,7 +299,7 @@ export function graphicalRuntimeProperties(
     __g_hh_set: hh === undefined ? "false" : "true",
     __g_alarm: alarm,
     __g_quality: quality,
-    __g_text_q: quality === "bad" ? "- - -" : text,
+    __g_text_q: quality === "disconnected" ? "OFFLINE" : quality === "stale" ? "STALE" : quality === "bad" ? "- - -" : text,
     __g_b_value: signalB.value,
     __g_b_pct: signalB.pct,
     __g_b_text: signalB.text,

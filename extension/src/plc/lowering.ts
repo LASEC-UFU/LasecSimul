@@ -146,7 +146,33 @@ function declarationClass(value: string): string {
   return "VAR";
 }
 
-export function compileProjectToCanonicalSt(store: IecProjectStore, projectId: string, entryPouId: string): string {
+/** De onde veio cada linha do ST canônico: erros do STruCpp e do g++ (via #line) apontam para a
+ * linha gerada, e o editor mostra o POU e a linha do corpo que o aluno escreveu. */
+export interface CanonicalStOrigin {
+  pouId: string;
+  pouName: string;
+  section: "header" | "declaration" | "body";
+  /** Linha do corpo (1 = primeira linha do texto do POU), só em `section: "body"`. */
+  bodyLine?: number;
+  /** Variável declarada nesta linha, em `section: "declaration"`. */
+  variableName?: string;
+}
+
+export interface CanonicalStProgram {
+  text: string;
+  /** `origins[i]` descreve a linha `i + 1` de `text`. */
+  origins: CanonicalStOrigin[];
+}
+
+/** Corpo ST do jeito que o aluno escreveu: sem `trim()` no início, para a linha 1 do erro ser a
+ * linha 1 do editor. */
+function stBodyLines(text: string): string[] {
+  const lines = text.replace(/\r\n/g, "\n").split("\n").map(line => line.replace(/\s+$/g, ""));
+  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  return lines;
+}
+
+export function generateCanonicalSt(store: IecProjectStore, projectId: string, entryPouId: string): CanonicalStProgram {
   const project = store.snapshot(projectId);
   if (!project.pous.some(pou => pou.pouId === entryPouId && pou.kind === "program")) {
     throw new Error(`entry PROGRAM ${entryPouId} does not exist`);
@@ -154,19 +180,27 @@ export function compileProjectToCanonicalSt(store: IecProjectStore, projectId: s
   const diagnostics = store.diagnostics();
   if (diagnostics.length) throw new Error(diagnostics.map(item => item.message).join("; "));
   const ordered = [...project.pous].sort((a, b) => (a.pouId === entryPouId ? 1 : b.pouId === entryPouId ? -1 : a.pouId.localeCompare(b.pouId)));
-  const chunks: string[] = [];
+  const lines: string[] = [];
+  const origins: CanonicalStOrigin[] = [];
   for (const pou of ordered) {
+    const emit = (line: string, origin: Omit<CanonicalStOrigin, "pouId" | "pouName">): void => {
+      lines.push(line);
+      origins.push({ pouId: pou.pouId, pouName: pou.name, ...origin });
+    };
     const keyword = pou.kind === "functionBlock" ? "FUNCTION_BLOCK" : pou.kind === "function" ? "FUNCTION" : "PROGRAM";
-    chunks.push(`${keyword} ${pou.name}${pou.kind === "function" ? ` : ${pou.interface.returnType}` : ""}`);
+    emit(`${keyword} ${pou.name}${pou.kind === "function" ? ` : ${pou.interface.returnType}` : ""}`, { section: "header" });
     const groups = new Map<string, typeof pou.interface.variables>();
     for (const variable of pou.interface.variables) {
       const key = declarationClass(variable.class);
       groups.set(key, [...(groups.get(key) ?? []), variable]);
     }
     for (const [key, variables] of groups) {
-      chunks.push(key);
-      for (const variable of variables) chunks.push(`  ${variable.name} : ${variable.type}${variable.initialValue ? ` := ${variable.initialValue}` : ""};`);
-      chunks.push("END_VAR");
+      emit(key, { section: "header" });
+      for (const variable of variables) {
+        emit(`  ${variable.name} : ${variable.type}${variable.initialValue ? ` := ${variable.initialValue}` : ""};`,
+          { section: "declaration", variableName: variable.name });
+      }
+      emit("END_VAR", { section: "header" });
     }
     const instanceVariables = (pou.references ?? []).flatMap(reference => {
       const target = store.symbols().find(symbol => symbol.pouId === reference.targetPouId);
@@ -175,18 +209,27 @@ export function compileProjectToCanonicalSt(store: IecProjectStore, projectId: s
         : [];
     });
     if (pou.implementation.language === "sfc" || instanceVariables.length > 0) {
-      chunks.push("VAR");
-      chunks.push(...instanceVariables);
+      emit("VAR", { section: "header" });
+      for (const line of instanceVariables) emit(line, { section: "header" });
       if (pou.implementation.language === "sfc") {
         for (const step of pou.implementation.steps) {
           const name = `__SFC_${step.stepId.replace(/[^A-Za-z0-9_]/g, "_")}`;
-          chunks.push(`  ${name} : BOOL := ${step.initial ? "TRUE" : "FALSE"};`);
+          emit(`  ${name} : BOOL := ${step.initial ? "TRUE" : "FALSE"};`, { section: "header" });
         }
       }
-      chunks.push("END_VAR");
+      emit("END_VAR", { section: "header" });
     }
-    chunks.push(lowerPouToSt(pou, store).canonicalSt);
-    chunks.push(`END_${keyword}`, "");
+    const body = pou.implementation.language === "st"
+      ? stBodyLines(pou.implementation.text)
+      : lowerPouToSt(pou, store).canonicalSt.split("\n");
+    body.forEach((line, index) => emit(line, { section: "body", bodyLine: index + 1 }));
+    emit(`END_${keyword}`, { section: "header" });
+    emit("", { section: "header" });
   }
-  return chunks.join("\n").trim() + "\n";
+  while (lines.length > 0 && lines[lines.length - 1] === "") { lines.pop(); origins.pop(); }
+  return { text: lines.join("\n") + "\n", origins };
+}
+
+export function compileProjectToCanonicalSt(store: IecProjectStore, projectId: string, entryPouId: string): string {
+  return generateCanonicalSt(store, projectId, entryPouId).text;
 }

@@ -650,6 +650,15 @@ export function isReadableInstrument(typeId: string): boolean {
   );
 }
 
+function clearTelemetrySnapshotsForDisconnect(): void {
+  state.schematicPanel?.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId: {}, transportStatus: "disconnected" });
+  state.schematicPanel?.postMessage({ version: 1, type: "componentVisualState", statesByComponentId: {} });
+  state.schematicPanel?.postMessage({ version: 1, type: "boardOverlayReadouts", readoutsByKey: {}, visualStatesByKey: {}, transportStatus: "disconnected" });
+  state.schematicPanel?.postMessage({ version: 1, type: "wireVoltages", voltagesByWireId: {}, clear: true });
+  state.schematicPanel?.postMessage({ version: 1, type: "simulationRate", rate: undefined });
+  state.schematicPanel?.postMessage({ version: 1, type: "mcuRealTimeRatio", rate: undefined });
+}
+
 /** Lê o estado de cada "instruments.voltmeter" no projeto e manda pra Webview — único instrumento
  * com leitura via Webview hoje (ver .spec/archive/legacy-v2/lasecsimul.spec sobre instrumentos como plugin ABI).
  * Generaliza naturalmente pra outros: basta interpretar getComponentState() conforme o typeId. */
@@ -667,6 +676,10 @@ export async function pollInstrumentReadouts(expectedGeneration?: number): Promi
   try {
     batchedStates = await state.coreClient.getComponentStates(stateItems);
   } catch {
+    // A failed batch must invalidate the previous snapshot. Leaving it in the Webview would make
+    // bound graphics display an old value indefinitely while the simulator is unreachable.
+    if (expectedGeneration !== undefined && expectedGeneration !== telemetryGeneration) return;
+    clearTelemetrySnapshotsForDisconnect();
     return;
   }
   for (const component of instruments) {
@@ -680,7 +693,7 @@ export async function pollInstrumentReadouts(expectedGeneration?: number): Promi
     }
   }
   if (expectedGeneration !== undefined && expectedGeneration !== telemetryGeneration) return;
-  state.schematicPanel.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId });
+  state.schematicPanel.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId, transportStatus: "connected" });
 }
 
 /** Atualiza qualquer package que declare `runtimeState`, sem conhecer SSD1306, TFT, servo ou outro
@@ -729,7 +742,8 @@ function exposedReadableItemsForSource(sourceId: string): InternalComponentSnaps
     const bindingSources = new Set(
       items
         .filter((item) => item.exposed && item.typeId.startsWith("graphics."))
-        .map((item) => item.properties?.bindSource)
+        .flatMap((item) => ["bindSource", "bindSourceB", "bindSourceC"]
+          .map((property) => item.properties?.[property]))
         .filter((value): value is string => typeof value === "string" && value.length > 0)
     );
     cached = items.filter((item) => {
@@ -810,7 +824,7 @@ export async function pollBoardOverlayReadouts(expectedGeneration?: number): Pro
     }
   }
   if (expectedGeneration !== undefined && expectedGeneration !== telemetryGeneration) return;
-  state.schematicPanel.postMessage({ version: 1, type: "boardOverlayReadouts", readoutsByKey });
+  state.schematicPanel.postMessage({ version: 1, type: "boardOverlayReadouts", readoutsByKey, transportStatus: "connected" });
 }
 
 /** Tensão de cada fio (lida em uma das duas pontas — são o mesmo nó elétrico por definição) pra
@@ -944,10 +958,16 @@ async function pollTelemetryFrame(expectedGeneration: number): Promise<void> {
     if (endpoint) probes.push({ key: probe.wireId, instanceId: endpoint.instanceId, pinId: endpoint.pinId });
   }
 
-  const frame = await state.coreClient.getTelemetryFrame(
-    { items: [...requestItems.values()], probes },
-    lastTelemetryFrameGeneration
-  );
+  let frame: Awaited<ReturnType<NonNullable<typeof state.coreClient>["getTelemetryFrame"]>>;
+  try {
+    frame = await state.coreClient.getTelemetryFrame(
+      { items: [...requestItems.values()], probes },
+      lastTelemetryFrameGeneration
+    );
+  } catch {
+    if (expectedGeneration === telemetryGeneration) clearTelemetrySnapshotsForDisconnect();
+    return;
+  }
   if (expectedGeneration !== telemetryGeneration) return;
   if (frame.telemetryGeneration <= lastTelemetryFrameGeneration) return;
   lastTelemetryFrameGeneration = frame.telemetryGeneration;
@@ -959,7 +979,7 @@ async function pollTelemetryFrame(expectedGeneration: number): Promise<void> {
     const readout = decodeComponentReadout(component.typeId, bytes);
     if (readout !== undefined) readoutsByComponentId[component.id] = readout;
   }
-  state.schematicPanel.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId });
+  state.schematicPanel.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId, transportStatus: "connected", sampleTimestampNs: frame.timestampNs });
 
   const statesByComponentId: Record<string, string> = {};
   for (const component of visual) {
@@ -980,7 +1000,7 @@ async function pollTelemetryFrame(expectedGeneration: number): Promise<void> {
     const entry = findCatalogEntry(typeId);
     if (entry?.package?.runtimeState || entry?.boardPackage?.runtimeState) visualStatesByKey[key] = bytes.toString("base64");
   }
-  state.schematicPanel.postMessage({ version: 1, type: "boardOverlayReadouts", readoutsByKey, visualStatesByKey });
+  state.schematicPanel.postMessage({ version: 1, type: "boardOverlayReadouts", readoutsByKey, visualStatesByKey, transportStatus: "connected", sampleTimestampNs: frame.timestampNs });
   state.schematicPanel.postMessage({ version: 1, type: "wireVoltages", voltagesByWireId: frame.nodeVoltages });
 
   const wallMs = Date.now();
@@ -1008,7 +1028,10 @@ export function startVoltageReadoutPolling(): void {
     if (telemetryPollInFlight) return;
     telemetryPollInFlight = true;
     void pollTelemetryFrame(generation)
-      .catch(() => { /* snapshot ainda nao publicado ou Core encerrando; proximo tick tenta de novo */ })
+      .catch(() => {
+        // Não manter os últimos valores como se ainda fossem atuais quando um frame inteiro falha.
+        if (generation === telemetryGeneration) clearTelemetrySnapshotsForDisconnect();
+      })
       .finally(() => { telemetryPollInFlight = false; });
   }, Math.round(1000 / telemetryRateHz));
 }

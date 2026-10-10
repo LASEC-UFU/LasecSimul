@@ -1,4 +1,6 @@
 import type { IpdLineClass } from "../ui/webview/ipdLineStyle";
+import type { HmiApplication } from "../ui/webview/model";
+export type { HmiApplication, HmiPage, HmiPageElement, HmiPageNavigationItem } from "../ui/webview/model";
 
 export const LS_PROJ_SCHEMA_VERSION = 2 as const;
 
@@ -148,6 +150,8 @@ export interface ProjectDocument {
   };
   simulationSettings: ProjectSimulationSettings;
   mcuFirmware?: ProjectFirmwareConfig[];
+  /** Campo aditivo opcional para compatibilidade com projetos anteriores ao modelo HMI. */
+  hmiApplication?: HmiApplication;
 }
 
 export function createEmptyProject(): ProjectDocument {

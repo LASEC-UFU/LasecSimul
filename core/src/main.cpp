@@ -1,5 +1,7 @@
 #include "app/CoreApplication.hpp"
+#include "plc/PlcCompileCli.hpp"
 #include <cstdio>
+#include <cstring>
 #include <exception>
 
 #ifdef _WIN32
@@ -37,6 +39,10 @@ private:
 #endif
 
 int main(int argc, char** argv) {
+    // Compilação de PLC (botão Compilar do editor IEC): processo curto, sem sessão IPC.
+    if (argc == 3 && std::strcmp(argv[1], "--plc-compile") == 0) {
+        return lasecsimul::plc::runPlcCompileCli(argv[2]);
+    }
 #ifdef _WIN32
     const HighResolutionTimerScope highResolutionTimerScope;
 #endif

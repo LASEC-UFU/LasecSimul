@@ -2,6 +2,9 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import {
   LS_PROJ_SCHEMA_VERSION,
+  HmiApplication,
+  HmiPage,
+  HmiPageElement,
   ProjectComponent,
   ProjectDocument,
   ProjectSubcircuitRef,
@@ -14,6 +17,7 @@ import {
   createEmptyProject,
 } from "./ProjectTypes";
 import { isIpdLineClass } from "../ui/webview/ipdLineStyle";
+import { defaultHmiNavigationVisual } from "../ui/webview/model";
 import { migrateLegacySignalTunnels } from "../catalog/legacySignalTunnelMigration";
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -141,6 +145,109 @@ function validateComponent(component: unknown, index: number): ProjectComponent 
     fpga: validateFpgaConfig(component.fpga),
     plc: validatePlcConfig(component.plc),
   };
+}
+
+export function validateHmiApplication(value: unknown): HmiApplication | undefined {
+  if (value === undefined) return undefined;
+  if (!isObject(value) || !Array.isArray(value.pages) || value.pages.length === 0) {
+    throw new Error("hmiApplication precisa conter ao menos uma página");
+  }
+  const staleAfterMs = asNumber(value.staleAfterMs);
+  if (value.staleAfterMs !== undefined && (staleAfterMs === undefined || staleAfterMs < 0)) {
+    throw new Error("hmiApplication.staleAfterMs precisa ser um numero finito nao negativo");
+  }
+  const pageIds = new Set<string>();
+  const elementIds = new Set<string>();
+  const navigationIds = new Set<string>();
+  const pages: HmiPage[] = value.pages.map((entry, pageIndex) => {
+    if (!isObject(entry)) throw new Error(`hmiApplication.pages[${pageIndex}] inválida`);
+    const id = asString(entry.id);
+    const name = asString(entry.name);
+    const width = asNumber(entry.width);
+    const height = asNumber(entry.height);
+    if (!id || !name || width === undefined || width <= 0 || height === undefined || height <= 0) {
+      throw new Error(`hmiApplication.pages[${pageIndex}] precisa de id, name, width e height válidos`);
+    }
+    if (pageIds.has(id)) throw new Error(`hmiApplication contém página duplicada: ${id}`);
+    pageIds.add(id);
+    const elements: HmiPageElement[] = Array.isArray(entry.elements)
+      ? entry.elements.map((element, elementIndex) => {
+          const context = `hmiApplication.pages[${pageIndex}].elements[${elementIndex}]`;
+          if (!isObject(element) || !isObject(element.visual)) throw new Error(`${context} inválido`);
+          const elementId = asString(element.id);
+          const componentId = asString(element.componentId);
+          const typeId = asString(element.typeId);
+          const x = asNumber(element.visual.x);
+          const y = asNumber(element.visual.y);
+          const elementWidth = asNumber(element.visual.width);
+          const elementHeight = asNumber(element.visual.height);
+          const rotation = element.visual.rotation;
+          if (!elementId || (!componentId && !typeId) || x === undefined || y === undefined || elementWidth === undefined || elementWidth <= 0 || elementHeight === undefined || elementHeight <= 0) {
+            throw new Error(`${context} precisa de id, componentId ou typeId e geometria válida`);
+          }
+          if (elementIds.has(elementId)) throw new Error(`hmiApplication contém elemento duplicado: ${elementId}`);
+          elementIds.add(elementId);
+          if (rotation !== undefined && rotation !== 0 && rotation !== 90 && rotation !== 180 && rotation !== 270) {
+            throw new Error(`${context}.visual.rotation inválida`);
+          }
+          // Referências órfãs são preservadas para que excluir um componente no editor não torne
+          // impossível reabrir/salvar o projeto HMI; o auditor poderá oferecer a relocalização.
+          // Referências podem apontar a qualquer componente real do processo; a página apresenta
+          // uma projeção independente dele. Elementos sem referência continuam restritos a graphics.*.
+          if (!componentId && !typeId!.startsWith("graphics.")) throw new Error(`${context} só pode conter elementos gráficos`);
+          return {
+            id: elementId,
+            ...(componentId ? { componentId } : {}),
+            ...(typeId ? { typeId } : {}),
+            ...(asString(element.label) ? { label: asString(element.label) } : {}),
+            ...(isObject(element.properties) ? { properties: element.properties } : {}),
+            visual: {
+              x,
+              y,
+              width: elementWidth,
+              height: elementHeight,
+              rotation: rotation === 90 || rotation === 180 || rotation === 270 ? rotation : 0,
+            },
+          };
+        })
+      : [];
+    const navigationObstacles = elements.map((element) => element.visual);
+    const navigation = Array.isArray(entry.navigation)
+      ? entry.navigation.map((item, itemIndex) => {
+          const context = `hmiApplication.pages[${pageIndex}].navigation[${itemIndex}]`;
+          if (!isObject(item)) throw new Error(`${context} inválido`);
+          const navId = asString(item.id);
+          const label = asString(item.label);
+          const targetPageId = asString(item.targetPageId);
+          if (!navId || !label || !targetPageId) throw new Error(`${context} precisa de id, label e targetPageId`);
+          if (navigationIds.has(navId)) throw new Error(`hmiApplication contém navegação duplicada: ${navId}`);
+          navigationIds.add(navId);
+          let visual = defaultHmiNavigationVisual(width, height, navigationObstacles);
+          if (item.visual !== undefined) {
+            if (!isObject(item.visual)) throw new Error(`${context}.visual invalido`);
+            const x = asNumber(item.visual.x);
+            const y = asNumber(item.visual.y);
+            const visualWidth = asNumber(item.visual.width);
+            const visualHeight = asNumber(item.visual.height);
+            if (x === undefined || y === undefined || visualWidth === undefined || visualWidth <= 0 || visualHeight === undefined || visualHeight <= 0) {
+              throw new Error(`${context}.visual precisa de geometria valida`);
+            }
+            visual = { x, y, width: visualWidth, height: visualHeight };
+          }
+          navigationObstacles.push(visual);
+          return { id: navId, label, targetPageId, visual };
+        })
+      : undefined;
+    return { id, name, width, height, elements, ...(navigation ? { navigation } : {}) };
+  });
+  const startPageId = asString(value.startPageId);
+  if (!startPageId || !pageIds.has(startPageId)) throw new Error("hmiApplication.startPageId referencia página inexistente");
+  for (const page of pages) {
+    for (const item of page.navigation ?? []) {
+      if (!pageIds.has(item.targetPageId)) throw new Error(`navegação ${item.id} referencia página inexistente: ${item.targetPageId}`);
+    }
+  }
+  return { startPageId, pages, ...(staleAfterMs && staleAfterMs > 0 ? { staleAfterMs } : {}) };
 }
 
 function validateWire(wire: unknown, index: number): ProjectWire {
@@ -277,6 +384,7 @@ export class ProjectSerializer {
             adaptiveTimeStep: asBoolean(parsed.simulationSettings.adaptiveTimeStep),
           }
         : {},
+      hmiApplication: validateHmiApplication(parsed.hmiApplication),
       mcuFirmware: Array.isArray(parsed.mcuFirmware)
         ? parsed.mcuFirmware.filter(isObject).map((entry) => ({
             chipId: asString(entry.chipId) ?? "",
@@ -294,6 +402,7 @@ export class ProjectSerializer {
       topology: project.topology,
       visual: { viewport: project.visual.viewport },
       simulationSettings: project.simulationSettings,
+      hmiApplication: project.hmiApplication,
       mcuFirmware: project.mcuFirmware,
     };
     await fs.mkdir(path.dirname(filePath), { recursive: true });
