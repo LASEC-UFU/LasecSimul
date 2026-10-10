@@ -250,7 +250,9 @@ async function resolveProjectSubcircuitReferences(projectDir: string): Promise<v
       typeId: parsed.typeId,
       label,
       category: "Subcircuitos",
-      hidden: true,
+      // Só fora da paleta: `hidden` do catálogo passa para a INSTÂNCIA ao reabrir o projeto
+      // (`projectComponentToWebviewComponent`) e a planta sumia do desenho na segunda abertura.
+      paletteHidden: true,
       pinCount: parsed.pinCount,
       pinIds: parsed.pinIds.length > 0 ? parsed.pinIds : undefined,
       defaultProperties: parsed.defaultProperties,

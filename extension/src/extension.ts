@@ -679,7 +679,7 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
     label,
     category: "Subcircuitos",
     workspaceSection: parsed.workspaceSection,
-    hidden: true, // nunca aparece na paleta -- só resolve por typeId, ver paletteTree.ts
+    paletteHidden: true, // nunca aparece na paleta -- só resolve por typeId; `hidden` esconderia a instância ao reabrir
     pinCount: parsed.pinCount,
     pinIds: parsed.pinIds.length > 0 ? parsed.pinIds : undefined,
     defaultProperties: parsed.defaultProperties,
@@ -799,7 +799,8 @@ async function loadDeviceReference(componentId: string, absolutePath: string, sh
   });
   const rawEntry: WebviewComponentCatalogEntry = {
     ...resolved.entry,
-    hidden: true,
+    // Fora da paleta, mas a instância continua visível ao reabrir (`hidden` passaria a ela).
+    paletteHidden: true,
     isRegistered: false,
     registeredSourceRemovable: false,
     externalReferencePath: path.normalize(absolutePath),

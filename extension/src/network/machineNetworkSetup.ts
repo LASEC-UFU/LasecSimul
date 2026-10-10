@@ -1,6 +1,4 @@
 import * as vscode from "vscode";
-import * as https from "https";
-import * as http from "http";
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
@@ -9,6 +7,7 @@ import { fileExists, readJsonFile } from "../pathUtils";
 import { logSimulation } from "../diagnostics/simulationLog";
 import { isMachineNetworkConfigCurrent, shouldOfferMachineNetworkSetup } from "./machineNetworkState";
 import { resolveNetworkMode } from "./networkMode";
+import { openReleaseAsset, readBody, type ReleaseAssetSource } from "./releaseAssets";
 
 /** Instala sob demanda (a partir da própria Extension, já rodando via Marketplace) o driver
  * TAP-Windows6, a Windows Network Bridge e o `LasecSimul.NetworkGateway.exe` que o modo de rede
@@ -81,49 +80,14 @@ function extensionVersion(context: vscode.ExtensionContext): string {
   return packageJson.version ?? "0.0.0";
 }
 
-function releaseAssetUrl(version: string, fileName: string): string {
-  return `https://github.com/${RELEASE_REPO}/releases/download/v${version}/${fileName}`;
+const RELEASE_SOURCE: ReleaseAssetSource = { repo: RELEASE_REPO };
+
+async function downloadText(version: string, fileName: string): Promise<string> {
+  return (await readBody(await openReleaseAsset(RELEASE_SOURCE, version, fileName))).toString("utf8");
 }
 
-/** `https.get` que segue redirecionamentos manualmente -- assets de release do GitHub sempre
- * redirecionam (302) pra `objects.githubusercontent.com`, e o `https` nativo do Node nunca segue
- * redirecionamento sozinho. */
-function httpsGetFollowingRedirects(url: string, remainingRedirects = 5): Promise<http.IncomingMessage> {
-  return new Promise((resolve, reject) => {
-    const request = https.get(url, { headers: { "User-Agent": "LasecSimul-Extension" } }, (response) => {
-      const { statusCode, headers } = response;
-      if (statusCode && statusCode >= 300 && statusCode < 400 && headers.location) {
-        response.resume();
-        if (remainingRedirects <= 0) {
-          reject(new Error(`Muitos redirecionamentos ao baixar ${url}`));
-          return;
-        }
-        httpsGetFollowingRedirects(new URL(headers.location, url).toString(), remainingRedirects - 1).then(resolve, reject);
-        return;
-      }
-      if (!statusCode || statusCode < 200 || statusCode >= 300) {
-        response.resume();
-        reject(new Error(`HTTP ${statusCode ?? "desconhecido"} ao baixar ${url}`));
-        return;
-      }
-      resolve(response);
-    });
-    request.on("error", reject);
-  });
-}
-
-async function downloadText(url: string): Promise<string> {
-  const response = await httpsGetFollowingRedirects(url);
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    response.on("data", (chunk: Buffer) => chunks.push(chunk));
-    response.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    response.on("error", reject);
-  });
-}
-
-async function downloadToFile(url: string, destinationPath: string): Promise<void> {
-  const response = await httpsGetFollowingRedirects(url);
+async function downloadToFile(version: string, fileName: string, destinationPath: string): Promise<void> {
+  const response = await openReleaseAsset(RELEASE_SOURCE, version, fileName);
   await fs.promises.mkdir(path.dirname(destinationPath), { recursive: true });
   await new Promise<void>((resolve, reject) => {
     const fileStream = fs.createWriteStream(destinationPath);
@@ -192,7 +156,7 @@ function runElevatedProvisioning(exePath: string): Promise<ElevatedRunResult> {
 
 async function downloadAndVerifySetupExe(context: vscode.ExtensionContext, version: string): Promise<string> {
   const assetName = `lasecsimul-${version}-win32-x64-setup.exe`;
-  const sumsText = await downloadText(releaseAssetUrl(version, "SHA256SUMS.txt"));
+  const sumsText = await downloadText(version, "SHA256SUMS.txt");
   const expectedHash = findExpectedHash(sumsText, assetName);
   if (!expectedHash) {
     throw new Error(`SHA256SUMS.txt da release v${version} não tem uma entrada para "${assetName}".`);
@@ -201,7 +165,7 @@ async function downloadAndVerifySetupExe(context: vscode.ExtensionContext, versi
   const exePath = path.join(context.globalStorageUri.fsPath, "machine-setup", version, assetName);
   const cachedIsValid = fileExists(exePath) && (await sha256OfFile(exePath)) === expectedHash;
   if (!cachedIsValid) {
-    await downloadToFile(releaseAssetUrl(version, assetName), exePath);
+    await downloadToFile(version, assetName, exePath);
     const actualHash = await sha256OfFile(exePath);
     if (actualHash !== expectedHash) {
       await fs.promises.rm(exePath, { force: true });
