@@ -233,6 +233,24 @@ private:
     HartLcdPage displayPage(const std::string& source, const HartDevicePlan& plan, double pv,
                             const HartAnalogOutput& analog) const;
     double m_loopCurrent = 0.004;
+    /** Loop role (`analogLoopDirection`): a transmitter drives the 4-20 mA ("output"); an actuator
+     * such as a valve positioner is loop powered and receives it ("input"). In input mode the loop
+     * terminals are a load of `analogInputResistance` (FY301: about 550 ohm) that measures the
+     * current (first-order filter of `kInputFilterSeconds`, as the real input stage, so the HART
+     * carrier does not move the setpoint), answers HART with a voltage carrier and is off below
+     * `analogInputMinimumMilliamps` (no HART, blank display). The measured current (mA) goes to the
+     * HART variable `analogInputVariable`, an Output signal for the model's blocks. */
+    bool m_analogInput = false;
+    double m_inputResistance = 550.0;
+    double m_inputMinimumMilliamps = 3.8;
+    std::string m_inputCurrentVariable = "inputCurrent";
+    double m_inputRawAmps = 0.0;
+    double m_publishedInputMilliamps = std::numeric_limits<double>::quiet_NaN();
+    static constexpr double kInputFilterSeconds = 0.02;
+    bool inputPowered() const noexcept { return !m_analogInput || m_loopCurrent * 1000.0 >= m_inputMinimumMilliamps; }
+    void stampCurrentInput(MnaMatrixView& matrix);
+    void publishInputCurrent();
+    void receiveOnWire(uint64_t now, double volts);
     /** HART on the wire (field devices): receiver of the master's carrier,
      * transmitter of the replies, frames waiting for the engine. */
     HartFskTransmitter m_wireTx;

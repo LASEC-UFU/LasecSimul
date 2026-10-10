@@ -1,0 +1,2271 @@
+{
+  "schemaVersion": 3,
+  "typeId": "subcircuits.hart.smar_fy301",
+  "name": "SMAR FY301",
+  "language": "pt-BR",
+  "translations": {
+    "en": {
+      "name": "SMAR FY301"
+    }
+  },
+  "folderPath": [
+    "Protocolos Industriais",
+    "HART"
+  ],
+  "workspaceSection": "process",
+  "help": {
+    "description": "Posicionador de válvula SMAR FY301 (HART). Alimentado pelo próprio laço: os bornes + e − recebem o sinal de 4-20 mA escrito pelo controlador (carga de cerca de 550 Ω, mínimo de 3,8 mA) e respondem HART modulando a tensão; ligue o modem HART em paralelo na linha. SUP recebe o suprimento de ar, OUT1 vai ao atuador e POS é a posição da haste lida pelo ímã (sensor Hall). Os parâmetros do ajuste local do manual (TYPE, AIR_T, CHAR, MODE, SP%, TIME, KP, TR, LOPOS, UPPOS, SETUP, TSO, limites e split range) ficam em Propriedades Exportadas. O display mostra a posição e o setpoint."
+  },
+  "components": [
+    {
+      "id": "fy301",
+      "typeId": "protocol.hart.device.standard",
+      "properties": {
+        "enabled": true,
+        "pollingAddress": 0,
+        "profileId": "lasecsimul.hart.standard-field-device",
+        "alarmSelectionCode": 0,
+        "configurationChangedFlags": 0,
+        "dateDay": 1,
+        "dateMonth": 1,
+        "dateYear": 124,
+        "descriptor": "POSICIONADOR",
+        "finalAssemblyNumber": 0,
+        "message": "",
+        "tag": "FY301",
+        "uniqueId": "0B2A61",
+        "unit": "%",
+        "writeProtectCode": 0,
+        "sensorLowVolts": 0.0,
+        "sensorHighVolts": 5.0,
+        "sensorLowValue": 0.0,
+        "sensorHighValue": 100.0,
+        "hartManufacturerId": 62,
+        "hartDeviceType": 3,
+        "hartRequestPreambles": 5,
+        "hartUniversalRevision": 5,
+        "hartDeviceRevision": 1,
+        "hartSoftwareRevision": 4,
+        "hartHardwareRevision": 1,
+        "hartFlags": 0,
+        "hartImplementedRevision": 5,
+        "hartCommandSet": "0-3,6,11-19,33-48,59",
+        "hartWriteProtectActiveCode": 1,
+        "analogSaturationLowPercent": -25.0,
+        "analogSaturationHighPercent": 125.0,
+        "analogLoopDirection": "input",
+        "analogInputResistance": 550.0,
+        "analogInputMinimumMilliamps": 3.8,
+        "analogInputVariable": "inputCurrent",
+        "sensorFault": false,
+        "displayInstalled": true,
+        "displayModelName": "FY301",
+        "displayVariable1": "dv:1",
+        "displayVariable2": "dv:4",
+        "displayCodeMap": "",
+        "displayGlass": 0,
+        "hartVariablesJson": "[{\"id\":\"PV\",\"name\":\"Setpoint (sinal de entrada 4-20 mA)\",\"role\":\"PV\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":0,\"deviceVariableUnit\":57,\"classification\":91,\"family\":6,\"lowerRangeValue\":0.0,\"upperRangeValue\":100.0,\"dampingValue\":0.0},{\"id\":\"position\",\"name\":\"Posicao da valvula\",\"role\":\"SV\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":1,\"deviceVariableUnit\":57,\"classification\":91,\"family\":6},{\"id\":\"inputCurrent\",\"name\":\"Corrente de entrada\",\"role\":\"TV\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":2,\"deviceVariableUnit\":39},{\"id\":\"outputPressure\",\"name\":\"Pressao de saida (OUT1)\",\"role\":\"QV\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":3,\"deviceVariableUnit\":7},{\"id\":\"spFinal\",\"name\":\"Setpoint de posicao (apos curva, limites e TIME)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":4,\"deviceVariableUnit\":57}]",
+        "hartCommandsJson": "[]"
+      },
+      "visual": {
+        "x": 320,
+        "y": 40,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel_loop_plus",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "loop_plus",
+        "pinId": "loop_plus"
+      },
+      "visual": {
+        "x": 520,
+        "y": 60,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel_loop_minus",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "loop_minus",
+        "pinId": "loop_minus"
+      },
+      "visual": {
+        "x": 520,
+        "y": 100,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "t_supply",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "supply",
+        "pinId": "supply",
+        "direction": "Input",
+        "valueType": "Real",
+        "defaultValue": 0
+      },
+      "visual": {
+        "x": 40,
+        "y": 60,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "t_position",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "position",
+        "pinId": "position",
+        "direction": "Input",
+        "valueType": "Real",
+        "defaultValue": 0
+      },
+      "visual": {
+        "x": 40,
+        "y": 120,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "t_out1",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "out1",
+        "pinId": "out1",
+        "direction": "Output",
+        "valueType": "Real"
+      },
+      "visual": {
+        "x": 40,
+        "y": 180,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "c_type",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 0,
+        "unit": "",
+        "options": "0=Lind (linear, direta);1=Linr (linear, reversa);2=Rotd (rotativa, direta);3=Rotr (rotativa, reversa)"
+      },
+      "visual": {
+        "x": 200,
+        "y": 260,
+        "rotation": 0
+      },
+      "label": "TYPE — Tipo de válvula e ação"
+    },
+    {
+      "id": "c_air",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 0,
+        "unit": "",
+        "options": "0=AIR_OPEN (o ar aumenta a posição);1=AIR_CLOSED (o ar diminui a posição)"
+      },
+      "visual": {
+        "x": 200,
+        "y": 320,
+        "rotation": 0
+      },
+      "label": "AIR_T — Efeito do ar"
+    },
+    {
+      "id": "c_char",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 0,
+        "unit": "",
+        "options": "0=Lin (linear);1=EP 1:25 (igual porcentagem);2=EP 1:33;3=EP 1:50;4=AR 1:25 (abertura rápida, hiperbólica);5=AR 1:33;6=AR 1:50"
+      },
+      "visual": {
+        "x": 200,
+        "y": 380,
+        "rotation": 0
+      },
+      "label": "CHAR — Curva de caracterização"
+    },
+    {
+      "id": "c_mode",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 0,
+        "unit": "",
+        "options": "0=Auto (segue os 4-20 mA);1=Man (segue o SP%)"
+      },
+      "visual": {
+        "x": 200,
+        "y": 440,
+        "rotation": 0
+      },
+      "label": "MODE — Modo de operação"
+    },
+    {
+      "id": "c_sp",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 0,
+        "unit": "%"
+      },
+      "visual": {
+        "x": 200,
+        "y": 500,
+        "rotation": 0
+      },
+      "label": "SP% — Setpoint no modo manual"
+    },
+    {
+      "id": "c_time",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 1,
+        "unit": "s"
+      },
+      "visual": {
+        "x": 200,
+        "y": 560,
+        "rotation": 0
+      },
+      "label": "TIME — Tempo de variação do setpoint (0 a 100 %)"
+    },
+    {
+      "id": "c_kp",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 40,
+        "unit": ""
+      },
+      "visual": {
+        "x": 200,
+        "y": 620,
+        "rotation": 0
+      },
+      "label": "KP — Ganho proporcional do servo"
+    },
+    {
+      "id": "c_tr",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 2,
+        "unit": "min/rep"
+      },
+      "visual": {
+        "x": 200,
+        "y": 680,
+        "rotation": 0
+      },
+      "label": "TR — Tempo integral do servo"
+    },
+    {
+      "id": "c_lopos",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 0,
+        "unit": "%"
+      },
+      "visual": {
+        "x": 200,
+        "y": 740,
+        "rotation": 0
+      },
+      "label": "LOPOS — Ajuste da posição inferior"
+    },
+    {
+      "id": "c_uppos",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 100,
+        "unit": "%"
+      },
+      "visual": {
+        "x": 200,
+        "y": 800,
+        "rotation": 0
+      },
+      "label": "UPPOS — Ajuste da posição superior"
+    },
+    {
+      "id": "c_tso",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 0,
+        "unit": "%"
+      },
+      "visual": {
+        "x": 200,
+        "y": 860,
+        "rotation": 0
+      },
+      "label": "TSO — Fechamento estanque abaixo de (0 = desligado)"
+    },
+    {
+      "id": "c_spl",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 0,
+        "unit": "%"
+      },
+      "visual": {
+        "x": 200,
+        "y": 920,
+        "rotation": 0
+      },
+      "label": "Limite inferior do setpoint"
+    },
+    {
+      "id": "c_sph",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 100,
+        "unit": "%"
+      },
+      "visual": {
+        "x": 200,
+        "y": 980,
+        "rotation": 0
+      },
+      "label": "Limite superior do setpoint"
+    },
+    {
+      "id": "c_slo",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 4,
+        "unit": "mA"
+      },
+      "visual": {
+        "x": 200,
+        "y": 1040,
+        "rotation": 0
+      },
+      "label": "Split range: corrente do 0 %"
+    },
+    {
+      "id": "c_shi",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 20,
+        "unit": "mA"
+      },
+      "visual": {
+        "x": 200,
+        "y": 1100,
+        "rotation": 0
+      },
+      "label": "Split range: corrente do 100 %"
+    },
+    {
+      "id": "c_setup",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 0,
+        "unit": "",
+        "options": "0=Parado;1=Executar"
+      },
+      "visual": {
+        "x": 200,
+        "y": 1160,
+        "rotation": 0
+      },
+      "label": "SETUP — Auto Setup (mude para Executar para iniciar)"
+    },
+    {
+      "id": "c_factory_span",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 30,
+        "unit": "mm"
+      },
+      "visual": {
+        "x": 40,
+        "y": 260,
+        "rotation": 0
+      },
+      "label": "Curso de fábrica do sensor de posição (antes do Auto Setup)"
+    },
+    {
+      "id": "pv_in",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(i-4)/16*100",
+        "inputs": [
+          "i"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 640,
+        "y": 300,
+        "rotation": 0
+      },
+      "label": "PV: sinal de entrada em % (4-20 mA)"
+    },
+    {
+      "id": "in_pct",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "((i-lo)/(((hi-lo)>0.1)*(hi-lo)+((hi-lo)<0.1001)*0.1)*100)+(((i-lo)/(((hi-lo)>0.1)*(hi-lo)+((hi-lo)<0.1001)*0.1)*100)<0)*(0-((i-lo)/(((hi-lo)>0.1)*(hi-lo)+((hi-lo)<0.1001)*0.1)*100))+(((i-lo)/(((hi-lo)>0.1)*(hi-lo)+((hi-lo)<0.1001)*0.1)*100)>100)*(100-((i-lo)/(((hi-lo)>0.1)*(hi-lo)+((hi-lo)<0.1001)*0.1)*100))",
+        "inputs": [
+          "i",
+          "lo",
+          "hi"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 640,
+        "y": 360,
+        "rotation": 0
+      },
+      "label": "Entrada em % do split range"
+    },
+    {
+      "id": "sp_src",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(m<0.5)*x+(m>0.5)*((sp)+((sp)<0)*(0-(sp))+((sp)>100)*(100-(sp)))",
+        "inputs": [
+          "x",
+          "m",
+          "sp"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 640,
+        "y": 420,
+        "rotation": 0
+      },
+      "label": "Setpoint: Auto (4-20 mA) ou Man (SP%)"
+    },
+    {
+      "id": "sp_char",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(c>-0.5)*(c<0.5)*(x)+(c>0.5)*(c<1.5)*(100*(25^(x/100)-1)/(25-1))+(c>1.5)*(c<2.5)*(100*(33^(x/100)-1)/(33-1))+(c>2.5)*(c<3.5)*(100*(50^(x/100)-1)/(50-1))+(c>3.5)*(c<4.5)*(100*25*(x/100)/(1+(25-1)*(x/100)))+(c>4.5)*(c<5.5)*(100*33*(x/100)/(1+(33-1)*(x/100)))+(c>5.5)*(c<6.5)*(100*50*(x/100)/(1+(50-1)*(x/100)))",
+        "inputs": [
+          "x",
+          "c"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 640,
+        "y": 480,
+        "rotation": 0
+      },
+      "label": "CHAR: setpoint caracterizado (%)"
+    },
+    {
+      "id": "sp_lim",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(x)+((x)<lo)*(lo-(x))+((x)>hi)*(hi-(x))",
+        "inputs": [
+          "x",
+          "lo",
+          "hi"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 640,
+        "y": 540,
+        "rotation": 0
+      },
+      "label": "Limites do setpoint"
+    },
+    {
+      "id": "sp_t",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(t>0.0001)*(c<t)*(0-5)+(1-(t>0.0001)*(c<t))*x",
+        "inputs": [
+          "x",
+          "c",
+          "t"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 640,
+        "y": 600,
+        "rotation": 0
+      },
+      "label": "TSO: abaixo do limite, fecha estanque"
+    },
+    {
+      "id": "sp_rate",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(20*(x-r))+((20*(x-r))<(0-100/((T>0.1)*T+(T<0.1001)*0.1)))*((0-100/((T>0.1)*T+(T<0.1001)*0.1))-(20*(x-r)))+((20*(x-r))>(100/((T>0.1)*T+(T<0.1001)*0.1)))*((100/((T>0.1)*T+(T<0.1001)*0.1))-(20*(x-r)))",
+        "inputs": [
+          "x",
+          "r",
+          "T"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 640,
+        "y": 660,
+        "rotation": 0
+      },
+      "label": "TIME: taxa do setpoint (%/s)"
+    },
+    {
+      "id": "sp_r",
+      "typeId": "control.integrator",
+      "properties": {
+        "gain": 1,
+        "initial": 0,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 420,
+        "y": 600,
+        "rotation": 0
+      },
+      "label": "Setpoint de posição (%)"
+    },
+    {
+      "id": "setup_in",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(s>0.5)",
+        "inputs": [
+          "s"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 640,
+        "y": 720,
+        "rotation": 0
+      },
+      "label": "Auto Setup: contagem"
+    },
+    {
+      "id": "setup_reset",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(s<0.5)*10*t",
+        "inputs": [
+          "s",
+          "t"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 640,
+        "y": 780,
+        "rotation": 0
+      },
+      "label": "Auto Setup: zera"
+    },
+    {
+      "id": "setup_timer",
+      "typeId": "control.tank",
+      "properties": {
+        "area": 1,
+        "initial": 0,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 420,
+        "y": 660,
+        "rotation": 0
+      },
+      "label": "Tempo do Auto Setup (s)"
+    },
+    {
+      "id": "setup_active",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(s>0.5)*(t<50)",
+        "inputs": [
+          "s",
+          "t"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 640,
+        "y": 840,
+        "rotation": 0
+      },
+      "label": "Auto Setup em andamento"
+    },
+    {
+      "id": "setup_progress",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(s>0.5)*((t<50)*t*2+(t>49.9999)*100)",
+        "inputs": [
+          "s",
+          "t"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 640,
+        "y": 900,
+        "rotation": 0
+      },
+      "label": "Auto Setup (%)"
+    },
+    {
+      "id": "hold_rest_in",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(s>0.5)*(t>20)*(t<25)*((x-h)>0)*(x-h)*5",
+        "inputs": [
+          "s",
+          "t",
+          "x",
+          "h"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 640,
+        "y": 960,
+        "rotation": 0
+      },
+      "label": "Auto Setup: grava a posição (rest)"
+    },
+    {
+      "id": "hold_rest_out",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(s>0.5)*(t>20)*(t<25)*((h-x)>0)*(h-x)*5",
+        "inputs": [
+          "s",
+          "t",
+          "x",
+          "h"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 860,
+        "y": 300,
+        "rotation": 0
+      },
+      "label": "Auto Setup: grava a posição (rest)"
+    },
+    {
+      "id": "hold_rest",
+      "typeId": "control.tank",
+      "properties": {
+        "area": 1,
+        "initial": 0,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 420,
+        "y": 720,
+        "rotation": 0
+      },
+      "label": "Posição sem ar (mm)"
+    },
+    {
+      "id": "hold_full_in",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(s>0.5)*(t>45)*(t<50)*((x-h)>0)*(x-h)*5",
+        "inputs": [
+          "s",
+          "t",
+          "x",
+          "h"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 860,
+        "y": 360,
+        "rotation": 0
+      },
+      "label": "Auto Setup: grava a posição (full)"
+    },
+    {
+      "id": "hold_full_out",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(s>0.5)*(t>45)*(t<50)*((h-x)>0)*(h-x)*5",
+        "inputs": [
+          "s",
+          "t",
+          "x",
+          "h"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 860,
+        "y": 420,
+        "rotation": 0
+      },
+      "label": "Auto Setup: grava a posição (full)"
+    },
+    {
+      "id": "hold_full",
+      "typeId": "control.tank",
+      "properties": {
+        "area": 1,
+        "initial": 30,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 420,
+        "y": 780,
+        "rotation": 0
+      },
+      "label": "Posição com ar total (mm)"
+    },
+    {
+      "id": "pos_raw",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(x-((a<b)*a+(1-(a<b))*b))/((((a<b)*b+(1-(a<b))*a)-((a<b)*a+(1-(a<b))*b)>0.1)*(((a<b)*b+(1-(a<b))*a)-((a<b)*a+(1-(a<b))*b))+((((a<b)*b+(1-(a<b))*a)-((a<b)*a+(1-(a<b))*b))<0.1001)*0.1)*100",
+        "inputs": [
+          "x",
+          "a",
+          "b"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 860,
+        "y": 480,
+        "rotation": 0
+      },
+      "label": "Abertura medida pelo sensor (% do curso calibrado)"
+    },
+    {
+      "id": "pos_trim",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(p-lo)/((((up-lo)>0.1)*(up-lo))+(((up-lo)<0.1001)*0.1))*100",
+        "inputs": [
+          "p",
+          "lo",
+          "up"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 860,
+        "y": 540,
+        "rotation": 0
+      },
+      "label": "LOPOS/UPPOS"
+    },
+    {
+      "id": "pos",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(1-((k>0.5)*(k<1.5)+(k>2.5)))*p+((k>0.5)*(k<1.5)+(k>2.5))*(100-p)",
+        "inputs": [
+          "p",
+          "k"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 860,
+        "y": 600,
+        "rotation": 0
+      },
+      "label": "Posição (%): direta ou reversa (TYPE)"
+    },
+    {
+      "id": "err",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(1-2*(a>0.5))*(r-p)",
+        "inputs": [
+          "r",
+          "p",
+          "a"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 860,
+        "y": 660,
+        "rotation": 0
+      },
+      "label": "Desvio do servo (com o efeito do ar)"
+    },
+    {
+      "id": "u",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "3*kp*(e+i)",
+        "inputs": [
+          "e",
+          "i",
+          "kp"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 860,
+        "y": 720,
+        "rotation": 0
+      },
+      "label": "Saída do PI (%)"
+    },
+    {
+      "id": "servo_i_in",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(1-a)*(tr>0.001)*(1-(u>100)*(e>0)-(u<0)*(e<0))*e/((((tr>0.001)*tr)+((tr<0.0011)*1))*60)-a*5*i",
+        "inputs": [
+          "e",
+          "u",
+          "tr",
+          "a",
+          "i"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 860,
+        "y": 780,
+        "rotation": 0
+      },
+      "label": "TR: integral (anti-saturação; zerada no Auto Setup)"
+    },
+    {
+      "id": "servo_i",
+      "typeId": "control.integrator",
+      "properties": {
+        "gain": 1,
+        "initial": 0,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 420,
+        "y": 840,
+        "rotation": 0
+      },
+      "label": "Integral do servo"
+    },
+    {
+      "id": "out_pct",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(i>3.8)*(a*(t>25)*100+(1-a)*((u)+((u)<0)*(0-(u))+((u)>100)*(100-(u))))",
+        "inputs": [
+          "u",
+          "a",
+          "t",
+          "i"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 860,
+        "y": 840,
+        "rotation": 0
+      },
+      "label": "Sinal do piezo/carretel (% do suprimento); sem sinal (< 3,8 mA) a saída esvazia"
+    },
+    {
+      "id": "out1_bar",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "o/100*((s>0)*s)",
+        "inputs": [
+          "o",
+          "s"
+        ],
+        "upperLimit": 0,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 1000000
+      },
+      "visual": {
+        "x": 860,
+        "y": 900,
+        "rotation": 0
+      },
+      "label": "OUT1 (bar)"
+    }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": [
+      {
+        "id": "w-1",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel_loop_plus",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "loop_plus"
+        },
+        "points": []
+      },
+      {
+        "id": "w-2",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel_loop_minus",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "loop_minus"
+        },
+        "points": []
+      },
+      {
+        "id": "w-3",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "inputCurrent"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pv_in",
+          "pinId": "i"
+        },
+        "points": []
+      },
+      {
+        "id": "w-4",
+        "from": {
+          "kind": "port",
+          "componentId": "pv_in",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "PV"
+        },
+        "points": []
+      },
+      {
+        "id": "w-5",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "inputCurrent"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "in_pct",
+          "pinId": "i"
+        },
+        "points": []
+      },
+      {
+        "id": "w-6",
+        "from": {
+          "kind": "port",
+          "componentId": "c_slo",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "in_pct",
+          "pinId": "lo"
+        },
+        "points": []
+      },
+      {
+        "id": "w-7",
+        "from": {
+          "kind": "port",
+          "componentId": "c_shi",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "in_pct",
+          "pinId": "hi"
+        },
+        "points": []
+      },
+      {
+        "id": "w-8",
+        "from": {
+          "kind": "port",
+          "componentId": "in_pct",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_src",
+          "pinId": "x"
+        },
+        "points": []
+      },
+      {
+        "id": "w-9",
+        "from": {
+          "kind": "port",
+          "componentId": "c_mode",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_src",
+          "pinId": "m"
+        },
+        "points": []
+      },
+      {
+        "id": "w-10",
+        "from": {
+          "kind": "port",
+          "componentId": "c_sp",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_src",
+          "pinId": "sp"
+        },
+        "points": []
+      },
+      {
+        "id": "w-11",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_src",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_char",
+          "pinId": "x"
+        },
+        "points": []
+      },
+      {
+        "id": "w-12",
+        "from": {
+          "kind": "port",
+          "componentId": "c_char",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_char",
+          "pinId": "c"
+        },
+        "points": []
+      },
+      {
+        "id": "w-13",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_char",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_lim",
+          "pinId": "x"
+        },
+        "points": []
+      },
+      {
+        "id": "w-14",
+        "from": {
+          "kind": "port",
+          "componentId": "c_spl",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_lim",
+          "pinId": "lo"
+        },
+        "points": []
+      },
+      {
+        "id": "w-15",
+        "from": {
+          "kind": "port",
+          "componentId": "c_sph",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_lim",
+          "pinId": "hi"
+        },
+        "points": []
+      },
+      {
+        "id": "w-16",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_lim",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_t",
+          "pinId": "x"
+        },
+        "points": []
+      },
+      {
+        "id": "w-17",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_char",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_t",
+          "pinId": "c"
+        },
+        "points": []
+      },
+      {
+        "id": "w-18",
+        "from": {
+          "kind": "port",
+          "componentId": "c_tso",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_t",
+          "pinId": "t"
+        },
+        "points": []
+      },
+      {
+        "id": "w-19",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_t",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_rate",
+          "pinId": "x"
+        },
+        "points": []
+      },
+      {
+        "id": "w-20",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_r",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_rate",
+          "pinId": "r"
+        },
+        "points": []
+      },
+      {
+        "id": "w-21",
+        "from": {
+          "kind": "port",
+          "componentId": "c_time",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_rate",
+          "pinId": "T"
+        },
+        "points": []
+      },
+      {
+        "id": "w-22",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_rate",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_r",
+          "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "w-23",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_r",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "spFinal"
+        },
+        "points": []
+      },
+      {
+        "id": "w-24",
+        "from": {
+          "kind": "port",
+          "componentId": "c_setup",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_in",
+          "pinId": "s"
+        },
+        "points": []
+      },
+      {
+        "id": "w-25",
+        "from": {
+          "kind": "port",
+          "componentId": "c_setup",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_reset",
+          "pinId": "s"
+        },
+        "points": []
+      },
+      {
+        "id": "w-26",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_timer",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_reset",
+          "pinId": "t"
+        },
+        "points": []
+      },
+      {
+        "id": "w-27",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_in",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_timer",
+          "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "w-28",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_reset",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_timer",
+          "pinId": "outflow"
+        },
+        "points": []
+      },
+      {
+        "id": "w-29",
+        "from": {
+          "kind": "port",
+          "componentId": "c_setup",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_active",
+          "pinId": "s"
+        },
+        "points": []
+      },
+      {
+        "id": "w-30",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_timer",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_active",
+          "pinId": "t"
+        },
+        "points": []
+      },
+      {
+        "id": "w-31",
+        "from": {
+          "kind": "port",
+          "componentId": "c_setup",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_progress",
+          "pinId": "s"
+        },
+        "points": []
+      },
+      {
+        "id": "w-32",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_timer",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_progress",
+          "pinId": "t"
+        },
+        "points": []
+      },
+      {
+        "id": "w-33",
+        "from": {
+          "kind": "port",
+          "componentId": "c_setup",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest_in",
+          "pinId": "s"
+        },
+        "points": []
+      },
+      {
+        "id": "w-34",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_timer",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest_in",
+          "pinId": "t"
+        },
+        "points": []
+      },
+      {
+        "id": "w-35",
+        "from": {
+          "kind": "port",
+          "componentId": "t_position",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest_in",
+          "pinId": "x"
+        },
+        "points": []
+      },
+      {
+        "id": "w-36",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_rest",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest_in",
+          "pinId": "h"
+        },
+        "points": []
+      },
+      {
+        "id": "w-37",
+        "from": {
+          "kind": "port",
+          "componentId": "c_setup",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest_out",
+          "pinId": "s"
+        },
+        "points": []
+      },
+      {
+        "id": "w-38",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_timer",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest_out",
+          "pinId": "t"
+        },
+        "points": []
+      },
+      {
+        "id": "w-39",
+        "from": {
+          "kind": "port",
+          "componentId": "t_position",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest_out",
+          "pinId": "x"
+        },
+        "points": []
+      },
+      {
+        "id": "w-40",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_rest",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest_out",
+          "pinId": "h"
+        },
+        "points": []
+      },
+      {
+        "id": "w-41",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_rest_in",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest",
+          "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "w-42",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_rest_out",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest",
+          "pinId": "outflow"
+        },
+        "points": []
+      },
+      {
+        "id": "w-43",
+        "from": {
+          "kind": "port",
+          "componentId": "c_setup",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_full_in",
+          "pinId": "s"
+        },
+        "points": []
+      },
+      {
+        "id": "w-44",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_timer",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_full_in",
+          "pinId": "t"
+        },
+        "points": []
+      },
+      {
+        "id": "w-45",
+        "from": {
+          "kind": "port",
+          "componentId": "t_position",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_full_in",
+          "pinId": "x"
+        },
+        "points": []
+      },
+      {
+        "id": "w-46",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_full",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_full_in",
+          "pinId": "h"
+        },
+        "points": []
+      },
+      {
+        "id": "w-47",
+        "from": {
+          "kind": "port",
+          "componentId": "c_setup",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_full_out",
+          "pinId": "s"
+        },
+        "points": []
+      },
+      {
+        "id": "w-48",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_timer",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_full_out",
+          "pinId": "t"
+        },
+        "points": []
+      },
+      {
+        "id": "w-49",
+        "from": {
+          "kind": "port",
+          "componentId": "t_position",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_full_out",
+          "pinId": "x"
+        },
+        "points": []
+      },
+      {
+        "id": "w-50",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_full",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_full_out",
+          "pinId": "h"
+        },
+        "points": []
+      },
+      {
+        "id": "w-51",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_full_in",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_full",
+          "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "w-52",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_full_out",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_full",
+          "pinId": "outflow"
+        },
+        "points": []
+      },
+      {
+        "id": "w-53",
+        "from": {
+          "kind": "port",
+          "componentId": "t_position",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pos_raw",
+          "pinId": "x"
+        },
+        "points": []
+      },
+      {
+        "id": "w-54",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_rest",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pos_raw",
+          "pinId": "a"
+        },
+        "points": []
+      },
+      {
+        "id": "w-55",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_full",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pos_raw",
+          "pinId": "b"
+        },
+        "points": []
+      },
+      {
+        "id": "w-56",
+        "from": {
+          "kind": "port",
+          "componentId": "pos_raw",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pos_trim",
+          "pinId": "p"
+        },
+        "points": []
+      },
+      {
+        "id": "w-57",
+        "from": {
+          "kind": "port",
+          "componentId": "c_lopos",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pos_trim",
+          "pinId": "lo"
+        },
+        "points": []
+      },
+      {
+        "id": "w-58",
+        "from": {
+          "kind": "port",
+          "componentId": "c_uppos",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pos_trim",
+          "pinId": "up"
+        },
+        "points": []
+      },
+      {
+        "id": "w-59",
+        "from": {
+          "kind": "port",
+          "componentId": "pos_trim",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pos",
+          "pinId": "p"
+        },
+        "points": []
+      },
+      {
+        "id": "w-60",
+        "from": {
+          "kind": "port",
+          "componentId": "c_type",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pos",
+          "pinId": "k"
+        },
+        "points": []
+      },
+      {
+        "id": "w-61",
+        "from": {
+          "kind": "port",
+          "componentId": "pos",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "position"
+        },
+        "points": []
+      },
+      {
+        "id": "w-62",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_r",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "err",
+          "pinId": "r"
+        },
+        "points": []
+      },
+      {
+        "id": "w-63",
+        "from": {
+          "kind": "port",
+          "componentId": "pos",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "err",
+          "pinId": "p"
+        },
+        "points": []
+      },
+      {
+        "id": "w-64",
+        "from": {
+          "kind": "port",
+          "componentId": "c_air",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "err",
+          "pinId": "a"
+        },
+        "points": []
+      },
+      {
+        "id": "w-65",
+        "from": {
+          "kind": "port",
+          "componentId": "err",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "u",
+          "pinId": "e"
+        },
+        "points": []
+      },
+      {
+        "id": "w-66",
+        "from": {
+          "kind": "port",
+          "componentId": "servo_i",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "u",
+          "pinId": "i"
+        },
+        "points": []
+      },
+      {
+        "id": "w-67",
+        "from": {
+          "kind": "port",
+          "componentId": "c_kp",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "u",
+          "pinId": "kp"
+        },
+        "points": []
+      },
+      {
+        "id": "w-68",
+        "from": {
+          "kind": "port",
+          "componentId": "err",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "servo_i_in",
+          "pinId": "e"
+        },
+        "points": []
+      },
+      {
+        "id": "w-69",
+        "from": {
+          "kind": "port",
+          "componentId": "u",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "servo_i_in",
+          "pinId": "u"
+        },
+        "points": []
+      },
+      {
+        "id": "w-70",
+        "from": {
+          "kind": "port",
+          "componentId": "c_tr",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "servo_i_in",
+          "pinId": "tr"
+        },
+        "points": []
+      },
+      {
+        "id": "w-71",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_active",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "servo_i_in",
+          "pinId": "a"
+        },
+        "points": []
+      },
+      {
+        "id": "w-72",
+        "from": {
+          "kind": "port",
+          "componentId": "servo_i",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "servo_i_in",
+          "pinId": "i"
+        },
+        "points": []
+      },
+      {
+        "id": "w-73",
+        "from": {
+          "kind": "port",
+          "componentId": "servo_i_in",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "servo_i",
+          "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "w-74",
+        "from": {
+          "kind": "port",
+          "componentId": "u",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out_pct",
+          "pinId": "u"
+        },
+        "points": []
+      },
+      {
+        "id": "w-75",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_active",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out_pct",
+          "pinId": "a"
+        },
+        "points": []
+      },
+      {
+        "id": "w-76",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_timer",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out_pct",
+          "pinId": "t"
+        },
+        "points": []
+      },
+      {
+        "id": "w-77",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "inputCurrent"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out_pct",
+          "pinId": "i"
+        },
+        "points": []
+      },
+      {
+        "id": "w-78",
+        "from": {
+          "kind": "port",
+          "componentId": "out_pct",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out1_bar",
+          "pinId": "o"
+        },
+        "points": []
+      },
+      {
+        "id": "w-79",
+        "from": {
+          "kind": "port",
+          "componentId": "t_supply",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out1_bar",
+          "pinId": "s"
+        },
+        "points": []
+      },
+      {
+        "id": "w-80",
+        "from": {
+          "kind": "port",
+          "componentId": "out1_bar",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "t_out1",
+          "pinId": "value"
+        },
+        "points": []
+      },
+      {
+        "id": "w-81",
+        "from": {
+          "kind": "port",
+          "componentId": "out1_bar",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "outputPressure"
+        },
+        "points": []
+      }
+    ]
+  },
+  "interface": [
+    {
+      "pinId": "supply",
+      "label": "Suprimento de ar (bar)",
+      "internalTunnel": "supply",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "out1",
+      "label": "Saída pneumática OUT1 (bar)",
+      "internalTunnel": "out1",
+      "domain": "signal",
+      "direction": "out",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "position",
+      "label": "Posição da haste no ímã (mm)",
+      "internalTunnel": "position",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "loop_plus",
+      "label": "LOOP+",
+      "internalTunnel": "loop_plus",
+      "domain": "electrical"
+    },
+    {
+      "pinId": "loop_minus",
+      "label": "LOOP-",
+      "internalTunnel": "loop_minus",
+      "domain": "electrical"
+    }
+  ],
+  "symbolMode": "custom",
+  "iconPath": "./fy301.svg",
+  "symbol": {
+    "width": 230,
+    "height": 200,
+    "border": false,
+    "shapes": [
+      {
+        "kind": "image",
+        "href": "./fy301.svg",
+        "x": 48,
+        "y": 76,
+        "w": 134,
+        "h": 104,
+        "preserveAspectRatio": "xMidYMid meet"
+      }
+    ],
+    "pins": [
+      {
+        "id": "supply",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 130,
+        "angle": 180,
+        "length": 8,
+        "label": "SUP"
+      },
+      {
+        "id": "out1",
+        "kind": "ANALOG_OUT",
+        "x": 0,
+        "y": 150,
+        "angle": 180,
+        "length": 8,
+        "label": "OUT1"
+      },
+      {
+        "id": "position",
+        "kind": "ANALOG_IN",
+        "x": 0,
+        "y": 170,
+        "angle": 180,
+        "length": 8,
+        "label": "POS"
+      },
+      {
+        "id": "loop_plus",
+        "kind": "POWER",
+        "x": 230,
+        "y": 140,
+        "angle": 0,
+        "length": 8,
+        "label": "LOOP+"
+      },
+      {
+        "id": "loop_minus",
+        "kind": "POWER",
+        "x": 230,
+        "y": 160,
+        "angle": 0,
+        "length": 8,
+        "label": "LOOP-"
+      }
+    ]
+  },
+  "exposedComponents": [
+    {
+      "componentId": "fy301",
+      "x": 63,
+      "y": 4,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 0
+    }
+  ],
+  "exportedPropertyComponentIds": [
+    "fy301",
+    "c_type",
+    "c_air",
+    "c_char",
+    "c_mode",
+    "c_sp",
+    "c_time",
+    "c_kp",
+    "c_tr",
+    "c_lopos",
+    "c_uppos",
+    "c_tso",
+    "c_spl",
+    "c_sph",
+    "c_slo",
+    "c_shi",
+    "c_setup"
+  ]
+}

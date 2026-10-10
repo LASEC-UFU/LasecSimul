@@ -430,6 +430,20 @@ bool HartEngine::setVariableInput(std::string_view deviceId, std::string_view va
     return false;
 }
 
+bool HartEngine::setMeasuredVariable(std::string_view deviceId, std::string_view variableId, double value) noexcept {
+    if (!std::isfinite(value)) return false;
+    for (RuntimeDevice& device : m_devices) {
+        if (device.plan.id != deviceId) continue;
+        for (size_t i = 0; i < device.plan.variables.size(); ++i) {
+            if (device.plan.variables[i].id != variableId) continue;
+            device.variableValues[i] = value;
+            return true;
+        }
+        return false;
+    }
+    return false;
+}
+
 std::optional<double> HartEngine::variableValue(std::string_view deviceId, std::string_view variableId) const noexcept {
     for (const RuntimeDevice& device : m_devices) {
         if (device.plan.id != deviceId) continue;

@@ -164,9 +164,10 @@ const catalog: PaletteRenderableEntry[] = [
     // LD301 e TT301 agora são os subcircuitos subcircuits/hart_smar_ld301 e
     // hart_smar_tt301 sobre o dispositivo HART padrão; os tipos built-in
     // antigos ficam ocultos.
-    for (const typeId of ["protocol.hart.device.standard", "protocol.hart.device.smar_fy301"]) {
+    for (const typeId of ["protocol.hart.device.standard"]) {
       assert(processTree.includes(typeId), `${typeId} deveria aparecer na paleta HART`);
     }
+    assert(!processTree.includes("protocol.hart.device.smar_fy301"), "o FY301 built-in legado não deveria aparecer na paleta");
     assert(!processTree.includes("protocol.hart.device.smar_ld301"), "o LD301 built-in legado não deveria aparecer na paleta");
     assert(!processTree.includes("protocol.hart.device.smar_tt301"), "o TT301 built-in legado não deveria aparecer na paleta");
     // O PC fala HART pelo fio: o Modem HART (em série no laço) fica na mesma pasta.

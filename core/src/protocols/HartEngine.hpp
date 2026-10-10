@@ -786,6 +786,9 @@ public:
     size_t deviceCount() const noexcept { return m_devices.size(); }
     bool setPrimaryValue(std::string_view deviceId, double value) noexcept;
     bool setVariableInput(std::string_view deviceId, std::string_view variableId, double value) noexcept;
+    /** A value the device measures itself (e.g. the loop current of a current-input device), any
+     * direction: Output variables carry it to the Signal Graph and to the DSL commands. */
+    bool setMeasuredVariable(std::string_view deviceId, std::string_view variableId, double value) noexcept;
     std::optional<double> variableValue(std::string_view deviceId, std::string_view variableId) const noexcept;
     /** Read-only view of a device's CURRENT runtime plan -- in particular the
      * identity fields a write command's `CommandProgramHook` may have

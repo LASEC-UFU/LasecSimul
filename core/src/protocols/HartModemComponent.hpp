@@ -48,7 +48,7 @@ public:
     size_t getState(uint8_t* out, size_t cap) const override;
     void setState(const uint8_t*, size_t) override {}
     std::vector<PropertyDescriptor> propertyDescriptors() override;
-    std::optional<double> current() const override { return m_senseVolts / m_senseResistance; }
+    std::optional<double> current() const override { return m_parallel ? m_senseVolts * kParallelInputConductance : m_senseVolts / m_senseResistance; }
 
     static std::vector<PropertySchema> propertySchema();
 
@@ -76,6 +76,13 @@ private:
     /** Guards scheduled callbacks against a destroyed component. */
     std::shared_ptr<bool> m_alive = std::make_shared<bool>(true);
 
+    /** Connection to the pair: in series in the loop (internal sense resistor, as before), or in
+     * parallel across the line like a configurator clipped to the wires (high impedance receiver,
+     * transmitter AC-coupled through `senseResistance`). A loop-powered actuator (valve positioner)
+     * is fed by a current source and answers with a voltage carrier: only the parallel connection
+     * hears it, as on the real installation. */
+    bool m_parallel = false;
+    static constexpr double kParallelInputConductance = 1e-9; ///< AC-coupled receiver: no DC load on the 4-20 mA
     double m_senseResistance = 250.0;
     double m_transmitVpp = 0.5;
     HartFskTransmitter m_tx;

@@ -112,6 +112,20 @@ std::array<Pin, 2> makePins2(const ComponentParams& p, const char* a = "pin-1", 
     return {makePinOr(pos[0], a), makePinOr(pos[1], b)};
 }
 
+/** Electrical terminals picked by name: the Signal<->MNA bridges list their signal port first in the catalog
+ * (`command`/`value`, then `p`, `n`), so a palette instance receives all three while a subcircuit child
+ * receives only its wired terminals -- by position, `p`/`n` would be the signal port and `p`. */
+std::array<Pin, 2> makeNamedPins2(const ComponentParams& p, const char* a, const char* b) {
+    const auto named = [&](const char* id) -> std::optional<Pin> {
+        for (const Pin& pin : p.pinList) if (pin.id == id) return pin;
+        return std::nullopt;
+    };
+    const auto first = named(a);
+    const auto second = named(b);
+    if (first && second) return {*first, *second};
+    return makePins2(p, a, b);
+}
+
 std::array<Pin, 3> makePins3(const ComponentParams& p, const char* a = "pin-1", const char* b = "pin-2",
                              const char* c = "pin-3") {
     const auto pos = p.pins<3>();
@@ -320,37 +334,37 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
                             std::vector<std::string>{});
 
     reg.registerFactory("bridges.voltage_sensor", [](const ComponentParams& p) {
-        return std::make_unique<components::SignalVoltageSensor>(makePins2(p, "p", "n"));
+        return std::make_unique<components::SignalVoltageSensor>(makeNamedPins2(p, "p", "n"));
     });
     registerBuiltinMetadata("bridges.voltage_sensor", "Sensor de Tensao", {},
                             R"json({"en":{"name":"Voltage Sensor"}})json", std::nullopt, std::nullopt, {"p", "n"});
     reg.registerFactory("bridges.current_sensor", [](const ComponentParams& p) {
-        return std::make_unique<components::SignalCurrentSensor>(makePins2(p, "p", "n"));
+        return std::make_unique<components::SignalCurrentSensor>(makeNamedPins2(p, "p", "n"));
     });
     registerBuiltinMetadata("bridges.current_sensor", "Sensor de Corrente", {},
                             R"json({"en":{"name":"Current Sensor"}})json", std::nullopt, std::nullopt, {"p", "n"});
     reg.registerFactory("bridges.digital_input", [](const ComponentParams& p) {
-        return std::make_unique<components::SignalDigitalInput>(makePins2(p, "p", "n"));
+        return std::make_unique<components::SignalDigitalInput>(makeNamedPins2(p, "p", "n"));
     });
     registerBuiltinMetadata("bridges.digital_input", "Entrada Digital", {},
                             R"json({"en":{"name":"Digital Input"}})json", std::nullopt, std::nullopt, {"p", "n"});
     reg.registerFactory("bridges.controlled_voltage_source", [](const ComponentParams& p) {
-        return std::make_unique<components::SignalControlledVoltageSource>(makePins2(p, "p", "n"));
+        return std::make_unique<components::SignalControlledVoltageSource>(makeNamedPins2(p, "p", "n"));
     });
     registerBuiltinMetadata("bridges.controlled_voltage_source", "Fonte de Tensao por Sinal", {},
                             R"json({"en":{"name":"Signal Controlled Voltage Source"}})json", std::nullopt, std::nullopt, {"p", "n"});
     reg.registerFactory("bridges.controlled_current_source", [](const ComponentParams& p) {
-        return std::make_unique<components::SignalControlledCurrentSource>(makePins2(p, "p", "n"));
+        return std::make_unique<components::SignalControlledCurrentSource>(makeNamedPins2(p, "p", "n"));
     });
     registerBuiltinMetadata("bridges.controlled_current_source", "Fonte de Corrente por Sinal", {},
                             R"json({"en":{"name":"Signal Controlled Current Source"}})json", std::nullopt, std::nullopt, {"p", "n"});
     reg.registerFactory("bridges.controlled_resistor", [](const ComponentParams& p) {
-        return std::make_unique<components::SignalControlledResistor>(makePins2(p, "p", "n"), p.property("resistance", 100.0));
+        return std::make_unique<components::SignalControlledResistor>(makeNamedPins2(p, "p", "n"), p.property("resistance", 100.0));
     });
     registerBuiltinMetadata("bridges.controlled_resistor", "Resistor por Sinal", {},
                             R"json({"en":{"name":"Signal Controlled Resistor"}})json", std::nullopt, std::nullopt, {"p", "n"});
     reg.registerFactory("bridges.digital_output", [](const ComponentParams& p) {
-        return std::make_unique<components::SignalDigitalOutput>(makePins2(p, "p", "n"));
+        return std::make_unique<components::SignalDigitalOutput>(makeNamedPins2(p, "p", "n"));
     });
     registerBuiltinMetadata("bridges.digital_output", "Saida Digital", {},
                             R"json({"en":{"name":"Digital Output"}})json", std::nullopt, std::nullopt, {"p", "n"});

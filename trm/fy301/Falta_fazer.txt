@@ -1,0 +1,44 @@
+Roteiro de capturas para fechar o FY301 (mesmo formato das capturas do LD301 e do TT301)
+
+Hoje o FY301 do simulador tem o comportamento elétrico e de posicionamento do manual, mas nenhuma troca HART
+foi capturada no aparelho real. Responde aos comandos Universais e de Prática Comum do dispositivo padrão; os
+comandos próprios da Smar (configuração, Auto Setup, trims) não existem ainda: no simulador, os parâmetros do
+ajuste local (TYPE, AIR_T, CHAR, MODE, SP%, TIME, KP, TR, LOPOS, UPPOS, SETUP, TSO, limites, split range) ficam
+em Propriedades Exportadas do FY301.
+
+Preparação
+- PACTware -> modem HART -> FY301, com o mesmo programa que gerou "saida do trm hart TT301.txt" (SERIAL RX e UDP RX).
+- O FY301 é alimentado pelo laço: use um calibrador em modo fonte de mA (ou a saída analógica do CLP) e ligue o
+  modem EM PARALELO nos bornes do FY301 (não há resistor de 250 ohm no laço de um posicionador).
+- Um log por item, com o nome do item (ex.: fy301_a1_identificacao.txt), o print da tela do DTM antes e depois,
+  a foto do display e a corrente/posição quando o item mexer na válvula.
+- Uma mudança por vez; volte a configuração ao que estava ao terminar cada item.
+
+Grupo A: identidade e leitura
+A1  Conectar o FY301 no PACTware (topology scan) e abrir Identification.      -> Cmd 0 (tipo, revisões HART/software, ID), 12, 13, 16
+A2  Abrir a tela de monitoração uns 10 s, com 4, 12 e 20 mA aplicados.        -> Cmds 1, 2, 3 (o que vem em PV, SV, TV, QV e as unidades)
+A3  Abrir Device Variables (se houver).                                         -> Cmd 9/33: códigos das variáveis (posição, setpoint, corrente, temperatura)
+A4  Ler a tela do display (Configuration -> Display).                          -> código das opções PV%, PV(mm), SP%, SP(mm)
+
+Grupo B: configuração (uma escrita por vez)
+B1  TYPE: Lind -> Linr -> Rotd -> Rotr (voltar a Lind).                        -> comando e códigos
+B2  AIR_T: AIR_OPEN <-> AIR_CLOSED.                                             -> comando e códigos
+B3  CHAR: Lin, EP 1:25, EP 1:33, EP 1:50, abertura rápida 1:25/1:33/1:50, Tabela. -> comando e códigos; a tabela de 16 pontos (X, Y)
+B4  MODE Auto/Man e SP% em manual (por exemplo 30 %).                          -> comandos e formato do SP
+B5  TIME, KP, TR (um de cada vez).                                              -> comandos e formato
+B6  Limites do setpoint, split range, TSO e TSO D.                             -> comandos e formato
+B7  Proteção de escrita (jumper W2) e tentativa de escrita.                    -> código de resposta
+
+Grupo C: calibração e manutenção
+C1  Auto Setup completo (anote o tempo e as mensagens do display).             -> comando de início, leitura de progresso e de fim
+C2  LOPOS e UPPOS (ajuste de posição inferior e superior).                      -> comandos e formato
+C3  Trim de corrente de 4 mA e de 20 mA (leitura da corrente de entrada).      -> Cmds 45/46 ou próprios
+C4  Trim de temperatura.                                                        -> comando
+C5  Diagnóstico: zona morta, odômetro, reversões, contador de operações.       -> comandos e layout
+C6  Backup: Ler do sensor / Escrever no sensor.                                 -> comandos
+
+Grupo D: comportamento físico (sem DTM)
+D1  Display ao ligar (sequência de inicialização) e com a corrente abaixo de 3,8 mA.
+D2  Tensão nos bornes a 4, 12 e 20 mA (confirma os ~550 ohm).
+D3  Posição real x indicada antes e depois do Auto Setup (régua no indicador de curso da válvula).
+D4  Tempo de curso de 0 a 100 % e de 100 a 0 % com TIME = 1 s.

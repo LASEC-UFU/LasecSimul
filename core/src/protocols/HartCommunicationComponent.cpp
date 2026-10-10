@@ -166,6 +166,11 @@ HartCommunicationComponent::HartCommunicationComponent(Mode mode, simulation::Sc
     m_date[2] = static_cast<uint8_t>(std::clamp(numberProperty(p, "dateYear", defaultNumber("dateYear", 0)), 0.0, 255.0));
     m_finalAssemblyNumber = static_cast<uint32_t>(std::clamp(numberProperty(p, "finalAssemblyNumber", defaultNumber("finalAssemblyNumber", 0)), 0.0, 16777215.0));
     m_loopCurrentModeEnabled = p.property("loopCurrentMode", true);
+    m_analogInput = stringProperty(p, "analogLoopDirection", defaultText("analogLoopDirection", "output")) == "input";
+    m_inputResistance = std::clamp(numberProperty(p, "analogInputResistance", defaultNumber("analogInputResistance", 550.0)), 1.0, 1e6);
+    m_inputMinimumMilliamps = std::clamp(numberProperty(p, "analogInputMinimumMilliamps", defaultNumber("analogInputMinimumMilliamps", 3.8)), 0.0, 24.0);
+    m_inputCurrentVariable = stringProperty(p, "analogInputVariable", defaultText("analogInputVariable", "inputCurrent"));
+    if (m_analogInput) m_loopCurrent = 0.0;
     m_sensorLowVolts = numberProperty(p, "sensorLowVolts", defaultNumber("sensorLowVolts", 0.0));
     m_sensorHighVolts = std::max(m_sensorLowVolts + 1e-9, numberProperty(p, "sensorHighVolts", defaultNumber("sensorHighVolts", 5.0)));
     m_displayInstalled = p.property("displayInstalled", presetDefaults.value("displayInstalled", true));
@@ -373,7 +378,7 @@ size_t HartCommunicationComponent::getTelemetryState(uint8_t* out, size_t cap) c
     // loop terminals are not part of an electrical circuit.
     const HartDevicePlan* plan = m_engine.findDevicePlan(m_deviceId);
     double milliamps = m_loopCurrent * 1000.0;
-    if (plan) {
+    if (plan && !m_analogInput) {
         const HartDeviceProfile* profile = m_profiles.find(plan->profileId);
         const auto primary = std::find_if(plan->variables.begin(), plan->variables.end(), [](const auto& v) { return v.id == "PV"; });
         const double pv = m_engine.variableValue(m_deviceId, "PV").value_or(plan->primaryValue) + plan->primaryVariableZeroOffset;
@@ -389,7 +394,7 @@ size_t HartCommunicationComponent::getTelemetryState(uint8_t* out, size_t cap) c
     std::memcpy(out, &milliamps, sizeof milliamps);
     const uint32_t marker = 0x4C434431u; // "LCD1"
     for (int i = 0; i < 4; ++i) out[8 + i] = static_cast<uint8_t>(marker >> (8 * i));
-    hartLcdSerialize(displayFrame(), out + 12);
+    hartLcdSerialize(inputPowered() ? displayFrame() : HartLcdFrame{}, out + 12);
     return total;
 }
 
@@ -409,6 +414,10 @@ void HartCommunicationComponent::stamp(MnaMatrixView& matrix) {
         const double value = m_sensorLowValue + (volts - m_sensorLowVolts) / (m_sensorHighVolts - m_sensorLowVolts) *
             (m_sensorHighValue - m_sensorLowValue);
         feedPrimary(value);
+    }
+    if (m_analogInput) {
+        stampCurrentInput(matrix);
+        return;
     }
     const double processValue = m_engine.variableValue(m_deviceId, "PV").value_or(0.0);
     const double low = std::isfinite(pv->lowerRangeValue) ? pv->lowerRangeValue : 0.0;
@@ -434,7 +443,38 @@ void HartCommunicationComponent::stamp(MnaMatrixView& matrix) {
     matrix.addCurrent(m_pins[2], m_pins[3], m_loopCurrent + carrier);
     // ...and the master's carrier is the AC voltage across the terminals.
     if (m_wireRx.muted()) return;
-    m_wireRx.sample(now, matrix.getNodeVoltage(m_pins[2]) - matrix.getNodeVoltage(m_pins[3]));
+    receiveOnWire(now, matrix.getNodeVoltage(m_pins[2]) - matrix.getNodeVoltage(m_pins[3]));
+}
+
+void HartCommunicationComponent::stampCurrentInput(MnaMatrixView& matrix) {
+    if (!m_pinConnected[2] || !m_pinConnected[3]) {
+        m_inputRawAmps = 0.0;
+        return;
+    }
+    // Load of `analogInputResistance` with the reply carrier in series (Norton form):
+    // i(L+ -> L-) = (V(L+) - V(L-) - v_tx) / R. Fed by a current source, the carrier shows up as a
+    // voltage across the terminals; the master (in parallel on the line) hears it.
+    const uint64_t now = m_scheduler.nowNsUnlocked();
+    m_wireTx.advance(now);
+    const double carrier = hart_phy::kSlaveVoltageAmplitudeV * m_wireTx.value(now);
+    const double conductance = 1.0 / m_inputResistance;
+    matrix.addConductance(m_pins[2], m_pins[3], conductance);
+    if (carrier != 0.0) matrix.addCurrent(m_pins[3], m_pins[2], conductance * carrier);
+    const double volts = matrix.getNodeVoltage(m_pins[2]) - matrix.getNodeVoltage(m_pins[3]);
+    m_inputRawAmps = (volts - carrier) * conductance;
+    if (!m_enabled || !inputPowered() || m_wireRx.muted()) return;
+    receiveOnWire(now, volts);
+}
+
+void HartCommunicationComponent::publishInputCurrent() {
+    const double milliamps = m_loopCurrent * 1000.0;
+    if (std::fabs(milliamps - m_publishedInputMilliamps) < 1e-6) return;
+    m_publishedInputMilliamps = milliamps;
+    if (!m_inputCurrentVariable.empty()) m_engine.setMeasuredVariable(m_deviceId, m_inputCurrentVariable, milliamps);
+}
+
+void HartCommunicationComponent::receiveOnWire(uint64_t now, double volts) {
+    m_wireRx.sample(now, volts);
     const std::vector<uint8_t> bytes = m_wireRx.takeBytes();
     if (bytes.empty()) return;
     for (auto& frame : m_wireFrames.push(bytes)) {
@@ -1201,6 +1241,14 @@ void HartCommunicationComponent::feedPrimary(double raw) {
 }
 
 void HartCommunicationComponent::postStep(uint64_t deltaNs) {
+    if (m_fieldDevice && m_analogInput) {
+        // Input stage filter: the 4-20 mA setpoint without the HART carrier riding on it.
+        const double alpha = 1.0 - std::exp(-static_cast<double>(deltaNs) * 1e-9 / kInputFilterSeconds);
+        const double before = m_loopCurrent;
+        m_loopCurrent += (m_inputRawAmps - m_loopCurrent) * alpha;
+        publishInputCurrent();
+        if (std::fabs(m_loopCurrent - before) > 1e-9) m_scheduler.dirtySet().insert(m_componentIndex);
+    }
     if (!m_fieldDevice || !std::isfinite(m_rawPrimary) || !std::isfinite(m_dampedPrimary)) return;
     const double tau = primaryDampingSeconds();
     if (tau <= 0.0) m_dampedPrimary = m_rawPrimary;
@@ -1334,6 +1382,13 @@ std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode
         out.push_back(numberSchema("sensorLowValue", "Processo na tensao A", "Sensor", preset->unit, 0.0, -1e9, 1e9));
         out.push_back(numberSchema("sensorHighValue", "Processo na tensao B", "Sensor", preset->unit, 0.0, -1e9, 1e9));
         out.push_back(readonlySchema("loopCurrentMilliamps", "Corrente de loop (4-20 mA)", "Sensor", "4"));
+        // Laço: transmissor (saída 4-20 mA) ou atuador alimentado pelo laço (entrada 4-20 mA).
+        PropertySchema direction{"analogLoopDirection", "Laço 4-20 mA", "Laço", "", PropertyValueKind::String, "select", std::string("output")};
+        direction.options = {{"output", "Saída (transmissor)"}, {"input", "Entrada (atuador / posicionador)"}};
+        out.push_back(direction);
+        out.push_back(numberSchema("analogInputResistance", "Impedância de entrada (entrada 4-20 mA)", "Laço", "Ω", 550, 1, 1e6));
+        out.push_back(numberSchema("analogInputMinimumMilliamps", "Corrente mínima para funcionar (entrada 4-20 mA)", "Laço", "mA", 3.8, 0, 24));
+        out.push_back(textSchema("analogInputVariable", "Variável HART que recebe a corrente medida (mA)", "Laço", "inputCurrent"));
         // Indicador local (LCD 4 1/2 digitos + 5 alfanumericos + anunciadores).
         out.push_back({"displayInstalled", "Indicador instalado", "Display", "", PropertyValueKind::Bool, "checkbox", true});
         out.push_back(textSchema("displayVariable1", "1a variavel (pv, percent, current, output, dv:N, var:id)", "Display", "pv"));
@@ -1405,6 +1460,10 @@ PropertyValue HartCommunicationComponent::propertyValue(const std::string& id) c
     if (id == "hartDeviceProfile") return m_traits.deviceProfile; if (id == "hartResponseDataLimits") return m_traits.responseDataLimits;
     if (id == "hartConfigChangeCounter") return static_cast<double>(m_configChangeCounter);
     if (id == "displayGlass") return m_displayGlass;
+    if (id == "analogLoopDirection") return std::string(m_analogInput ? "input" : "output");
+    if (id == "analogInputResistance") return m_inputResistance;
+    if (id == "analogInputMinimumMilliamps") return m_inputMinimumMilliamps;
+    if (id == "analogInputVariable") return m_inputCurrentVariable;
     if (id == "bus") return m_bus; if (id == "endpoint") return m_endpointName; if (id == "enabled") return m_enabled;
     if (id == "pollingAddress") return static_cast<double>(m_pollingAddress); if (id == "uniqueId") return m_uniqueId;
     if (id == "tag") return m_tag; if (id == "unit") return m_unit; if (id == "profileId") return m_profileId; if (id == "hartVariablesJson") return m_hartVariablesJson; if (id == "hartCommandsJson") return m_hartCommandsJson; if (id == "hartBurstJson") return m_hartBurstJson; if (id == "hartAdditionalJson") return m_hartAdditionalJson; if (id == "alarmSelectionCode") return static_cast<double>(m_alarmSelectionCode); if (id == "writeProtectCode") return static_cast<double>(m_writeProtectCode); if (id == "hartManufacturerId") return m_traits.manufacturerId; if (id == "hartDeviceType") return m_traits.deviceType; if (id == "hartRequestPreambles") return m_traits.requestPreambles; if (id == "hartUniversalRevision") return m_traits.universalRevision; if (id == "hartDeviceRevision") return m_traits.deviceRevision; if (id == "hartSoftwareRevision") return m_traits.softwareRevision; if (id == "hartHardwareRevision") return m_traits.hardwareRevision; if (id == "hartFlags") return m_traits.flags; if (id == "hartImplementedRevision") return m_traits.implementedRevision; if (id == "analogSaturationLowPercent") return m_traits.saturationLowPercent; if (id == "analogSaturationHighPercent") return m_traits.saturationHighPercent; if (id == "hartCommandSet") return m_traits.commandSet; if (id == "analogFixedLowMilliamps") return m_traits.fixedLowMilliamps; if (id == "analogFixedHighMilliamps") return m_traits.fixedHighMilliamps; if (id == "analogAlarmLowMilliamps") return m_traits.alarmLowMilliamps; if (id == "analogAlarmHighMilliamps") return m_traits.alarmHighMilliamps; if (id == "rangeLimitTolerancePercent") return m_traits.rangeTolerancePercent; if (id == "minimumSpanAcceptPercent") return m_traits.minimumSpanAcceptPercent; if (id == "hartOperationCounters") return m_traits.operationCounters; if (id == "sensorFault") return m_sensorFault; if (id == "displayInstalled") return m_displayInstalled; if (id == "displayVariable1") return m_displayVariable1; if (id == "displayVariable2") return m_displayVariable2; if (id == "displayCodeMap") return m_displayCodeMap; if (id == "displayModelName") return m_displayModelName; if (id == "sensorLowVolts") return m_sensorLowVolts; if (id == "sensorHighVolts") return m_sensorHighVolts; if (id == "sensorLowValue") return m_sensorLowValue; if (id == "sensorHighValue") return m_sensorHighValue; if (id == "loopCurrentMilliamps") return std::to_string(m_loopCurrent * 1000.0); if (id == "configurationChangedFlags") return static_cast<double>(m_configurationChangedFlags); if (id == "hartCommandsStatus") return m_hartCommandsStatus; if (id == "hartVariablesStatus") return m_hartVariablesStatus; if (id == "baudRate") return static_cast<double>(m_baudRate);
@@ -1473,6 +1532,14 @@ void HartCommunicationComponent::setPropertyValue(const std::string& id, const P
     else if (id == "displayCodeMap") m_displayCodeMap = std::get<std::string>(v);
     else if (id == "displayGlass") m_displayGlass = std::get<double>(v);
     else if (id == "displayModelName") m_displayModelName = std::get<std::string>(v);
+    else if (id == "analogLoopDirection") {
+        m_analogInput = std::get<std::string>(v) == "input";
+        m_publishedInputMilliamps = std::numeric_limits<double>::quiet_NaN();
+        m_scheduler.dirtySet().insert(m_componentIndex);
+    }
+    else if (id == "analogInputResistance") { m_inputResistance = std::clamp(std::get<double>(v), 1.0, 1e6); m_scheduler.dirtySet().insert(m_componentIndex); }
+    else if (id == "analogInputMinimumMilliamps") m_inputMinimumMilliamps = std::clamp(std::get<double>(v), 0.0, 24.0);
+    else if (id == "analogInputVariable") { m_inputCurrentVariable = std::get<std::string>(v); m_publishedInputMilliamps = std::numeric_limits<double>::quiet_NaN(); }
     else if (id == "sensorLowVolts") m_sensorLowVolts = std::get<double>(v);
     else if (id == "sensorHighVolts") m_sensorHighVolts = std::max(m_sensorLowVolts + 1e-9, std::get<double>(v));
     else if (id == "sensorLowValue") m_sensorLowValue = std::get<double>(v);

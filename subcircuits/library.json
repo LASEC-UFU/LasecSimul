@@ -26,6 +26,10 @@
       "manifest": "process_electric_furnace_tc.lssubcircuit"
     },
     {
+      "typeId": "subcircuits.process.control_valve",
+      "manifest": "process_control_valve.lssubcircuit"
+    },
+    {
       "typeId": "subcircuits.process.orifice_flow_dp",
       "manifest": "process_orifice_flow_dp.lssubcircuit"
     },
@@ -232,6 +236,10 @@
     {
       "typeId": "subcircuits.hart.smar_tt301",
       "manifest": "hart_smar_tt301.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.hart.smar_fy301",
+      "manifest": "hart_smar_fy301.lssubcircuit"
     }
   ]
 }

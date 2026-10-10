@@ -21015,7 +21015,8 @@
     },
     {
       "typeId": "protocol.hart.device.smar_fy301",
-      "label": "SMAR FY301",
+      "label": "SMAR FY301 (legado)",
+      "hidden": true,
       "pinCount": 4,
       "pinIds": [
         "sensor_plus",

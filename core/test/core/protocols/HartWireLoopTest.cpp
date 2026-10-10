@@ -302,6 +302,170 @@ struct Multidrop {
     }
 };
 
+/** Ideal 4-20 mA source (a controller's analog output or a mA calibrator): `amps` out of `out`. */
+class TestCurrentSource final : public IComponentModel {
+public:
+    explicit TestCurrentSource(double amps) : amps(amps) {}
+    const char* typeId() const override { return "test.current_source"; }
+    std::span<Pin> pins() override { return m_pins; }
+    bool isDynamic() const override { return true; }
+    void stamp(MnaMatrixView& matrix) override { matrix.addCurrent(m_pins[1], m_pins[0], amps); }
+    void postStep(uint64_t) override {}
+    size_t getState(uint8_t*, size_t) const override { return 0; }
+    void setState(const uint8_t*, size_t) override {}
+    double amps;
+
+private:
+    std::array<Pin, 2> m_pins{Pin{"out", 0, 0}, Pin{"ret", 0, 0}};
+};
+
+/** Loop-powered actuator (valve positioner, FY301):
+ *
+ *   [4-20 mA source] -- [device LOOP+ / LOOP-, 550 ohm] -- back to the source
+ *                    \- [modem in parallel on the line] -/
+ *
+ * The source imposes the current; the device measures it and answers HART with a voltage carrier;
+ * the configurator hears it in parallel, like the alligator clips on the real line. */
+struct InputLoop {
+    plugins::GlobalPluginCache cache;
+    session::SimulationSession session{cache};
+    HartCommunicationComponent::DevicePreset preset = HartCommunicationComponent::standardFieldDevicePreset();
+    HartModemComponent* modem = nullptr;
+    HartCommunicationComponent* device = nullptr;
+    TestCurrentSource* source = nullptr;
+    uint32_t deviceIndex = 0;
+    double lineMin = 1e9, lineMax = -1e9;
+    bool recordLine = false;
+
+    explicit InputLoop(const std::string& modemConnection, double milliamps) {
+        auto& components = session.components();
+        auto& scheduler = session.scheduler();
+        components.registerFactory("test.current_source", [this, milliamps](const registry::ComponentParams&) {
+            auto instance = std::make_unique<TestCurrentSource>(milliamps / 1000.0);
+            source = instance.get();
+            return instance;
+        });
+        components.registerFactory("other.ground", [](const registry::ComponentParams&) {
+            return std::make_unique<components::Ground>(Pin{"pin", 0, 0});
+        });
+        components.registerFactory(HartModemComponent::kTypeId, [this, &scheduler](const registry::ComponentParams& p) {
+            auto instance = std::make_unique<HartModemComponent>(scheduler, p);
+            modem = instance.get();
+            return instance;
+        });
+        components.registerFactory("protocol.hart.device.standard", [this, &scheduler](const registry::ComponentParams& p) {
+            auto instance = std::make_unique<HartCommunicationComponent>(HartCommunicationComponent::Mode::Serial, scheduler, p, &preset);
+            device = instance.get();
+            return instance;
+        });
+        components.registerFactory("test.probe.line", [this, &scheduler](const registry::ComponentParams&) {
+            return std::make_unique<RecordingProbe>(scheduler, [this](uint64_t, double volts) {
+                if (!recordLine || !device || !device->wireTransmitting()) return;
+                lineMin = std::min(lineMin, volts);
+                lineMax = std::max(lineMax, volts);
+            });
+        });
+        const uint32_t sourceIndex = session.addComponent("test.current_source", {});
+        registry::ComponentParams modemParams;
+        modemParams.properties["connection"] = modemConnection;
+        const uint32_t modemIndex = session.addComponent(HartModemComponent::kTypeId, modemParams);
+        deviceIndex = session.addComponent("protocol.hart.device.standard", inputParams());
+        const uint32_t ground = session.addComponent("other.ground", {});
+        const uint32_t probe = session.addComponent("test.probe.line", {});
+        if (modemConnection == "parallel") {
+            session.connectWire(sourceIndex, "out", deviceIndex, "loop_plus");
+            session.connectWire(modemIndex, "loop_plus", deviceIndex, "loop_plus");
+            session.connectWire(modemIndex, "loop_minus", deviceIndex, "loop_minus");
+        } else {
+            session.connectWire(sourceIndex, "out", modemIndex, "loop_plus");
+            session.connectWire(modemIndex, "loop_minus", deviceIndex, "loop_plus");
+        }
+        session.connectWire(deviceIndex, "loop_minus", ground, "pin");
+        session.connectWire(sourceIndex, "ret", ground, "pin");
+        session.connectWire(probe, "a", deviceIndex, "loop_plus");
+        session.connectWire(probe, "b", deviceIndex, "loop_minus");
+        for (int i = 0; i < 20 && session.settleStep(); ++i) {}
+    }
+
+    /** The LD301 data in current-input mode, with the measured current published as `inputCurrent`. */
+    static registry::ComponentParams inputParams() {
+        registry::ComponentParams params = ld301Params();
+        params.properties["analogLoopDirection"] = std::string("input");
+        params.properties["analogInputResistance"] = 550.0;
+        nlohmann::json variables = nlohmann::json::array();
+        try { variables = nlohmann::json::parse(std::get<std::string>(params.properties["hartVariablesJson"])); } catch (...) {}
+        variables.push_back({{"id", "inputCurrent"}, {"name", "Corrente de entrada"}, {"role", "VendorSpecific"}, {"type", "Float32"},
+                             {"direction", "Output"}, {"unit", "mA"}, {"value", 0.0}});
+        params.properties["hartVariablesJson"] = variables.dump();
+        return params;
+    }
+
+    double deviceVolts() { return session.nodeVoltageOfPin(deviceIndex, "loop_plus") - session.nodeVoltageOfPin(deviceIndex, "loop_minus"); }
+    double measured() { return device->signalOutput("inputCurrent").value_or(-1.0); }
+
+    Bytes transact(const Bytes& frame, size_t expectedLength, uint64_t limitNs = 1'000'000'000) {
+        Bytes received;
+        recordLine = true;
+        modem->hostWrite(frame);
+        for (uint64_t t = 0; t < limitNs; t += 1'000'000) {
+            session.scheduler().step(1'000'000);
+            const Bytes out = modem->takeHostOutput();
+            received.insert(received.end(), out.begin(), out.end());
+            if (expectedLength && withoutPreambles(received).size() >= expectedLength && !device->wireTransmitting()) break;
+        }
+        recordLine = false;
+        return received;
+    }
+};
+
+void currentInputTests(const std::function<Bytes(const Bytes&)>& expected) {
+    {
+        InputLoop loop("parallel", 12.0);
+        check(loop.modem && loop.device && loop.source, "I0 loop-powered actuator: 12 mA source, device in current-input mode, modem in parallel on the line");
+        loop.device->setSignalInput("PV", 940.0); // same PV as the reference device (the model feeds it from the current)
+        loop.session.scheduler().step(500'000'000);
+        check(std::fabs(loop.deviceVolts() - 6.6) < 0.01,
+              "I1 the device is a 550 ohm load: 12 mA -> 6.60 V across LOOP+/LOOP- (" + std::to_string(loop.deviceVolts()) + " V)");
+        check(std::fabs(loop.measured() - 12.0) < 0.001,
+              "I2 it measures the current it receives: inputCurrent = " + std::to_string(loop.measured()) + " mA");
+        double driftDuringHart = 0.0;
+        // Power-up: the first reply reports Cold Start; the reference device already reported it.
+        loop.transact(request(0), withoutPreambles(expected(request(0))).size());
+        bool first = true;
+        for (const auto& [name, frame] : std::vector<std::pair<std::string, Bytes>>{{"Command 0", request(0)}, {"Command 13", request(13)}}) {
+            const Bytes reply = expected(frame);
+            const Bytes received = loop.transact(frame, withoutPreambles(reply).size());
+            driftDuringHart = std::max(driftDuringHart, std::fabs(loop.measured() - 12.0));
+            check(!reply.empty() && withoutPreambles(received) == withoutPreambles(reply),
+                  "I3 " + name + " through the parallel modem: the reply (a voltage carrier) is demodulated byte-exact" +
+                  (withoutPreambles(received) == withoutPreambles(reply) ? "" : "\n  got " + hex(received) + "\n  exp " + hex(reply)));
+            if (first) {
+                first = false;
+                const double pp = loop.lineMax - loop.lineMin;
+                check(std::fabs(pp - 0.5) < 0.03, "I4 the reply is 0.5 V p-p across the device terminals (" + std::to_string(pp * 1000) + " mV)");
+            }
+        }
+        check(driftDuringHart < 0.02, "I5 the master's carrier does not move the measured setpoint (input filter): drift " +
+              std::to_string(driftDuringHart * 1000) + " uA");
+        loop.source->amps = 0.003;
+        loop.session.scheduler().step(300'000'000);
+        const Bytes silent = loop.transact(request(0), 0, 600'000'000);
+        check(withoutPreambles(silent).empty() && std::fabs(loop.measured() - 3.0) < 0.01,
+              "I6 below the 3.8 mA minimum the device is off: no HART reply at 3.0 mA");
+        uint8_t telemetry[64] = {};
+        const size_t size = loop.device->getTelemetryState(telemetry, sizeof telemetry);
+        check(size > 16 && telemetry[12] == 0 && telemetry[13] == 0, "I7 ...and its display is blank");
+    }
+    {
+        InputLoop loop("series", 12.0);
+        loop.session.scheduler().step(200'000'000);
+        const Bytes received = loop.transact(request(0), 0, 600'000'000);
+        check(loop.device->wireFramesReceived() == 0 && withoutPreambles(received).empty(),
+              "I8 with the modem in series and an ideal current source nothing crosses (the source fixes the current: the "
+              "request's carrier drops across the source, the reply's never reaches the modem): connect the configurator in parallel");
+    }
+}
+
 Bytes shortFrame(uint8_t pollingAddress, uint8_t command) {
     Bytes frame{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x02, static_cast<uint8_t>(0x80 | pollingAddress), command, 0x00};
     uint8_t checksum = 0;
@@ -496,6 +660,7 @@ int run() {
     }
 
     multidropTests();
+    currentInputTests(expected);
     std::printf("HART wire loop: %d checks, %d failures\n", checks, failures);
     return failures == 0 ? 0 : 1;
 }

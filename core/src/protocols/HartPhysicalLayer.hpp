@@ -35,6 +35,9 @@ inline constexpr uint64_t kCharNs = 11 * kBitNs;     ///< start + 8 data + odd p
 inline constexpr uint64_t kSampleNs = 20'000;
 /** Slave transmit amplitude: ±0.5 mA (1 mA p-p) on the loop current. */
 inline constexpr double kSlaveCurrentAmplitudeA = 0.5e-3;
+/** A current-input device (valve positioner) is fed by a current source: it answers with a voltage
+ * carrier across its terminals instead, ±0.25 V (0.5 V p-p). */
+inline constexpr double kSlaveVoltageAmplitudeV = 0.25;
 /** Receiver carrier detect thresholds (peak-to-peak volts). */
 inline constexpr double kCarrierOnVpp = 0.100;
 inline constexpr double kCarrierOffVpp = 0.080;

@@ -31,6 +31,8 @@ HartModemComponent::HartModemComponent(simulation::Scheduler& scheduler, const r
     if (const auto it = params.properties.find("udp_address"); it != params.properties.end())
         if (const auto* address = std::get_if<std::string>(&it->second)) m_udpAddress = *address;
     m_udpPort = static_cast<uint16_t>(std::clamp(params.property("udp_port", 5094.0), 1.0, 65535.0));
+    if (const auto it = params.properties.find("connection"); it != params.properties.end())
+        if (const auto* connection = std::get_if<std::string>(&it->second)) m_parallel = *connection == "parallel";
     m_senseResistance = std::clamp(params.property("senseResistance", 250.0), 1.0, 100000.0);
     m_transmitVpp = std::clamp(params.property("transmitAmplitudeMvpp", 500.0), 0.0, 5000.0) / 1000.0;
     m_portOpenRequested = m_autoOpen;
@@ -150,12 +152,21 @@ void HartModemComponent::stamp(MnaMatrixView& matrix) {
     const uint64_t now = m_scheduler.nowNsUnlocked();
     m_tx.advance(now);
     const double transmit = 0.5 * m_transmitVpp * m_tx.value(now);
-    // Sense resistance in series with the transmit source (Norton form):
-    // i(L+ -> L-) = (V(L+) - V(L-) - v_tx) / R.
-    const double conductance = 1.0 / m_senseResistance;
-    matrix.addConductance(m_pins[0], m_pins[1], conductance);
-    if (transmit != 0.0) matrix.addCurrent(m_pins[1], m_pins[0], conductance * transmit);
-    m_senseVolts = matrix.getNodeVoltage(m_pins[0]) - matrix.getNodeVoltage(m_pins[1]) - transmit;
+    if (m_parallel) {
+        // Across the line: 1 Mohm receiver; the carrier is injected through the output resistance with
+        // no DC path (coupling capacitor), so the 4-20 mA is untouched. The receiver hears the line
+        // voltage (its high-pass removes the DC).
+        matrix.addConductance(m_pins[0], m_pins[1], kParallelInputConductance);
+        if (transmit != 0.0) matrix.addCurrent(m_pins[1], m_pins[0], transmit / m_senseResistance);
+        m_senseVolts = matrix.getNodeVoltage(m_pins[0]) - matrix.getNodeVoltage(m_pins[1]);
+    } else {
+        // Sense resistance in series with the transmit source (Norton form):
+        // i(L+ -> L-) = (V(L+) - V(L-) - v_tx) / R.
+        const double conductance = 1.0 / m_senseResistance;
+        matrix.addConductance(m_pins[0], m_pins[1], conductance);
+        if (transmit != 0.0) matrix.addCurrent(m_pins[1], m_pins[0], conductance * transmit);
+        m_senseVolts = matrix.getNodeVoltage(m_pins[0]) - matrix.getNodeVoltage(m_pins[1]) - transmit;
+    }
     if (m_rx.muted()) return;
     m_rx.sample(now, m_senseVolts);
     const std::vector<uint8_t> bytes = m_rx.takeBytes();
@@ -188,7 +199,7 @@ size_t HartModemComponent::getState(uint8_t* out, size_t cap) const {
     // Loop current through the modem (A), carrier on the wire, transmitting.
     struct State { double loopCurrent; uint8_t carrier; uint8_t transmitting; };
     if (cap < sizeof(State)) return 0;
-    const State state{m_senseVolts / m_senseResistance, static_cast<uint8_t>(m_rx.carrierAt(m_scheduler.nowNs()) ? 1 : 0),
+    const State state{current().value_or(0.0), static_cast<uint8_t>(m_rx.carrierAt(m_scheduler.nowNs()) ? 1 : 0),
                       static_cast<uint8_t>(m_tx.active() ? 1 : 0)};
     std::memcpy(out, &state, sizeof state);
     return sizeof state;
@@ -206,6 +217,9 @@ std::vector<PropertySchema> HartModemComponent::propertySchema() {
     udpPort.maxValue = 65535.0;
     out.push_back(udpPort);
     out.push_back(schema("auto_open", "Abrir automaticamente", "PC", "", PropertyValueKind::Bool, "checkbox", false));
+    PropertySchema connection = schema("connection", "Ligacao na linha", "HART", "", PropertyValueKind::String, "select", std::string("series"));
+    connection.options = {{"series", "Em serie no laco (transmissor)"}, {"parallel", "Em paralelo na linha (posicionador / garras)"}};
+    out.push_back(connection);
     PropertySchema resistance = schema("senseResistance", "Resistor interno (carga HART)", "HART", "Ω", PropertyValueKind::Number, "number", 250.0);
     resistance.minValue = 1.0;
     resistance.maxValue = 100000.0;
@@ -232,6 +246,7 @@ PropertyValue HartModemComponent::propertyValue(const std::string& id) const {
     if (id == "udp_address") return m_udpAddress;
     if (id == "udp_port") return static_cast<double>(m_udpPort);
     if (id == "auto_open") return m_autoOpen;
+    if (id == "connection") return std::string(m_parallel ? "parallel" : "series");
     if (id == "senseResistance") return m_senseResistance;
     if (id == "transmitAmplitudeMvpp") return m_transmitVpp * 1000.0;
     if (id == "port_open") return m_portOpenRequested;
@@ -259,6 +274,9 @@ void HartModemComponent::setPropertyValue(const std::string& id, const PropertyV
         if (pcLinkOpen()) { closePort(); openPort(); }
     } else if (id == "auto_open" && std::holds_alternative<bool>(value)) {
         m_autoOpen = std::get<bool>(value);
+    } else if (id == "connection" && std::holds_alternative<std::string>(value)) {
+        m_parallel = std::get<std::string>(value) == "parallel";
+        if (m_assigned) m_scheduler.dirtySet().insert(m_index);
     } else if (id == "senseResistance" && std::holds_alternative<double>(value)) {
         m_senseResistance = std::clamp(std::get<double>(value), 1.0, 100000.0);
         if (m_assigned) m_scheduler.dirtySet().insert(m_index);
