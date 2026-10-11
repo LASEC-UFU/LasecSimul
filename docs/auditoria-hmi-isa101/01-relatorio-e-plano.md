@@ -150,7 +150,17 @@ Foi criada uma fundação persistente para HMI: `HmiApplication` aceita páginas
 
 Cada instância de página guarda a própria geometria, separada de `ProjectComponent.visual`. Assim, adicionar uma página ou posicionar nela um elemento não muda as coordenadas atuais no canvas. Os gráficos da tela continuam referenciando os componentes do projeto, sem duplicar o dispositivo Core. O schema permanece na versão atual e o campo novo é aditivo/opcional.
 
-A autoria HMI, o modo Operar, a navegacao interna posicionavel e o redimensionamento das paginas estao disponiveis no canvas. O modo de operacao inicia na pagina inicial, oculta ferramentas de autoria e mantem leitura/estado de runtime e acoes do operador durante a simulacao. Os atalhos usam caixas calculadas em regioes livres, podem ser arrastados no modo de autoria e nao reposicionam elementos existentes. Permanecem pendentes os testes round-trip especificos para paginas.
+A autoria HMI, o modo Operar, a navegação interna posicionável e o redimensionamento das páginas estão disponíveis no canvas. O modo de operação inicia na página inicial, oculta ferramentas de autoria e mantém leitura/estado de runtime e ações do operador durante a simulação. Os atalhos usam caixas calculadas em regiões livres, podem ser arrastados no modo de autoria e não reposicionam elementos existentes. Testes round-trip de `.lsproj` e `.lssubcircuit` agora verificam IDs, páginas, overrides, navegação, validade de dados, exceções e preservação da geometria esquemática.
+## Situação da implementação em 10/10/2026
+
+O inventário e diagnóstico acima registram a auditoria de base; este resumo registra as entregas posteriores no repositório. A Fase 1 está implementada: modelo de páginas HMI e geometria por página; autoria/operação no canvas; elementos vinculados ou gráficos independentes; navegação; persistência em `.lsproj` e `.lssubcircuit`; undo/redo, cópia/cola local e round-trip preservando a geometria do esquemático.
+
+A Fase 2 tem infraestrutura para timestamp coerente de frame, estados desconectado/stale, timeout configurável, validação de fontes/canais/unidades e relatório estático. O timeout e o perfil de carga ainda dependem de valores e cenários de cada projeto, não de parâmetros universais.
+
+O HMI Design Auditor tem regras estruturais/de binding, recomendações, filtros, perfis versionados, exceções com trilha append-only e export JSON/HTML com fingerprints e redação padrão. As regras são genéricas e não afirmam mapeamento normativo.
+
+As Fases 3 a 5 não estão concluídas: ciclo de vida de alarmes/histórico, gateway de comandos com autorização/intertravamentos, tokens visuais e validação orientada por tarefas seguem como backlog. Implementá-las sem definições de processo, política de comando, retenção e perfil operacional criaria semântica arbitrária e falsa segurança. As Fases 0 e 6 exigem revisão licenciada, ambiente/operadores e aprovações externas. Não se declara que o produto inteiro está adequado ou certificado.
+
 ## Base de evidências no repositório
 
 - `project/schema/component-catalog.json`: fonte catalogada; contagens derivadas em [inventário](./03-inventario-catalogo.md).

@@ -10,4 +10,4 @@ Documentação da auditoria e plano de adequação, com a primeira fatia de mode
 - [Lista preliminar de ativos SVG](./06-lista-ativos-svg.md)
 - [Fatia implementada da Fase 1](./07-implementacao-fase1.md)
 
-A classificação normativa permanece pendente de revisão humana com texto integral autorizado. O inventário descreve somente o estado observado no repositório.
+A Fase 1, a infraestrutura de qualidade de comunicação da Fase 2 e o HMI Design Auditor estão implementados conforme descrito nos relatórios. Alarmes/histórico, gateway de comandos e validação de telas por tarefas continuam pendentes. A classificação normativa exige revisão humana com texto autorizado; a documentação distingue o inventário de base das entregas posteriores.

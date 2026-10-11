@@ -14,7 +14,7 @@ function walk(directory, options = {}) {
   const result = [];
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     if (entry.name === ".git" || entry.name === "node_modules") continue;
-    if (options.skipGenerated && ["build", "dist", "out", "out-test", "out-webview"].includes(entry.name)) continue;
+    if (options.skipGenerated && ["build", "dist", "out", "out-test", "out-webview", ".piohome"].includes(entry.name)) continue;
     const full = path.join(directory, entry.name);
     if (entry.isDirectory()) {
       if (options.skipArchive && full === path.join(specRoot, "archive")) continue;

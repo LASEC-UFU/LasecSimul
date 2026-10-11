@@ -23,6 +23,11 @@ import type { ComponentReadoutValue } from "./messages.js";
  * simulação nenhuma rodando. */
 export const GRAPHICAL_VALUE_PROPERTY = "value";
 
+/** The HMI banner is a visual threshold indicator; it does not implement an alarm lifecycle. */
+export function hasVisualOnlyAlarmSemantics(typeId: string): boolean {
+  return typeId === "graphics.hmi.alarm_banner";
+}
+
 export interface GraphicalBindingProperties {
   /** Id do componente cuja telemetria alimenta este gráfico. Vazio/ausente == sem binding. */
   bindSource?: unknown;
@@ -124,6 +129,73 @@ function numberProperty(properties: GraphicalBindingProperties, key: string, fal
 function stringProperty(properties: GraphicalBindingProperties, key: string): string {
   const raw = properties[key];
   return typeof raw === "string" ? raw.trim() : "";
+}
+
+export type GraphicalBindingUnitReview = "missing-display-unit" | "unit-mismatch" | "conversion-unverified" | "compatible";
+
+/** Static unit check for authoring diagnostics. It does not alter the runtime value or assume a
+ * conversion from a free-form unit label; non-identity scale/offset needs human review. */
+export function reviewGraphicalBindingUnit(
+  properties: GraphicalBindingProperties,
+  sourceUnit: string,
+  suffix = "",
+): GraphicalBindingUnitReview | undefined {
+  const source = sourceUnit.trim();
+  if (!source) return undefined;
+  const target = stringProperty(properties, `bindUnit${suffix}`).trim();
+  const scale = numberProperty(properties, `bindScale${suffix}`, 1);
+  const offset = numberProperty(properties, `bindOffset${suffix}`, 0);
+  if (scale !== 1 || offset !== 0) return "conversion-unverified";
+  if (target === source) return "compatible";
+  return target ? "unit-mismatch" : "missing-display-unit";
+}
+
+export type GraphicalBindingConfigurationIssue = {
+  property: string;
+  kind: "invalid-number" | "degenerate-range" | "invalid-decimals" | "limit-order";
+};
+
+/** Detects malformed engineering configuration without normalizing or changing persisted values. */
+export function reviewGraphicalBindingConfiguration(
+  properties: GraphicalBindingProperties,
+  suffix = "",
+): GraphicalBindingConfigurationIssue[] {
+  const issues: GraphicalBindingConfigurationIssue[] = [];
+  const numericKeys = ["bindScale", "bindOffset", "bindMin", "bindMax", "bindDecimals", "bindThreshold"];
+  if (!suffix) numericKeys.push("limitLL", "limitL", "limitH", "limitHH");
+  const parsed = new Map<string, number>();
+  for (const baseKey of numericKeys) {
+    const key = `${baseKey}${suffix}`;
+    const raw = properties[key];
+    if (raw === undefined || raw === "") continue;
+    const value = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw.trim()) : Number.NaN;
+    if (!Number.isFinite(value)) {
+      issues.push({ property: key, kind: "invalid-number" });
+      continue;
+    }
+    parsed.set(key, value);
+    if (baseKey === "bindDecimals" && (!Number.isInteger(value) || value < 0 || value > 6)) {
+      issues.push({ property: key, kind: "invalid-decimals" });
+    }
+  }
+  const minKey = `bindMin${suffix}`;
+  const maxKey = `bindMax${suffix}`;
+  const minimum = parsed.get(minKey) ?? (properties[minKey] === undefined || properties[minKey] === "" ? 0 : undefined);
+  const maximum = parsed.get(maxKey) ?? (properties[maxKey] === undefined || properties[maxKey] === "" ? 100 : undefined);
+  if (minimum !== undefined && maximum !== undefined && minimum === maximum) {
+    issues.push({ property: minKey, kind: "degenerate-range" });
+  }
+  if (!suffix) {
+    const limits = ["limitLL", "limitL", "limitH", "limitHH"]
+      .flatMap((key) => parsed.has(key) ? [{ key, value: parsed.get(key)! }] : []);
+    for (let index = 1; index < limits.length; index++) {
+      if (limits[index]!.value < limits[index - 1]!.value) {
+        issues.push({ property: limits[index]!.key, kind: "limit-order" });
+        break;
+      }
+    }
+  }
+  return issues;
 }
 
 function booleanProperty(properties: GraphicalBindingProperties, key: string): boolean {

@@ -247,7 +247,40 @@ export function validateHmiApplication(value: unknown): HmiApplication | undefin
       if (!pageIds.has(item.targetPageId)) throw new Error(`navegação ${item.id} referencia página inexistente: ${item.targetPageId}`);
     }
   }
-  return { startPageId, pages, ...(staleAfterMs && staleAfterMs > 0 ? { staleAfterMs } : {}) };
+  const auditExceptions = value.auditExceptions === undefined ? undefined : (() => {
+    if (!Array.isArray(value.auditExceptions)) throw new Error("hmiApplication.auditExceptions precisa ser uma lista");
+    const ids = new Set<string>();
+    return value.auditExceptions.map((raw, index) => {
+      const context = `hmiApplication.auditExceptions[${index}]`;
+      if (!isObject(raw)) throw new Error(`${context} invalida`);
+      const id = asString(raw.id), findingKey = asString(raw.findingKey), ruleId = asString(raw.ruleId);
+      const pageId = asString(raw.pageId), action = asString(raw.action), reviewer = asString(raw.reviewer);
+      const reason = asString(raw.reason), recordedAt = asString(raw.recordedAt);
+      const elementId = asString(raw.elementId);
+      const expectedFindingKey = ruleId && pageId ? JSON.stringify([ruleId, pageId, elementId ?? ""]) : undefined;
+      if (!id || ids.has(id) || !findingKey || findingKey !== expectedFindingKey || !ruleId || !pageId || !reviewer || !reviewer.trim() || !reason || !reason.trim()
+          || !recordedAt || !Number.isFinite(Date.parse(recordedAt)) || (action !== "accepted" && action !== "revoked")) {
+        throw new Error(`${context} contem campos obrigatorios invalidos ou id duplicado`);
+      }
+      ids.add(id);
+      const expiresAt = raw.expiresAt === undefined ? undefined : asString(raw.expiresAt);
+      if (expiresAt !== undefined && !Number.isFinite(Date.parse(expiresAt))) throw new Error(`${context}.expiresAt invalido`);
+      if (action === "revoked" && expiresAt !== undefined) throw new Error(`${context}: revogacao nao aceita expiresAt`);
+      return { id: id!, findingKey: findingKey!, ruleId: ruleId!, pageId: pageId!, ...(elementId ? { elementId } : {}), ...(asString(raw.componentId) ? { componentId: asString(raw.componentId)! } : {}), action: action as "accepted" | "revoked", reviewer: reviewer!.trim(), reason: reason!.trim(), recordedAt: recordedAt!, ...(expiresAt ? { expiresAt } : {}) };
+    });
+  })();
+  const auditRuleProfile = value.auditRuleProfile === undefined ? undefined : (() => {
+    const raw = value.auditRuleProfile;
+    if (!isObject(raw) || raw.schemaVersion !== 1 || !Array.isArray(raw.disabledRuleIds)) throw new Error("hmiApplication.auditRuleProfile invalido");
+    const name = asString(raw.name), version = asNumber(raw.version);
+    if (!name?.trim() || version === undefined || !Number.isInteger(version) || version < 1
+        || raw.disabledRuleIds.some((id) => typeof id !== "string" || !id.trim())
+        || new Set(raw.disabledRuleIds).size !== raw.disabledRuleIds.length) {
+      throw new Error("hmiApplication.auditRuleProfile precisa de nome, versao positiva e IDs unicos");
+    }
+    return { schemaVersion: 1 as const, name: name.trim(), version, disabledRuleIds: raw.disabledRuleIds as string[] };
+  })();
+  return { startPageId, pages, ...(staleAfterMs && staleAfterMs > 0 ? { staleAfterMs } : {}), ...(auditExceptions ? { auditExceptions } : {}), ...(auditRuleProfile ? { auditRuleProfile } : {}) };
 }
 
 function validateWire(wire: unknown, index: number): ProjectWire {

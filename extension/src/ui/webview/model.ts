@@ -1153,6 +1153,31 @@ export interface HmiApplication {
   pages: HmiPage[];
   /** Sem nova amostra de frame por este intervalo durante Run, bindings configurados aparecem como stale. Ausente/desativado nao inventa prazo. */
   staleAfterMs?: number;
+  /** Registro append-only das decisões de revisão dos achados da auditoria HMI. */
+  auditExceptions?: HmiAuditExceptionEvent[];
+  /** Perfil local versionado do conjunto de regras do auditor. */
+  auditRuleProfile?: HmiAuditRuleProfile;
+}
+
+export interface HmiAuditRuleProfile {
+  schemaVersion: 1;
+  name: string;
+  version: number;
+  disabledRuleIds: string[];
+}
+
+export interface HmiAuditExceptionEvent {
+  id: string;
+  findingKey: string;
+  ruleId: string;
+  pageId: string;
+  elementId?: string;
+  componentId?: string;
+  action: "accepted" | "revoked";
+  reviewer: string;
+  reason: string;
+  recordedAt: string;
+  expiresAt?: string;
 }
 
 /** Encontra uma caixa inicial livre para um atalho HMI sem mover nenhum elemento existente. */

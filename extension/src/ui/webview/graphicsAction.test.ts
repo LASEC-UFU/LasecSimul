@@ -1,6 +1,7 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
 import {
   graphicalActionConfig,
+  graphicalActionDisplayValue,
   isGraphicalActionTypeId,
   parseGraphicalActionValue,
   resolveGraphicalActionValue,
@@ -25,6 +26,9 @@ import {
     const config = graphicalActionConfig({ actionTarget: "dist", actionProperty: "enabled", actionMode: "toggle", actionValue: "true", actionReleaseValue: "false" })!;
     assert(resolveGraphicalActionValue(config, false, "activate") === true, "toggle desligado deveria ligar");
     assert(resolveGraphicalActionValue(config, true, "activate") === false, "toggle ligado deveria desligar");
+    const numericCommand = graphicalActionConfig({ actionTarget: "source", actionProperty: "voltage", actionMode: "toggle", actionValue: 0, actionReleaseValue: 5 })!;
+    assert(graphicalActionDisplayValue(numericCommand, 0, "activate") === 100, "estado visual ligado deve ser independente do comando numerico 0");
+    assert(graphicalActionDisplayValue(numericCommand, 5, "activate") === 0, "estado visual desligado deve acompanhar o valor de repouso configurado");
   });
 
   await test("momentâneo separa pressionar de soltar", () => {
@@ -32,6 +36,7 @@ import {
     assert(resolveGraphicalActionValue(config, "HOLD", "press") === "OPEN", "press deveria escrever comando");
     assert(resolveGraphicalActionValue(config, "OPEN", "release") === "HOLD", "release deveria escrever repouso");
     assert(resolveGraphicalActionValue(config, "HOLD", "activate") === undefined, "activate isolado não serve para momentâneo");
+    assert(graphicalActionDisplayValue(config, "OPEN", "press") === 100 && graphicalActionDisplayValue(config, "HOLD", "release") === 0, "widget momentaneo deve refletir pressionado/solto mesmo com comandos textuais");
   });
 
   await test("incremento respeita limites", () => {

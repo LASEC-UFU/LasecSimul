@@ -108,6 +108,20 @@ export function resolveGraphicalActionValue(
   return config.value;
 }
 
+/** Map a committed command to the widget's local visual state without assuming
+ * that the process command value itself is a percentage (e.g. a toggle may
+ * command 0/5 V while its own indication must be off/on). */
+export function graphicalActionDisplayValue(
+  config: GraphicalActionConfig,
+  nextValue: GraphicalActionValue,
+  phase: GraphicalActionPhase,
+): number | undefined {
+  if (config.mode === "toggle") return sameActionValue(nextValue, config.value) ? 100 : 0;
+  if (config.mode === "momentary") return phase === "release" ? 0 : phase === "press" ? 100 : undefined;
+  if (typeof nextValue === "boolean") return nextValue ? 100 : 0;
+  return typeof nextValue === "number" ? nextValue : undefined;
+}
+
 export function isGraphicalActionTypeId(typeId: string): boolean {
   return ACTION_TYPES.has(typeId);
 }

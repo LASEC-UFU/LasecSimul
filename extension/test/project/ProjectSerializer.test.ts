@@ -2,7 +2,7 @@ import * as assert from "assert";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import { ProjectSerializer } from "../../src/project/ProjectSerializer";
+import { ProjectSerializer, validateHmiApplication } from "../../src/project/ProjectSerializer";
 import { createEmptyProject, LS_PROJ_SCHEMA_VERSION } from "../../src/project/ProjectTypes";
 import { resolveProjectSourcePaths } from "../../src/project/projectPathPolicy";
 
@@ -20,6 +20,33 @@ import { resolveProjectSourcePaths } from "../../src/project/projectPathPolicy";
   assert.strictEqual(loaded.schemaVersion, 2);
   assert.strictEqual(loaded.components.length, 0);
   assert.strictEqual(loaded.wires.length, 0);
+
+  const auditProject = createEmptyProject();
+  const auditHmi = {
+    startPageId: "home",
+    staleAfterMs: 4500,
+    auditRuleProfile: { schemaVersion: 1 as const, name: "Linha A", version: 3, disabledRuleIds: ["HMI.ALARM.VISUAL_ONLY", "plugin.site.rule"] },
+    pages: [
+      { id: "home", name: "Overview", width: 1280, height: 720, elements: [
+        { id: "pump-projection", componentId: "pump-1", label: "P-101", properties: { bindSource: "tag.pressure", bindUnit: "kPa" }, visual: { x: 117, y: 203, width: 184, height: 96, rotation: 90 as const } },
+        { id: "trend-independent", typeId: "graphics.hmi.trend", label: "Pressure trend", visual: { x: 420, y: 96, width: 520, height: 240, rotation: 0 as const } },
+      ], navigation: [{ id: "nav-detail", label: "Details", targetPageId: "detail", visual: { x: 1080, y: 650, width: 160, height: 36 } }] },
+      { id: "detail", name: "Detail", width: 1280, height: 720, elements: [] },
+    ],
+    auditExceptions: [{ id: "audit-1", findingKey: '["HMI.TEST","home","el1"]', ruleId: "HMI.TEST", pageId: "home", elementId: "el1", action: "accepted" as const, reviewer: "Ana", reason: "Excecao operacional aprovada", recordedAt: "2026-10-10T12:00:00.000Z", expiresAt: "2027-01-01T23:59:59.999Z" }],
+  };
+  auditProject.components.push({ id: "pump-1", typeId: "instrument.pressure", properties: { range: 0 }, visual: { x: 137, y: 281, rotation: 180 } });
+  auditProject.hmiApplication = auditHmi;
+  const auditPath = path.join(tmpDir, "audit-exceptions.lsproj");
+  await serializer.save(auditPath, auditProject);
+  const auditRoundTrip = await serializer.load(auditPath);
+  assert.deepStrictEqual(auditRoundTrip.hmiApplication?.pages, auditHmi.pages, "paginas, ids, ordem/camadas, bindings e geometria HMI devem sobreviver sem reposicionamento");
+  assert.deepStrictEqual(auditRoundTrip.components.map(({ id, visual }) => ({ id, visual })), [{ id: "pump-1", visual: { x: 137, y: 281, rotation: 180 } }], "round-trip HMI nao pode mudar a geometria dos componentes no projeto");
+  assert.strictEqual(auditRoundTrip.hmiApplication?.staleAfterMs, 4500, "politica de stale deve sobreviver ao round-trip");
+  assert.deepStrictEqual(auditRoundTrip.hmiApplication?.auditRuleProfile, auditHmi.auditRuleProfile, "perfil versionado e regras extras devem sobreviver ao round-trip");
+  assert.deepStrictEqual(auditRoundTrip.hmiApplication?.auditExceptions, auditHmi.auditExceptions, "trilha de excecoes deve sobreviver ao round-trip do projeto");
+  assert.throws(() => validateHmiApplication({ ...auditHmi, auditExceptions: [{ ...auditHmi.auditExceptions[0], reviewer: " ", reason: "" }] }), /campos obrigatorios invalidos/);
+  assert.throws(() => validateHmiApplication({ ...auditHmi, auditRuleProfile: { ...auditHmi.auditRuleProfile, disabledRuleIds: ["R1", "R1"] } }), /IDs unicos/);
 
   const invalidSchemaPath = path.join(tmpDir, "invalid-schema.lsproj");
   await fs.writeFile(invalidSchemaPath, JSON.stringify({ ...project, schemaVersion: 999 }), "utf8");

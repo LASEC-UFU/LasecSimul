@@ -13,11 +13,19 @@ Esta primeira fatia estabelece persistência de um modelo HMI opcional no `.lspr
 
 A barra do editor agora permite criar uma página HMI a partir da seleção. Cada item fica em sua cena/página própria; o esquemático não é movido nem tem suas propriedades alteradas. A dimensão inicial é 1920 × 1080.
 
+O `Verificar HMI` também valida a integridade estrutural dos elementos locais: IDs únicos por página e geometria com coordenadas finitas e tamanho positivo. Elementos malformados recebem achado próprio antes da checagem de viewport; referências e posição dos símbolos no esquemático permanecem inalteradas.
+
 A autoria HMI foi integrada como modo de cena no canvas existente, seguindo a separação Circuito/Símbolo/Ícone. A barra permite selecionar páginas, criar, renomear, excluir e definir a inicial. O modo usa posições por elemento e por página; pode incluir projeções ligadas a componentes internos ou elementos gráficos independentes da paleta. As mudanças de posição e propriedades ficam na página HMI, sem alterar `components[].x/y` nem as propriedades do esquemático. O HMI é persistido no `.lsproj` e também no `.lssubcircuit`, com snapshot de alterações da sessão.
 
 A copia/cola e a duplicacao por arrasto no modo HMI criam ocorrencias locais na pagina, preservam a referencia ao componente de origem quando existe e nao inserem dispositivos ou fios no circuito. Propriedades locais sao gravadas como diferencas, de modo que leituras/runtime nao editados continuam vindo do componente vinculado.
 
-A exposicao visual de componentes no simbolo (`exposedComponents`) e a exportacao de propriedades (`exportedPropertyComponentIds`) continuam conceitos independentes. A autoria HMI permite criar paginas, selecionar, renomear, excluir e definir a inicial; posicionar, redimensionar e editar elementos locais; criar atalhos para outras paginas. A navegacao aparece no canvas e pode ser arrastada sem mover os elementos existentes; uma faixa na barra oferece retorno a edicao e saida do HMI. O modo Operar inicia na pagina inicial, oculta controles de autoria e mantem as projecoes atualizadas com leituras/estados de runtime; acoes de operador atuam quando a simulacao esta rodando. Excluir uma pagina remove os atalhos de entrada. Permanecem pendentes testes round-trip especificos. Nenhum teste foi adicionado ou executado nesta etapa.
+A exposição visual de componentes no símbolo (`exposedComponents`) e a exportação de propriedades (`exportedPropertyComponentIds`) continuam conceitos independentes. A autoria HMI permite criar páginas, selecionar, renomear, excluir e definir a inicial; posicionar, redimensionar e editar elementos locais; criar atalhos para outras páginas. A navegação aparece no canvas e pode ser arrastada sem mover os elementos existentes; uma faixa na barra oferece retorno à edição e saída do HMI. O modo Operar inicia na página inicial, oculta controles de autoria e mantém as projeções atualizadas com leituras/estados de runtime; ações de operador atuam quando a simulação está rodando. Excluir uma página remove os atalhos de entrada.
+
+## Persistência verificada
+
+Round-trip em `.lsproj` e `.lssubcircuit` cobre páginas e destinos, ordem dos elementos, elementos vinculados e independentes, overrides locais, rotações, geometria dos atalhos, stale timeout e eventos de exceção da auditoria. A regressão compara também as coordenadas dos componentes do subcircuito antes/depois, confirmando que os dados HMI não deslocam o esquemático.
+
+Verificação desta etapa: `ProjectSerializer.test.ts` passou; `subcircuitDocument.test.ts` passou (13 casos); `hmiAudit.test.ts` passou (12 casos, cobrindo todos os IDs de regras). `npm test` passou (exit code 0), incluindo perfis versionados, fingerprints, HART, PLC Build, IL e SFC lowering, além da matriz IEC 61131/browser pós-teste.
 
 
 
@@ -36,3 +44,11 @@ Depois de selecionar uma origem, `bindChannel` vira um seletor limitado aos cana
 A barra de autoria HMI inclui `Verificar HMI`, que percorre todas as páginas e informa referências de componente removidas, fontes inexistentes, fontes sem `readoutFormat`, canais fora da faixa publicada (inclusive canal diferente de zero em fonte escalar), controles sem alvo/propriedade de ação válidos, destinos de navegação inválidos, páginas sem caminho desde a inicial, IDs de página duplicados ou página inicial ausente, dimensões inválidas e elementos fora dos limites da página. Problemas estruturais/de binding são separados de avisos de rota/viewport. Cada achado ligado a um elemento abre a página correspondente e seleciona o elemento quando ainda existe na cena, inclusive quando sua referência ao componente esquemático foi removida. A verificação é informativa e não altera propriedades, layout ou autorização de operação; páginas sem binding configurado são válidas como composição estática. Coordenadas fora dos limites são reportadas, nunca corrigidas automaticamente.
 
 Nos widgets com ação, os campos `actionTarget` e `actionProperty` podem selecionar componentes existentes e propriedades disponíveis/gravadáveis segundo o schema e as propriedades do alvo. IDs visíveis distinguem componentes homônimos; valores legados inválidos permanecem visíveis para correção. A ação continua sendo uma escrita genérica de propriedade e não implementa permissivos, autorização ou confirmação industrial.
+
+## Continuidade da Fase 2 - revisao de unidades e faixas
+
+O `Verificar HMI` compara a unidade declarada por fontes escalares com `bindUnit` de cada sinal do widget. Rotulo ausente ou unidade diferente sem escala/offset gera aviso; qualquer escala/offset nao neutro gera aviso de conversao nao verificada, mesmo quando os rotulos coincidem. Unidade igual so e considerada compativel quando escala=1 e offset=0. O diagnostico nao converte valores nem altera limites.
+
+A verificacao tambem reporta parametros numericos nao finitos, casas decimais fora de 0..6, faixa de engenharia degenerada e limites LL/L/H/HH fora de ordem. Faixas invertidas continuam aceitas para escalas de acao reversa. Valores nao sao corrigidos automaticamente. Fontes multicanal sem unidade declarada continuam sem conclusao automatica.
+
+`reviewGraphicalBindingUnit` e `reviewGraphicalBindingConfiguration` sao funcoes puras cobertas em `graphicsBinding.test.ts` (15 casos passam).

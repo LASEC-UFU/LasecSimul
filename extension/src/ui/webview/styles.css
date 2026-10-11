@@ -1088,8 +1088,45 @@ rect.meter-expand-button:hover {
   overflow: auto;
 }
 
+.hmi-audit-results__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.hmi-audit-results__filters[hidden],
+.hmi-audit-results__list[hidden] {
+  display: none;
+}
+
+.hmi-audit-results__filters select {
+  max-width: 100%;
+  min-width: 150px;
+  padding: 5px;
+  color: var(--vscode-dropdown-foreground, inherit);
+  background: var(--vscode-dropdown-background, transparent);
+  border: 1px solid var(--vscode-dropdown-border, #888);
+}
+
 .hmi-audit-results__list h3 {
   margin: 10px 0 2px;
+}
+
+.hmi-audit-results__export {
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  background: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #fff);
+  cursor: pointer;
+}
+
+.hmi-audit-results__export:hover,
+.hmi-audit-results__export:focus-visible {
+  background: var(--vscode-button-hoverBackground, #1177bb);
+  outline: 2px solid var(--vscode-focusBorder, #007acc);
+  outline-offset: 1px;
 }
 
 .hmi-audit-results__finding {
@@ -1100,6 +1137,65 @@ rect.meter-expand-button:hover {
   color: var(--vscode-button-secondaryForeground, #111);
   text-align: left;
   cursor: pointer;
+}
+
+.hmi-audit-results__finding-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.hmi-audit-results__finding-copy {
+  min-width: 0;
+}
+
+.hmi-audit-results__recommendation {
+  margin: 4px 8px 8px;
+  font-size: .9em;
+  color: var(--vscode-descriptionForeground, #666);
+}
+
+.hmi-audit-results__decision {
+  flex: 0 0 auto;
+  padding: 7px 9px;
+  border: 1px solid var(--vscode-button-border, #888);
+  background: var(--vscode-button-secondaryBackground, #ddd);
+  color: var(--vscode-button-secondaryForeground, #111);
+  cursor: pointer;
+}
+
+.hmi-audit-results__decision:hover,
+.hmi-audit-results__decision:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder, #007acc);
+  outline-offset: 1px;
+}
+
+.hmi-audit-results__profile {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--vscode-panel-border, #888);
+}
+
+.hmi-audit-results__profile summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.hmi-audit-results__profile-rules {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 4px 12px;
+  max-height: 220px;
+  overflow: auto;
+  margin: 8px 0;
+}
+
+.hmi-audit-results__profile-rules label {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  overflow-wrap: anywhere;
 }
 
 .hmi-audit-results__finding:hover,

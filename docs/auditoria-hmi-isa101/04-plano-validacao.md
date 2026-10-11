@@ -1,4 +1,4 @@
-﻿# Plano de validação e resultados desta auditoria
+# Plano de validação e resultados desta auditoria
 
 ## Evidência já executada
 
@@ -67,3 +67,49 @@ Todos os critérios quantitativos devem ser definidos por processo, ambiente, op
 ## Lacunas da validação presente
 
 Não houve E2E de click-to-Core via browser, sessão de operador, testes de autorização (não há modelo observado), navegação entre páginas, perda/reconexão de canal, carga/performance instrumentada, teste formal de usabilidade, validação de símbolos contra edição licenciada, nem root cause dos avisos MNA. A imagem `hmi-widget-sheet.png` comprova somente a renderização pontual. Portanto os testes verdes sustentam capacidades delimitadas, não conformidade.
+
+## Continuidade da Fase 2 - unidades de binding
+
+| Verificacao | Resultado | Escopo e limite |
+|---|---|---|
+| `graphicsBinding.test.ts` focado em binding, unidades e configuracao | 16 casos passaram, 0 falharam | Inclui a classificacao da tarja de alarme como indicacao visual; conversao dimensional nao e inferida. |
+| `npm test` apos a checagem de unidade | Passou, exit code 0 | Suite configurada da extensao, incluindo compilacao da Webview, host e testes; nao substitui validacao de processo. |
+| `tsc --noEmit -p ./tsconfig.webview.json` | Passou, exit code 0 | Confirma compilacao estatica do editor/verificador HMI. |
+| `npm test` apos aviso da tarja visual | Passou, exit code 0 | Suite completa configurada da extensao; inclui regressao do verificador e os testes de HART/PLC ja presentes no HEAD. |
+| `hmiAudit.test.ts` | 7 passaram, 0 falharam | Motor puro e export: entrada estatica, referencia/canal/unidade/rota, escopo de componente (inclusive referencia quebrada), tarja visual, filtros, nao mutacao, determinismo, privacidade JSON e escaping HTML. |
+| `npm test` apos extracao do motor de auditoria | Passou, exit code 0 | Compila host e Webview, executa a suite completa da extensao e inclui `hmiAudit.test.ts`, HART e PLC. |
+| `npm test` apos export JSON | Passou, exit code 0 | Inclui compilacao da Webview/extensao, suite completa e o teste do formato de exportacao. |
+| `npm test` apos export HTML | Passou, exit code 0 | HTML acessivel e autocontido; o teste confirma que textos dinamicos sao escapados. |
+| `npm test` apos filtros da lista | Passou, exit code 0 | Inclui compilacao host/Webview, regressao dos filtros e suite com HART/PLC. |
+| `git diff --check` | Passou | Sem erros de whitespace nas alteracoes atuais. Git reportou apenas avisos de conversao LF/CRLF do checkout Windows. |
+
+## Excecoes auditaveis e filtro por status
+
+- Cada excecao registra evento append-only ligado a regra, pagina e elemento HMI, com responsavel declarado, justificativa, data e validade opcional. Revogar adiciona evento novo e mantem a trilha anterior.
+- O filtro apresenta achados em aberto, com excecao, vencidos ou revogados; as exportacoes JSON e HTML incluem status e decisao.
+- Cobertura adicionada para vinculo/status da excecao, filtro e round-trip `.lsproj`, incluindo rejeicao de justificativa/responsavel vazios.
+- O registro nao autentica o responsavel: identidade e permissao dependem de controles externos do ambiente.
+- Perfil local versionado permite habilitar/desabilitar cada regra por ID; IDs desativados, inclusive extensões desconhecidas, aparecem nos relatórios. Versão do perfil avança somente quando há mudança.
+- Perfil é salvo junto à aplicação HMI em `.lsproj`/`.lssubcircuit`; validação rejeita nome/versão/IDs duplicados inválidos.
+- `hmiAudit.test.ts`: 12 passaram, incluindo chave genérica, última decisão, vencimento com relógio controlado, filtros, perfil versionado, fingerprints, exportação da trilha e pelo menos um fixture para cada ID de regra registrado.
+- O motor recebe o instante de avaliação explicitamente; chamadas iguais com o mesmo instante continuam determinísticas também para exceções vencidas.
+- Exportação redige textos do projeto por padrão; nomes, mensagens dinâmicas e justificativas de exceção só entram após opt-in explícito. Teste cobre os dois modos.
+- `ProjectSerializer.test.ts`: passou com round-trip `.lsproj` e rejeição de responsável/justificativa vazios; `tsc -p ./tsconfig.test.json --noEmit` também passou.
+- `npm test`: passou, exit code 0, incluindo perfis de regras, exceções, fingerprints SHA-256 e round-trip HMI em projetos/subcircuitos. Inclui compilação host/Webview, persistência, HART (11 casos), PLC Build, IL e SFC lowering, mais o pós-teste IEC 61131/browser cross-language.
+- `subcircuitDocument.test.ts`: 13 passaram, 0 falharam; o caso HMI confere igualdade estrutural sem depender da ordem das chaves JSON e preserva posições/rotações dos componentes esquemáticos.
+- `git diff --check`: passou; apenas avisos de conversão LF/CRLF do checkout Windows.
+
+## Continuidade — integridade geométrica e identidade dos elementos
+
+- O auditor detecta IDs duplicados de elementos e atalhos dentro da mesma página e geometrias com coordenadas não finitas ou largura/altura não positivas. A verificação de viewport só roda para geometria válida, evitando classificar `NaN`/infinito como um simples elemento fora da página. Duplicidade e alcançabilidade usam mapas lineares no volume de dados.
+- `hmiAudit.test.ts`: fixture positivo incluído para cada novo ID; o contrato do teste garante cobertura de todo o registro genérico de regras.
+- Compilação da extensão e Webview, `tsc -p ./tsconfig.test.json` e `hmiAudit.test.ts`: passaram; 12 grupos de teste, incluindo um fixture acionador para cada regra registrada.
+- `npm test` em `extension`: passou, exit code 0, após as mudanças; incluiu compilação host/Webview, suíte completa configurada, HART, PLC Build/IL/SFC/LD e matriz IEC 61131/browser pós-teste. Essa passagem não substitui revisão humana normativa nem validação com operadores.
+- `git diff --check`: passou nesta continuidade.
+
+## Continuidade — estado visual do comando HMI
+
+- O E2E de conexão revelou que um toggle poderia comandar um valor numérico (por exemplo 0/5 V) que coincidia com o próprio `value` visual inicial do controle, deixando o alvo atualizado e o controle aparentemente inalterado.
+- A interpretação foi centralizada em `graphicalActionDisplayValue`: toggles refletem ativo/inativo pelos valores configurados; momentâneos refletem pressionado/solto; comandos set/increment continuam refletindo booleano ou valor numérico. A mesma função atende canvas e overlays de subcircuito, sem caminho específico por dispositivo.
+- `graphicsAction.test.ts`: 7 passaram; inclui toggle numérico e comando momentâneo textual. `hmiAudit.test.ts`: 12 passaram. Compilação host/Webview e testes TypeScript passaram.
+- `npm run test:connections:e2e`: passou; verificou o caminho de conexão e ação HMI até a atualização do alvo e do desenho do controle.

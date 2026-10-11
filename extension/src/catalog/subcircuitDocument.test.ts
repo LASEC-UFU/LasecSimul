@@ -16,6 +16,15 @@ function signalTunnel(id: string, name: string, direction: "Input" | "Output"): 
   return { id, typeId: "connectors.signal_tunnel", properties: { name, direction, valueType: "Real", unit: "V" }, visual: { x: 0, y: 0, rotation: 0 } };
 }
 
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([left], [right]) => left.localeCompare(right));
+    return `{${entries.map(([key, child]) => `${JSON.stringify(key)}:${stableJson(child)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "undefined";
+}
+
 function fullDocument(): SubcircuitDocument {
   return {
     schemaVersion: SUBCIRCUIT_SCHEMA_VERSION,
@@ -97,6 +106,32 @@ function fullDocument(): SubcircuitDocument {
       assert(reparsed.document.symbolMode === "generic", "symbolMode deveria sobreviver ao round-trip");
       assert(reparsed.document.icon?.width === 24, "icon deveria sobreviver ao round-trip");
     }
+  });
+
+  await test("round-trip HMI embutido preserva paginas, elementos, overrides, navegacao, excecoes e coordenadas do esquema", () => {
+    const original: SubcircuitDocument = {
+      ...fullDocument(),
+      hmiApplication: {
+        startPageId: "overview",
+        staleAfterMs: 3200,
+        auditRuleProfile: { schemaVersion: 1, name: "Celula A", version: 2, disabledRuleIds: ["HMI.PAGE.UNREACHABLE"] },
+        pages: [
+          { id: "overview", name: "Visao geral", width: 1440, height: 900, elements: [
+            { id: "motor-view", componentId: "r1", label: "R-1", properties: { bindSource: "tag.speed", bindUnit: "rpm" }, visual: { x: 135, y: 245, width: 210, height: 118, rotation: 270 } },
+            { id: "trend", typeId: "graphics.hmi.trend", visual: { x: 520, y: 120, width: 480, height: 300, rotation: 0 } },
+          ], navigation: [{ id: "to-detail", label: "Detalhe", targetPageId: "detail", visual: { x: 1240, y: 820, width: 150, height: 34 } }] },
+          { id: "detail", name: "Detalhe", width: 1440, height: 900, elements: [] },
+        ],
+        auditExceptions: [{ id: "audit-e1", findingKey: '["HMI.ELEMENT.OUT_OF_BOUNDS","overview","motor-view"]', ruleId: "HMI.ELEMENT.OUT_OF_BOUNDS", pageId: "overview", elementId: "motor-view", componentId: "r1", action: "accepted", reviewer: "Engenharia", reason: "layout historico revisado", recordedAt: "2026-10-10T12:00:00.000Z" }],
+      },
+    };
+    const originalSchematicCoordinates = original.components.map((component) => ({ id: component.id, visual: component.visual }));
+    const raw = serializeSubcircuitDocument(original);
+    const reparsed = parseSubcircuitDocument(raw, "/tmp");
+    assert(reparsed.ok, "subcircuito serializado com HMI deveria continuar valido");
+    if (!reparsed.ok) return;
+    assert(stableJson(reparsed.document.hmiApplication) === stableJson(original.hmiApplication), "conteudo HMI deve sobreviver integralmente ao round-trip");
+    assert(stableJson(reparsed.document.components.map((component) => ({ id: component.id, visual: component.visual }))) === stableJson(originalSchematicCoordinates), "posicao/rotacao dos simbolos do esquematico nao pode mudar com HMI");
   });
 
   await test("topology.conductors[].vertices grava/lê como 'points' no arquivo (convenção real do .lssubcircuit), nunca vira undefined", () => {

@@ -1,10 +1,14 @@
-﻿# Especificação proposta: HMI Design Auditor
+# Especificação proposta: HMI Design Auditor
 
 ## Estado do protótipo no produto
 
-O editor já oferece a ação `Verificar HMI` na barra de autoria. Ela verifica referências de componente ausentes, bindings para fontes inexistentes ou sem `readoutFormat`, índices de canal inválidos, destinos de navegação inexistentes, páginas inalcançáveis desde a inicial, controles sem alvo e propriedade de ação válidos, dimensões inválidas, IDs de página duplicados e elementos/atalhos que ultrapassam o viewport. O resultado é informativo; os achados navegáveis abrem a página e selecionam o elemento existente, inclusive quando sua referência de componente está quebrada. A checagem não move elementos, altera bindings, bloqueia operação ou declara conformidade.
+O editor já oferece a ação `Verificar HMI` na barra de autoria. Ela verifica referências de componente ausentes, bindings para fontes inexistentes ou sem `readoutFormat`, índices de canal inválidos, destinos de navegação inexistentes, páginas inalcançáveis desde a inicial, controles sem alvo e propriedade de ação válidos, dimensões inválidas, IDs duplicados de página/elemento/atalho e elementos/atalhos que ultrapassam o viewport. Para elementos e atalhos, coordenadas precisam ser finitas e largura/altura positivas; geometrias inválidas não são confundidas com posição fora da página. IDs repetidos são tratados no escopo da página e não se seleciona arbitrariamente uma ocorrência. A análise de duplicidade e alcance usa mapas lineares no volume de objetos, evitando comparações quadráticas no projeto. O resultado é informativo; os achados navegáveis abrem a página e selecionam o elemento existente, inclusive quando sua referência de componente está quebrada. A checagem não move elementos, altera bindings, bloqueia operação ou declara conformidade.
 
-Isso cobre um subconjunto estrutural da primeira etapa abaixo. Os achados navegáveis abrem a página correspondente e selecionam o elemento quando ele ainda existe na cena. Ainda não há motor puro reutilizável, perfil versionado de regras, relatório JSON/HTML, verificação de unidade, análise de ações de operador ou exceções auditáveis. Esses itens permanecem como trabalho futuro.
+Isso cobre um subconjunto estrutural da primeira etapa. O auditor verifica bindings, navegação, limites, faixas numéricas, ordem dos limites, unidades escalares, estruturas de página e ações de operador. Unidades iguais sem conversão são aceitas; unidades ausentes ou divergentes sem escala/offset geram aviso; transformações não são declaradas compatíveis automaticamente e exigem revisão humana. As regras estão em `hmiAudit.ts`, um motor que recebe aplicação, componentes e catálogo e devolve achados com IDs estáveis. A interface exporta relatórios JSON e HTML autocontidos (schema de relatório v2) e limitados a metadados/achados. Exceções auditáveis por regra/página/elemento, filtros por status, perfis locais versionados e fingerprints SHA-256 canônicos das entradas de auditoria e do catálogo já estão implementados. O pacote de evidências não é assinado e não autentica a origem dos arquivos.
+
+`hmiAudit.test.ts` cobre composição estática, referências quebradas, canal e unidade, páginas inalcançáveis, indicação visual de alarmes, ausência de mutação, filtros, perfis, fingerprints e contratos JSON/HTML e exceções. Um fixture exercita cada ID de regra registrado. O instante de avaliação é uma entrada explícita do motor, inclusive para validade de exceções. O HTML usa marcação semântica e escapa todos os textos dinâmicos. A interface apresenta justificativa e próximo passo, exporta e navega os achados; fornece ao motor a lista de propriedades editáveis dos alvos de ação. A lista permite filtrar por página, componente, regra, severidade e status. As regras habilitáveis têm IDs genéricos; IDs extras de plugins são preservados e reportados, mesmo sem implementação local conhecida.
+
+O auditor tambem avisa quando `graphics.hmi.alarm_banner` aparece numa pagina. A tarja compara valores com limites configurados e apresenta uma indicacao visual; ela nao implementa prioridade, reconhecimento, historico ou servico de alarmes. O aviso e informativo e nao altera o widget.
 
 ## Objetivo e limite
 
@@ -14,7 +18,7 @@ Ferramenta de análise estática de um projeto HMI que encontra inconsistências
 
 **Entrada:** `.lsproj` e futuro manifesto HMI versionado; catálogo usado; perfil de viewport/projeto; perfil de regras controlado; baseline opcional de tags, unidades e componentes aprovados.
 
-**Saída:** relatório JSON e HTML acessível, com regra e versão, severidade de engenharia, confiança, página/componente/caminho, valor observado, justificativa, recomendação, referência de evidência e opção de exceção assinada. Exportação não inclui texto protegido da norma. IDs de requisito e conteúdo normativo só podem vir de registro local autorizado e são administrados pelo responsável competente.
+**Saída:** relatório JSON e HTML acessível (schema v2), com regra/versão, severidade de engenharia, confiança da detecção, caminho de evidência, recomendação, disponibilidade de auto-fix, perfil ativo e fingerprints SHA-256 das entradas. A exportação redige por padrão nomes, mensagens dinâmicas e justificativas de exceção; o operador pode optar por incluí-los após confirmação. As regras atuais declaram explicitamente que não têm correção automática; o caminho de evidência preserva IDs técnicos, não valores brutos. O export não inclui texto protegido da norma nem assinatura digital. IDs de requisito e conteúdo normativo só podem vir de registro local autorizado e são administrados pelo responsável competente.
 
 ## Esquema de achado
 
@@ -57,7 +61,11 @@ O auditor não calcula aceitabilidade de alarme, segurança de processo, qualida
 
 ## UX do relatório
 
-- Filtros por página, componente, regra, severidade de engenharia e status.
+- Filtros por página, componente, regra, severidade e status implementados. Status: em aberto, com exceção, exceção vencida e exceção revogada.
+- Exceção append-only vinculada à chave estável regra/página/elemento; exige responsável e justificativa, aceita validade opcional e registra data. Revogação cria novo evento sem apagar a decisão anterior.
+- A trilha acompanha o documento HMI em `.lsproj` e `.lssubcircuit`, aparece nas exportações JSON/HTML e é preservada em undo/redo.
+- O nome do responsável é informado pelo operador; este recurso registra a atribuição declarada, mas não autentica identidade nem substitui controle de acesso ou assinatura digital.
+- O perfil ativo salvo com o HMI tem `schemaVersion`, nome, versão e IDs desativados. A interface lista regras genéricas; regras adicionais/desconhecidas são preservadas e também aparecem no relatório. As exportações registram o perfil e fingerprints SHA-256 das entradas analisadas, sem incluir o conteúdo bruto.
 - Saltar para componente no editor, destaque sem alterar o documento.
 - Explicação curta que diga o fato observado e o próximo passo.
 - Ações de correção apenas para transformação determinística e reversível, com preview e undo; sem escrita automática em regras protegidas.

@@ -2,7 +2,8 @@ import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, 
 import { CanonicalEndpoint, CanonicalTopologyDocument, HmiApplication, HmiPage, HmiPageElement, InteractionKindEntry, McuSerialPortEntry, PackagePin, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, defaultHmiNavigationVisual, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
 import { reorderedZOrder, zOrderModeForKey, type ZOrderMode } from "./zOrder.js";
 import { graphicalRuntimeProperties, isGraphicalTypeId } from "./graphicsBinding.js";
-import { GraphicalActionPhase, GraphicalActionValue, graphicalActionConfig, isGraphicalActionTypeId, resolveGraphicalActionValue } from "./graphicsAction.js";
+import { auditHmiApplication, createHmiAuditHtml, createHmiAuditReport, defaultHmiAuditRuleProfile, filterHmiAuditFindings, fingerprintHmiAuditInputs, HMI_AUDIT_RULE_IDS, hmiAuditFindingKey } from "./hmiAudit.js";
+import { GraphicalActionPhase, GraphicalActionValue, graphicalActionConfig, graphicalActionDisplayValue, isGraphicalActionTypeId, resolveGraphicalActionValue } from "./graphicsAction.js";
 import { childPropertyKey, effectiveChildProperties, isChildPropertyKey } from "./childPropertyOverrides.js";
 import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, instancePinPlacements, isDifferentialOscope, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage, resolvedPackageFor, runtimeSurfaceImageHref } from "./componentSymbols.js";
 import { ExternalLabelKind, SYMBOL_PIN_LABEL_ALIGN_KEY, formatProbeVoltage, genericExternalLabelFontSize, isExternalProbeReadout, labelPropertyKey, nextLabelRotation, resolveDefaultExternalLabelOffset, resolveExternalLabelColor, symbolPinLabelPackageFields } from "./componentLabels.js";
@@ -1888,7 +1889,7 @@ function applyBoardOverlayOperatorAction(
 
   // Mesmo princípio do canvas: o controle sem binding continua legível pelo próprio `value`; com
   // binding, `graphicalRuntimeProperties` projeta a leitura por cima deste valor persistido.
-  const displayValue = typeof nextValue === "boolean" ? (nextValue ? 100 : 0) : typeof nextValue === "number" ? nextValue : undefined;
+  const displayValue = graphicalActionDisplayValue(config, nextValue, phase);
   if (displayValue !== undefined) {
     item.properties = { ...item.properties, value: displayValue };
     send({
@@ -2396,7 +2397,8 @@ function captureUndoSnapshot(): UndoSnapshot {
 
 /** Chave de comparação -- conteúdo da cena + política/canvas do símbolo (nunca seleção). */
 function undoContentKey(snapshot: { components: WebviewComponentModel[]; topology: CanonicalTopologyDocument; symbolMode?: WebviewProjectState["symbolMode"]; symbolCanvas?: WebviewProjectState["symbolCanvas"]; hmiApplication?: HmiApplication }): string {
-  return JSON.stringify([snapshot.components, snapshot.topology, snapshot.symbolMode, snapshot.symbolCanvas, snapshot.hmiApplication]);
+  const hmiForUndo = snapshot.hmiApplication ? { ...snapshot.hmiApplication, auditExceptions: undefined } : undefined;
+  return JSON.stringify([snapshot.components, snapshot.topology, snapshot.symbolMode, snapshot.symbolCanvas, hmiForUndo]);
 }
 
 /** Reseta o histórico (undo E redo) pro estado ATUAL de `state` -- chamado ao entrar/sair da sessão
@@ -2456,7 +2458,10 @@ function recordUndoSnapshotIfChanged(): void {
 function applyUndoSnapshot(snapshot: UndoSnapshot): void {
   isApplyingUndoSnapshot = true;
   try {
-    state = { ...state, hmiApplication: snapshot.hmiApplication ? structuredClone(snapshot.hmiApplication) : undefined };
+    const currentAuditExceptions = state.hmiApplication?.auditExceptions ?? [];
+    const restoredHmi = snapshot.hmiApplication ? structuredClone(snapshot.hmiApplication) : undefined;
+    if (restoredHmi && currentAuditExceptions.length > 0) restoredHmi.auditExceptions = currentAuditExceptions;
+    state = { ...state, hmiApplication: restoredHmi };
     selectedHmiPageId = snapshot.hmiApplication?.pages.some((page) => page.id === snapshot.selectedHmiPageId)
       ? snapshot.selectedHmiPageId
       : snapshot.hmiApplication?.startPageId;
@@ -2651,105 +2656,17 @@ function setHmiStaleTimeout(): void {
 function verifyHmiDesign(): void {
   const app = state.hmiApplication;
   if (!app) return;
-  type Finding = { pageId: string; pageName: string; message: string; elementId?: string };
-  const issues: Finding[] = [];
-  const warnings: Finding[] = [];
-  const addFinding = (target: Finding[], page: HmiPage, message: string, elementId?: string): void => {
-    target.push({ pageId: page.id, pageName: page.name, message, ...(elementId ? { elementId } : {}) });
-  };
-  const pageIds = new Set(app.pages.map((page) => page.id));
-  const firstPage = app.pages[0];
-  if (!pageIds.has(app.startPageId) && firstPage) {
-    addFinding(issues, firstPage, `página inicial inexistente (${app.startPageId})`);
-  }
-  for (const [pageId, duplicateCount] of app.pages.reduce((counts, page) => counts.set(page.id, (counts.get(page.id) ?? 0) + 1), new Map<string, number>())) {
-    if (duplicateCount > 1 && firstPage) addFinding(issues, firstPage, `ID de página duplicado (${pageId})`);
-  }
-  const reachablePageIds = new Set<string>([app.startPageId]);
-  const pendingPageIds = [app.startPageId];
-  while (pendingPageIds.length > 0) {
-    const pageId = pendingPageIds.pop()!;
-    const page = app.pages.find((candidate) => candidate.id === pageId);
-    for (const navigation of page?.navigation ?? []) {
-      if (pageIds.has(navigation.targetPageId) && !reachablePageIds.has(navigation.targetPageId)) {
-        reachablePageIds.add(navigation.targetPageId);
-        pendingPageIds.push(navigation.targetPageId);
-      }
-    }
-  }
-  for (const page of app.pages) {
-    if (!Number.isFinite(page.width) || page.width <= 0 || !Number.isFinite(page.height) || page.height <= 0) {
-      addFinding(issues, page, "dimensões da página inválidas; largura e altura devem ser positivas");
-    }
-    for (const element of page.elements) {
-      if (element.visual.x < 0 || element.visual.y < 0
-          || element.visual.x + element.visual.width > page.width
-          || element.visual.y + element.visual.height > page.height) {
-        addFinding(warnings, page, `${element.label ?? element.typeId ?? element.id}: elemento ultrapassa os limites da página`, element.id);
-      }
-      const sourceComponent = element.componentId
-        ? state.components.find((candidate) => candidate.id === element.componentId)
-        : undefined;
-      if (element.componentId && !sourceComponent) {
-        const elementLabel = element.label ?? element.typeId ?? element.id;
-        addFinding(issues, page, `${elementLabel}: referência de componente inexistente (${element.componentId})`, element.id);
-      }
-      const typeId = sourceComponent?.typeId ?? element.typeId;
-      if (!typeId || !isGraphicalTypeId(typeId)) continue;
-      const properties = { ...(sourceComponent?.properties ?? catalogEntryFor(typeId)?.defaultProperties ?? {}), ...(element.properties ?? {}) };
-      const elementLabel = element.label ?? sourceComponent?.label ?? catalogEntryFor(typeId)?.label ?? typeId;
-      for (const suffix of ["", "B", "C"]) {
-        const bindSource = properties[`bindSource${suffix}`];
-        if (typeof bindSource !== "string" || bindSource.trim() === "") continue;
-        const boundComponent = state.components.find((candidate) => candidate.id === bindSource);
-        if (!boundComponent) {
-          addFinding(issues, page, `${elementLabel} / bindSource${suffix}: fonte inexistente (${bindSource})`, element.id);
-          continue;
-        }
-        const readoutFormat = catalogEntryFor(boundComponent.typeId)?.readoutFormat;
-        if (!readoutFormat) {
-          addFinding(issues, page, `${elementLabel} / bindSource${suffix}: ${boundComponent.label} existe, mas não publica leitura compatível`, element.id);
-          continue;
-        }
-        const channel = Number(properties[`bindChannel${suffix}`] ?? 0);
-        const channelCount = readoutFormat.kind === "scalar" ? 1 : readoutFormat.channels;
-        if (!Number.isInteger(channel) || channel < 0 || channel >= channelCount) {
-          addFinding(issues, page, `${elementLabel} / bindChannel${suffix}: canal ${String(properties[`bindChannel${suffix}`] ?? 0)} inválido para ${boundComponent.label} (${readoutFormat.kind}, ${channelCount} canal(is))`, element.id);
-        }
-      }
-      if (isGraphicalActionTypeId(typeId)) {
-        const actionTargetId = typeof properties.actionTarget === "string" ? properties.actionTarget.trim() : "";
-        const actionProperty = typeof properties.actionProperty === "string" ? properties.actionProperty.trim() : "";
-        if (!actionTargetId || !actionProperty) {
-          addFinding(warnings, page, `${elementLabel}: controle sem alvo/propriedade de ação configurados`, element.id);
-        } else {
-          const actionTarget = state.components.find((candidate) => candidate.id === actionTargetId);
-          if (!actionTarget) {
-            addFinding(issues, page, `${elementLabel}: alvo de ação inexistente (${actionTargetId})`, element.id);
-          } else if (!graphicalActionPropertyNames(actionTarget).some((property) => property.id === actionProperty)) {
-            addFinding(issues, page, `${elementLabel}: propriedade de ação indisponível em ${actionTarget.label} (${actionProperty})`, element.id);
-          }
-        }
-      }
-    }
-    for (const navigation of page.navigation ?? []) {
-      if (navigation.visual.x < 0 || navigation.visual.y < 0
-          || navigation.visual.x + navigation.visual.width > page.width
-          || navigation.visual.y + navigation.visual.height > page.height) {
-        addFinding(warnings, page, `${navigation.label}: atalho ultrapassa os limites da página`);
-      }
-      if (!pageIds.has(navigation.targetPageId)) {
-        addFinding(issues, page, `${navigation.label}: destino de navegação inexistente (${navigation.targetPageId})`);
-      }
-    }
-    if (!reachablePageIds.has(page.id)) addFinding(warnings, page, "página sem caminho de navegação desde a página inicial");
-  }
-  if (issues.length === 0 && warnings.length === 0) {
-    window.alert(currentLocale() === "pt-BR"
-      ? "Verificação concluída: bindings, navegação e limites das páginas estão consistentes."
-      : "Verification complete: bindings, navigation, and page bounds are consistent.");
-    return;
-  }
+  const writablePropertiesByComponentId = Object.fromEntries(
+    state.components.map((component) => [component.id, graphicalActionPropertyNames(component).map((property) => property.id)]),
+  );
+  const { issues, warnings, profile } = auditHmiApplication(
+    app,
+    state.components,
+    state.catalog,
+    writablePropertiesByComponentId,
+    currentLocale(),
+    Date.now(),
+  );
   propertyDialog.innerHTML = "";
   propertyDialog.className = "property-dialog property-dialog--hmi-audit";
   const sheet = document.createElement("section");
@@ -2771,43 +2688,233 @@ function verifyHmiDesign(): void {
     ? `${issues.length} problema(s); ${warnings.length} aviso(s). Selecione um item para abrir sua página.`
     : `${issues.length} issue(s); ${warnings.length} warning(s). Select a finding to open its page.`;
   sheet.appendChild(summary);
+  const exportAuditReport = async (format: "json" | "html"): Promise<void> => {
+    try {
+      const includeProjectText = window.confirm(currentLocale() === "pt-BR"
+        ? "Incluir nomes de páginas/componentes, mensagens originais e justificativas de exceção? OK inclui esses textos. Cancel exporta a versão redigida, mantendo IDs e caminhos de evidência."
+        : "Include page/component names, original messages, and exception rationales? OK includes this project text. Cancel exports the redacted version, keeping IDs and evidence paths.");
+      const evidence = await fingerprintHmiAuditInputs(app, state.components, state.catalog);
+      const report = createHmiAuditReport({ issues, warnings, profile }, currentLocale(), new Date().toISOString(), profile, evidence, includeProjectText ? "full" : "redacted");
+      if (format === "json") downloadHmiAuditArtifact(JSON.stringify(report, null, 2), "application/json;charset=utf-8", "lasecsimul-hmi-audit.json");
+      else downloadHmiAuditArtifact(createHmiAuditHtml(report), "text/html;charset=utf-8", "lasecsimul-hmi-audit.html");
+    } catch {
+      window.alert(currentLocale() === "pt-BR" ? "Não foi possível calcular os fingerprints SHA-256 do relatório." : "Could not calculate the report SHA-256 fingerprints.");
+    }
+  };
+  const exportButton = document.createElement("button");
+  exportButton.type = "button";
+  exportButton.className = "hmi-audit-results__export";
+  exportButton.textContent = currentLocale() === "pt-BR" ? "Exportar relatório JSON" : "Export JSON report";
+  exportButton.addEventListener("click", () => { void exportAuditReport("json"); });
+  sheet.appendChild(exportButton);
+  const exportHtmlButton = document.createElement("button");
+  exportHtmlButton.type = "button";
+  exportHtmlButton.className = "hmi-audit-results__export";
+  exportHtmlButton.textContent = currentLocale() === "pt-BR" ? "Exportar relatório HTML" : "Export HTML report";
+  exportHtmlButton.addEventListener("click", () => { void exportAuditReport("html"); });
+  sheet.appendChild(exportHtmlButton);
+  const profileDetails = document.createElement("details");
+  profileDetails.className = "hmi-audit-results__profile";
+  const profileSummary = document.createElement("summary");
+  profileSummary.textContent = currentLocale() === "pt-BR" ? `Perfil ${profile?.name ?? "Padrão"} v${profile?.version ?? 1} · Configurar regras` : `Profile ${profile?.name ?? "Default"} v${profile?.version ?? 1} · Configure rules`;
+  profileDetails.appendChild(profileSummary);
+  const profileHelp = document.createElement("p");
+  profileHelp.textContent = currentLocale() === "pt-BR" ? "Desmarque apenas regras cuja análise não se aplica. Regras desativadas ficam registradas nas exportações." : "Disable only rules that do not apply. Disabled rules are recorded in report exports.";
+  profileDetails.appendChild(profileHelp);
+  const disabledRuleIds = new Set(profile?.disabledRuleIds ?? []);
+  const ruleChecks: Array<{ id: string; input: HTMLInputElement }> = [];
+  const profileRuleList = document.createElement("div");
+  profileRuleList.className = "hmi-audit-results__profile-rules";
+  const registeredRuleIds = new Set<string>(HMI_AUDIT_RULE_IDS);
+  for (const ruleId of HMI_AUDIT_RULE_IDS) {
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = !disabledRuleIds.has(ruleId);
+    label.append(input, document.createTextNode(ruleId));
+    profileRuleList.appendChild(label);
+    ruleChecks.push({ id: ruleId, input });
+  }
+  const unknownDisabledRuleIds = [...disabledRuleIds].filter((ruleId) => !registeredRuleIds.has(ruleId));
+  if (unknownDisabledRuleIds.length > 0) {
+    const unknown = document.createElement("p");
+    unknown.textContent = `${currentLocale() === "pt-BR" ? "IDs de regras de plugins/perfis preservados:" : "Plugin/profile rule IDs preserved:"} ${unknownDisabledRuleIds.join(", ")}`;
+    profileDetails.appendChild(unknown);
+  }
+  profileDetails.appendChild(profileRuleList);
+  const saveProfile = document.createElement("button");
+  saveProfile.type = "button";
+  saveProfile.className = "hmi-audit-results__export";
+  saveProfile.textContent = currentLocale() === "pt-BR" ? "Salvar perfil" : "Save profile";
+  saveProfile.addEventListener("click", () => {
+    const nextDisabled = [...unknownDisabledRuleIds, ...ruleChecks.filter(({ input }) => !input.checked).map(({ id }) => id)];
+    const currentProfile = app.auditRuleProfile ?? defaultHmiAuditRuleProfile(currentLocale());
+    if (JSON.stringify([...currentProfile.disabledRuleIds].sort()) === JSON.stringify([...nextDisabled].sort())) return;
+    const nextProfile = { ...currentProfile, version: currentProfile.version + 1, disabledRuleIds: [...nextDisabled] };
+    state = { ...state, hmiApplication: { ...app, auditRuleProfile: nextProfile } };
+    persistState();
+    verifyHmiDesign();
+  });
+  profileDetails.appendChild(saveProfile);
+  sheet.appendChild(profileDetails);
+  if (issues.length === 0 && warnings.length === 0) {
+    const clean = document.createElement("p");
+    clean.textContent = currentLocale() === "pt-BR"
+      ? "Nenhum achado nas regras habilitadas. Isto nao declara conformidade normativa."
+      : "No findings for the enabled rules. This does not declare normative compliance.";
+    sheet.appendChild(clean);
+  }
+  const allFindings = [
+    ...issues.map((finding) => ({ ...finding, severity: "issue" as const })),
+    ...warnings.map((finding) => ({ ...finding, severity: "warning" as const })),
+  ];
+  const filters = document.createElement("div");
+  filters.className = "hmi-audit-results__filters";
+  const makeFilter = (label: string, allLabel: string): HTMLSelectElement => {
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", label);
+    const allOption = document.createElement("option");
+    allOption.value = "";
+    allOption.textContent = allLabel;
+    select.appendChild(allOption);
+    filters.appendChild(select);
+    return select;
+  };
+  const severityFilter = makeFilter(currentLocale() === "pt-BR" ? "Filtrar por severidade" : "Filter by severity", currentLocale() === "pt-BR" ? "Todas as severidades" : "All severities");
+  for (const [value, label] of [["issue", currentLocale() === "pt-BR" ? "Problemas" : "Issues"], ["warning", currentLocale() === "pt-BR" ? "Avisos" : "Warnings"]] as const) {
+    const option = document.createElement("option"); option.value = value; option.textContent = label; severityFilter.appendChild(option);
+  }
+  const pageFilter = makeFilter(currentLocale() === "pt-BR" ? "Filtrar por página" : "Filter by page", currentLocale() === "pt-BR" ? "Todas as páginas" : "All pages");
+  const pagesById = new Map(allFindings.map((finding) => [finding.pageId, finding.pageName]));
+  for (const [id, name] of pagesById) {
+    const option = document.createElement("option"); option.value = id; option.textContent = `${name} (${id})`; pageFilter.appendChild(option);
+  }
+  const componentFilter = makeFilter(currentLocale() === "pt-BR" ? "Filtrar por componente" : "Filter by component", currentLocale() === "pt-BR" ? "Todos os componentes" : "All components");
+  const componentsById = new Map(allFindings.flatMap((finding) => finding.componentId
+    ? [[finding.componentId, finding.componentLabel ?? finding.componentId] as const]
+    : []));
+  for (const [id, label] of componentsById) {
+    const option = document.createElement("option"); option.value = id; option.textContent = `${label} (${id})`; componentFilter.appendChild(option);
+  }
+  const ruleFilter = makeFilter(currentLocale() === "pt-BR" ? "Filtrar por regra" : "Filter by rule", currentLocale() === "pt-BR" ? "Todas as regras" : "All rules");
+  for (const ruleId of new Set(allFindings.map((finding) => finding.ruleId))) {
+    const option = document.createElement("option"); option.value = ruleId; option.textContent = ruleId; ruleFilter.appendChild(option);
+  }
+  const statusFilter = makeFilter(currentLocale() === "pt-BR" ? "Filtrar por status" : "Filter by status", currentLocale() === "pt-BR" ? "Todos os status" : "All statuses");
+  for (const [value, label] of [["open", currentLocale() === "pt-BR" ? "Em aberto" : "Open"], ["excepted", currentLocale() === "pt-BR" ? "Com exceção" : "Excepted"], ["expired", currentLocale() === "pt-BR" ? "Exceção vencida" : "Exception expired"], ["revoked", currentLocale() === "pt-BR" ? "Exceção revogada" : "Exception revoked"]] as const) {
+    const option = document.createElement("option"); option.value = value; option.textContent = label; statusFilter.appendChild(option);
+  }
+  sheet.appendChild(filters);
   const list = document.createElement("div");
   list.className = "hmi-audit-results__list";
-  for (const [kind, findings] of [
-    ["issue", issues] as const,
-    ["warning", warnings] as const,
-  ]) {
-    if (findings.length === 0) continue;
-    const groupTitle = document.createElement("h3");
-    groupTitle.textContent = kind === "issue"
-      ? (currentLocale() === "pt-BR" ? "Problemas" : "Issues")
-      : (currentLocale() === "pt-BR" ? "Avisos" : "Warnings");
-    list.appendChild(groupTitle);
-    for (const finding of findings.slice(0, 100)) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = `hmi-audit-results__finding hmi-audit-results__finding--${kind}`;
-      button.textContent = `${finding.pageName} · ${finding.message}`;
-      button.addEventListener("click", () => {
-        propertyDialog.close();
-        selectedHmiPageId = finding.pageId;
-        hmiSceneCache = undefined;
-        state.selectedComponentIds = finding.elementId ? [finding.elementId] : [];
-        state.selectedWireIds = [];
-        render();
-        zoomToFitAllDeferred();
-      });
-      list.appendChild(button);
-    }
-    if (findings.length > 100) {
-      const more = document.createElement("p");
-      more.textContent = currentLocale() === "pt-BR" ? `Mais ${findings.length - 100} item(ns) nesta seção.` : `${findings.length - 100} more item(s) in this section.`;
-      list.appendChild(more);
-    }
+  if (allFindings.length === 0) {
+    filters.hidden = true;
+    list.hidden = true;
   }
+  const renderFindings = (): void => {
+    list.innerHTML = "";
+    const filtered = filterHmiAuditFindings(allFindings, {
+      severity: (severityFilter.value || undefined) as "issue" | "warning" | undefined,
+      pageId: pageFilter.value || undefined,
+      ruleId: ruleFilter.value || undefined,
+      componentId: componentFilter.value || undefined,
+      status: (statusFilter.value || undefined) as import("./hmiAudit.js").HmiAuditStatus | undefined,
+    });
+    if (filtered.length === 0) {
+      const empty = document.createElement("p");
+      empty.textContent = currentLocale() === "pt-BR" ? "Nenhum achado corresponde aos filtros." : "No findings match these filters.";
+      list.appendChild(empty);
+      return;
+    }
+    for (const kind of ["issue", "warning"] as const) {
+      const findings = filtered.filter((finding) => finding.severity === kind);
+      if (findings.length === 0) continue;
+      const groupTitle = document.createElement("h3");
+      groupTitle.textContent = kind === "issue"
+        ? (currentLocale() === "pt-BR" ? "Problemas" : "Issues")
+        : (currentLocale() === "pt-BR" ? "Avisos" : "Warnings");
+      list.appendChild(groupTitle);
+      for (const finding of findings.slice(0, 100)) {
+        const row = document.createElement("div");
+        row.className = "hmi-audit-results__finding-row";
+        const findingCopy = document.createElement("div");
+        findingCopy.className = "hmi-audit-results__finding-copy";
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `hmi-audit-results__finding hmi-audit-results__finding--${kind}`;
+        const status = finding.status ?? "open";
+        const statusLabel = currentLocale() === "pt-BR"
+          ? ({ open: "Em aberto", excepted: "Com exceção", expired: "Exceção vencida", revoked: "Exceção revogada" } as const)[status]
+          : ({ open: "Open", excepted: "Excepted", expired: "Exception expired", revoked: "Exception revoked" } as const)[status];
+        button.textContent = `[${statusLabel}] ${finding.pageName} · ${finding.message}${finding.exception ? ` — ${finding.exception.reviewer}: ${finding.exception.reason}` : ""}`;
+        button.addEventListener("click", () => {
+          propertyDialog.close();
+          selectedHmiPageId = finding.pageId;
+          hmiSceneCache = undefined;
+          state.selectedComponentIds = finding.elementId ? [finding.elementId] : [];
+          state.selectedWireIds = [];
+          render();
+          zoomToFitAllDeferred();
+        });
+        findingCopy.appendChild(button);
+        const recommendation = document.createElement("p");
+        recommendation.className = "hmi-audit-results__recommendation";
+        recommendation.textContent = `${currentLocale() === "pt-BR" ? "Próximo passo" : "Recommendation"}: ${finding.recommendation ?? ""}`;
+        findingCopy.appendChild(recommendation);
+        row.appendChild(findingCopy);
+        const decision = document.createElement("button");
+        decision.type = "button";
+        decision.className = "hmi-audit-results__decision";
+        decision.textContent = status === "excepted" ? (currentLocale() === "pt-BR" ? "Revogar exceção" : "Revoke exception") : (currentLocale() === "pt-BR" ? "Registrar exceção" : "Record exception");
+        decision.addEventListener("click", () => {
+          const reviewer = window.prompt(currentLocale() === "pt-BR" ? "Responsável pela revisão:" : "Reviewer:")?.trim();
+          if (!reviewer) return;
+          const reason = window.prompt(currentLocale() === "pt-BR" ? "Justificativa obrigatória:" : "Required rationale:")?.trim();
+          if (!reason) return;
+          let expiresAt: string | undefined;
+          const action = status === "excepted" ? "revoked" as const : "accepted" as const;
+          if (action === "accepted") {
+            const expiry = window.prompt(currentLocale() === "pt-BR" ? "Validade opcional (AAAA-MM-DD); deixe vazio para sem vencimento:" : "Optional expiry (YYYY-MM-DD); leave empty for no expiry:")?.trim();
+            if (expiry) {
+              const parsed = new Date(`${expiry}T23:59:59.999Z`);
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(expiry) || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== expiry) {
+                window.alert(currentLocale() === "pt-BR" ? "Data inválida. Use AAAA-MM-DD." : "Invalid date. Use YYYY-MM-DD."); return;
+              }
+              expiresAt = parsed.toISOString();
+            }
+          }
+          const event = { id: `hmi-audit-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`, findingKey: hmiAuditFindingKey(finding), ruleId: finding.ruleId, pageId: finding.pageId, ...(finding.elementId ? { elementId: finding.elementId } : {}), ...(finding.componentId ? { componentId: finding.componentId } : {}), action, reviewer, reason, recordedAt: new Date().toISOString(), ...(expiresAt ? { expiresAt } : {}) };
+          state = { ...state, hmiApplication: { ...app, auditExceptions: [...(app.auditExceptions ?? []), event] } };
+          persistState();
+          verifyHmiDesign();
+        });
+        row.appendChild(decision);
+        list.appendChild(row);
+      }
+      if (findings.length > 100) {
+        const more = document.createElement("p");
+        more.textContent = currentLocale() === "pt-BR" ? `Mais ${findings.length - 100} item(ns) nesta seção.` : `${findings.length - 100} more item(s) in this section.`;
+        list.appendChild(more);
+      }
+    }
+  };
+  for (const filter of [severityFilter, pageFilter, componentFilter, ruleFilter, statusFilter]) filter.addEventListener("change", renderFindings);
+  renderFindings();
   sheet.appendChild(list);
   propertyDialog.appendChild(sheet);
   if (!propertyDialog.open) propertyDialog.showModal();
+}
+
+function downloadHmiAuditArtifact(content: string, mimeType: string, fileName: string): void {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function renameHmiPage(): void {
@@ -8374,7 +8481,7 @@ function applyGraphicalOperatorAction(
   // Keep an unbound operator readable while editing/running. A configured
   // binding remains authoritative because runtimeSymbolProperties projects it
   // over this persisted fallback value.
-  const displayValue = typeof nextValue === "boolean" ? (nextValue ? 100 : 0) : typeof nextValue === "number" ? nextValue : undefined;
+  const displayValue = graphicalActionDisplayValue(resolved.config, nextValue, phase);
   if (displayValue !== undefined) {
     component.properties.value = displayValue;
     if (resolved.target.id !== component.id || resolved.config.property !== "value") {

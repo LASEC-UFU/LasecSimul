@@ -1,5 +1,5 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
-import { formatGraphicalValue, graphicalRuntimeProperties, isGraphicalTypeId } from "./graphicsBinding";
+import { formatGraphicalValue, graphicalRuntimeProperties, hasVisualOnlyAlarmSemantics, isGraphicalTypeId, reviewGraphicalBindingConfiguration, reviewGraphicalBindingUnit } from "./graphicsBinding";
 import type { ComponentReadoutValue } from "./messages";
 
 const readouts = (map: Record<string, ComponentReadoutValue>) => (id: string) => map[id];
@@ -84,6 +84,33 @@ const none = () => undefined;
     assert(graphicalRuntimeProperties({ value: 5, bindDecimals: 3, bindUnit: "m3/h" }, none).__g_text === "5.000 m3/h", "texto do binding usa as mesmas regras");
   });
 
+  await test("revisao de unidade distingue unidade ausente, divergencia direta e conversao nao verificada", () => {
+    assert(reviewGraphicalBindingUnit({ bindUnit: "kPa" }, " kPa ") === "compatible", "unidades iguais apos trim sao compativeis");
+    assert(reviewGraphicalBindingUnit({ bindUnit: "", bindScale: 1, bindOffset: 0 }, "bar") === "missing-display-unit", "unidade da fonte sem rotulo na tela deve ser reportada");
+    assert(reviewGraphicalBindingUnit({ bindUnit: "bar", bindScale: 1, bindOffset: 0 }, "kPa") === "unit-mismatch", "unidades diferentes sem transformacao devem ser reportadas");
+    assert(reviewGraphicalBindingUnit({ bindUnit: "bar", bindScale: 0.01, bindOffset: 0 }, "kPa") === "conversion-unverified", "escala nao basta para provar conversao de engenharia");
+    assert(reviewGraphicalBindingUnit({ bindUnit: "kPa", bindScale: 10, bindOffset: 0 }, "kPa") === "conversion-unverified", "escala alterada exige revisao mesmo quando o rotulo da unidade coincide");
+    assert(reviewGraphicalBindingUnit({ bindUnit: "", bindScale: 1, bindOffset: 273.15 }, "C") === "conversion-unverified", "offset com unidade omitida exige revisao");
+    assert(reviewGraphicalBindingUnit({ bindUnit: "" }, "") === undefined, "fonte sem unidade declarada nao deve ser inferida");
+  });
+
+  await test("revisao da configuracao detecta valores invalidos sem reescrever e preserva faixa invertida", () => {
+    const issues = reviewGraphicalBindingConfiguration({
+      bindScale: "nan",
+      bindDecimals: 7,
+      bindMin: 12,
+      bindMax: 12,
+      limitLL: 2,
+      limitH: 1,
+    });
+    assert(issues.some((issue) => issue.property === "bindScale" && issue.kind === "invalid-number"), "escala nao numerica deve ser detectada");
+    assert(issues.some((issue) => issue.property === "bindDecimals" && issue.kind === "invalid-decimals"), "casas fora do suporte devem ser detectadas");
+    assert(issues.some((issue) => issue.kind === "degenerate-range"), "faixa sem amplitude deve ser sinalizada");
+    assert(issues.some((issue) => issue.property === "limitH" && issue.kind === "limit-order"), "ordem de limites deve ser verificada inclusive com niveis intermediarios ausentes");
+    assert(reviewGraphicalBindingConfiguration({ bindMin: 100, bindMax: 0 }).every((issue) => issue.kind !== "degenerate-range"), "faixa invertida permanece valida para escala de acao reversa");
+    assert(reviewGraphicalBindingConfiguration({ bindMin: 100 }).some((issue) => issue.kind === "degenerate-range"), "maximo padrao 100 participa da verificacao");
+  });
+
   await test("propriedade numerica que chega como string (campo de texto do Inspector) e aceita", () => {
     const out = graphicalRuntimeProperties({ value: "80" as unknown as number, bindMax: "200" as unknown as number }, none);
     assert(out.__g_value === 80, "valor numerico em string deveria ser aceito");
@@ -95,6 +122,11 @@ const none = () => undefined;
     assert(isGraphicalTypeId("graphics.rectangle"), "forma basica legada tambem");
     assert(!isGraphicalTypeId("passive.resistor"), "componente eletrico nao");
     assert(!isGraphicalTypeId("control.pid"), "bloco de controle nao -- ele e FONTE, nao projecao");
+  });
+
+  await test("tarja HMI e indicacao visual de limites, nao servico de alarmes", () => {
+    assert(hasVisualOnlyAlarmSemantics("graphics.hmi.alarm_banner"), "a tarja precisa ser identificada para revisao explicita no auditor HMI");
+    assert(!hasVisualOnlyAlarmSemantics("graphics.hmi.faceplate"), "faceplate generico nao deve receber este aviso especifico");
   });
 
   const { failed } = finish();
