@@ -1,10 +1,6 @@
 #pragma once
 
-/** Artefato compilado produzido por `PlcCompiler` (F9.3) -- estrutura de dados pura, sem lógica.
- * Mínimo desta rodada (ST-only, um PROGRAM por artefato): sem `symbolTable`/`dataTypeTable`/
- * `pouTable`/`taskTable`/`retainLayout` completos ainda (ver plano F9 Rodada 1, "Mudanças
- * mínimas") -- esses crescem quando múltiplos POUs/linguagens cross-language entrarem em rodadas
- * futuras. */
+/** Artefato compilado produzido por `PlcCompiler` -- estrutura de dados pura, sem lógica. */
 
 #include <cstdint>
 #include <string>
@@ -18,6 +14,19 @@ struct PlcExportedIo {
     std::string name;
     std::string direction; // "input" | "output"
     std::string iecType;   // BOOL, INT, DINT, REAL, TIME, etc. -- nome IEC, não o tipo C++ interno.
+};
+
+struct PlcTaskDescriptor {
+    std::string name;
+    int64_t intervalNs = 0;
+    int32_t priority = 0;
+    std::string eventVariable;
+};
+
+struct PlcProgramInstanceDescriptor {
+    std::string instanceName;
+    std::string taskName;
+    std::string programName;
 };
 
 /** Uma entrada por diretiva `#line N "arquivo.st"` encontrada no `.cpp` gerado pela STruCpp
@@ -51,6 +60,11 @@ struct PlcNativeModule {
                                   // `Program_<NOME>` gerado pela STruCpp.
 
     std::vector<PlcExportedIo> exportedIo;
+    /** Stable retain contract entries encoded as UPPERCASE_NAME:IEC_TYPE. */
+    std::vector<std::string> retainLayout;
+    std::string configurationName;
+    std::vector<PlcTaskDescriptor> taskTable;
+    std::vector<PlcProgramInstanceDescriptor> programInstances;
     std::vector<PlcDebugLineMapping> debugMap;
 };
 

@@ -18,7 +18,7 @@ import type { PlcNativeModuleDto } from "../ipc/CoreClient";
 import { resolveCoreExecutablePath } from "../core/coreExecutable";
 import { readPlcNativeModule } from "./artifact";
 import { IecProjectAuthoring, IecProjectStore, IecVariable, PouDefinition, parseIecProject } from "./iecProject";
-import { CanonicalStOrigin, generateCanonicalSt } from "./lowering";
+import { CanonicalStOrigin, IecLoweringError, generateCanonicalSt } from "./lowering";
 
 export interface PlcToolchainPaths {
   coreExecutable: string;
@@ -65,7 +65,7 @@ export function resolvePlcToolchain(
   let cxxCompiler: string | undefined;
   if (platform === "win32") {
     const candidates = [
-      path.join(bundled, "mingw64", "bin", "g++.exe"),
+      path.join(bundled, "ucrt64", "bin", "g++.exe"),
       path.resolve(repoRoot, "..", "tools", "msys64", "ucrt64", "bin", "g++.exe"),
     ];
     cxxCompiler = candidates.find(exists);
@@ -81,8 +81,8 @@ export function resolvePlcToolchain(
 }
 
 interface NamedEntry { name: string }
-interface TaskEntry extends NamedEntry { intervalMs?: number; priority?: number }
-interface ResourceEntry extends NamedEntry { task?: string }
+interface TaskEntry extends NamedEntry { intervalMs?: number; priority?: number; eventVariable?: string }
+interface ResourceEntry extends NamedEntry { task?: string; tasks?: string[] }
 interface ConfigurationEntry extends NamedEntry { resource?: string }
 interface ProgramInstanceEntry extends NamedEntry { pouId?: string; task?: string }
 
@@ -99,12 +99,10 @@ export interface PlcEntryPoint {
   taskName?: string;
   /** Período da tarefa cíclica que executa o programa; 10 ms quando o projeto não define. */
   taskIntervalMs: number;
-  /** Instâncias de programa a mais no mesmo recurso: nesta etapa só a primeira roda. */
-  ignoredProgramInstances: string[];
 }
 
-/** CONFIGURATION de entrada (buildSettings.entryConfiguration) -> RESOURCE -> instância de
- * programa associada a uma TASK desse recurso -> POU PROGRAM e período da tarefa. */
+/** CONFIGURATION de entrada -> RESOURCE -> instância de programa/TASK de entrada -> POU PROGRAM.
+ * O módulo também preserva e executa as demais tasks e instâncias configuradas. */
 export function resolvePlcEntryPoint(project: IecProjectAuthoring): PlcEntryPoint {
   const configurations = named<ConfigurationEntry>(project.configurations);
   const resources = named<ResourceEntry>(project.resources);
@@ -114,7 +112,8 @@ export function resolvePlcEntryPoint(project: IecProjectAuthoring): PlcEntryPoin
   const wanted = typeof project.buildSettings.entryConfiguration === "string" ? project.buildSettings.entryConfiguration : undefined;
   const configuration = configurations.find(item => item.name === wanted) ?? configurations[0];
   const resource = resources.find(item => item.name === configuration?.resource) ?? resources[0];
-  const resourceTasks = new Set(tasks.filter(task => !resource?.task || task.name === resource.task).map(task => task.name));
+  const assignedTaskNames = Array.isArray(resource?.tasks) ? resource.tasks : resource?.task ? [resource.task] : [];
+  const resourceTasks = new Set(tasks.filter(task => assignedTaskNames.length === 0 || assignedTaskNames.includes(task.name)).map(task => task.name));
   const candidates = instances.filter(instance => programs.some(pou => pou.pouId === instance.pouId) &&
     (!instance.task || resourceTasks.size === 0 || resourceTasks.has(instance.task)));
   const instance = candidates[0];
@@ -129,7 +128,6 @@ export function resolvePlcEntryPoint(project: IecProjectAuthoring): PlcEntryPoin
     ...(instance ? { programInstanceName: instance.name } : {}),
     ...(task ? { taskName: task.name } : {}),
     taskIntervalMs: Number.isFinite(interval) && interval > 0 ? interval : 10,
-    ignoredProgramInstances: candidates.slice(1).map(item => item.name),
   };
 }
 
@@ -163,16 +161,98 @@ export interface PlcWatchVariable {
 }
 
 /** Variáveis do programa que o worker publica (entradas, saídas e locais escalares). */
-export function plcWatchVariables(pou: PouDefinition): PlcWatchVariable[] {
-  return pou.interface.variables
-    .filter(variable => variable.class === "input" || variable.class === "output" ||
-      ((variable.class === "local") && PLC_SCALAR_TYPES.includes(variable.type.toUpperCase())))
-    .map(variable => ({
-      name: variable.name,
-      qualifiedName: `${pou.name.toUpperCase()}.${variable.name.toUpperCase()}`,
-      iecType: variable.type.toUpperCase(),
-      role: variable.class === "local" ? "local" : variable.class as "input" | "output",
-    }));
+export function plcWatchVariables(pou: PouDefinition, project?: IecProjectAuthoring): PlcWatchVariable[] {
+  const result: PlcWatchVariable[] = [];
+  const scalarTypes = new Set(PLC_SCALAR_TYPES);
+  const dataTypes = [
+    ...(project?.dataTypes ?? []),
+    ...(project?.pous.filter(item => item.kind === "functionBlock").map(item => ({
+      name: item.name,
+      kind: "struct" as const,
+      fields: item.interface.variables.map(variable => ({ name: variable.name, type: variable.type })),
+    })) ?? []),
+    ...Object.entries({
+      TON: [["IN", "BOOL"], ["PT", "TIME"], ["Q", "BOOL"], ["ET", "TIME"]],
+      TOF: [["IN", "BOOL"], ["PT", "TIME"], ["Q", "BOOL"], ["ET", "TIME"]],
+      TP: [["IN", "BOOL"], ["PT", "TIME"], ["Q", "BOOL"], ["ET", "TIME"]],
+      R_TRIG: [["CLK", "BOOL"], ["Q", "BOOL"]], F_TRIG: [["CLK", "BOOL"], ["Q", "BOOL"]],
+      SR: [["S1", "BOOL"], ["R", "BOOL"], ["Q1", "BOOL"]],
+      RS: [["S", "BOOL"], ["R1", "BOOL"], ["Q1", "BOOL"]],
+      CTU: [["CU", "BOOL"], ["R", "BOOL"], ["PV", "INT"], ["Q", "BOOL"], ["CV", "INT"]],
+      CTD: [["CD", "BOOL"], ["LD", "BOOL"], ["PV", "INT"], ["Q", "BOOL"], ["CV", "INT"]],
+      CTUD: [["CU", "BOOL"], ["CD", "BOOL"], ["R", "BOOL"], ["LD", "BOOL"], ["PV", "INT"], ["QU", "BOOL"], ["QD", "BOOL"], ["CV", "INT"]],
+    }).map(([name, fields]) => ({
+      name, kind: "struct" as const, fields: (fields as string[][]).map(([fieldName, type]) => ({ name: fieldName!, type: type! })),
+    })),
+  ];
+  const appendArray = (pathName: string, elementType: string, bounds: Array<readonly [number, number]>,
+    stack: Set<string>, budget: number): void => {
+    let remaining = budget;
+    const visit = (dimension: number, indices: number[]): void => {
+      if (remaining <= 0) return;
+      if (dimension === bounds.length) {
+        remaining -= 1;
+        append(`${pathName}${indices.map(index => `[${index}]`).join("")}`, elementType, stack, remaining);
+        return;
+      }
+      const [lower, upper] = bounds[dimension]!;
+      for (let index = lower; index <= upper && remaining > 0; index++) visit(dimension + 1, [...indices, index]);
+    };
+    visit(0, []);
+  };
+  const append = (pathName: string, typeName: string, stack: Set<string>, budget = 2048): void => {
+    const normalized = typeName.trim().toUpperCase();
+    if (scalarTypes.has(normalized)) {
+      result.push({ name: pathName, qualifiedName: `${pou.name.toUpperCase()}.${pathName}`, iecType: normalized, role: "local" });
+      return;
+    }
+    const derived = dataTypes.find(type => type.name.toUpperCase() === normalized);
+    if (derived) {
+      if (stack.has(normalized)) return;
+      const nextStack = new Set(stack).add(normalized);
+      if (derived.kind === "alias") append(pathName, derived.baseType, nextStack, budget);
+      else if (derived.kind === "struct") {
+        for (const field of derived.fields) append(`${pathName}.${field.name.toUpperCase()}`, field.type, nextStack, budget);
+      } else if (derived.kind === "array") {
+        const bounds = derived.dimensions.map(bound => {
+          const match = /^\s*(-?\d+)\s*\.\.\s*(-?\d+)\s*$/.exec(bound);
+          return match ? [Number(match[1]), Number(match[2])] as const : undefined;
+        });
+        if (bounds.some(bound => !bound || bound[1] < bound[0])) return;
+        appendArray(pathName, derived.elementType, bounds as Array<readonly [number, number]>, nextStack, budget);
+      }
+      return;
+    }
+    const inlineArray = /^ARRAY\s*\[([^\]]+)\]\s*OF\s*(.+)$/i.exec(typeName.trim());
+    if (inlineArray) {
+      const bounds = inlineArray[1]!.split(",").map(bound => {
+        const match = /^\s*(-?\d+)\s*\.\.\s*(-?\d+)\s*$/.exec(bound);
+        return match ? [Number(match[1]), Number(match[2])] as const : undefined;
+      });
+      if (bounds.some(bound => !bound || bound[1] < bound[0])) return;
+      appendArray(pathName, inlineArray[2]!, bounds as Array<readonly [number, number]>, stack, budget);
+    }
+  };
+
+  for (const variable of pou.interface.variables) {
+    if (variable.class === "input" || variable.class === "output") {
+      if (scalarTypes.has(variable.type.toUpperCase())) result.push({
+        name: variable.name,
+        qualifiedName: `${pou.name.toUpperCase()}.${variable.name.toUpperCase()}`,
+        iecType: variable.type.toUpperCase(),
+        role: variable.class,
+      });
+    } else if (variable.class === "local") append(variable.name.toUpperCase(), variable.type, new Set());
+  }
+  return result;
+}
+
+/** Resposta de plcGet/plcSet/plcForce: `MAIN.LAMP : BOOL = TRUE [FORCED]`. */
+export function parsePlcVariableReply(reply: string): { value: string; forced: boolean } {
+  const forced = /\s\[FORCED\]\s*$/.test(reply);
+  const text = reply.replace(/\s\[FORCED\]\s*$/, "");
+  const equals = text.indexOf(" = ");
+  return { value: (equals >= 0 ? text.slice(equals + 3) : text).trim(), forced };
 }
 
 export interface PlcBuildDiagnostic {
@@ -186,6 +266,9 @@ export interface PlcBuildDiagnostic {
   column?: number;
   /** Variável cuja declaração causou o erro. */
   variableName?: string;
+  /** SFC: passo, transição ou ação (id do elemento e rótulo legível). */
+  elementId?: string;
+  elementLabel?: string;
 }
 
 export type PlcBuildResult =
@@ -245,6 +328,7 @@ export function mapCompilerOutput(output: string, origins: CanonicalStOrigin[], 
       ...(origin ? { pouId: origin.pouId, pouName: origin.pouName } : {}),
       ...(origin?.section === "body" ? { line: origin.bodyLine } : {}),
       ...(origin?.variableName ? { variableName: origin.variableName } : {}),
+      ...(origin?.element ? { elementId: origin.element.id, elementLabel: origin.element.label } : {}),
     };
     const key = `${diagnostic.pouId}:${diagnostic.line}:${diagnostic.message}`;
     if (seen.has(key)) continue;
@@ -336,12 +420,8 @@ export async function buildIecProject(project: IecProjectAuthoring, options: Plc
   }
   const store = new IecProjectStore(project);
   const warnings: PlcBuildDiagnostic[] = [];
-  for (const ignored of entry.ignoredProgramInstances) {
-    warnings.push({ severity: "warning", stage: "configuration",
-      message: `A instância de programa ${ignored} não roda: nesta versão cada bloco PLC executa uma instância (${entry.programInstanceName ?? entry.pou.name}).` });
-  }
   for (const pou of project.pous) {
-    if (pou.implementation.language !== "st") {
+    if (pou.implementation.language === "ld" && !pou.implementation.rungs) {
       warnings.push({ severity: "warning", stage: "project", pouId: pou.pouId, pouName: pou.name,
         message: `${pou.name} está em ${pou.implementation.language.toUpperCase()}: a tradução desta linguagem para ST ainda é experimental.` });
     }
@@ -352,6 +432,12 @@ export async function buildIecProject(project: IecProjectAuthoring, options: Plc
     canonical = generateCanonicalSt(store, project.projectId, entry.pou.pouId);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (error instanceof IecLoweringError) {
+      return fail([...warnings, ...error.diagnostics.map(item => ({
+        severity: "error" as const, stage: "lowering", message: item.message, pouId: item.pouId, pouName: item.pouName, line: item.line,
+        ...(item.element ? { elementId: item.element.id, elementLabel: item.element.label } : {}),
+      }))], message, entry);
+    }
     return fail([{ severity: "error", stage: "project", message }], message, entry);
   }
 
@@ -369,6 +455,9 @@ export async function buildIecProject(project: IecProjectAuthoring, options: Plc
     core: fileStamp(toolchain.coreExecutable),
     runtime: fileStamp(path.join(toolchain.runtimeIncludeDir, "iec_std_lib.hpp")),
     driver: fileStamp(path.join(toolchain.plcSrcDir, "PlcScanSession.cpp")),
+    compiler: fileStamp(path.join(toolchain.plcSrcDir, "PlcCompiler.cpp")),
+    parser: fileStamp(path.join(toolchain.plcSrcDir, "PlcInterfaceParser.cpp")),
+    driverCodegen: fileStamp(path.join(toolchain.plcSrcDir, "PlcDriverCodegen.cpp")),
   })).slice(0, 16);
   const prefix = `${safeName(project.projectId)}-`;
   const buildName = `${prefix}${key}`;

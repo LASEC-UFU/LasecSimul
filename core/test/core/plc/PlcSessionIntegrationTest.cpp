@@ -6,15 +6,20 @@
  * vendorizado, por isso hermetic (mesma logica de PlcRuntimeTest.cpp).
  */
 #include <cstdio>
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <cmath>
+#include <chrono>
 #include <string>
+#include <thread>
 #include <unordered_map>
+#include <vector>
 
 #include "session/SimulationSession.hpp"
 #include "plugins/GlobalPluginCache.hpp"
 #include "lasecsimul/Sha256.hpp"
+#include "lasecsimul/CausalTrace.hpp"
 #include "plc/PlcComponent.hpp"
 
 namespace fs = std::filesystem;
@@ -181,6 +186,56 @@ void loadingArtifactCreatesExactExportedIoPins() {
     CHECK(session.netlist().pinSlotsOf(idx).empty(), "descarregar o artefato deve voltar a zero pinos");
 }
 
+void cyclicTaskUnionSchedulesScansAtEveryVirtualBoundary() {
+    plugins::GlobalPluginCache cache;
+    SimulationSession session(cache);
+    const uint32_t idx = session.addComponent("plc.instance", {});
+    plc::PlcNativeModule module = makeHelloModule();
+    module.configurationName = "CFG";
+    module.taskTable = {{"FAST", 5'000'000, 2}, {"SLOW", 10'000'000, 1}};
+    module.programInstances = {{"HELLO_FAST", "FAST", "hello"}, {"HELLO_SLOW", "SLOW", "hello"}};
+    session.loadPlcArtifact(idx, std::move(module));
+    session.setPlcTaskIntervalNs(idx, 100'000'000); // fallback deve ser ignorado se o artefato tem tabela de tasks.
+    (void)session.simulationPlan();
+
+    session.scheduler().runUntil(22'000'000);
+    CHECK(session.plcLastAcceptedScanTimeNs(idx) == 20'000'000,
+          "Core deve agendar a união dos vencimentos de 5 ms e 10 ms, sem usar o fallback de 100 ms");
+}
+
+void eventTaskRunsOnlyOnRisingBoolInputEdgeWithoutPolling() {
+    plugins::GlobalPluginCache cache;
+    SimulationSession session(cache);
+    const uint32_t idx = session.addComponent("plc.instance", {});
+    auto module = makeHelloModule();
+    module.configurationName = "CFG";
+    module.taskTable = {{"ON_DI0", 0, 1, "DI0"}};
+    session.loadPlcArtifact(idx, std::move(module));
+    session.setPlcIoBindings(idx, standardBindings());
+    session.setSignalGraph(makeGraph(false));
+    (void)session.simulationPlan();
+    session.scheduler().runUntil(10'000'000);
+    CHECK(session.plcRuntimeState(idx) == plc::PlcRuntimeState::Stopped,
+          "event-only PLC must not start a periodic fallback worker while its BOOL event is low");
+
+    session.setSignalGraph(makeGraph(true));
+    session.setPlcIoBindings(idx, standardBindings());
+    (void)session.simulationPlan();
+    session.scheduler().runUntil(20'000'000);
+    CHECK(session.plcRuntimeState(idx) == plc::PlcRuntimeState::Ready,
+          "rising BOOL input edge dispatches the configured event task");
+    CHECK(session.plcLastAcceptedScanTimeNs(idx) >= 10'000'000,
+          "event activation carries the stable virtual timestamp into the worker");
+}
+
+void traceOffDoesNotAllocatePerPlcTraceBuffers() {
+    const auto& recorder = trace::Recorder::instance();
+    if (recorder.mode() == trace::Mode::Off) {
+        CHECK(recorder.capacity() == 0, "trace OFF mantém o buffer causal global ausente; PLC não adiciona buffer por instância");
+        CHECK(recorder.written() == 0, "trace OFF não registra eventos de PLC");
+    }
+}
+
 void inputLatchAndOutputCommitFlowThroughSignalEngine() {
     plugins::GlobalPluginCache cache;
     SimulationSession session(cache);
@@ -313,6 +368,22 @@ void multipleIndependentInstancesNeverInterfereEvenAtTheSameTimestamp() {
     CHECK(session.plcRuntimeState(a) == plc::PlcRuntimeState::Ready, "instancia A deve seguir Ready");
     CHECK(session.plcRuntimeState(b) == plc::PlcRuntimeState::Ready, "instancia B deve seguir Ready");
     CHECK(session.scheduler().nowNs() == 500'000'000, "avanco normal do tempo com duas instancias no mesmo calendario");
+    const RuntimeLaunchIdentity identityA = session.plcRuntimeIdentity(a);
+    const RuntimeLaunchIdentity identityB = session.plcRuntimeIdentity(b);
+    CHECK(identityA.sessionExecutionId != 0 && identityA.sessionExecutionId == identityB.sessionExecutionId,
+          "PLC workers de uma execução compartilham sessionExecutionId nao-zero");
+    CHECK(identityA.runtimeInstanceId != identityB.runtimeInstanceId && identityA.launchGeneration == 1 && identityB.launchGeneration == 1,
+          "PLC workers simultaneos recebem runtimeInstanceId distintos e primeira launchGeneration");
+
+    session.stopSimulation();
+    session.scheduler().runUntil(100'000'000);
+    const RuntimeLaunchIdentity restartedA = session.plcRuntimeIdentity(a);
+    const RuntimeLaunchIdentity restartedB = session.plcRuntimeIdentity(b);
+    CHECK(restartedA.sessionExecutionId != identityA.sessionExecutionId && restartedA.sessionExecutionId == restartedB.sessionExecutionId,
+          "stop + nova execucao PLC gera novo sessionExecutionId compartilhado");
+    CHECK(restartedA.runtimeInstanceId == identityA.runtimeInstanceId && restartedB.runtimeInstanceId == identityB.runtimeInstanceId &&
+          restartedA.launchGeneration == 2 && restartedB.launchGeneration == 2,
+          "relaunch preserva runtimeInstanceId e incrementa launchGeneration sem reuso");
 }
 
 void repeatedAddRemoveLeavesNoDanglingSchedule() {
@@ -349,7 +420,7 @@ void repeatedAddRemoveLeavesNoDanglingSchedule() {
     // "consultar uma instancia removida deve lancar" repetido em loop sem nunca crashar/vazar.
 }
 
-std::pair<bool, uint64_t> runEquivalentProfile(resources::ResourceProfile profile) {
+std::pair<bool, uint64_t> runEquivalentProfile(resources::ResourceProfile profile, bool stepped = false) {
     plugins::GlobalPluginCache cache;
     SimulationSession session(cache, 64, resources::ResourceGovernor::forProfile(profile, 8));
     const uint32_t idx = session.addComponent("plc.instance", {});
@@ -359,16 +430,113 @@ std::pair<bool, uint64_t> runEquivalentProfile(resources::ResourceProfile profil
     session.setSignalGraph(makeGraph(true));
     const auto plan = session.simulationPlan();
     const auto output = SignalCompiler::output(plan->signal->engine, "plc_do0_target");
-    session.scheduler().runUntil(700'000'000);
+    if (stepped) {
+        for (int i = 0; i < 7; ++i) session.scheduler().step(100'000'000);
+    } else session.scheduler().runUntil(700'000'000);
     return {session.signalRuntime().boolean(output), session.scheduler().nowNs()};
 }
 
 void desktopAndSharedHostPreservePlcSemantics() {
     const auto desktop = runEquivalentProfile(resources::ResourceProfile::Desktop);
     const auto shared = runEquivalentProfile(resources::ResourceProfile::SharedHost);
+    const auto stepped = runEquivalentProfile(resources::ResourceProfile::Desktop, true);
     CHECK(desktop == shared, "o mesmo artefato PLC deve ter resultado e tempo equivalentes nos dois perfis");
+    CHECK(desktop == stepped, "scan PLC deve produzir o mesmo resultado em avanço headless e em passos explícitos");
     CHECK(desktop.first && desktop.second == 700'000'000,
           "cenario de equivalencia deve realmente completar o TON e o tempo virtual esperado");
+}
+
+std::vector<bool> runWithPlcWorkerCount(size_t workerCount) {
+    plugins::GlobalPluginCache cache;
+    SimulationSession session(cache);
+    std::vector<uint32_t> components;
+    SignalGraphDefinition graph;
+    constexpr SignalRate testRate{10'000'000, 0, 0};
+    components.reserve(workerCount);
+    for (size_t i = 0; i < workerCount; ++i) {
+        const uint32_t index = session.addComponent("plc.instance", {});
+        session.loadPlcArtifact(index, makeHelloModule());
+        const std::string suffix = std::to_string(i);
+        const std::string sourceId = "src_di0_" + suffix;
+        const std::string targetId = "plc_do0_target_" + suffix;
+        SignalBlockDefinition source;
+        source.id = sourceId;
+        source.kind = SignalBlockKind::Source;
+        source.output = SignalPortDefinition{"out", {SignalScalarType::Bool, 1}, ""};
+        source.boolParameters = {1};
+        source.rate = testRate;
+        graph.blocks.push_back(source);
+        SignalBlockDefinition target;
+        target.id = targetId;
+        target.kind = SignalBlockKind::ExternalInput;
+        target.output = SignalPortDefinition{"out", {SignalScalarType::Bool, 1}, ""};
+        target.boolParameters = {0};
+        target.rate = testRate;
+        graph.blocks.push_back(target);
+        session.setPlcIoBindings(index, {{"di0", sourceId}, {"do0", targetId}});
+        session.setPlcTaskIntervalNs(index, 50'000'000);
+        components.push_back(index);
+    }
+    session.setSignalGraph(std::move(graph));
+    const auto plan = session.simulationPlan();
+    std::vector<std::string> outputIds;
+    outputIds.reserve(workerCount);
+    for (size_t i = 0; i < workerCount; ++i)
+        outputIds.push_back("plc_do0_target_" + std::to_string(i));
+    session.scheduler().runUntil(700'000'000);
+    CHECK(session.scheduler().nowNs() == 700'000'000, "frota PLC avança no tempo virtual ao ponto de coleta");
+    std::vector<bool> outputs;
+    outputs.reserve(workerCount);
+    for (size_t i = 0; i < components.size(); ++i) {
+        const auto outputSlot = SignalCompiler::output(plan->signal->engine, outputIds[i]);
+        const bool output = session.signalRuntime().boolean(outputSlot);
+        outputs.push_back(output);
+        CHECK(output && session.plcLastAcceptedScanTimeNs(components[i]) == 700'000'000,
+              "workers com a mesma entrada e horizonte virtual publicam a mesma saída e timestamp");
+    }
+    session.stopSimulation();
+    return outputs;
+}
+
+void plcResultsAreStableAcrossOneTwoAndManyWorkers() {
+    const auto one = runWithPlcWorkerCount(1);
+    const auto two = runWithPlcWorkerCount(2);
+    const auto many = runWithPlcWorkerCount(5);
+    CHECK(one.size() == 1 && two.size() == 2 && many.size() == 5,
+          "o cenário cobre uma, duas e cinco instâncias de worker PLC");
+    CHECK(std::all_of(one.begin(), one.end(), [](bool value) { return value; }) &&
+          std::all_of(two.begin(), two.end(), [](bool value) { return value; }) &&
+          std::all_of(many.begin(), many.end(), [](bool value) { return value; }),
+          "o resultado funcional permanece idêntico ao variar a quantidade de workers PLC");
+}
+
+std::pair<bool, bool> runLivePlcAtRate(double rate) {
+    plugins::GlobalPluginCache cache;
+    SimulationSession session(cache);
+    const uint32_t idx = session.addComponent("plc.instance", {});
+    session.loadPlcArtifact(idx, makeHelloModule());
+    session.setPlcIoBindings(idx, standardBindings());
+    session.setPlcTaskIntervalNs(idx, 100'000'000);
+    session.setSignalGraph(makeGraph(true));
+    const auto plan = session.simulationPlan();
+    const auto output = SignalCompiler::output(plan->signal->engine, "plc_do0_target");
+    session.scheduler().setRealTimeRate(rate);
+    session.scheduler().start();
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (session.scheduler().nowNs() < 800'000'000 && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    const bool reached = session.scheduler().nowNs() >= 800'000'000;
+    session.scheduler().stop();
+    const bool value = session.signalRuntime().boolean(output);
+    session.stopSimulation();
+    return {reached, value};
+}
+
+void timersMatchInRealtimeAndAcceleratedSchedulerModes() {
+    const auto realtime = runLivePlcAtRate(1.0);
+    const auto accelerated = runLivePlcAtRate(100.0);
+    CHECK(realtime.first && accelerated.first, "scheduler realtime e acelerado chegam ao mesmo horizonte virtual");
+    CHECK(realtime.second && accelerated.second, "TON PLC produz a mesma saída nos modos realtime e acelerado");
 }
 
 void resetWhileSchedulerRunsUsesTheCommandQueue() {
@@ -382,7 +550,8 @@ void resetWhileSchedulerRunsUsesTheCommandQueue() {
     (void)session.simulationPlan();
     session.scheduler().start();
     session.plcReset(idx); // must be drained by the running scheduler, never paused before enqueue.
-    CHECK(session.plcRuntimeState(idx) == plc::PlcRuntimeState::Ready,
+    const auto state = session.scheduler().synchronized([&] { return session.plcRuntimeState(idx); });
+    CHECK(state == plc::PlcRuntimeState::Ready,
           "reset enfileirado durante Run deve recriar o worker sem deadlock");
     session.stopSimulation();
 }
@@ -392,6 +561,9 @@ void resetWhileSchedulerRunsUsesTheCommandQueue() {
 int main() {
     plcBlockWithoutArtifactHasZeroPins();
     loadingArtifactCreatesExactExportedIoPins();
+    cyclicTaskUnionSchedulesScansAtEveryVirtualBoundary();
+    eventTaskRunsOnlyOnRisingBoolInputEdgeWithoutPolling();
+    traceOffDoesNotAllocatePerPlcTraceBuffers();
     plcPinsBridgeDirectlyToTheElectricalDomain();
     inputLatchAndOutputCommitFlowThroughSignalEngine();
     pauseNeverAdvancesPlcTimeOrRunsNewScans();
@@ -400,6 +572,8 @@ int main() {
     multipleIndependentInstancesNeverInterfereEvenAtTheSameTimestamp();
     repeatedAddRemoveLeavesNoDanglingSchedule();
     desktopAndSharedHostPreservePlcSemantics();
+    plcResultsAreStableAcrossOneTwoAndManyWorkers();
+    timersMatchInRealtimeAndAcceleratedSchedulerModes();
     resetWhileSchedulerRunsUsesTheCommandQueue();
     if (failures == 0) std::printf("PLC <-> SimulationSession/Scheduler integration (F9.5): OK\n");
     return failures == 0 ? 0 : 1;

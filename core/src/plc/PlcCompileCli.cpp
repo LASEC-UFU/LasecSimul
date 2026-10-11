@@ -25,6 +25,16 @@ nlohmann::json moduleToJson(const PlcNativeModule& module) {
         debugMap.push_back({{"generatedLine", line.generatedLine}, {"sourceFile", line.sourceFile},
                             {"sourceLine", line.sourceLine}});
     }
+    nlohmann::json taskTable = nlohmann::json::array();
+    for (const auto& task : module.taskTable) {
+        taskTable.push_back({{"name", task.name}, {"intervalNs", task.intervalNs}, {"priority", task.priority},
+                             {"eventVariable", task.eventVariable}});
+    }
+    nlohmann::json programInstances = nlohmann::json::array();
+    for (const auto& instance : module.programInstances) {
+        programInstances.push_back({{"instanceName", instance.instanceName}, {"taskName", instance.taskName},
+                                    {"programName", instance.programName}});
+    }
     return {
         {"formatVersion", module.formatVersion},
         {"workerProtocolVersion", module.workerProtocolVersion},
@@ -38,6 +48,10 @@ nlohmann::json moduleToJson(const PlcNativeModule& module) {
         {"nativeBinaryRef", module.nativeBinaryRef},
         {"programName", module.programName},
         {"exportedIo", exportedIo},
+        {"retainLayout", module.retainLayout},
+        {"configurationName", module.configurationName},
+        {"taskTable", taskTable},
+        {"programInstances", programInstances},
         {"debugMap", debugMap},
     };
 }

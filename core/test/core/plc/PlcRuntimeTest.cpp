@@ -4,6 +4,19 @@
 #include <cstdlib>
 #include <filesystem>
 #include <string>
+#include <fstream>
+#include <chrono>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <winsock2.h>
+#else
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
 
 #include "lasecsimul/Sha256.hpp"
 
@@ -17,6 +30,116 @@ int failures = 0;
 
 fs::path helloWorkerBinary() { return LASECSIMUL_TEST_PLC_WORKER_HELLO_BINARY; }
 fs::path misbehavingWorkerBinary() { return LASECSIMUL_TEST_PLC_MISBEHAVING_WORKER_BINARY; }
+fs::path sandboxProbeWorkerBinary() { return LASECSIMUL_TEST_PLC_SANDBOX_PROBE_BINARY; }
+PlcNativeModule makeModule(const fs::path& binaryPath);
+PlcRuntimeOptions fastOptions();
+
+bool sharedHostSandboxBlocksFileAndNetwork() {
+    constexpr uint16_t probePort = 43917;
+    fs::path sentinelPath = LASECSIMUL_TEST_PLC_SANDBOX_SENTINEL;
+    if (fs::exists(sentinelPath)) {
+        CHECK(false, "sandbox probe sentinel path must be free before the test starts");
+        return false;
+    }
+    { std::ofstream sentinel(sentinelPath, std::ios::binary | std::ios::trunc); sentinel << "host-only"; }
+    if (!fs::exists(sentinelPath)) return false;
+#if defined(_WIN32)
+    WSADATA winsock{};
+    if (WSAStartup(MAKEWORD(2, 2), &winsock) != 0) return false;
+    SOCKET listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (listener == INVALID_SOCKET) { WSACleanup(); return false; }
+    BOOL reuse = TRUE;
+    setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&reuse), sizeof(reuse));
+#else
+    int listener = socket(AF_INET, SOCK_STREAM, 0);
+    if (listener < 0) return false;
+    int reuse = 1;
+    setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+#endif
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_port = htons(probePort);
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    const bool listening = bind(listener, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == 0 &&
+                           listen(listener, 1) == 0;
+    if (!listening) {
+#if defined(_WIN32)
+        closesocket(listener); WSACleanup();
+#else
+        close(listener);
+#endif
+        return false;
+    }
+    const char* previousWorkRoot = std::getenv("LASECSIMUL_PLC_SHAREDHOST_WORK_ROOT");
+    const bool hadPreviousWorkRoot = previousWorkRoot != nullptr;
+    const std::string savedWorkRoot = previousWorkRoot ? previousWorkRoot : "";
+    const char* previousSecret = std::getenv("LASECSIMUL_PLC_TEST_SECRET");
+    const bool hadPreviousSecret = previousSecret != nullptr;
+    const std::string savedSecret = previousSecret ? previousSecret : "";
+    const fs::path configuredWorkRoot = fs::temp_directory_path() /
+        ("lasecsimul-plc-sharedhost-test-" + std::to_string(
+            std::chrono::steady_clock::now().time_since_epoch().count()));
+    if (fs::exists(configuredWorkRoot)) {
+        CHECK(false, "SharedHost test work root must be absent before the test starts");
+#if defined(_WIN32)
+        closesocket(listener); WSACleanup();
+#else
+        close(listener);
+#endif
+        fs::remove(sentinelPath);
+        return false;
+    }
+#if defined(_WIN32)
+    _putenv_s("LASECSIMUL_PLC_SHAREDHOST_WORK_ROOT", configuredWorkRoot.string().c_str());
+    _putenv_s("LASECSIMUL_PLC_TEST_SECRET", "must-not-enter-worker");
+#else
+    setenv("LASECSIMUL_PLC_SHAREDHOST_WORK_ROOT", configuredWorkRoot.c_str(), 1);
+    setenv("LASECSIMUL_PLC_TEST_SECRET", "must-not-enter-worker", 1);
+#endif
+    PlcNativeModule module = makeModule(sandboxProbeWorkerBinary());
+    PlcRuntimeOptions options = fastOptions();
+    options.sharedHostIsolationRequired = true;
+    PlcRuntime runtime(std::move(module), std::move(options));
+    bool fileBlocked = false, networkBlocked = false, secretEnvironmentBlocked = false;
+    try {
+        runtime.ensureStarted();
+        const std::string fileReply = runtime.get("HELLO.FS_BLOCKED");
+        const std::string networkReply = runtime.get("HELLO.NETWORK_BLOCKED");
+        const std::string environmentReply = runtime.get("HELLO.ENV_BLOCKED");
+        fileBlocked = fileReply.find("TRUE") != std::string::npos;
+        networkBlocked = networkReply.find("TRUE") != std::string::npos;
+        secretEnvironmentBlocked = environmentReply.find("TRUE") != std::string::npos;
+        if (!fileBlocked || !networkBlocked || !secretEnvironmentBlocked)
+            std::fprintf(stderr, "sandbox probe replies: %s | %s | %s\n", fileReply.c_str(), networkReply.c_str(), environmentReply.c_str());
+        runtime.shutdown();
+    } catch (const PlcRuntimeError& error) {
+        std::fprintf(stderr, "sandbox probe runtime error: %s\n", error.what());
+        runtime.forceKill();
+    }
+#if defined(_WIN32)
+    closesocket(listener); WSACleanup();
+#else
+    close(listener);
+#endif
+    std::error_code ignored;
+    fs::remove(sentinelPath, ignored);
+    const bool privateWorkRootCleaned = fs::exists(configuredWorkRoot) && fs::is_empty(configuredWorkRoot, ignored);
+    fs::remove(configuredWorkRoot, ignored);
+#if defined(_WIN32)
+    _putenv_s("LASECSIMUL_PLC_SHAREDHOST_WORK_ROOT", savedWorkRoot.c_str());
+    _putenv_s("LASECSIMUL_PLC_TEST_SECRET", savedSecret.c_str());
+#else
+    if (hadPreviousWorkRoot) setenv("LASECSIMUL_PLC_SHAREDHOST_WORK_ROOT", savedWorkRoot.c_str(), 1);
+    else unsetenv("LASECSIMUL_PLC_SHAREDHOST_WORK_ROOT");
+    if (hadPreviousSecret) setenv("LASECSIMUL_PLC_TEST_SECRET", savedSecret.c_str(), 1);
+    else unsetenv("LASECSIMUL_PLC_TEST_SECRET");
+#endif
+    CHECK(fileBlocked, "SharedHost PLC worker cannot read a host file outside its private work directory");
+    CHECK(networkBlocked, "SharedHost PLC worker cannot connect to an available loopback TCP listener");
+    CHECK(secretEnvironmentBlocked, "SharedHost worker receives no arbitrary Core environment variables");
+    CHECK(privateWorkRootCleaned, "SharedHost worker working directory follows the deployment root and is removed at shutdown");
+    return fileBlocked && networkBlocked && secretEnvironmentBlocked && privateWorkRootCleaned;
+}
 
 /** `PlcRuntime`/`Process::start()` spawna `nativeBinaryRef` como um caminho de executavel puro,
  * sem argv extra -- nenhum `PlcNativeModule` real precisa disso. Pra selecionar o modo de mau
@@ -60,6 +183,8 @@ void spawnsAndValidatesHandshake() {
     CHECK(runtime.state() == PlcRuntimeState::Stopped, "shutdown() must leave the runtime Stopped");
     CHECK(!runtime.workerRunning(), "shutdown() must leave no worker process running");
 }
+
+void sharedHostSandboxIsEnforced() { (void)sharedHostSandboxBlocksFileAndNetwork(); }
 
 void protocolAndIdentityMismatchAreRejected() {
     {
@@ -269,6 +394,7 @@ void multipleInstancesNeverInterfere() {
 int main() {
     try {
         spawnsAndValidatesHandshake();
+    sharedHostSandboxIsEnforced();
         protocolAndIdentityMismatchAreRejected();
         artifactHashMismatchIsRejectedBeforeSpawning();
         validScanReturnsCompleteSnapshot();

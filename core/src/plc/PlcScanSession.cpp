@@ -1,6 +1,7 @@
 #include "PlcScanSession.hpp"
 
 #include <cctype>
+#include <algorithm>
 #include <sstream>
 
 #include "iec_std_lib.hpp"
@@ -66,17 +67,29 @@ bool isValueValidForType(VarTypeTag type, const std::string& value) {
 } // namespace
 
 PlcScanSession::PlcScanSession(ProgramDescriptor program, std::vector<VarDescriptor> inputVars,
-                               std::vector<VarDescriptor> outputVars, std::function<void()> resetInstance)
+                               std::vector<VarDescriptor> outputVars, std::function<void()> resetInstance,
+                               std::function<void(int64_t, const std::vector<std::string>&)> runConfiguredTasks,
+                               std::function<std::string()> exportRetain,
+                               std::function<bool(const std::string&)> importRetain)
     : m_program(program), m_inputVars(std::move(inputVars)), m_outputVars(std::move(outputVars)),
-      m_resetInstance(std::move(resetInstance)) {}
+      m_resetInstance(std::move(resetInstance)), m_runConfiguredTasks(std::move(runConfiguredTasks)),
+      m_exportRetain(std::move(exportRetain)), m_importRetain(std::move(importRetain)) {}
 
 std::string PlcScanSession::handleLine(const std::string& line) {
     const ParsedCommand parsed = parseCommandLine(line);
     if (!parsed.valid) return "ERR ? malformed command line";
 
-    if (parsed.command == "HELLO") return handleHello(parsed.requestId);
+    if (parsed.command == "HELLO") return handleHello(parsed.requestId, parsed.rest);
+    if (parsed.command == "RETAIN_EXPORT") {
+        return "OK " + parsed.requestId + (m_exportRetain ? " " + m_exportRetain() : "");
+    }
+    if (parsed.command == "RETAIN_IMPORT") {
+        if (!m_importRetain || !m_importRetain(parsed.rest)) return "ERR " + parsed.requestId + " invalid RETAIN snapshot";
+        return "OK " + parsed.requestId;
+    }
     if (parsed.command == "RESET") return handleReset(parsed.requestId);
     if (parsed.command == "SCAN") return handleScan(parsed.requestId, parsed.rest);
+    if (parsed.command == "EVENT") return handleEvent(parsed.requestId, parsed.rest);
     if (parsed.command == "GET" || parsed.command == "SET" ||
         parsed.command == "FORCE" || parsed.command == "UNFORCE") {
         return handleVariableCommand(parsed.command, parsed.requestId, parsed.rest);
@@ -94,8 +107,28 @@ std::string PlcScanSession::handleLine(const std::string& line) {
     return "ERR " + parsed.requestId + " unknown command: " + parsed.command;
 }
 
-std::string PlcScanSession::handleHello(const std::string& requestId) {
-    return "OK " + requestId + " protocol=1 program=" + std::string(m_program.name);
+std::string PlcScanSession::handleHello(const std::string& requestId, const std::string& args) {
+    PlcWorkerIdentity identity{};
+    std::istringstream stream(args);
+    std::string token;
+    try {
+        while (stream >> token) {
+            const size_t eq = token.find('=');
+            if (eq == std::string::npos) return "ERR " + requestId + " malformed launch identity";
+            const std::string key = token.substr(0, eq), value = token.substr(eq + 1);
+            const uint64_t parsedValue = std::stoull(value);
+            if (key == "session") identity.sessionExecutionId = parsedValue;
+            else if (key == "runtime") identity.runtimeInstanceId = parsedValue;
+            else if (key == "generation") identity.launchGeneration = parsedValue;
+            else return "ERR " + requestId + " unknown HELLO field: " + key;
+        }
+    } catch (...) { return "ERR " + requestId + " invalid launch identity"; }
+    m_runtimeIdentity = identity;
+    std::string response = "OK " + requestId + " protocol=1 program=" + std::string(m_program.name);
+    if (!args.empty()) response += " session=" + std::to_string(identity.sessionExecutionId) +
+                                   " runtime=" + std::to_string(identity.runtimeInstanceId) +
+                                   " generation=" + std::to_string(identity.launchGeneration);
+    return response;
 }
 
 std::string PlcScanSession::handleReset(const std::string& requestId) {
@@ -163,7 +196,8 @@ std::string PlcScanSession::handleScan(const std::string& requestId, const std::
     strucpp::__CURRENT_TIME_NS = simulationTimeNs;
     strucpp::__CURRENT_DT_NS = simulationTimeNs;
 
-    m_program.instance->run();
+    if (m_runConfiguredTasks) m_runConfiguredTasks(simulationTimeNs, {});
+    else m_program.instance->run();
 
     m_hasScanned = true;
     m_lastAcceptedTimeNs = simulationTimeNs;
@@ -178,6 +212,44 @@ std::string PlcScanSession::handleScan(const std::string& requestId, const std::
         response += "=";
         response += var_value_to_string(output.type, output.var_ptr);
     }
+    return response;
+}
+
+std::string PlcScanSession::handleEvent(const std::string& requestId, const std::string& args) {
+    std::istringstream stream(args);
+    int64_t simulationTimeNs = 0;
+    std::string taskList;
+    if (!(stream >> simulationTimeNs >> taskList) || taskList.empty()) return "ERR " + requestId + " missing event time/tasks";
+    if (m_hasScanned && simulationTimeNs < m_lastAcceptedTimeNs)
+        return "ERR " + requestId + " event time precedes last activation";
+    std::vector<std::string> tasks;
+    std::istringstream taskStream(taskList);
+    std::string task;
+    while (std::getline(taskStream, task, ',')) if (!task.empty()) tasks.push_back(task);
+    if (tasks.empty()) return "ERR " + requestId + " empty event task list";
+    struct PendingAssignment { VarDescriptor* var; std::string value; };
+    std::vector<PendingAssignment> pending;
+    std::string token;
+    while (stream >> token) {
+        const size_t eq = token.find('=');
+        if (eq == std::string::npos || eq == 0) return "ERR " + requestId + " malformed input assignment: " + token;
+        const std::string name = token.substr(0, eq), value = token.substr(eq + 1);
+        VarDescriptor* var = nullptr;
+        for (auto& candidate : m_inputVars) if (name == candidate.name) { var = &candidate; break; }
+        if (!var) return "ERR " + requestId + " unknown input variable: " + name;
+        if (!isValueValidForType(var->type, value)) return "ERR " + requestId + " invalid input value: " + name;
+        pending.push_back({var, value});
+    }
+    for (auto& assignment : pending) var_set_value(assignment.var->type, assignment.var->var_ptr, assignment.value);
+    strucpp::__CURRENT_TIME_NS = simulationTimeNs;
+    strucpp::__CURRENT_DT_NS = 0;
+    if (m_runConfiguredTasks) m_runConfiguredTasks(simulationTimeNs, tasks);
+    else m_program.instance->run();
+    m_hasScanned = true;
+    m_lastAcceptedTimeNs = std::max(m_lastAcceptedTimeNs, simulationTimeNs);
+    ++m_scanCount;
+    std::string response = "OK " + requestId;
+    for (const auto& output : m_outputVars) response += " " + std::string(output.name) + "=" + var_value_to_string(output.type, output.var_ptr);
     return response;
 }
 

@@ -2,7 +2,7 @@
    confirmada manualmente contra o binario vendorizado da STruCpp antes de escrever este arquivo
    (compila sem erro). O loop nunca termina de proposito -- run() jamais retorna, entao qualquer
    SCAN mandado pro worker deve estourar o timeout do lado do PlcRuntime, nunca travar o Core. *)
-PROGRAM hangtest
+PROGRAM hang
 VAR_INPUT
     di0 : BOOL;
 END_VAR

@@ -137,8 +137,8 @@ inline std::string var_value_to_string(VarTypeTag type, void* ptr) {
             return r;
         }
         case VarTypeTag::STRING: {
-            const char* str_data = reinterpret_cast<const char*>(ptr);
-            return std::string("'") + str_data + "'";
+            const auto value = static_cast<strucpp::STRING_VAR*>(ptr)->get();
+            return std::string("'") + value.c_str() + "'";
         }
         default: return "<?>";
     }
@@ -163,6 +163,7 @@ inline bool var_is_forced(VarTypeTag type, void* ptr) {
         case VarTypeTag::DWORD: return static_cast<IECVar<DWORD_t>*>(ptr)->is_forced();
         case VarTypeTag::LWORD: return static_cast<IECVar<LWORD_t>*>(ptr)->is_forced();
         case VarTypeTag::TIME:  return static_cast<IECVar<TIME_t>*>(ptr)->is_forced();
+        case VarTypeTag::STRING: return static_cast<STRING_VAR*>(ptr)->is_forced();
         default: return false;
     }
 }
@@ -193,10 +194,7 @@ inline bool var_set_value(VarTypeTag type, void* ptr, const std::string& val) {
             case VarTypeTag::STRING: {
                 std::string s = val;
                 if (s.size() >= 2 && s.front() == '\'' && s.back() == '\'') s = s.substr(1, s.size() - 2);
-                char* data_ptr = reinterpret_cast<char*>(ptr);
-                uint16_t len = static_cast<uint16_t>(s.size() > 254 ? 254 : s.size());
-                std::memcpy(data_ptr, s.c_str(), len);
-                data_ptr[len] = '\0';
+                static_cast<STRING_VAR*>(ptr)->set(s.c_str());
                 return true;
             }
             default: return false;
@@ -227,6 +225,12 @@ inline bool var_force_value(VarTypeTag type, void* ptr, const std::string& val) 
             case VarTypeTag::DWORD: static_cast<IECVar<DWORD_t>*>(ptr)->force(static_cast<DWORD_t>(std::stoul(val, nullptr, 0))); return true;
             case VarTypeTag::LWORD: static_cast<IECVar<LWORD_t>*>(ptr)->force(static_cast<LWORD_t>(std::stoull(val, nullptr, 0))); return true;
             case VarTypeTag::TIME:  static_cast<IECVar<TIME_t>*>(ptr)->force(static_cast<TIME_t>(std::stoll(val))); return true;
+            case VarTypeTag::STRING: {
+                std::string s = val;
+                if (s.size() >= 2 && s.front() == '\'' && s.back() == '\'') s = s.substr(1, s.size() - 2);
+                static_cast<STRING_VAR*>(ptr)->force(s.c_str());
+                return true;
+            }
             default: return false;
         }
     } catch (...) { return false; }
@@ -251,6 +255,7 @@ inline void var_unforce(VarTypeTag type, void* ptr) {
         case VarTypeTag::DWORD: static_cast<IECVar<DWORD_t>*>(ptr)->unforce(); break;
         case VarTypeTag::LWORD: static_cast<IECVar<LWORD_t>*>(ptr)->unforce(); break;
         case VarTypeTag::TIME:  static_cast<IECVar<TIME_t>*>(ptr)->unforce(); break;
+        case VarTypeTag::STRING: static_cast<STRING_VAR*>(ptr)->unforce(); break;
         default: break;
     }
 }

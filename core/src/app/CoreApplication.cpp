@@ -1619,6 +1619,25 @@ plc::PlcNativeModule plcModuleFromJson(const nlohmann::json& value) {
     module.artifactHash = value.value("artifactHash", std::string{});
     module.nativeBinaryRef = value.value("nativeBinaryRef", std::string{});
     module.programName = value.value("programName", std::string{});
+    module.configurationName = value.value("configurationName", std::string{});
+    if (value.contains("retainLayout") && value["retainLayout"].is_array()) {
+        for (const auto& name : value["retainLayout"]) {
+            if (name.is_string()) module.retainLayout.push_back(name.get<std::string>());
+        }
+    }
+    if (value.contains("taskTable") && value["taskTable"].is_array()) {
+        for (const auto& encoded : value["taskTable"]) {
+            module.taskTable.push_back({encoded.value("name", std::string{}), encoded.value("intervalNs", int64_t{0}),
+                                        encoded.value("priority", int32_t{0}), encoded.value("eventVariable", std::string{})});
+        }
+    }
+    if (value.contains("programInstances") && value["programInstances"].is_array()) {
+        for (const auto& encoded : value["programInstances"]) {
+            module.programInstances.push_back({encoded.value("instanceName", std::string{}),
+                                               encoded.value("taskName", std::string{}),
+                                               encoded.value("programName", std::string{})});
+        }
+    }
     if (value.contains("exportedIo") && value["exportedIo"].is_array()) {
         for (const auto& encoded : value["exportedIo"]) {
             module.exportedIo.push_back({encoded.value("ioId", std::string{}), encoded.value("name", std::string{}),
@@ -1790,11 +1809,12 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         } catch (const std::exception& error) { resp.ok = false; resp.error = error.what(); }
         return resp;
     }
-    if (msg.type == "plcReset") {
+    if (msg.type == "plcReset" || msg.type == "plcWarmReset") {
         try {
             const auto payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
             const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
-            session.plcReset(instanceId);
+            if (msg.type == "plcWarmReset") session.plcWarmReset(instanceId);
+            else session.plcReset(instanceId);
             resp.ok = true;
         } catch (const std::exception& error) { resp.ok = false; resp.error = error.what(); }
         return resp;

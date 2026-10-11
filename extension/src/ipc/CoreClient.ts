@@ -71,6 +71,10 @@ export interface PlcNativeModuleDto {
   nativeBinaryRef: string;
   programName: string;
   exportedIo: Array<{ ioId: string; name: string; direction: "input" | "output"; iecType: string }>;
+  retainLayout?: string[];
+  configurationName?: string;
+  taskTable?: Array<{ name: string; intervalNs: number; priority: number; eventVariable?: string }>;
+  programInstances?: Array<{ instanceName: string; taskName: string; programName: string }>;
   debugMap?: Array<{ generatedLine: number; sourceFile: string; sourceLine: number }>;
 }
 
@@ -498,6 +502,10 @@ export class CoreClient {
 
   async plcReset(instanceId: string): Promise<void> {
     await this.request("plcReset", { instanceId });
+  }
+
+  async plcWarmReset(instanceId: string): Promise<void> {
+    await this.request("plcWarmReset", { instanceId });
   }
 
   // ── FPGA/VHDL (GHDL) ────────────────────────────────────────────────────────

@@ -108,8 +108,8 @@ import { ProjectCustomEditorProvider } from "./ui/panels/ProjectCustomEditorProv
 import { SimulideImportCustomEditorProvider } from "./ui/panels/SimulideImportCustomEditorProvider";
 import { IecProjectEditorProvider } from "./plc/IecProjectEditorProvider";
 import { newIecProjectCommand } from "./plc/plcCommands";
-import { parseIecProject } from "./plc/iecProject";
 import { readPlcNativeModule } from "./plc/artifact";
+import { ensureAllPlcsBuilt, plcConfigurationForIecProject } from "./plc/plcSchematic";
 import { maybeOfferMachineNetworkSetup, registerMachineNetworkSetupCommand } from "./network/machineNetworkSetup";
 import { resolveNetworkMode } from "./network/networkMode";
 import { startMdnsResponder } from "./network/mdnsResponder";
@@ -563,6 +563,8 @@ async function runSimulationWithFirmwareCheck(): Promise<void> {
   // (criando o session_execution_id); em seguida o carregador pode iniciar/reiniciar o QEMU com
   // o firmware selecionado. A ordem anterior tentava carregar com a sessão parada e produzia
   // "loadMcuFirmware requer execucao ativa".
+  // O programa do CLP é compilado antes: carregar o artefato refaz o Core, o que exige parado.
+  if (!(await ensureAllPlcsBuilt({ syncSchematicPanel }))) return;
   await runSimulation();
   if ((state.simulationStatus as string) !== "running") return;
   const result = await ensureAllMcuFirmwareUpToDate(mcuCommandOptions());
@@ -996,11 +998,12 @@ async function chooseFilePropertyCommand(componentId: string, propertyKey: strin
   }
   if (isPlcProject) {
     try {
-      const project = parseIecProject(JSON.parse(fs.readFileSync(absolutePath, "utf8")));
-      const entryConfiguration = typeof project.buildSettings.entryConfiguration === "string"
-        ? project.buildSettings.entryConfiguration : component.plc?.entryConfiguration;
-      plc = { ...component.plc, iecProjectRef: absolutePath, ...(entryConfiguration ? { entryConfiguration } : {}) };
-      if (entryConfiguration) updatedProperties.plcEntryConfiguration = entryConfiguration;
+      // Pinos saem da interface do PROGRAM sem compilar; a compilação acontece ao Rodar.
+      const configured = plcConfigurationForIecProject(component.plc, absolutePath);
+      plc = configured.plc;
+      plcPins = configured.pins;
+      updatedProperties.plcArtifactRef = "";
+      if (configured.entryConfiguration) updatedProperties.plcEntryConfiguration = configured.entryConfiguration;
     } catch (err) {
       vscode.window.showErrorMessage(`Projeto IEC inválido: ${err instanceof Error ? err.message : String(err)}`);
       return;

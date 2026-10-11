@@ -20,6 +20,7 @@ import { RollingRateSampler } from "./rollingRateSampler";
 import { buildFpgaPins, FpgaPortSpec } from "../fpga/fpgaPins";
 import { resolveFpgaToolchainConfig } from "../fpga/fpgaToolchain";
 import { readPlcNativeModule } from "../plc/artifact";
+import { publishIecProjectPlc } from "../plc/plcRuntimeBridge";
 import { SIMULIDE_UNRESOLVED_TYPE_ID } from "../import/simulide/SimulideToLasecConverter";
 
 export { electricalEdgesForProject, diffElectricalEdges, voltageProbesForProject };
@@ -95,10 +96,15 @@ export function registerCoreIdsForComponent(
 }
 
 async function publishConfiguredPlcArtifact(
-  component: Pick<WebviewComponentModel, "plc" | "properties"> | undefined,
+  component: Pick<WebviewComponentModel, "plc" | "properties" | "id"> | undefined,
   instanceId: string
 ): Promise<void> {
   if (!state.coreClient || !component) return;
+  // Projeto IEC: período da TASK e programa vêm do projeto compilado (plc/plcRuntimeBridge.ts).
+  if (component.plc?.iecProjectRef) {
+    await publishIecProjectPlc(component, instanceId);
+    return;
+  }
   const taskIntervalMs = Number(component.properties.plcTaskIntervalMs ?? 10);
   if (Number.isFinite(taskIntervalMs) && taskIntervalMs > 0) {
     await state.coreClient.setPlcTaskInterval(instanceId, Math.max(1, Math.round(taskIntervalMs * 1_000_000)));

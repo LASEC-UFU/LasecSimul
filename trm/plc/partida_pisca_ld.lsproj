@@ -1,0 +1,434 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    {
+      "id": "component-1791700000000-plc",
+      "typeId": "plc.instance",
+      "label": "CLP (LD)",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 520,
+        "y": 300,
+        "rotation": 0
+      },
+      "properties": {
+        "plcIecProjectRef": "partida_pisca_ld.iec.json",
+        "plcArtifactRef": "",
+        "plcEntryConfiguration": "CONFIGURATION_1",
+        "plcTaskIntervalMs": 10
+      },
+      "plc": {
+        "iecProjectRef": "partida_pisca_ld.iec.json",
+        "entryConfiguration": "CONFIGURATION_1",
+        "exportedIoBindingVersion": 1,
+        "exportedIo": [
+          {
+            "ioId": "START",
+            "name": "START",
+            "direction": "input",
+            "iecType": "BOOL"
+          },
+          {
+            "ioId": "STOP",
+            "name": "STOP",
+            "direction": "input",
+            "iecType": "BOOL"
+          },
+          {
+            "ioId": "LAMP",
+            "name": "LAMP",
+            "direction": "output",
+            "iecType": "BOOL"
+          },
+          {
+            "ioId": "BLINK",
+            "name": "BLINK",
+            "direction": "output",
+            "iecType": "BOOL"
+          }
+        ]
+      }
+    },
+    {
+      "id": "component-1791700000000-vcc",
+      "typeId": "sources.dc_voltage",
+      "label": "Fonte 5 V",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 120,
+        "y": 260,
+        "rotation": 0
+      },
+      "properties": {
+        "voltage": 5
+      }
+    },
+    {
+      "id": "component-1791700000000-liga",
+      "typeId": "switches.push",
+      "label": "LIGA",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 300,
+        "y": 240,
+        "rotation": 0
+      },
+      "properties": {
+        "closed": false,
+        "normallyClosed": false,
+        "key": "L"
+      }
+    },
+    {
+      "id": "component-1791700000000-desliga",
+      "typeId": "switches.push",
+      "label": "DESLIGA",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 300,
+        "y": 330,
+        "rotation": 0
+      },
+      "properties": {
+        "closed": false,
+        "normallyClosed": false,
+        "key": "D"
+      }
+    },
+    {
+      "id": "component-1791700000000-rliga",
+      "typeId": "passive.resistor",
+      "label": "R1 10k",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 420,
+        "y": 420,
+        "rotation": 90
+      },
+      "properties": {
+        "resistance": 10000
+      }
+    },
+    {
+      "id": "component-1791700000000-rdesliga",
+      "typeId": "passive.resistor",
+      "label": "R2 10k",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 460,
+        "y": 420,
+        "rotation": 90
+      },
+      "properties": {
+        "resistance": 10000
+      }
+    },
+    {
+      "id": "component-1791700000000-rlamp",
+      "typeId": "passive.resistor",
+      "label": "R3 330",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 700,
+        "y": 280,
+        "rotation": 0
+      },
+      "properties": {
+        "resistance": 330
+      }
+    },
+    {
+      "id": "component-1791700000000-lamp",
+      "typeId": "outputs.led",
+      "label": "Lâmpada",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 800,
+        "y": 280,
+        "rotation": 0
+      },
+      "properties": {
+        "color": "Green",
+        "threshold": 2.4,
+        "resistance": 0.6
+      }
+    },
+    {
+      "id": "component-1791700000000-rblink",
+      "typeId": "passive.resistor",
+      "label": "R4 330",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 700,
+        "y": 360,
+        "rotation": 0
+      },
+      "properties": {
+        "resistance": 330
+      }
+    },
+    {
+      "id": "component-1791700000000-blink",
+      "typeId": "outputs.led",
+      "label": "Pisca",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 800,
+        "y": 360,
+        "rotation": 0
+      },
+      "properties": {
+        "color": "Yellow",
+        "threshold": 2.4,
+        "resistance": 0.6
+      }
+    },
+    {
+      "id": "component-1791700000000-gnd",
+      "typeId": "other.ground",
+      "label": "GND",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 520,
+        "y": 520,
+        "rotation": 0
+      },
+      "properties": {}
+    }
+  ],
+  "topology": {
+    "revision": 1,
+    "nodes": [],
+    "conductors": [
+      {
+        "id": "wire-1791700000000-vcc-gnd",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791700000000-vcc",
+          "pinId": "pin-2"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791700000000-gnd",
+          "pinId": "pin"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791700000000-vcc-liga",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791700000000-vcc",
+          "pinId": "pin-1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791700000000-liga",
+          "pinId": "pin-1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791700000000-vcc-desliga",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791700000000-vcc",
+          "pinId": "pin-1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791700000000-desliga",
+          "pinId": "pin-1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791700000000-liga-start",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791700000000-liga",
+          "pinId": "pin-2"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791700000000-plc",
+          "pinId": "START"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791700000000-desliga-stop",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791700000000-desliga",
+          "pinId": "pin-2"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791700000000-plc",
+          "pinId": "STOP"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791700000000-start-r1",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791700000000-plc",
+          "pinId": "START"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791700000000-rliga",
+          "pinId": "pin-1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791700000000-r1-gnd",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791700000000-rliga",
+          "pinId": "pin-2"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791700000000-gnd",
+          "pinId": "pin"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791700000000-stop-r2",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791700000000-plc",
+          "pinId": "STOP"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791700000000-rdesliga",
+          "pinId": "pin-1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791700000000-r2-gnd",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791700000000-rdesliga",
+          "pinId": "pin-2"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791700000000-gnd",
+          "pinId": "pin"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791700000000-lamp-r3",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791700000000-plc",
+          "pinId": "LAMP"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791700000000-rlamp",
+          "pinId": "pin-1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791700000000-r3-led",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791700000000-rlamp",
+          "pinId": "pin-2"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791700000000-lamp",
+          "pinId": "anode"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791700000000-led-gnd",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791700000000-lamp",
+          "pinId": "cathode"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791700000000-gnd",
+          "pinId": "pin"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791700000000-blink-r4",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791700000000-plc",
+          "pinId": "BLINK"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791700000000-rblink",
+          "pinId": "pin-1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791700000000-r4-led",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791700000000-rblink",
+          "pinId": "pin-2"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791700000000-blink",
+          "pinId": "anode"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791700000000-led2-gnd",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791700000000-blink",
+          "pinId": "cathode"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791700000000-gnd",
+          "pinId": "pin"
+        },
+        "vertices": []
+      }
+    ]
+  },
+  "visual": {
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    }
+  },
+  "simulationSettings": {}
+}

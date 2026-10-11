@@ -1,0 +1,58 @@
+name: PLC Linux
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/plc-linux.yml"
+      - ".spec/features/iec61131-plc.md"
+      - "core/**"
+      - "extension/src/plc/**"
+      - "scripts/build-strucpp.js"
+      - "scripts/strucpp-pin.json"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/plc-linux.yml"
+      - ".spec/features/iec61131-plc.md"
+      - "core/**"
+      - "extension/src/plc/**"
+      - "scripts/build-strucpp.js"
+      - "scripts/strucpp-pin.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plc-linux:
+    name: Linux IEC PLC runtime and sandbox
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify Linux C++ toolchain
+        run: |
+          cmake --version
+          g++ --version
+
+      - name: Build pinned STruCpp compiler
+        run: npm run build:strucpp
+
+      - name: Configure Core tests
+        run: cmake -S core -B core/build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build PLC tests
+        run: >-
+          cmake --build core/build --config Release --parallel 4 --target
+          plc_scan_session_test plc_compiler_test plc_runtime_test plc_session_integration_test
+
+      - name: Run PLC tests including Linux SharedHost probes
+        run: >-
+          ctest --test-dir core/build -C Release
+          -R '^plc_(scan_session|compiler|runtime|session_integration)$'
+          --output-on-failure

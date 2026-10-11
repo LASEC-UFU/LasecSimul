@@ -15,6 +15,8 @@
  */
 
 #include <cstdint>
+#include <functional>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -22,6 +24,7 @@
 #include <unordered_map>
 
 #include "PlcNativeModule.hpp"
+#include "lasecsimul/Types.hpp"
 
 namespace lasecsimul::plc {
 
@@ -37,11 +40,22 @@ struct PlcRuntimeOptions {
     uint32_t handshakeTimeoutMs = 5000;
     uint32_t stepTimeoutMs = 5000;   // usado por SCAN/GET/SET/FORCE/UNFORCE/RESET
     uint32_t shutdownTimeoutMs = 3000; // espera apos mandar SHUTDOWN antes de considerar travado
+    /** Processo worker PLC recebe este teto de memoria virtual/commit; zero desativa o limite. */
+    uint64_t workerMemoryLimitBytes = 0;
+    /** SharedHost workers run with a private work directory, a reduced environment and OS sandbox. */
+    bool sharedHostIsolationRequired = false;
+    /** Snapshot RETAIN durável por instância PLC. Vazio desativa armazenamento fora do processo. */
+    std::filesystem::path retainStoragePath;
+    /** Identity is reserved by the owning component immediately before each process launch. */
+    std::function<RuntimeLaunchIdentity()> launchIdentityProvider;
+    uint64_t sessionExecutionId = 0;
+    uint64_t runtimeInstanceId = 0;
 };
 
 struct PlcScanRequest {
     int64_t simulationTimeNs = 0;
     std::unordered_map<std::string, std::string> inputs; // nome (ex.: "DI0") -> valor textual
+    std::vector<std::string> eventTasks;
 };
 
 struct PlcScanResult {
@@ -69,6 +83,8 @@ public:
      * chamar de novo com o estado já `Ready` é no-op. Lança `PlcRuntimeError` (e fica `Faulted`) se
      * qualquer passo falhar. */
     void ensureStarted();
+    void setSessionExecutionId(uint64_t sessionExecutionId);
+    RuntimeLaunchIdentity runtimeIdentity() const noexcept { return m_runtimeIdentity; }
 
     /** UM scan -- exige `Ready` (chama `ensureStarted()` internamente). `simulationTimeNs` deve
      * ser estritamente maior que o último aceito (mesmo contrato provado em F9.2 -- `PlcRuntime`
@@ -76,6 +92,8 @@ public:
      * parcial: timeout, EOF, resposta malformada ou `requestId` incorreto viram `PlcRuntimeError`
      * (e `Faulted`) ANTES de qualquer saída ser interpretada -- quem chama nunca vê output parcial. */
     PlcScanResult scan(const PlcScanRequest& request);
+    /** Dispara as tasks SINGLE indicadas sem avançar o tempo IEC; aceita ativações no mesmo timestamp. */
+    PlcScanResult event(const PlcScanRequest& request);
 
     /** `qualifiedName` no formato `PROGRAMA.VARIAVEL` (ex.: `"HELLO.DO0"`). Nenhum destes avança
      * `simulationTimeNs`/executa `run()` -- garantido pelo próprio `PlcScanSession` (F9.2), aqui só
@@ -89,6 +107,9 @@ public:
      * (novo processo, novo handshake) -- escopo desta rodada é "estado inicial conhecido", não a
      * semântica IEC completa de Cold/Warm Reset (RETAIN, etc.) -- ver plano F9 Rodada 1. */
     void reset();
+
+    /** Warm reset keeps IEC RETAIN members and reinitializes every other program value in place. */
+    void warmReset();
 
     /** Alias semântico de `reset()` nesta rodada -- mesma implementação (mata + sobe de novo +
      * handshake). Mantido como nome próprio porque o vocabulário de "restart após fault" e "reset
@@ -115,6 +136,8 @@ private:
     class Process;
 
     void markFaulted(const std::string& message);
+    void checkpointRetainSnapshot();
+    void writeRetainSnapshotDurably();
     std::string nextRequestId();
     /** Manda `command` já formatado (sem requestId -- adiciona aqui) e devolve a resposta JÁ COM O
      * PREFIXO `OK <requestId> `/`ERR <requestId> ` removido. Lança (e marca `Faulted`) em timeout,
@@ -129,6 +152,10 @@ private:
     uint64_t m_requestSequence = 0;
     bool m_hasScanned = false;
     int64_t m_lastAcceptedTimeNs = -1;
+    std::string m_retainSnapshot;
+    bool m_hasRetainSnapshot = false;
+    RuntimeLaunchIdentity m_runtimeIdentity{};
+    uint64_t m_localLaunchGeneration = 0;
 };
 
 } // namespace lasecsimul::plc

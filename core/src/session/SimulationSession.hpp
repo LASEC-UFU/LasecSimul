@@ -320,7 +320,10 @@ public:
     std::string plcForceVariable(uint32_t componentIndex, const std::string& qualifiedName, const std::string& value);
     std::string plcUnforceVariable(uint32_t componentIndex, const std::string& qualifiedName);
     void plcReset(uint32_t componentIndex);
+    void plcWarmReset(uint32_t componentIndex);
     plc::PlcRuntimeState plcRuntimeState(uint32_t componentIndex) const;
+    int64_t plcLastAcceptedScanTimeNs(uint32_t componentIndex) const;
+    RuntimeLaunchIdentity plcRuntimeIdentity(uint32_t componentIndex) const;
 
     /** Registra, no ComponentRegistry desta sessão, uma factory delegando ao PluginRuntime para
      * cada typeId com PluginModule ativo no GlobalPluginCache. Componentes built-in (ex: Resistor)
@@ -652,23 +655,17 @@ private:
     /** F9.5: agenda o PRIMEIRO scan de qualquer instância de PLC com artefato que ainda não tenha
      * um scan pendente (`m_plcScanScheduledNs`) -- chamado depois de publicar um plano novo, mesmo
      * espírito de `scheduleNextSignalBoundaryUnlocked`. Cada scan subsequente se reagenda sozinho
-     * (ver `runPlcScanUnlocked`), então isto só precisa "dar a partida" em instâncias novas. */
+     * (ver `runPlcScanBatchUnlocked`), então isto só precisa "dar a partida" em instâncias novas. */
     void schedulePlcScansUnlocked(uint64_t timestampNs);
     /** Agenda UM scan (o próximo, `intervalNs` a partir de `fromTimeNs`) pra `componentIndex` --
      * usado tanto pra dar a partida inicial quanto pelo autoagendamento no fim de cada scan (ver
-     * `runPlcScanUnlocked`), garantindo as duas chamadas sempre usam exatamente a mesma lógica de
+     * `runPlcScanBatchUnlocked`), garantindo as duas chamadas sempre usam exatamente a mesma lógica de
      * geração/staleness. */
-    void scheduleOnePlcScanUnlocked(uint32_t componentIndex, uint64_t fromTimeNs, uint64_t intervalNs);
-    /** Corpo do evento agendado pra UM scan de UMA instância -- InputLatch (lê `ioBindings` do
-     * Signal Engine) -> `PlcRuntime::scan()` -> OutputCommit (só se `scan()` retornar com sucesso,
-     * nunca parcial) -> reagenda o PRÓXIMO scan desta mesma instância. Roda fora do mutex do
-     * Scheduler (ver `Scheduler::scheduleEventUnlocked` -- callback invocado com o lock liberado),
-     * então bloquear aqui dentro de `PlcRuntime::scan()` nunca trava outras threads de IPC, só
-     * atrasa o progresso do próprio worker thread do Scheduler (mesma categoria de custo já aceita
-     * pra qualquer outro passo síncrono de processo externo). Um fault NÃO reagenda -- a instância
-     * fica parada em `Faulted` até um reset/restart explícito (fora do escopo desta rodada), Core e
-     * outras instâncias seguem normalmente. */
-    void runPlcScanUnlocked(uint32_t componentIndex, uint64_t scanTimeNs);
+    void scheduleOnePlcScanUnlocked(uint32_t componentIndex, uint64_t fromTimeNs, uint64_t fallbackIntervalNs,
+                                    const std::vector<plc::PlcTaskDescriptor>* taskTable = nullptr);
+    /** Barreira de scan do timestamp: reúne todos os PLCs vencidos, captura todas as entradas, avalia os workers e só então commita as saídas. Executado na thread do Scheduler; uma falha para apenas o worker afetado. */
+    void runPlcScanBatchUnlocked(uint64_t scanTimeNs);
+    void runPlcEventBatchUnlocked(uint64_t eventTimeNs, const std::vector<std::pair<uint32_t, std::string>>& activations);
     /** Resolve `componentIndex` pra um `PlcComponent` com `PlcRuntime` já carregado, ou lança
      * `std::invalid_argument` com uma mensagem prefixada por `callerName` -- usado por
      * `plcGetVariable`/`plcSetVariable`/`plcForceVariable`/`plcUnforceVariable` (todos idênticos na
@@ -856,6 +853,7 @@ private:
      * (mesmo raciocínio de `m_signalScheduleGeneration`, só que por instância em vez de global —
      * global invalidaria erroneamente OUTRAS instâncias PLC não relacionadas a cada reload). */
     std::unordered_map<uint32_t, uint64_t> m_plcScanGeneration;
+    std::unordered_map<uint32_t, std::unordered_map<std::string, bool>> m_plcEventPrevious;
     struct PauseConditionState {
         PauseExpression expression;
         std::unordered_map<std::string, simulation::SignalPlan::Route> signalRoutes;

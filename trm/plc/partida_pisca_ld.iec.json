@@ -1,0 +1,273 @@
+{
+  "schemaVersion": 1,
+  "projectId": "partida_pisca_ld",
+  "dataTypes": [],
+  "globalVariableLists": [],
+  "configurations": [
+    {
+      "name": "CONFIGURATION_1",
+      "resource": "RESOURCE_1"
+    }
+  ],
+  "resources": [
+    {
+      "name": "RESOURCE_1",
+      "task": "MAIN_TASK"
+    }
+  ],
+  "tasks": [
+    {
+      "name": "MAIN_TASK",
+      "intervalMs": 10,
+      "priority": 1
+    }
+  ],
+  "programInstances": [
+    {
+      "name": "MAIN_INSTANCE",
+      "pouId": "pou-main",
+      "task": "MAIN_TASK"
+    }
+  ],
+  "pous": [
+    {
+      "pouId": "pou-main",
+      "name": "MAIN",
+      "kind": "program",
+      "interface": {
+        "variables": [
+          {
+            "ioId": "START",
+            "name": "START",
+            "class": "input",
+            "type": "BOOL"
+          },
+          {
+            "ioId": "STOP",
+            "name": "STOP",
+            "class": "input",
+            "type": "BOOL"
+          },
+          {
+            "ioId": "LAMP",
+            "name": "LAMP",
+            "class": "output",
+            "type": "BOOL"
+          },
+          {
+            "ioId": "BLINK",
+            "name": "BLINK",
+            "class": "output",
+            "type": "BOOL"
+          },
+          {
+            "name": "RUN",
+            "class": "local",
+            "type": "BOOL"
+          },
+          {
+            "name": "COUNT",
+            "class": "local",
+            "type": "INT"
+          },
+          {
+            "name": "T1",
+            "class": "local",
+            "type": "TON"
+          },
+          {
+            "name": "FLIP",
+            "class": "local",
+            "type": "TOGGLE"
+          }
+        ]
+      },
+      "implementation": {
+        "language": "ld",
+        "networks": [],
+        "rungs": [
+          {
+            "rungId": "rung-1",
+            "comment": "Partida e parada com selo: LIGA acende, DESLIGA apaga.",
+            "rows": [
+              [
+                {
+                  "kind": "contact",
+                  "contact": "no",
+                  "variable": "START"
+                },
+                {
+                  "kind": "contact",
+                  "contact": "nc",
+                  "variable": "STOP"
+                },
+                {
+                  "kind": "coil",
+                  "coil": "coil",
+                  "variable": "RUN"
+                },
+                null,
+                null,
+                null
+              ],
+              [
+                {
+                  "kind": "contact",
+                  "contact": "no",
+                  "variable": "RUN"
+                },
+                null,
+                null,
+                null,
+                null,
+                null
+              ]
+            ],
+            "verticals": [
+              {
+                "row": 0,
+                "column": 0
+              }
+            ]
+          },
+          {
+            "rungId": "rung-2",
+            "rows": [
+              [
+                {
+                  "kind": "contact",
+                  "contact": "no",
+                  "variable": "RUN"
+                },
+                {
+                  "kind": "coil",
+                  "coil": "coil",
+                  "variable": "LAMP"
+                },
+                null,
+                null,
+                null,
+                null
+              ]
+            ],
+            "verticals": []
+          },
+          {
+            "rungId": "rung-3",
+            "comment": "Pisca de 0,5 s enquanto a lampada esta acesa.",
+            "rows": [
+              [
+                {
+                  "kind": "contact",
+                  "contact": "no",
+                  "variable": "RUN"
+                },
+                {
+                  "kind": "contact",
+                  "contact": "nc",
+                  "variable": "T1.Q"
+                },
+                {
+                  "kind": "block",
+                  "typeName": "TON",
+                  "instanceName": "T1",
+                  "powerInput": "IN",
+                  "powerOutput": "Q",
+                  "inputs": {
+                    "PT": "T#500ms"
+                  },
+                  "outputs": {}
+                },
+                {
+                  "kind": "block",
+                  "typeName": "TOGGLE",
+                  "instanceName": "FLIP",
+                  "powerInput": "CLK",
+                  "powerOutput": "Q",
+                  "inputs": {},
+                  "outputs": {}
+                },
+                {
+                  "kind": "contact",
+                  "contact": "no",
+                  "variable": "RUN"
+                },
+                {
+                  "kind": "coil",
+                  "coil": "coil",
+                  "variable": "BLINK"
+                }
+              ]
+            ],
+            "verticals": []
+          },
+          {
+            "rungId": "rung-4",
+            "comment": "Conta os ciclos do temporizador.",
+            "rows": [
+              [
+                {
+                  "kind": "contact",
+                  "contact": "no",
+                  "variable": "T1.Q"
+                },
+                {
+                  "kind": "block",
+                  "typeName": "ADD",
+                  "powerInput": "EN",
+                  "powerOutput": "ENO",
+                  "inputs": {
+                    "IN1": "COUNT",
+                    "IN2": "1"
+                  },
+                  "outputs": {
+                    "OUT": "COUNT"
+                  }
+                },
+                null,
+                null,
+                null,
+                null
+              ]
+            ],
+            "verticals": []
+          }
+        ]
+      }
+    },
+    {
+      "pouId": "pou-toggle",
+      "name": "TOGGLE",
+      "kind": "functionBlock",
+      "interface": {
+        "variables": [
+          {
+            "ioId": "CLK",
+            "name": "CLK",
+            "class": "input",
+            "type": "BOOL"
+          },
+          {
+            "ioId": "Q",
+            "name": "Q",
+            "class": "output",
+            "type": "BOOL"
+          },
+          {
+            "name": "EDGE",
+            "class": "local",
+            "type": "R_TRIG"
+          }
+        ]
+      },
+      "implementation": {
+        "language": "st",
+        "text": "(* Inverte Q a cada borda de subida de CLK. *)\nEDGE(CLK := CLK);\nIF EDGE.Q THEN\n  Q := NOT Q;\nEND_IF;"
+      }
+    }
+  ],
+  "libraries": [],
+  "buildSettings": {
+    "entryConfiguration": "CONFIGURATION_1"
+  }
+}

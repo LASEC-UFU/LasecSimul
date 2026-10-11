@@ -548,7 +548,10 @@ PlcNativeModule PlcCompiler::compile(const PlcCompileOptions& options) {
     const std::string stSource = readFile(options.stSourcePath);
     PlcParsedInterface parsedInterface;
     try {
-        parsedInterface = parsePlcProgramInterface(stSource);
+        // Canonical ST may contain helper PROGRAMs before its configured entry point. The source
+        // file stem is the entry POU name selected by the extension build, so never publish the
+        // first unrelated PROGRAM's pins/monitor table by accident.
+        parsedInterface = parsePlcProgramInterface(stSource, options.stSourcePath.stem().string());
     } catch (const PlcInterfaceParseError& error) {
         fail("parse", error.what());
     }
@@ -682,10 +685,20 @@ PlcNativeModule PlcCompiler::compile(const PlcCompileOptions& options) {
     module.artifactHash = Sha256::hashFile(binaryPath);
     module.nativeBinaryRef = binaryPath.string();
     module.programName = parsedInterface.programName;
+    module.configurationName = parsedInterface.configurationName;
+    for (const auto& task : parsedInterface.tasks) {
+        module.taskTable.push_back({task.name, task.intervalNs, task.priority, task.eventVariable});
+    }
+    for (const auto& instance : parsedInterface.programInstances) {
+        module.programInstances.push_back({instance.instanceName, instance.taskName, instance.programName});
+    }
     for (const auto& variable : parsedInterface.variables) {
         const auto stableId = options.ioIdByVariableName.find(variable.name);
         module.exportedIo.push_back({stableId == options.ioIdByVariableName.end() ? variable.name : stableId->second,
                                      variable.name, variable.direction, variable.iecType});
+    }
+    for (const auto& variable : parsedInterface.locals) {
+        if (variable.retain) module.retainLayout.push_back(variable.name + ":" + variable.iecType);
     }
     module.debugMap = debugMap;
     return module;

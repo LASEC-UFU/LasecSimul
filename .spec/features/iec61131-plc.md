@@ -187,6 +187,38 @@ O workspace IEC pertence ao LasecSimul e oferece criação de `PROGRAM`, `FUNCTI
 
 O detalhamento de UX dos cinco editores, do browser de blocos comum e do mecanismo pelo qual um `FUNCTION_BLOCK` recém-criado fica imediatamente disponível para as outras quatro linguagens está em [features/iec61131-editor.md](iec61131-editor.md).
 
+Estado (2026-10-10, etapa 1, ver `docs/clp-etapa1-st.md`): ST de ponta a ponta no produto. Compilar no editor e ao Rodar via `lasecsimul-core --plc-compile`, cache por hash, diagnóstico com POU e linha do corpo, tabela de variáveis com `ioId` estável, uma TASK cíclica por recurso executando uma instância de PROGRAM, pinos do bloco derivados da interface antes de compilar, monitor com escrever/forçar/liberar/reiniciar. STruCpp roda só com as bibliotecas da norma e os blocos adicionais do OpenPLC (a OSCAT colide com nomes de FBs do usuário). O instalador Windows leva um g++ mínimo (`bundled/plc/ucrt64`); o `.deb` depende de `g++`.
+
+Etapa 2 (2026-10-10, `docs/clp-etapa2-il.md`): IL completa pela 3ª edição (seção 7.2) traduzida para o ST canônico com resultado corrente tipado, modificadores N/C/(, rótulos e JMP (máquina de estados `WHILE`/`CASE`), CAL formal, operadores de entrada de FB, funções com o CR como primeiro argumento ou formais, RET; diagnósticos com POU e linha IL; programas IL executados no Core real.
+
+Etapa 3 (2026-10-10, `docs/clp-etapa3-sfc.md`): SFC pela seção 6.7 com editor gráfico na notação da norma; controle das ações pelo ACTION_CONTROL da norma (3ª ed., saídas Q e A), regras de evolução 6.7.5, divergências/convergências seletivas (prioridade esquerda→direita ou numerada) e simultâneas, `PASSO.X`/`PASSO.T`, `ACAO.Q`/`ACAO.A`; ordem interna do ciclo (ações da situação atual, depois transições, uma evolução por ciclo) documentada como escolha da implementação; programas SFC executados no Core real.
+
+Etapa 4 (2026-10-10, `docs/clp-etapa4-ld.md`): LD pela seção 8.2 com editor gráfico em grade por rede; tabelas 74 (barras, ligação horizontal e vertical = OU), 75 (contatos NA, NF, P, N e de comparação), 76 (bobina, negada, set, reset, P, N; sem as retentivas da 2ª ed.), 18 (EN/ENO) e 73 (salto e retorno); redes de cima para baixo, elemento só depois das suas entradas; fluxo de energia no monitor; programas LD executados no Core real. O formato antigo de LD (nós/arestas) segue lido quando não há `rungs`.
+
+Etapa 5 (2026-10-11, `docs/clp-etapa5-fbd.md`): editor FBD por redes, nós móveis, junções gráficas para distribuir sinais e ligações de realimentação com atraso de um scan e valor inicial configurável; operadores BOOL, aritméticos e de comparação, tipos IEC genéricos/variádicos, browser comum de POUs e lowering determinístico com chamadas de FB/FUNCTION por portas formais. Erros de portas, referências, ciclos sem atraso, variáveis e tipos são reportados. Execução no Core real, isolamento de instâncias, realimentação e matriz de linguagens 5×5 passaram.
+
+Etapa 6 (2026-10-11, integração parcial, `docs/clp-etapa1-st.md`): tipos definidos pelo usuário, GVL/`VAR_EXTERNAL`, edição RETAIN, Cold/Warm Reset e hot reload quando interface e período da TASK não mudam. Tasks por evento concluídas na etapa 12; múltiplas tasks na etapa 10; persistência durável RETAIN por scan/evento na etapa 11.
+
+Etapa 7 (2026-10-11, barreira de scans): o Core reúne os PLCs vencidos no mesmo timestamp, coleta as entradas de todo o lote antes de avaliar os workers e publica as saídas somente depois das avaliações, com ordem estável pelo índice do componente. O teste de integração usa fontes e destinos independentes e confirma a mesma saída TON e o timestamp de 700 ms para 1, 2 e 5 workers. Isso cobre configurações representativas; não é prova para qualquer N nem para todas as ordenações possíveis.
+
+Etapa 8 (2026-10-11, monitor composto): o parser do artefato lê alias, STRUCT, ARRAY e definições de FUNCTION_BLOCK do ST canônico; o driver publica campos e elementos escalares por caminho qualificado; o workspace oferece esses mesmos caminhos no watch/force. Arrays longos expõem até 2048 posições ao monitor. Build nativo e SCAN/GET no worker real confirmaram campos de struct, elemento indexado e estado de FB.
+
+Etapa 9 (2026-10-11, seleção do POU de entrada): quando o ST canônico contém vários PROGRAMs, o compilador escolhe agora o POU correspondente ao nome do arquivo de entrada, em vez do primeiro PROGRAM encontrado. O teste nativo cobre um HELPER antes do MAIN e confirmou que somente os pinos do MAIN são exportados.
+
+Etapa 10 (2026-10-11, tasks cíclicas): o `PlcNativeModule` transporta configuração, tasks (período em ns e prioridade) e ligações de instâncias. O worker instancia a CONFIGURATION da STruCpp e despacha as instâncias nos vencimentos virtuais, em ordem de prioridade e nome; o Core agenda a união dos vencimentos cíclicos, mesmo para períodos que não são múltiplos. O teste nativo compilou duas instâncias do mesmo PROGRAM em tasks de 5 ms e 10 ms: ao avançar de 5 ms para 20 ms, confirmou quatro execuções da instância FAST, duas da SLOW e a ordem por prioridade. O teste de integração do Core confirmou scans em 5/10/15/20 ms apesar de um fallback de 100 ms. A UI agora edita e valida listas completas de resources, tasks cíclicas e instâncias; tasks por evento foram concluídas na etapa 12.
+
+Etapa 11 (2026-10-11, retenção no lifecycle do worker): o `PlcNativeModule` publica `retainLayout` com nomes e tipos IEC; o protocolo exporta/importa o snapshot tipado do PROGRAM de entrada. Após cada scan/evento e alteração via SET, o Core sincroniza o snapshot em arquivo temporário, sincroniza os dados e publica por rename atômico; no Linux também sincroniza o diretório. No Windows usa `FlushFileBuffers` e `MOVEFILE_WRITE_THROUGH`. Ao reabrir o projeto, o worker restaura os valores antes do próximo scan. Os testes compilam um contador `DINT RETAIN`, confirmam restauração após encerramento limpo e após `forceKill()` abrupto do worker, e verificam que Cold Reset apaga o checkpoint. Em caso de falha de persistência, o runtime transita para Faulted em vez de publicar saída sem checkpoint confirmado.
+
+Etapa 12 (2026-10-11, tasks por evento): o lowering do projeto emite `TASK ... (SINGLE := BOOL_INPUT, PRIORITY := ...)`; parser/artefato preservam variável e prioridade; editor/runtime config valida uma entrada `BOOL` exportada. O Core detecta borda de subida após estabilizar entradas, não agenda polling para módulos somente por evento e despacha `EVENT` no worker com latch de entrada e commit após avaliação. Tasks do mesmo instante seguem prioridade decrescente e nome estável; o worker executa somente a task de evento solicitada, sem consumir vencimentos cíclicos. Testes de lowering, dispatch do worker e integração Core/sinal confirmaram autoria, validação, ausência de fallback periódico e disparo na borda. Teste de integração `plc_session_integration` passou.
+
+Etapa 13 (2026-10-11, monitor de FBs IEC da biblioteca padrão): o driver expõe os membros públicos de TON/TOF/TP, R_TRIG/F_TRIG, SR/RS e CTU/CTD/CTUD como caminhos qualificados; o workspace oferece os mesmos campos em watch/force sem exigir a definição do FB no projeto. O teste nativo usa `GET HELLO.TIMER0.Q` sobre o TON da biblioteca; o teste de build cobre a lista de watch.
+
+Etapa 14 (2026-10-11, equivalência de avanço virtual): o cenário PLC com TON produziu a mesma saída e o mesmo tempo final em `runUntil` (headless), passos explícitos e perfis Desktop/SharedHost. Cenários realtime e acelerado usam o Scheduler vivo; o teste de integração passou três execuções consecutivas sob CTest após corrigir a ordem de locks do `stopSimulation()`.
+
+Etapa 15 (2026-10-11, identidade e containment de lifecycle): cada componente PLC recebe `runtimeInstanceId` estável, `sessionExecutionId` por execução e `launchGeneration` monotônica. HELLO valida os campos; eventos detalhados usam o recorder causal compartilhado, e trace OFF mantém ausência de recorder/buffer por PLC. O Scheduler rearma tasks após stop/start. O budget limita memória do worker via Job Object no Windows e `RLIMIT_AS` no Linux. SharedHost agora cria diretório exclusivo por worker sob `LASECSIMUL_PLC_SHAREDHOST_WORK_ROOT` (ou temporário privado por padrão), usa ambiente mínimo, remove o diretório no encerramento e aplica contenção de filesystem/rede: AppContainer LPAC sem capabilities de rede e Job Object com limite de processos no Windows; Landlock e seccomp fail-closed no Linux, incluindo bloqueio de rede, criação de processos e sinais a outros processos. No Linux, a política Landlock/seccomp é preparada no pai e aplicada por worker iniciado com `vfork`; o filho faz somente chamadas de sistema até `execve`, fecha todos os descritores herdados e falha fechado se `close_range` não estiver disponível. O teste probe no Windows confirmou bloqueio de leitura de arquivo fora da workdir, loopback e variável secreta do Core; verificou também limpeza da workdir configurável.
+
+Etapa 16 (2026-10-11, determinismo e validacao integrada): CTest confirma o mesmo resultado TON e timestamp final com 1, 2 e 5 workers; cenarios ao vivo realtime/acelerado passaram em tres repeticoes apos corrigir o encerramento do Scheduler. A matriz IEC 5x5 passou no Core real, e os cinco cenarios FBD no Core real passaram. Nesta retomada, SFC temporizado tambem produziu a mesma saida e instante de transicao (100 ms) em step, headless, realtime e acelerado. Um rebuild com erro manteve o modulo valido carregado e executando no worker. Na auditoria Windows, `plc_scan_session`, `plc_compiler`, `plc_runtime`, `plc_runtime_hang` e `plc_session_integration` passaram juntos (5/5); a fixture `hang.st` foi alinhada ao nome do PROGRAM de entrada. Tambem passaram `npm --prefix extension run test:plc`, `npm --prefix extension run test:plc:fbd-core` (5 cenarios FBD e matriz 5x5 no Core real), os testes reais de IL (8), LD (7), SFC (9) e ST ponta a ponta (11), `npm run test:strucpp-smoke`, `npm run check:plc-toolchain` e `npm run license:check-ipd`. O probe SharedHost Windows confirma bloqueio de leitura fora da workdir, loopback e variável secreta do Core, além da limpeza da workdir configurável. O workflow obrigatório `.github/workflows/plc-linux.yml` está preparado para Ubuntu 24.04; sua validação Linux segue pendente e não faz parte desta rodada focada em Windows.
+
 ## Scan e tasks
 
 Cada `PlcNativeModule` roda em um **worker próprio**, no mesmo padrão coordenador/workers limitados de ADR-0003 já usado para o worker Python (`features/python-runtime.md`) e para o processo GHDL (`features/fpga-ghdl.md`). O Core não faz `dlopen`/`LoadLibrary` do módulo nativo dentro do seu próprio processo.
@@ -204,51 +236,43 @@ Timers IEC (`TON`, `TOF`, `TP`), contadores e SFC usam o tempo virtual do Schedu
 
 ## Estado, RETAIN e reset
 
-Cada instância possui:
-
-- input image;
-- output image;
-- memória local/global runtime;
-- instâncias de `FUNCTION_BLOCK`;
-- estado de steps/actions SFC;
-- timers e counters;
-- área `RETAIN`/`PERSISTENT` quando habilitada;
-- tabela de force/watch.
-
-`Cold Reset`, `Warm Reset` e política de `RETAIN` devem ter semântica explícita e testes próprios. O projeto persiste autoria e configuração; checkpoints de runtime são uma feature separada.
+Cada instância possui input image, output image, memória local/global runtime, instâncias de FB, estado de steps/actions SFC, timers/counters, área RETAIN/PERSISTENT e tabela force/watch. Cold Reset, Warm Reset e política RETAIN têm semântica explícita e testes. Warm Reset mantém RETAIN; o Core persiste atomicamente o snapshot após cada scan/evento e alteração via SET; Cold Reset apaga o snapshot e reinicia com valores iniciais. O snapshot tipado limita-se ao PROGRAM de entrada. Testes confirmam restauração após encerramento normal e abrupto do worker; falha de persistência marca o runtime como Faulted.
 
 ## Segurança e isolamento
 
-Por ADR-0007, o isolamento passa de validação em nível de VM (ADR-0006, superseded) para isolamento em nível de **processo do worker**, mesma admissão já feita para o worker Python: código nativo compilado não é sandbox de segurança forte por construção.
+Por ADR-0007, o isolamento ocorre no processo do worker; código nativo compilado não é sandbox forte por construção.
 
-- `PlcNativeModule` malformado, com hash/versão de toolchain incompatível, é rejeitado antes de subir o worker e antes de publicar o plano;
-- crash ou timeout do worker pausa a(s) instância(s) PLC afetada(s), marca o domínio como `Faulted` e não derruba o Core, mesmo contrato de falha do worker Python;
-- uma instância PLC não acessa memória de outra porque cada `PlcNativeModule`/instância vive em seu próprio worker/processo, não por checagem de VM;
-- SharedHost deve executar o worker sob identidade/containment do usuário, com workdir, ambiente, filesystem e rede definidos pelo perfil de implantação — mesma regra do worker Python;
-- recursão ilimitada e uso de memória são limitados por watchdog e limites de processo (ulimits/job objects) do worker, não por validação de opcode;
-- compilador (STruCpp vendorizado) e cache de build não mantêm estado mutável de sessão dentro do artefato publicado.
+- PlcNativeModule malformado ou com hash/versão incompatível é rejeitado antes de iniciar worker/publicar plano;
+- crash/timeout pausa a instância afetada e marca Faulted sem derrubar Core ou outros domínios;
+- cada instância executa em processo próprio;
+- workers herdam a identidade do usuário Core e recebem limites de memória (Job Object Windows; RLIMIT_AS Linux). Em SharedHost, o administrador pode definir `LASECSIMUL_PLC_SHAREDHOST_WORK_ROOT` como caminho absoluto; cada worker usa subdiretório descartável, ambiente mínimo e filesystem restrito. O perfil nega rede por padrão: AppContainer LPAC sem capabilities no Windows; seccomp bloqueia sockets no Linux. Se o isolamento não puder ser aplicado, o worker sai antes do HELLO. Desktop não recebe estas restrições.
+- watchdog e limites de processo contêm recursão/uso de memória;
+- compilador STruCpp e cache não mantêm estado mutável no artefato.
 
 ## Lifecycle e observabilidade do worker PLC
 
-Processos PLC nativos seguem `ARCH-009`: identidade/provenance é criada no cold path, relaunch incrementa geração sem reutilização e wall-clock/watchdog continua separado do tempo IEC. Diagnóstico detalhado não cria thread por PLC nem trafega raw trace pela Webview; qualquer custo por sessão permanece bounded pelo perfil.
+Processos PLC seguem ARCH-009: identidade/provenance no cold path, geração monotônica em relaunch e watchdog separado do tempo IEC. Trace OFF não cria recorder/buffer por PLC.
 
 ## Compatibilidade futura
 
-PLCopen XML e importadores/atualizações do OpenPLC v4/STruCpp podem ser adicionados como formatos de intercâmbio e atualizações de toolchain vendorizado. Eles nunca substituem o schema canônico do LasecSimul nem o `PlcNativeModule` publicado.
+PLCopen XML e atualizações do OpenPLC v4/STruCpp podem ser formatos de intercâmbio/toolchain; não substituem schema canônico nem PlcNativeModule.
 
 ## Aceitação
 
-- LD, FBD, ST, SFC e IL podem criar `FUNCTION` e `FUNCTION_BLOCK` válidos;
-- matriz **5×5** automatizada: POU implementado em cada linguagem é chamado/instanciado com sucesso a partir de cada uma das cinco linguagens;
-- um FB stateful chamado a partir de outra linguagem preserva estado por instância e não compartilha memória entre instâncias;
-- uma alteração apenas da linguagem do chamador não muda o resultado numérico/booleano do POU chamado;
-- bloco PLC recém-inserido tem zero pinos; após carregar `PlcNativeModule`, os pinos refletem exatamente `exportedIo[]`;
-- recompilar com rename e mesmo `ioId` preserva ligação; remoção gera orphan diagnosticável;
-- scan é reproduzível com 1, 2 e N workers;
-- timers e SFC produzem o mesmo resultado em tempo real, acelerado, step e headless;
-- erro de compilação preserva o último `PlcNativeModule` válido e não corrompe o runtime ativo;
-- nenhuma das cinco linguagens exige um runtime próprio;
-- toda simulação PLC ocorre em um worker do LasecSimul, sem depender de um OpenPLC Runtime externo;
-- crash/timeout do worker PLC não derruba o Core nem outras instâncias PLC/domínios;
-- um projeto IEC compilado pelo usuário produz um `PlcNativeModule` que o usuário pode distribuir sob a licença de sua escolha, conforme a LasecSimul PLC Runtime Library Exception;
-- relaunch de worker não colide identidade com geração anterior e trace OFF não acrescenta thread/buffer por instância.
+- LD, FBD, ST, SFC e IL criam FUNCTION e FUNCTION_BLOCK válidos;
+- matriz 5x5 automatizada executa cada linguagem como caller/callee;
+- FB stateful preserva estado por instância;
+- alterar linguagem caller não altera resultado;
+- PLC novo tem zero pinos; após load, pinos correspondem a exportedIo;
+- rename com ioId preserva binding; remoção gera orphan diagnosticável;
+- scan reproduzível com 1, 2 e N workers;
+- tasks SINGLE executam somente na borda de subida e respeitam latch/commit;
+- timers/SFC equivalentes em realtime, accelerated, step e headless;
+- erro de build preserva artefato válido e runtime ativo;
+- nenhuma linguagem exige runtime próprio nem OpenPLC Runtime externo;
+- crash/timeout não derruba Core/outras instâncias;
+- RETAIN sobrevive a encerramento abrupto e sincroniza atomicamente após cada scan/evento;
+- limite de memória por perfil aplica-se ao worker Windows/Linux;
+- SharedHost restringe workdir, ambiente, filesystem e rede conforme deployment; Windows tem probe real aprovado, Linux tem Landlock/seccomp fail-closed e o workflow `.github/workflows/plc-linux.yml` deve passar com os probes Linux;
+- usuário pode distribuir PlcNativeModule sob licenção de sua escolha pela Runtime Library Exception;
+- relaunch não reutiliza identidade/generation; trace OFF sem thread/buffer por instância.

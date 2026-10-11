@@ -23,6 +23,8 @@ enum class EventType : uint16_t {
      * cut per-transaction QPC/recorder overhead, not because that segment is cleared for the
      * degradation regime, which Pass 2 never reproduced. Remove once the investigation concludes. */
     CoreI2cBurstClaimed = 30,
+    PlcWorkerLaunchAttempt = 40, PlcWorkerLaunchReady = 41,
+    PlcScanBegin = 42, PlcScanCommit = 43, PlcEventDispatch = 44, PlcWorkerFault = 45,
 };
 
 struct Record {
@@ -67,6 +69,7 @@ public:
     uint64_t written() const noexcept { return m_written.load(std::memory_order_relaxed); }
     uint64_t dropped() const noexcept { return m_dropped.load(std::memory_order_relaxed); }
     uint64_t highWatermark() const noexcept { return m_highWatermark.load(std::memory_order_relaxed); }
+    uint64_t capacity() const noexcept { return m_capacity; }
 
 private:
     Recorder();

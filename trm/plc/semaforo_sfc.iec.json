@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "projectId": "semaforo_sfc",
+  "dataTypes": [],
+  "globalVariableLists": [],
+  "configurations": [
+    {
+      "name": "CONFIGURATION_1",
+      "resource": "RESOURCE_1"
+    }
+  ],
+  "resources": [
+    {
+      "name": "RESOURCE_1",
+      "task": "MAIN_TASK"
+    }
+  ],
+  "tasks": [
+    {
+      "name": "MAIN_TASK",
+      "intervalMs": 10,
+      "priority": 1
+    }
+  ],
+  "programInstances": [
+    {
+      "name": "MAIN_INSTANCE",
+      "pouId": "pou-main",
+      "task": "MAIN_TASK"
+    }
+  ],
+  "pous": [
+    {
+      "pouId": "pou-main",
+      "name": "MAIN",
+      "kind": "program",
+      "interface": {
+        "variables": [
+          {
+            "ioId": "BOTAO",
+            "name": "BOTAO",
+            "class": "input",
+            "type": "BOOL"
+          },
+          {
+            "ioId": "VERMELHO",
+            "name": "VERMELHO",
+            "class": "output",
+            "type": "BOOL"
+          },
+          {
+            "ioId": "AMARELO",
+            "name": "AMARELO",
+            "class": "output",
+            "type": "BOOL"
+          },
+          {
+            "ioId": "VERDE",
+            "name": "VERDE",
+            "class": "output",
+            "type": "BOOL"
+          },
+          {
+            "name": "CICLOS",
+            "class": "local",
+            "type": "INT"
+          }
+        ]
+      },
+      "implementation": {
+        "language": "sfc",
+        "steps": [
+          {
+            "stepId": "step-vm",
+            "name": "VM",
+            "actions": [
+              {
+                "actionId": "a-vm-1",
+                "qualifier": "N",
+                "actionName": "VERMELHO"
+              }
+            ],
+            "initial": true
+          },
+          {
+            "stepId": "step-vd",
+            "name": "VD",
+            "actions": [
+              {
+                "actionId": "a-vd-1",
+                "qualifier": "N",
+                "actionName": "VERDE"
+              },
+              {
+                "actionId": "a-vd-2",
+                "qualifier": "P1",
+                "actionName": "CONTA"
+              }
+            ]
+          },
+          {
+            "stepId": "step-am",
+            "name": "AM",
+            "actions": [
+              {
+                "actionId": "a-am-1",
+                "qualifier": "N",
+                "actionName": "AMARELO"
+              }
+            ]
+          }
+        ],
+        "transitions": [
+          {
+            "transitionId": "t-vm-vd",
+            "fromStepIds": [
+              "step-vm"
+            ],
+            "toStepIds": [
+              "step-vd"
+            ],
+            "condition": "VM.T >= T#3s"
+          },
+          {
+            "transitionId": "t-vd-am-botao",
+            "fromStepIds": [
+              "step-vd"
+            ],
+            "toStepIds": [
+              "step-am"
+            ],
+            "condition": "BOTAO AND VD.T >= T#1s",
+            "priority": 1
+          },
+          {
+            "transitionId": "t-vd-am-tempo",
+            "fromStepIds": [
+              "step-vd"
+            ],
+            "toStepIds": [
+              "step-am"
+            ],
+            "condition": "VD.T >= T#4s",
+            "priority": 2
+          },
+          {
+            "transitionId": "t-am-vm",
+            "fromStepIds": [
+              "step-am"
+            ],
+            "toStepIds": [
+              "step-vm"
+            ],
+            "condition": "AM.T >= T#1s"
+          }
+        ],
+        "actions": [
+          {
+            "name": "CONTA",
+            "language": "st",
+            "text": "(* P1: Q fica TRUE só no ciclo em que o verde acende; A roda mais uma vez quando Q cai. *)\nIF CONTA.Q THEN\n  CICLOS := CICLOS + 1;\nEND_IF;"
+          }
+        ]
+      }
+    }
+  ],
+  "libraries": [],
+  "buildSettings": {
+    "entryConfiguration": "CONFIGURATION_1"
+  }
+}

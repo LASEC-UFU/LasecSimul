@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const { stagePlcToolchain } = require("./stage-plc-toolchain");
 
 const repoRoot = path.resolve(__dirname, "..");
 const extensionDir = path.join(repoRoot, "extension");
@@ -561,6 +562,13 @@ function stageBundledAssets() {
   const coreRelative = path.relative(path.join(repoRoot, "core", "build"), coreExecutable);
   copyFileTo(coreExecutable, path.join(bundledRoot, "core", "build", coreRelative));
 
+  // CLP IEC 61131-3: STruCpp, runtime, driver e (Windows) g++ mínimo; verificado com o Core
+  // empacotado compilando um programa de teste (PATH limpo no Windows).
+  stagePlcToolchain({
+    destRoot: path.join(bundledRoot, "plc"),
+    coreExecutable: path.join(bundledRoot, "core", "build", coreRelative),
+  });
+
   stageBundledFpgaVpiModule();
   stageBundledGhdlRuntime();
 }
@@ -829,7 +837,8 @@ function createLinuxControlFile() {
     "Priority: optional",
     "Architecture: amd64",
     "Maintainer: LasecSimul Team <noreply@lasecsimul.local>",
-    "Depends: bash",
+    // g++ compila o programa do CLP (IEC 61131-3); no Windows ele vai dentro do pacote.
+    "Depends: bash, g++",
     `Description: ${packageDescription}`,
     " Instala o payload empacotado da extensao LasecSimul para VS Code, incluindo",
     " o Core nativo e as bibliotecas ABI/QEMU/subcircuitos embutidas no VSIX.",

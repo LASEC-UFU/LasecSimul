@@ -314,6 +314,8 @@ add_executable(plc_compiler_test
     src/plc/PlcInterfaceParser.cpp
     src/plc/PlcDriverCodegen.cpp
     src/plc/PlcScanSession.cpp
+    src/plc/PlcRuntime.cpp
+    src/trace/CausalTrace.cpp
 )
 target_include_directories(plc_compiler_test PRIVATE include src src/plc/runtime/include)
 target_compile_definitions(plc_compiler_test PRIVATE
@@ -337,6 +339,27 @@ add_executable(plc_worker_driver_hello
 )
 target_include_directories(plc_worker_driver_hello PRIVATE include src src/plc/runtime/include test/core/plc)
 
+# Probe used by the SharedHost sandbox test. The fixture records whether an external file and a
+# listening loopback TCP endpoint remain reachable from the worker process.
+if(WIN32 AND DEFINED ENV{USERPROFILE})
+    file(TO_CMAKE_PATH "$ENV{USERPROFILE}" PLC_SANDBOX_USER_PROFILE)
+    set(PLC_SANDBOX_SENTINEL_PATH "${PLC_SANDBOX_USER_PROFILE}/lasecsimul-plc-sandbox-probe-9d1c7.txt")
+else()
+    set(PLC_SANDBOX_SENTINEL_PATH "${CMAKE_CURRENT_BINARY_DIR}/plc-sandbox-sentinel.txt")
+endif()
+add_executable(plc_sandbox_probe_worker
+    test/core/plc/fixtures/sandbox_probe_worker.cpp
+    test/core/plc/fixtures/hello.generated.cpp
+    src/plc/PlcScanSession.cpp
+)
+target_include_directories(plc_sandbox_probe_worker PRIVATE include src src/plc src/plc/runtime/include test/core/plc)
+target_compile_definitions(plc_sandbox_probe_worker PRIVATE
+    LASECSIMUL_TEST_PLC_SANDBOX_SENTINEL="${PLC_SANDBOX_SENTINEL_PATH}"
+)
+if(WIN32)
+    target_link_libraries(plc_sandbox_probe_worker PRIVATE ws2_32)
+endif()
+
 # F9.4: worker de teste "mal-comportado" (protocolo/versao errados, requestId errado, resposta
 # truncada/malformada, crash pos-handshake, trava indefinidamente) -- nao ha construcao ST que
 # produza esses modos de forma deterministica e nao-racy, entao e escrito a mao (ver
@@ -354,13 +377,19 @@ add_executable(plc_misbehaving_worker
 add_executable(plc_runtime_test
     test/core/plc/PlcRuntimeTest.cpp
     src/plc/PlcRuntime.cpp
+    src/trace/CausalTrace.cpp
 )
 target_include_directories(plc_runtime_test PRIVATE include src)
-add_dependencies(plc_runtime_test plc_worker_driver_hello plc_misbehaving_worker)
+add_dependencies(plc_runtime_test plc_worker_driver_hello plc_misbehaving_worker plc_sandbox_probe_worker)
 target_compile_definitions(plc_runtime_test PRIVATE
     LASECSIMUL_TEST_PLC_WORKER_HELLO_BINARY="$<TARGET_FILE:plc_worker_driver_hello>"
     LASECSIMUL_TEST_PLC_MISBEHAVING_WORKER_BINARY="$<TARGET_FILE:plc_misbehaving_worker>"
+    LASECSIMUL_TEST_PLC_SANDBOX_PROBE_BINARY="$<TARGET_FILE:plc_sandbox_probe_worker>"
+    LASECSIMUL_TEST_PLC_SANDBOX_SENTINEL="${PLC_SANDBOX_SENTINEL_PATH}"
 )
+if(WIN32)
+    target_link_libraries(plc_runtime_test PRIVATE ws2_32)
+endif()
 add_test(NAME plc_runtime COMMAND plc_runtime_test)
 set_tests_properties(plc_runtime PROPERTIES TIMEOUT 60 SKIP_REGULAR_EXPRESSION "PULADO:")
 
@@ -375,6 +404,7 @@ add_executable(plc_runtime_hang_test
     src/plc/PlcDriverCodegen.cpp
     src/plc/PlcScanSession.cpp
     src/plc/PlcRuntime.cpp
+    src/trace/CausalTrace.cpp
 )
 target_include_directories(plc_runtime_hang_test PRIVATE include src src/plc/runtime/include)
 target_compile_definitions(plc_runtime_hang_test PRIVATE
@@ -406,7 +436,11 @@ target_compile_definitions(plc_session_integration_test PRIVATE
     LASECSIMUL_TEST_PLC_MISBEHAVING_WORKER_BINARY="$<TARGET_FILE:plc_misbehaving_worker>"
 )
 add_test(NAME plc_session_integration COMMAND plc_session_integration_test)
-set_tests_properties(plc_session_integration PROPERTIES TIMEOUT 60 SKIP_REGULAR_EXPRESSION "PULADO:")
+set_tests_properties(plc_session_integration PROPERTIES
+    TIMEOUT 60
+    SKIP_REGULAR_EXPRESSION "PULADO:"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/.."
+)
 
 add_executable(industrial_protocols_test
     test/core/protocols/IndustrialProtocolsTest.cpp

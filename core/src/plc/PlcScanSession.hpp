@@ -34,8 +34,15 @@
 
 namespace lasecsimul::plc {
 
-/** Um `PROGRAM` só nesta rodada (sem symbol table/linker cross-language, sem múltiplas tasks) --
- * ver plano F9 Rodada 1, "Mudanças mínimas", RETAIN/reset. */
+struct PlcWorkerIdentity {
+    uint64_t sessionExecutionId = 0;
+    uint64_t runtimeInstanceId = 0;
+    uint64_t launchGeneration = 0;
+};
+
+/** Sessão de protocolo para a interface pública do PROGRAM selecionado. Projetos com CONFIGURATION
+ * delegam a ativação a `runConfiguredTasks`, que executa as instâncias associadas a cada task; o
+ * descriptor principal ainda delimita o I/O elétrico exposto pelo bloco PLC. */
 class PlcScanSession {
 public:
     /** `resetInstance`: reconstrói a instância concreta do PROGRAM (ex.:
@@ -45,7 +52,10 @@ public:
      * do PROGRAM (Program_HELLO etc.) -- quem monta a sessão (o driver/main, gerado por projeto em
      * F9.3) sabe e fornece isso. */
     PlcScanSession(ProgramDescriptor program, std::vector<VarDescriptor> inputVars,
-                   std::vector<VarDescriptor> outputVars, std::function<void()> resetInstance);
+                   std::vector<VarDescriptor> outputVars, std::function<void()> resetInstance,
+                   std::function<void(int64_t, const std::vector<std::string>&)> runConfiguredTasks = {},
+                   std::function<std::string()> exportRetain = {},
+                   std::function<bool(const std::string&)> importRetain = {});
 
     /** Processa uma linha de protocolo (sem o '\n' final) e devolve a linha de resposta completa
      * (também sem '\n' -- quem chama, o driver/main, cuida da E/S real). Nunca lança. */
@@ -55,12 +65,14 @@ public:
      * respostas de texto). */
     bool hasScanned() const { return m_hasScanned; }
     int64_t lastAcceptedTimeNs() const { return m_lastAcceptedTimeNs; }
+    PlcWorkerIdentity runtimeIdentity() const { return m_runtimeIdentity; }
     uint64_t scanCount() const { return m_scanCount; }
 
 private:
-    std::string handleHello(const std::string& requestId);
+    std::string handleHello(const std::string& requestId, const std::string& args);
     std::string handleReset(const std::string& requestId);
     std::string handleScan(const std::string& requestId, const std::string& args);
+    std::string handleEvent(const std::string& requestId, const std::string& args);
     std::string handleVariableCommand(const std::string& command, const std::string& requestId, const std::string& args);
     std::string handleShutdown(const std::string& requestId);
 
@@ -68,9 +80,13 @@ private:
     std::vector<VarDescriptor> m_inputVars;
     std::vector<VarDescriptor> m_outputVars;
     std::function<void()> m_resetInstance;
+    std::function<void(int64_t, const std::vector<std::string>&)> m_runConfiguredTasks;
+    std::function<std::string()> m_exportRetain;
+    std::function<bool(const std::string&)> m_importRetain;
     bool m_hasScanned = false;
     int64_t m_lastAcceptedTimeNs = -1;
     uint64_t m_scanCount = 0;
+    PlcWorkerIdentity m_runtimeIdentity{};
 };
 
 } // namespace lasecsimul::plc

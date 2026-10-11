@@ -47,6 +47,32 @@ export function parsePlcNativeModule(value: unknown, manifestDir?: string): PlcN
         iecType: string(io.iecType, `exportedIo[${index}].iecType`),
       };
     }),
+    ...(Array.isArray(raw.retainLayout) ? { retainLayout: raw.retainLayout.map((entry, index) => string(entry, `retainLayout[${index}]`)) } : {}),
+    ...(typeof raw.configurationName === "string" ? { configurationName: raw.configurationName } : {}),
+    ...(Array.isArray(raw.taskTable) ? { taskTable: raw.taskTable.map((entry, index) => {
+      const task = object(entry, `taskTable[${index}]`);
+      const intervalNs = task.intervalNs;
+      const priority = task.priority;
+      if (typeof intervalNs !== "number" || !Number.isSafeInteger(intervalNs) || intervalNs < 0) {
+        throw new Error(`taskTable[${index}].intervalNs must be a non-negative safe integer`);
+      }
+      if (typeof priority !== "number" || !Number.isInteger(priority)) throw new Error(`taskTable[${index}].priority must be an integer`);
+      const eventVariable = typeof task.eventVariable === "string" && task.eventVariable ? task.eventVariable : undefined;
+      if (intervalNs === 0 && !eventVariable) throw new Error(`taskTable[${index}] event task requires eventVariable`);
+      if (intervalNs > 0 && eventVariable) throw new Error(`taskTable[${index}] cyclic task cannot have eventVariable`);
+      return {
+        name: string(task.name, `taskTable[${index}].name`), intervalNs, priority,
+        ...(eventVariable ? { eventVariable } : {}),
+      };
+    }) } : {}),
+    ...(Array.isArray(raw.programInstances) ? { programInstances: raw.programInstances.map((entry, index) => {
+      const instance = object(entry, `programInstances[${index}]`);
+      return {
+        instanceName: string(instance.instanceName, `programInstances[${index}].instanceName`),
+        taskName: string(instance.taskName, `programInstances[${index}].taskName`),
+        programName: string(instance.programName, `programInstances[${index}].programName`),
+      };
+    }) } : {}),
     debugMap: Array.isArray(raw.debugMap) ? raw.debugMap.map((entry, index) => {
       const line = object(entry, `debugMap[${index}]`);
       return {

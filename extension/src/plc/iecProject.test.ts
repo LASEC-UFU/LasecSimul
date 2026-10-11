@@ -81,11 +81,12 @@ async function main(): Promise<void> {
     { stepId: "run", name: "Run", actions: [{ actionId: "run-q", text: "q := TRUE;" }] },
   ], transitions: [{ transitionId: "start", fromStepId: "idle", toStepId: "run", condition: "x" }] };
   assert.deepEqual(store.savePou(sfc), []);
-  assert.match(lowerPouToSt(sfc, store).canonicalSt, /__SFC_idle AND \(x\)/);
+  assert.match(lowerPouToSt(sfc, store).canonicalSt, /IF __SFC_IDLE_X AND __SFC_IDLE_XN THEN\s+IF x THEN/, "transição habilitada pelo passo anterior, condição x");
   const canonical = compileProjectToCanonicalSt(store, "project-1", "main");
   assert.match(canonical, /FUNCTION_BLOCK FB_LD/);
   assert.match(canonical, /PROGRAM MAIN/);
-  assert.match(canonical, /__SFC_idle : BOOL := TRUE;/, "canonical ST declares deterministic SFC state");
+  assert.match(canonical, /__SFC_IDLE_X : BOOL := TRUE;/, "canonical ST declares deterministic SFC state");
+  assert.match(canonical, /FUNCTION_BLOCK __SFC_ACTION_CONTROL/, "ACTION_CONTROL da norma no ST canônico");
 
   store.importOpenPlcLibrary({
     name: "iec-standard",
