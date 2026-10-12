@@ -527,6 +527,8 @@ function stageBundledAssets() {
   copyDirFiltered(path.join(repoRoot, "mcu-adapters"), path.join(bundledRoot, "mcu-adapters"), excluded);
   copyDirFiltered(path.join(repoRoot, "subcircuits"), path.join(bundledRoot, "subcircuits"), excluded);
   copyDirFiltered(path.join(repoRoot, "Externos"), path.join(bundledRoot, "Externos"), excluded);
+  // Arte final dos componentes gráficos HMI, referenciado pelo catálogo relativo a project/schema.
+  copyDirFiltered(path.join(repoRoot, "Icones"), path.join(bundledRoot, "Icones"), excluded);
 
   const stagedQemuBin = path.join(bundledRoot, "devices", "qemu-esp32", "bin");
   const sourceQemuBin = path.dirname(sourceQemu);

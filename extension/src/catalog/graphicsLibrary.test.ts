@@ -93,7 +93,7 @@ function filledRectHeight(svg: string, fill: string): number {
       assert(svg.length > 0, `${entry.typeId} nao renderizou nada`);
       assert(!svg.includes("NaN"), `${entry.typeId} gerou NaN em algum atributo`);
       assert(!svg.includes("undefined"), `${entry.typeId} gerou undefined em algum atributo`);
-      if (entry.typeId === "graphics.tank_svg" || entry.typeId === "graphics.valve_globe_svg") {
+      if (["graphics.tank_svg", "graphics.valve_globe_svg", "graphics.hmi.tank", "graphics.hmi.pump"].includes(entry.typeId)) {
         assert(/<image\b[^>]*href="data:image\/svg\+xml;base64,/.test(svg), `${entry.typeId} deve usar SVG vetorial empacotado`);
       } else {
         assert(!/<image\b/.test(svg), `${entry.typeId} usa bitmap -- a biblioteca e vetorial`);
@@ -262,7 +262,7 @@ function filledRectHeight(svg: string, fill: string): number {
     // O vaso agora é o herdado do HMI Studio do IPD; a cor do líquido é a do tema ISA-101, que é
     // do símbolo e não uma propriedade do usuário -- um tema não se edita instância a instância.
     const tank = byTypeId.get("graphics.hmi.tank")!;
-    const liquid = "#9aa8b2";
+    const liquid = "#35a9e8";
     const h0 = filledRectHeight(render(tank, { value: 0 }), liquid);
     const h50 = filledRectHeight(render(tank, { value: 50 }), liquid);
     const h100 = filledRectHeight(render(tank, { value: 100 }), liquid);
@@ -272,7 +272,7 @@ function filledRectHeight(svg: string, fill: string): number {
 
   await test("tanque: valor fora da faixa satura no desenho, nunca vaza do casco", () => {
     const tank = byTypeId.get("graphics.hmi.tank")!;
-    const liquid = "#9aa8b2";
+    const liquid = "#35a9e8";
     const cheio = filledRectHeight(render(tank, { value: 100 }), liquid);
     const estourado = filledRectHeight(render(tank, { value: 100000 }), liquid);
     const negativo = filledRectHeight(render(tank, { value: -5000 }), liquid);
