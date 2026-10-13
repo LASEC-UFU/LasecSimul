@@ -122,6 +122,43 @@ const catalog: PaletteRenderableEntry[] = [
     assert(JSON.stringify(remainingLabels) === JSON.stringify(["Fontes", "Passivos", "Medidores"]), `ordem das demais pastas nao deveria mudar, veio ${JSON.stringify(remainingLabels)}`);
   });
 
+  await test("Processo: PLC, Protocolos Industriais e Modelos, nesta ordem, em portugues", () => {
+    const entries: PaletteRenderableEntry[] = [
+      { typeId: "subcircuits.process.fopdt", label: "Processo FOPDT", category: "Modelos", folderPath: ["Modelos"], workspaceSection: "process", pinCount: 2, defaultProperties: {} },
+      { typeId: "protocol.hart.modem", label: "Modem HART", category: "Protocolos", folderPath: ["Protocolos Industriais", "HART"], workspaceSection: "process", pinCount: 2, defaultProperties: {} },
+      { typeId: "protocol.modbus.server", label: "Servidor Modbus", category: "Protocolos", folderPath: ["Protocolos Industriais", "Modbus"], workspaceSection: "process", pinCount: 0, defaultProperties: {} },
+      { typeId: "plc.instance", label: "PLC IEC 61131-3", category: "PLC", folderPath: ["PLC IEC 61131-3"], workspaceSection: "process", pinCount: 0, defaultProperties: {} },
+    ];
+    const tree = buildPaletteTree(entries, "", "process", "pt-BR");
+    const labels = tree.map((node) => node.label);
+    assert(JSON.stringify(labels) === JSON.stringify(["PLC IEC 61131-3", "Protocolos Industriais", "Modelos"]), `ordem das pastas de Processo: ${JSON.stringify(labels)}`);
+    const first = tree[0];
+    assert(first?.kind === "folder" && first.children.length === 1 && first.children[0]?.kind === "component" && first.children[0].typeId === "plc.instance",
+      "o primeiro item de Processo deveria ser o PLC");
+  });
+
+  await test("Processo em ingles: catalogo meio traduzido nao duplica a pasta de protocolos nem tira o PLC do topo", () => {
+    // Como o catálogo real chega em inglês: PLC e Modbus com a pasta traduzida, HART e modelos não.
+    const entries: PaletteRenderableEntry[] = [
+      { typeId: "protocol.hart.modem", label: "Modem HART", category: "Protocolos", folderPath: ["Protocolos Industriais", "HART"], workspaceSection: "process", pinCount: 2, defaultProperties: {} },
+      { typeId: "subcircuits.process.fopdt", label: "Processo FOPDT", category: "Modelos", folderPath: ["Modelos"], workspaceSection: "process", pinCount: 2, defaultProperties: {} },
+      { typeId: "plc.instance", label: "IEC 61131-3 PLC", category: "PLC", folderPath: ["IEC 61131-3 PLC"], workspaceSection: "process", pinCount: 0, defaultProperties: {} },
+      { typeId: "protocol.modbus.server", label: "Modbus Server", category: "Protocolos", folderPath: ["Industrial Protocols", "Modbus"], workspaceSection: "process", pinCount: 0, defaultProperties: {} },
+    ];
+    const tree = buildPaletteTree(entries, "", "process", "en");
+    const labels = tree.map((node) => node.label);
+    assert(JSON.stringify(labels) === JSON.stringify(["IEC 61131-3 PLC", "Industrial Protocols", "Models"]), `ordem das pastas de Processo em ingles: ${JSON.stringify(labels)}`);
+    const protocols = tree[1];
+    const subfolders = protocols?.kind === "folder" ? protocols.children.map((node) => node.label).sort() : [];
+    assert(JSON.stringify(subfolders) === JSON.stringify(["HART", "Modbus"]), `HART e Modbus deveriam dividir a MESMA pasta: ${JSON.stringify(subfolders)}`);
+    // Em português, as mesmas entradas voltam aos nomes em português (a pasta é a mesma).
+    const portuguese = buildPaletteTree(entries, "", "process", "pt-BR").map((node) => node.label);
+    assert(JSON.stringify(portuguese) === JSON.stringify(["PLC IEC 61131-3", "Protocolos Industriais", "Modelos"]), `mesmas entradas em portugues: ${JSON.stringify(portuguese)}`);
+    // Sem língua informada os nomes ficam como vieram, mas o PLC continua no topo.
+    const untouched = buildPaletteTree(entries, "", "process");
+    assert(untouched[0]?.label === "IEC 61131-3 PLC", `PLC deveria continuar primeiro sem lingua informada, veio ${untouched[0]?.label}`);
+  });
+
   await test("prioridade de pasta so se aplica dentro da aba configurada (Digital nao e afetado)", () => {
     const mixed: PaletteRenderableEntry[] = [
       { typeId: "logic.and_gate", label: "AND", category: "Logicos", folderPath: ["Logicos"], pinCount: 3, defaultProperties: {} },

@@ -270,7 +270,7 @@ function render(): void {
   const shouldRestoreSearchFocus = activeElement instanceof HTMLInputElement && activeElement.classList.contains("palette__search-input");
   const selectionStart = shouldRestoreSearchFocus ? activeElement.selectionStart : null;
   const selectionEnd = shouldRestoreSearchFocus ? activeElement.selectionEnd : null;
-  const tree = buildPaletteTree(state.catalog, query, section);
+  const tree = buildPaletteTree(state.catalog, query, section, state.language);
   const visibleComponents = collectVisibleComponents(tree).filter((node) => !node.disabled);
   app.innerHTML = "";
 

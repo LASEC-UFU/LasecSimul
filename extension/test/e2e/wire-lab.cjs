@@ -13,10 +13,15 @@ const harnessRoot = path.resolve(__dirname, "../..");
 const extensionPath = process.env.LASECSIMUL_WIRE_LAB_EXTENSION ? path.resolve(process.env.LASECSIMUL_WIRE_LAB_EXTENSION) : harnessRoot;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function launch({ fixture, width = 1720, height = 1000, readySelector = ".component" }) {
+async function launch({ fixture, width = 1720, height = 1000, readySelector = ".component", settings }) {
   const port = 9600 + Math.floor(Math.random() * 300);
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), "lasecsimul-wire-lab-user-"));
   const extensionsDir = fs.mkdtempSync(path.join(os.tmpdir(), "lasecsimul-wire-lab-ext-"));
+  if (settings) {
+    // Configurações do usuário do VS Code de teste (ex.: { "lasecsimul.language": "pt-BR" }).
+    fs.mkdirSync(path.join(userData, "User"), { recursive: true });
+    fs.writeFileSync(path.join(userData, "User", "settings.json"), JSON.stringify(settings));
+  }
   const executable = await downloadAndUnzipVSCode({
     version: process.env.VSCODE_E2E_VERSION || "1.128.0",
     cachePath: path.resolve(harnessRoot, ".vscode-test"),

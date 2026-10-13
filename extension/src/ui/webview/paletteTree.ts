@@ -108,12 +108,43 @@ function stripMutableNodes(nodes: Array<MutableFolderNode | PaletteComponentNode
  * de todo o resto permanece exatamente a de sempre (sort estável). Ausente == comportamento
  * legado, sem prioridade nenhuma.
  */
-const ROOT_FOLDER_PRIORITY: Partial<Record<WorkspaceSection, readonly string[]>> = {
-  analog: ["Microcontroladores"],
+export type PaletteLanguage = "pt-BR" | "en";
+
+/** Uma pasta de topo prioritária e os nomes com que ela chega do catálogo: o da língua base
+ * (pt-BR) e, quando existe, o traduzido. A pasta é A MESMA nos dois casos. */
+interface RootFolderName {
+  readonly "pt-BR": string;
+  readonly en?: string;
+}
+
+const ROOT_FOLDER_PRIORITY: Partial<Record<WorkspaceSection, readonly RootFolderName[]>> = {
+  analog: [{ "pt-BR": "Microcontroladores" }],
   // PLC-IEC, Protocolos Industriais, Modelos -- nesta ordem -- dentro de Processo.
-  process: ["PLC IEC 61131-3", "Protocolos Industriais", "Modelos"],
-  misc: ["peripherals"],
+  process: [
+    { "pt-BR": "PLC IEC 61131-3", en: "IEC 61131-3 PLC" },
+    { "pt-BR": "Protocolos Industriais", en: "Industrial Protocols" },
+    { "pt-BR": "Modelos", en: "Models" },
+  ],
+  misc: [{ "pt-BR": "peripherals" }],
 };
+
+function rootFolderPriorityIndex(workspaceSection: WorkspaceSection | undefined, label: string): number {
+  const priority = workspaceSection ? ROOT_FOLDER_PRIORITY[workspaceSection] : undefined;
+  return priority ? priority.findIndex((name) => name["pt-BR"] === label || name.en === label) : -1;
+}
+
+/** Nome de uma pasta de topo conhecida na língua da paleta. Só PARTE do catálogo traduz
+ * `folderPath` (`component-catalog.json::translations`): em inglês o PLC e o Modbus chegam com a
+ * pasta traduzida, e HART e os modelos (subcircuitos) chegam em português. Sem unificar aqui, a
+ * paleta em inglês mostrava "Protocolos Industriais" (HART) e "Industrial Protocols" (Modbus) como
+ * duas pastas, e a do PLC -- com o nome traduzido, fora da lista de prioridade -- ia parar depois
+ * de "Modelos". Sem `language`, o nome fica como veio. */
+function localizedRootFolder(segment: string, workspaceSection: WorkspaceSection | undefined, language: PaletteLanguage | undefined): string {
+  if (!language || !workspaceSection) return segment;
+  const name = ROOT_FOLDER_PRIORITY[workspaceSection]?.[rootFolderPriorityIndex(workspaceSection, segment)];
+  if (!name) return segment;
+  return (language === "en" ? name.en : undefined) ?? name["pt-BR"];
+}
 
 function applyRootFolderPriority(
   roots: Array<MutableFolderNode | PaletteComponentNode>,
@@ -121,19 +152,18 @@ function applyRootFolderPriority(
 ): Array<MutableFolderNode | PaletteComponentNode> {
   const priority = workspaceSection ? ROOT_FOLDER_PRIORITY[workspaceSection] : undefined;
   if (!priority || priority.length === 0) return roots;
+  const indexOf = (node: MutableFolderNode | PaletteComponentNode): number =>
+    node.kind === "folder" ? rootFolderPriorityIndex(workspaceSection, node.label) : -1;
   const prioritized: Array<MutableFolderNode | PaletteComponentNode> = [];
   const rest: Array<MutableFolderNode | PaletteComponentNode> = [];
-  for (const node of roots) {
-    const isPriorityFolder = node.kind === "folder" && priority.includes(node.label);
-    (isPriorityFolder ? prioritized : rest).push(node);
-  }
-  // Ordem relativa DENTRO do grupo priorizado segue `priority[]`; múltiplas pastas com o mesmo
+  for (const node of roots) (indexOf(node) >= 0 ? prioritized : rest).push(node);
+  // Ordem relativa DENTRO do grupo priorizado segue a lista; múltiplas pastas com o mesmo
   // nome nunca coexistem no mesmo nível (chave única por segmento, ver `createFolderNode`).
-  prioritized.sort((a, b) => priority.indexOf(a.label) - priority.indexOf(b.label));
+  prioritized.sort((a, b) => indexOf(a) - indexOf(b));
   return [...prioritized, ...rest];
 }
 
-export function buildPaletteTree(entries: PaletteRenderableEntry[], rawQuery: string, workspaceSection?: WorkspaceSection): PaletteTreeNode[] {
+export function buildPaletteTree(entries: PaletteRenderableEntry[], rawQuery: string, workspaceSection?: WorkspaceSection, language?: PaletteLanguage): PaletteTreeNode[] {
   const roots: Array<MutableFolderNode | PaletteComponentNode> = [];
   const rootFolders = new Map<string, MutableFolderNode>();
   const query = normalizeSearchText(rawQuery);
@@ -141,6 +171,7 @@ export function buildPaletteTree(entries: PaletteRenderableEntry[], rawQuery: st
   for (const entry of entries) {
     if (entry.hidden || entry.paletteHidden || (workspaceSection && workspaceSectionForCatalogEntry(entry) !== workspaceSection) || !entryMatchesQuery(entry, query)) continue;
     const pathSegments = resolvePaletteFolderPath(entry);
+    if (pathSegments.length > 0) pathSegments[0] = localizedRootFolder(pathSegments[0]!, workspaceSection, language);
 
     let targetChildren = roots;
     let targetFolderIndex = rootFolders;

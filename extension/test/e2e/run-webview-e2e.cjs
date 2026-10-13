@@ -122,16 +122,12 @@ async function domClick(locator) {
     }
     if (!paletteFrame) throw new Error("Paleta real do LasecSimul nao abriu");
 
-    const controlTab = paletteFrame.getByRole("tab", { name: /^(Controle|Control)$/ }).first();
-    await controlTab.waitFor({ state: "visible", timeout: 30000 });
-    await domClick(controlTab);
-    await paletteFrame.locator('.palette-item[title^="plc.instance"]').waitFor({ state: "attached", timeout: 30000 });
-
     const processTab = paletteFrame.getByRole("tab", { name: /^(Processo|Process)$/ }).first();
     await processTab.waitFor({ state: "visible", timeout: 30000 });
     await domClick(processTab);
 
     const requiredProcessTypeIds = [
+      "plc.instance",
       "protocol.modbus.server",
       "protocol.modbus.client",
       "protocol.hart.device.standard",
@@ -140,20 +136,47 @@ async function domClick(locator) {
       "subcircuits.tdps.basic_flow_loop",
       "subcircuits.tdps.smith_predictor",
       "subcircuits.tdps.split_range",
-      "subcircuits.tdps.surge_tank_level",
+      "subcircuits.tdps.surge_tank",
       "subcircuits.tdps.heat_exchanger",
-      "subcircuits.tdps.furnace_combustion",
-      "subcircuits.tdps.boiler_drum",
-      "subcircuits.tdps.reactor_temperature",
-      "subcircuits.tdps.ph_neutralization",
+      "subcircuits.tdps.furnace",
+      "subcircuits.tdps.boiler",
+      "subcircuits.tdps.reactor",
+      "subcircuits.tdps.ph_control",
     ];
     for (const typeId of requiredProcessTypeIds) {
-      await paletteFrame.locator(`.palette-item[title^="${typeId}"]`).waitFor({ state: "attached", timeout: 30000 });
+      // O título é "typeId\ncaminho\ndica": o `\a ` (quebra de linha em CSS) exige o typeId INTEIRO,
+      // senão `subcircuits.tdps.furnace` também casaria com `subcircuits.tdps.furnace_master_slave`.
+      await paletteFrame.locator(`.palette-item[title^="${typeId}\\a "]`).waitFor({ state: "attached", timeout: 30000 });
     }
-    await paletteFrame.locator(".palette").screenshot({
-      path: path.join(artifacts, "process-palette.actual.png"),
-      animations: "disabled",
+    const processLayout = await paletteFrame.evaluate(() => {
+      const typeIdOf = (item) => (item.getAttribute("title") || "").split("\n")[0];
+      return Array.from(document.querySelectorAll(".palette__tree > .palette-folder")).map((folder) => ({
+        label: (folder.querySelector(":scope > .palette-folder__summary")?.textContent || "").replace(/^[>v\s]+/, "").trim(),
+        typeIds: Array.from(folder.querySelectorAll(".palette-item")).map(typeIdOf),
+      }));
     });
+    const folderOf = (typeId) => processLayout.findIndex((folder) => folder.typeIds.includes(typeId));
+    const layoutText = JSON.stringify(processLayout.map((folder) => folder.label));
+    if (processLayout[0]?.typeIds[0] !== "plc.instance") throw new Error(`o PLC deveria ser o primeiro item de Processo: ${layoutText}`);
+    if (folderOf("protocol.modbus.server") !== 1 || folderOf("protocol.hart.modem") !== 1) {
+      throw new Error(`Modbus e HART deveriam estar na mesma pasta, logo depois do PLC: ${layoutText}`);
+    }
+    if (folderOf("subcircuits.process.fopdt") !== 2) throw new Error(`os modelos deveriam vir depois dos protocolos: ${layoutText}`);
+
+    // A paleta é reconstruída quando o catálogo chega de novo (ex.: Core terminando de subir); se
+    // isso acontecer no meio da captura, o elemento some e basta tentar outra vez.
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        await paletteFrame.locator(".palette").screenshot({
+          path: path.join(artifacts, "process-palette.actual.png"),
+          animations: "disabled",
+        });
+        break;
+      } catch (error) {
+        if (attempt >= 4) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
 
     let instrumentFrame;
     for (let attempt = 0; attempt < 120 && !instrumentFrame; attempt++) {
@@ -167,6 +190,10 @@ async function domClick(locator) {
     }
     if (!instrumentFrame) throw new Error("Webview real não abriu a fixture determinística");
     await instrumentFrame.evaluate(() => document.fonts.ready);
+    // O painel de propriedades (posterior às imagens de referência) abre por padrão e cobre o lado
+    // direito das janelas de instrumento; recolhe para a captura mostrar a janela inteira.
+    const propertyDockToggle = instrumentFrame.locator(".property-dock__header button").first();
+    if (await propertyDockToggle.count()) await domClick(propertyDockToggle);
 
     await domClick(instrumentFrame.locator('.component[data-component-id="scope"] .meter-expand-button'));
     const scope = instrumentFrame.locator('.instrument-popup[data-component-id="scope"]');
@@ -226,7 +253,10 @@ async function domClick(locator) {
     const reopened = instrumentFrame.locator('.instrument-popup[data-component-id="logic"]');
     await reopened.waitFor({ state: "visible" });
     const after = await reopened.boundingBox();
-    if (!after || Math.abs(expectedSize.width - after.width) > 2 || Math.abs(expectedSize.height - after.height) > 2) throw new Error("configuração da janela não persistiu ao reabrir");
+    if (!after || Math.abs(expectedSize.width - after.width) > 2 || Math.abs(expectedSize.height - after.height) > 2) {
+      throw new Error(`configuração da janela não persistiu ao reabrir: antes ${Math.round(before.width)}x${Math.round(before.height)}, ` +
+        `esperado ${expectedSize.width}x${expectedSize.height}, reaberta ${after ? `${Math.round(after.width)}x${Math.round(after.height)}` : "ausente"}`);
+    }
 
     fs.writeFileSync(path.join(artifacts, "results.json"), JSON.stringify({
       viewport: { width: 1440, height: 1000, deviceScaleFactor: 1 },
