@@ -1,5 +1,5 @@
 import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
-import { CanonicalEndpoint, CanonicalTopologyDocument, HmiApplication, HmiPage, HmiPageElement, InteractionKindEntry, McuSerialPortEntry, PackagePin, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, defaultHmiNavigationVisual, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
+import { CanonicalEndpoint, CanonicalTopologyDocument, HmiApplication, HmiPage, HmiPageElement, InteractionKindEntry, McuSerialPortEntry, PackagePin, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, TopologyNode, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, defaultHmiNavigationVisual, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
 import { reorderedZOrder, zOrderModeForKey, type ZOrderMode } from "./zOrder.js";
 import { graphicalRuntimeProperties, isGraphicalTypeId } from "./graphicsBinding.js";
 import { auditHmiApplication, createHmiAuditHtml, createHmiAuditReport, defaultHmiAuditRuleProfile, filterHmiAuditFindings, fingerprintHmiAuditInputs, HMI_AUDIT_RULE_IDS, hmiAuditFindingKey } from "./hmiAudit.js";
@@ -13,23 +13,22 @@ import { analogSampleHoldPath, clampInstrumentWindow, decodeInstrumentState, enc
 import {
   Point,
   WIRE_GRID_SIZE,
-  appendPoint,
   buildOrthogonalPath,
   moveOrthogonalWireCorner,
   moveOrthogonalWireSegment,
   nearestPointOnOrthogonalSegment,
   nearestSnappedPointOnOrthogonalSegment,
   normalizeOrthogonalPath,
-  orthogonalSegmentPoints,
   samePoint,
   snapCoordinate,
-  snapToWireGrid,
   splitWireRouteAtPoint,
   wireConnectCornerIndexLikeSimulIDE,
   wireCornerIndexNearSegmentPoint,
 } from "./wireGeometry.js";
 import { formatEngineeringValue, defaultSiPrefixFactor, SI_PREFIXES } from "./valueFormatting.js";
-import { isJunctionVisible, movableTopologyNodeIds, endpointScenePosition as resolveEndpointScenePosition, wirePolylinePoints as resolveWirePolylinePoints } from "./wireTopology.js";
+import { ConnectionEndpoint, autoRoutedWirePoints, connectEndpointToNode, isJunctionVisible, movableTopologyNodeIds, normalizeWireGeometry, endpointScenePosition as resolveEndpointScenePosition, wirePolylinePoints as resolveWirePolylinePoints } from "./wireTopology.js";
+import { WireDraft, finishWireDraft, fixWireDraftCorner, moveWireDraft, simplifyWirePath, snapToDraftGrid, startWireDraft, translatePoints, undoWireDraftCorner, wireDraftPath } from "./wireRouting.js";
+import { assertTopologyInvariants } from "./topologyDocument.js";
 import { WireSpatialIndex } from "./wireSpatialIndex.js";
 import { DockPort, PortDockIndex, buildPortDockIndex, findMagneticDock, magneticDockRadius } from "./connectionEngine.js";
 import { BatchPropertyPatch, PropertyField, PropertyFieldKind, SharedFieldValue, SharedPropertyField, computeGenericInstanceFields, computeSharedPropertyFields, planBatchPropertyChange, propertyFieldKindFromEditor } from "./batchProperties.js";
@@ -94,6 +93,7 @@ function normalizeProjectState(raw: unknown): WebviewProjectState {
   return {
     ...createEmptyState(),
     ...candidate,
+    pendingConnection: undefined,
     locale: candidate.locale === "en" ? "en" : "pt-BR",
     catalog: Array.isArray(candidate.catalog) ? candidate.catalog : [],
     components: Array.isArray(candidate.components) ? candidate.components : [],
@@ -219,6 +219,9 @@ let canvasElement: HTMLDivElement | undefined;
 let canvasContentElement: HTMLDivElement | undefined;
 let wireLayerElement: SVGSVGElement | undefined;
 let canvasAnnouncerElement: HTMLParagraphElement | undefined;
+/** Zoom por scroll ainda não persistido (ver `scheduleViewportPersist`). Enquanto definido, o
+ * `state.viewport` LOCAL é o único válido -- o Host só conhece um viewport de antes do gesto. */
+let viewportPersistTimer: ReturnType<typeof setTimeout> | undefined;
 let canvasKeyboardCurrentId: string | undefined;
 let lastCanvasAnnouncement = "";
 
@@ -295,6 +298,8 @@ const UI_TEXT = {
     openSubcircuit: "Abrir Subcircuito",
     chooseSubcircuitFile: "Procurar...",
     noSubcircuitFileChosen: "(nenhum)",
+    plcProgramNone: "(nenhum programa vinculado)",
+    plcOpenProgram: "Abrir programa",
     locateSubcircuitFile: "Localizar arquivo do subcircuito...",
     locateDeviceFile: "Localizar ou recarregar arquivo do Device...",
     linkToTunnel: "Vincular a túnel...",
@@ -316,6 +321,7 @@ const UI_TEXT = {
     firmwarePath: "Firmware (.bin/.elf)",
     qemuBinary: "Binario QEMU",
     fpgaLoadCode: "Carregar código VHDL...",
+    plcNewProject: "Novo programa",
     fpgaUnconfigured: "Nenhum código carregado; o bloco ainda não possui entradas ou saídas.",
     fpgaOpenSource: "Abrir/editar VHDL",
     fpgaConfigure: "Alterar arquivos e entity...",
@@ -450,6 +456,8 @@ const UI_TEXT = {
     openSubcircuit: "Open Subcircuit",
     chooseSubcircuitFile: "Browse...",
     noSubcircuitFileChosen: "(none)",
+    plcProgramNone: "(no program linked)",
+    plcOpenProgram: "Open program",
     locateSubcircuitFile: "Locate subcircuit file...",
     locateDeviceFile: "Locate or reload Device file...",
     linkToTunnel: "Link to tunnel...",
@@ -470,6 +478,7 @@ const UI_TEXT = {
     firmwareGroup: "Firmware",
     firmwarePath: "Firmware (.bin/.elf)",
     fpgaLoadCode: "Load VHDL code...",
+    plcNewProject: "New program",
     fpgaUnconfigured: "No code loaded; the block does not have inputs or outputs yet.",
     fpgaOpenSource: "Open/edit VHDL",
     fpgaConfigure: "Change files and entity...",
@@ -592,11 +601,16 @@ function boardOverlayRuntimeState(outerComponentId: string, item: { id: string; 
   const encoded = boardOverlayVisualStatesByKey[`${outerComponentId}:${item.id}`];
   return encoded ? { __runtime_state: encoded } : {};
 }
-let pendingWirePreviewTarget: Point | undefined;
-let pendingWireRoute: Point[] = [];
-let pendingWireBendLengths: number[] = [];
+/** Geometria do fio em desenho (`wireRouting.ts`): pontos já fixados + o "L" elástico até o cursor.
+ * `state.pendingConnection` guarda só DE ONDE o fio sai; o rascunho nunca sai da Webview. */
+let wireDraft: WireDraft | undefined;
 let pendingWireDockTarget: DockPort | undefined;
+/** Alvo magnético sobre OUTRO fio ou nó (ponto já encaixado) -- clicar ali cria/usa a junção. */
+let pendingWireWireTarget: { wireId: string; point: Point } | undefined;
 let pendingWireDockIndex: PortDockIndex | undefined;
+/** Alcance, em pixels de TELA, para um fio em desenho grudar em outro fio. Menor que o dos pinos
+ * (`DOCK_SCREEN_PX`): dá pra passar rente a um fio sem ser capturado por ele. */
+const WIRE_DOCK_SCREEN_PX = 8;
 let wireSegmentDrag:
   | {
       wireId: string;
@@ -633,6 +647,9 @@ let selectedWireCorner:
  * mover um fio. Setado no `finish()` de cada arrasto quando `moved===true`, consumido (e resetado)
  * no início do próximo `click`. */
 let suppressNextWireInteractionClick = false;
+// O clique a suprimir é sempre o do MESMO aperto que terminou o arrasto. Zerar a cada novo aperto
+// garante que a flag nunca sobre pra engolir um clique legítimo (ex.: arrasto solto fora da janela).
+window.addEventListener("pointerdown", () => { suppressNextWireInteractionClick = false; }, { capture: true });
 let simulationStatus: SimulationStatus = "stopped";
 /** Taxa real alcançada (ver `messages.ts::simulationRate`) -- `undefined` == sem leitura ainda ou
  * simulação parada, mostra só o rótulo de status sem número junto. */
@@ -2398,7 +2415,9 @@ function captureUndoSnapshot(): UndoSnapshot {
 /** Chave de comparação -- conteúdo da cena + política/canvas do símbolo (nunca seleção). */
 function undoContentKey(snapshot: { components: WebviewComponentModel[]; topology: CanonicalTopologyDocument; symbolMode?: WebviewProjectState["symbolMode"]; symbolCanvas?: WebviewProjectState["symbolCanvas"]; hmiApplication?: HmiApplication }): string {
   const hmiForUndo = snapshot.hmiApplication ? { ...snapshot.hmiApplication, auditExceptions: undefined } : undefined;
-  return JSON.stringify([snapshot.components, snapshot.topology, snapshot.symbolMode, snapshot.symbolCanvas, hmiForUndo]);
+  // `topology.revision` fica de fora: é um contador do Host, não conteúdo. Com ele na chave, cada
+  // revisão nova virava uma entrada de desfazer idêntica à anterior (Ctrl+Z "sem efeito").
+  return JSON.stringify([snapshot.components, snapshot.topology.nodes, snapshot.topology.conductors, snapshot.symbolMode, snapshot.symbolCanvas, hmiForUndo]);
 }
 
 /** Reseta o histórico (undo E redo) pro estado ATUAL de `state` -- chamado ao entrar/sair da sessão
@@ -2466,20 +2485,27 @@ function applyUndoSnapshot(snapshot: UndoSnapshot): void {
       ? snapshot.selectedHmiPageId
       : snapshot.hmiApplication?.startPageId;
     const restoredHmiPage = snapshot.hmiApplication?.pages.find((page) => page.id === selectedHmiPageId);
+    // O snapshot continua guardado nas pilhas de desfazer/refazer: o estado vivo recebe CÓPIAS.
+    // Sem isso, toda edição feita depois de um Ctrl+Z (arrastes mexem em `component.x`/`wire.points`
+    // no lugar) alterava também o snapshot guardado, e os passos seguintes de desfazer/refazer
+    // voltavam para estados errados. O antigo eco do Host mascarava isso ao trocar `state` logo em
+    // seguida por uma cópia vinda de fora.
+    const restoredComponents = structuredClone(snapshot.components);
     hmiSceneCache = subcircuitEditorMode === "hmi" && restoredHmiPage
       ? {
           pageId: restoredHmiPage.id,
-          elements: snapshot.components,
+          elements: restoredComponents,
           sourceByElementId: new Map(restoredHmiPage.elements.flatMap((element) =>
             element.componentId ? [[element.id, element.componentId] as const] : [])),
         }
       : undefined;
-    setActiveSceneComponents(snapshot.components);
-    state.topology = snapshot.topology;
-    state.selectedComponentIds = snapshot.selectedComponentIds;
-    state.selectedWireIds = snapshot.selectedWireIds;
+    setActiveSceneComponents(restoredComponents);
+    // A revisão é um contador do Host: desfazer restaura o conteúdo, nunca volta o número.
+    state.topology = { ...structuredClone(snapshot.topology), revision: state.topology.revision };
+    state.selectedComponentIds = [...snapshot.selectedComponentIds];
+    state.selectedWireIds = [...snapshot.selectedWireIds];
     state.symbolMode = snapshot.symbolMode;
-    state.symbolCanvas = snapshot.symbolCanvas;
+    state.symbolCanvas = snapshot.symbolCanvas ? structuredClone(snapshot.symbolCanvas) : undefined;
     clearPendingWire();
     selectedWireSegment = undefined;
     selectedWireCorner = undefined;
@@ -2525,7 +2551,11 @@ function persistState(): void {
   }
   recordUndoSnapshotIfChanged();
   storeWebviewState();
-  const outbound: WebviewToHostMessage = { version: WEBVIEW_MESSAGE_VERSION, type: "projectChanged", project: state };
+  const outbound: WebviewToHostMessage = {
+    version: WEBVIEW_MESSAGE_VERSION,
+    type: "projectChanged",
+    project: state.pendingConnection ? { ...state, pendingConnection: undefined } : state,
+  };
   vscode?.postMessage(outbound);
 }
 
@@ -3271,37 +3301,38 @@ function clearSelection(): void {
 
 function clearPendingWire(): void {
   state.pendingConnection = undefined;
-  pendingWirePreviewTarget = undefined;
-  pendingWireRoute = [];
-  pendingWireBendLengths = [];
+  wireDraft = undefined;
   pendingWireDockTarget = undefined;
+  pendingWireWireTarget = undefined;
   pendingWireDockIndex = undefined;
   syncPendingWireDockVisuals();
+  refreshPendingWirePreview();
 }
 
 /** Ponto único de cancelamento da ferramenta ativa (derivação de fio EM ANDAMENTO ou posicionamento
  * de componente) -- Esc/botão direito/troca de ferramenta chamam SÓ isto, nunca mexem nas duas flags
- * na mão. Antes desta função, entrar em modo de posicionamento não cancelava um draft de fio em
- * andamento (nem o inverso) -- os dois podiam coexistir, e o primeiro Esc só derrubava um dos dois
- * (achado real de auditoria: `docs/27-analise-critica-fios-vs-auditoria-2026-07-11.md`, seção "Análise
- * da FSM" -- preview de fio ficava visível sobre o componente recém-posicionado até um SEGUNDO Esc).
- * As duas ferramentas são MUTUAMENTE EXCLUSIVAS por construção agora: nenhum caminho de entrada em
- * uma delas (`beginWireDraft`/`beginPlacementMode` abaixo) deixa a outra ativa. */
+ * na mão. As duas ferramentas são MUTUAMENTE EXCLUSIVAS por construção: nenhum caminho de entrada em
+ * uma delas (`beginWireDraft`/`beginPlacementMode` abaixo) deixa a outra ativa (ver
+ * `docs/27-analise-critica-fios-vs-auditoria-2026-07-11.md`, seção "Análise da FSM"). */
 function cancelActiveTool(): void {
   clearPendingWire();
   exitPlacementMode();
 }
 
-/** Único ponto de entrada em "derivar fio" (clique num pino livre ou em cima de outro fio) --
- * cancela posicionamento de componente em andamento antes, pra nunca deixar as duas ferramentas
- * simultaneamente ativas (ver `cancelActiveTool`). */
+/** Único ponto de entrada em "derivar fio" (clique num pino, num nó ou em cima de outro fio).
+ * Não seleciona nada, não persiste nada e não reconstrói o canvas: começar um fio é instantâneo e
+ * só liga o rascunho + o realce dos alvos (mesmo comportamento do SimulIDE, onde apertar num pino
+ * apenas cria o conector que passa a seguir o cursor). */
 function beginWireDraft(origin: NonNullable<WebviewProjectState["pendingConnection"]>): void {
   if (placingTypeId) exitPlacementMode();
   state.pendingConnection = origin;
-  pendingWireRoute = [];
-  pendingWireBendLengths = [];
+  const start = pendingConnectionPosition();
+  wireDraft = start ? startWireDraft(start) : undefined;
+  pendingWireDockTarget = undefined;
+  pendingWireWireTarget = undefined;
   rebuildPendingWireDockIndex();
   syncPendingWireDockVisuals();
+  refreshPendingWirePreview();
 }
 
 function pendingWireSourcePort(): Pick<DockPort, "ownerId" | "portId" | "kind"> | undefined {
@@ -3326,28 +3357,130 @@ function rebuildPendingWireDockIndex(): void {
   pendingWireDockIndex = buildPortDockIndex(ports);
 }
 
-function syncPendingWireDockVisuals(): void {
-  const canvas = document.querySelector<HTMLElement>(".canvas");
-  canvas?.classList.toggle("wire-docking", Boolean(state.pendingConnection));
-  for (const element of Array.from(document.querySelectorAll<SVGCircleElement>(".pin-terminal"))) {
-    const sameOwner = element.dataset.componentId === pendingWireSourcePort()?.ownerId;
-    element.classList.toggle("pin-terminal--compatible", Boolean(state.pendingConnection) && !sameOwner);
-    element.classList.toggle(
-      "pin-terminal--dock-target",
-      element.dataset.componentId === pendingWireDockTarget?.ownerId && element.dataset.pinId === pendingWireDockTarget?.portId
-    );
-  }
+function pinTerminalElement(port: Pick<DockPort, "ownerId" | "portId"> | undefined): SVGCircleElement | null {
+  if (!port) return null;
+  return document.querySelector<SVGCircleElement>(
+    `.pin-terminal[data-component-id="${CSS.escape(port.ownerId)}"][data-pin-id="${CSS.escape(port.portId)}"]`
+  );
 }
 
-function updatePendingWireDock(point: Point): void {
+/** Varredura COMPLETA dos realces de pino -- só ao começar/terminar um rascunho e a cada `render()`
+ * (que recria os pinos). O alvo magnético do momento é trocado por `setPendingWireTargets`, que
+ * toca só os dois pinos envolvidos em vez de todos a cada movimento do mouse. */
+function syncPendingWireDockVisuals(): void {
+  const canvas = canvasElement ?? document.querySelector<HTMLElement>(".canvas");
+  const active = Boolean(state.pendingConnection);
+  canvas?.classList.toggle("wire-docking", active);
+  const source = pendingWireSourcePort();
+  for (const element of Array.from(document.querySelectorAll<SVGCircleElement>(".pin-terminal"))) {
+    const ownerId = element.dataset.componentId;
+    const isSource = ownerId === source?.ownerId && element.dataset.pinId === source?.portId;
+    element.classList.toggle("pin-terminal--active", active && isSource);
+    element.classList.toggle("pin-terminal--compatible", active && ownerId !== source?.ownerId);
+    element.classList.toggle(
+      "pin-terminal--dock-target",
+      active && ownerId === pendingWireDockTarget?.ownerId && element.dataset.pinId === pendingWireDockTarget?.portId
+    );
+  }
+  refreshWireDockMarker();
+}
+
+function setPendingWireTargets(dock: DockPort | undefined, wireTarget: { wireId: string; point: Point } | undefined): void {
+  const previous = pendingWireDockTarget;
+  pendingWireDockTarget = dock;
+  pendingWireWireTarget = wireTarget;
+  if (previous?.ownerId !== dock?.ownerId || previous?.portId !== dock?.portId) {
+    pinTerminalElement(previous)?.classList.remove("pin-terminal--dock-target");
+    pinTerminalElement(dock)?.classList.add("pin-terminal--dock-target");
+  }
+  refreshWireDockMarker();
+}
+
+/** Marca verde no ponto do fio/nó onde o rascunho vai se ligar -- o usuário vê a junção antes de
+ * criá-la. */
+function refreshWireDockMarker(): void {
+  const wireLayer = wireLayerElement ?? document.querySelector<SVGSVGElement>(".wire-layer");
+  if (!wireLayer) return;
+  let marker = wireLayer.querySelector<SVGCircleElement>("circle.wire-layer__dock-marker");
+  const target = state.pendingConnection ? pendingWireWireTarget : undefined;
+  if (!target) {
+    marker?.remove();
+    return;
+  }
+  if (!marker) {
+    marker = document.createElementNS(SVG_NS, "circle");
+    marker.setAttribute("class", "wire-layer__dock-marker");
+    marker.setAttribute("r", "4.5");
+  }
+  marker.setAttribute("cx", String(target.point.x));
+  marker.setAttribute("cy", String(target.point.y));
+  wireLayer.appendChild(marker);
+}
+
+/** Nó ou segmento de fio ao alcance do cursor, com o ponto de ligação já encaixado. Nó tem
+ * prioridade (é um alvo pontual, como um pino). Sobre um segmento, o ponto fica na grade do
+ * rascunho ao longo do eixo do segmento -- a última perna chega reta -- e, a menos de um passo de
+ * grade de um canto do fio, usa o próprio canto (mesma regra de `ConnectorLine::connectToWire` do
+ * SimulIDE: nunca cria um nó colado num canto). */
+function findWireDockTarget(raw: Point): { wireId: string; point: Point } | undefined {
+  if (!wireDraft || subcircuitEditorMode !== "circuit") return undefined;
+  const zoom = state.viewport.zoom || 1;
+  const origin = wireDraft.anchors[0]!;
+
+  const nodeReach = magneticDockRadius(zoom) * 0.7;
+  let bestNode: { distance: number; nodeId: string; point: Point } | undefined;
+  for (const node of state.topology.nodes) {
+    const distance = Math.hypot(node.position.x - raw.x, node.position.y - raw.y);
+    if (distance > nodeReach || (bestNode && distance >= bestNode.distance)) continue;
+    bestNode = { distance, nodeId: node.id, point: { x: node.position.x, y: node.position.y } };
+  }
+  if (bestNode && !samePoint(bestNode.point, origin)) {
+    const wireId = wiresByComponentId().get(bestNode.nodeId)?.[0]?.id;
+    if (wireId) return { wireId, point: bestNode.point };
+  }
+
+  const reach = Math.min(16, Math.max(3, WIRE_DOCK_SCREEN_PX / zoom));
+  const lattice = snapToDraftGrid(wireDraft, raw);
+  let best: { distance: number; wireId: string; segmentIndex: number; point: Point } | undefined;
+  for (const segment of wireSpatialIndex.queryPoint(raw, reach)) {
+    const horizontal = Math.abs(segment.from.y - segment.to.y) < 0.5;
+    const vertical = Math.abs(segment.from.x - segment.to.x) < 0.5;
+    if (!horizontal && !vertical) continue;
+    const nearest = nearestPointOnOrthogonalSegment(raw, segment.from, segment.to);
+    const distance = Math.hypot(nearest.x - raw.x, nearest.y - raw.y);
+    if (distance > reach || (best && distance >= best.distance)) continue;
+    const point = horizontal
+      ? { x: Math.max(Math.min(lattice.x, Math.max(segment.from.x, segment.to.x)), Math.min(segment.from.x, segment.to.x)), y: segment.from.y }
+      : { x: segment.from.x, y: Math.max(Math.min(lattice.y, Math.max(segment.from.y, segment.to.y)), Math.min(segment.from.y, segment.to.y)) };
+    best = { distance, wireId: segment.wireId, segmentIndex: segment.segmentIndex, point };
+  }
+  if (!best) return undefined;
+  const wire = state.topology.conductors.find((entry) => entry.id === best!.wireId);
+  if (!wire || wire.hidden) return undefined;
+  const full = wirePolylinePoints(wire);
+  const cornerIndex = wireConnectCornerIndexLikeSimulIDE(full, best.segmentIndex, best.point);
+  const point = cornerIndex !== undefined ? { ...full[cornerIndex]! } : best.point;
+  if (samePoint(point, origin)) return undefined;
+  return { wireId: best.wireId, point };
+}
+
+/** Um movimento do mouse com um fio em desenho: acha o alvo magnético (pino > nó > fio), encaixa
+ * a ponta livre e redesenha SÓ a pré-visualização. O que aparece aqui é exatamente o fio que um
+ * clique criaria. */
+function updatePendingWireDock(rawPoint: Point): void {
   if (!state.pendingConnection) return;
+  if (!wireDraft) {
+    const start = pendingConnectionPosition();
+    if (!start) return;
+    wireDraft = startWireDraft(start);
+  }
   if (!pendingWireDockIndex) rebuildPendingWireDockIndex();
   const dock = pendingWireDockIndex
-    ? findMagneticDock(point, pendingWireDockIndex, magneticDockRadius(state.viewport.zoom || 1), pendingWireSourcePort())
+    ? findMagneticDock(rawPoint, pendingWireDockIndex, magneticDockRadius(state.viewport.zoom || 1), pendingWireSourcePort())
     : undefined;
-  pendingWireDockTarget = dock?.port;
-  pendingWirePreviewTarget = dock?.port.point ?? point;
-  syncPendingWireDockVisuals();
+  const wireTarget = dock ? undefined : findWireDockTarget(rawPoint);
+  setPendingWireTargets(dock?.port, wireTarget);
+  wireDraft = moveWireDraft(wireDraft, dock?.port.point ?? wireTarget?.point ?? snapToDraftGrid(wireDraft, rawPoint));
   refreshPendingWirePreview();
 }
 
@@ -3355,16 +3488,74 @@ type WireGestureOrigin =
   | { kind: "pin"; componentId: string; pinId: string; point: Point }
   | { kind: "wire"; wireId: string; point: Point };
 
+function newJunctionId(): string {
+  return `junction-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+}
+
+/** Aplica uma conexão NA HORA, na própria Webview: divide o(s) fio(s) tocado(s), cria o(s) nó(s) e
+ * o fio novo numa única mutação de `state`. O Host recebe o resultado pelo `"projectChanged"` de
+ * sempre (`persistState`), que já sincroniza qualquer mudança de topologia com o Core -- não existe
+ * mais ida e volta antes de o fio aparecer, nem pedido que possa ser descartado em silêncio.
+ * Devolve `false` (sem alterar nada) se o alvo não formar uma conexão válida. */
+function applyLocalConnection(from: ConnectionEndpoint, to: ConnectionEndpoint, routePoints: Point[]): boolean {
+  let connected;
+  try {
+    connected = connectEndpointToNode(
+      { components: state.components, wires: state.topology.conductors, nodes: state.topology.nodes },
+      from,
+      to,
+      routePoints.length > 0 ? routePoints : undefined,
+      { newWireId: newWireId(), nextJunctionId: newJunctionId, nextWireId: newWireId }
+    );
+  } catch (error) {
+    console.warn("LasecSimul: conexão recusada", error);
+    return false;
+  }
+  const created = connected.newWires[connected.newWires.length - 1];
+  if (!created) return false;
+  if (endpointId(created.from) === endpointId(created.to) && endpointPinId(created.from) === endpointPinId(created.to)) return false;
+  const replaced = new Set(connected.replacedWireIds);
+  const topology = {
+    ...state.topology,
+    nodes: [...state.topology.nodes, ...connected.newNodes],
+    conductors: [...state.topology.conductors.filter((wire) => !replaced.has(wire.id)), ...connected.newWires],
+  };
+  try {
+    assertTopologyInvariants(topology, new Set(state.components.map((component) => component.id)));
+  } catch (error) {
+    console.warn("LasecSimul: topologia resultante inválida, conexão descartada", error);
+    return false;
+  }
+  state = { ...state, topology };
+  return true;
+}
+
+/** Fecha o rascunho em `target`. A rota gravada é a da pré-visualização com a ponta no alvo. */
+function commitWireDraft(target: WireGestureOrigin): void {
+  const pending = state.pendingConnection;
+  const start = pendingConnectionPosition();
+  if (!pending || !start) {
+    clearPendingWire();
+    return;
+  }
+  const full = finishWireDraft(wireDraft ?? startWireDraft(start), target.point);
+  const from: ConnectionEndpoint = pending.kind === "wire"
+    ? { kind: "wire", wireId: pending.wireId, point: pending.point }
+    : { kind: "pin", componentId: pending.componentId, pinId: pending.pinId };
+  const to: ConnectionEndpoint = target.kind === "pin"
+    ? { kind: "pin", componentId: target.componentId, pinId: target.pinId }
+    : { kind: "wire", wireId: target.wireId, point: target.point };
+  // Alvo inválido (ex.: a própria origem): o rascunho continua vivo, o usuário só escolhe outro ponto.
+  if (!applyLocalConnection(from, to, full.slice(1, -1))) return;
+  clearSelection();
+  clearPendingWire();
+  persistState();
+  render();
+}
+
 /** Ponto único de decisão pra clicar num alvo de conexão JÁ EXISTENTE (pino, meio-de-segmento,
- * canto, ou junção) -- antes desta função, cada um dos quatro handles tinha sua PRÓPRIA cópia quase
- * idêntica desta lógica (checar `placingTypeId`, checar `suppressNextWireInteractionClick`, decidir
- * "terminar a conexão pendente aqui" vs "começar um draft novo daqui"), e só o pino tratava
- * corretamente o caso de re-clicar na própria origem pra cancelar. Início de draft é SEMPRE local
- * (nunca mais um round-trip `requestStartWireFromWire` pela Extension só pra armar
- * `pendingConnection` -- é estado 100% transitório da Webview, `beginWireDraft` já bastava pro caso
- * de pino, agora serve pros quatro). Terminar (`state.pendingConnection` já setado) SEMPRE passa
- * pelo Core via `requestConnectEndpoints` -- isso sim precisa de round-trip, é o único momento em
- * que a topologia de verdade muda. */
+ * canto, ou junção): sem rascunho, começa um daqui; com rascunho, termina aqui. Clicar de novo no
+ * pino de origem cancela. */
 function handleWireGestureClick(target: WireGestureOrigin): void {
   if (placingTypeId) return;
   if (suppressNextWireInteractionClick) {
@@ -3372,49 +3563,67 @@ function handleWireGestureClick(target: WireGestureOrigin): void {
     return;
   }
 
-  if (!state.pendingConnection) {
-    if (target.kind === "pin") {
-      beginWireDraft({ kind: "pin", componentId: target.componentId, pinId: target.pinId });
-      selectOnlyComponent(target.componentId);
-    } else {
-      beginWireDraft({ kind: "wire", wireId: target.wireId, point: target.point });
-      clearSelection();
-    }
-    pendingWirePreviewTarget = target.point;
-    persistState();
-    render();
-    return;
-  }
-
   const pending = state.pendingConnection;
-  if (target.kind === "pin" && pending.kind !== "wire" && pending.componentId === target.componentId && pending.pinId === target.pinId) {
-    // Re-clicar na MESMA origem cancela o draft -- só faz sentido pra pino (um ponto discreto e
-    // nomeado); meio-de-fio/junção não tem essa noção de "clicar 2x no mesmo lugar", Esc já cobre.
-    clearPendingWire();
-    persistState();
-    render();
+  if (!pending) {
+    beginWireDraft(target.kind === "pin"
+      ? { kind: "pin", componentId: target.componentId, pinId: target.pinId }
+      : { kind: "wire", wireId: target.wireId, point: target.point });
     return;
   }
 
-  send({
-    version: WEBVIEW_MESSAGE_VERSION,
-    type: "requestConnectEndpoints",
-    baseRevision: state.topology.revision ?? 0,
-    from: pending.kind === "wire" ? pending : { kind: "pin", componentId: pending.componentId, pinId: pending.pinId },
-    to: target.kind === "pin" ? { kind: "pin", componentId: target.componentId, pinId: target.pinId } : { kind: "wire", wireId: target.wireId, point: target.point },
-    points: pendingWirePointsForTarget(target.point),
-  });
-  clearPendingWire();
-  storeWebviewState();
-  render();
+  if (target.kind === "pin" && pending.kind !== "wire" && pending.componentId === target.componentId && pending.pinId === target.pinId) {
+    clearPendingWire();
+    return;
+  }
+  // Sobre um fio/nó, o ponto de ligação é o que a pré-visualização já está mostrando.
+  commitWireDraft(target.kind === "wire" && pendingWireWireTarget ? { kind: "wire", ...pendingWireWireTarget } : target);
 }
 
-/**
- * Drag-to-connect path layered on top of the existing click-click workflow.
- * The draft stays transient until a compatible magnetic target is reached;
- * one pointerup then commits through the same atomic host transaction used by
- * clicks, so runtime topology and undo semantics remain unchanged.
- */
+/** Com um fio em desenho, um clique sobre uma alça de fio/canto/nó é resolvido como qualquer
+ * outro clique no canvas: vale o alvo que a pré-visualização está mostrando (marca verde), nunca
+ * um ponto recalculado por outro caminho. `true` se o clique foi consumido aqui. */
+function routePendingWireClick(event: MouseEvent, handle: Element): boolean {
+  if (!state.pendingConnection || placingTypeId) return false;
+  const canvasEl = handle.closest<HTMLElement>(".canvas");
+  if (!canvasEl) return false;
+  handlePendingWireCanvasClick(eventToCanvasPoint(event, canvasEl));
+  return true;
+}
+
+/** Clique com um fio em desenho num lugar que não é uma alça: termina no alvo magnético se houver
+ * um; senão fixa o canto atual e o fio continua seguindo o cursor a partir dele. */
+function handlePendingWireCanvasClick(rawPoint: Point): void {
+  if (suppressNextWireInteractionClick) {
+    suppressNextWireInteractionClick = false;
+    return;
+  }
+  updatePendingWireDock(rawPoint);
+  if (pendingWireDockTarget) {
+    const dock = pendingWireDockTarget;
+    commitWireDraft({ kind: "pin", componentId: dock.ownerId, pinId: dock.portId, point: dock.point });
+    return;
+  }
+  if (pendingWireWireTarget) {
+    commitWireDraft({ kind: "wire", ...pendingWireWireTarget });
+    return;
+  }
+  if (!wireDraft) return;
+  wireDraft = fixWireDraftCorner(wireDraft);
+  refreshPendingWirePreview();
+}
+
+/** Desfaz o último canto fixado do rascunho; `false` se não havia nenhum (só a origem). */
+function undoPendingWireCorner(): boolean {
+  const previous = wireDraft ? undoWireDraftCorner(wireDraft) : undefined;
+  if (!previous) return false;
+  wireDraft = previous;
+  refreshPendingWirePreview();
+  return true;
+}
+
+/** Apertar num pino e arrastar: o fio nasce no primeiro movimento e segue o cursor. Soltar sobre
+ * um pino, nó ou fio conecta ali; soltar no vazio fixa o canto e o fio CONTINUA em desenho (como no
+ * SimulIDE) -- nunca é descartado só porque o botão foi solto fora de um alvo. */
 function startPinConnectionDrag(event: PointerEvent, component: WebviewComponentModel, pinId: string): void {
   if (event.button !== 0 || placingTypeId || state.pendingConnection) return;
   event.stopPropagation();
@@ -3424,43 +3633,40 @@ function startPinConnectionDrag(event: PointerEvent, component: WebviewComponent
 
   const onMove = (moveEvent: PointerEvent): void => {
     if (!dragging && Math.hypot(moveEvent.clientX - startClientX, moveEvent.clientY - startClientY) < 4) return;
-    const canvas = document.querySelector<HTMLDivElement>(".canvas");
+    const canvas = canvasElement ?? document.querySelector<HTMLDivElement>(".canvas");
     if (!canvas) return;
     if (!dragging) {
       dragging = true;
       beginWireDraft({ kind: "pin", componentId: component.id, pinId });
-      selectOnlyComponent(component.id);
-      persistState();
-      render();
     }
     updatePendingWireDock(eventToCanvasPoint(moveEvent, canvas));
   };
 
-  const finish = (): void => {
+  const detach = (): void => {
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", finish);
     window.removeEventListener("pointercancel", cancel);
+  };
+  const finish = (): void => {
+    detach();
     if (!dragging) return;
-    const dock = pendingWireDockTarget;
-    if (dock) {
-      handleWireGestureClick({ kind: "pin", componentId: dock.ownerId, pinId: dock.portId, point: dock.point });
-      suppressNextWireInteractionClick = true;
-    } else {
-      suppressNextWireInteractionClick = true;
-      clearPendingWire();
-      persistState();
-      render();
+    // O `click` que o navegador dispara depois deste solte pertence ao arrasto, não é um novo comando.
+    suppressNextWireInteractionClick = true;
+    if (pendingWireDockTarget) {
+      const dock = pendingWireDockTarget;
+      commitWireDraft({ kind: "pin", componentId: dock.ownerId, pinId: dock.portId, point: dock.point });
+    } else if (pendingWireWireTarget) {
+      commitWireDraft({ kind: "wire", ...pendingWireWireTarget });
+    } else if (wireDraft) {
+      wireDraft = fixWireDraftCorner(wireDraft);
+      refreshPendingWirePreview();
     }
   };
   const cancel = (): void => {
-    window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointerup", finish);
-    window.removeEventListener("pointercancel", cancel);
-    if (dragging) {
-      suppressNextWireInteractionClick = true;
-      clearPendingWire();
-      render();
-    }
+    detach();
+    if (!dragging) return;
+    suppressNextWireInteractionClick = true;
+    clearPendingWire();
   };
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", finish, { once: true });
@@ -4258,9 +4464,7 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
       return;
     }
     if (state.pendingConnection) {
-      appendPendingWireBend(eventToCanvasPoint(event, canvas));
-      pendingWirePreviewTarget = undefined;
-      refreshPendingWirePreview();
+      handlePendingWireCanvasClick(eventToCanvasPoint(event, canvas));
       return;
     }
     clearSelection();
@@ -4284,14 +4488,8 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
       return;
     }
     if (state.pendingConnection) {
-      if (pendingWireBendLengths.length > 0) {
-        undoPendingWireBend();
-        refreshPendingWirePreview();
-      } else {
-        clearPendingWire();
-        persistState();
-        render();
-      }
+      // Botão direito recua um canto fixado; sem cantos, cancela o fio (como no SimulIDE).
+      if (!undoPendingWireCorner()) clearPendingWire();
       return;
     }
     clearSelection();
@@ -4424,10 +4622,24 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
       state.viewport.y = screenY - localY * newZoom;
       state.viewport.zoom = newZoom;
       canvasContent.style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${newZoom})`;
-      persistState();
+      scheduleViewportPersist();
     },
     { passive: false }
   );
+}
+
+/** Persiste o viewport só quando a roda PARA (mesmo princípio do pan com botão do meio, que só
+ * persiste no solte) -- `persistState()` serializa o projeto inteiro (chave de undo, `setState`,
+ * `"projectChanged"` com catálogo e tudo, e o Host ainda refaz o diff contra o Core), e um mouse de
+ * rolagem suave/touchpad dispara dezenas de `wheel` por segundo. Rodar isso a cada evento travava
+ * o zoom e, pior, enfileirava snapshots com viewports intermediários que voltavam atrasados no eco
+ * (`syncStatePatch`) e faziam a imagem pular (bug relatado 2026-10-13). */
+function scheduleViewportPersist(): void {
+  if (viewportPersistTimer !== undefined) clearTimeout(viewportPersistTimer);
+  viewportPersistTimer = setTimeout(() => {
+    viewportPersistTimer = undefined;
+    persistState();
+  }, 200);
 }
 
 /** Bounding box REAL (caixa própria de cada componente -- tamanho/rotação/flip via `componentBox`/
@@ -4850,11 +5062,7 @@ function render(): void {
     if (wire.hidden) continue;
     const points = wirePolylinePoints(wire);
     if (points.length < 2) continue;
-    const spatialSignature = points.map((point) => `${point.x},${point.y}`).join(";");
-    if (wireSpatialSignatures.get(wire.id) !== spatialSignature) {
-      wireSpatialIndex.upsertWire(wire.id, points);
-      wireSpatialSignatures.set(wire.id, spatialSignature);
-    }
+    syncWireSpatialIndex(wire.id, points);
     visibleWireIds.add(wire.id);
     const stroke = wire.lineClass ? ipdLineStroke(wire.lineClass) : undefined;
     if (stroke?.double) {
@@ -4899,7 +5107,7 @@ function render(): void {
     outline.remove();
     wireOutlineElementsById.delete(id);
   }
-  if (subcircuitEditorMode === "circuit") renderPendingWirePreview(wireLayer);
+  if (subcircuitEditorMode === "circuit") renderPendingWirePreview();
 
   const visibleComponents: WebviewComponentModel[] = [];
   const subcircuitFileComponents: WebviewComponentModel[] = [];
@@ -5057,9 +5265,9 @@ function deleteSelectedItems(): void {
     render();
     return;
   }
-  for (const wireId of state.selectedWireIds) {
-    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRemoveWire", wireId });
-  }
+  // Fios saem NA HORA, aqui mesmo (ver `removeWiresLocally`); só componentes ainda dependem do Host
+  // (cascatas de túnel/escopo/instância no Core).
+  const removedWires = removeWiresLocally(new Set(state.selectedWireIds));
   // Bloqueio (`component.locked`): sobrevive a um apagar em lote -- os DEMAIS componentes
   // co-selecionados (não bloqueados) continuam sendo removidos normalmente, só o(s) bloqueado(s)
   // ficam de fora do loop (enforcement mínimo acordado, ver `batchProperties.ts`).
@@ -5069,6 +5277,28 @@ function deleteSelectedItems(): void {
     send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRemoveComponent", componentId });
   }
   clearSelection();
+  if (removedWires) render();
+}
+
+/** Remove fios com a mesma normalização que o Host aplicava (`normalizeWireGeometry`): nó que
+ * fica com dois fios some e os dois viram um só; nó que fica com um leva o toco junto (mesma regra
+ * de `Node::checkRemove` do SimulIDE). Local e imediato -- o Host recebe o resultado pelo
+ * `"projectChanged"` e sincroniza o Core pelo diff de topologia, como em qualquer outra edição.
+ * Antes, o fio só sumia depois da ida e volta ao Host. */
+function removeWiresLocally(wireIds: ReadonlySet<string>): boolean {
+  if (wireIds.size === 0 || !state.topology.conductors.some((wire) => wireIds.has(wire.id))) return false;
+  const normalized = normalizeWireGeometry({
+    components: state.components,
+    wires: state.topology.conductors.filter((wire) => !wireIds.has(wire.id)),
+    nodes: state.topology.nodes,
+  });
+  state = { ...state, topology: { ...state.topology, nodes: normalized.nodes, conductors: normalized.wires } };
+  selectedWireSegment = undefined;
+  selectedWireCorner = undefined;
+  // Antes dos pedidos de remoção de componente que possam vir em seguida: o Host os aplica sobre
+  // o estado já sem estes fios.
+  persistState();
+  return true;
 }
 
 function cloneComponent(component: WebviewComponentModel): WebviewComponentModel {
@@ -5534,6 +5764,15 @@ function updateWireFromFullPath(wire: WebviewWireModel, fullPoints: Point[]): vo
   const internal = normalized.slice(1, -1).map((point) => ({ x: point.x, y: point.y }));
   if (internal.length > 0) wire.points = internal;
   else delete wire.points;
+  // O que fica gravado é o que está DESENHADO. Um canto vizinho a um pino só pode deslizar num
+  // eixo (`resolveWirePath` o realinha com o pino); sem regravar a rota resolvida, o fio guardaria
+  // um canto que nunca aparece na tela -- e um gesto sem efeito visível viraria uma entrada de
+  // desfazer que "não faz nada".
+  const drawn = wirePolylinePoints(wire);
+  if (drawn.length < 2) return;
+  const baked = drawn.slice(1, -1).map((point) => ({ x: point.x, y: point.y }));
+  if (baked.length > 0) wire.points = baked;
+  else delete wire.points;
 }
 
 /** Finaliza uma rota manual com a mesma limpeza de vértices do IPD Studio: encaixa os pontos na
@@ -5553,8 +5792,21 @@ function cleanWireVerticesAfterGesture(wireId: string): void {
   updateWireVisual(wireId);
 }
 
+/** Descarta os cantos: o fio volta a ser a ligação mais simples entre as duas pontas (reta ou "L"). */
 function resetWireToAutomaticRoute(wire: WebviewWireModel): void {
   delete wire.points;
+  selectedWireCorner = undefined;
+  selectedWireSegment = undefined;
+  persistState();
+  render();
+}
+
+/** Roteia UMA vez desviando dos outros componentes e grava o resultado como cantos normais -- a
+ * rota não muda mais sozinha depois disso (o roteador deixou de rodar a cada render). */
+function routeWireAroundComponents(wire: WebviewWireModel): void {
+  const routed = autoRoutedWirePoints(state.components, wire, state.topology.nodes);
+  if (routed && routed.length > 0) wire.points = routed;
+  else delete wire.points;
   selectedWireCorner = undefined;
   selectedWireSegment = undefined;
   persistState();
@@ -5678,6 +5930,82 @@ function applyGroupMoveWireDelta(targets: GroupMoveWireTargets, dx: number, dy: 
   for (const wireId of touchedWireIds) updateWireVisual(wireId);
 }
 
+/** Fios e nós que se movem INTEIROS junto com um conjunto de componentes arrastados: um fio cujas
+ * duas pontas estão no conjunto translada rígido (mantém a forma exata), e um nó é levado quando
+ * tudo que chega nele também está sendo levado. O que liga o conjunto ao resto do circuito NÃO
+ * entra aqui -- esses fios só ajustam a ponta (`resolveWirePath`), como no SimulIDE. */
+interface CarriedTopology {
+  wires: { wire: WebviewWireModel; startPoints: Point[] }[];
+  nodes: { node: TopologyNode; startX: number; startY: number }[];
+}
+
+function computeCarriedTopology(componentIds: ReadonlySet<string>, skipWireIds: ReadonlySet<string>, skipNodeIds: ReadonlySet<string>): CarriedTopology {
+  const byOwner = wiresByComponentId();
+  const otherEnd = (wire: WebviewWireModel, ownerId: string): string =>
+    endpointId(wire.from) === ownerId ? endpointId(wire.to) : endpointId(wire.from);
+  // Maior conjunto de nós em que cada um só toca componentes arrastados ou outros nós do conjunto.
+  const carriedNodeIds = new Set(state.topology.nodes.map((node) => node.id));
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const nodeId of [...carriedNodeIds]) {
+      const touching = byOwner.get(nodeId) ?? [];
+      const carried = touching.length > 0 && touching.every((wire) => {
+        const other = otherEnd(wire, nodeId);
+        return componentIds.has(other) || carriedNodeIds.has(other);
+      });
+      if (!carried) {
+        carriedNodeIds.delete(nodeId);
+        changed = true;
+      }
+    }
+  }
+  const moves = (ownerId: string): boolean => componentIds.has(ownerId) || carriedNodeIds.has(ownerId);
+  const wires: CarriedTopology["wires"] = [];
+  for (const wire of state.topology.conductors) {
+    if (skipWireIds.has(wire.id) || !wire.points?.length) continue;
+    if (moves(endpointId(wire.from)) && moves(endpointId(wire.to))) wires.push({ wire, startPoints: wire.points.map((point) => ({ ...point })) });
+  }
+  const nodes: CarriedTopology["nodes"] = [];
+  for (const node of state.topology.nodes) {
+    if (carriedNodeIds.has(node.id) && !skipNodeIds.has(node.id)) nodes.push({ node, startX: node.position.x, startY: node.position.y });
+  }
+  return { wires, nodes };
+}
+
+function updateJunctionVisual(nodeId: string, x: number, y: number): void {
+  const group = wireLayerElement?.querySelector<SVGGElement>(`.wire-layer__junction[data-wire-id="${CSS.escape(nodeId)}"]`);
+  for (const circle of Array.from(group?.querySelectorAll("circle") ?? [])) {
+    circle.setAttribute("cx", String(x));
+    circle.setAttribute("cy", String(y));
+  }
+}
+
+function applyCarriedTopologyDelta(carried: CarriedTopology, dx: number, dy: number): void {
+  for (const { wire, startPoints } of carried.wires) wire.points = translatePoints(startPoints, dx, dy);
+  for (const { node, startX, startY } of carried.nodes) {
+    node.position = { x: startX + dx, y: startY + dy };
+    updateJunctionVisual(node.id, node.position.x, node.position.y);
+  }
+  for (const { node } of carried.nodes) updateWiresTouchingComponent(node.id);
+}
+
+/** Fim de um gesto que moveu pontas de fio (componente, nó, seta do teclado): grava nos fios
+ * tocados a rota que está na tela, já sem cantos redundantes. Durante o gesto a rota é sempre
+ * derivada do ponto de partida -- arrastar e voltar devolve a forma original, e só o que ficou ao
+ * soltar vira definitivo. */
+function bakeWiresTouching(ownerIds: readonly string[]): void {
+  const byOwner = wiresByComponentId();
+  const seen = new Set<string>();
+  for (const ownerId of ownerIds) {
+    for (const wire of byOwner.get(ownerId) ?? []) {
+      if (seen.has(wire.id)) continue;
+      seen.add(wire.id);
+      const full = wirePolylinePoints(wire);
+      if (full.length >= 2) updateWireFromFullPath(wire, full);
+    }
+  }
+}
+
 /** Reflete `component.x/y` (já atualizado pelo chamador) na posição DOM + reroteia os fios que
  * tocam esse componente -- versão reusável do que o loop principal de arrasto de componente já faz
  * inline, usada pelos gestos de arrasto de GRUPO iniciados pelo lado do FIO (`applyGroupWireDelta`
@@ -5777,6 +6105,7 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
         render();
         return;
       }
+      if (routePendingWireClick(event, handle)) return;
       handleWireGestureClick({ kind: "wire", wireId: wire.id, point });
     });
     handle.addEventListener("contextmenu", (event) => {
@@ -5785,7 +6114,8 @@ function renderWireCornerHandles(wireLayer: SVGSVGElement, wire: WebviewWireMode
       render();
       showContextMenu(event, [
         { label: "Remover ponto de rota", onClick: () => removeWireRoutePoint(wire, index), disabled: !wire.points?.length },
-        { label: "Redefinir rota automática", onClick: () => resetWireToAutomaticRoute(wire), disabled: !wire.points?.length },
+        { label: "Rota direta (reta ou L)", onClick: () => resetWireToAutomaticRoute(wire), disabled: !wire.points?.length },
+        { label: "Rotear desviando de componentes", onClick: () => routeWireAroundComponents(wire) },
         wireLineStyleMenu(wire),
         { kind: "separator" },
         { label: t("deleteSelectedItems"), onClick: () => deleteSelectedItems() },
@@ -5900,6 +6230,7 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
         return;
       }
 
+      if (routePendingWireClick(event, handle)) return;
       const canvasEl = handle.closest<HTMLElement>(".canvas");
       if (!canvasEl) return;
       const clickPoint = eventToCanvasPoint(event, canvasEl);
@@ -5913,7 +6244,8 @@ function renderWireSegmentHandles(wireLayer: SVGSVGElement, wire: WebviewWireMod
       persistState();
       render();
       showContextMenu(event, [
-        { label: "Redefinir rota automática", onClick: () => resetWireToAutomaticRoute(wire), disabled: !wire.points?.length },
+        { label: "Rota direta (reta ou L)", onClick: () => resetWireToAutomaticRoute(wire), disabled: !wire.points?.length },
+        { label: "Rotear desviando de componentes", onClick: () => routeWireAroundComponents(wire) },
         wireLineStyleMenu(wire),
         { kind: "separator" },
         { label: t("deleteSelectedItems"), onClick: () => deleteSelectedItems() },
@@ -6052,31 +6384,19 @@ function pendingConnectionPosition(): Point | undefined {
   return component && pinScenePosition(component, pending.pinId);
 }
 
-function pendingWireAnchor(): Point | undefined {
-  const start = pendingConnectionPosition();
-  if (!start) return undefined;
-  return pendingWireRoute[pendingWireRoute.length - 1] ?? start;
-}
-
+/** Polilinha do rascunho já simplificada -- ponto a ponto o que `finishWireDraft` gravaria. */
 function pendingWirePreviewPoints(): Point[] {
-  const start = pendingConnectionPosition();
-  if (!start) return [];
-  const target = pendingWirePreviewTarget;
-  return target ? buildOrthogonalPath([start, ...pendingWireRoute, target]) : [start, ...pendingWireRoute];
+  return wireDraft && state.pendingConnection ? simplifyWirePath(wireDraftPath(wireDraft)) : [];
 }
 
-function renderPendingWirePreview(wireLayer: SVGSVGElement): void {
-  const points = pendingWirePreviewPoints();
-  if (points.length < 2) return;
-  const polyline = document.createElementNS(SVG_NS, "polyline");
-  polyline.dataset.wirePreview = "pending";
-  setPolylinePoints(polyline, points);
-  polyline.setAttribute("class", "wire-layer__wire wire-layer__wire--preview");
-  wireLayer.appendChild(polyline);
+/** `render()` limpa a camada de fios; recoloca a pré-visualização e a marca de junção. */
+function renderPendingWirePreview(): void {
+  refreshPendingWirePreview();
+  refreshWireDockMarker();
 }
 
 function refreshPendingWirePreview(): void {
-  const wireLayer = document.querySelector<SVGSVGElement>(".wire-layer");
+  const wireLayer = wireLayerElement ?? document.querySelector<SVGSVGElement>(".wire-layer");
   if (!wireLayer) return;
   let polyline = wireLayer.querySelector<SVGPolylineElement>('polyline[data-wire-preview="pending"]');
   const points = pendingWirePreviewPoints();
@@ -6091,35 +6411,6 @@ function refreshPendingWirePreview(): void {
     wireLayer.appendChild(polyline);
   }
   setPolylinePoints(polyline, points);
-}
-
-function appendPendingWireBend(point: Point): void {
-  const anchor = pendingWireAnchor();
-  if (!anchor) return;
-  const snappedPoint = snapToWireGrid(point);
-  const segment = orthogonalSegmentPoints(anchor, snappedPoint);
-  const beforeLength = pendingWireRoute.length;
-  for (const routePoint of segment.slice(1)) appendPoint(pendingWireRoute, routePoint);
-  pendingWireBendLengths.push(pendingWireRoute.length - beforeLength);
-}
-
-function undoPendingWireBend(): void {
-  const lastLength = pendingWireBendLengths.pop();
-  if (!lastLength) return;
-  pendingWireRoute.splice(Math.max(0, pendingWireRoute.length - lastLength), lastLength);
-}
-
-function pendingWirePointsForTarget(target: Point): Point[] {
-  const anchor = pendingWireAnchor();
-  if (!anchor) return [];
-  // No authored bend means automatic routing. Persisting the preview's
-  // incidental L elbow would freeze the route and prevent obstacle-aware
-  // rerouting when either component moves.
-  if (pendingWireRoute.length === 0) return [];
-  const points = pendingWireRoute.map((point) => ({ ...point }));
-  const segment = orthogonalSegmentPoints(anchor, target);
-  for (const routePoint of segment.slice(1, -1)) appendPoint(points, routePoint);
-  return points;
 }
 
 function selectedWireSegmentInfo():
@@ -6218,6 +6509,7 @@ function moveSelectedComponentsByArrow(key: string, step: number): boolean {
     const offset = externalLabelOffset(component, kind);
     setExternalLabelLayout(component, kind, { x: offset.x + dx, y: offset.y + dy });
   }
+  if (subcircuitEditorMode === "circuit") bakeWiresTouching(components.map((component) => component.id));
   persistState();
   render();
   return true;
@@ -6237,6 +6529,18 @@ function pinScenePosition(component: WebviewComponentModel, pinId: string): Poin
  * de propósito (só overlap real, não "nas redondezas") -- diferente do hit-test de clique explícito
  * (`WIRE_GRID_SIZE`), já que este gatilho é automático/passivo, não uma ação deliberada do usuário. */
 function maybeAutoJunctionForDraggedComponents(componentIds: string[]): void {
+  let connectedAny = false;
+  try {
+    autoJunctionPass(componentIds, () => { connectedAny = true; });
+  } finally {
+    if (connectedAny) {
+      persistState();
+      render();
+    }
+  }
+}
+
+function autoJunctionPass(componentIds: string[], onConnected: () => void): void {
   for (const componentId of componentIds) {
     const component = state.components.find((entry) => entry.id === componentId);
     if (!component) continue;
@@ -6267,13 +6571,7 @@ function maybeAutoJunctionForDraggedComponents(componentIds: string[]): void {
       }
       if (!matchedWire || !matchedTarget) continue;
 
-      send({
-        version: WEBVIEW_MESSAGE_VERSION,
-        type: "requestConnectEndpoints",
-        baseRevision: state.topology.revision ?? 0,
-        from: { kind: "pin", componentId, pinId: pin.id },
-        to: { kind: "wire", wireId: matchedWire.id, point: matchedTarget },
-      });
+      if (applyLocalConnection({ kind: "pin", componentId, pinId: pin.id }, { kind: "wire", wireId: matchedWire.id, point: matchedTarget }, [])) onConnected();
       touchingWireIds.add(matchedWire.id); // não tenta o mesmo fio de novo pra outro pino desta mesma passada
     }
   }
@@ -6303,6 +6601,16 @@ function wiresByComponentId(): Map<string, WebviewWireModel[]> {
   return next;
 }
 
+/** Mantém o índice espacial igual ao que está desenhado. Arrastes redesenham o fio sem passar
+ * pelo `render()` completo; com o índice velho, o fio recém-movido deixava de atrair um fio em
+ * desenho (a marca de junção não aparecia onde o clique de fato conectaria). */
+function syncWireSpatialIndex(wireId: string, points: Point[]): void {
+  const signature = points.map((point) => `${point.x},${point.y}`).join(";");
+  if (wireSpatialSignatures.get(wireId) === signature) return;
+  wireSpatialIndex.upsertWire(wireId, points);
+  wireSpatialSignatures.set(wireId, signature);
+}
+
 function updateWiresTouchingComponent(componentId: string): void {
   for (const wire of wiresByComponentId().get(componentId) ?? []) {
     // Lookup O(1) via `wirePolylineElementsById` (UI-2/UI-3) em vez de `querySelector` -- percorrido
@@ -6312,6 +6620,7 @@ function updateWiresTouchingComponent(componentId: string): void {
     if (!polyline) continue;
     const points = wirePolylinePoints(wire);
     if (points.length < 2) continue;
+    syncWireSpatialIndex(wire.id, points);
     const outline = wireOutlineElementsById.get(wire.id);
     if (outline) {
       setPolylinePoints(outline, points);
@@ -6343,6 +6652,7 @@ function updateWireVisual(wireId: string): void {
 
   const polyline = wirePolylineElementsById.get(wireId);
   if (points.length < 2 || !polyline) return;
+  syncWireSpatialIndex(wireId, points);
   const stroke = wire.lineClass ? ipdLineStroke(wire.lineClass) : undefined;
   let outline = wireOutlineElementsById.get(wireId);
   if (stroke?.double) {
@@ -8831,6 +9141,13 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           { label: t("fpgaConfigureGhdl"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestConfigureGhdl" }) },
         ]
       : [];
+    const plcMenuItems: ContextMenuItem[] = !isGroup && component.typeId === "plc.instance"
+      ? [
+          { label: t("plcNewProject"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestCreatePlcProject", componentId: component.id }) },
+          { label: t("plcOpenProgram"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenPlcProgram", componentId: component.id }) },
+          { kind: "separator" },
+        ]
+      : [];
     const createSubcircuitMenuItems: ContextMenuItem[] = isGroup
       ? [
           { kind: "separator" },
@@ -8908,6 +9225,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         ]
       : [];
     const menuItems: ContextMenuItem[] = [
+      ...plcMenuItems,
       ...(!isGroup && component.pins.length > 0 ? [
         { label: editingTerminalsComponentId === component.id ? t("finishTerminalEditing") : t("editTerminals"),
           onClick: () => { editingTerminalsComponentId = editingTerminalsComponentId === component.id ? undefined : component.id;
@@ -8965,6 +9283,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
   }> = [];
   let groupWireDragTarget: GroupWireDragTarget | undefined;
   let groupWireMoveTargets: GroupMoveWireTargets | undefined;
+  let carriedTopology: CarriedTopology | undefined;
 
   el.addEventListener("pointerdown", (event) => {
     const component = liveComponent();
@@ -9451,8 +9770,23 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       }
       if (!dragStarted) return;
       const zoom = state.viewport.zoom || 1;
-      const dx = (moveEvent.clientX - dragStartX) / zoom;
-      const dy = (moveEvent.clientY - dragStartY) / zoom;
+      // No circuito o deslocamento anda em passos de grade (como no SimulIDE): pinos que estavam
+      // alinhados continuam alinhados e os fios não ganham degraus de poucos pixels. Alt solta o
+      // passo; fora do circuito (Símbolo/Ícone/IHM) o movimento continua livre.
+      const snapMove = subcircuitEditorMode === "circuit" && !moveEvent.altKey;
+      const rawDx = (moveEvent.clientX - dragStartX) / zoom;
+      const rawDy = (moveEvent.clientY - dragStartY) / zoom;
+      const dx = snapMove ? snapCoordinate(rawDx, WIRE_GRID_SIZE) : rawDx;
+      const dy = snapMove ? snapCoordinate(rawDy, WIRE_GRID_SIZE) : rawDy;
+      if (!carriedTopology && subcircuitEditorMode === "circuit") {
+        carriedTopology = computeCarriedTopology(
+          new Set(dragTargets.map((target) => target.component.id)),
+          new Set(state.selectedWireIds),
+          new Set(groupWireMoveTargets?.nodes.map((entry) => entry.nodeId) ?? [])
+        );
+      }
+      // Antes do laço: os fios dos componentes são redesenhados lá, já com os cantos transladados.
+      if (carriedTopology) applyCarriedTopologyDelta(carriedTopology, dx, dy);
       for (const target of dragTargets) {
         target.component.x = target.startX + dx;
         target.component.y = target.startY + dy;
@@ -9487,9 +9821,13 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         state.selectedComponentIds = dragTargets.map((target) => target.component.id);
       }
       const draggedComponentIds = dragStarted ? dragTargets.map((target) => target.component.id) : [];
+      if (dragStarted && subcircuitEditorMode === "circuit") {
+        bakeWiresTouching([...draggedComponentIds, ...(carriedTopology?.nodes.map((entry) => entry.node.id) ?? [])]);
+      }
       dragTargets = [];
       groupWireDragTarget = undefined;
       groupWireMoveTargets = undefined;
+      carriedTopology = undefined;
       if (!dragStarted && canToggle) {
         if (isPushButton) setPushClosed(component, false);
         else if (isToggleClickable) setSwitchClosed(component, component.properties.closed !== true);
@@ -10704,14 +11042,17 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
     pathText.className = "property-sheet__field-input";
     pathText.type = "text";
     pathText.readOnly = true;
-    pathText.value = String(field.value) || t("noSubcircuitFileChosen");
+    const isPlcProgram = component.typeId === "plc.instance" && field.key === "plcIecProjectRef";
+    pathText.value = String(field.value) || (isPlcProgram ? t("plcProgramNone") : t("noSubcircuitFileChosen"));
     pathText.title = String(field.value);
     const browseButton = document.createElement("button");
     browseButton.type = "button";
     browseButton.className = "property-sheet__file-browse-button";
     browseButton.textContent = t("chooseSubcircuitFile");
     browseButton.addEventListener("click", () => {
-      if (isSubcircuitRefPath) {
+      if (isPlcProgram) {
+        send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseFile", componentId: component.id, propertyKey: field.key });
+      } else if (isSubcircuitRefPath) {
         send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseSubcircuitFile", componentId: component.id });
       } else if (isDeviceRefPath) {
         send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestChooseDeviceFile", componentId: component.id });
@@ -10720,7 +11061,22 @@ function renderPropertyField(component: WebviewComponentModel, field: PropertyFi
       }
     });
     fileGroup.append(pathText, browseButton);
-    row.append(caption, fileGroup);
+    if (isPlcProgram) {
+      const actions = document.createElement("div");
+      actions.className = "property-sheet__plc-actions";
+      const newButton = document.createElement("button");
+      newButton.type = "button";
+      newButton.textContent = t("plcNewProject");
+      newButton.addEventListener("click", () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestCreatePlcProject", componentId: component.id }));
+      const openButton = document.createElement("button");
+      openButton.type = "button";
+      openButton.textContent = t("plcOpenProgram");
+      openButton.addEventListener("click", () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenPlcProgram", componentId: component.id }));
+      actions.append(newButton, openButton);
+      row.append(caption, fileGroup, actions);
+    } else {
+      row.append(caption, fileGroup);
+    }
     return row;
   }
   if (field.kind === "boolean") {
@@ -11525,7 +11881,13 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       recordUndoTransition(undoContentKey(message.project), () => snapshotOfProjectState(message.project));
     }
     const previousSubcircuitEditingContext = state.subcircuitEditingContext;
-    state = message.project;
+    const localPendingConnection = state.pendingConnection;
+    // Zoom por scroll ainda não persistido: o viewport do Host é de ANTES do gesto -- aceitá-lo
+    // faria a imagem pular de volta e o próximo `wheel` ancorar no ponto errado. Só vale dentro da
+    // MESMA sessão; `"init"`/troca de sessão trazem uma cena nova, com o viewport dela.
+    const keepLocalViewport = message.type === "syncState" && viewportPersistTimer !== undefined &&
+      previousSubcircuitEditingContext?.sourceId === message.project.subcircuitEditingContext?.sourceId;
+    state = keepLocalViewport ? { ...message.project, viewport: state.viewport } : message.project;
     hmiSceneCache = undefined;
     if (subcircuitEditorMode === "hmi" && !state.hmiApplication?.pages.length) {
       subcircuitEditorMode = "circuit";
@@ -11540,10 +11902,18 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       hmiPresentationMode = false;
     }
     syncPackageRegistry(state.catalog);
+    // O fio em desenho é estado só da Webview (o Host nunca o conhece): uma ressincronização dentro
+    // da mesma sessão não o derruba, desde que a origem dele ainda exista.
+    if (message.type === "syncState" && localPendingConnection && !state.pendingConnection &&
+        previousSubcircuitEditingContext?.sourceId === state.subcircuitEditingContext?.sourceId) {
+      state.pendingConnection = localPendingConnection;
+      if (!pendingConnectionPosition()) state.pendingConnection = undefined;
+    }
+    pendingWireDockIndex = undefined; // posições de pino podem ter mudado
     if (!state.pendingConnection) {
-      pendingWirePreviewTarget = undefined;
-      pendingWireRoute = [];
-      pendingWireBendLengths = [];
+      wireDraft = undefined;
+      pendingWireDockTarget = undefined;
+      pendingWireWireTarget = undefined;
     }
     if (message.type === "init") resetUndoHistory(mainUndoHistory);
     storeWebviewState();
@@ -11592,6 +11962,8 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     // patch com o mesmo conteúdo".
     const previousSubcircuitSourceId = state.subcircuitEditingContext?.sourceId;
     const enteringOrLeavingSubcircuitSession = previousSubcircuitSourceId !== merged.subcircuitEditingContext?.sourceId;
+    // Mesmo motivo do `keepLocalViewport` do handler de "syncState" acima.
+    if (viewportPersistTimer !== undefined && !enteringOrLeavingSubcircuitSession) merged.viewport = state.viewport;
     if (!enteringOrLeavingSubcircuitSession) recordUndoTransition(undoContentKey(merged), () => snapshotOfProjectState(merged));
     state = merged;
     if ("components" in message.patch || "hmiApplication" in message.patch || enteringOrLeavingSubcircuitSession) hmiSceneCache = undefined;
@@ -11616,10 +11988,12 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     // nenhum pra invalidar ainda.
     if (enteringOrLeavingSubcircuitSession && !merged.subcircuitEditingContext) boardOverlayDataByComponentId.clear();
     if (message.patch.catalog) syncPackageRegistry(state.catalog);
+    pendingWireDockIndex = undefined; // posições de pino podem ter mudado
+    if (state.pendingConnection && !pendingConnectionPosition()) state.pendingConnection = undefined;
     if (!state.pendingConnection) {
-      pendingWirePreviewTarget = undefined;
-      pendingWireRoute = [];
-      pendingWireBendLengths = [];
+      wireDraft = undefined;
+      pendingWireDockTarget = undefined;
+      pendingWireWireTarget = undefined;
     }
     storeWebviewState();
     // `syncStatePatch` é o eco de QUALQUER `requestUpdateProperty`/`projectChanged` que a própria
@@ -11638,6 +12012,13 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     if (enteringOrLeavingSubcircuitSession && merged.subcircuitEditingContext) zoomToFitAllDeferred();
   }
 
+  // Número de revisão novo depois de um `"projectChanged"` nosso que mexeu na topologia. É só o
+  // contador: o conteúdo já é o que está em `state` (ver `extension.ts`, caso "projectChanged").
+  if (message.type === "topologyRevision") {
+    state.topology.revision = message.revision;
+    return;
+  }
+
   if (message.type === "beginComponentPlacement") {
     enterPlacementMode(message.typeId);
   }
@@ -11645,7 +12026,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   if (message.type === "selectComponent") {
     state.selectedComponentIds = message.componentId ? [message.componentId] : [];
     state.selectedWireIds = [];
-    render();
+    if (!isInteractiveGestureInProgress()) render();
   }
   if (message.type === "inspectorUpdateProperty") {
     send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestUpdateProperty", componentId: message.componentId, name: message.name, value: message.value });
@@ -11771,8 +12152,14 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   }
 
   if (message.type === "simulationStatus") {
+    // O Host reenvia o status a CADA `syncSchematicPanel()` (toda edição de topologia), quase sempre
+    // sem mudança nenhuma. Redesenhar o canvas inteiro aqui sem condição reinseria os elementos no
+    // DOM e soltava a captura de ponteiro de um arrasto em andamento -- o componente "largava" do
+    // mouse logo depois de criar um fio (bug real, medido em `measure-wire-interaction.cjs`).
+    const statusChanged = simulationStatus !== message.status;
     simulationStatus = message.status;
     updateTelemetryStaleness();
+    if (!statusChanged) return;
     if (message.status === "stopped") {
       // Stop é a única transição que apaga o snapshot visual. Uma amostra de telemetria
       // vazia durante Run/Pause é apenas uma falha transitória e preserva a última cor válida.
@@ -11788,7 +12175,8 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       dcMotorAnglesDeg.clear();
       dcMotorSpeedRatios.clear();
     }
-    render();
+    // Com um arrasto em curso, o solte do mouse já redesenha tudo (ver `isInteractiveGestureInProgress`).
+    if (!isInteractiveGestureInProgress()) render();
     renderInstrumentPopups();
     refreshOpenPropertyDialog();
   }
@@ -11892,11 +12280,11 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   }
 
   if (message.type === "requestUndo") {
-    undo();
+    if (!consumeLocalUndoRedoEcho("undo")) undo();
   }
 
   if (message.type === "requestRedo") {
-    redo();
+    if (!consumeLocalUndoRedoEcho("redo")) redo();
   }
 
   if (message.type === "triggerCreateSubcircuitFromSelection") {
@@ -12119,7 +12507,9 @@ function renderJunction(id: string, x: number, y: number): SVGGElement {
   const dot = document.createElementNS(SVG_NS, "circle");
   dot.setAttribute("cx", String(x));
   dot.setAttribute("cy", String(y));
-  dot.setAttribute("r", "2.5");
+  // Bem maior que a espessura do fio (3): um "T" conectado tem que ser inconfundível com um
+  // cruzamento sem conexão -- no SimulIDE o nó tem pouco mais que o dobro da largura da linha.
+  dot.setAttribute("r", "4");
   dot.setAttribute("class", "wire-layer__junction-dot");
   group.appendChild(dot);
 
@@ -12127,6 +12517,7 @@ function renderJunction(id: string, x: number, y: number): SVGGElement {
 
   group.addEventListener("click", (event) => {
     event.stopPropagation();
+    if (routePendingWireClick(event, group)) return;
     const wireId = anyTouchingWireId();
     if (!wireId) return; // nó sem fio de verdade não deveria existir (ver removeOrphanNodes), defensivo
     handleWireGestureClick({ kind: "wire", wireId, point: { x, y } });
@@ -12170,9 +12561,14 @@ function renderJunction(id: string, x: number, y: number): SVGGElement {
     const groupStartClientY = event.clientY;
 
     const onMove = (moveEvent: PointerEvent): void => {
-      const raw = eventToCanvasPoint(moveEvent, canvasEl);
+      // Passo relativo ao ponto de partida (não à grade global): um nó sobre um fio fora da grade
+      // (pino em y=244,5) continua exatamente sobre ele quando desliza ao longo do fio.
       const step = moveEvent.shiftKey ? FINE_WIRE_STEP : WIRE_GRID_SIZE;
-      node.position = { x: snapCoordinate(raw.x, step), y: snapCoordinate(raw.y, step) };
+      const dragZoom = state.viewport.zoom || 1;
+      node.position = {
+        x: startX + snapCoordinate((moveEvent.clientX - groupStartClientX) / dragZoom, step),
+        y: startY + snapCoordinate((moveEvent.clientY - groupStartClientY) / dragZoom, step),
+      };
       moved = true;
       // `updateWiresTouchingComponent` só redesenha os FIOS tocando o nó -- a própria marca visual da
       // junção (este `<g>`) não é um fio, precisa ser movida à parte (senão o nó "salta" de volta pra
@@ -12194,8 +12590,11 @@ function renderJunction(id: string, x: number, y: number): SVGGElement {
 
     startWireDragListeners(onMove, () => {
       if (moved) {
+        bakeWiresTouching([id]);
         persistState();
         suppressNextWireInteractionClick = true;
+        // As alças dos fios tocados ainda estão na posição antiga (o arrasto só moveu as polilinhas).
+        render();
       } else {
         node.position = { x: startX, y: startY }; // sem movimento real -- nunca deixa arredondamento residual
       }
@@ -12402,6 +12801,37 @@ function selectAll(): void {
   render();
 }
 
+/** Ctrl+Z/Ctrl+Y tratados aqui mesmo quando o foco está no canvas: desfazer é instantâneo, sem
+ * depender da volta `keybinding do VS Code -> comando -> Host -> "requestUndo"` (centenas de ms sob
+ * carga, e às vezes o comando nem chegava). O keybinding continua existindo pra quando o foco está
+ * no painel mas fora do documento da Webview; se o VS Code também despachar o comando pra ESTA
+ * mesma tecla, o `"requestUndo"`/`"requestRedo"` correspondente é descartado. */
+const localUndoRedoKeys: { kind: "undo" | "redo"; at: number }[] = [];
+
+function consumeLocalUndoRedoEcho(kind: "undo" | "redo"): boolean {
+  const now = performance.now();
+  while (localUndoRedoKeys.length > 0 && now - localUndoRedoKeys[0]!.at > 3000) localUndoRedoKeys.shift();
+  const index = localUndoRedoKeys.findIndex((entry) => entry.kind === kind);
+  if (index < 0) return false;
+  localUndoRedoKeys.splice(index, 1);
+  return true;
+}
+
+window.addEventListener("keydown", (event) => {
+  if (hmiPresentationMode || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+  const key = event.key.toLowerCase();
+  if (key !== "z" && key !== "y") return;
+  const target = event.target;
+  // Dentro de um campo de texto, Ctrl+Z é do próprio campo.
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || (target instanceof HTMLElement && target.isContentEditable)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const kind = key === "y" || event.shiftKey ? "redo" : "undo";
+  localUndoRedoKeys.push({ kind, at: performance.now() });
+  if (kind === "redo") redo();
+  else undo();
+}, { capture: true });
+
 window.addEventListener("keydown", (event) => {
   if (hmiPresentationMode) {
     if (event.key === "Escape") {
@@ -12466,6 +12896,12 @@ window.addEventListener("keydown", (event) => {
       ? activeSceneComponents().find((component) => component.id === editingTerminalsComponentId) : undefined;
     if (editedComponent && editingTerminalsPinId) transformEditedTerminal(editedComponent, editingTerminalsPinId, event.shiftKey ? "flipV" : "flipH");
     else flipSelectedComponents(event.shiftKey ? "vertical" : "horizontal");
+    return;
+  }
+
+  if (event.key === "Backspace" && state.pendingConnection) {
+    event.preventDefault();
+    undoPendingWireCorner();
     return;
   }
 

@@ -27,12 +27,8 @@ import {
 import { CanonicalEndpoint, TopologyNode, WebviewComponentModel, WebviewWireModel, endpointId, endpointPinId, nodeEndpoint, portEndpoint } from "./model.js";
 import { componentBox, componentLocalOrigin, instancePinPlacements, pinLocalPosition } from "./componentSymbols.js";
 import { localToScene, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
-import {
-  ConnectionDirection,
-  ConnectionRect,
-  orthogonalizeConnectionWaypoints,
-  routeOrthogonalConnection,
-} from "./connectionEngine.js";
+import { ConnectionDirection, ConnectionRect, routeOrthogonalConnection } from "./connectionEngine.js";
+import { LegAxis, interiorOfPath, resolveWirePath } from "./wireRouting.js";
 
 export interface TopologySnapshot {
   components: WebviewComponentModel[];
@@ -122,43 +118,80 @@ export function pinSceneDirection(component: WebviewComponentModel, pinId: strin
   return dy < 0 ? "top" : "bottom";
 }
 
+/** Eixo por onde um fio SEM canto gravado deve sair: o do pino de origem (ou, na falta dele, o
+ * perpendicular ao do pino de destino, pra chegar nele de frente). Estável enquanto o componente se
+ * move -- o "L" padrão nunca troca de lado no meio de um arrasto. */
+function defaultFirstAxis(components: WebviewComponentModel[], wire: WebviewWireModel): LegAxis | undefined {
+  const directionOf = (endpoint: CanonicalEndpoint): ConnectionDirection | undefined => {
+    if (endpoint.kind !== "port") return undefined;
+    const component = components.find((entry) => entry.id === endpoint.componentId);
+    return component ? pinSceneDirection(component, endpoint.pinId) : undefined;
+  };
+  const fromDirection = directionOf(wire.from);
+  if (fromDirection) return fromDirection === "left" || fromDirection === "right" ? "h" : "v";
+  const toDirection = directionOf(wire.to);
+  if (toDirection) return toDirection === "left" || toDirection === "right" ? "v" : "h";
+  return undefined;
+}
+
 /** Polilinha completa do fio (com as duas extremidades reais resolvidas), ou `[]` se algum dos dois
- * pinos não existir mais (referência órfã -- ver `normalizeWireGeometry`). */
+ * pinos não existir mais (referência órfã -- ver `normalizeWireGeometry`).
+ *
+ * A rota é a GRAVADA em `wire.points` (os cantos que o usuário desenhou); só os cantos vizinhos às
+ * pontas deslizam quando o pino/nó sai do lugar (`wireRouting.ts::resolveWirePath`). Nenhum roteador
+ * automático roda aqui: a mesma entrada dá sempre a mesma saída, na Webview e no Extension host, e
+ * mover um componente nunca redesenha o resto do fio. Roteamento com desvio de obstáculos continua
+ * disponível como AÇÃO explícita (`autoRoutedWirePoints`). */
 export function wirePolylinePoints(components: WebviewComponentModel[], wire: WebviewWireModel, nodes: TopologyNode[] = []): Point[] {
   const fromPos = endpointScenePosition(components, wire.from, nodes);
   const toPos = endpointScenePosition(components, wire.to, nodes);
   if (!fromPos || !toPos) return [];
-  const fromComponentId = wire.from.kind === "port" ? wire.from.componentId : undefined;
-  const toComponentId = wire.to.kind === "port" ? wire.to.componentId : undefined;
-  const fromComponent = fromComponentId ? components.find((entry) => entry.id === fromComponentId) : undefined;
-  const toComponent = toComponentId ? components.find((entry) => entry.id === toComponentId) : undefined;
+  if (wire.points && wire.points.length > 0) return resolveWirePath(fromPos, wire.points, toPos);
+  const aligned = Math.abs(fromPos.x - toPos.x) < 0.5 || Math.abs(fromPos.y - toPos.y) < 0.5;
+  return resolveWirePath(fromPos, undefined, toPos, aligned ? undefined : defaultFirstAxis(components, wire));
+}
+
+/** Cantos de uma rota que desvia dos outros componentes (roteador de `connectionEngine.ts`) -- usado
+ * só quando o usuário PEDE ("Rotear desviando de componentes"); o resultado é gravado em
+ * `wire.points` como qualquer rota desenhada à mão e não muda mais sozinho. */
+export function autoRoutedWirePoints(components: WebviewComponentModel[], wire: WebviewWireModel, nodes: TopologyNode[] = []): Point[] | undefined {
+  const fromPos = endpointScenePosition(components, wire.from, nodes);
+  const toPos = endpointScenePosition(components, wire.to, nodes);
+  if (!fromPos || !toPos) return undefined;
+  const fromEndpoint = wire.from;
+  const toEndpoint = wire.to;
+  const fromComponent = fromEndpoint.kind === "port" ? components.find((entry) => entry.id === fromEndpoint.componentId) : undefined;
+  const toComponent = toEndpoint.kind === "port" ? components.find((entry) => entry.id === toEndpoint.componentId) : undefined;
   const endpointComponentIds = new Set([fromComponent?.id, toComponent?.id].filter((id): id is string => Boolean(id)));
   const obstacles = components
     .filter((component) => !endpointComponentIds.has(component.id) && !component.hidden && !component.hiddenByUser)
     .map(componentSceneRect);
-
-  // Persisted points are authored/manual waypoints. Their coordinates remain
-  // authoritative; the engine only inserts an orthogonal elbow when two
-  // consecutive authored anchors are diagonal.
-  if (wire.points && wire.points.length > 0) {
-    return orthogonalizeConnectionWaypoints([fromPos, ...wire.points, toPos], obstacles);
-  }
-
   const endpointBoxes = [fromComponent, toComponent]
     .filter((component): component is WebviewComponentModel => Boolean(component))
     .map(componentSceneRect);
-  return routeOrthogonalConnection(
-    {
-      ...fromPos,
-      direction: fromComponent && wire.from.kind === "port" ? pinSceneDirection(fromComponent, wire.from.pinId) : undefined,
-    },
-    {
-      ...toPos,
-      direction: toComponent && wire.to.kind === "port" ? pinSceneDirection(toComponent, wire.to.pinId) : undefined,
-    },
+  const routed = routeOrthogonalConnection(
+    { ...fromPos, direction: fromComponent && fromEndpoint.kind === "port" ? pinSceneDirection(fromComponent, fromEndpoint.pinId) : undefined },
+    { ...toPos, direction: toComponent && toEndpoint.kind === "port" ? pinSceneDirection(toComponent, toEndpoint.pinId) : undefined },
     obstacles,
     endpointBoxes
   );
+  return interiorOfPath(routed);
+}
+
+/** Grava em `wire.points` a rota que está sendo desenhada agora para os fios pedidos (todos, se
+ * `wireIds` for omitido). Chamado ao FIM de um gesto que moveu pontas (soltar um componente/nó): a
+ * partir daí os cantos gravados coincidem com os desenhados, já sem pontos redundantes. */
+export function bakeWireRoutes(snapshot: TopologySnapshot, wireIds?: ReadonlySet<string>): WebviewWireModel[] {
+  return snapshot.wires.map((wire) => {
+    if (wireIds && !wireIds.has(wire.id)) return wire;
+    const full = wirePolylinePoints(snapshot.components, wire, snapshot.nodes);
+    if (full.length < 2) return wire;
+    const interior = full.slice(1, -1).map((point) => ({ x: point.x, y: point.y }));
+    const current = wire.points ?? [];
+    if (interior.length === current.length && interior.every((point, index) => samePoint(point, current[index]!))) return wire;
+    const { points: _points, ...rest } = wire;
+    return interior.length > 0 ? { ...rest, points: interior } : rest;
+  });
 }
 
 /** Quantos fios distintos tocam `nodeOrComponentId` (como `from` ou `to`) -- a base de tudo
@@ -279,6 +312,25 @@ export function splitSegmentAtPoint(snapshot: TopologySnapshot, wireId: string, 
   return { node, firstWire, secondWire };
 }
 
+/** Id do fio cuja polilinha passa por `point` (tolerância de meio pixel), se houver. */
+export function findWireAtPoint(snapshot: TopologySnapshot, point: Point, tolerance = 0.5): string | undefined {
+  for (const wire of snapshot.wires) {
+    const full = wirePolylinePoints(snapshot.components, wire, snapshot.nodes);
+    for (let index = 0; index + 1 < full.length; index += 1) {
+      const from = full[index]!;
+      const to = full[index + 1]!;
+      const horizontal = Math.abs(from.y - to.y) < 0.5;
+      const vertical = Math.abs(from.x - to.x) < 0.5;
+      if (!horizontal && !vertical) continue;
+      const nearest = vertical
+        ? { x: from.x, y: Math.max(Math.min(point.y, Math.max(from.y, to.y)), Math.min(from.y, to.y)) }
+        : { x: Math.max(Math.min(point.x, Math.max(from.x, to.x)), Math.min(from.x, to.x)), y: from.y };
+      if (Math.hypot(nearest.x - point.x, nearest.y - point.y) <= tolerance) return wire.id;
+    }
+  }
+  return undefined;
+}
+
 export type ConnectionEndpoint = { kind: "pin"; componentId: string; pinId: string } | { kind: "wire"; wireId: string; point: Point };
 
 export interface ConnectEndpointIds {
@@ -314,7 +366,12 @@ export function connectEndpointToNode(
 
   const resolveEndpoint = (endpoint: ConnectionEndpoint): CanonicalEndpoint => {
     if (endpoint.kind === "pin") return portEndpoint(endpoint.componentId, endpoint.pinId);
-    const split = splitSegmentAtPoint(working, endpoint.wireId, endpoint.point, {
+    // O fio citado pode já ter sido trocado pelas duas metades de um split anterior DESTA mesma
+    // conexão (derivação que começa e termina no mesmo fio) -- procura quem passa pelo ponto agora.
+    const targetWireId = working.wires.some((wire) => wire.id === endpoint.wireId)
+      ? endpoint.wireId
+      : findWireAtPoint(working, endpoint.point) ?? endpoint.wireId;
+    const split = splitSegmentAtPoint(working, targetWireId, endpoint.point, {
       junctionId: ids.nextJunctionId(),
       firstWireId: ids.nextWireId(),
       secondWireId: ids.nextWireId(),
@@ -324,14 +381,26 @@ export function connectEndpointToNode(
       // junção/pino existente naquela posição.
       const existing = findExistingJunctionAt(working.nodes, endpoint.point);
       if (existing) return nodeEndpoint(existing);
+      // Ponto exatamente sobre uma PONTA do fio: liga na própria ponta (pino ou nó), sem dividir.
+      const targetWire = working.wires.find((wire) => wire.id === targetWireId);
+      if (targetWire) {
+        const fromPos = endpointScenePosition(working.components, targetWire.from, working.nodes);
+        const toPos = endpointScenePosition(working.components, targetWire.to, working.nodes);
+        if (fromPos && Math.hypot(fromPos.x - endpoint.point.x, fromPos.y - endpoint.point.y) <= WIRE_GRID_SIZE / 2) return targetWire.from;
+        if (toPos && Math.hypot(toPos.x - endpoint.point.x, toPos.y - endpoint.point.y) <= WIRE_GRID_SIZE / 2) return targetWire.to;
+      }
       throw new Error("connectEndpointToNode: ponto do meio-de-fio não corresponde a nenhum segmento nem junção existente");
     }
     if (split.node) newNodes.push(split.node);
+    // Metades de um fio criado por um split anterior desta mesma conexão substituem a entrada dele em
+    // `newWires` -- nunca ficam as duas versões.
+    const replacedIndex = newWires.findIndex((wire) => wire.id === targetWireId);
+    if (replacedIndex >= 0) newWires.splice(replacedIndex, 1);
+    else replacedWireIds.push(targetWireId);
     newWires.push(split.firstWire, split.secondWire);
-    replacedWireIds.push(endpoint.wireId);
     working = {
       components: working.components,
-      wires: [...working.wires.filter((wire) => wire.id !== endpoint.wireId), split.firstWire, split.secondWire],
+      wires: [...working.wires.filter((wire) => wire.id !== targetWireId), split.firstWire, split.secondWire],
       nodes: split.node ? [...working.nodes, split.node] : working.nodes,
     };
     return nodeEndpoint(split.node?.id ?? findExistingJunctionAt(working.nodes, endpoint.point)!);
@@ -407,13 +476,20 @@ export function removeOrphanNodes(snapshot: TopologySnapshot): TopologySnapshot 
       const bEndsAtNode = endpointId(wireB.to) === nodeId;
       const outerFrom = aEndsAtNode ? wireA.from : wireA.to;
       const outerTo = bEndsAtNode ? wireB.from : wireB.to;
-      const pointsA = aEndsAtNode ? (wireA.points ?? []) : [...(wireA.points ?? [])].reverse();
-      const pointsB = bEndsAtNode ? [...(wireB.points ?? [])].reverse() : (wireB.points ?? []);
-      const mergedPoints = normalizeOrthogonalPath([
-        ...pointsA,
-        { x: node.position.x, y: node.position.y },
-        ...pointsB,
-      ]);
+      // Junta as duas rotas como estão DESENHADAS (pontas resolvidas), não só os cantos gravados --
+      // uma metade sem canto gravado ainda pode ser um "L", e esse canto precisa sobreviver à fusão.
+      const fullA = wirePolylinePoints(snapshot.components, wireA, nodes);
+      const fullB = wirePolylinePoints(snapshot.components, wireB, nodes);
+      let mergedPoints: Point[];
+      if (fullA.length >= 2 && fullB.length >= 2) {
+        const towardNode = aEndsAtNode ? fullA : [...fullA].reverse();
+        const awayFromNode = bEndsAtNode ? [...fullB].reverse() : fullB;
+        mergedPoints = interiorOfPath([...towardNode, ...awayFromNode.slice(1)]);
+      } else {
+        const pointsA = aEndsAtNode ? (wireA.points ?? []) : [...(wireA.points ?? [])].reverse();
+        const pointsB = bEndsAtNode ? [...(wireB.points ?? [])].reverse() : (wireB.points ?? []);
+        mergedPoints = normalizeOrthogonalPath([...pointsA, { x: node.position.x, y: node.position.y }, ...pointsB]);
+      }
 
       const mergedWire: WebviewWireModel = {
         id: wireA.id,

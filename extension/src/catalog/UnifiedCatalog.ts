@@ -141,6 +141,18 @@ export function entryToWebview(item: UnifiedCatalogItem, assetBasePath?: string)
   // devices ship SVG artwork, so use the same asset on the canvas instead of
   // silently falling back to the generic empty package rectangle.
   let symbolSvg = item.symbolSvg;
+  // The PLC instance is a runtime component rather than a graphical package, but its canvas body
+  // still uses the same supplied artwork as its palette icon. Keep the file out of the catalog
+  // JSON and embed it only when constructing the webview entry.
+  if (!symbolSvg && item.typeId === "plc.instance" && item.iconFilePath && assetBasePath) {
+    try {
+      const asset = path.resolve(assetBasePath, item.iconFilePath);
+      const data = fs.readFileSync(asset).toString("base64");
+      symbolSvg = `<image x="0" y="0" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" href="data:image/svg+xml;base64,${data}"/>`;
+    } catch {
+      // Keep the generic fallback if the PLC artwork is absent from this installation.
+    }
+  }
   if (!symbolSvg && item.typeId.startsWith("protocol.hart.device.smar_") && item.icon) {
     try {
       const asset = path.join(__dirname, "..", "..", "media", "components", "light", `${item.icon}.svg`);

@@ -107,6 +107,9 @@ export type HostToWebviewMessage =
         iconCanvas?: WebviewProjectState["iconCanvas"] | null;
       };
     }
+  /** Revisão canônica da topologia depois de um `"projectChanged"` que a alterou. Substitui o antigo
+   * eco do estado inteiro: a Webview já tem tudo que acabou de mandar, só não sabe o número novo. */
+  | { version: number; type: "topologyRevision"; revision: number }
   | { version: number; type: "componentReadout"; readoutsByComponentId: Record<string, ComponentReadoutValue>; transportStatus?: "connected" | "disconnected"; sampleTimestampNs?: number }
   /** Estado opaco de `getComponentState()` para packages com `runtimeState`. O package declara
    * offsets e encoding; esta mensagem não conhece nenhum dispositivo específico. */
@@ -254,6 +257,8 @@ export type WebviewToHostMessage =
    * esquemático aberto, ver `projectCommands.ts::importProjectCommand`. */
   | { version: number; type: "requestImportCircuit" }
   | { version: number; type: "requestChooseMcuFirmware"; componentId: string }
+  | { version: number; type: "requestCreatePlcProject"; componentId: string }
+  | { version: number; type: "requestOpenPlcProgram"; componentId: string }
   | { version: number; type: "requestOpenMcuSerialMonitor"; componentId: string; usartIndex: 0 | 1 | 2 }
   /** Ações de uma instância `digital.generic_fpga` -- ver `fpga/fpgaCommands.ts`. */
   | { version: number; type: "requestOpenFpgaSource"; componentId: string }

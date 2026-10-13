@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    { "id": "r1", "typeId": "passive.resistor", "label": "R1", "properties": { "resistance": 100 }, "visual": { "x": 160, "y": 80, "rotation": 0 } },
+    { "id": "r2", "typeId": "passive.resistor", "label": "R2", "properties": { "resistance": 100 }, "visual": { "x": 400, "y": 80, "rotation": 0 } },
+    { "id": "r3", "typeId": "passive.resistor", "label": "R3", "properties": { "resistance": 100 }, "visual": { "x": 160, "y": 240, "rotation": 0 } },
+    { "id": "r4", "typeId": "passive.resistor", "label": "R4", "properties": { "resistance": 100 }, "visual": { "x": 400, "y": 240, "rotation": 0 } },
+    { "id": "r5", "typeId": "passive.resistor", "label": "R5", "properties": { "resistance": 100 }, "visual": { "x": 640, "y": 160, "rotation": 0 } },
+    { "id": "r6", "typeId": "passive.resistor", "label": "R6", "properties": { "resistance": 100 }, "visual": { "x": 280, "y": 400, "rotation": 0 } },
+    { "id": "r7", "typeId": "passive.resistor", "label": "R7", "properties": { "resistance": 100 }, "visual": { "x": 560, "y": 400, "rotation": 0 } }
+  ],
+  "topology": { "revision": 0, "nodes": [], "conductors": [] },
+  "visual": { "components": [], "wires": [], "viewport": { "x": 0, "y": 0, "zoom": 1 } },
+  "simulationSettings": { "frequencyHz": 1000, "timeScale": 1, "paused": false }
+}

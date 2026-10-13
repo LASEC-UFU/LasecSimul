@@ -33,7 +33,7 @@ export const defaultComponentCatalog: WebviewComponentCatalogEntry[] = [
   { typeId: "plc.instance", label: "PLC IEC 61131-3", category: "Controle", folderPath: ["PLC IEC 61131-3"], workspaceSection: "process", icon: "package", pinCount: 0,
     defaultProperties: { plcIecProjectRef: "", plcArtifactRef: "", plcEntryConfiguration: "", plcTaskIntervalMs: 10 },
     propertySchema: [
-      { id: "plcIecProjectRef", label: "Projeto IEC 61131-3", group: "PLC", unit: "", editor: "filePath", default: "" },
+      { id: "plcIecProjectRef", label: "Programa IEC", group: "PLC", unit: "", editor: "filePath", default: "" },
       { id: "plcArtifactRef", label: "Artefato compilado", group: "PLC", unit: "", editor: "filePath", default: "" },
       { id: "plcEntryConfiguration", label: "Configuracao de entrada", group: "PLC", unit: "", editor: "text", default: "" },
       { id: "plcTaskIntervalMs", label: "Periodo da tarefa", group: "PLC", unit: "ms", editor: "number", default: 10, min: 0.1, max: 60000 },

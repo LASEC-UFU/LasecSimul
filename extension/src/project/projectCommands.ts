@@ -9,6 +9,7 @@ import { rebuildCoreFromSchematicState, pinsForProjectComponent } from "../core/
 import { CanonicalTopologyDocument, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, nodeEndpoint, portEndpoint } from "../ui/webview/model";
 import { ProjectComponent, ProjectDocument, ProjectTopology, createEmptyProject } from "./ProjectTypes";
 import { assertTopologyInvariants } from "../ui/webview/topologyDocument";
+import { autoRoutedWirePoints } from "../ui/webview/wireTopology";
 import { decideSaveTarget } from "./savePolicy";
 import { resolveProjectSourcePaths } from "./projectPathPolicy";
 import { isSimulideCircuitPath } from "../import/simulide/SimulideImporter";
@@ -590,6 +591,8 @@ export async function openProjectFile(filePath: string, options: {
   state.schematicState = projectToWebviewState(project, path.dirname(filePath));
   await resolveProjectSubcircuitReferences(path.dirname(filePath));
   await options.resolveExternalDeviceReferences?.(path.dirname(filePath));
+  // Depois de resolver subcircuitos/dispositivos: a geometria de pino/caixa já é a definitiva.
+  if (project.visual.wireRoutes !== "explicit") freezeLegacyAutomaticRoutes();
   // Opening a project replaces the whole document, including its conductors.
   // A full snapshot repairs any stale state retained by an existing webview.
   options.openSchematicEditor(options.extensionUri);
@@ -597,6 +600,25 @@ export async function openProjectFile(filePath: string, options: {
   markProjectSaved();
   await addRecentProjectPath(filePath);
   await rebuildCoreFromSchematicState();
+}
+
+/** Arquivos anteriores à rota explícita não gravavam os cantos de um fio roteado automaticamente:
+ * o desenho era recalculado a cada render, desviando dos componentes. Agora a rota de um fio é a
+ * gravada (`wireTopology.ts::wirePolylinePoints`); sem isto, esses fios abririam como retas/"L"
+ * passando por cima de componentes. Roda o MESMO roteador uma única vez na abertura e grava o
+ * resultado -- o projeto abre com a aparência de antes e, daí em diante, só muda quando o usuário
+ * edita. Fios que já tinham vértices não são tocados. */
+function freezeLegacyAutomaticRoutes(): void {
+  const { components, topology } = state.schematicState;
+  let changed = false;
+  const conductors = topology.conductors.map((wire) => {
+    if (wire.points && wire.points.length > 0) return wire;
+    const routed = autoRoutedWirePoints(components, wire, topology.nodes);
+    if (!routed || routed.length === 0) return wire;
+    changed = true;
+    return { ...wire, points: routed };
+  });
+  if (changed) state.schematicState = { ...state.schematicState, topology: { ...topology, conductors } };
 }
 
 let importIdCounter = 0;

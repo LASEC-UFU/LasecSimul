@@ -147,6 +147,12 @@ export interface ProjectDocument {
   visual: {
     wires: Array<{ id: string; selected?: boolean; points?: { x: number; y: number }[] }>;
     viewport: { x: number; y: number; zoom: number };
+    /** `"explicit"`: o arquivo foi gravado por uma versão em que a rota de cada fio é a que está em
+     * `topology.conductors[].vertices` (um fio sem vértices é uma reta ou um "L", por decisão do
+     * usuário). Ausente: arquivo anterior, em que fio sem vértices era redesenhado por um roteador
+     * automático a cada abertura -- essas rotas são calculadas UMA vez ao abrir e passam a valer
+     * como gravadas (ver `projectCommands.ts::freezeLegacyAutomaticRoutes`). */
+    wireRoutes?: "explicit";
   };
   simulationSettings: ProjectSimulationSettings;
   mcuFirmware?: ProjectFirmwareConfig[];

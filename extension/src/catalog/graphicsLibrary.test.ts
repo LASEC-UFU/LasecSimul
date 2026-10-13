@@ -93,7 +93,7 @@ function filledRectHeight(svg: string, fill: string): number {
       assert(svg.length > 0, `${entry.typeId} nao renderizou nada`);
       assert(!svg.includes("NaN"), `${entry.typeId} gerou NaN em algum atributo`);
       assert(!svg.includes("undefined"), `${entry.typeId} gerou undefined em algum atributo`);
-      if (["graphics.tank_svg", "graphics.valve_globe_svg", "graphics.hmi.tank", "graphics.hmi.pump"].includes(entry.typeId)) {
+      if (["graphics.tank_svg", "graphics.valve_globe_svg", "graphics.hmi.tank", "graphics.hmi.pump", "graphics.pid.bagfilter", "graphics.pid.blower", "graphics.pid.pump_centrifugal", "graphics.pid.motor", "graphics.pid.vessel_tank"].includes(entry.typeId)) {
         assert(/<image\b[^>]*href="data:image\/svg\+xml;base64,/.test(svg), `${entry.typeId} deve usar SVG vetorial empacotado`);
       } else {
         assert(!/<image\b/.test(svg), `${entry.typeId} usa bitmap -- a biblioteca e vetorial`);
@@ -325,7 +325,7 @@ function filledRectHeight(svg: string, fill: string): number {
 
   await test("catalogo P&ID completo do IPD preserva licença, fonte e aviso em cada item", () => {
     const ipd = graphics.filter((entry) => entry.typeId.startsWith("graphics.pid."));
-    assert(ipd.length === 193, `esperado o snapshot completo de 193 símbolos IPD, veio ${ipd.length}`);
+    assert(ipd.length === 192, `esperado o snapshot completo de 192 símbolos IPD, veio ${ipd.length}`);
     for (const entry of ipd) {
       assert(entry.provenance?.license === "PolyForm Noncommercial 1.0.0", `${entry.typeId} sem licença PolyForm`);
       assert(entry.provenance?.sourceCommit === "4b84fb8694bc89985872690366e8be2e32a8db2b", `${entry.typeId} sem commit fixado`);
@@ -380,6 +380,35 @@ function filledRectHeight(svg: string, fill: string): number {
     const semFluxo = render(pipe, { value: 0 });
     const lines = (svg: string) => (svg.match(/<line\b/g) ?? []).length;
     assert(lines(comFluxo) > lines(semFluxo), `com fluxo deveria desenhar a seta a mais: ${lines(comFluxo)} vs ${lines(semFluxo)}`);
+  });
+
+  await test("PLC e equipamentos usam os SVGs fornecidos no canvas e na paleta", () => {
+    const assets = [
+      ["plc.instance", "PLC_LIMPO_FINAL_2026.svg", "symbol"],
+      ["graphics.pid.bagfilter", "Cutaway Stainless Steel Bag Filter Vessel.svg", "package"],
+      ["graphics.pid.blower", "Industrial Centrifugal Blower Assembly2.svg", "package"],
+      ["graphics.pid.pump_centrifugal", "Industrial Centrifugal Pump Assembly.svg", "package"],
+      ["graphics.pid.motor", "Industrial Electric Motor Icon.svg", "package"],
+      ["graphics.pid.vessel_tank", "Industrial Mixing Tank with Cutaway Agitator.svg", "package"],
+      ["graphics.hmi.pump", "Industrial Electric Motor Icon.svg", "paint"],
+      ["graphics.hmi.tank", "Industrial Mixing Tank with Cutaway Agitator.svg", "paint"],
+    ] as const;
+    const prefix = "data:image/svg+xml;base64,";
+    for (const [typeId, filename, source] of assets) {
+      const entry = catalog.find((candidate) => candidate.typeId === typeId);
+      assert(Boolean(entry), `${typeId} deveria existir no catálogo`);
+      const file = path.resolve(process.cwd(), "..", "Icones", filename);
+      const raw = fs.readFileSync(file);
+      const paletteAsset = entry?.iconFilePath ?? path.join(process.cwd(), "media", "components", "light", `${entry?.icon}.svg`);
+      assert(entry?.iconFilePath ? paletteAsset === file : fs.readFileSync(paletteAsset).equals(raw), `${typeId}: ?cone da paleta n?o aponta para ${filename}`);
+      const href = source === "symbol"
+        ? entry?.symbolSvg?.match(/href="(data:image\/svg\+xml;base64,[^"]+)"/)?.[1]
+        : source === "package"
+          ? (entry?.package?.shapes?.find((shape) => shape.kind === "image") as { href?: string } | undefined)?.href
+          : (entry?.package?.simulidePaint?.primitives.find((shape) => shape.kind === "image") as { href?: string } | undefined)?.href;
+      assert(Boolean(href?.startsWith(prefix)), `${typeId}: SVG do símbolo não foi carregado`);
+      assert(Buffer.from(href!.slice(prefix.length), "base64").equals(raw), `${typeId}: SVG carregado não corresponde a ${filename}`);
+    }
   });
 
   await test("o icone da paleta existe para todo simbolo", () => {

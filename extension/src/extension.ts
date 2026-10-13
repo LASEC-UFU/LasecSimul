@@ -10,7 +10,7 @@ import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, d
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { createInitialWebviewState } from "./ui/webview/catalog";
 import { CanonicalTopologyDocument, JUNCTION_TYPE_ID, PackageDescriptor, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, portEndpoint } from "./ui/webview/model";
-import { connectEndpointToNode, normalizeWireGeometry, removeOrphanNodes, splitSegmentAtPoint, wirePolylinePoints } from "./ui/webview/wireTopology";
+import { autoRoutedWirePoints, connectEndpointToNode, normalizeWireGeometry, removeOrphanNodes, splitSegmentAtPoint } from "./ui/webview/wireTopology";
 import { assertTopologyInvariants } from "./ui/webview/topologyDocument";
 import { WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
@@ -964,7 +964,7 @@ function disposeDeviceReferenceWatchers(): void {
  * `packageSanitizers.ts::sanitizePackageBackground`) pra renderização real na Webview
  * (`componentSymbols.ts`) -- sem isso a imagem escolhida nunca apareceria no canvas, só o caminho
  * cru guardado. */
-async function chooseFilePropertyCommand(componentId: string, propertyKey: string): Promise<void> {
+async function chooseFilePropertyCommand(componentId: string, propertyKey: string, providedPath?: string): Promise<string | undefined> {
   const ref = getElement(state.schematicState, componentId);
   if (!ref) return;
   const component = ref.element;
@@ -972,7 +972,7 @@ async function chooseFilePropertyCommand(componentId: string, propertyKey: strin
   const isImagePath = component.typeId === "graphics.image" && propertyKey === "path";
   const isPlcProject = component.typeId === "plc.instance" && propertyKey === "plcIecProjectRef";
   const isPlcArtifact = component.typeId === "plc.instance" && propertyKey === "plcArtifactRef";
-  const picked = await vscode.window.showOpenDialog({
+  const picked = providedPath ? undefined : await vscode.window.showOpenDialog({
     canSelectMany: false,
     filters: isImagePath ? { Imagem: ["png", "jpg", "jpeg", "svg"] }
       : isPlcProject ? { "Projeto IEC 61131-3": ["json"] }
@@ -980,7 +980,7 @@ async function chooseFilePropertyCommand(componentId: string, propertyKey: strin
       : { "Todos os arquivos": ["*"] },
     title: `Selecionar arquivo para ${component.label}`,
   });
-  const selected = picked?.[0];
+  const selected = providedPath ? vscode.Uri.file(providedPath) : picked?.[0];
   if (!selected) return;
   const absolutePath = selected.fsPath;
 
@@ -1045,6 +1045,20 @@ async function chooseFilePropertyCommand(componentId: string, propertyKey: strin
     else pushPropertyToCore(componentId, propertyKey, absolutePath);
   }
   syncSchematicPanel();
+  return absolutePath;
+}
+
+async function openPlcProgramCommand(componentId: string): Promise<void> {
+  const ref = getElement(state.schematicState, componentId);
+  if (!ref || ref.element.typeId !== "plc.instance") return;
+  let projectPath = String(ref.element.properties.plcIecProjectRef ?? ref.element.plc?.iecProjectRef ?? "");
+  if (!projectPath || !fs.existsSync(projectPath)) {
+    if (projectPath) vscode.window.showWarningMessage("O programa IEC vinculado não foi encontrado. Selecione o arquivo novamente.");
+    const selectedPath = await chooseFilePropertyCommand(componentId, "plcIecProjectRef");
+    if (!selectedPath) return;
+    projectPath = selectedPath;
+  }
+  await vscode.commands.executeCommand("vscode.openWith", vscode.Uri.file(projectPath), "lasecsimul.iecProjectEditor");
 }
 
 /** `pinIds` (quando presente) é o contrato elétrico REAL na ordem que o Core espera -- plugins usam
@@ -1249,14 +1263,24 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       // Vários fluxos client-side mutam `state` na Webview e mandam o snapshot inteiro aqui. O diff
       // precisa cobrir também propriedades/endpoints, porque undo/redo passa por este caminho.
       const previous = state.schematicState;
-      const topologyChanged = JSON.stringify([previous.components, previous.topology]) !==
-        JSON.stringify([message.project.components, message.project.topology]);
-      state.schematicState = topologyChanged
-        ? { ...message.project, topology: { ...message.project.topology, revision: previous.topology.revision + 1 } }
-        : { ...message.project, topology: { ...message.project.topology, revision: previous.topology.revision } };
+      // A revisão é do Host e fica FORA da comparação: a Webview manda a que conhecia, que pode estar
+      // um número atrás -- comparar com ela dentro faria todo snapshot parecer "topologia mudou".
+      const contentOf = (project: WebviewProjectState): string =>
+        JSON.stringify([project.components, project.topology.nodes, project.topology.conductors]);
+      const topologyChanged = contentOf(previous) !== contentOf(message.project);
+      const revision = previous.topology.revision + (topologyChanged ? 1 : 0);
+      state.schematicState = { ...message.project, topology: { ...message.project.topology, revision } };
+      // Tudo neste snapshot veio da Webview, então ela já o tem. Marcar como sincronizado impede que
+      // o próximo `syncSchematicPanel()` devolva o estado inteiro como "mudança" (toda referência é
+      // nova depois do postMessage). Esse eco chegava atrasado e sobrescrevia o que o usuário já
+      // tinha feito depois: zoom que voltava, fio recém-criado que sumia e reaparecia, entrada de
+      // desfazer sem efeito visível. O Host só manda o que ELE muda; a revisão nova vai sozinha.
+      if (state.lastSyncedProjectState) state.lastSyncedProjectState = state.schematicState;
       enqueueProjectSnapshotSync(previous, state.schematicState);
-      if (topologyChanged) syncSchematicPanel();
-      else refreshDirtyIndicator();
+      if (topologyChanged) {
+        syncSchematicPanel();
+        state.schematicPanel?.postMessage({ version: 1, type: "topologyRevision", revision });
+      } else refreshDirtyIndicator();
       return;
     }
     case "requestAddComponent": {
@@ -1726,6 +1750,14 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestChooseFile":
       void chooseFilePropertyCommand(message.componentId, message.propertyKey);
       return;
+    case "requestCreatePlcProject":
+      void newIecProjectCommand(message.componentId, async (componentId, absolutePath) => {
+        await chooseFilePropertyCommand(componentId, "plcIecProjectRef", absolutePath);
+      });
+      return;
+    case "requestOpenPlcProgram":
+      void openPlcProgramCommand(message.componentId);
+      return;
     case "requestOpenExternal":
       void vscode.env.openExternal(vscode.Uri.parse(message.url));
       return;
@@ -2104,10 +2136,11 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
   // Manifestos TDPS antigos guardavam somente as extremidades e deixavam o renderer desenhar uma
   // reta diagonal. Materializa uma rota ortogonal usando a mesma geometria dos pinos da Webview;
   // a rota fica persistível no próximo save e não depende de um cálculo diferente por viewport.
+  // Mesmo roteador com desvio de componentes que desenhava esses fios antes da rota explícita --
+  // `wirePolylinePoints` agora só resolve rotas GRAVADAS, não inventa caminho.
   const internalWires: WebviewWireModel[] = rawInternalWires.map((wire) => {
     if (wire.points && wire.points.length > 0) return wire;
-    const fullPath = wirePolylinePoints(internalComponents, wire);
-    const points = fullPath.length > 2 ? fullPath.slice(1, -1) : undefined;
+    const points = autoRoutedWirePoints(internalComponents, wire);
     return points && points.length > 0 ? { ...wire, points } : wire;
   });
   // Autocorreção defensiva (junção órfã/duplicada, fio de comprimento zero) -- roda ANTES de virar a

@@ -28,3 +28,12 @@ the permissions and restrictions of PolyForm Noncommercial 1.0.0.
 The connection router port deliberately comes from the historical AGPL-3.0-only revision because
 that license can coexist with the GPL host. Its provenance is documented in
 `docs/third-party/IPD_STUDIO_PROVENANCE.md` and in the production source file that contains the port.
+
+## SimulIDE — behavioural reference for wire interaction
+
+`extension/src/ui/webview/wireRouting.ts` reproduces the wire-drawing behaviour of SimulIDE
+(Santiago González and contributors; AGPL-3.0-or-later for the author's files and
+GPL-3.0-or-later for other contributions, per the program's `copyright.txt`). The module is an
+independent implementation written from an analysis of the program's behaviour and source code; it
+contains no SimulIDE source text. The analysis is recorded in
+`docs/48-reengenharia-conexoes-simulide.md`.

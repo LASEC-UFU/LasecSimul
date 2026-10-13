@@ -398,6 +398,7 @@ export class ProjectSerializer {
                   zoom: asNumber(parsed.visual.viewport.zoom) ?? 1,
                 }
               : { x: 0, y: 0, zoom: 1 },
+            ...(parsed.visual.wireRoutes === "explicit" ? { wireRoutes: "explicit" as const } : {}),
           }
         : createEmptyProject().visual,
       simulationSettings: isObject(parsed.simulationSettings)
@@ -433,7 +434,7 @@ export class ProjectSerializer {
       schemaVersion: LS_PROJ_SCHEMA_VERSION,
       components: project.components,
       topology: project.topology,
-      visual: { viewport: project.visual.viewport },
+      visual: { viewport: project.visual.viewport, wireRoutes: "explicit" as const },
       simulationSettings: project.simulationSettings,
       hmiApplication: project.hmiApplication,
       mcuFirmware: project.mcuFirmware,

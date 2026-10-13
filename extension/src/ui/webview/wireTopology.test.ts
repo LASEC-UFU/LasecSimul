@@ -8,6 +8,9 @@ import {
   electricalEdgesForProject,
   findExistingJunctionAt,
   isJunctionVisible,
+  autoRoutedWirePoints,
+  bakeWireRoutes,
+  findWireAtPoint,
   mergeCollinearSegments,
   movableTopologyNodeIds,
   normalizeWireGeometry,
@@ -116,7 +119,7 @@ function portWire(id: string, fromComponentId: string, toComponentId: string, pi
     assert(wirePolylinePoints(snapshot.components, orphanWire, snapshot.nodes).length === 0, "endpoint inexistente deveria devolver polilinha vazia");
   });
 
-  await test("wirePolylinePoints integra rota automática, obstáculo e reroteamento ao mover endpoint", () => {
+  await test("wirePolylinePoints desenha a rota GRAVADA: sem roteador automático, e mover uma ponta só mexe na ponta", () => {
     const endpointPackage: PackageDescriptor = {
       width: 40,
       height: 40,
@@ -149,29 +152,124 @@ function portWire(id: string, fromComponentId: string, toComponentId: string, pi
       pins: [],
       properties: {},
     };
-    const wire: WebviewWireModel = {
-      id: "auto",
-      from: portEndpoint(source.id, "out"),
-      to: portEndpoint(target.id, "in"),
+    const components = [source, obstacle, target];
+    const orthogonal = (points: { x: number; y: number }[], label: string): void => {
+      for (let index = 0; index + 1 < points.length; index += 1) {
+        assert(points[index]!.x === points[index + 1]!.x || points[index]!.y === points[index + 1]!.y, `${label}: segmento ${index} deveria ser ortogonal`);
+      }
     };
-    const routeBefore = wirePolylinePoints([source, obstacle, target], wire);
-    assert(routeBefore.length >= 4, "rota integrada deveria contornar o componente intermediário");
-    for (let index = 0; index + 1 < routeBefore.length; index += 1) {
-      assert(routeBefore[index]!.x === routeBefore[index + 1]!.x || routeBefore[index]!.y === routeBefore[index + 1]!.y,
-        `segmento integrado ${index} deveria permanecer ortogonal`);
-    }
+    const wire: WebviewWireModel = { id: "auto", from: portEndpoint(source.id, "out"), to: portEndpoint(target.id, "in") };
+
+    // Sem cantos gravados e com as pontas alinhadas: uma reta, haja o que houver no caminho.
+    const straight = wirePolylinePoints(components, wire);
+    assert(straight.length === 2, `fio sem cantos entre pinos alinhados deveria ser uma reta, veio ${JSON.stringify(straight)}`);
+
+    // Desviar de componentes é uma AÇÃO: devolve cantos pra gravar, e aí a rota é a gravada.
+    const detour = autoRoutedWirePoints(components, wire);
+    assert(detour !== undefined && detour.length >= 2, "o roteador explícito deveria contornar o componente intermediário");
+    const routedWire: WebviewWireModel = { ...wire, points: detour };
+    const routeBefore = wirePolylinePoints(components, routedWire);
+    orthogonal(routeBefore, "rota gravada");
+    assert(JSON.stringify(routeBefore.slice(1, -1)) === JSON.stringify(detour), "a rota desenhada deveria ser exatamente os cantos gravados");
+    assert(JSON.stringify(wirePolylinePoints(components, routedWire)) === JSON.stringify(routeBefore), "mesma entrada, mesma rota (determinístico)");
+
+    // Mover o destino: continua ancorado, ortogonal, e só o último canto muda.
     target.y = 120;
-    const routeAfter = wirePolylinePoints([source, obstacle, target], wire);
-    const targetPosition = pinScenePosition([source, obstacle, target], target.id, "in")!;
+    const routeAfter = wirePolylinePoints(components, routedWire);
+    const targetPosition = pinScenePosition(components, target.id, "in")!;
     const last = routeAfter[routeAfter.length - 1]!;
     assert(last.x === targetPosition.x && last.y === targetPosition.y, "rota deveria continuar ancorada no endpoint movido");
-    assert(JSON.stringify(routeAfter) !== JSON.stringify(routeBefore), "mover endpoint deveria recalcular a rota automática");
-    for (let index = 0; index + 1 < routeAfter.length; index += 1) {
-      assert(routeAfter[index]!.x === routeAfter[index + 1]!.x || routeAfter[index]!.y === routeAfter[index + 1]!.y,
-        `segmento reroteado ${index} deveria permanecer ortogonal`);
-    }
+    orthogonal(routeAfter, "rota depois de mover");
+    assert(routeAfter.length === routeBefore.length, "mover uma ponta não deveria criar nem remover cantos");
+    const changed = routeAfter.filter((point, index) => point.x !== routeBefore[index]!.x || point.y !== routeBefore[index]!.y).length;
+    assert(changed === 2, `só a ponta e o canto vizinho deveriam mudar, mudaram ${changed} pontos`);
+
+    // Voltar o destino devolve a rota original (não depende do caminho percorrido).
+    target.y = 0;
+    assert(JSON.stringify(wirePolylinePoints(components, routedWire)) === JSON.stringify(routeBefore), "voltar a ponta deveria devolver a rota original");
+
+    // Fio sem cantos e pontas desalinhadas: "L" saindo pelo eixo do pino de origem (estável).
+    target.y = 120;
+    const elbow = wirePolylinePoints(components, wire);
+    assert(elbow.length === 3 && elbow[0]!.y === elbow[1]!.y, `L deveria sair na horizontal do pino de origem, veio ${JSON.stringify(elbow)}`);
+    target.y = 300;
+    const elbowLower = wirePolylinePoints(components, wire);
+    assert(elbowLower.length === 3 && elbowLower[0]!.y === elbowLower[1]!.y, "o L padrão não deveria trocar de lado ao mover a ponta");
+
     registerPackage("test.routeEndpoint", undefined);
     registerPackage("test.routeObstacle", undefined);
+  });
+
+  await test("bakeWireRoutes grava nos fios pedidos a rota desenhada, sem cantos redundantes", () => {
+    const r1 = resistorComponent("r1", 0, 0);
+    const r2 = resistorComponent("r2", 200, 120);
+    const wire: WebviewWireModel = { id: "w", from: portEndpoint("r1", "pin-2"), to: portEndpoint("r2", "pin-1") };
+    const other: WebviewWireModel = { id: "other", from: portEndpoint("r1", "pin-1"), to: portEndpoint("r2", "pin-2") };
+    const snapshot: TopologySnapshot = { components: [r1, r2], wires: [wire, other], nodes: [] };
+    const drawn = wirePolylinePoints(snapshot.components, wire, snapshot.nodes);
+    const baked = bakeWireRoutes(snapshot, new Set(["w"]));
+    assert(baked[1] === other, "fio fora do conjunto deveria voltar o MESMO objeto");
+    assert(JSON.stringify(baked[0]!.points) === JSON.stringify(drawn.slice(1, -1)), "cantos gravados deveriam ser os desenhados");
+    assert(JSON.stringify(wirePolylinePoints(snapshot.components, baked[0]!, snapshot.nodes)) === JSON.stringify(drawn), "gravar não deveria mudar o desenho");
+    const again = bakeWireRoutes({ ...snapshot, wires: baked }, new Set(["w"]));
+    assert(again[0] === baked[0], "gravar de novo é idempotente (mesmo objeto)");
+  });
+
+  await test("findWireAtPoint acha o fio que passa pelo ponto (e nenhum fora da polilinha)", () => {
+    const r1 = resistorComponent("r1", 0, 0);
+    const r2 = resistorComponent("r2", 200, 0);
+    const wire: WebviewWireModel = { id: "w", from: portEndpoint("r1", "pin-2"), to: portEndpoint("r2", "pin-1") };
+    const snapshot: TopologySnapshot = { components: [r1, r2], wires: [wire], nodes: [] };
+    const full = wirePolylinePoints(snapshot.components, wire);
+    const middle = { x: (full[0]!.x + full[1]!.x) / 2, y: full[0]!.y };
+    assert(findWireAtPoint(snapshot, middle) === "w", "ponto no meio do fio");
+    assert(findWireAtPoint(snapshot, { x: middle.x, y: middle.y + 40 }) === undefined, "ponto fora do fio");
+  });
+
+  await test("derivação que começa e termina no MESMO fio divide o fio duas vezes e não deixa metade órfã", () => {
+    const r1 = resistorComponent("r1", 0, 0);
+    const r2 = resistorComponent("r2", 400, 0);
+    const wire: WebviewWireModel = { id: "w", from: portEndpoint("r1", "pin-2"), to: portEndpoint("r2", "pin-1") };
+    const snapshot: TopologySnapshot = { components: [r1, r2], wires: [wire], nodes: [] };
+    const full = wirePolylinePoints(snapshot.components, wire);
+    const y = full[0]!.y;
+    const a = { x: 104, y };
+    const b = { x: 296, y };
+    let nextWire = 0;
+    let nextJunction = 0;
+    const result = connectEndpointToNode(
+      snapshot,
+      { kind: "wire", wireId: "w", point: a },
+      { kind: "wire", wireId: "w", point: b },
+      [{ x: 104, y: y - 48 }, { x: 296, y: y - 48 }],
+      { newWireId: "bridge", nextJunctionId: () => `j${(nextJunction += 1)}`, nextWireId: () => `h${(nextWire += 1)}` }
+    );
+    assert(result.newNodes.length === 2, `dois nós novos, vieram ${result.newNodes.length}`);
+    assert(result.replacedWireIds.length === 1 && result.replacedWireIds[0] === "w", "só o fio original é substituído");
+    assert(result.newWires.length === 4, `três trechos do fio original + a ponte, vieram ${result.newWires.length}`);
+    const ids = new Set(result.newWires.map((entry) => entry.id));
+    assert(ids.size === 4, "nenhum id repetido entre os fios novos");
+    const nodeIds = new Set(result.newNodes.map((node) => node.id));
+    const degree = (nodeId: string): number => result.newWires.filter((entry) => endpointId(entry.from) === nodeId || endpointId(entry.to) === nodeId).length;
+    for (const nodeId of nodeIds) assert(degree(nodeId) === 3, `cada nó deveria ter grau 3, ${nodeId} tem ${degree(nodeId)}`);
+  });
+
+  await test("ligar um fio exatamente na PONTA de outro liga no próprio pino, sem criar nó", () => {
+    const r1 = resistorComponent("r1", 0, 0);
+    const r2 = resistorComponent("r2", 200, 0);
+    const r3 = resistorComponent("r3", 0, 160);
+    const wire: WebviewWireModel = { id: "w", from: portEndpoint("r1", "pin-2"), to: portEndpoint("r2", "pin-1") };
+    const snapshot: TopologySnapshot = { components: [r1, r2, r3], wires: [wire], nodes: [] };
+    const end = wirePolylinePoints(snapshot.components, wire).slice(-1)[0]!;
+    const result = connectEndpointToNode(
+      snapshot,
+      { kind: "pin", componentId: "r3", pinId: "pin-2" },
+      { kind: "wire", wireId: "w", point: end },
+      undefined,
+      { newWireId: "n", nextJunctionId: () => "j", nextWireId: () => "h" }
+    );
+    assert(result.newNodes.length === 0 && result.replacedWireIds.length === 0, "nada dividido");
+    assert(result.newWires.length === 1 && endpointId(result.newWires[0]!.to) === "r2" && endpointPinId(result.newWires[0]!.to) === "pin-1", "fio novo termina no pino da ponta");
   });
 
   await test("WireSpatialIndex: upsertWire indexa os segmentos, removeWire tira do índice (mesmo espírito da antiga cobertura via findAtPosition, removido por ser código morto -- ver .spec seção 25.10; classe continua em uso real por maybeAutoJunctionForDraggedComponents)", () => {

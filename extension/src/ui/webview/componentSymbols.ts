@@ -1766,6 +1766,7 @@ const DEFAULT_BOX: ComponentBox = { width: 70, height: 40 };
 
 function builtinComponentBox(typeId: string): ComponentBox | undefined {
   switch (typeId) {
+    case "plc.instance": return { width: 96, height: 96 };
     case JUNCTION_TYPE_ID: return { width: 0, height: 0 };
     case "connectors.bus": return { width: 24, height: 64 }; // logic/bus.cpp: tronco vertical
     case TUNNEL_TYPE_ID: return tunnelBox();

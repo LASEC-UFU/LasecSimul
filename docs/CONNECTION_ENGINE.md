@@ -1,69 +1,64 @@
-# Common connection engine
+# Connection engine
+
+Rewritten on 2026-10-13 to follow SimulIDE's wire behaviour. The investigation, the before/after
+measurements and the remaining limitations are in
+[48-reengenharia-conexoes-simulide.md](48-reengenharia-conexoes-simulide.md).
 
 ## Architecture
 
-`connectionEngine.ts` is a pure geometry kernel. It provides:
+| Module | Responsibility |
+|---|---|
+| `wireRouting.ts` | Pure geometry: the draft being drawn, resolving a stored route against the current endpoints, path simplification. No DOM, no `vscode`. |
+| `wireTopology.ts` | Pure topology: junction nodes, splitting a wire, connecting endpoints, collapsing degree-2 nodes, electrical projection for the Core. |
+| `connectionEngine.ts` | Magnetic docking of ports, and the obstacle-avoiding orthogonal router. The router runs only on request. |
+| `main.ts` | Pointer/keyboard events, the transient gesture state (`wireDraft`), DOM updates. |
+| `extension.ts` | Host: persistence and Core synchronisation of whatever the Webview committed. |
 
-- screen-stable magnetic docking radius and a per-gesture spatial hash of ports;
-- semantic family compatibility without knowledge of HART, CTRL or TDPS;
-- orthogonal obstacle routing using a visibility grid and Dijkstra search;
-- progressive local-obstacle corridors with whole-scene collision validation, preventing the
-  upstream 40k-cell safety limit from degrading dense scenes into a line through equipment;
-- direction-aware port exit stubs and a bend penalty;
-- authored-waypoint orthogonalization and deterministic path collapse.
+## Rules
 
-`wireTopology.ts` adapts the kernel to LasecSimul components. It resolves stable endpoint IDs,
-derives port orientation from the authored pin position plus rotation/flip, computes transformed
-component bounds, and supplies obstacles. `main.ts` owns gesture/render state. The Extension host
-remains the authority for atomic topology edits and the Core remains the simulation authority.
-
-## Geometry versus semantics
-
-The router receives only endpoints, directions, rectangles and waypoint coordinates. It never sees
-simulation component types or variable/protocol details. The current electrical conductor uses this
-geometry first. Future `ProcessPipe` and `GraphicalConnector` objects can share it while retaining
-separate model/runtime semantics.
-
-Crossing polylines do not connect. A logical connection exists only through canonical endpoint/node
-IDs. T junctions and fan-out therefore remain explicit.
-
-## Route modes and compatibility
-
-- `wire.points` present: manual route. Coordinates persist through `.lsproj`/`.lssubcircuit` as before.
-- no `wire.points`: automatic route. It is regenerated from current port locations and obstacles, so
-  moving or rotating a component keeps the endpoint attached and reroutes the line.
-- legacy projects continue to open without schema changes. Existing persisted vertices remain manual;
-  new connections with no authored bend are automatic.
-- the connection context menu can reset a manual route to automatic or remove a route point.
+1. **A wire is what was drawn.** `wire.points` holds the corners. `wirePolylinePoints` resolves them
+   against the current pin/node positions and never invents a path. The same input gives the same
+   output in the Webview and in the Extension host.
+2. **The elbow has memory.** Between the last fixed point and the cursor there is at most one
+   corner. Its first-leg axis is chosen when the cursor leaves alignment with that point (dominant
+   axis) and stays locked until the cursor realigns.
+3. **Moving an endpoint moves only the end.** When a pin or node moves, the neighbouring corner
+   slides along the next segment's axis; the rest of the route stays. The result does not depend on
+   the path the endpoint took, so dragging and coming back restores the original route. What is on
+   screen when the gesture ends is stored.
+4. **Crossing is not connecting.** A connection exists only through endpoint/node ids.
 
 ## Interaction
 
-Both workflows remain available:
+| Gesture | Result |
+|---|---|
+| Click a pin, a wire or a junction | Starts a wire there |
+| Move | The preview follows; it is exactly the wire a click would create |
+| Click empty canvas | Fixes the current corner (on a straight stretch, adds a waypoint) |
+| Click or release on a pin, junction or wire | Finishes; on a wire, creates the junction at the green marker |
+| Press a pin and drag | Same wire; releasing on empty canvas fixes the corner and keeps drawing |
+| Right click or Backspace | Steps back one fixed corner; cancels when none is left |
+| Esc | Cancels |
+| Drag a segment / a corner / a junction | Moves it; neighbours stretch |
+| Drag a component | Grid steps (Alt for free movement); attached wire ends follow |
+| Ctrl+click a wire, Delete | Removes it; a junction left with two wires is merged away |
 
-1. click a source pin and click a destination;
-2. press a source pin, drag, enter the magnetic radius and release.
+Committing a wire, deleting a wire, undo and redo are applied in the Webview and reach the Host
+through the ordinary `projectChanged` message. The Host does not echo that state back.
 
-During a gesture compatible ports are revealed, the nearest port gets a green docking halo, and the
-preview snaps to its exact anchor. The radius is expressed in screen pixels and compensated for zoom.
-The final drop reuses `requestConnectEndpoints`; no preview or half-split is persisted.
+## Obstacle-avoiding router
 
-Connection selection uses wide invisible segment handles, not pixel-perfect line clicks. Existing
-segment/corner dragging, keyboard nudging, group movement, undo/redo and save/reopen continue to use
-the same history and persistence paths.
+`autoRoutedWirePoints` runs the router of `connectionEngine.ts` once and returns corners to store.
+It is used by the wire context menu ("Rotear desviando de componentes") and when opening a project
+saved before explicit routes (`projectCommands.ts::freezeLegacyAutomaticRoutes`), so those projects
+keep their previous appearance. Files saved from now on carry `visual.wireRoutes: "explicit"`.
 
 ## Verification
 
-- `connectionEngine.test.ts`: seven deterministic kernel tests covering zoom-stable docking,
-  compatibility, obstacle avoidance, orthogonality, authored waypoints, repeatable output and a
-  211-obstacle dense-scene regression.
-- `wireTopology.test.ts`: 35 adapter/topology tests, including production-adapter rerouting after
-  an endpoint moves around an intervening component.
-- `wireGeometry.test.ts`: 20 interaction/persistence geometry tests.
-- `npm run test:connections:visual`: three visual states (automatic obstacle route, endpoint moved,
-  and persistent manual waypoints).
-- `npm run test:connections:e2e`: launches VS Code 1.128, creates a connection by dragging between
-  real Webview pins, checks the docking halo, checks every segment for orthogonality, moves an
-  endpoint and verifies that the route changes and remains orthogonal.
-- `npm run test:connections:performance`: reproducible 200-object/120-connection routing benchmark.
-  On Node 24.19.0 / Ryzen 9 5950X a recorded run completed in 139.88 ms total (1.166 ms per connection); this is
-  kernel routing time, not an end-to-end frame-rate claim.
+- `wireRouting.test.ts`, `wireTopology.test.ts`, `wireGeometry.test.ts`, `connectionEngine.test.ts`
+  (part of `npm test`).
+- `npm run test:wires:e2e`: the 20 comparison scenarios in real VS Code with real pointer input.
+- `npm run test:wires:measure -- <label>`: elbow flips, preview fidelity, route stability, commit
+  latency and handler cost, written to `test/e2e/artifacts/wire-interaction/<label>/`.
+- `npm run test:connections:e2e`, `npm run test:connections:visual`,
+  `npm run test:connections:performance`: unchanged.
