@@ -13,14 +13,13 @@
         "rotation": 0
       },
       "properties": {
-        "plcIecProjectRef": "semaforo_sfc.iec.json",
+        "plcIecProjectRef": "semaforo_sfc.lsplc",
         "plcArtifactRef": "",
-        "plcEntryConfiguration": "CONFIGURATION_1",
+        "plcEntryConfiguration": "",
         "plcTaskIntervalMs": 10
       },
       "plc": {
-        "iecProjectRef": "semaforo_sfc.iec.json",
-        "entryConfiguration": "CONFIGURATION_1",
+        "iecProjectRef": "semaforo_sfc.lsplc",
         "exportedIoBindingVersion": 1,
         "exportedIo": [
           {

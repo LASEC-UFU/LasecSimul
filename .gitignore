@@ -32,6 +32,8 @@ extension/node_modules/
 extension/out/
 extension/out-test/
 extension/out-webview/
+# Frontend do OpenPLC Editor empacotado por scripts/build-openplc-workspace.js
+extension/media/openplc-workspace/
 *.tsbuildinfo
 
 # CMake / Ninja

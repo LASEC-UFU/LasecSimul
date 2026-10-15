@@ -14,6 +14,9 @@ import {
   defaultPlcCacheRoot,
   resolvePlcToolchain,
 } from "./plcBuild";
+import { buildOpenPlcProject } from "./openplc/openPlcBuild";
+import { loadOpenPlcHost } from "./openplc/openPlcHost";
+import { isLsplcFile } from "./openplc/lsplcFile";
 
 /** artifactHash carregado em cada bloco PLC (id do componente), para saber se o Core está com o
  * programa atual ou precisa de rebuild depois de uma compilação. */
@@ -45,10 +48,51 @@ export function onPlcBuildFinished(listener: (projectPath: string, result: PlcBu
   return { dispose: () => buildListeners.delete(listener) };
 }
 
+export function notifyPlcBuildFinished(projectPath: string, result: PlcBuildResult): void {
+  for (const listener of buildListeners) listener(projectPath, result);
+}
+
+/** Projeto do bloco PLC: .lsplc (editor OpenPLC, as cinco linguagens) ou o .iec.json antigo. */
 export async function buildIecProjectForSimulator(projectPath: string, cacheOnly = false): Promise<PlcBuildResult> {
-  const result = await buildIecProjectFile(projectPath, plcBuildOptions({ cacheOnly }));
-  if (!cacheOnly) for (const listener of buildListeners) listener(projectPath, result);
+  const options = plcBuildOptions({ cacheOnly });
+  let result: PlcBuildResult;
+  if (isLsplcFile(projectPath)) {
+    const extensionPath = state.extensionContext?.extensionPath ?? "";
+    const storageDir = state.extensionContext?.globalStorageUri.fsPath ?? path.dirname(options.cacheRoot);
+    try {
+      const host = loadOpenPlcHost({ extensionPath, storageDir, toolchain: options.toolchain });
+      result = await buildOpenPlcProject(projectPath, { ...options, host });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      result = { ok: false, diagnostics: [{ severity: "error", stage: "toolchain", message }], log: message };
+    }
+  } else {
+    result = await buildIecProjectFile(projectPath, options);
+  }
+  if (!cacheOnly) notifyPlcBuildFinished(projectPath, result);
   return result;
+}
+
+/** Depois de um build com a simulação rodando: troca o programa dos blocos que usam o projeto
+ * sem parar o Core. Devolve avisos para mostrar a quem pediu o build. */
+export async function hotReloadRunningPlcs(projectPath: string, result: PlcBuildResult): Promise<string[]> {
+  if (!result.ok || state.simulationStatus === "stopped") return [];
+  const notices: string[] = [];
+  for (const instance of runningPlcInstancesFor(projectPath)) {
+    if (loadedPlcArtifactHashByComponentId.get(instance.componentId) === result.module.artifactHash) continue;
+    if (loadedPlcTaskIntervalMsByComponentId.get(instance.componentId) !== result.entry.taskIntervalMs) {
+      notices.push(`TASK interval changed: stop and run the simulation again to apply it to ${instance.label}.`);
+      continue;
+    }
+    try {
+      await state.coreClient?.loadPlcArtifact(instance.instanceId, result.module);
+      loadedPlcArtifactHashByComponentId.set(instance.componentId, result.module.artifactHash);
+      notices.push(`Program reloaded on the running PLC block ${instance.label}.`);
+    } catch (error) {
+      notices.push(`Build finished, but reloading ${instance.label} failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return notices;
 }
 
 /**

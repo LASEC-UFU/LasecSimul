@@ -1,0 +1,12 @@
+{
+  "_comment": "Versão do OpenPLC Editor cujo frontend (editores LD/FBD/ST/IL, explorer, variáveis, bibliotecas) roda dentro do LasecSimul. Usado por scripts/build-openplc-workspace.js. A mesma versão instalada como referência visual. GPL-3.0; ver plc/openplc-workspace/README.md e THIRD_PARTY_NOTICES.md.",
+  "repository": "https://github.com/Autonomy-Logic/openplc-editor.git",
+  "tag": "v4.2.8",
+  "commit": "1b1e4b64db79e84aa437b5cc3054ee923b8893a5",
+  "license": "GPL-3.0",
+  "strucppNpm": "v0.5.13",
+  "fonts": {
+    "inter": "5.2.8",
+    "poppins": "5.2.7"
+  }
+}

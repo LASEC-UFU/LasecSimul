@@ -107,9 +107,11 @@ import { controlGraphPinIds } from "./catalog/controlGraphCatalog";
 import { ProjectCustomEditorProvider } from "./ui/panels/ProjectCustomEditorProvider";
 import { SimulideImportCustomEditorProvider } from "./ui/panels/SimulideImportCustomEditorProvider";
 import { IecProjectEditorProvider } from "./plc/IecProjectEditorProvider";
-import { newIecProjectCommand } from "./plc/plcCommands";
+import { OpenPlcEditorProvider, openOpenPlcProject } from "./plc/openplc/OpenPlcEditorProvider";
+import { isLsplcFile } from "./plc/openplc/lsplcFile";
+import { convertIecProjectCommand, exportOpenPlcProjectCommand, importOpenPlcProjectCommand, newIecProjectCommand } from "./plc/plcCommands";
 import { readPlcNativeModule } from "./plc/artifact";
-import { ensureAllPlcsBuilt, plcConfigurationForIecProject } from "./plc/plcSchematic";
+import { ensureAllPlcsBuilt, plcConfigurationForProject } from "./plc/plcSchematic";
 import { maybeOfferMachineNetworkSetup, registerMachineNetworkSetupCommand } from "./network/machineNetworkSetup";
 import { resolveNetworkMode } from "./network/networkMode";
 import { startMdnsResponder } from "./network/mdnsResponder";
@@ -975,7 +977,7 @@ async function chooseFilePropertyCommand(componentId: string, propertyKey: strin
   const picked = providedPath ? undefined : await vscode.window.showOpenDialog({
     canSelectMany: false,
     filters: isImagePath ? { Imagem: ["png", "jpg", "jpeg", "svg"] }
-      : isPlcProject ? { "Projeto IEC 61131-3": ["json"] }
+      : isPlcProject ? { "Projeto PLC": ["lsplc", "json"] }
       : isPlcArtifact ? { "Artefato PLC": ["json"] }
       : { "Todos os arquivos": ["*"] },
     title: `Selecionar arquivo para ${component.label}`,
@@ -999,7 +1001,7 @@ async function chooseFilePropertyCommand(componentId: string, propertyKey: strin
   if (isPlcProject) {
     try {
       // Pinos saem da interface do PROGRAM sem compilar; a compilação acontece ao Rodar.
-      const configured = plcConfigurationForIecProject(component.plc, absolutePath);
+      const configured = await plcConfigurationForProject(component.plc, absolutePath);
       plc = configured.plc;
       plcPins = configured.pins;
       updatedProperties.plcArtifactRef = "";
@@ -1058,7 +1060,8 @@ async function openPlcProgramCommand(componentId: string): Promise<void> {
     if (!selectedPath) return;
     projectPath = selectedPath;
   }
-  await vscode.commands.executeCommand("vscode.openWith", vscode.Uri.file(projectPath), "lasecsimul.iecProjectEditor");
+  if (isLsplcFile(projectPath)) await openOpenPlcProject(projectPath);
+  else await vscode.commands.executeCommand("vscode.openWith", vscode.Uri.file(projectPath), "lasecsimul.iecProjectEditor");
 }
 
 /** `pinIds` (quando presente) é o contrato elétrico REAL na ordem que o Core espera -- plugins usam
@@ -2488,6 +2491,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     { dispose: disposeDeviceReferenceWatchers },
     vscode.commands.registerCommand("lasecsimul.showSimulationLog", () => showSimulationLogChannel()),
     IecProjectEditorProvider.register(context),
+    OpenPlcEditorProvider.register(context),
     registerMachineNetworkSetupCommand(context),
     // Diagnóstico via Command Palette (achado 2026-07-18, pedido explícito do usuário: "tem algum
     // comando que posso dar pelo prompt... pra saber se o problema é aqui ou na outra extensão") --
@@ -2564,6 +2568,10 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
       logSimulation("error", `Falha ao conectar ao LasecSimul Core: ${err instanceof Error ? err.message : String(err)}`, { stage: "core-process" });
     });
   state.catalogReadyPromise.then(async () => {
+    // E2E do editor OpenPLC (test/e2e/openplc-lab.cjs): abre o projeto direto no editor.
+    if (process.env.LASECSIMUL_E2E === "1" && process.env.LASECSIMUL_E2E_OPENPLC_PROJECT) {
+      await openOpenPlcProject(process.env.LASECSIMUL_E2E_OPENPLC_PROJECT);
+    }
     if (process.env.LASECSIMUL_E2E === "1" && process.env.LASECSIMUL_E2E_FIXTURE) {
       await openProjectFile(process.env.LASECSIMUL_E2E_FIXTURE, {
         extensionUri: context.extensionUri,
@@ -2672,6 +2680,9 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
       refreshCatalog: () => refreshUnifiedCatalogState(true, catalogCommandOptions()),
     })),
     vscode.commands.registerCommand("lasecsimul.plc.newProject", () => newIecProjectCommand()),
+    vscode.commands.registerCommand("lasecsimul.plc.importOpenPlcProject", (target?: vscode.Uri) => importOpenPlcProjectCommand(target)),
+    vscode.commands.registerCommand("lasecsimul.plc.exportOpenPlcProject", (target?: vscode.Uri) => exportOpenPlcProjectCommand(target)),
+    vscode.commands.registerCommand("lasecsimul.plc.convertIecProject", (target?: vscode.Uri) => convertIecProjectCommand(target)),
     vscode.commands.registerCommand("lasecsimul.palette.registerFile", () => registerCatalogFileCommand(catalogCommandOptions())),
     vscode.commands.registerCommand("lasecsimul.palette.removeRegistered", (item: { sourceId?: string }) =>
       removeRegisteredCatalogItemCommand(item, catalogCommandOptions())

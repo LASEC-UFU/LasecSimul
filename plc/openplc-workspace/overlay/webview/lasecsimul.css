@@ -1,0 +1,21 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Fontes do OpenPLC Editor (index.ejs pede Inter e Poppins 400-700 ao Google Fonts), empacotadas
+   porque a CSP da Webview não carrega fontes de fora. Licença SIL OFL 1.1 (@fontsource). */
+@import '@fontsource/inter/latin-400.css';
+@import '@fontsource/inter/latin-500.css';
+@import '@fontsource/inter/latin-600.css';
+@import '@fontsource/inter/latin-700.css';
+@import '@fontsource/poppins/latin-400.css';
+@import '@fontsource/poppins/latin-500.css';
+@import '@fontsource/poppins/latin-600.css';
+@import '@fontsource/poppins/latin-700.css';
+
+/* Página da Webview: mesma base do index.ejs do OpenPLC Editor (h-full em html/body/#root). */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}

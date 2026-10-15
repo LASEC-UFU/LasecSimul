@@ -20,7 +20,7 @@ import { RollingRateSampler } from "./rollingRateSampler";
 import { buildFpgaPins, FpgaPortSpec } from "../fpga/fpgaPins";
 import { resolveFpgaToolchainConfig } from "../fpga/fpgaToolchain";
 import { readPlcNativeModule } from "../plc/artifact";
-import { publishIecProjectPlc } from "../plc/plcRuntimeBridge";
+import { loadedPlcArtifactHashByComponentId, publishIecProjectPlc } from "../plc/plcRuntimeBridge";
 import { SIMULIDE_UNRESOLVED_TYPE_ID } from "../import/simulide/SimulideToLasecConverter";
 
 export { electricalEdgesForProject, diffElectricalEdges, voltageProbesForProject };
@@ -1325,7 +1325,14 @@ async function rebuildCoreFromSchematicStateNow(options: { alreadyStopped?: bool
     }
   }
 
+  // Bloco CLP com projeto IEC só tem pinos no Core depois de carregar o programa; sem build em cache
+  // (sessão nova) os fios dele esperam a reconstrução que o Rodar faz depois de compilar, em vez de
+  // falhar aqui com um aviso por fio.
+  const plcWithoutProgram = new Set(state.schematicState.components
+    .filter(component => component.typeId === "plc.instance" && component.plc?.iecProjectRef && !loadedPlcArtifactHashByComponentId.has(component.id))
+    .map(component => component.id));
   for (const wire of electricalEdgesForProject({ wires: state.schematicState.topology.conductors, topologyNodes: state.schematicState.topology.nodes })) {
+    if (plcWithoutProgram.has(endpointId(wire.from)) || plcWithoutProgram.has(endpointId(wire.to))) continue;
     const a = resolveWireEndpoint(endpointId(wire.from), endpointPinId(wire.from));
     const b = resolveWireEndpoint(endpointId(wire.to), endpointPinId(wire.to));
     if (!a || !b) continue;

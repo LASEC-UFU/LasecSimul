@@ -1,0 +1,53 @@
+{
+  "format": "lasecsimul.plc-project",
+  "formatVersion": 1,
+  "editor": {
+    "name": "OpenPLC Editor",
+    "version": "4.2.8"
+  },
+  "project": {
+    "meta": {
+      "name": "semaforo_sfc",
+      "type": "plc-project"
+    },
+    "data": {
+      "pous": [],
+      "dataTypes": [],
+      "libraries": [],
+      "configuration": {
+        "resource": {
+          "tasks": [
+            {
+              "name": "MAIN_TASK",
+              "triggering": "Cyclic",
+              "interval": "T#10ms",
+              "priority": 1
+            }
+          ],
+          "instances": [
+            {
+              "name": "MAIN_INSTANCE",
+              "program": "MAIN",
+              "task": "MAIN_TASK"
+            }
+          ],
+          "globalVariables": []
+        }
+      }
+    }
+  },
+  "devices": {
+    "configuration": {
+      "deviceBoard": "OpenPLC Simulator",
+      "communicationPort": "",
+      "runtimeIpAddress": "",
+      "vendorScreenData": {},
+      "vendorScreenDataByBoard": {},
+      "selectedPlatformOptions": {}
+    },
+    "pinMapping": {}
+  },
+  "files": {
+    "pous/programs/MAIN.sfc": "PROGRAM MAIN\n  VAR_INPUT\n    BOTAO : BOOL;\n  END_VAR\n  VAR_OUTPUT\n    VERMELHO : BOOL;\n    AMARELO : BOOL;\n    VERDE : BOOL;\n  END_VAR\n  VAR\n    CICLOS : INT;\n  END_VAR\n\n{\n  \"name\": \"MAIN\",\n  \"steps\": [\n    {\n      \"stepId\": \"step-vm\",\n      \"name\": \"VM\",\n      \"initial\": true,\n      \"actions\": [\n        {\n          \"actionId\": \"a-vm-1\",\n          \"qualifier\": \"N\",\n          \"actionName\": \"VERMELHO\"\n        }\n      ]\n    },\n    {\n      \"stepId\": \"step-vd\",\n      \"name\": \"VD\",\n      \"actions\": [\n        {\n          \"actionId\": \"a-vd-1\",\n          \"qualifier\": \"N\",\n          \"actionName\": \"VERDE\"\n        },\n        {\n          \"actionId\": \"a-vd-2\",\n          \"qualifier\": \"P1\",\n          \"actionName\": \"CONTA\"\n        }\n      ]\n    },\n    {\n      \"stepId\": \"step-am\",\n      \"name\": \"AM\",\n      \"actions\": [\n        {\n          \"actionId\": \"a-am-1\",\n          \"qualifier\": \"N\",\n          \"actionName\": \"AMARELO\"\n        }\n      ]\n    }\n  ],\n  \"transitions\": [\n    {\n      \"transitionId\": \"t-vm-vd\",\n      \"fromStepIds\": [\n        \"step-vm\"\n      ],\n      \"toStepIds\": [\n        \"step-vd\"\n      ],\n      \"condition\": \"VM.T >= T#3s\"\n    },\n    {\n      \"transitionId\": \"t-vd-am-botao\",\n      \"fromStepIds\": [\n        \"step-vd\"\n      ],\n      \"toStepIds\": [\n        \"step-am\"\n      ],\n      \"condition\": \"BOTAO AND VD.T >= T#1s\",\n      \"priority\": 1\n    },\n    {\n      \"transitionId\": \"t-vd-am-tempo\",\n      \"fromStepIds\": [\n        \"step-vd\"\n      ],\n      \"toStepIds\": [\n        \"step-am\"\n      ],\n      \"condition\": \"VD.T >= T#4s\",\n      \"priority\": 2\n    },\n    {\n      \"transitionId\": \"t-am-vm\",\n      \"fromStepIds\": [\n        \"step-am\"\n      ],\n      \"toStepIds\": [\n        \"step-vm\"\n      ],\n      \"condition\": \"AM.T >= T#1s\"\n    }\n  ],\n  \"actions\": [\n    {\n      \"name\": \"CONTA\",\n      \"language\": \"st\",\n      \"text\": \"(* P1: Q fica TRUE só no ciclo em que o verde acende; A roda mais uma vez quando Q cai. *)\\nIF CONTA.Q THEN\\n  CICLOS := CICLOS + 1;\\nEND_IF;\"\n    }\n  ],\n  \"layout\": {\n    \"step-vm\": {\n      \"x\": 64,\n      \"y\": 32\n    },\n    \"step-vd\": {\n      \"x\": 64,\n      \"y\": 224\n    },\n    \"step-am\": {\n      \"x\": 64,\n      \"y\": 416\n    },\n    \"t-vm-vd\": {\n      \"x\": 88,\n      \"y\": 144\n    },\n    \"t-vd-am-botao\": {\n      \"x\": 88,\n      \"y\": 336\n    },\n    \"t-vd-am-tempo\": {\n      \"x\": 376,\n      \"y\": 336\n    },\n    \"t-am-vm\": {\n      \"x\": 88,\n      \"y\": 528\n    }\n  }\n}\nEND_PROGRAM"
+  }
+}

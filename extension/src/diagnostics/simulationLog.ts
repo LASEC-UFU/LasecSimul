@@ -45,6 +45,25 @@ export interface SimLogOptions {
   reveal?: boolean;
 }
 
+export interface SimLogEntry {
+  /** Crescente desde a ativação da extensão. */
+  id: number;
+  timestamp: string;
+  level: SimLogLevel;
+  /** `[etapa/dispositivo] mensagem`, como no canal de saída. */
+  message: string;
+}
+
+/** Últimas linhas do log, para quem mostra o log fora do canal de saída (aba "PLC Logs" do editor
+ * OpenPLC). */
+const recentEntries: SimLogEntry[] = [];
+const RECENT_LIMIT = 1000;
+let nextEntryId = 1;
+
+export function recentSimulationLog(minId = 0): SimLogEntry[] {
+  return recentEntries.filter(entry => entry.id >= minId);
+}
+
 /** Registra uma linha no canal de saída (sempre) e, conforme o nível, também como notificação nativa
  * e atualização da status bar -- ponto único de entrada pra qualquer mensagem de diagnóstico da
  * simulação (Core, QEMU, firmware, ABI). */
@@ -52,6 +71,8 @@ export function logSimulation(level: SimLogLevel, message: string, options: SimL
   const context = options.device ? `${options.stage}/${options.device}` : options.stage;
   const timestamp = new Date().toLocaleString();
   channel?.appendLine(`[${timestamp}] [${levelTag(level)}] [${context}] ${message}`);
+  recentEntries.push({ id: nextEntryId++, timestamp: new Date().toISOString(), level, message: `[${context}] ${message}` });
+  if (recentEntries.length > RECENT_LIMIT) recentEntries.splice(0, recentEntries.length - RECENT_LIMIT);
   if (options.detail) {
     for (const detailLine of options.detail.split("\n")) channel?.appendLine(`    ${detailLine}`);
   }

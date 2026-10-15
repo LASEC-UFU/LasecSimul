@@ -177,6 +177,18 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: node scripts/build-core.js --config Release --target vnext_b_attachment_test
 
+      # Frontend do OpenPLC Editor (explorer, LD/FBD/ST/IL, variáveis, bibliotecas, depurador) que
+      # roda dentro do LasecSimul: código oficial na tag de scripts/openplc-workspace-pin.json mais
+      # plc/openplc-workspace/overlay. O clone e o node_modules dele ficam em cache por pin.
+      - name: Cache OpenPLC Editor source and dependencies
+        uses: actions/cache@v4
+        with:
+          path: dist/cache/openplc-editor
+          key: openplc-editor-${{ runner.os }}-${{ hashFiles('scripts/openplc-workspace-pin.json') }}
+
+      - name: Build OpenPLC editor workspace
+        run: node scripts/build-openplc-workspace.js
+
       - name: Package release artifacts
         run: node scripts/package-release.js
 

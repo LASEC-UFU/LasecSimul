@@ -1,0 +1,54 @@
+{
+  "format": "lasecsimul.plc-project",
+  "formatVersion": 1,
+  "editor": {
+    "name": "OpenPLC Editor",
+    "version": "4.2.8"
+  },
+  "project": {
+    "meta": {
+      "name": "partida_pisca_il",
+      "type": "plc-project"
+    },
+    "data": {
+      "pous": [],
+      "dataTypes": [],
+      "libraries": [],
+      "configuration": {
+        "resource": {
+          "tasks": [
+            {
+              "name": "MAIN_TASK",
+              "triggering": "Cyclic",
+              "interval": "T#10ms",
+              "priority": 1
+            }
+          ],
+          "instances": [
+            {
+              "name": "MAIN_INSTANCE",
+              "program": "MAIN",
+              "task": "MAIN_TASK"
+            }
+          ],
+          "globalVariables": []
+        }
+      }
+    }
+  },
+  "devices": {
+    "configuration": {
+      "deviceBoard": "OpenPLC Simulator",
+      "communicationPort": "",
+      "runtimeIpAddress": "",
+      "vendorScreenData": {},
+      "vendorScreenDataByBoard": {},
+      "selectedPlatformOptions": {}
+    },
+    "pinMapping": {}
+  },
+  "files": {
+    "pous/function-blocks/TOGGLE_1.il": "FUNCTION_BLOCK TOGGLE_1\n  VAR_INPUT\n    CLK : BOOL;\n  END_VAR\n  VAR_OUTPUT\n    Q : BOOL;\n  END_VAR\n  VAR\n    EDGE : R_TRIG;\n  END_VAR\n\n(* Inverte Q a cada borda de subida de CLK. *)\n      LD    CLK\n      CLK   EDGE        (* EDGE(CLK := CLK) *)\n      LD    EDGE.Q\n      JMPCN FIM\n      LD    Q\n      NOT\n      ST    Q\nFIM:\n\nEND_FUNCTION_BLOCK",
+    "pous/programs/MAIN.il": "PROGRAM MAIN\n  VAR_INPUT\n    START : BOOL;\n    STOP : BOOL;\n  END_VAR\n  VAR_OUTPUT\n    LAMP : BOOL;\n    BLINK : BOOL;\n  END_VAR\n  VAR\n    RUN : BOOL;\n    COUNT : INT;\n    T1 : TON;\n    FLIP : TOGGLE_1;\n  END_VAR\n\n(* Partida e parada com selo: LIGA acende, DESLIGA apaga. *)\n      LD    START\n      OR    RUN\n      ANDN  STOP\n      ST    RUN\n      ST    LAMP\n\n(* Pisca de 0,5 s enquanto a lampada esta acesa. *)\n      LD    T#500ms\n      ST    T1.PT       (* so grava a entrada: PT T1 tambem CHAMARIA o TON, e duas *)\n                        (* chamadas no mesmo scan engolem o pulso de T1.Q        *)\n      LD    RUN\n      ANDN  T1.Q\n      IN    T1          (* T1(IN := RUN AND NOT T1.Q) *)\n      LD    T1.Q\n      CLK   FLIP        (* FLIP(CLK := T1.Q) *)\n      LD    FLIP.Q\n      AND   RUN\n      ST    BLINK\n      LD    T1.Q\n      JMPCN FIM\n      LD    COUNT\n      ADD   1\n      ST    COUNT\nFIM:\n\nEND_PROGRAM"
+  }
+}

@@ -93,6 +93,7 @@ function named<T extends NamedEntry>(values: unknown[]): T[] {
 
 export interface PlcEntryPoint {
   pou: PouDefinition;
+  programName: string;
   configurationName?: string;
   resourceName?: string;
   programInstanceName?: string;
@@ -123,6 +124,7 @@ export function resolvePlcEntryPoint(project: IecProjectAuthoring): PlcEntryPoin
   const interval = Number(task?.intervalMs);
   return {
     pou,
+    programName: pou.name,
     ...(configuration ? { configurationName: configuration.name } : {}),
     ...(resource ? { resourceName: resource.name } : {}),
     ...(instance ? { programInstanceName: instance.name } : {}),
@@ -271,17 +273,27 @@ export interface PlcBuildDiagnostic {
   elementLabel?: string;
 }
 
+/** O que o resto da extensão usa do programa de entrada: nome, TASK e período. */
+export interface PlcBuildEntry {
+  programName: string;
+  configurationName?: string;
+  resourceName?: string;
+  programInstanceName?: string;
+  taskName?: string;
+  taskIntervalMs: number;
+}
+
 export type PlcBuildResult =
   | {
     ok: true;
     module: PlcNativeModuleDto;
     manifestPath: string;
-    entry: PlcEntryPoint;
+    entry: PlcBuildEntry;
     cached: boolean;
     durationMs: number;
     warnings: PlcBuildDiagnostic[];
   }
-  | { ok: false; diagnostics: PlcBuildDiagnostic[]; log: string; entry?: PlcEntryPoint };
+  | { ok: false; diagnostics: PlcBuildDiagnostic[]; log: string; entry?: PlcBuildEntry };
 
 export interface PlcBuildOptions {
   toolchain: PlcToolchainPaths;
@@ -338,10 +350,10 @@ export function mapCompilerOutput(output: string, origins: CanonicalStOrigin[], 
   return result;
 }
 
-/** Copia só as bibliotecas da norma para um diretório próprio (STruCpp lê todas de um `-L`). */
-function prepareIecLibraryDir(toolchain: PlcToolchainPaths, cacheRoot: string): string {
+/** Copia só as bibliotecas pedidas para um diretório próprio (STruCpp lê todas de um `-L`). */
+export function prepareIecLibraryDir(toolchain: PlcToolchainPaths, cacheRoot: string, libraries: readonly string[] = IEC_LIBRARIES): string {
   const source = toolchain.strucppLibrarySourceDir;
-  const present = IEC_LIBRARIES.filter(name => fs.existsSync(path.join(source, name)));
+  const present = libraries.filter(name => fs.existsSync(path.join(source, name)));
   if (present.length === 0) throw new Error(`Bibliotecas IEC do STruCpp não encontradas em ${source}`);
   const digest = sha256(present.map(name => fileStamp(path.join(source, name))).join("|")).slice(0, 12);
   const target = path.join(cacheRoot, `strucpp-libs-${digest}`);
@@ -445,10 +457,48 @@ export async function buildIecProject(project: IecProjectAuthoring, options: Plc
   for (const variable of entry.pou.interface.variables) {
     if ((variable.class === "input" || variable.class === "output") && variable.ioId) ioIdByVariableName[variable.name] = variable.ioId;
   }
+  return compileStProgram({
+    projectId: project.projectId,
+    programName: entry.pou.name,
+    st: canonical.text,
+    origins: canonical.origins,
+    ioIdByVariableName,
+    entry,
+    warnings,
+    started,
+  }, options);
+}
+
+export interface StProgramBuildInput {
+  /** Prefixo do diretório de build (builds antigos do mesmo projeto são apagados). */
+  projectId: string;
+  programName: string;
+  st: string;
+  /** Linha do ST gerado -> POU/linha do editor, para os diagnósticos. Vazio: sem mapeamento. */
+  origins: CanonicalStOrigin[];
+  ioIdByVariableName: Record<string, string>;
+  entry: PlcBuildEntry;
+  warnings?: PlcBuildDiagnostic[];
+  /** .stlib passadas à STruCpp; padrão IEC_LIBRARIES. */
+  libraries?: readonly string[];
+  /** Entra na chave do cache junto com o ST (ex.: o mesmo ST com outro mapeamento de diagnóstico). */
+  cacheSalt?: string;
+  started?: number;
+}
+
+/** ST pronto -> `lasecsimul-core --plc-compile` -> módulo nativo, com cache pelo hash do ST e das ferramentas. */
+export async function compileStProgram(input: StProgramBuildInput, options: PlcBuildOptions): Promise<PlcBuildResult> {
+  const started = input.started ?? Date.now();
+  const log = options.log ?? (() => undefined);
+  const { entry, ioIdByVariableName } = input;
+  const warnings = input.warnings ?? [];
+  const libraries = input.libraries ?? IEC_LIBRARIES;
+  const fail = (diagnostics: PlcBuildDiagnostic[], text: string): PlcBuildResult =>
+    ({ ok: false, diagnostics, log: text, entry });
 
   const { toolchain, cacheRoot } = options;
   const key = sha256(JSON.stringify({
-    st: canonical.text,
+    st: input.st,
     io: ioIdByVariableName,
     strucpp: fileStamp(toolchain.strucppBinary),
     cxx: fileStamp(toolchain.cxxCompiler),
@@ -458,8 +508,11 @@ export async function buildIecProject(project: IecProjectAuthoring, options: Plc
     compiler: fileStamp(path.join(toolchain.plcSrcDir, "PlcCompiler.cpp")),
     parser: fileStamp(path.join(toolchain.plcSrcDir, "PlcInterfaceParser.cpp")),
     driverCodegen: fileStamp(path.join(toolchain.plcSrcDir, "PlcDriverCodegen.cpp")),
+    // Só entram quando diferentes do padrão: a chave dos projetos .iec.json continua a mesma.
+    ...(input.libraries ? { libraries } : {}),
+    ...(input.cacheSalt ? { salt: input.cacheSalt } : {}),
   })).slice(0, 16);
-  const prefix = `${safeName(project.projectId)}-`;
+  const prefix = `${safeName(input.projectId)}-`;
   const buildName = `${prefix}${key}`;
   const buildDir = path.join(cacheRoot, buildName);
   const manifestPath = path.join(buildDir, "artifact.json");
@@ -469,13 +522,13 @@ export async function buildIecProject(project: IecProjectAuthoring, options: Plc
     return { ok: true, module: cachedModule, manifestPath, entry, cached: true, durationMs: Date.now() - started, warnings };
   }
   if (options.cacheOnly) {
-    return fail([{ severity: "error", stage: "cache", message: "Programa ainda não compilado." }], "", entry);
+    return fail([{ severity: "error", stage: "cache", message: "Programa ainda não compilado." }], "");
   }
 
   for (const required of [toolchain.coreExecutable, toolchain.strucppBinary, toolchain.runtimeIncludeDir, toolchain.plcSrcDir]) {
     if (!fs.existsSync(required)) {
       const message = `Ferramenta de compilação do CLP não encontrada: ${required}`;
-      return fail([{ severity: "error", stage: "toolchain", message }], message, entry);
+      return fail([{ severity: "error", stage: "toolchain", message }], message);
     }
   }
 
@@ -483,14 +536,14 @@ export async function buildIecProject(project: IecProjectAuthoring, options: Plc
   fs.mkdirSync(buildDir, { recursive: true });
   let libraryDir: string;
   try {
-    libraryDir = prepareIecLibraryDir(toolchain, cacheRoot);
+    libraryDir = prepareIecLibraryDir(toolchain, cacheRoot, libraries);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return fail([{ severity: "error", stage: "toolchain", message }], message, entry);
+    return fail([{ severity: "error", stage: "toolchain", message }], message);
   }
-  const stName = `${entry.pou.name.toLowerCase()}.st`;
+  const stName = `${input.programName.toLowerCase()}.st`;
   const stPath = path.join(buildDir, stName);
-  fs.writeFileSync(stPath, canonical.text, "utf8");
+  fs.writeFileSync(stPath, input.st, "utf8");
   const requestPath = path.join(buildDir, "request.json");
   fs.writeFileSync(requestPath, `${JSON.stringify({
     stSourcePath: stPath,
@@ -504,13 +557,13 @@ export async function buildIecProject(project: IecProjectAuthoring, options: Plc
     ioIdByVariableName,
   }, null, 2)}\n`, "utf8");
 
-  log(`Compilando ${entry.pou.name} (${stName}) em ${buildDir}`);
+  log(`Compilando ${input.programName} (${stName}) em ${buildDir}`);
   let run: Awaited<ReturnType<typeof runCore>>;
   try {
     run = await runCore(toolchain.coreExecutable, requestPath, toolchain.cxxCompiler, 180_000);
   } catch (error) {
     const message = `Não foi possível iniciar o compilador do CLP: ${error instanceof Error ? error.message : String(error)}`;
-    return fail([{ severity: "error", stage: "toolchain", message }], message, entry);
+    return fail([{ severity: "error", stage: "toolchain", message }], message);
   }
   const responseLine = run.stdout.trim().split(/\r?\n/).filter(Boolean).pop() ?? "";
   let response: { ok?: boolean; diagnostics?: { stage?: string; message?: string; capturedOutput?: string; exitCode?: number } };
@@ -518,12 +571,12 @@ export async function buildIecProject(project: IecProjectAuthoring, options: Plc
     response = JSON.parse(responseLine);
   } catch {
     const message = `O compilador do CLP terminou sem resposta (código ${run.code}). ${run.stderr.trim()}`.trim();
-    return fail([{ severity: "error", stage: "toolchain", message }], `${run.stdout}\n${run.stderr}`, entry);
+    return fail([{ severity: "error", stage: "toolchain", message }], `${run.stdout}\n${run.stderr}`);
   }
   if (!response.ok) {
     const stage = response.diagnostics?.stage ?? "unknown";
     const captured = response.diagnostics?.capturedOutput ?? "";
-    const mapped = mapCompilerOutput(captured, canonical.origins, stage);
+    const mapped = mapCompilerOutput(captured, input.origins, stage);
     const diagnostics = mapped.length > 0 ? mapped : [{
       severity: "error" as const,
       stage,
@@ -531,7 +584,7 @@ export async function buildIecProject(project: IecProjectAuthoring, options: Plc
     }];
     log(`Falhou (${stage}): ${response.diagnostics?.message ?? ""}`);
     if (captured) log(captured);
-    return fail([...warnings, ...diagnostics], captured || (response.diagnostics?.message ?? ""), entry);
+    return fail([...warnings, ...diagnostics], captured || (response.diagnostics?.message ?? ""));
   }
   const module = await readPlcNativeModule(manifestPath);
   removeStaleBuilds(cacheRoot, prefix, buildName);

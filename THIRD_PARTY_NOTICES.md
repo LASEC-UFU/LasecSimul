@@ -37,3 +37,29 @@ GPL-3.0-or-later for other contributions, per the program's `copyright.txt`). Th
 independent implementation written from an analysis of the program's behaviour and source code; it
 contains no SimulIDE source text. The analysis is recorded in
 `docs/48-reengenharia-conexoes-simulide.md`.
+
+## OpenPLC Editor — IEC 61131-3 editor running inside LasecSimul
+
+The PLC editor (`lasecsimul.openplcEditor`) is the frontend of OpenPLC Editor
+(Autonomy-Logic/openplc-editor, tag `v4.2.8`, commit `1b1e4b64db79e84aa437b5cc3054ee923b8893a5`,
+GPL-3.0), built from that pinned source by `scripts/build-openplc-workspace.js` (pin in
+`scripts/openplc-workspace-pin.json`). The OpenPLC source is not stored in this repository. The
+build adds the files in `plc/openplc-workspace/overlay` (VS Code platform adapter, entry point, SFC
+editor, legacy-project converter, webpack configuration and the source patches listed in
+`overlay/patch-loader.cjs`, applied at build time) and produces
+`extension/media/openplc-workspace/`. The extension host reuses OpenPLC's project, POU and library
+services and its Structured Text transpiler from the same build. Copyright © Autonomy Logic and the
+OpenPLC Project contributors. The combined work is distributed under GPL-3.0-or-later, compatible
+with the upstream GPL-3.0 terms; the corresponding source is the pinned upstream tag plus the
+overlay in this repository.
+
+The bundle also contains, from OpenPLC Editor's dependency tree: React, React Flow (@xyflow/react),
+Radix UI, Tailwind CSS, Zustand, Immer, dnd-kit, Monaco Editor and STruC++'s browser language
+server (`strucpp` npm package `v0.5.13`, GPL-3.0-or-later). Their license texts ship with the
+bundle in `media/openplc-workspace/webview/*.LICENSE.txt` and `assets/*.LICENSE.txt`. The Inter
+and Poppins fonts (SIL Open Font License 1.1) are packaged from `@fontsource/inter` 5.2.8 and
+`@fontsource/poppins` 5.2.7 because the webview cannot load Google Fonts.
+
+The four IEC libraries shown in the editor (Additional Function Blocks, Standard Function Blocks,
+Standard Functions, OSCAT Basic) are the `.stlib` archives of the STruC++ release that LasecSimul
+already ships (`scripts/strucpp-pin.json`), the same set OpenPLC Editor 4.2.8 bundles.

@@ -13,14 +13,13 @@
         "rotation": 0
       },
       "properties": {
-        "plcIecProjectRef": "partida_pisca_il.iec.json",
+        "plcIecProjectRef": "partida_pisca_il.lsplc",
         "plcArtifactRef": "",
-        "plcEntryConfiguration": "CONFIGURATION_1",
+        "plcEntryConfiguration": "",
         "plcTaskIntervalMs": 10
       },
       "plc": {
-        "iecProjectRef": "partida_pisca_il.iec.json",
-        "entryConfiguration": "CONFIGURATION_1",
+        "iecProjectRef": "partida_pisca_il.lsplc",
         "exportedIoBindingVersion": 1,
         "exportedIo": [
           {

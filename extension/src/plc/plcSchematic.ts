@@ -12,6 +12,9 @@ import { WebviewComponentModel, endpointId, endpointPinId } from "../ui/webview/
 import { parseIecProject } from "./iecProject";
 import { PlcBuildDiagnostic, PlcExportedIoEntry, plcExportedIoFromProject } from "./plcBuild";
 import { buildIecProjectForSimulator, loadedPlcArtifactHashByComponentId } from "./plcRuntimeBridge";
+import { loadLsplcProject } from "./openplc/openPlcHost";
+import { isLsplcFile } from "./openplc/lsplcFile";
+import { openOpenPlcProject, openPlcHostForExtension } from "./openplc/OpenPlcEditorProvider";
 
 export interface PlcSchematicOptions {
   syncSchematicPanel: () => void;
@@ -43,6 +46,24 @@ export function plcConfigurationForIecProject(
     },
     pins: plcPinsFromExportedIo(exportedIo),
     ...(entryConfiguration ? { entryConfiguration } : {}),
+  };
+}
+
+/** Igual a `plcConfigurationForIecProject`, aceitando também o projeto .lsplc (editor OpenPLC)
+ * (pinos = VAR_INPUT/VAR_OUTPUT do programa da primeira instância da RESOURCE). */
+export async function plcConfigurationForProject(
+  current: WebviewComponentModel["plc"],
+  projectPath: string,
+): Promise<{ plc: NonNullable<WebviewComponentModel["plc"]>; pins: WebviewComponentModel["pins"]; entryConfiguration?: string }> {
+  if (!isLsplcFile(projectPath)) return plcConfigurationForIecProject(current, projectPath);
+  const host = openPlcHostForExtension();
+  const project = loadLsplcProject(host, projectPath);
+  const entry = host.entryPoint(project.data);
+  const exportedIo: PlcExportedIoEntry[] = entry.io.map(io => ({ ioId: io.name, name: io.name, direction: io.direction, iecType: io.iecType }));
+  const { artifactRef: _artifactRef, expectedArtifactHash: _expectedHash, entryConfiguration: _entry, ...rest } = current ?? {};
+  return {
+    plc: { ...rest, iecProjectRef: projectPath, exportedIoBindingVersion: 1, exportedIo },
+    pins: plcPinsFromExportedIo(exportedIo),
   };
 }
 
@@ -108,7 +129,9 @@ export async function ensureAllPlcsBuilt(options: PlcSchematicOptions): Promise<
           `CLP "${block.label || block.id}": ${errors[0] ? describe(errors[0]) : "falha na compilação"}`,
           "Abrir projeto IEC",
         ).then(choice => {
-          if (choice) void vscode.commands.executeCommand("vscode.openWith", vscode.Uri.file(projectPath), "lasecsimul.iecProjectEditor");
+          if (!choice) return;
+          if (isLsplcFile(projectPath)) void openOpenPlcProject(projectPath);
+          else void vscode.commands.executeCommand("vscode.openWith", vscode.Uri.file(projectPath), "lasecsimul.iecProjectEditor");
         });
         return false;
       }

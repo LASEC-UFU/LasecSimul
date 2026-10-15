@@ -429,6 +429,16 @@ function stageExtensionFiles() {
     copyFileTo(sourcePath, path.join(stagingExtensionDir, relativePath));
   }
 
+  // Editor OpenPLC (scripts/build-openplc-workspace.js): sem ele os projetos PLC novos abririam
+  // num aviso de "editor indisponível". Falha aqui em vez de publicar um pacote sem o editor.
+  for (const relativePath of [
+    path.join("media", "openplc-workspace", "webview", "openplc.js"),
+    path.join("media", "openplc-workspace", "webview", "openplc.css"),
+    path.join("media", "openplc-workspace", "host", "host.js"),
+  ]) {
+    ensureFile(path.join(extensionDir, relativePath), "editor OpenPLC (rode node scripts/build-openplc-workspace.js)");
+  }
+
   for (const dirName of ["out", "out-webview", "media"]) {
     const sourceDir = path.join(extensionDir, dirName);
     if (fs.existsSync(sourceDir)) {
