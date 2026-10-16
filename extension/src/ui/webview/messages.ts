@@ -111,6 +111,8 @@ export type HostToWebviewMessage =
    * eco do estado inteiro: a Webview já tem tudo que acabou de mandar, só não sabe o número novo. */
   | { version: number; type: "topologyRevision"; revision: number }
   | { version: number; type: "componentReadout"; readoutsByComponentId: Record<string, ComponentReadoutValue>; transportStatus?: "connected" | "disconnected"; sampleTimestampNs?: number }
+  | { version: number; type: "pidDialogOpen"; componentId: string; html: string }
+  | { version: number; type: "pidDialogSnapshot"; values: { sp?: number; pv?: number; mv?: number; manual?: boolean; localMode?: boolean }; dt: number }
   /** Estado opaco de `getComponentState()` para packages com `runtimeState`. O package declara
    * offsets e encoding; esta mensagem não conhece nenhum dispositivo específico. */
   | { version: number; type: "componentVisualState"; statesByComponentId: Record<string, string> }
@@ -186,6 +188,9 @@ export type HostToWebviewMessage =
   | { version: number; type: "triggerCreateSubcircuitFromSelection" };
 
 export type WebviewToHostMessage =
+  | { version: number; type: "requestOpenPidTuning"; componentId: string }
+  | { version: number; type: "pidPropertyChanged"; componentId: string; name: string; value: string | number | boolean }
+  | { version: number; type: "pidDialogClosed" }
   | { version: number; type: "selectionChanged"; componentId: string | null }
   | { version: number; type: "webviewReady" }
   /** Toolbar conversion actions: the textual DSL is a view of the same

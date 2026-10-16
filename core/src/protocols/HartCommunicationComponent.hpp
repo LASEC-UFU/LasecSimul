@@ -218,10 +218,13 @@ private:
     std::array<Pin, 4> m_pins{};
     double m_sensorLowVolts = 0.0, m_sensorHighVolts = 5.0;
     /** Process value (PV units) at sensorLowVolts / sensorHighVolts: the
-     * physical scale of the injected signal. Deliberately independent of the
-     * HART-configurable LRV/URV -- re-ranging a transmitter never changes the
-     * pressure it is exposed to. */
+     * physical scale of the injected signal. Independent of sensor URL/LRL
+     * and HART-configurable LRV/URV; range limits only affect device limits. */
     double m_sensorLowValue = 0.0, m_sensorHighValue = 0.0;
+    /** Optional LD301 sensor model/range selector (D0-D4, M0-M6, H2-H5).
+     * Present only on LD301 subcircuits that author this property. */
+    std::string m_sensorRangeCode;
+    void applyLd301SensorRange();
     std::array<bool, 4> m_pinConnected{};
     /** Local display: installed?, the one or two variables it shows (a
      * source token, or `var:<id>` resolved through `m_displayCodeMap`), and

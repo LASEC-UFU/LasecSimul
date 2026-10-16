@@ -8,6 +8,7 @@ import { resolveCoreExecutablePath } from "./core/coreExecutable";
 import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
+import { PidTuningPanel } from "./ui/panels/PidTuningPanel";
 import { createInitialWebviewState } from "./ui/webview/catalog";
 import { CanonicalTopologyDocument, JUNCTION_TYPE_ID, PackageDescriptor, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, portEndpoint } from "./ui/webview/model";
 import { autoRoutedWirePoints, connectEndpointToNode, normalizeWireGeometry, removeOrphanNodes, splitSegmentAtPoint } from "./ui/webview/wireTopology";
@@ -1251,6 +1252,67 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     return;
   }
   switch (message.type) {
+    case "requestOpenPidTuning": {
+      const component = state.schematicState.components.find((item) => item.id === message.componentId && item.typeId === "control.pid_station");
+      if (!state.extensionContext || !component) {
+        void vscode.window.showErrorMessage("Não foi possível abrir a Sintonia: componente ou contexto da extensão ausente.");
+        return;
+      }
+      try {
+        PidTuningPanel.open(state.extensionContext.extensionUri, component.id, component.label,
+        (name, value) => {
+          const liveComponent = state.schematicState.components.find((item) => item.id === component.id && item.typeId === "control.pid_station");
+          if (!liveComponent) return;
+          if (name === "manual" && value === false && liveComponent.properties.manual === true) {
+            const live = PidTuningPanel.latestSample(liveComponent.id);
+            const sp = live?.sp ?? Number(liveComponent.properties.localSetpoint ?? 0);
+            const pv = live?.pv ?? 0;
+            const mv = live?.mv ?? Number(liveComponent.properties.manualOutput ?? 0);
+            const integral = mv - Number(liveComponent.properties.bias ?? 0) - Number(liveComponent.properties.kc ?? 1) * Number(liveComponent.properties.action ?? 1) * (sp - pv);
+            handleWebviewMessage({ version: 1, type: "requestUpdateProperty", componentId: liveComponent.id, name: "initialIntegral", value: integral });
+          }
+          if (name === "remoteSetpoint") {
+            const wire = state.schematicState.topology.conductors.find((item) =>
+              (item.from.kind === "port" && item.from.componentId === liveComponent.id && item.from.pinId === "sp") ||
+              (item.to.kind === "port" && item.to.componentId === liveComponent.id && item.to.pinId === "sp"));
+            const source = wire && (wire.from.kind === "port" && wire.from.componentId === liveComponent.id ? wire.to : wire.from);
+            if (source?.kind === "port") {
+              const upstream = state.schematicState.components.find((item) => item.id === source.componentId);
+              if (upstream?.typeId === "control.constant") handleWebviewMessage({ version: 1, type: "requestUpdateProperty", componentId: upstream.id, name: "value", value });
+            }
+            return;
+          }
+          if (name === "manual" || name === "localMode") {
+            const pinId = name === "manual" ? "am" : "lr";
+            const wire = state.schematicState.topology.conductors.find((item) =>
+              (item.from.kind === "port" && item.from.componentId === liveComponent.id && item.from.pinId === pinId) ||
+              (item.to.kind === "port" && item.to.componentId === liveComponent.id && item.to.pinId === pinId));
+            const source = wire && (wire.from.kind === "port" && wire.from.componentId === liveComponent.id ? wire.to : wire.from);
+            if (source?.kind === "port") {
+              const upstream = state.schematicState.components.find((item) => item.id === source.componentId);
+              if (upstream?.typeId === "control.constant") {
+                // Valores compatíveis com o JSP: A/M 1=Auto, 0=Manual; L/R 1=Local, 0=Remoto.
+                const signalValue = name === "manual" ? (value ? 0 : 1) : (value ? 1 : 0);
+                handleWebviewMessage({ version: 1, type: "requestUpdateProperty", componentId: upstream.id, name: "value", value: signalValue });
+                return;
+              }
+            }
+          }
+          handleWebviewMessage({ version: 1, type: "requestUpdateProperty", componentId: liveComponent.id, name, value });
+        });
+      } catch (error) {
+        void vscode.window.showErrorMessage(`Falha ao abrir a Sintonia: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      return;
+    }
+    case "pidPropertyChanged": {
+      PidTuningPanel.handlePropertyChange(message);
+      return;
+    }
+    case "pidDialogClosed": {
+      PidTuningPanel.close();
+      return;
+    }
     case "requestOpenDslEditor": {
       void openDslCommand();
       return;

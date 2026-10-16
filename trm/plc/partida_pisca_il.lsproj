@@ -4,6 +4,12 @@
     {
       "id": "component-1791700000000-plc",
       "typeId": "plc.instance",
+      "properties": {
+        "plcIecProjectRef": "partida_pisca_il.lsplc",
+        "plcArtifactRef": "",
+        "plcEntryConfiguration": "",
+        "plcTaskIntervalMs": 10
+      },
       "label": "CLP (IL)",
       "showValue": false,
       "showDialValue": false,
@@ -11,12 +17,6 @@
         "x": 520,
         "y": 300,
         "rotation": 0
-      },
-      "properties": {
-        "plcIecProjectRef": "partida_pisca_il.lsplc",
-        "plcArtifactRef": "",
-        "plcEntryConfiguration": "",
-        "plcTaskIntervalMs": 10
       },
       "plc": {
         "iecProjectRef": "partida_pisca_il.lsplc",
@@ -52,6 +52,9 @@
     {
       "id": "component-1791700000000-vcc",
       "typeId": "sources.dc_voltage",
+      "properties": {
+        "voltage": 5
+      },
       "label": "Fonte 5 V",
       "showValue": false,
       "showDialValue": false,
@@ -59,14 +62,16 @@
         "x": 120,
         "y": 260,
         "rotation": 0
-      },
-      "properties": {
-        "voltage": 5
       }
     },
     {
       "id": "component-1791700000000-liga",
       "typeId": "switches.push",
+      "properties": {
+        "closed": false,
+        "normallyClosed": false,
+        "key": "L"
+      },
       "label": "LIGA",
       "showValue": false,
       "showDialValue": false,
@@ -74,16 +79,16 @@
         "x": 300,
         "y": 240,
         "rotation": 0
-      },
-      "properties": {
-        "closed": false,
-        "normallyClosed": false,
-        "key": "L"
       }
     },
     {
       "id": "component-1791700000000-desliga",
       "typeId": "switches.push",
+      "properties": {
+        "closed": false,
+        "normallyClosed": false,
+        "key": "D"
+      },
       "label": "DESLIGA",
       "showValue": false,
       "showDialValue": false,
@@ -91,16 +96,14 @@
         "x": 300,
         "y": 330,
         "rotation": 0
-      },
-      "properties": {
-        "closed": false,
-        "normallyClosed": false,
-        "key": "D"
       }
     },
     {
       "id": "component-1791700000000-rliga",
       "typeId": "passive.resistor",
+      "properties": {
+        "resistance": 10000
+      },
       "label": "R1 10k",
       "showValue": false,
       "showDialValue": false,
@@ -108,14 +111,14 @@
         "x": 420,
         "y": 420,
         "rotation": 90
-      },
-      "properties": {
-        "resistance": 10000
       }
     },
     {
       "id": "component-1791700000000-rdesliga",
       "typeId": "passive.resistor",
+      "properties": {
+        "resistance": 10000
+      },
       "label": "R2 10k",
       "showValue": false,
       "showDialValue": false,
@@ -123,14 +126,14 @@
         "x": 460,
         "y": 420,
         "rotation": 90
-      },
-      "properties": {
-        "resistance": 10000
       }
     },
     {
       "id": "component-1791700000000-rlamp",
       "typeId": "passive.resistor",
+      "properties": {
+        "resistance": 330
+      },
       "label": "R3 330",
       "showValue": false,
       "showDialValue": false,
@@ -138,14 +141,16 @@
         "x": 700,
         "y": 280,
         "rotation": 0
-      },
-      "properties": {
-        "resistance": 330
       }
     },
     {
       "id": "component-1791700000000-lamp",
       "typeId": "outputs.led",
+      "properties": {
+        "color": "Green",
+        "threshold": 2.4,
+        "resistance": 0.6
+      },
       "label": "Lâmpada",
       "showValue": false,
       "showDialValue": false,
@@ -153,16 +158,14 @@
         "x": 800,
         "y": 280,
         "rotation": 0
-      },
-      "properties": {
-        "color": "Green",
-        "threshold": 2.4,
-        "resistance": 0.6
       }
     },
     {
       "id": "component-1791700000000-rblink",
       "typeId": "passive.resistor",
+      "properties": {
+        "resistance": 330
+      },
       "label": "R4 330",
       "showValue": false,
       "showDialValue": false,
@@ -170,14 +173,16 @@
         "x": 700,
         "y": 360,
         "rotation": 0
-      },
-      "properties": {
-        "resistance": 330
       }
     },
     {
       "id": "component-1791700000000-blink",
       "typeId": "outputs.led",
+      "properties": {
+        "color": "Yellow",
+        "threshold": 2.4,
+        "resistance": 0.6
+      },
       "label": "Pisca",
       "showValue": false,
       "showDialValue": false,
@@ -185,16 +190,12 @@
         "x": 800,
         "y": 360,
         "rotation": 0
-      },
-      "properties": {
-        "color": "Yellow",
-        "threshold": 2.4,
-        "resistance": 0.6
       }
     },
     {
       "id": "component-1791700000000-gnd",
       "typeId": "other.ground",
+      "properties": {},
       "label": "GND",
       "showValue": false,
       "showDialValue": false,
@@ -202,12 +203,11 @@
         "x": 520,
         "y": 520,
         "rotation": 0
-      },
-      "properties": {}
+      }
     }
   ],
   "topology": {
-    "revision": 1,
+    "revision": 21,
     "nodes": [],
     "conductors": [
       {
@@ -222,7 +222,20 @@
           "componentId": "component-1791700000000-gnd",
           "pinId": "pin"
         },
-        "vertices": []
+        "vertices": [
+          {
+            "x": 512,
+            "y": 284
+          },
+          {
+            "x": 512,
+            "y": 508
+          },
+          {
+            "x": 528,
+            "y": 508
+          }
+        ]
       },
       {
         "id": "wire-1791700000000-vcc-liga",
@@ -236,7 +249,16 @@
           "componentId": "component-1791700000000-liga",
           "pinId": "pin-1"
         },
-        "vertices": []
+        "vertices": [
+          {
+            "x": 108,
+            "y": 284
+          },
+          {
+            "x": 108,
+            "y": 248
+          }
+        ]
       },
       {
         "id": "wire-1791700000000-vcc-desliga",
@@ -250,7 +272,16 @@
           "componentId": "component-1791700000000-desliga",
           "pinId": "pin-1"
         },
-        "vertices": []
+        "vertices": [
+          {
+            "x": 108,
+            "y": 284
+          },
+          {
+            "x": 108,
+            "y": 338
+          }
+        ]
       },
       {
         "id": "wire-1791700000000-liga-start",
@@ -264,7 +295,16 @@
           "componentId": "component-1791700000000-plc",
           "pinId": "START"
         },
-        "vertices": []
+        "vertices": [
+          {
+            "x": 514,
+            "y": 248
+          },
+          {
+            "x": 514,
+            "y": 332
+          }
+        ]
       },
       {
         "id": "wire-1791700000000-desliga-stop",
@@ -278,7 +318,24 @@
           "componentId": "component-1791700000000-plc",
           "pinId": "STOP"
         },
-        "vertices": []
+        "vertices": [
+          {
+            "x": 520,
+            "y": 338
+          },
+          {
+            "x": 520,
+            "y": 300
+          },
+          {
+            "x": 622,
+            "y": 300
+          },
+          {
+            "x": 622,
+            "y": 332
+          }
+        ]
       },
       {
         "id": "wire-1791700000000-start-r1",
@@ -292,7 +349,12 @@
           "componentId": "component-1791700000000-rliga",
           "pinId": "pin-1"
         },
-        "vertices": []
+        "vertices": [
+          {
+            "x": 436,
+            "y": 332
+          }
+        ]
       },
       {
         "id": "wire-1791700000000-r1-gnd",
@@ -306,7 +368,16 @@
           "componentId": "component-1791700000000-gnd",
           "pinId": "pin"
         },
-        "vertices": []
+        "vertices": [
+          {
+            "x": 436,
+            "y": 508
+          },
+          {
+            "x": 528,
+            "y": 508
+          }
+        ]
       },
       {
         "id": "wire-1791700000000-stop-r2",
@@ -320,7 +391,20 @@
           "componentId": "component-1791700000000-rdesliga",
           "pinId": "pin-1"
         },
-        "vertices": []
+        "vertices": [
+          {
+            "x": 622,
+            "y": 332
+          },
+          {
+            "x": 622,
+            "y": 396.5
+          },
+          {
+            "x": 476,
+            "y": 396.5
+          }
+        ]
       },
       {
         "id": "wire-1791700000000-r2-gnd",
@@ -334,7 +418,16 @@
           "componentId": "component-1791700000000-gnd",
           "pinId": "pin"
         },
-        "vertices": []
+        "vertices": [
+          {
+            "x": 476,
+            "y": 508
+          },
+          {
+            "x": 528,
+            "y": 508
+          }
+        ]
       },
       {
         "id": "wire-1791700000000-lamp-r3",
@@ -348,7 +441,16 @@
           "componentId": "component-1791700000000-rlamp",
           "pinId": "pin-1"
         },
-        "vertices": []
+        "vertices": [
+          {
+            "x": 514,
+            "y": 364
+          },
+          {
+            "x": 514,
+            "y": 284.5
+          }
+        ]
       },
       {
         "id": "wire-1791700000000-r3-led",
@@ -362,7 +464,16 @@
           "componentId": "component-1791700000000-lamp",
           "pinId": "anode"
         },
-        "vertices": []
+        "vertices": [
+          {
+            "x": 788,
+            "y": 284.5
+          },
+          {
+            "x": 788,
+            "y": 290
+          }
+        ]
       },
       {
         "id": "wire-1791700000000-led-gnd",
@@ -376,7 +487,20 @@
           "componentId": "component-1791700000000-gnd",
           "pinId": "pin"
         },
-        "vertices": []
+        "vertices": [
+          {
+            "x": 844,
+            "y": 290
+          },
+          {
+            "x": 844,
+            "y": 508
+          },
+          {
+            "x": 528,
+            "y": 508
+          }
+        ]
       },
       {
         "id": "wire-1791700000000-blink-r4",
@@ -404,7 +528,16 @@
           "componentId": "component-1791700000000-blink",
           "pinId": "anode"
         },
-        "vertices": []
+        "vertices": [
+          {
+            "x": 788,
+            "y": 364.5
+          },
+          {
+            "x": 788,
+            "y": 370
+          }
+        ]
       },
       {
         "id": "wire-1791700000000-led2-gnd",
@@ -418,16 +551,30 @@
           "componentId": "component-1791700000000-gnd",
           "pinId": "pin"
         },
-        "vertices": []
+        "vertices": [
+          {
+            "x": 844,
+            "y": 370
+          },
+          {
+            "x": 844,
+            "y": 508
+          },
+          {
+            "x": 528,
+            "y": 508
+          }
+        ]
       }
     ]
   },
   "visual": {
     "viewport": {
-      "x": 0,
-      "y": 0,
-      "zoom": 1
-    }
+      "x": -76.97423745110768,
+      "y": -125.55109907781707,
+      "zoom": 1.1040895136738123
+    },
+    "wireRoutes": "explicit"
   },
   "simulationSettings": {}
 }

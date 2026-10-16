@@ -122,16 +122,17 @@ const catalog: PaletteRenderableEntry[] = [
     assert(JSON.stringify(remainingLabels) === JSON.stringify(["Fontes", "Passivos", "Medidores"]), `ordem das demais pastas nao deveria mudar, veio ${JSON.stringify(remainingLabels)}`);
   });
 
-  await test("Processo: PLC, Protocolos Industriais e Modelos, nesta ordem, em portugues", () => {
+  await test("Processo: PLC, Protocolos Industriais, Ferramentas e Modelos nesta ordem", () => {
     const entries: PaletteRenderableEntry[] = [
       { typeId: "subcircuits.process.fopdt", label: "Processo FOPDT", category: "Modelos", folderPath: ["Modelos"], workspaceSection: "process", pinCount: 2, defaultProperties: {} },
       { typeId: "protocol.hart.modem", label: "Modem HART", category: "Protocolos", folderPath: ["Protocolos Industriais", "HART"], workspaceSection: "process", pinCount: 2, defaultProperties: {} },
       { typeId: "protocol.modbus.server", label: "Servidor Modbus", category: "Protocolos", folderPath: ["Protocolos Industriais", "Modbus"], workspaceSection: "process", pinCount: 0, defaultProperties: {} },
+      { typeId: "control.pid_station", label: "Sintonia", category: "Ferramentas", folderPath: ["Ferramentas"], workspaceSection: "process", pinCount: 5, defaultProperties: {} },
       { typeId: "plc.instance", label: "PLC IEC 61131-3", category: "PLC", folderPath: ["PLC IEC 61131-3"], workspaceSection: "process", pinCount: 0, defaultProperties: {} },
     ];
     const tree = buildPaletteTree(entries, "", "process", "pt-BR");
     const labels = tree.map((node) => node.label);
-    assert(JSON.stringify(labels) === JSON.stringify(["PLC IEC 61131-3", "Protocolos Industriais", "Modelos"]), `ordem das pastas de Processo: ${JSON.stringify(labels)}`);
+    assert(JSON.stringify(labels) === JSON.stringify(["PLC IEC 61131-3", "Protocolos Industriais", "Ferramentas", "Modelos"]), `ordem das pastas de Processo: ${JSON.stringify(labels)}`);
     const first = tree[0];
     assert(first?.kind === "folder" && first.children.length === 1 && first.children[0]?.kind === "component" && first.children[0].typeId === "plc.instance",
       "o primeiro item de Processo deveria ser o PLC");
@@ -144,16 +145,17 @@ const catalog: PaletteRenderableEntry[] = [
       { typeId: "subcircuits.process.fopdt", label: "Processo FOPDT", category: "Modelos", folderPath: ["Modelos"], workspaceSection: "process", pinCount: 2, defaultProperties: {} },
       { typeId: "plc.instance", label: "IEC 61131-3 PLC", category: "PLC", folderPath: ["IEC 61131-3 PLC"], workspaceSection: "process", pinCount: 0, defaultProperties: {} },
       { typeId: "protocol.modbus.server", label: "Modbus Server", category: "Protocolos", folderPath: ["Industrial Protocols", "Modbus"], workspaceSection: "process", pinCount: 0, defaultProperties: {} },
+      { typeId: "control.pid_station", label: "Tuning", category: "Tools", folderPath: ["Ferramentas"], workspaceSection: "process", pinCount: 5, defaultProperties: {} },
     ];
     const tree = buildPaletteTree(entries, "", "process", "en");
     const labels = tree.map((node) => node.label);
-    assert(JSON.stringify(labels) === JSON.stringify(["IEC 61131-3 PLC", "Industrial Protocols", "Models"]), `ordem das pastas de Processo em ingles: ${JSON.stringify(labels)}`);
+    assert(JSON.stringify(labels) === JSON.stringify(["IEC 61131-3 PLC", "Industrial Protocols", "Tools", "Models"]), `ordem das pastas de Processo em ingles: ${JSON.stringify(labels)}`);
     const protocols = tree[1];
     const subfolders = protocols?.kind === "folder" ? protocols.children.map((node) => node.label).sort() : [];
     assert(JSON.stringify(subfolders) === JSON.stringify(["HART", "Modbus"]), `HART e Modbus deveriam dividir a MESMA pasta: ${JSON.stringify(subfolders)}`);
     // Em português, as mesmas entradas voltam aos nomes em português (a pasta é a mesma).
     const portuguese = buildPaletteTree(entries, "", "process", "pt-BR").map((node) => node.label);
-    assert(JSON.stringify(portuguese) === JSON.stringify(["PLC IEC 61131-3", "Protocolos Industriais", "Modelos"]), `mesmas entradas em portugues: ${JSON.stringify(portuguese)}`);
+    assert(JSON.stringify(portuguese) === JSON.stringify(["PLC IEC 61131-3", "Protocolos Industriais", "Ferramentas", "Modelos"]), `mesmas entradas em portugues: ${JSON.stringify(portuguese)}`);
     // Sem língua informada os nomes ficam como vieram, mas o PLC continua no topo.
     const untouched = buildPaletteTree(entries, "", "process");
     assert(untouched[0]?.label === "IEC 61131-3 PLC", `PLC deveria continuar primeiro sem lingua informada, veio ${untouched[0]?.label}`);
@@ -212,10 +214,14 @@ const catalog: PaletteRenderableEntry[] = [
     assert(processTree.includes("Protocolos Industriais"), "protocolos deveriam ficar sob Process/Protocolos Industriais");
   });
 
-  await test("primitivos control.* somem da paleta de Processo e so os usados pelos modelos (e a Constante) aparecem na raiz de Controle", () => {
+  await test("PID e uma ferramenta em Processo; os demais primitivos de controle permanecem na aba Controle", () => {
     const processTree = JSON.stringify(buildPaletteTree(controlGraphCatalog, "", "process"));
     assert(!processTree.includes("Controle"), "Processo nao deveria mais ter a subsecao Controle");
-    assert(!processTree.includes("control."), "nenhum primitivo control.* deveria aparecer em Processo");
+    assert(!processTree.includes("\"control.pid\""), "o PID antigo sem portas A/M e L/R nao deveria aparecer em Processo");
+    const station = controlGraphCatalog.find((item) => item.typeId === "control.pid_station");
+    assert(JSON.stringify(station?.pinIds) === JSON.stringify(["sp", "pv", "am", "lr", "out"]), `a estacao precisa expor SP, PV, A/M, L/R e MV: ${JSON.stringify(station?.pinIds)}`);
+    assert(processTree.includes("control.pid_station") && processTree.includes("Ferramentas"), "a estação de sintonia deveria aparecer em Processo/Ferramentas");
+    assert(!processTree.includes("control.process"), "o bloco de processo genérico nao deveria aparecer em Processo");
 
     const controlTree = buildPaletteTree(controlGraphCatalog, "", "control");
     const typeIds = controlTree.map((node) => (node.kind === "component" ? node.typeId : `folder:${node.label}`)).sort();

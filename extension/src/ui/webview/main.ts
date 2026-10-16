@@ -2569,6 +2569,86 @@ function send(message: WebviewToHostMessage): void {
   vscode?.postMessage(message);
 }
 
+let pidDialogOverlay: HTMLElement | undefined;
+let pidDialogIframe: HTMLIFrameElement | undefined;
+let pidDialogComponentId: string | undefined;
+
+function closePidDialog(notifyHost = true): void {
+  pidDialogOverlay?.remove();
+  pidDialogOverlay = undefined;
+  pidDialogIframe = undefined;
+  pidDialogComponentId = undefined;
+  if (notifyHost) send({ version: WEBVIEW_MESSAGE_VERSION, type: "pidDialogClosed" });
+}
+
+function showPidDialog(componentId: string, html: string): void {
+  closePidDialog(false);
+  const overlay = document.createElement("div");
+  overlay.className = "pid-dialog-overlay";
+  Object.assign(overlay.style, { position: "fixed", inset: "0", zIndex: "10000", background: "rgba(12, 20, 30, .62)" });
+  const dialog = document.createElement("section");
+  Object.assign(dialog.style, { position: "fixed", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: "min(1440px, 96vw)", height: "min(940px, 96vh)", background: "#fff", border: "1px solid #697586", borderRadius: "6px", boxShadow: "0 18px 60px rgba(0,0,0,.45)", overflow: "hidden" });
+  const titlebar = document.createElement("div");
+  titlebar.textContent = "Sintonia PID";
+  Object.assign(titlebar.style, { height: "34px", boxSizing: "border-box", display: "flex", alignItems: "center", padding: "0 44px 0 12px", background: "#263746", color: "#f1f5f9", font: "600 13px/34px sans-serif", cursor: "move", userSelect: "none" });
+  const close = document.createElement("button");
+  close.type = "button";
+  close.textContent = "×";
+  close.title = "Fechar sintonia";
+  Object.assign(close.style, { position: "absolute", top: "2px", right: "5px", zIndex: "2", width: "28px", height: "28px", border: "1px solid #8a929c", borderRadius: "4px", background: "#fff", color: "#263544", font: "22px/24px sans-serif", cursor: "pointer" });
+  close.addEventListener("pointerdown", (event) => event.stopPropagation());
+  close.addEventListener("click", () => closePidDialog());
+  titlebar.appendChild(close);
+  const frame = document.createElement("iframe");
+  frame.title = "Diálogo de sintonia PID";
+  frame.style.cssText = "display:block;width:100%;height:calc(100% - 34px);border:0;background:#fff";
+  frame.srcdoc = html;
+  dialog.append(titlebar, frame);
+  titlebar.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target === close) return;
+    const rect = dialog.getBoundingClientRect();
+    const offsetX = event.clientX - rect.left;
+    const offsetY = event.clientY - rect.top;
+    dialog.style.transform = "none";
+    dialog.style.left = `${rect.left}px`;
+    dialog.style.top = `${rect.top}px`;
+    titlebar.setPointerCapture(event.pointerId);
+    const move = (moveEvent: PointerEvent) => {
+      const left = Math.max(0, Math.min(window.innerWidth - dialog.offsetWidth, moveEvent.clientX - offsetX));
+      const top = Math.max(0, Math.min(window.innerHeight - dialog.offsetHeight, moveEvent.clientY - offsetY));
+      dialog.style.left = `${left}px`;
+      dialog.style.top = `${top}px`;
+    };
+    const finish = () => {
+      titlebar.removeEventListener("pointermove", move);
+      titlebar.removeEventListener("pointerup", finish);
+      titlebar.removeEventListener("pointercancel", finish);
+    };
+    titlebar.addEventListener("pointermove", move);
+    titlebar.addEventListener("pointerup", finish, { once: true });
+    titlebar.addEventListener("pointercancel", finish, { once: true });
+    event.preventDefault();
+  });
+  overlay.appendChild(dialog);
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) closePidDialog(); });
+  document.body.appendChild(overlay);
+  pidDialogOverlay = overlay;
+  pidDialogIframe = frame;
+  pidDialogComponentId = componentId;
+}
+
+window.addEventListener("message", (event: MessageEvent) => {
+  if (event.source !== pidDialogIframe?.contentWindow || !event.data || event.data.type !== "pidDialogPropertyChanged") return;
+  const message = event.data.message as { type?: string; name?: string; value?: unknown } | undefined;
+  if (!message || (message.type !== "pidPropertyChanged" && message.type !== "pidSetpointChanged") || typeof message.name !== "string") return;
+  if (typeof message.value !== "boolean" && (typeof message.value !== "number" || !Number.isFinite(message.value))) return;
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "pidPropertyChanged", componentId: pidDialogComponentId!, name: message.name, value: message.value });
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && pidDialogOverlay) closePidDialog();
+});
+
 function createHmiPageFromSelection(): void {
   if (subcircuitEditorMode === "hmi") commitHmiSceneToPage();
   const selectedItems = activeSceneComponents().filter((component) =>
@@ -9303,7 +9383,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     // subsequente pro elemento QUE CAPTUROU (`el`), nunca pro alvo visual original (o `<text>`), então
     // o listener de `.serial-toggle-hit-zone` NUNCA disparava -- o clique virava só "selecionar o
     // componente" (handler genérico de `el`), indistinguível de "o botão não faz nada".
-    if (event.target instanceof Element && event.target.closest(".pin-terminal, .meter-expand-button, .serial-toggle-hit-zone")) return;
+    if (event.target instanceof Element && event.target.closest(".pin-terminal, .meter-expand-button, .serial-toggle-hit-zone, .pid-tuning-trigger")) return;
     event.stopPropagation();
     const dialHitZone = isEncoder && event.target instanceof Element
       ? event.target.closest(".encoder-hit-zone, .viewspec-interaction-dragAngular")
@@ -10137,6 +10217,25 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
 
   el.querySelector("svg")?.remove();
   el.appendChild(svg);
+  el.querySelector(".pid-tuning-trigger")?.remove();
+  if (component.typeId === "control.pid_station" && isComponentSelected(component.id)) {
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "pid-tuning-trigger";
+    trigger.title = "Abrir diálogo de sintonia PID";
+    trigger.setAttribute("aria-label", "Abrir diálogo de sintonia PID");
+    trigger.textContent = "↗";
+    trigger.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    trigger.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenPidTuning", componentId: component.id });
+    });
+    el.appendChild(trigger);
+  }
 }
 
 // `PropertyFieldKind`/`PropertyField` agora moram em `batchProperties.ts` (roda em Node nos testes,
@@ -11870,6 +11969,15 @@ function applyGenericInstanceFieldPatch(component: WebviewComponentModel, key: s
 window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) => {
   const message = event.data;
   if (!message || message.version !== WEBVIEW_MESSAGE_VERSION) return;
+
+  if (message.type === "pidDialogOpen") {
+    showPidDialog(message.componentId, message.html);
+    return;
+  }
+  if (message.type === "pidDialogSnapshot") {
+    pidDialogIframe?.contentWindow?.postMessage({ type: "pidSnapshot", values: message.values, dt: message.dt }, "*");
+    return;
+  }
 
   if (message.type === "init" || message.type === "syncState") {
     // `syncState` é como o Host confirma mutações que NUNCA passam por `state` local antes (ex:

@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { PidTuningPanel } from "../ui/panels/PidTuningPanel";
 import { filePathFromSourceId } from "../project/embeddedSubcircuits";
 import { childPropertyOverrides, parseChildPropertyKey, withoutChildPropertyOverrides } from "../ui/webview/childPropertyOverrides";
 import * as path from "path";
@@ -700,6 +701,43 @@ export async function pollInstrumentReadouts(expectedGeneration?: number): Promi
   }
   if (expectedGeneration !== undefined && expectedGeneration !== telemetryGeneration) return;
   state.schematicPanel.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId, transportStatus: "connected" });
+  const scalarValue = (id: string | undefined): number | undefined => {
+    if (!id) return undefined;
+    const value = readoutsByComponentId[id];
+    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  };
+  const sourceForInput = (componentId: string, pinId: string): string | undefined => {
+    for (const wire of state.schematicState.topology.conductors) {
+      const fromIsTarget = wire.from.kind === "port" && wire.from.componentId === componentId && wire.from.pinId === pinId;
+      const toIsTarget = wire.to.kind === "port" && wire.to.componentId === componentId && wire.to.pinId === pinId;
+      const source = fromIsTarget ? wire.to : toIsTarget ? wire.from : undefined;
+      if (source?.kind === "port") return source.componentId;
+    }
+    return undefined;
+  };
+  const componentById = new Map(state.schematicState.components.map((component) => [component.id, component]));
+  for (const pid of state.schematicState.components.filter((component) => component.typeId === "control.pid" || component.typeId === "control.pid_station")) {
+    const spSourceId = sourceForInput(pid.id, "sp");
+    const pvSourceId = sourceForInput(pid.id, "pv");
+    const amSourceId = pid.typeId === "control.pid_station" ? sourceForInput(pid.id, "am") : undefined;
+    const lrSourceId = pid.typeId === "control.pid_station" ? sourceForInput(pid.id, "lr") : undefined;
+    const amValue = scalarValue(amSourceId);
+    const lrValue = scalarValue(lrSourceId);
+    // Paridade com pid_dialog.jsp: A/M 1=Auto e L/R 1=Local.
+    const localMode = lrValue === undefined ? pid.properties.localMode === true : lrValue >= 0.5;
+    const manual = amValue === undefined ? pid.properties.manual === true : amValue < 0.5;
+    const sp = localMode ? Number(pid.properties.localSetpoint ?? 0) : scalarValue(spSourceId);
+    const pv = scalarValue(pvSourceId);
+    const mv = scalarValue(pid.id);
+    PidTuningPanel.updateSample(pid.id, {
+      ...(Number.isFinite(sp) ? { sp } : {}),
+      ...(pv !== undefined ? { pv } : {}),
+      ...(mv !== undefined ? { mv } : {}),
+      manual,
+      localMode,
+      ...(spSourceId && componentById.get(spSourceId)?.typeId === "control.constant" ? { setpointSourceId: spSourceId } : {}),
+    });
+  }
 }
 
 /** Atualiza qualquer package que declare `runtimeState`, sem conhecer SSD1306, TFT, servo ou outro

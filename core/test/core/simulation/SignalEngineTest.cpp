@@ -189,6 +189,36 @@ void algebraicLoopsNeedPolicyAndAreBounded() {
     CHECK(runtime.metrics().algebraicIterations == 3 && runtime.metrics().nonConvergentLoops == 1,
           "SCC oscilante para no limite e registra diagnostico");
 }
+
+void pidLocalRemoteAndManualModesDriveTheRealOutput() {
+    SignalGraphDefinition definition;
+    auto remoteSp = source("remote_sp", 35.0);
+    auto pv = source("pv", 20.0);
+    auto am = source("am", 1.0); // pid_dialog.jsp: 1=Auto, 0=Manual
+    auto lr = source("lr", 1.0);
+    SignalBlockDefinition pid;
+    pid.id = "pid"; pid.kind = SignalBlockKind::Pid;
+    pid.inputs = {realPort("sp"), realPort("pv"), realPort("am"), realPort("lr")}; pid.output = realPort("out"); pid.rate = {100'000'000, 0, 0};
+    pid.realParameters = {2.0, 0.0, 0.0, 0.0, 0.1, 0.0, 100.0, 1.0, 1.0, 0.0,
+                          0.0, 0.0, 1.0, 70.0};
+    definition.blocks = {remoteSp, pv, am, lr, pid};
+    definition.connections = {{"remote_sp", "out", "pid", "sp", false}, {"pv", "out", "pid", "pv", false},
+                              {"am", "out", "pid", "am", false}, {"lr", "out", "pid", "lr", false}};
+    SignalRuntime runtime; runtime.bind(SignalCompiler::compile(definition)); runtime.executeUntil(0);
+    CHECK(std::abs(runtime.real(runtime.output("pid")) - 100.0) < 1e-12,
+          "Local usa o setpoint local (70), nao o SP remoto (35)");
+
+    definition.blocks[3].realParameters[0] = 0.0;
+    runtime.bind(SignalCompiler::compile(definition)); runtime.executeUntil(0);
+    CHECK(std::abs(runtime.real(runtime.output("pid")) - 30.0) < 1e-12,
+          "Remoto usa o SP ligado por fio (35)");
+
+    definition.blocks[2].realParameters[0] = 0.0;
+    definition.blocks[4].realParameters[11] = 33.0;
+    runtime.bind(SignalCompiler::compile(definition)); runtime.executeUntil(0);
+    CHECK(std::abs(runtime.real(runtime.output("pid")) - 33.0) < 1e-12,
+          "Manual força MV configurada e limita pela faixa do controlador");
+}
 } // namespace
 
 int main() {
@@ -199,6 +229,7 @@ int main() {
     allPrimitiveBlocksExecuteDeterministically();
     phaseOrdersRateGroupsAtTheSameTimestamp();
     algebraicLoopsNeedPolicyAndAreBounded();
+    pidLocalRemoteAndManualModesDriveTheRealOutput();
     if (failures == 0) std::puts("SignalEngineTest: OK");
     return failures == 0 ? 0 : 1;
 }

@@ -517,3 +517,66 @@ execução serial todos passam — são do ambiente, não regressões.
 7. Laço elétrico: fonte de corrente ideal (sem tensão mínima/lift‑off).
 8. O TT301 já é subcircuito do dispositivo padrão (`docs/tt301-audit.md`); o FY301 ainda é preset built‑in antigo (a refazer).
 9. Entradas HART por sinal: só uma porta com fio de sinal de verdade é amostrada a cada passo. Uma porta sem fio não zera mais o PV do aparelho; antes isso deixava o `hart_wire_loop` em 3,8 mA.
+
+
+
+## 11. Coleta ao vivo no LD301 manometrico (2026-10-16)
+
+A captura mais recente foi feita com PACTware/DTM conectado ao LD301 real pelo kit ESP32
+(ID 1), via COM21. Os quadros reconstruidos estao em
+`trm/ld301/captura-kit1-20261016-105106.log` e o resumo em
+`trm/ld301/captura-kit1-20261016-105106-resumo.md`. Foram identificadas 87 requisicoes
+e 84 respostas HART completas validas; houve um candidato com ruido/XOR invalido.
+As telas e o indice de evidencias estao em
+`C:\Prof_Josue\0II2\II2P12_LD301_Manometrico_vs_Diferencial\assets\live_manometrico_esp32`.
+
+O perfil `subcircuits/hart_smar_ld301.lssubcircuit` foi atualizado com valores
+confirmados da unidade real: flange Level 2 in/150 lb, Monel, O-ring Unknown,
+dreno/vent None; selo remoto unico, Flanged, Neobee-M20 e diafragma Tantalum;
+Display Total/None; contadores de Function 12, Lower Zero Trim 24, PID Mode 13
+e Totalization 20; total lido 14113856, vazao maxima 99 e fator 2; tabela com
+5 pontos e Y2=99. Os demais pontos da tabela foram mantidos porque a captura nao
+estabeleceu uma configuracao nova confiavel para eles.
+
+A unidade real aparece como Gauge (M), silicone fill, faixa 2 (200 inH2O),
+diafragma 316 SS, LRV/URV 190/1690 mmH2O, PV unit On e User Unit 243/800 mm.
+Esses dados compativeis ja estavam no perfil. O subcircuito permanece diferencial
+por requisito do projeto: PV=HIGH-LOW. Nenhum comando de escrita foi enviado
+ao transmissor nesta coleta.
+
+Limites da coleta: o DTM mostra Number of Points = 0 embora as respostas do Cmd 133
+indiquem 5; os comandos proprietarios de leitura de totalizacao (185/186/189)
+retornam RC 0x76 nesta condicao; a tela identifica a unidade como familia Special,
+mas o campo Total Unit esta vazio. Por isso o perfil preserva o codigo atual da
+unidade de totalizacao e nao infere o modo PID apenas da tela. A leitura de processo
+(~148433 mmH2O e ~20,50 mA) estava fora da faixa apresentada pelo sensor e foi
+tratada como condicao transitoria, nao como valor inicial do simulador. O PACTware
+tambem apresentou pedido de senha e erro do DTM durante a sessao.
+
+
+## 12. Seletor de modelo/faixa do sensor
+
+O manual `trm/ld301/ld301mp.pdf`, pagina impressa 6.9 (pagina PDF 117),
+lista os modelos de pressao diferencial D0-D4, manometrica M0-M6 e diferencial
+com alta pressao estatica H2-H5, com LRL, URL e span minimo. O LD301 virtual
+agora expoe a propriedade `sensorRangeCode` no inspetor do componente quando o
+subcircuito possui essa propriedade. Opcoes: D0-D4, M0-M6 e H2-H5.
+
+A troca atualiza `PV.lowerTransducerLimit`, `PV.upperTransducerLimit`,
+`PV.minimumSpan` e a faixa calibrada se os LRV/URV atuais nao couberem no novo
+URL/LRL ou ficarem abaixo do span minimo. Nesse caso a calibracao passa para os
+limites completos do sensor. Os limites da tabela do manual, em kPa, sao
+convertidos para a unidade do perfil (mmH2O@20C). O padrao do subcircuito e M2,
+correspondente ao equipamento manometrico amostrado; no M2 os limites e o span
+minimo mantem a precisao medida no PACTware (?5107.7451 mmH2O e 25.5387 mmH2O),
+pois a tabela do manual arredonda os valores em kPa. O usuario pode selecionar D2
+ou H2 e as demais faixas documentadas.
+
+O seletor representa a faixa nominal do sensor. A topologia do circuito virtual
+continua diferencial, calculando PV=HIGH-LOW, conforme o objetivo deste
+subcircuito. A escala do sinal aplicado nao muda ao selecionar outra faixa; isso
+permite testar tanto leituras dentro quanto fora dos limites nominais. H2-H5
+representam a versao diferencial para alta pressao estatica, mas o simulador nao
+modela mecanicamente a pressao estatica de linha, apenas o URL/LRL diferencial
+documentado. Modelos absolutos A1-A6 nao foram incluidos neste seletor porque a
+entrada do subcircuito e diferencial.

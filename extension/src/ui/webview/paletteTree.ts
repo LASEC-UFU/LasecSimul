@@ -119,10 +119,11 @@ interface RootFolderName {
 
 const ROOT_FOLDER_PRIORITY: Partial<Record<WorkspaceSection, readonly RootFolderName[]>> = {
   analog: [{ "pt-BR": "Microcontroladores" }],
-  // PLC-IEC, Protocolos Industriais, Modelos -- nesta ordem -- dentro de Processo.
+  // PLC-IEC, Protocolos Industriais, Ferramentas e Modelos -- nesta ordem -- dentro de Processo.
   process: [
     { "pt-BR": "PLC IEC 61131-3", en: "IEC 61131-3 PLC" },
     { "pt-BR": "Protocolos Industriais", en: "Industrial Protocols" },
+    { "pt-BR": "Ferramentas", en: "Tools" },
     { "pt-BR": "Modelos", en: "Models" },
   ],
   misc: [{ "pt-BR": "peripherals" }],

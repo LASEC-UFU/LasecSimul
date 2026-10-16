@@ -567,6 +567,30 @@ html, body {
   cursor: grab;
 }
 
+.pid-tuning-trigger {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  top: -27px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  transform: translateX(-50%);
+  border: 1px solid #0369a1;
+  border-radius: 2px;
+  background: #e0f2fe;
+  color: #075985;
+  font: 700 15px/20px "Segoe UI", sans-serif;
+  text-align: center;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.pid-tuning-trigger:hover {
+  background: #bae6fd;
+  border-color: #0284c7;
+}
+
 .component.dragging {
   cursor: grabbing;
 }

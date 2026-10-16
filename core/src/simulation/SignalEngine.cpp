@@ -261,7 +261,7 @@ size_t expectedInputCount(SignalBlockKind kind) {
     case SignalBlockKind::Tank:
         return 2;
     case SignalBlockKind::Pid:
-        return 2;
+        return std::numeric_limits<size_t>::max();
     default:
         return std::numeric_limits<size_t>::max();
     }
@@ -363,6 +363,15 @@ void validateBlock(const SignalBlockDefinition& block, uint16_t maxWidth) {
         if (reversed) throw std::invalid_argument("Limiter exige minimo <= maximo: " + block.id);
     }
     const size_t dynamicInputs = expectedInputCount(block.kind);
+    if (block.kind == SignalBlockKind::Pid) {
+        if (count != 2 && count != 4)
+            throw std::invalid_argument("PID exige entradas SP/PV e, opcionalmente, A/M e L/R: " + block.id);
+        if (block.output.type.scalar != SignalScalarType::Real)
+            throw std::invalid_argument("PID exige saida Real: " + block.id);
+        for (const auto& input : block.inputs)
+            if (input.type != block.output.type)
+                throw std::invalid_argument("PID exige entradas Real da largura da saida: " + block.id);
+    }
     if (dynamicInputs != std::numeric_limits<size_t>::max()) {
         if (count != dynamicInputs) throw std::invalid_argument("quantidade de entradas invalida no bloco dinamico: " + block.id);
         if (block.output.type.scalar != SignalScalarType::Real)
@@ -784,9 +793,10 @@ void SignalRuntime::bind(std::shared_ptr<const CompiledSignalGraph> graph) {
                     m_dynamicState[block.stateOffset + block.output.width + element] = 0.0;
                     m_dynamicState[block.stateOffset + 2 * block.output.width + element] = 0.0;
                     m_dynamicState[block.stateOffset + 3 * block.output.width + element] = 0.0;
-                    m_reals[block.output.offset + element] = std::clamp(
-                        block.realParameters[3] + block.realParameters[9],
-                        block.realParameters[5], block.realParameters[6]);
+                    const bool manual = block.realParameters.size() > 10 && block.realParameters[10] != 0.0;
+                    const double initialOutput = manual && block.realParameters.size() > 11
+                        ? block.realParameters[11] : block.realParameters[3] + block.realParameters[9];
+                    m_reals[block.output.offset + element] = std::clamp(initialOutput, block.realParameters[5], block.realParameters[6]);
                     continue;
                 }
                 double initial = 0.0;
@@ -902,7 +912,7 @@ void SignalRuntime::activateGroup(uint32_t groupIndex, uint64_t timestampNs) {
                             double& previousBasis = m_dynamicState[block.stateOffset + width + element];
                             double& filteredDerivative = m_dynamicState[block.stateOffset + 2 * width + element];
                             double& initialized = m_dynamicState[block.stateOffset + 3 * width + element];
-                            const double sp = readSlot(m_realSnapshot, block.inputs[0], element);
+                            const double remoteSp = readSlot(m_realSnapshot, block.inputs[0], element);
                             const double pv = readSlot(m_realSnapshot, block.inputs[1], element);
                             const double kc = block.realParameters[0];
                             const double ti = block.realParameters[1];
@@ -913,6 +923,24 @@ void SignalRuntime::activateGroup(uint32_t groupIndex, uint64_t timestampNs) {
                             const double maximum = block.realParameters[6];
                             const double action = block.realParameters[7];
                             const bool derivativeOnPv = block.realParameters[8] != 0.0;
+                            // Sinais industriais conforme pid_dialog.jsp: A/M=1 Auto, 0 Manual.
+                            const bool manual = block.inputs.size() > 2
+                                ? readSlot(m_realSnapshot, block.inputs[2], element) < 0.5
+                                : block.realParameters.size() > 10 && block.realParameters[10] != 0.0;
+                            const double manualOutput = block.realParameters.size() > 11 ? block.realParameters[11] : 0.0;
+                            const bool localMode = block.inputs.size() > 3
+                                ? readSlot(m_realSnapshot, block.inputs[3], element) >= 0.5
+                                : block.realParameters.size() > 12 && block.realParameters[12] != 0.0;
+                            const double sp = localMode && block.realParameters.size() > 13 ? block.realParameters[13] : remoteSp;
+                            if (manual) {
+                                const double basis = derivativeOnPv ? pv : action * (sp - pv);
+                                previousBasis = basis;
+                                filteredDerivative = 0.0;
+                                integral = std::clamp(manualOutput, minimum, maximum) - bias - kc * action * (sp - pv);
+                                initialized = 1.0;
+                                m_realCandidate[block.output.offset + element] = std::clamp(manualOutput, minimum, maximum);
+                                continue;
+                            }
                             const double error = action * (sp - pv);
                             const double basis = derivativeOnPv ? pv : error;
                             double integralCandidate = integral;

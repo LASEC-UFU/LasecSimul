@@ -71,7 +71,7 @@ public:
             "control.dead_time", "control.first_order", "control.second_order", "control.lead_lag",
             "control.fopdt", "control.transfer_function", "control.tank", "control.valve_characteristic",
             "control.saturation", "control.limiter", "control.deadband", "control.hysteresis",
-            "control.stiction", "control.rate_limiter", "control.pid", "control.calc_expression",
+            "control.stiction", "control.rate_limiter", "control.pid", "control.pid_station", "control.calc_expression",
             "control.probe", "control.observer", "control.process",
         };
         return {kIds, std::size(kIds)};
@@ -258,6 +258,7 @@ public:
 
 private:
     std::vector<std::string> inputPortIds() const {
+        if (m_typeId == "control.pid_station") return {"sp", "pv", "am", "lr"};
         if (m_typeId == "control.pid") return {"sp", "pv"};
         if (m_typeId == "control.tank") return {"in", "outflow"};
         if (m_typeId == "control.bias") {
@@ -333,7 +334,7 @@ private:
         if (m_typeId == "control.hysteresis") return Kind::Hysteresis;
         if (m_typeId == "control.stiction") return Kind::Stiction;
         if (m_typeId == "control.rate_limiter") return Kind::RateLimiter;
-        if (m_typeId == "control.pid") return Kind::Pid;
+        if (m_typeId == "control.pid" || m_typeId == "control.pid_station") return Kind::Pid;
         if (m_typeId == "control.probe" || m_typeId == "control.observer") return Kind::Probe;
         if (m_typeId == "control.transfer_function") return transferFunctionKind();
         throw std::invalid_argument("tipo de bloco de controle nao suportado: " + m_typeId);
@@ -382,7 +383,9 @@ private:
                 return {number("kc", 1.0), number("ti", 0.0), number("td", 0.0), number("bias", 0.0),
                         number("derivativeFilter", 0.1), number("outputMin", 0.0), number("outputMax", 100.0),
                         number("action", 1.0), boolean("derivativeOnPv", true) ? 1.0 : 0.0,
-                        number("initialIntegral", 0.0)};
+                        number("initialIntegral", 0.0), boolean("manual", false) ? 1.0 : 0.0,
+                        number("manualOutput", 0.0), boolean("localMode", false) ? 1.0 : 0.0,
+                        number("localSetpoint", 50.0)};
             default: return {};
         }
     }

@@ -1,0 +1,5 @@
+LD301 current manometric specimen ? read-only identification probe
+UTC/local: 2026-10-16T10:33:00.343055-03:00
+Port: COM17; 1200 baud; 8O1; HART short address 0; Command 0 (Read Unique Identifier)
+TX: FF FF FF FF FF 02 80 00 00 82
+RX (0 bytes): 

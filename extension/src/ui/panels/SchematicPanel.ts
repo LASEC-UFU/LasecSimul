@@ -16,6 +16,7 @@ export class SchematicPanel {
   private language: "pt-BR" | "en" = "pt-BR";
   private dirty = false;
   private lastRenderedScriptMtimeMs: number | undefined;
+  private renderNonce = "";
 
   private constructor(
     panel: vscode.WebviewPanel,
@@ -83,6 +84,7 @@ export class SchematicPanel {
         localResourceRoots: [
           vscode.Uri.joinPath(extensionUri, "src", "ui", "webview"),
           vscode.Uri.joinPath(extensionUri, "out-webview"),
+          vscode.Uri.joinPath(extensionUri, "media", "pid"),
         ],
       }
     );
@@ -98,6 +100,15 @@ export class SchematicPanel {
       return Promise.resolve(true);
     }
     return this.panel.webview.postMessage(message);
+  }
+
+  pidDialogWebviewContext(): { cspSource: string; nonce: string; asWebviewUri(uri: vscode.Uri): string } {
+    return { cspSource: this.panel.webview.cspSource, nonce: this.renderNonce,
+      asWebviewUri: (uri) => this.panel.webview.asWebviewUri(uri).toString() };
+  }
+
+  showPidDialog(componentId: string, html: string): void {
+    void this.postMessage({ version: WEBVIEW_MESSAGE_VERSION, type: "pidDialogOpen", componentId, html });
   }
 
   setLanguage(language: "pt-BR" | "en"): void {
@@ -166,6 +177,7 @@ export class SchematicPanel {
     const stylePath = vscode.Uri.joinPath(this.extensionUri, "src", "ui", "webview", "styles.css");
 
     const nonce = String(Date.now());
+    this.renderNonce = nonce;
     const initialStateJson = JSON.stringify(this.initialState);
     const locale = this.initialState.locale ?? "pt-BR";
     const scriptUri = this.cacheBustedUri(webview, scriptPath, nonce);
@@ -177,7 +189,7 @@ export class SchematicPanel {
         <head>
           <meta charset="UTF-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}';" />
+          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} https://cdn.plot.ly 'nonce-${nonce}'; frame-src ${webview.cspSource} about:;" />
           <title>${localizedPanelTitle(locale)}</title>
           <link rel="stylesheet" href="${styleUri}" />
         </head>

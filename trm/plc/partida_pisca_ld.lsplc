@@ -11,9 +11,8 @@
       "type": "plc-project"
     },
     "data": {
-      "pous": [],
       "dataTypes": [],
-      "libraries": [],
+      "pous": [],
       "configuration": {
         "resource": {
           "tasks": [
@@ -27,22 +26,25 @@
           "instances": [
             {
               "name": "MAIN_INSTANCE",
-              "program": "MAIN",
-              "task": "MAIN_TASK"
+              "task": "MAIN_TASK",
+              "program": "MAIN"
             }
           ],
           "globalVariables": []
         }
-      }
+      },
+      "libraries": []
     }
   },
   "devices": {
     "configuration": {
       "deviceBoard": "OpenPLC Simulator",
       "communicationPort": "",
-      "runtimeIpAddress": "",
+      "runtimeIpAddress": "LasecSimul",
       "vendorScreenData": {},
-      "vendorScreenDataByBoard": {},
+      "vendorScreenDataByBoard": {
+        "OpenPLC Simulator": {}
+      },
       "selectedPlatformOptions": {}
     },
     "pinMapping": {}

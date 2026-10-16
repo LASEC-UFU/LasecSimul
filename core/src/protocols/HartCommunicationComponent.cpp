@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <iterator>
 #include <nlohmann/json.hpp>
 
 namespace lasecsimul::protocols {
@@ -132,6 +133,7 @@ HartCommunicationComponent::HartCommunicationComponent(Mode mode, simulation::Sc
     // device instance, or a test constructing directly with an empty ComponentParams) -- the
     // preset's Signal Graph ports/Device Variable roles apply out of the box, never an empty "[]".
     m_hartVariablesJson = stringProperty(p, "hartVariablesJson", preset ? preset->hartVariablesJson : "[]");
+    m_sensorRangeCode = stringProperty(p, "sensorRangeCode", "");
     m_hartDynamicVariableAssignments = stringProperty(p, "hartDynamicVariableAssignments", "");
     ++m_hartVariablesRevision;
     m_hartCommandsJson = stringProperty(p, "hartCommandsJson", "[]");
@@ -184,6 +186,7 @@ HartCommunicationComponent::HartCommunicationComponent(Mode mode, simulation::Sc
     const double nan = std::numeric_limits<double>::quiet_NaN();
     m_sensorLowValue = numberProperty(p, "sensorLowValue", defaultNumber("sensorLowValue", nan));
     m_sensorHighValue = numberProperty(p, "sensorHighValue", defaultNumber("sensorHighValue", nan));
+    if (!m_sensorRangeCode.empty()) applyLd301SensorRange();
 
     HartReferenceCatalog::registerProfiles(m_profiles);
     m_profileId = stringProperty(p, "profileId", preset ? preset->profileId : m_profileId);
@@ -203,6 +206,60 @@ HartCommunicationComponent::HartCommunicationComponent(Mode mode, simulation::Sc
     config.kind = mode == Mode::Serial ? HartTransportKind::Serial : HartTransportKind::Udp;
     config.bus = m_bus; config.endpoint = m_endpointName; config.baudRate = m_baudRate; config.udpPort = m_udpPort;
     m_endpoint.configure(std::move(config));
+}
+
+void HartCommunicationComponent::applyLd301SensorRange() {
+    // LD301 manual, order code table (manual pages 6.9-6.10): URL and minimum
+    // span. The profile's pressure unit is mmH2O@20C; the manual table is kPa.
+    // H2-H5 are differential models with the high-static-pressure option.
+    // This changes HART's sensor limits and calibrated range only; the input
+    // Signal Graph stays a physical pressure signal and is never rescaled.
+    struct Range { const char* code; double lowKpa; double highKpa; double minSpanKpa; };
+    static constexpr Range ranges[]{
+        {"D0",-1,1,.05},{"D1",-5,5,.10},{"D2",-50,50,.42},{"D3",-250,250,2.08},{"D4",-2500,2500,20.83},
+        {"M0",-1,1,.05},{"M1",-5,5,.10},{"M2",-50,50,.42},{"M3",-100,250,2.08},{"M4",-100,2500,20.83},
+        {"M5",-100,25000,210},{"M6",-100,40000,330},
+        {"H2",-50,50,.42},{"H3",-250,250,2.08},{"H4",-2500,2500,20.83},{"H5",-25000,25000,210}
+    };
+    const auto selected = std::find_if(std::begin(ranges), std::end(ranges), [&](const Range& r) {
+        return m_sensorRangeCode == r.code;
+    });
+    if (selected == std::end(ranges)) return;
+    constexpr double mmH2OperKpa = 101.9716212978;
+    double sensorLow = selected->lowKpa * mmH2OperKpa;
+    double sensorHigh = selected->highKpa * mmH2OperKpa;
+    double minSpan = selected->minSpanKpa * mmH2OperKpa;
+    // The live M2 transmitter used as the virtual differential reference
+    // reports these calibrated URL/LRL and minimum-span values in PACTware;
+    // preserve that measured precision instead of the manual's rounded kPa.
+    if (m_sensorRangeCode == "M2") {
+        sensorLow = -5107.7451171875;
+        sensorHigh = 5107.7451171875;
+        minSpan = 25.538724899291992;
+    }
+    try {
+        auto variables = nlohmann::json::parse(m_hartVariablesJson.empty() ? "[]" : m_hartVariablesJson);
+        if (!variables.is_array()) return;
+        for (auto& variable : variables) {
+            if (!variable.is_object() || variable.value("id", std::string{}) != "PV") continue;
+            variable["lowerTransducerLimit"] = sensorLow;
+            variable["upperTransducerLimit"] = sensorHigh;
+            variable["minimumSpan"] = minSpan;
+            double lrv = variable.value("lowerRangeValue", sensorLow);
+            double urv = variable.value("upperRangeValue", sensorHigh);
+            if (lrv < sensorLow || lrv > sensorHigh || urv < sensorLow || urv > sensorHigh ||
+                std::fabs(urv - lrv) < minSpan) {
+                lrv = sensorLow;
+                urv = sensorHigh;
+            }
+            variable["lowerRangeValue"] = lrv;
+            variable["upperRangeValue"] = urv;
+            break;
+        }
+        m_hartVariablesJson = variables.dump();
+    } catch (...) {
+        // Preserve authored data if an unrelated malformed edit is present.
+    }
 }
 
 void HartCommunicationComponent::resolveProfileTraits(const registry::ComponentParams& p, const std::string& defaultsJson) {
@@ -1515,6 +1572,7 @@ PropertyValue HartCommunicationComponent::propertyValue(const std::string& id) c
     if (id == "analogInputMinimumMilliamps") return m_inputMinimumMilliamps;
     if (id == "analogInputVariable") return m_inputCurrentVariable;
     if (id == "bus") return m_bus; if (id == "endpoint") return m_endpointName; if (id == "enabled") return m_enabled;
+    if (id == "sensorRangeCode") return m_sensorRangeCode;
     if (id == "pollingAddress") return static_cast<double>(m_pollingAddress); if (id == "uniqueId") return m_uniqueId;
     if (id == "tag") return m_tag; if (id == "unit") return m_unit; if (id == "profileId") return m_profileId; if (id == "hartVariablesJson") return m_hartVariablesJson; if (id == "hartCommandsJson") return m_hartCommandsJson; if (id == "hartBurstJson") return m_hartBurstJson; if (id == "hartAdditionalJson") return m_hartAdditionalJson; if (id == "alarmSelectionCode") return static_cast<double>(m_alarmSelectionCode); if (id == "writeProtectCode") return static_cast<double>(m_writeProtectCode); if (id == "hartManufacturerId") return m_traits.manufacturerId; if (id == "hartDeviceType") return m_traits.deviceType; if (id == "hartRequestPreambles") return m_traits.requestPreambles; if (id == "hartUniversalRevision") return m_traits.universalRevision; if (id == "hartDeviceRevision") return m_traits.deviceRevision; if (id == "hartSoftwareRevision") return m_traits.softwareRevision; if (id == "hartHardwareRevision") return m_traits.hardwareRevision; if (id == "hartFlags") return m_traits.flags; if (id == "hartImplementedRevision") return m_traits.implementedRevision; if (id == "analogSaturationLowPercent") return m_traits.saturationLowPercent; if (id == "analogSaturationHighPercent") return m_traits.saturationHighPercent; if (id == "hartCommandSet") return m_traits.commandSet; if (id == "analogFixedLowMilliamps") return m_traits.fixedLowMilliamps; if (id == "analogFixedHighMilliamps") return m_traits.fixedHighMilliamps; if (id == "analogAlarmLowMilliamps") return m_traits.alarmLowMilliamps; if (id == "analogAlarmHighMilliamps") return m_traits.alarmHighMilliamps; if (id == "rangeLimitTolerancePercent") return m_traits.rangeTolerancePercent; if (id == "minimumSpanAcceptPercent") return m_traits.minimumSpanAcceptPercent; if (id == "hartOperationCounters") return m_traits.operationCounters; if (id == "sensorFault") return m_sensorFault; if (id == "displayInstalled") return m_displayInstalled; if (id == "displayVariable1") return m_displayVariable1; if (id == "displayVariable2") return m_displayVariable2; if (id == "displayCodeMap") return m_displayCodeMap; if (id == "displayModelName") return m_displayModelName; if (id == "sensorLowVolts") return m_sensorLowVolts; if (id == "sensorHighVolts") return m_sensorHighVolts; if (id == "sensorLowValue") return m_sensorLowValue; if (id == "sensorHighValue") return m_sensorHighValue; if (id == "loopCurrentMilliamps") return std::to_string(m_loopCurrent * 1000.0); if (id == "configurationChangedFlags") return static_cast<double>(m_configurationChangedFlags); if (id == "hartCommandsStatus") return m_hartCommandsStatus; if (id == "hartVariablesStatus") return m_hartVariablesStatus; if (id == "baudRate") return static_cast<double>(m_baudRate);
     if (id == "udpPort") return static_cast<double>(m_udpPort);
@@ -1591,6 +1649,7 @@ void HartCommunicationComponent::setPropertyValue(const std::string& id, const P
     else if (id == "analogInputResistance") { m_inputResistance = std::clamp(std::get<double>(v), 1.0, 1e6); m_scheduler.dirtySet().insert(m_componentIndex); }
     else if (id == "analogInputMinimumMilliamps") m_inputMinimumMilliamps = std::clamp(std::get<double>(v), 0.0, 24.0);
     else if (id == "analogInputVariable") { m_inputCurrentVariable = std::get<std::string>(v); m_publishedInputMilliamps = std::numeric_limits<double>::quiet_NaN(); }
+    else if (id == "sensorRangeCode") { m_sensorRangeCode = std::get<std::string>(v); applyLd301SensorRange(); ++m_hartVariablesRevision; rebuildConfiguredPlan(); }
     else if (id == "sensorLowVolts") m_sensorLowVolts = std::get<double>(v);
     else if (id == "sensorHighVolts") m_sensorHighVolts = std::max(m_sensorLowVolts + 1e-9, std::get<double>(v));
     else if (id == "sensorLowValue") m_sensorLowValue = std::get<double>(v);
@@ -1611,7 +1670,22 @@ void HartCommunicationComponent::setPropertyValue(const std::string& id, const P
     config.baudRate = m_baudRate; config.udpPort = m_udpPort; m_endpoint.configure(std::move(config));
 }
 std::vector<PropertyDescriptor> HartCommunicationComponent::propertyDescriptors() {
-    std::vector<PropertyDescriptor> out; for (const auto& schema : propertySchema(m_mode)) out.push_back({schema.id, schema.unit,
+    std::vector<PropertyDescriptor> out; auto schemas = propertySchema(m_mode);
+    if (!m_sensorRangeCode.empty()) {
+        PropertySchema range{"sensorRangeCode", "Modelo/faixa do sensor LD301", "Sensor", "", PropertyValueKind::String, "select", m_sensorRangeCode};
+        range.options = {{"D0","D0 - diferencial, +/-1 kPa"},{"D1","D1 - diferencial, +/-5 kPa"},
+                         {"D2","D2 - diferencial, +/-50 kPa"},{"D3","D3 - diferencial, +/-250 kPa"},
+                         {"D4","D4 - diferencial, +/-2500 kPa"},{"M0","M0 - manometrico, +/-1 kPa"},
+                         {"M1","M1 - manometrico, +/-5 kPa"},{"M2","M2 - manometrico, +/-50 kPa"},
+                         {"M3","M3 - manometrico, -100/+250 kPa"},{"M4","M4 - manometrico, -100/+2500 kPa"},
+                         {"M5","M5 - manometrico, -0.1/+25 MPa"},{"M6","M6 - manometrico, -0.1/+40 MPa"},
+                         {"H2","H2 - diferencial, alta pressao estatica, +/-50 kPa"},
+                         {"H3","H3 - diferencial, alta pressao estatica, +/-250 kPa"},
+                         {"H4","H4 - diferencial, alta pressao estatica, +/-2500 kPa"},
+                         {"H5","H5 - diferencial, alta pressao estatica, +/-25 MPa"}};
+        schemas.push_back(std::move(range));
+    }
+    for (const auto& schema : schemas) out.push_back({schema.id, schema.unit,
         [this, id=schema.id]{ return propertyValue(id); }, [this, id=schema.id](const PropertyValue& v){ setPropertyValue(id,v); }, schema}); return out;
 }
 size_t HartCommunicationComponent::getState(uint8_t* out, size_t cap) const { struct S { uint8_t enabled, address; }; if (cap < sizeof(S)) return 0; S s{static_cast<uint8_t>(m_enabled),m_pollingAddress}; std::memcpy(out,&s,sizeof s); return sizeof s; }

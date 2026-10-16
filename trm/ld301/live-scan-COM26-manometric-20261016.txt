@@ -1,0 +1,4 @@
+Read-only HART Cmd 0 polling scan through COM26->COM27->COM17
+2026-10-16T10:35:25.388370-03:00
+addr 10 TX FF FF FF FF FF 02 8A 00 00 88 RX FF
+1 responses
