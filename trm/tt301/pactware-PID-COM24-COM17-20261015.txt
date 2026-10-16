@@ -1,0 +1,3 @@
+HART transparent serial relay; 2026-10-15T11:37:52.264062-03:00
+Topology: PACTware's paired virtual endpoint <-> COM25 <-> relay <-> COM17 modem
+Format: direction timestamp length hex-bytes
