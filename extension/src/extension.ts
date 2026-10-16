@@ -106,10 +106,9 @@ import { importTdpsSmpCommand } from "./tdps/tdpsCommand";
 import { controlGraphPinIds } from "./catalog/controlGraphCatalog";
 import { ProjectCustomEditorProvider } from "./ui/panels/ProjectCustomEditorProvider";
 import { SimulideImportCustomEditorProvider } from "./ui/panels/SimulideImportCustomEditorProvider";
-import { IecProjectEditorProvider } from "./plc/IecProjectEditorProvider";
 import { OpenPlcEditorProvider, openOpenPlcProject } from "./plc/openplc/OpenPlcEditorProvider";
 import { isLsplcFile } from "./plc/openplc/lsplcFile";
-import { convertIecProjectCommand, exportOpenPlcProjectCommand, importOpenPlcProjectCommand, newIecProjectCommand } from "./plc/plcCommands";
+import { exportOpenPlcProjectCommand, importOpenPlcProjectCommand, newIecProjectCommand } from "./plc/plcCommands";
 import { readPlcNativeModule } from "./plc/artifact";
 import { ensureAllPlcsBuilt, plcConfigurationForProject } from "./plc/plcSchematic";
 import { maybeOfferMachineNetworkSetup, registerMachineNetworkSetupCommand } from "./network/machineNetworkSetup";
@@ -977,7 +976,7 @@ async function chooseFilePropertyCommand(componentId: string, propertyKey: strin
   const picked = providedPath ? undefined : await vscode.window.showOpenDialog({
     canSelectMany: false,
     filters: isImagePath ? { Imagem: ["png", "jpg", "jpeg", "svg"] }
-      : isPlcProject ? { "Projeto PLC": ["lsplc", "json"] }
+      : isPlcProject ? { "Projeto PLC": ["lsplc"] }
       : isPlcArtifact ? { "Artefato PLC": ["json"] }
       : { "Todos os arquivos": ["*"] },
     title: `Selecionar arquivo para ${component.label}`,
@@ -1054,14 +1053,17 @@ async function openPlcProgramCommand(componentId: string): Promise<void> {
   const ref = getElement(state.schematicState, componentId);
   if (!ref || ref.element.typeId !== "plc.instance") return;
   let projectPath = String(ref.element.properties.plcIecProjectRef ?? ref.element.plc?.iecProjectRef ?? "");
-  if (!projectPath || !fs.existsSync(projectPath)) {
-    if (projectPath) vscode.window.showWarningMessage("O programa IEC vinculado não foi encontrado. Selecione o arquivo novamente.");
+  if (!projectPath || !fs.existsSync(projectPath) || !isLsplcFile(projectPath)) {
+    if (projectPath) {
+      vscode.window.showWarningMessage(fs.existsSync(projectPath)
+        ? "O bloco CLP precisa de um projeto PLC .lsplc. Selecione o arquivo."
+        : "O projeto PLC vinculado não foi encontrado. Selecione o arquivo novamente.");
+    }
     const selectedPath = await chooseFilePropertyCommand(componentId, "plcIecProjectRef");
-    if (!selectedPath) return;
+    if (!selectedPath || !isLsplcFile(selectedPath)) return;
     projectPath = selectedPath;
   }
-  if (isLsplcFile(projectPath)) await openOpenPlcProject(projectPath);
-  else await vscode.commands.executeCommand("vscode.openWith", vscode.Uri.file(projectPath), "lasecsimul.iecProjectEditor");
+  await openOpenPlcProject(projectPath);
 }
 
 /** `pinIds` (quando presente) é o contrato elétrico REAL na ordem que o Core espera -- plugins usam
@@ -2490,7 +2492,6 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   context.subscriptions.push(
     { dispose: disposeDeviceReferenceWatchers },
     vscode.commands.registerCommand("lasecsimul.showSimulationLog", () => showSimulationLogChannel()),
-    IecProjectEditorProvider.register(context),
     OpenPlcEditorProvider.register(context),
     registerMachineNetworkSetupCommand(context),
     // Diagnóstico via Command Palette (achado 2026-07-18, pedido explícito do usuário: "tem algum
@@ -2682,7 +2683,6 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     vscode.commands.registerCommand("lasecsimul.plc.newProject", () => newIecProjectCommand()),
     vscode.commands.registerCommand("lasecsimul.plc.importOpenPlcProject", (target?: vscode.Uri) => importOpenPlcProjectCommand(target)),
     vscode.commands.registerCommand("lasecsimul.plc.exportOpenPlcProject", (target?: vscode.Uri) => exportOpenPlcProjectCommand(target)),
-    vscode.commands.registerCommand("lasecsimul.plc.convertIecProject", (target?: vscode.Uri) => convertIecProjectCommand(target)),
     vscode.commands.registerCommand("lasecsimul.palette.registerFile", () => registerCatalogFileCommand(catalogCommandOptions())),
     vscode.commands.registerCommand("lasecsimul.palette.removeRegistered", (item: { sourceId?: string }) =>
       removeRegisteredCatalogItemCommand(item, catalogCommandOptions())

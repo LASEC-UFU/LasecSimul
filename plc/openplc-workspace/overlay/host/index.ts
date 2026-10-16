@@ -19,7 +19,6 @@ import { buildProjectFileContent } from '@root/backend/shared/project/create-pro
 import { parseProjectFiles } from '@root/backend/shared/utils/parse-project-files'
 import { getExtensionFromLanguage, getFolderFromPouType } from '@root/frontend/utils/PLC/pou-file-extensions'
 import { serializePouToText } from '@root/frontend/utils/PLC/pou-text-serializer'
-import { stlibsToSystemLibraries } from '@root/frontend/utils/stlib-to-system-library'
 import type { PLCProjectData } from '@root/middleware/shared/ports/types'
 import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
@@ -32,7 +31,6 @@ import {
   transpileForLasecSimul,
 } from '../shared/transpile'
 import { configureElectronShim, type ElectronShimOptions } from './electron-shim'
-import { convertLegacyIecProject, type LegacyIecProject, type LegacyPou, type LegacyStFallback } from './legacy'
 
 export interface OpenPlcHostOptions extends ElectronShimOptions {
   /** Pasta com as .stlib que acompanham o editor (as mesmas quatro do OpenPLC Editor). */
@@ -83,11 +81,6 @@ export interface OpenPlcHost {
   writeFolderProject(projectDir: string, raw: RawProjectData): Promise<{ success: boolean; error?: string }>
   /** Nome do arquivo de um POU no projeto (`pous/programs/main.ld`). */
   pouRelativePath(pouType: string, name: string, language: string): string
-  /** Projeto IEC antigo do LasecSimul (`*.iec.json`) como projeto OpenPLC. */
-  fromLasecIecProject(
-    project: LegacyIecProject,
-    options?: { fallbackSt?: (pou: LegacyPou) => LegacyStFallback },
-  ): { raw: RawProjectData; warnings: string[] }
   transpile(data: PLCProjectData): LasecTranspileResult
   entryPoint(data: PLCProjectData): LasecEntryPoint
 }
@@ -181,43 +174,6 @@ export function createOpenPlcHost(options: OpenPlcHostOptions): OpenPlcHost {
     }
   }
 
-  const fromLasecIecProject: OpenPlcHost['fromLasecIecProject'] = (project, conversion = {}) => {
-    const systemLibraries = stlibsToSystemLibraries(libraries.loadAll()) as never
-    const converted = convertLegacyIecProject(project, { systemLibraries, ...conversion })
-    const built = buildProjectFileContent({
-      language: 'st',
-      time: converted.tasks[0]?.interval ?? 'T#20ms',
-      type: 'plc-project',
-      name: converted.name,
-    })
-    const projectJson = {
-      ...built.project,
-      data: {
-        ...built.project.data,
-        dataTypes: converted.dataTypes,
-        configuration: {
-          resource: { tasks: converted.tasks, instances: converted.instances, globalVariables: converted.globalVariables },
-        },
-      },
-    }
-    return {
-      raw: {
-        projectPath: '',
-        projectJson: JSON.stringify(projectJson, null, 2),
-        deviceConfig: JSON.stringify(built.deviceConfiguration, null, 2),
-        pinMapping: JSON.stringify(built.devicePinMapping, null, 2),
-        libraryManifest: '',
-        pouFiles: converted.pous.map((pou) => ({
-          relativePath: pouRelativePath(pou.pouType, pou.name, pou.body.language),
-          content: serializePouToText(pou as never),
-        })),
-        serverFiles: [],
-        remoteDeviceFiles: [],
-      },
-      warnings: converted.warnings,
-    }
-  }
-
   const readFolderProject = async (projectDir: string): Promise<RawProjectData> => {
     const raw = await projectService.readRawProjectFiles(projectDir)
     if (!raw.success || !raw.data) {
@@ -256,7 +212,6 @@ export function createOpenPlcHost(options: OpenPlcHostOptions): OpenPlcHost {
     readFolderProject,
     writeFolderProject,
     pouRelativePath,
-    fromLasecIecProject,
     transpile: transpileForLasecSimul,
     entryPoint: resolveLasecEntryPoint,
   }
@@ -265,4 +220,3 @@ export function createOpenPlcHost(options: OpenPlcHostOptions): OpenPlcHost {
 export { iecIntervalMs } from '../shared/transpile'
 export { normalizeSfcBody } from '../shared/sfc'
 export type { LasecEntryPoint, LasecProgramIo, LasecTranspileResult } from '../shared/transpile'
-export type { LegacyIecProject, LegacyPou, LegacyStFallback } from './legacy'

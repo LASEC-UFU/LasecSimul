@@ -1,8 +1,8 @@
 /*
- * Compilação de um projeto IEC 61131-3 até o artefato nativo que o bloco "PLC IEC 61131-3" carrega.
- *
- * Projeto (*.iec.json) -> ST canônico (lowering.ts) -> `lasecsimul-core --plc-compile` (STruCpp +
- * compilador C++, PlcCompiler) -> manifesto PlcNativeModule + executável do worker.
+ * Compilação do programa de um projeto PLC até o artefato nativo que o bloco "PLC IEC 61131-3"
+ * carrega: ST (gerado do projeto .lsplc por openplc/openPlcBuild.ts) -> `lasecsimul-core
+ * --plc-compile` (STruCpp + compilador C++, PlcCompiler) -> manifesto PlcNativeModule + executável
+ * do worker.
  *
  * Cada build fica num diretório nomeado pelo hash do ST e das ferramentas: compilar de novo o mesmo
  * programa não chama o compilador, e o executável de um build que está rodando nunca é
@@ -17,23 +17,18 @@ import * as path from "path";
 import type { PlcNativeModuleDto } from "../ipc/CoreClient";
 import { resolveCoreExecutablePath } from "../core/coreExecutable";
 import { readPlcNativeModule } from "./artifact";
-import { IecProjectAuthoring, IecProjectStore, IecVariable, PouDefinition, parseIecProject } from "./iecProject";
-import { CanonicalStOrigin, IecLoweringError, generateCanonicalSt } from "./lowering";
+import type { SfcElement } from "./sfcLowering";
 
 export interface PlcToolchainPaths {
   coreExecutable: string;
   strucppBinary: string;
-  /** Diretório com os .stlib do pacote da STruCpp (só os da norma são usados, ver IEC_LIBRARIES). */
+  /** Diretório com os .stlib do pacote da STruCpp. */
   strucppLibrarySourceDir: string;
   runtimeIncludeDir: string;
   plcSrcDir: string;
   /** Ausente: o Core procura g++ no PATH e o Visual C++ (PlcCompiler::resolveCxxCompiler). */
   cxxCompiler?: string;
 }
-
-/** Bibliotecas da norma e os blocos adicionais do OpenPLC (PID, RAMP, HYSTERESIS...). A OSCAT do
- * pacote fica de fora: TOGGLE, BLINK, CLK_DIV... colidem com FBs do aluno (PlcCompileOptions). */
-export const IEC_LIBRARIES = ["iec-standard-fb.stlib", "iec-std-functions.stlib", "additional-function-blocks.stlib"];
 
 /** Tipos que o worker sabe ler, escrever e forçar (PlcDriverCodegen::mapIecTypeToVarTypeTag). */
 export const PLC_SCALAR_TYPES = ["BOOL", "SINT", "INT", "DINT", "LINT", "USINT", "UINT", "UDINT", "ULINT",
@@ -80,173 +75,11 @@ export function resolvePlcToolchain(
   };
 }
 
-interface NamedEntry { name: string }
-interface TaskEntry extends NamedEntry { intervalMs?: number; priority?: number; eventVariable?: string }
-interface ResourceEntry extends NamedEntry { task?: string; tasks?: string[] }
-interface ConfigurationEntry extends NamedEntry { resource?: string }
-interface ProgramInstanceEntry extends NamedEntry { pouId?: string; task?: string }
-
-function named<T extends NamedEntry>(values: unknown[]): T[] {
-  return values.filter((value): value is T =>
-    !!value && typeof value === "object" && typeof (value as NamedEntry).name === "string");
-}
-
-export interface PlcEntryPoint {
-  pou: PouDefinition;
-  programName: string;
-  configurationName?: string;
-  resourceName?: string;
-  programInstanceName?: string;
-  taskName?: string;
-  /** Período da tarefa cíclica que executa o programa; 10 ms quando o projeto não define. */
-  taskIntervalMs: number;
-}
-
-/** CONFIGURATION de entrada -> RESOURCE -> instância de programa/TASK de entrada -> POU PROGRAM.
- * O módulo também preserva e executa as demais tasks e instâncias configuradas. */
-export function resolvePlcEntryPoint(project: IecProjectAuthoring): PlcEntryPoint {
-  const configurations = named<ConfigurationEntry>(project.configurations);
-  const resources = named<ResourceEntry>(project.resources);
-  const tasks = named<TaskEntry>(project.tasks);
-  const instances = named<ProgramInstanceEntry>(project.programInstances);
-  const programs = project.pous.filter(pou => pou.kind === "program");
-  const wanted = typeof project.buildSettings.entryConfiguration === "string" ? project.buildSettings.entryConfiguration : undefined;
-  const configuration = configurations.find(item => item.name === wanted) ?? configurations[0];
-  const resource = resources.find(item => item.name === configuration?.resource) ?? resources[0];
-  const assignedTaskNames = Array.isArray(resource?.tasks) ? resource.tasks : resource?.task ? [resource.task] : [];
-  const resourceTasks = new Set(tasks.filter(task => assignedTaskNames.length === 0 || assignedTaskNames.includes(task.name)).map(task => task.name));
-  const candidates = instances.filter(instance => programs.some(pou => pou.pouId === instance.pouId) &&
-    (!instance.task || resourceTasks.size === 0 || resourceTasks.has(instance.task)));
-  const instance = candidates[0];
-  const pou = programs.find(item => item.pouId === instance?.pouId) ?? programs[0];
-  if (!pou) throw new Error("O projeto não tem nenhum POU do tipo PROGRAM.");
-  const task = tasks.find(item => item.name === instance?.task) ?? tasks.find(item => resourceTasks.has(item.name)) ?? tasks[0];
-  const interval = Number(task?.intervalMs);
-  return {
-    pou,
-    programName: pou.name,
-    ...(configuration ? { configurationName: configuration.name } : {}),
-    ...(resource ? { resourceName: resource.name } : {}),
-    ...(instance ? { programInstanceName: instance.name } : {}),
-    ...(task ? { taskName: task.name } : {}),
-    taskIntervalMs: Number.isFinite(interval) && interval > 0 ? interval : 10,
-  };
-}
-
 export interface PlcExportedIoEntry {
   ioId: string;
   name: string;
   direction: "input" | "output";
   iecType: string;
-}
-
-/** Pinos do bloco PLC: VAR_INPUT e VAR_OUTPUT do programa de entrada, na ordem declarada. Sai do
- * projeto sem compilar, igual ao que o Core devolve em `exportedIo` depois da compilação. */
-export function plcExportedIoFromProject(project: IecProjectAuthoring): PlcExportedIoEntry[] {
-  const { pou } = resolvePlcEntryPoint(project);
-  return pou.interface.variables
-    .filter((variable): variable is IecVariable & { class: "input" | "output" } => variable.class === "input" || variable.class === "output")
-    .map(variable => ({
-      ioId: variable.ioId ?? variable.name,
-      name: variable.name,
-      direction: variable.class,
-      iecType: variable.type.toUpperCase(),
-    }));
-}
-
-export interface PlcWatchVariable {
-  name: string;
-  /** Nome usado em plcGet/plcSet/plcForce: `PROGRAMA.VARIAVEL` em maiúsculas. */
-  qualifiedName: string;
-  iecType: string;
-  role: "input" | "output" | "local";
-}
-
-/** Variáveis do programa que o worker publica (entradas, saídas e locais escalares). */
-export function plcWatchVariables(pou: PouDefinition, project?: IecProjectAuthoring): PlcWatchVariable[] {
-  const result: PlcWatchVariable[] = [];
-  const scalarTypes = new Set(PLC_SCALAR_TYPES);
-  const dataTypes = [
-    ...(project?.dataTypes ?? []),
-    ...(project?.pous.filter(item => item.kind === "functionBlock").map(item => ({
-      name: item.name,
-      kind: "struct" as const,
-      fields: item.interface.variables.map(variable => ({ name: variable.name, type: variable.type })),
-    })) ?? []),
-    ...Object.entries({
-      TON: [["IN", "BOOL"], ["PT", "TIME"], ["Q", "BOOL"], ["ET", "TIME"]],
-      TOF: [["IN", "BOOL"], ["PT", "TIME"], ["Q", "BOOL"], ["ET", "TIME"]],
-      TP: [["IN", "BOOL"], ["PT", "TIME"], ["Q", "BOOL"], ["ET", "TIME"]],
-      R_TRIG: [["CLK", "BOOL"], ["Q", "BOOL"]], F_TRIG: [["CLK", "BOOL"], ["Q", "BOOL"]],
-      SR: [["S1", "BOOL"], ["R", "BOOL"], ["Q1", "BOOL"]],
-      RS: [["S", "BOOL"], ["R1", "BOOL"], ["Q1", "BOOL"]],
-      CTU: [["CU", "BOOL"], ["R", "BOOL"], ["PV", "INT"], ["Q", "BOOL"], ["CV", "INT"]],
-      CTD: [["CD", "BOOL"], ["LD", "BOOL"], ["PV", "INT"], ["Q", "BOOL"], ["CV", "INT"]],
-      CTUD: [["CU", "BOOL"], ["CD", "BOOL"], ["R", "BOOL"], ["LD", "BOOL"], ["PV", "INT"], ["QU", "BOOL"], ["QD", "BOOL"], ["CV", "INT"]],
-    }).map(([name, fields]) => ({
-      name, kind: "struct" as const, fields: (fields as string[][]).map(([fieldName, type]) => ({ name: fieldName!, type: type! })),
-    })),
-  ];
-  const appendArray = (pathName: string, elementType: string, bounds: Array<readonly [number, number]>,
-    stack: Set<string>, budget: number): void => {
-    let remaining = budget;
-    const visit = (dimension: number, indices: number[]): void => {
-      if (remaining <= 0) return;
-      if (dimension === bounds.length) {
-        remaining -= 1;
-        append(`${pathName}${indices.map(index => `[${index}]`).join("")}`, elementType, stack, remaining);
-        return;
-      }
-      const [lower, upper] = bounds[dimension]!;
-      for (let index = lower; index <= upper && remaining > 0; index++) visit(dimension + 1, [...indices, index]);
-    };
-    visit(0, []);
-  };
-  const append = (pathName: string, typeName: string, stack: Set<string>, budget = 2048): void => {
-    const normalized = typeName.trim().toUpperCase();
-    if (scalarTypes.has(normalized)) {
-      result.push({ name: pathName, qualifiedName: `${pou.name.toUpperCase()}.${pathName}`, iecType: normalized, role: "local" });
-      return;
-    }
-    const derived = dataTypes.find(type => type.name.toUpperCase() === normalized);
-    if (derived) {
-      if (stack.has(normalized)) return;
-      const nextStack = new Set(stack).add(normalized);
-      if (derived.kind === "alias") append(pathName, derived.baseType, nextStack, budget);
-      else if (derived.kind === "struct") {
-        for (const field of derived.fields) append(`${pathName}.${field.name.toUpperCase()}`, field.type, nextStack, budget);
-      } else if (derived.kind === "array") {
-        const bounds = derived.dimensions.map(bound => {
-          const match = /^\s*(-?\d+)\s*\.\.\s*(-?\d+)\s*$/.exec(bound);
-          return match ? [Number(match[1]), Number(match[2])] as const : undefined;
-        });
-        if (bounds.some(bound => !bound || bound[1] < bound[0])) return;
-        appendArray(pathName, derived.elementType, bounds as Array<readonly [number, number]>, nextStack, budget);
-      }
-      return;
-    }
-    const inlineArray = /^ARRAY\s*\[([^\]]+)\]\s*OF\s*(.+)$/i.exec(typeName.trim());
-    if (inlineArray) {
-      const bounds = inlineArray[1]!.split(",").map(bound => {
-        const match = /^\s*(-?\d+)\s*\.\.\s*(-?\d+)\s*$/.exec(bound);
-        return match ? [Number(match[1]), Number(match[2])] as const : undefined;
-      });
-      if (bounds.some(bound => !bound || bound[1] < bound[0])) return;
-      appendArray(pathName, inlineArray[2]!, bounds as Array<readonly [number, number]>, stack, budget);
-    }
-  };
-
-  for (const variable of pou.interface.variables) {
-    if (variable.class === "input" || variable.class === "output") {
-      if (scalarTypes.has(variable.type.toUpperCase())) result.push({
-        name: variable.name,
-        qualifiedName: `${pou.name.toUpperCase()}.${variable.name.toUpperCase()}`,
-        iecType: variable.type.toUpperCase(),
-        role: variable.class,
-      });
-    } else if (variable.class === "local") append(variable.name.toUpperCase(), variable.type, new Set());
-  }
-  return result;
 }
 
 /** Resposta de plcGet/plcSet/plcForce: `MAIN.LAMP : BOOL = TRUE [FORCED]`. */
@@ -321,6 +154,20 @@ function safeName(value: string): string {
   return value.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 40) || "plc";
 }
 
+/** De onde veio cada linha do ST gerado: erros do STruCpp e do g++ (via #line) apontam para a
+ * linha gerada, e o editor mostra o POU e a linha do corpo que o aluno escreveu. */
+export interface CanonicalStOrigin {
+  pouId: string;
+  pouName: string;
+  section: "header" | "declaration" | "body";
+  /** Linha do corpo (1 = primeira linha do texto do POU), só em `section: "body"`. */
+  bodyLine?: number;
+  /** Variável declarada nesta linha, em `section: "declaration"`. */
+  variableName?: string;
+  /** SFC: passo, transição ou ação que gerou a linha. */
+  element?: SfcElement;
+}
+
 /** Erro do STruCpp (`programa.st:8:16: error: ...`) ou do g++ via #line. */
 const SOURCE_DIAGNOSTIC = /^(?:.*[\\/])?([^\\/:]+\.st):(\d+):(\d+):\s*(error|warning):\s*(.*)$/;
 
@@ -351,7 +198,7 @@ export function mapCompilerOutput(output: string, origins: CanonicalStOrigin[], 
 }
 
 /** Copia só as bibliotecas pedidas para um diretório próprio (STruCpp lê todas de um `-L`). */
-export function prepareIecLibraryDir(toolchain: PlcToolchainPaths, cacheRoot: string, libraries: readonly string[] = IEC_LIBRARIES): string {
+export function prepareIecLibraryDir(toolchain: PlcToolchainPaths, cacheRoot: string, libraries: readonly string[]): string {
   const source = toolchain.strucppLibrarySourceDir;
   const present = libraries.filter(name => fs.existsSync(path.join(source, name)));
   if (present.length === 0) throw new Error(`Bibliotecas IEC do STruCpp não encontradas em ${source}`);
@@ -406,69 +253,6 @@ function removeStaleBuilds(cacheRoot: string, prefix: string, keep: string): voi
   }
 }
 
-export async function buildIecProjectFile(projectPath: string, options: PlcBuildOptions): Promise<PlcBuildResult> {
-  let project: IecProjectAuthoring;
-  try {
-    project = parseIecProject(JSON.parse(fs.readFileSync(projectPath, "utf8")));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, diagnostics: [{ severity: "error", stage: "project", message }], log: message };
-  }
-  return buildIecProject(project, options);
-}
-
-export async function buildIecProject(project: IecProjectAuthoring, options: PlcBuildOptions): Promise<PlcBuildResult> {
-  const started = Date.now();
-  const log = options.log ?? (() => undefined);
-  const fail = (diagnostics: PlcBuildDiagnostic[], text: string, entry?: PlcEntryPoint): PlcBuildResult =>
-    ({ ok: false, diagnostics, log: text, ...(entry ? { entry } : {}) });
-
-  let entry: PlcEntryPoint;
-  try {
-    entry = resolvePlcEntryPoint(project);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return fail([{ severity: "error", stage: "project", message }], message);
-  }
-  const store = new IecProjectStore(project);
-  const warnings: PlcBuildDiagnostic[] = [];
-  for (const pou of project.pous) {
-    if (pou.implementation.language === "ld" && !pou.implementation.rungs) {
-      warnings.push({ severity: "warning", stage: "project", pouId: pou.pouId, pouName: pou.name,
-        message: `${pou.name} está em ${pou.implementation.language.toUpperCase()}: a tradução desta linguagem para ST ainda é experimental.` });
-    }
-  }
-
-  let canonical: ReturnType<typeof generateCanonicalSt>;
-  try {
-    canonical = generateCanonicalSt(store, project.projectId, entry.pou.pouId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (error instanceof IecLoweringError) {
-      return fail([...warnings, ...error.diagnostics.map(item => ({
-        severity: "error" as const, stage: "lowering", message: item.message, pouId: item.pouId, pouName: item.pouName, line: item.line,
-        ...(item.element ? { elementId: item.element.id, elementLabel: item.element.label } : {}),
-      }))], message, entry);
-    }
-    return fail([{ severity: "error", stage: "project", message }], message, entry);
-  }
-
-  const ioIdByVariableName: Record<string, string> = {};
-  for (const variable of entry.pou.interface.variables) {
-    if ((variable.class === "input" || variable.class === "output") && variable.ioId) ioIdByVariableName[variable.name] = variable.ioId;
-  }
-  return compileStProgram({
-    projectId: project.projectId,
-    programName: entry.pou.name,
-    st: canonical.text,
-    origins: canonical.origins,
-    ioIdByVariableName,
-    entry,
-    warnings,
-    started,
-  }, options);
-}
-
 export interface StProgramBuildInput {
   /** Prefixo do diretório de build (builds antigos do mesmo projeto são apagados). */
   projectId: string;
@@ -479,8 +263,8 @@ export interface StProgramBuildInput {
   ioIdByVariableName: Record<string, string>;
   entry: PlcBuildEntry;
   warnings?: PlcBuildDiagnostic[];
-  /** .stlib passadas à STruCpp; padrão IEC_LIBRARIES. */
-  libraries?: readonly string[];
+  /** .stlib passadas à STruCpp. */
+  libraries: readonly string[];
   /** Entra na chave do cache junto com o ST (ex.: o mesmo ST com outro mapeamento de diagnóstico). */
   cacheSalt?: string;
   started?: number;
@@ -492,7 +276,7 @@ export async function compileStProgram(input: StProgramBuildInput, options: PlcB
   const log = options.log ?? (() => undefined);
   const { entry, ioIdByVariableName } = input;
   const warnings = input.warnings ?? [];
-  const libraries = input.libraries ?? IEC_LIBRARIES;
+  const { libraries } = input;
   const fail = (diagnostics: PlcBuildDiagnostic[], text: string): PlcBuildResult =>
     ({ ok: false, diagnostics, log: text, entry });
 
@@ -508,8 +292,7 @@ export async function compileStProgram(input: StProgramBuildInput, options: PlcB
     compiler: fileStamp(path.join(toolchain.plcSrcDir, "PlcCompiler.cpp")),
     parser: fileStamp(path.join(toolchain.plcSrcDir, "PlcInterfaceParser.cpp")),
     driverCodegen: fileStamp(path.join(toolchain.plcSrcDir, "PlcDriverCodegen.cpp")),
-    // Só entram quando diferentes do padrão: a chave dos projetos .iec.json continua a mesma.
-    ...(input.libraries ? { libraries } : {}),
+    libraries,
     ...(input.cacheSalt ? { salt: input.cacheSalt } : {}),
   })).slice(0, 16);
   const prefix = `${safeName(input.projectId)}-`;

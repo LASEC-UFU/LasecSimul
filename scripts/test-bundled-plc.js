@@ -3,10 +3,11 @@
 
 /**
  * Gate pós-empacotamento do CLP IEC 61131-3: reextrai o VSIX FINAL num caminho com espaço, fora do
- * repositório, e compila um projeto IEC pelo MESMO código da extensão instalada
- * (`out/plc/plcBuild.js`: resolvePlcToolchain + buildIecProject), com o Core, o STruCpp, o runtime
- * e (Windows) o g++ que estão dentro do pacote. No Windows o PATH fica só com System32, como na
- * máquina de um aluno sem MSYS2.
+ * repositório, cria projetos PLC `.lsplc` com o host do editor OpenPLC empacotado e os compila pelo
+ * MESMO código da extensão instalada (`out/plc/openplc/openPlcBuild.js`), com o Core, o STruCpp, as
+ * bibliotecas, o runtime e (Windows) o g++ que estão dentro do pacote: um programa ST com TON e o SFC
+ * de um projeto novo (tradução SFC -> ST). No Windows o PATH fica só com System32, como na máquina de
+ * um aluno sem MSYS2.
  *
  * Uso: node scripts/test-bundled-plc.js [caminho-para-o.vsix]
  */
@@ -52,7 +53,9 @@ async function main() {
   }
 
   const plcBuild = require(path.join(extensionPath, "out", "plc", "plcBuild.js"));
-  const { starterIecProject } = require(path.join(extensionPath, "out", "plc", "plcProjectTemplate.js"));
+  const { buildOpenPlcProject } = require(path.join(extensionPath, "out", "plc", "openplc", "openPlcBuild.js"));
+  const { loadOpenPlcHost } = require(path.join(extensionPath, "out", "plc", "openplc", "openPlcHost.js"));
+  const lsplc = require(path.join(extensionPath, "out", "plc", "openplc", "lsplcFile.js"));
   const toolchain = plcBuild.resolvePlcToolchain(extensionPath);
   for (const [label, file] of Object.entries({ core: toolchain.coreExecutable, strucpp: toolchain.strucppBinary,
     runtime: toolchain.runtimeIncludeDir, driver: toolchain.plcSrcDir, ...(toolchain.cxxCompiler ? { cxx: toolchain.cxxCompiler } : {}) })) {
@@ -60,16 +63,46 @@ async function main() {
   }
   if (process.platform === "win32" && !toolchain.cxxCompiler) fail("g++ empacotado ausente (bundled/plc/ucrt64)");
 
-  const project = starterIecProject("gate");
-  project.pous[0].interface.variables.push({ name: "T1", class: "local", type: "TON" }, { name: "COUNT", class: "local", type: "INT" });
-  project.pous[0].implementation = { language: "st", text: "T1(IN := DI0 AND NOT T1.Q, PT := T#100ms);\nIF T1.Q THEN COUNT := COUNT + 1; END_IF;\nDO0 := DI0;" };
-  const cacheRoot = path.join(path.dirname(extensionPath), "plc builds");
-  const result = await plcBuild.buildIecProject(project, { toolchain, cacheRoot, log: (line) => console.log(`[bundled-plc] ${line}`) });
-  if (!result.ok) fail(`compilação: ${JSON.stringify(result.diagnostics, null, 2)}\n${result.log}`);
-  if (!fs.existsSync(result.module.nativeBinaryRef)) fail("executável do worker ausente");
-  console.log(`[bundled-plc] OK: ${result.module.programName} compilado com ${result.module.cxxToolchainVersion || "g++"} ` +
-    `em ${(result.durationMs / 1000).toFixed(1)} s (STruCpp ${result.module.strucppVersion})`);
-  fs.rmSync(path.dirname(extensionPath), { recursive: true, force: true });
+  const work = path.dirname(extensionPath);
+  const host = loadOpenPlcHost({ extensionPath, storageDir: path.join(work, "storage"), toolchain });
+  const io = [{ name: "DI0", direction: "input", type: "BOOL" }, { name: "DO0", direction: "output", type: "BOOL" }];
+  const projects = {
+    // ST com um FB da biblioteca padrão.
+    st: (raw) => ({
+      ...raw,
+      pouFiles: raw.pouFiles.map((file) => ({
+        ...file,
+        content: [
+          "PROGRAM main",
+          "  VAR_INPUT", "    DI0 : BOOL;", "  END_VAR",
+          "  VAR_OUTPUT", "    DO0 : BOOL;", "  END_VAR",
+          "  VAR", "    T1 : TON;", "    COUNT : INT;", "  END_VAR",
+          "",
+          "T1(IN := DI0 AND NOT T1.Q, PT := T#100ms);",
+          "IF T1.Q THEN COUNT := COUNT + 1; END_IF;",
+          "DO0 := DI0;",
+          "",
+          "END_PROGRAM",
+        ].join("\n"),
+      })),
+    }),
+    // SFC de um projeto novo (Init -> DI0 -> S1 com DO0 -> NOT DI0 -> Init).
+    sfc: (raw) => raw,
+  };
+  const cacheRoot = path.join(work, "plc builds");
+  for (const [language, prepare] of Object.entries(projects)) {
+    const file = path.join(work, `gate ${language}.lsplc`);
+    const { projectPath: _projectPath, ...raw } = prepare(host.newProjectFiles({ name: `gate_${language}`, language, io }));
+    lsplc.writeLsplc(file, lsplc.bundleFromRaw(raw));
+    const result = await buildOpenPlcProject(file, { host, toolchain, cacheRoot, log: (line) => console.log(`[bundled-plc] ${line}`) });
+    if (!result.ok) fail(`compilação ${language.toUpperCase()}: ${JSON.stringify(result.diagnostics, null, 2)}\n${result.log}`);
+    if (!fs.existsSync(result.module.nativeBinaryRef)) fail(`executável do worker ausente (${language})`);
+    const pins = result.module.exportedIo.map((item) => `${item.direction}:${item.name}`).join(",");
+    if (pins !== "input:DI0,output:DO0") fail(`pinos ${language}: ${pins}`);
+    console.log(`[bundled-plc] OK ${language.toUpperCase()}: ${result.module.programName} compilado com ${result.module.cxxToolchainVersion || "g++"} ` +
+      `em ${(result.durationMs / 1000).toFixed(1)} s (STruCpp ${result.module.strucppVersion})`);
+  }
+  fs.rmSync(work, { recursive: true, force: true });
 }
 
 main().catch((error) => fail(error && error.stack ? error.stack : String(error)));

@@ -15,7 +15,6 @@ pasta `overlay/` para `src/lasecsimul/` e gera `extension/media/openplc-workspac
 | `overlay/shared/transpile.ts` | Projeto OpenPLC -> ST e programa de entrada (pinos do bloco CLP) |
 | `overlay/shared/sfc.ts` | Corpo dos POUs SFC (mesmos campos do modelo SFC do LasecSimul + posições), layout automático |
 | `overlay/shared/function-temp-types.ts` | Tipo da saída de funções genéricas (ADD, MUL...) no LD/FBD, que o transpilador do OpenPLC deixa BOOL |
-| `overlay/host/legacy.ts` | Projeto IEC antigo (`*.iec.json`) -> projeto OpenPLC; LD em grade montado com as funções do editor LD |
 | `overlay/webview/sfc/` | Editor SFC (no lugar do stub do OpenPLC) e a barra de ferramentas SFC |
 | `overlay/patch-loader.cjs` | Os ajustes no código do OpenPLC (capacidades, menu de POU, SFC, tipo de saída de função), aplicados no empacotamento |
 | `overlay/webpack.*.cjs` | Configurações de empacotamento (Webview e host) |

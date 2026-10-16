@@ -8,7 +8,6 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import type { IecProjectAuthoring, PouDefinition } from "../iecProject";
 import { PlcToolchainPaths } from "../plcBuild";
 import { rawProjectFiles, readLsplc } from "./lsplcFile";
 
@@ -92,12 +91,6 @@ export interface OpenPlcHost {
   readFolderProject(projectDir: string): Promise<RawProjectData>;
   writeFolderProject(projectDir: string, raw: RawProjectData): Promise<{ success: boolean; error?: string }>;
   pouRelativePath(pouType: string, name: string, language: string): string;
-  /** Projeto IEC antigo do LasecSimul (`*.iec.json`) como projeto OpenPLC; `fallbackSt` traduz para
-   * ST o POU que o OpenPLC não desenha. */
-  fromLasecIecProject(
-    project: IecProjectAuthoring,
-    options?: { fallbackSt?: (pou: PouDefinition) => { text: string; variables: Array<{ name: string; type: string }> } },
-  ): { raw: RawProjectData; warnings: string[] };
   transpile(data: OpenPlcProjectData): OpenPlcTranspileResult;
   entryPoint(data: OpenPlcProjectData): OpenPlcEntryPoint;
 }

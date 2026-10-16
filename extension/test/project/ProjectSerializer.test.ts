@@ -252,7 +252,7 @@ import { resolveProjectSourcePaths } from "../../src/project/projectPathPolicy";
     properties: {},
     visual: { x: 20, y: 30, rotation: 0 },
     plc: {
-      iecProjectRef: "../plc/controller.iec.json",
+      iecProjectRef: "../plc/controller.lsplc",
       entryConfiguration: "MainConfiguration",
       artifactRef: "../plc/build/controller.exe",
       expectedArtifactHash: "a".repeat(64),

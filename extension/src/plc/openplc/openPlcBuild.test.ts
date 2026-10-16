@@ -144,7 +144,7 @@ function lsplc(): void {
     });
     writeLsplc(file, bundle);
     assert.equal(isLsplcFile(file), true);
-    assert.equal(isLsplcFile(path.join(root, "x.iec.json")), false);
+    assert.equal(isLsplcFile(path.join(root, "x.json")), false);
     const read = readLsplc(file);
     assert.equal(read.format, LSPLC_FORMAT);
     assert.deepEqual(Object.keys(read.files), ["pous/programs/main.sfc"]);

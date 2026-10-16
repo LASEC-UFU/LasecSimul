@@ -1,11 +1,12 @@
-// Projetos IEC antigos (`*.iec.json`) convertidos para `.lsplc` abertos no editor OpenPLC dentro do
-// VS Code: os exemplos de trm/plc em LD e em SFC (cópias numa pasta temporária, com o esquemático
-// redirecionado para o .lsplc). Confere o desenho (degraus com paralelo e blocos; passos, transições
-// e ações), compila pelo Build do OpenPLC e roda a simulação pelo Play. Mouse e teclado do CDP.
+// Exemplos de trm/plc (.lsplc) abertos no editor OpenPLC dentro do VS Code, em LD e em SFC (cópias do
+// projeto e do esquemático numa pasta temporária). Confere o desenho (degraus com paralelo e blocos;
+// passos, transições e ações), que o projeto abre sem modificação, compila pelo Build do OpenPLC, roda
+// a simulação pelo Play no esquemático do exemplo e, no LD, que o depurador lê membros de instâncias de
+// FB (T1.Q, T1.ET, FLIP.Q). Mouse e teclado do CDP.
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { launch, waitConsole, waitFor, sleep, harnessRoot, repoRoot } = require("./openplc-lab.cjs");
+const { launch, waitConsole, waitFor, sleep, repoRoot } = require("./openplc-lab.cjs");
 
 const out = path.join(__dirname, "artifacts", "openplc");
 fs.mkdirSync(out, { recursive: true });
@@ -15,22 +16,11 @@ const check = (name, ok, detail = "") => {
   console.log(`${ok ? "ok  " : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
 };
 
-/** Cópia do exemplo (projeto antigo + esquemático) convertida para .lsplc. */
-function convertExample(name) {
-  const legacy = require(path.join(harnessRoot, "out", "plc", "openplc", "legacyIecProject.js"));
-  const { createOpenPlcHost } = require(path.join(harnessRoot, "media", "openplc-workspace", "host", "host.js"));
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lasecsimul-openplc-legacy-"));
-  for (const file of [`${name}.iec.json`, `${name}.lsproj`]) fs.copyFileSync(path.join(repoRoot, "trm", "plc", file), path.join(root, file));
-  const host = createOpenPlcHost({
-    userDataDir: path.join(root, "user-data"),
-    bundledLibrariesDir: path.join(repoRoot, "plc", "strucpp", "build", `${process.platform}-${process.arch}`, "strucpp", "libs"),
-    librariesDir: path.join(root, "libraries"),
-  });
-  const source = path.join(root, `${name}.iec.json`);
-  const { target, warnings } = legacy.convertLegacyIecProjectFile(host, source);
-  const schematic = path.join(root, `${name}.lsproj`);
-  legacy.retargetSchematic(schematic, source, target);
-  return { projectFile: target, schematic, warnings };
+/** Cópia do exemplo (projeto .lsplc + esquemático) numa pasta temporária. */
+function copyExample(name) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lasecsimul-openplc-example-"));
+  for (const file of [`${name}.lsplc`, `${name}.lsproj`]) fs.copyFileSync(path.join(repoRoot, "trm", "plc", file), path.join(root, file));
+  return { projectFile: path.join(root, `${name}.lsplc`), schematic: path.join(root, `${name}.lsproj`) };
 }
 
 async function build(frame) {
@@ -75,8 +65,7 @@ async function openDebugger(frame) {
 }
 
 async function scenarioLd() {
-  const { projectFile, schematic, warnings } = convertExample("partida_pisca_ld");
-  check("LD: conversão só avisa da troca de nome do TOGGLE", warnings.length === 1 && /TOGGLE_1/.test(warnings[0]), warnings.join(" | "));
+  const { projectFile, schematic } = copyExample("partida_pisca_ld");
   const session = await launch({ projectFile, fixture: schematic, width: 1700, height: 1100 });
   const { frame, workbench } = session;
   try {
@@ -96,13 +85,13 @@ async function scenarioLd() {
       .flatMap((flow) => flow.rungs.flatMap((rung) => rung.nodes.filter((node) => node.type === "block").map((node) => node.data.variant?.name))));
     check("LD: blocos TON, TOGGLE_1 e ADD", ["TON", "TOGGLE_1", "ADD"].every((name) => blocks.includes(name)), blocks.join(" | "));
     const dirty = await workbench.locator(".tabs-container .tab.dirty").count();
-    check("LD: projeto convertido abre sem modificação", dirty === 0, `abas sujas: ${dirty}`);
-    await workbench.screenshot({ path: path.join(out, "70-legacy-ld.png") });
+    check("LD: projeto abre sem modificação", dirty === 0, `abas sujas: ${dirty}`);
+    await workbench.screenshot({ path: path.join(out, "70-example-ld.png") });
     await frame.locator(".react-flow").nth(3).scrollIntoViewIfNeeded();
     await sleep(600);
-    await workbench.screenshot({ path: path.join(out, "72-legacy-ld-blocks.png") });
+    await workbench.screenshot({ path: path.join(out, "72-example-ld-blocks.png") });
     const tail = await build(frame);
-    check("LD convertido compila no Core", /Build (finished|is up to date)/.test(tail), tail.slice(-160));
+    check("LD compila no Core", /Build (finished|is up to date)/.test(tail), tail.slice(-160));
     const ran = await play(frame, workbench, async () => {
       // Depurador: membros das instâncias de FB (T1 : TON, FLIP : TOGGLE_1) no mapa, com valor do CLP.
       check("LD: depurador conectado ao CLP do exemplo", await openDebugger(frame));
@@ -115,17 +104,16 @@ async function scenarioLd() {
       }, members);
       const seen = await waitFor(read, (list) => !list.some((item) => /fora do mapa$/.test(item)) && !/=\?$/.test(list[0]), 20000);
       check("LD: depurador mapeia membros de FB e lê T1.Q do CLP", !seen.some((item) => /fora do mapa$/.test(item)) && !/=\?$/.test(seen[0]), seen.join(", "));
-      await workbench.screenshot({ path: path.join(out, "73-legacy-ld-debug.png") });
+      await workbench.screenshot({ path: path.join(out, "73-example-ld-debug.png") });
     });
-    check("LD convertido roda no esquemático do exemplo (pinos START/STOP/LAMP/BLINK)", ran.status === "RUNNING" && /rodando/i.test(ran.badge), `${ran.status}`);
+    check("LD roda no esquemático do exemplo (pinos START/STOP/LAMP/BLINK)", ran.status === "RUNNING" && /rodando/i.test(ran.badge), `${ran.status}`);
   } finally {
     await session.close();
   }
 }
 
 async function scenarioSfc() {
-  const { projectFile, schematic, warnings } = convertExample("semaforo_sfc");
-  check("SFC: conversão sem avisos", warnings.length === 0, warnings.join(" | "));
+  const { projectFile, schematic } = copyExample("semaforo_sfc");
   const session = await launch({ projectFile, fixture: schematic, width: 1700, height: 1100 });
   const { frame, workbench } = session;
   try {
@@ -142,11 +130,11 @@ async function scenarioSfc() {
     check("SFC: passos VM, VD e AM e as 4 transições", ["VM", "VD", "AM"].every((name) => drawn.steps.includes(name)) && drawn.transitions === 4, JSON.stringify(drawn));
     const actions = await frame.evaluate(() => Array.from(document.querySelectorAll(".react-flow__node-sfcStep input")).map((input) => input.value).filter(Boolean));
     check("SFC: blocos de ação com as saídas e a ação CONTA", ["VERMELHO", "VERDE", "AMARELO", "CONTA"].every((name) => actions.includes(name)), actions.join(", "));
-    await workbench.screenshot({ path: path.join(out, "71-legacy-sfc.png") });
+    await workbench.screenshot({ path: path.join(out, "71-example-sfc.png") });
     const tail = await build(frame);
-    check("SFC convertido compila no Core", /Build (finished|is up to date)/.test(tail), tail.slice(-160));
+    check("SFC compila no Core", /Build (finished|is up to date)/.test(tail), tail.slice(-160));
     const ran = await play(frame, workbench);
-    check("SFC convertido roda no esquemático do exemplo", ran.status === "RUNNING" && /rodando/i.test(ran.badge), `${ran.status}`);
+    check("SFC roda no esquemático do exemplo", ran.status === "RUNNING" && /rodando/i.test(ran.badge), `${ran.status}`);
   } finally {
     await session.close();
   }

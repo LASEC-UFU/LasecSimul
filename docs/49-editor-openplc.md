@@ -66,36 +66,20 @@ resolvidos dentro do arquivo, que é gravado de uma vez (temporário + troca). C
 - **LasecSimul: Export PLC Project to OpenPLC Editor** — `.lsplc` → pasta do OpenPLC original (POUs
   SFC só abrem no LasecSimul; o OpenPLC 4.2.8 não tem editor SFC).
 
-- **LasecSimul: Convert IEC Project (.iec.json) to .lsplc** — projeto antigo → `.lsplc` (também no
-  menu de contexto do explorer sobre um `*.iec.json` e no título do editor antigo).
+O formato `.iec.json` e os editores próprios das primeiras etapas do CLP foram descontinuados e
+removidos (fase beta): o projeto PLC é só o `.lsplc`.
 
-### Projetos antigos (`.iec.json`)
+### Exemplos
 
-Os projetos dos editores próprios das etapas 1 a 4 (`*.iec.json`) continuam abrindo no editor antigo,
-mas não são mais criados; o comando acima os converte. O arquivo antigo fica como estava, o `.lsplc`
-é gravado ao lado com o mesmo nome e, se algum esquemático do workspace usa o projeto antigo, o
-comando oferece passar a usar o novo (os pinos são as mesmas `VAR_INPUT`/`VAR_OUTPUT`, com o mesmo
-nome, então os fios continuam ligados). Os exemplos de `trm/plc` já foram convertidos e os
-esquemáticos deles apontam para os `.lsplc`.
+Em `trm/plc`, cada exemplo é um `.lsplc` com o esquemático que o usa: `partida_pisca` (ST),
+`partida_pisca_il` (IL), `partida_pisca_ld` (LD, com o selo em paralelo e os blocos TON, TOGGLE_1 e
+ADD com EN/ENO) e `semaforo_sfc` (SFC com divergência seletiva e ação P1). O bloco dos exemplos se
+chama `TOGGLE_1` porque a OSCAT Basic já tem um `TOGGLE`: as bibliotecas do OpenPLC entram sempre na
+compilação, então um POU do projeto não pode ter o nome de um bloco delas.
 
-- **ST e IL** passam como texto; o **SFC** já usa o mesmo modelo e só ganha o desenho (layout
-  automático a partir do passo inicial).
-- **LD**: o LD antigo é uma grade com ligações verticais; a conversão (`overlay/host/legacy.ts`) a
-  transforma numa expressão série-paralelo (fatorando o trecho comum dos ramos) e monta cada degrau
-  com as funções do próprio editor do OpenPLC — as mesmas que rodam quando um elemento é solto num
-  marcador (`addNewElement`, em série ou no marcador de baixo, que abre um paralelo). O resultado é um
-  degrau igual ao desenhado à mão: contatos (NA, NF, bordas), bobinas (normal, negada, set, reset,
-  bordas), blocos com as variáveis ligadas e EN/ENO quando o degrau passa por eles. O arquivo
-  convertido abre sem marcar modificação e, salvo sem mexer, fica idêntico.
-- O que o editor LD do OpenPLC não desenha — salto/retorno, contato de comparação, ramo vazio — e o
-  FBD antigo vão como ST, pela mesma tradução que o build do LasecSimul usava, com aviso.
-- Bloco ou função do projeto com o nome de um bloco das bibliotecas do OpenPLC (a OSCAT Basic tem
-  `TOGGLE`, o mesmo nome do bloco dos exemplos) ganha um sufixo (`TOGGLE_1`), com aviso; as bibliotecas
-  entram sempre na compilação e os dois nomes colidiriam.
-
-![Exemplo LD convertido: selo como paralelo](assets/49-openplc/10-exemplo-ld-convertido.png)
-![Exemplo LD convertido: TON, TOGGLE_1 e ADD com EN/ENO](assets/49-openplc/11-exemplo-ld-blocos.png)
-![Exemplo SFC convertido](assets/49-openplc/12-exemplo-sfc-convertido.png)
+![Exemplo LD: selo como paralelo](assets/49-openplc/10-exemplo-ld.png)
+![Exemplo LD: TON, TOGGLE_1 e ADD com EN/ENO](assets/49-openplc/11-exemplo-ld-blocos.png)
+![Exemplo SFC](assets/49-openplc/12-exemplo-sfc.png)
 
 ## 3. O que o usuário tem
 
@@ -148,9 +132,8 @@ esquemáticos deles apontam para os `.lsplc`.
 
 ## 4. Integração com o esquemático
 
-- O bloco **"PLC IEC 61131-3"** aceita no campo "Programa IEC" o arquivo `.lsplc` (e ainda o
-  `.iec.json` antigo). Os pinos são as `VAR_INPUT`/`VAR_OUTPUT` do programa da primeira instância da
-  RESOURCE, lidos sem compilar.
+- O bloco **"PLC IEC 61131-3"** recebe no campo "Programa IEC" o arquivo `.lsplc`. Os pinos são as
+  `VAR_INPUT`/`VAR_OUTPUT` do programa da primeira instância da RESOURCE, lidos sem compilar.
 - "Abrir programa" no bloco abre o editor; "Novo projeto PLC" cria um `.lsplc` na linguagem escolhida.
   O SFC novo já vem funcionando: Init → `DI0` → S1 (ação N em `DO0`) → `NOT DI0` → Init.
 - Rodar a simulação compila o projeto (cache por hash do ST e das ferramentas) e carrega o módulo no
@@ -218,27 +201,24 @@ Os testes de ponta a ponta abrem o VS Code de teste com a extensão, dirigem o e
 o mouse/teclado do sistema) e conferem: Ladder (tabela de variáveis, degrau, contato e bobina
 arrastados, desfazer/refazer, duplicar/apagar degrau, Library Manager, aba modificada e Ctrl+S,
 autocompletar de variáveis, Build no Core), linguagens (LSP de ST, menu "+", IL, FBD com ligação
-puxada e Delete), depuração (Play/Stop, Debugger com cores de energia, Force True, PLC Logs) e SFC
+puxada e Delete), depuração (Play/Stop, Debugger com cores de energia, Force True, PLC Logs), SFC
 (desenho inicial, barra de ferramentas, transição e passo arrastados que se ligam sozinhos, condição,
 bloco de ação, desfazer/refazer, renomear, salvar no `.lsplc`, Build, Play, passo inicial ativo e a
-evolução Init → S1 → TEMPO no CLP simulado), sem erros no console da Webview, e os exemplos
-`trm/plc` convertidos (degraus com o paralelo do selo e os blocos TON/TOGGLE_1/ADD, abrir sem
-modificação, passos/transições/ações do semáforo, Build e Play no esquemático do exemplo). Com
-`LASECSIMUL_OPENPLC_LAB_MIRROR=1` a extensão de teste roda num espelho do repositório feito só de
-junções — útil quando há edições em andamento em `core/src` que deixariam o Core "desatualizado" para
-a extensão de desenvolvimento.
+evolução Init → S1 → TEMPO no CLP simulado) e os exemplos de `trm/plc` (degraus com o paralelo do
+selo e os blocos TON/TOGGLE_1/ADD, abrir sem modificação, depurador lendo membros de FB, passos,
+transições e ações do semáforo, Build e Play no esquemático do exemplo), sem erros no console da
+Webview. Com `LASECSIMUL_OPENPLC_LAB_MIRROR=1` a extensão de teste roda num espelho do repositório
+feito só de junções — útil quando há edições em andamento em `core/src` que deixariam o Core
+"desatualizado" para a extensão de desenvolvimento; `node test/run-mirrored.cjs <teste em out/>`
+(dentro de `extension`) faz o mesmo para os testes no Core real.
 
-Teste unitário: `node out-test/src/plc/openplc/openPlcBuild.test.js` (também em `npm test`): mapa de
-linhas, tradução SFC→ST do semáforo, diagnóstico de passo inicial e o arquivo `.lsplc`.
+Testes unitários (em `npm test`): `openPlcBuild.test.js` (mapa de linhas, tradução SFC→ST do
+semáforo, diagnóstico de passo inicial, o arquivo `.lsplc`, tabela de variáveis do depurador),
+`plcBuild.test.js`, `sfcLowering.test.js` e `ilLowering.test.js`.
 
-Conversão dos projetos antigos, no Core real: `npm --prefix extension run test:plc:openplc-core`. O
-projeto antigo (build do LasecSimul) e o convertido (transpilador do OpenPLC) rodam lado a lado no
-mesmo Core, com as mesmas entradas pseudoaleatórias, e as saídas são comparadas a cada passo: os
-quatro exemplos de `trm/plc`, degraus em grade com série, selo, ramo no meio, paralelos aninhados,
-bobinas em paralelo e ramos com bobinas diferentes, set/reset, bordas, bobina negada, TON e ADD com
-EN/ENO, e um LD com salto e comparação (que vai como ST). Quando há edições em andamento em `core/src`,
-`node test/run-mirrored.cjs out/plc/openplc/legacyIecProject.realCore.test.js` (dentro de `extension`)
-roda o mesmo teste pelo espelho de junções.
+O pacote de release passa por `scripts/test-bundled-plc.js`: o VSIX final é reextraído e dois
+projetos `.lsplc` (ST com TON e o SFC de um projeto novo) são compilados só com o que vem dentro
+dele (host do OpenPLC, bibliotecas, STruCpp, Core e, no Windows, o g++).
 
 ## 8. Limitações conhecidas
 
@@ -249,10 +229,5 @@ roda o mesmo teste pelo espelho de junções.
 - Não foram exercitados nos testes automáticos: copiar/colar (na Webview passa pela área de
   transferência do sistema, compartilhada com a sessão do usuário), instalar uma `.stlib` pelo Library
   Manager e os comandos de importar/exportar (diálogos de arquivo).
-- Conversão de `.iec.json`: o FBD antigo e o LD com salto, retorno ou contato de comparação viram
-  ST; `RETAIN` não existe no OpenPLC Editor e sai das variáveis; tipos apelido (`TYPE A : INT`) não
-  existem nele e saem do projeto; várias listas de variáveis globais viram uma só. Tudo isso com aviso.
-  O comando em si (diálogos e a pergunta sobre os esquemáticos) não tem teste automático; a conversão
-  e a troca de referência no esquemático têm.
 - A aba do editor abaixo de ~1000 px de largura fica apertada como o OpenPLC numa janela pequena;
   fechar a barra lateral do VS Code (Ctrl+B) dá mais espaço.

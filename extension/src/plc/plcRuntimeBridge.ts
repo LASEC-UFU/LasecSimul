@@ -1,5 +1,6 @@
 /*
- * Ligação entre o build do projeto IEC (plcBuild.ts) e o bloco "PLC IEC 61131-3" rodando no Core.
+ * Ligação entre o build do projeto PLC (.lsplc, openplc/openPlcBuild.ts) e o bloco "PLC IEC 61131-3"
+ * rodando no Core.
  * Não importa coreLifecycle (que importa este arquivo): o rebuild do Core fica em plcSchematic.ts.
  */
 
@@ -10,7 +11,6 @@ import { logSimulation } from "../diagnostics/simulationLog";
 import {
   PlcBuildOptions,
   PlcBuildResult,
-  buildIecProjectFile,
   defaultPlcCacheRoot,
   resolvePlcToolchain,
 } from "./plcBuild";
@@ -40,7 +40,7 @@ export function sameFilePath(a: string, b: string): boolean {
   return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
 }
 
-/** Ouvintes de "terminou uma compilação" (editor IEC aberto mostra o resultado). */
+/** Ouvintes de "terminou uma compilação" (o editor do projeto aberto mostra o resultado). */
 const buildListeners = new Set<(projectPath: string, result: PlcBuildResult) => void>();
 
 export function onPlcBuildFinished(listener: (projectPath: string, result: PlcBuildResult) => void): { dispose(): void } {
@@ -52,11 +52,14 @@ export function notifyPlcBuildFinished(projectPath: string, result: PlcBuildResu
   for (const listener of buildListeners) listener(projectPath, result);
 }
 
-/** Projeto do bloco PLC: .lsplc (editor OpenPLC, as cinco linguagens) ou o .iec.json antigo. */
+/** Compila o projeto PLC (.lsplc, as cinco linguagens) de um bloco CLP. */
 export async function buildIecProjectForSimulator(projectPath: string, cacheOnly = false): Promise<PlcBuildResult> {
   const options = plcBuildOptions({ cacheOnly });
   let result: PlcBuildResult;
-  if (isLsplcFile(projectPath)) {
+  if (!isLsplcFile(projectPath)) {
+    const message = `O bloco CLP usa um projeto PLC .lsplc: ${path.basename(projectPath)}`;
+    result = { ok: false, diagnostics: [{ severity: "error", stage: "project", message }], log: message };
+  } else {
     const extensionPath = state.extensionContext?.extensionPath ?? "";
     const storageDir = state.extensionContext?.globalStorageUri.fsPath ?? path.dirname(options.cacheRoot);
     try {
@@ -66,8 +69,6 @@ export async function buildIecProjectForSimulator(projectPath: string, cacheOnly
       const message = error instanceof Error ? error.message : String(error);
       result = { ok: false, diagnostics: [{ severity: "error", stage: "toolchain", message }], log: message };
     }
-  } else {
-    result = await buildIecProjectFile(projectPath, options);
   }
   if (!cacheOnly) notifyPlcBuildFinished(projectPath, result);
   return result;

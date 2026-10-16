@@ -1,14 +1,14 @@
 /*
  * Projeto PLC (.lsplc, projeto do OpenPLC Editor dentro) -> módulo nativo do bloco "PLC IEC 61131-3".
  *
- * O ST sai do transpilador do próprio OpenPLC Editor (pacote do host); daí em diante é o mesmo
- * caminho dos projetos .iec.json: `compileStProgram` -> `lasecsimul-core --plc-compile`.
+ * O ST sai do transpilador do próprio OpenPLC Editor (pacote do host); os POUs SFC antes passam pela
+ * tradução SFC -> ST do LasecSimul (openPlcSfc.ts). Daí em diante: `compileStProgram` ->
+ * `lasecsimul-core --plc-compile`.
  */
 
 import * as crypto from "crypto";
 import * as path from "path";
-import { CanonicalStOrigin } from "../lowering";
-import { PlcBuildDiagnostic, PlcBuildEntry, PlcBuildOptions, PlcBuildResult, compileStProgram } from "../plcBuild";
+import { CanonicalStOrigin, PlcBuildDiagnostic, PlcBuildEntry, PlcBuildOptions, PlcBuildResult, compileStProgram } from "../plcBuild";
 import { OPENPLC_BUNDLED_LIBRARIES, OpenPlcEntryPoint, OpenPlcHost, OpenPlcProjectData, loadLsplcProject } from "./openPlcHost";
 import { SfcLineOrigin, prepareOpenPlcSfc } from "./openPlcSfc";
 

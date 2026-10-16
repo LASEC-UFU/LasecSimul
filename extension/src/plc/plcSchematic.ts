@@ -1,16 +1,14 @@
 /*
- * Blocos "PLC IEC 61131-3" do esquemático ligados a um projeto IEC (*.iec.json): pinos vindos da
- * interface do programa e compilação antes de Rodar, como o FPGA faz com o VHDL.
+ * Blocos "PLC IEC 61131-3" do esquemático ligados a um projeto PLC (.lsplc, editor OpenPLC): pinos
+ * vindos da interface do programa e compilação antes de Rodar, como o FPGA faz com o VHDL.
  */
 
-import * as fs from "fs";
 import * as vscode from "vscode";
 import { logSimulation } from "../diagnostics/simulationLog";
 import { rebuildCoreFromSchematicState } from "../core/coreLifecycle";
 import { state } from "../state";
 import { WebviewComponentModel, endpointId, endpointPinId } from "../ui/webview/model";
-import { parseIecProject } from "./iecProject";
-import { PlcBuildDiagnostic, PlcExportedIoEntry, plcExportedIoFromProject } from "./plcBuild";
+import { PlcBuildDiagnostic, PlcExportedIoEntry } from "./plcBuild";
 import { buildIecProjectForSimulator, loadedPlcArtifactHashByComponentId } from "./plcRuntimeBridge";
 import { loadLsplcProject } from "./openplc/openPlcHost";
 import { isLsplcFile } from "./openplc/lsplcFile";
@@ -24,42 +22,19 @@ export function plcPinsFromExportedIo(exportedIo: PlcExportedIoEntry[]): Webview
   return exportedIo.map((io, index) => ({ id: io.ioId, x: 0, y: index * 12 }));
 }
 
-/** `plc` e pinos de um bloco que passa a usar o projeto IEC `projectPath` (sem compilar). */
-export function plcConfigurationForIecProject(
-  current: WebviewComponentModel["plc"],
-  projectPath: string,
-): { plc: NonNullable<WebviewComponentModel["plc"]>; pins: WebviewComponentModel["pins"]; entryConfiguration?: string } {
-  const project = parseIecProject(JSON.parse(fs.readFileSync(projectPath, "utf8")));
-  const entryConfiguration = typeof project.buildSettings.entryConfiguration === "string"
-    ? project.buildSettings.entryConfiguration : current?.entryConfiguration;
-  const exportedIo = plcExportedIoFromProject(project);
-  // Projeto IEC e artefato avulso são modos exclusivos: o artefato antigo não deve voltar a ser
-  // carregado no lugar do programa compilado do projeto.
-  const { artifactRef: _artifactRef, expectedArtifactHash: _expectedHash, ...rest } = current ?? {};
-  return {
-    plc: {
-      ...rest,
-      iecProjectRef: projectPath,
-      ...(entryConfiguration ? { entryConfiguration } : {}),
-      exportedIoBindingVersion: 1,
-      exportedIo,
-    },
-    pins: plcPinsFromExportedIo(exportedIo),
-    ...(entryConfiguration ? { entryConfiguration } : {}),
-  };
-}
-
-/** Igual a `plcConfigurationForIecProject`, aceitando também o projeto .lsplc (editor OpenPLC)
- * (pinos = VAR_INPUT/VAR_OUTPUT do programa da primeira instância da RESOURCE). */
+/** `plc` e pinos de um bloco que passa a usar o projeto PLC `projectPath`, sem compilar: os pinos
+ * são as VAR_INPUT/VAR_OUTPUT do programa da primeira instância da RESOURCE. */
 export async function plcConfigurationForProject(
   current: WebviewComponentModel["plc"],
   projectPath: string,
 ): Promise<{ plc: NonNullable<WebviewComponentModel["plc"]>; pins: WebviewComponentModel["pins"]; entryConfiguration?: string }> {
-  if (!isLsplcFile(projectPath)) return plcConfigurationForIecProject(current, projectPath);
+  if (!isLsplcFile(projectPath)) throw new Error("O bloco CLP usa um projeto PLC .lsplc.");
   const host = openPlcHostForExtension();
   const project = loadLsplcProject(host, projectPath);
   const entry = host.entryPoint(project.data);
   const exportedIo: PlcExportedIoEntry[] = entry.io.map(io => ({ ioId: io.name, name: io.name, direction: io.direction, iecType: io.iecType }));
+  // Projeto e artefato avulso são modos exclusivos: o artefato antigo não deve voltar a ser
+  // carregado no lugar do programa compilado do projeto.
   const { artifactRef: _artifactRef, expectedArtifactHash: _expectedHash, entryConfiguration: _entry, ...rest } = current ?? {};
   return {
     plc: { ...rest, iecProjectRef: projectPath, exportedIoBindingVersion: 1, exportedIo },
@@ -127,11 +102,9 @@ export async function ensureAllPlcsBuilt(options: PlcSchematicOptions): Promise<
         });
         void vscode.window.showErrorMessage(
           `CLP "${block.label || block.id}": ${errors[0] ? describe(errors[0]) : "falha na compilação"}`,
-          "Abrir projeto IEC",
+          "Abrir projeto PLC",
         ).then(choice => {
-          if (!choice) return;
-          if (isLsplcFile(projectPath)) void openOpenPlcProject(projectPath);
-          else void vscode.commands.executeCommand("vscode.openWith", vscode.Uri.file(projectPath), "lasecsimul.iecProjectEditor");
+          if (choice && isLsplcFile(projectPath)) void openOpenPlcProject(projectPath);
         });
         return false;
       }

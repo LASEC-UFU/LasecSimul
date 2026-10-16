@@ -4,7 +4,6 @@ import * as vscode from "vscode";
 import { openOpenPlcProject, openPlcHostForExtension } from "./openplc/OpenPlcEditorProvider";
 import { LSPLC_EXTENSION, bundleFromRaw, isLsplcFile, readLsplc, rawProjectFiles, writeLsplc } from "./openplc/lsplcFile";
 import { OpenPlcLanguage, openPlcWorkspaceAvailable } from "./openplc/openPlcHost";
-import { convertLegacyIecProjectFile, isLegacyIecProjectFile, lsplcPathForLegacy, retargetSchematic, schematicReferences } from "./openplc/legacyIecProject";
 import { state } from "../state";
 
 /** Nome IEC do projeto a partir do nome do arquivo (o project.json do OpenPLC guarda o nome). */
@@ -116,53 +115,4 @@ export async function exportOpenPlcProjectCommand(target?: vscode.Uri): Promise<
   const result = await openPlcHostForExtension().writeFolderProject(destination, rawProjectFiles(destination, readLsplc(source)));
   if (!result.success) void vscode.window.showErrorMessage(`Não foi possível exportar: ${result.error}`);
   else void vscode.window.showInformationMessage(`Projeto exportado para ${destination}`);
-}
-
-/**
- * Projeto IEC antigo (`*.iec.json`, editores próprios do LasecSimul) -> projeto PLC `.lsplc`, que abre
- * no editor OpenPLC. O arquivo antigo fica como estava; os esquemáticos que usam o projeto antigo
- * podem passar a usar o novo.
- */
-export async function convertIecProjectCommand(target?: vscode.Uri): Promise<void> {
-  if (!requireEditor()) return;
-  const active = vscode.window.tabGroups.activeTabGroup.activeTab?.input as { uri?: vscode.Uri } | undefined;
-  const candidate = target?.fsPath ?? (active?.uri && isLegacyIecProjectFile(active.uri.fsPath) ? active.uri.fsPath : undefined);
-  const source = candidate ?? (await vscode.window.showOpenDialog({
-    canSelectMany: false,
-    filters: { "Projeto IEC antigo do LasecSimul": ["json"] },
-    title: "Projeto IEC (.iec.json) a converter para .lsplc",
-  }))?.[0]?.fsPath;
-  if (!source) return;
-  let destination = lsplcPathForLegacy(source);
-  if (fs.existsSync(destination)) {
-    const chosen = await vscode.window.showSaveDialog({
-      defaultUri: vscode.Uri.file(destination),
-      filters: { "Projeto PLC LasecSimul": [LSPLC_EXTENSION.slice(1)] },
-      saveLabel: "Converter",
-      title: `${path.basename(destination)} já existe: onde gravar o projeto convertido?`,
-    });
-    if (!chosen) return;
-    destination = isLsplcFile(chosen.fsPath) ? chosen.fsPath : `${chosen.fsPath}${LSPLC_EXTENSION}`;
-  }
-  let warnings: string[];
-  try {
-    warnings = convertLegacyIecProjectFile(openPlcHostForExtension(), source, destination).warnings;
-  } catch (error) {
-    void vscode.window.showErrorMessage(`Não foi possível converter ${path.basename(source)}: ${error instanceof Error ? error.message : String(error)}`);
-    return;
-  }
-  const schematics = (await vscode.workspace.findFiles("**/*.lsproj", "**/node_modules/**", 500))
-    .map(uri => uri.fsPath)
-    .filter(file => schematicReferences(file, source));
-  if (schematics.length > 0) {
-    const names = schematics.map(file => path.basename(file)).join(", ");
-    const answer = await vscode.window.showInformationMessage(
-      `${schematics.length === 1 ? "O esquemático" : "Os esquemáticos"} ${names} ${schematics.length === 1 ? "usa" : "usam"} ${path.basename(source)}. Passar a usar ${path.basename(destination)}?`,
-      "Atualizar", "Agora não");
-    if (answer === "Atualizar") for (const file of schematics) retargetSchematic(file, source, destination);
-  }
-  if (warnings.length > 0) {
-    void vscode.window.showWarningMessage(`${path.basename(destination)} criado com avisos: ${warnings.join(" ")}`);
-  }
-  await openOpenPlcProject(destination);
 }
