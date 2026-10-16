@@ -132,6 +132,7 @@ HartCommunicationComponent::HartCommunicationComponent(Mode mode, simulation::Sc
     // device instance, or a test constructing directly with an empty ComponentParams) -- the
     // preset's Signal Graph ports/Device Variable roles apply out of the box, never an empty "[]".
     m_hartVariablesJson = stringProperty(p, "hartVariablesJson", preset ? preset->hartVariablesJson : "[]");
+    m_hartDynamicVariableAssignments = stringProperty(p, "hartDynamicVariableAssignments", "");
     ++m_hartVariablesRevision;
     m_hartCommandsJson = stringProperty(p, "hartCommandsJson", "[]");
     m_hartBurstJson = stringProperty(p, "hartBurstJson", "[]");
@@ -317,6 +318,21 @@ HartLcdPage HartCommunicationComponent::displayPage(const std::string& source, c
             value = std::isfinite(variable->lowerRangeValue) && std::isfinite(variable->upperRangeValue)
                 ? variable->lowerRangeValue + analog.percentOfRange / 100.0 * (variable->upperRangeValue - variable->lowerRangeValue)
                 : analog.percentOfRange;
+        else if (variable->derivedSource == HartDerivedSource::SetpointRange) {
+            const double setpoint = m_engine.variableValue(m_deviceId, "pid.setpoint").value_or(0.0);
+            const auto primary = std::find_if(plan.variables.begin(), plan.variables.end(), [](const auto& candidate) {
+                return candidate.deviceVariableCode == 246 || candidate.role == HartVariableRole::PrimaryVariable ||
+                       candidate.id == "PV" || candidate.id == "primary";
+            });
+            if (primary != plan.variables.end() && std::isfinite(primary->lowerRangeValue) &&
+                std::isfinite(primary->upperRangeValue))
+                value = primary->lowerRangeValue + setpoint / 100.0 *
+                    (primary->upperRangeValue - primary->lowerRangeValue);
+        } else if (variable->derivedSource == HartDerivedSource::PidError) {
+            const double setpoint = m_engine.variableValue(m_deviceId, "pid.setpoint").value_or(0.0);
+            const double errorEnabled = m_engine.variableValue(m_deviceId, "pid.operatingMode2").value_or(255.0);
+            if (errorEnabled == 1.0) value = analog.percentOfRange - setpoint;
+        }
         page.valid = true;
         page.value = value;
         // A variable derived from the percent of range is the PV re-expressed (LD301 "Unidade do
@@ -858,6 +874,34 @@ void HartCommunicationComponent::rebuildConfiguredPlan() {
             device.variables.push_back(std::move(variable));
         }
     } catch (const std::exception& ex) { m_hartVariablesStatus = std::string("ERROR: ") + ex.what(); return; }
+    if (!m_hartDynamicVariableAssignments.empty()) {
+        std::array<uint8_t, 4> assignments{};
+        size_t at = 0;
+        for (size_t slot = 0; slot < assignments.size(); ++slot) {
+            const size_t comma = m_hartDynamicVariableAssignments.find(',', at);
+            const size_t end = comma == std::string::npos ? m_hartDynamicVariableAssignments.size() : comma;
+            try {
+                const unsigned long code = std::stoul(m_hartDynamicVariableAssignments.substr(at, end - at));
+                if (code > 255 || (code != 250 && std::none_of(device.variables.begin(), device.variables.end(),
+                        [code](const auto& variable) { return variable.deviceVariableCode == code; })))
+                    throw std::invalid_argument("unknown device variable code");
+                assignments[slot] = static_cast<uint8_t>(code);
+            } catch (...) {
+                m_hartVariablesStatus = "ERROR: hartDynamicVariableAssignments must contain four existing device-variable codes";
+                return;
+            }
+            if (slot + 1 < assignments.size() && comma == std::string::npos) {
+                m_hartVariablesStatus = "ERROR: hartDynamicVariableAssignments must contain four codes";
+                return;
+            }
+            if (slot + 1 == assignments.size() && comma != std::string::npos) {
+                m_hartVariablesStatus = "ERROR: hartDynamicVariableAssignments must contain four codes";
+                return;
+            }
+            at = end + 1;
+        }
+        device.dynamicVariableAssignments = assignments;
+    }
     try {
         const auto bursts = nlohmann::json::parse(m_hartBurstJson.empty() ? "[]" : m_hartBurstJson);
         if (!bursts.is_array() || bursts.size() > device.burstMessages.size()) { m_hartVariablesStatus = "ERROR: invalid Burst configuration JSON"; return; }
@@ -1038,6 +1082,10 @@ void HartCommunicationComponent::syncPersistedStateFromEngine() {
     m_alarmSelectionCode = plan->alarmSelectionCode;
     m_writeProtectCode = plan->writeProtectCode;
     m_configChangeCounter = plan->configurationChangedCounter & 0xFFFFu;
+    m_hartDynamicVariableAssignments = std::to_string(plan->dynamicVariableAssignments[0]) + "," +
+        std::to_string(plan->dynamicVariableAssignments[1]) + "," +
+        std::to_string(plan->dynamicVariableAssignments[2]) + "," +
+        std::to_string(plan->dynamicVariableAssignments[3]);
     // HART-5 rules make the per-master Configuration Changed bits
     // non-volatile: they survive save/reopen like any other device state.
     m_configurationChangedFlags = plan->configurationChangedMasters;
@@ -1318,6 +1366,7 @@ std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode
         numberSchema("hartPrivateLabel", "Private Label Distributor (Command 0, HART 7)", "HART Perfil", "", 0, 0, 65535),
         numberSchema("hartDeviceProfile", "Device Profile (Command 0, HART 7)", "HART Perfil", "", 1, 0, 255),
         textSchema("hartResponseDataLimits", "Bytes de dados maximos por comando (ex.: 15=17)", "HART Perfil", ""),
+        textSchema("hartDynamicVariableAssignments", "Atribuicoes PV/SV/TV/QV (4 codigos separados por virgula)", "HART Perfil", ""),
         numberSchema("hartConfigChangeCounter", "Contador de mudancas de configuracao (Command 0, HART 6/7)", "HART", "", 0, 0, 65535),
         {"sensorFault", "Simular falha do sensor", "Sensor", "", PropertyValueKind::Bool, "checkbox", false},
         // Universal Command 12/17 (Message), 13/18 (Descriptor/Date), 16/19
@@ -1458,6 +1507,7 @@ PropertyValue HartCommunicationComponent::propertyValue(const std::string& id) c
     if (id == "hartBurnoutPercentFollowsOutput") return m_traits.burnoutPercentFollowsOutput;
     if (id == "hartMaxDeviceVariables") return m_traits.maxDeviceVariables; if (id == "hartPrivateLabel") return m_traits.privateLabel;
     if (id == "hartDeviceProfile") return m_traits.deviceProfile; if (id == "hartResponseDataLimits") return m_traits.responseDataLimits;
+    if (id == "hartDynamicVariableAssignments") return m_hartDynamicVariableAssignments;
     if (id == "hartConfigChangeCounter") return static_cast<double>(m_configChangeCounter);
     if (id == "displayGlass") return m_displayGlass;
     if (id == "analogLoopDirection") return std::string(m_analogInput ? "input" : "output");
@@ -1524,6 +1574,7 @@ void HartCommunicationComponent::setPropertyValue(const std::string& id, const P
     else if (id == "hartPrivateLabel") { m_traits.privateLabel = std::get<double>(v); rebuildConfiguredPlan(); }
     else if (id == "hartDeviceProfile") { m_traits.deviceProfile = std::get<double>(v); rebuildConfiguredPlan(); }
     else if (id == "hartResponseDataLimits") { m_traits.responseDataLimits = std::get<std::string>(v); rebuildConfiguredPlan(); }
+    else if (id == "hartDynamicVariableAssignments") { m_hartDynamicVariableAssignments = std::get<std::string>(v); rebuildConfiguredPlan(); }
     else if (id == "hartConfigChangeCounter") { m_configChangeCounter = static_cast<uint32_t>(std::clamp(std::get<double>(v), 0.0, 65535.0)); rebuildConfiguredPlan(); }
     else if (id == "sensorFault") { m_sensorFault = std::get<bool>(v); m_engine.setSensorFault(m_deviceId, m_sensorFault || m_signalSensorFault); }
     else if (id == "displayInstalled") m_displayInstalled = std::get<bool>(v);

@@ -352,6 +352,8 @@ namespace HartDerivedSource {
 inline constexpr uint8_t None = 0xFF;
 inline constexpr uint8_t PercentRange = 243;
 inline constexpr uint8_t LoopCurrent = 244;
+inline constexpr uint8_t SetpointRange = 245;
+inline constexpr uint8_t PidError = 246;
 }
 
 /** The only public value-ownership choices for a HART variable. */

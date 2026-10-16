@@ -19,7 +19,7 @@ Artefatos reproduzíveis:
 |---|---|---|
 | [`ld301-session.csv`](ld301-session.csv) | 135 trocas: preâmbulos, delimitador, endereço, comando, byte count, dados, XOR, RC, status | `python scripts/ld301_decode.py` |
 | [`ld301-replay.csv`](ld301-replay.csv) | resposta real × simulada, byte a byte, com classificação | `hart_ld301_test --report docs/ld301-replay.csv` |
-| `hart_ld301_test` | 249 verificações + replay, LD301 lido do `.lssubcircuit` | `ctest -R hart_ld301` |
+| `hart_ld301_test` | 255 verificações + replay, LD301 lido do `.lssubcircuit` | `ctest -R hart_ld301` |
 
 Legenda de evidência: **C** = capturado no log; **F** = lido na figura;
 **D** = deduzido de C/F com cálculo verificado; **S** = especificação HART
@@ -473,7 +473,7 @@ e Factory ainda têm comportamento de escrita/dinâmica desconhecido.
 | Suíte | Resultado |
 |---|---|
 | Core `ctest` (Debug, `-j 4`, `ucrt64/bin` no PATH) | **110 testes: 105 passaram, 5 pulados (os mesmos do baseline), 0 falhas**; execução concluída em 2026-10-05 13:55 |
-| `hart_ld301` | 249/249 verificações (inclui novas capturas X, Y, Z e AA); replay original 130 exatos / 5 semânticos / 0 divergentes |
+| `hart_ld301` | 255/255 verificações (inclui capturas X, Y, Z, AA e Cmd 11 Tag match/mismatch); replay original 130 exatos / 5 semânticos / 0 divergentes |
 | `hart_wire_loop` (Release) | 26/26; inclui Cmd 47 pelo modem HART e mudança de 8 para 12 mA medida no resistor de 250 Ω |
 | `hart_engine` (suíte HART existente) | PASS |
 | Extensão `npm test` | 689 casos, 0 falhas (inclui `segmentLcd.test.ts`) |
@@ -512,7 +512,7 @@ execução serial todos passam — são do ambiente, não regressões.
 2. Significado de `cmd128.byte3/11/12/22/23`, `display.byte3`, `pid.operatingMode*`, `pid.modeCode`, `cmd189.*`, Cmd 204, variável 20 e da condição dos avisos 112/118 (o manual não traz o layout dos comandos proprietários). Os logs de 2026-10-05 às 13:03–13:18 confirmaram Hard/Bumpless no Cmd 156, corte 6→5, User Unit On, Totalization Off e Function Linear. Para Square Root, RC 113 acompanha Function Linear e RC 0 acompanha Sqrt nas sessões medidas.
 3. ~~Saturação 20,5 mA e corrente de alarme~~ — resolvido pelo manual (§5.5); burnout testado por injeção de falha, não observado em aparelho real.
 4. ~~Damping~~ — resolvido (§5.5). **Contadores Cmd 166**: somente os ligados aos comandos padrão estão implementados; falta medir o incremento após uma escrita de Função, Totalização ou Caracterização e depois implementar os demais (Trim Superior/Temperatura, TRM/PID, Auto Clamp, Proteção de escrita e Senha/Nível).
-5. Cmd 11 genérico (byte de status antes da identidade; não silencia com tag divergente) e endereço de broadcast — fora do log.
+5. Cmd 11: regressão adicionada para Tag coincidente (`00` + identidade do Cmd 0) e divergente (`01` + mesma identidade). Endereçamento broadcast segue fora do log e sem validação.
 6. Validação visual no PACTware/DTM (§8).
 7. Laço elétrico: fonte de corrente ideal (sem tensão mínima/lift‑off).
 8. O TT301 já é subcircuito do dispositivo padrão (`docs/tt301-audit.md`); o FY301 ainda é preset built‑in antigo (a refazer).

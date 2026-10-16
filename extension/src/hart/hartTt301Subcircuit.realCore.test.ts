@@ -56,13 +56,13 @@ function data(frameHex: string): Buffer {
 
     await test("the inner standard HART device answers the HART 7 Command 0 identity of the captured TT301", async () => {
       const reply = await client.hartTransact(inner, request("0280", 0));
-      assert(body(reply.frameHex).startsWith("068000180060fe3e020507086010000" + "10c3a0509002800003e003e01"),
+      assert(body(reply.frameHex).startsWith("068000180060fe3e020507086010000" + "10c3a0509003200003e003e01"),
         `Command 0: ${reply.frameHex}`);
     });
 
     await test("Command 15 (17 bytes) and the vendor Commands 130 / 223 match the capture byte for byte", async () => {
       const output = await client.hartTransact(inner, request("82" + longAddress, 15));
-      const expected15 = ["010020", "44480000", "00000000", "00000000", "fffa"].join("");
+      const expected15 = ["010020", "44548000", "c3480000", "00000000", "01fa"].join("");
       assert(data(output.frameHex).toString("hex") === expected15, `Command 15: ${output.frameHex}`);
       const sensor = await client.hartTransact(inner, request("82" + longAddress, 130, [2]));
       assert(data(sensor.frameHex).toString("hex") === "0201020101", `Command 130: ${sensor.frameHex}`);
@@ -117,7 +117,7 @@ function data(frameHex: string): Buffer {
       return { element, wires, edges };
     };
 
-    await test("Pt100 a 4 fios nos bornes 1-4: 138,51 ohm = 100 degC no PV e 6 mA (0..800); o cabo de 1 ohm por fio não influi", async () => {
+    await test("Pt100 a 4 fios nos bornes 1-4: 138,51 ohm = 100 degC no PV e 8,571 mA (-200..850); o cabo de 1 ohm por fio não influi", async () => {
       const device = await client.addComponent("subcircuits.hart.smar_tt301", {}, pins, "TT301 4 fios");
       const deviceInner = await client.getSubcircuitChildInstanceId(device.instanceId, "tt301");
       const sensor = await placeSensor("4 fios", 100, ["A1", "A2", "B3", "B4"]);
@@ -127,11 +127,11 @@ function data(frameHex: string): Buffer {
       await client.step(20_000_000);
       const read = readings(deviceInner);
       assert(Math.abs((await read.temperature()) - 100) < 0.01, `PV ${await read.temperature()} degC`);
-      assert(Math.abs((await read.current()) - 6) < 0.01, `corrente ${await read.current()} mA`);
+      assert(Math.abs((await read.current()) - (4 + 16 * 300 / 1050)) < 0.01, `corrente ${await read.current()} mA`);
       await client.setProperty(sensor.element.instanceId, "resistance", pt100(400));
       await client.step(20_000_000);
       assert(Math.abs((await read.temperature()) - 400) < 0.01, `PV ${await read.temperature()} degC a 400 degC`);
-      assert(Math.abs((await read.current()) - 12) < 0.01, `400 degC = 12 mA: ${await read.current()}`);
+      assert(Math.abs((await read.current()) - (4 + 16 * 600 / 1050)) < 0.01, `400 degC no range -200..850: ${await read.current()} mA`);
 
       // Sensor aberto: o estágio de entrada vê resistência fora da faixa e o TT301 vai ao burnout alto (21 mA).
       await client.setProperty(sensor.element.instanceId, "resistance", 1e9);
@@ -139,7 +139,7 @@ function data(frameHex: string): Buffer {
       assert(Math.abs((await read.current()) - 21) < 0.01, `burnout: ${await read.current()} mA`);
       await client.setProperty(sensor.element.instanceId, "resistance", pt100(100));
       await client.step(20_000_000);
-      assert(Math.abs((await read.current()) - 6) < 0.01, `sensor religado: ${await read.current()} mA`);
+      assert(Math.abs((await read.current()) - (4 + 16 * 300 / 1050)) < 0.01, `sensor religado: ${await read.current()} mA`);
     });
 
     await test("2 fios (1-2 e 3-4 em ponte): os dois fios de 1 ohm entram na medida (+5,2 degC a 100 degC)", async () => {

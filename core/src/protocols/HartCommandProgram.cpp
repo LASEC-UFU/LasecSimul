@@ -49,6 +49,18 @@ size_t hartVarWidth(HartVarId id) noexcept {
 
 HartExecutionVariables::DeviceVariable* selectedDeviceVariable(HartExecutionVariables& vars, uint8_t code) noexcept {
     for (auto& variable : vars.deviceVariables) if (variable.code == code) return &variable;
+    // The TT301's HART 7 dynamic-variable aliases are distinct selector
+    // values on Command 9, but each resolves to one of its regular variables.
+    // This mapping is based on the COM17 Cmd 9 scan; it must stay scoped to
+    // SMAR TT301 so aliases retain standard behavior on other devices.
+    if (vars.manufacturerId == 62 && vars.deviceType == 2) {
+        const uint8_t mapped = code == 244 ? 1 : code == 245 ? 0 : code == 247 ? 3 :
+                               code == 248 ? 1 : code == 249 ? 2 : code;
+        if (mapped != code)
+            for (auto& variable : vars.deviceVariables) if (variable.code == mapped) return &variable;
+    }
+    if (code == 246 && vars.primaryDeviceVariableCode != 246)
+        for (auto& variable : vars.deviceVariables) if (variable.code == vars.primaryDeviceVariableCode) return &variable;
     // Legacy Universal Command 9/33 fixtures used code 0 for PV before the
     // Common Practice Table 34 code 246 was modeled. Keep that alias only in
     // the cold-resolved handle table; no string/name lookup is involved.

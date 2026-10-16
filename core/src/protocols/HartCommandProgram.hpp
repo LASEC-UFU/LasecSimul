@@ -251,6 +251,9 @@ struct HartExecutionVariables {
     uint8_t flags = 0;
     std::array<uint8_t, 6> tagPacked{};
     uint8_t primaryVariableUnit = 57; // HART unit code 57 = percent
+    // Some device profiles expose PV under a vendor-assigned Device Variable
+    // code. Standard Command 15 still addresses it semantically as code 246.
+    uint8_t primaryDeviceVariableCode = 246;
     float primaryVariable = 0.0f;
     std::array<uint8_t, 24> messagePacked{};
     std::array<uint8_t, 12> descriptorPacked{};

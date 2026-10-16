@@ -203,6 +203,13 @@ bool parseStatement(const nlohmann::json& node, std::vector<HartStatement>& out,
         out.push_back(HartStatement{HartAppendStmt{std::move(*expr)}});
         return true;
     }
+    if (kind == "append") {
+        if (!node.contains("source")) { error = "APPEND requires a \"source\" expression"; return false; }
+        auto source = parseExpr(node["source"], error);
+        if (!source) return false;
+        out.push_back(HartStatement{HartAppendStmt{std::move(*source)}});
+        return true;
+    }
     if (kind == "set") {
         const std::string target = node.value("target", std::string{});
         if (target.empty()) { error = "SET requires a \"target\""; return false; }

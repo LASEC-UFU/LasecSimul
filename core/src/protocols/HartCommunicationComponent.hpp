@@ -163,6 +163,8 @@ private:
     uint16_t m_udpPort = 5094;
     bool m_enabled = true;
     std::string m_hartVariablesJson = "[]", m_hartCommandsJson = "[]";
+    /** Optional four-slot HART Command 50 assignment, comma-separated device-variable codes. */
+    std::string m_hartDynamicVariableAssignments;
     std::string m_hartBurstJson = "[]";
     std::string m_hartAdditionalJson = "{}";
     uint8_t m_alarmSelectionCode = 0xFB;

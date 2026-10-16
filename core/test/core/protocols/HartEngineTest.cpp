@@ -640,6 +640,7 @@ int main() {
             "id": 160, "name": "Full Vocabulary",
             "writeSteps": [{"kind": "set", "target": "PrimaryVariableUnit", "value": {"kind": "bodySlice", "offset": 0, "length": 1}}],
             "responseSteps": [
+                {"kind": "append", "source": {"kind": "hex", "bytes": "CC"}},
                 {"kind": "if",
                  "lhs": {"kind": "variable", "variable": "PrimaryVariableUnit"},
                  "rhs": {"kind": "hex", "bytes": "11"},
@@ -657,7 +658,7 @@ int main() {
         }])";
         const auto fullVocabParsed = HartCommandJson::parseCommandCollection(fullVocabJson);
         check(fullVocabParsed.success && fullVocabParsed.definitions.size() == 1 &&
-                  fullVocabParsed.definitions[0].write.size() == 1 && fullVocabParsed.definitions[0].resp.size() == 3,
+                  fullVocabParsed.definitions[0].write.size() == 1 && fullVocabParsed.definitions[0].resp.size() == 4,
               "JSON bridge parses write/SET + IF/MAP/FOR_CODES, not just flat Append");
 
         HartProfileRegistry fullVocabProfiles;
@@ -672,7 +673,7 @@ int main() {
 
         const uint8_t fullVocabRequest1[] = {0x11, 0x01, 0x07, 0x08};
         HartResponseBuilder fullVocabOut1(16);
-        const std::vector<uint8_t> fullVocabExpected1{0xAA, 0xC1, 0x07, 0x08};
+        const std::vector<uint8_t> fullVocabExpected1{0xCC, 0xAA, 0xC1, 0x07, 0x08};
         check(fullVocabEngine.execute("hart-1", 12, 160, fullVocabRequest1, fullVocabOut1) &&
                   fullVocabOut1.size() == fullVocabExpected1.size() &&
                   std::equal(fullVocabExpected1.begin(), fullVocabExpected1.end(), fullVocabOut1.bytes().begin()),
@@ -680,7 +681,7 @@ int main() {
 
         const uint8_t fullVocabRequest2[] = {0x22, 0x09, 0x0A, 0x0B};
         HartResponseBuilder fullVocabOut2(16);
-        const std::vector<uint8_t> fullVocabExpected2{0xBB, 0xC0, 0x0A, 0x0B};
+        const std::vector<uint8_t> fullVocabExpected2{0xCC, 0xBB, 0xC0, 0x0A, 0x0B};
         check(fullVocabEngine.execute("hart-1", 12, 160, fullVocabRequest2, fullVocabOut2) &&
                   fullVocabOut2.size() == fullVocabExpected2.size() &&
                   std::equal(fullVocabExpected2.begin(), fullVocabExpected2.end(), fullVocabOut2.bytes().begin()),

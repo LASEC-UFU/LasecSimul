@@ -558,7 +558,15 @@ int main(int argc, char** argv) {
               "C5 Command 3: loop current 3.8 mA + PV (unit mmH2O)");
         check(!device.send(requestFrame(1, {}, false)).present,
               "C6 HART-5: a short frame other than Command 0 is not answered");
-        check(device.cmd(11, HartTypeCodec::encodePackedAscii("PT200", 8)).present, "C7 Command 11 is part of the HART-5 set");
+        const Reply matchingTag = device.cmd(11, HartTypeCodec::encodePackedAscii("PT200", 8));
+        const Bytes identity = device.cmd(0, {}, true).data;
+        check(matchingTag.present && matchingTag.responseCode == 0 && !matchingTag.data.empty() &&
+                  matchingTag.data[0] == 0x00 && Bytes(matchingTag.data.begin() + 1, matchingTag.data.end()) == identity,
+              "C7 Command 11 with the matching tag returns status 00 and the Command 0 identity block");
+        const Reply mismatchedTag = device.cmd(11, HartTypeCodec::encodePackedAscii("OTHER", 8));
+        check(mismatchedTag.present && mismatchedTag.responseCode == 0 && !mismatchedTag.data.empty() &&
+                  mismatchedTag.data[0] == 0x01 && Bytes(mismatchedTag.data.begin() + 1, mismatchedTag.data.end()) == identity,
+              "C8 Command 11 with a different tag returns status 01 and the same identity block");
     }
 
     // ----------------------------------------------- D. common practice commands

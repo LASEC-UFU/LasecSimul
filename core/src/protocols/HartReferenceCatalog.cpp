@@ -1122,13 +1122,17 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
         std::copy_n(encodedLongTag.begin(), std::min(encodedLongTag.size(), vars.longTag.size()), vars.longTag.begin());
         vars.pollingAddress = plan.pollingAddress;
         vars.loopCurrentMode = plan.loopCurrentMode;
-        vars.primaryVariableUnit = profile.primaryVariableUnit;
         const auto primary = std::find_if(plan.variables.begin(), plan.variables.end(), [](const auto& v) {
             return v.deviceVariableCode == 246 || v.role == HartVariableRole::PrimaryVariable ||
                    v.id == "PV" || v.id == "primary";
         });
+        const uint8_t authoredPrimaryUnit = primary != plan.variables.end() && primary->deviceVariableUnit != 250
+            ? primary->deviceVariableUnit : profile.primaryVariableUnit;
+        vars.primaryVariableUnit = authoredPrimaryUnit;
+        if (primary != plan.variables.end() && primary->deviceVariableCode != 0xFF)
+            vars.primaryDeviceVariableCode = primary->deviceVariableCode;
         vars.rangeUnitCode = primary != plan.variables.end() && primary->rangeUnitCode != 0xFF
-            ? primary->rangeUnitCode : profile.primaryVariableUnit;
+            ? primary->rangeUnitCode : authoredPrimaryUnit;
         vars.upperRangeValue = primary != plan.variables.end() && std::isfinite(primary->upperRangeValue)
             ? primary->upperRangeValue : profile.upperRangeValue;
         vars.lowerRangeValue = primary != plan.variables.end() && std::isfinite(primary->lowerRangeValue)
@@ -1173,6 +1177,31 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 variable.value = variable.units != 57 && std::isfinite(authored.lowerRangeValue) && std::isfinite(authored.upperRangeValue)
                     ? authored.lowerRangeValue + (analog.percentOfRange / 100.0f) * (authored.upperRangeValue - authored.lowerRangeValue)
                     : analog.percentOfRange;
+            } else if (authored.derivedSource == HartDerivedSource::SetpointRange) {
+                const auto setpoint = std::find_if(plan.variables.begin(), plan.variables.end(), [](const auto& candidate) {
+                    return candidate.id == "pid.setpoint";
+                });
+                // Even with the PID off, the TT301 reports SP in engineering
+                // units as LRV + SP% of span (SP%=0 therefore returns LRV).
+                if (setpoint != plan.variables.end() && std::isfinite(vars.lowerRangeValue) &&
+                    std::isfinite(vars.upperRangeValue)) {
+                    variable.value = static_cast<float>(vars.lowerRangeValue +
+                        (setpoint->value / 100.0) * (vars.upperRangeValue - vars.lowerRangeValue));
+                }
+            } else if (authored.derivedSource == HartDerivedSource::PidError) {
+                const auto setpoint = std::find_if(plan.variables.begin(), plan.variables.end(), [](const auto& candidate) {
+                    return candidate.id == "pid.setpoint";
+                });
+                const auto errorEnabled = std::find_if(plan.variables.begin(), plan.variables.end(), [](const auto& candidate) {
+                    return candidate.id == "pid.operatingMode2";
+                });
+                const HartAnalogOutput analog = hartAnalogOutput(vars);
+                // The TT301 baseline with the third PID-mode byte at FF
+                // reports zero error. After PACTware writes that byte to 01,
+                // both active and Off readings report PV% - SP%.
+                if (setpoint != plan.variables.end() && errorEnabled != plan.variables.end() &&
+                    errorEnabled->value == 1.0)
+                    variable.value = analog.percentOfRange - static_cast<float>(setpoint->value);
             }
             variable.status = authored.deviceVariableStatus;
             variable.upperLimit = authored.upperTransducerLimit;
@@ -3103,6 +3132,18 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
         // never RC 5. A HART 5 device answers with the address byte only.
         std::array<uint8_t, 2> hart5Command6{};
         std::span<const uint8_t> programRequest = request;
+        std::vector<uint8_t> tt301Command33Request;
+        // The physical SMAR TT301 accepts the HART 7 primary-variable alias
+        // codes 244-249 in Command 33, but responds with four records for
+        // Device Variable 0 (loop current), regardless of which alias was
+        // selected. Command 9 on the same device resolves those aliases to
+        // their distinct variables, so keep this quirk local to Command 33.
+        if (command == 0x21 && profile.manufacturerId == 62 && profile.deviceType == 2) {
+            tt301Command33Request.assign(request.begin(), request.end());
+            for (uint8_t& code : tt301Command33Request)
+                if (code >= 244 && code <= 249) code = 0;
+            programRequest = tt301Command33Request;
+        }
         if (command == 0x06 && request.size() == 1) {
             hart5Command6 = {request[0], static_cast<uint8_t>(request[0] == 0 ? 1 : 0)};
             programRequest = hart5Command6;

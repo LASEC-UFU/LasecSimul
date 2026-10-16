@@ -245,6 +245,31 @@ struct ReplayRow { size_t index = 0; uint8_t command = 0; std::string result, de
 lasecsimul::registry::ComponentParams benchState() {
     lasecsimul::registry::ComponentParams bench;
     bench.properties["sensorFault"] = true;
+    // The archived 104-exchange trace predates the current live profile.
+    // Keep its opening state explicit so replay remains a test of that trace.
+    bench.properties["hartConfigChangeCounter"] = 40.0;
+    // The archived capture used HART's semantic PV alias 246.
+    bench.properties["writeProtectCode"] = 255.0;
+    bench.properties["hartDynamicVariableAssignments"] = std::string("246,250,250,250");
+    auto variables = nlohmann::json::parse(std::get<std::string>(tt301Params().properties.at("hartVariablesJson")));
+    for (auto& variable : variables) {
+        const std::string id = variable.value("id", std::string{});
+        if (id == "PV") {
+            variable["deviceVariableCode"] = 246;
+            variable["lowerRangeValue"] = 0.0;
+            variable["upperRangeValue"] = 800.0;
+            variable["deviceVariableStatus"] = 0;
+        } else if (id == "terminalTemperature") {
+            variable["deviceVariableCode"] = 1;
+            variable["deviceVariableStatus"] = 0;
+        } else if (id == "sensor.coldJunction") variable["value"] = 255;
+        else if (id == "PVPercent" || id == "loopCurrent") variable["deviceVariableCode"] = 255;
+        else if (id == "pid.tr") variable["value"] = 0.01;
+        else if (id == "pid.param5") variable["value"] = 0.1;
+        else if (id == "pid.operatingMode2") variable["value"] = 255;
+        else if (id == "display.firstVariable") variable["value"] = 2;
+    }
+    bench.properties["hartVariablesJson"] = variables.dump();
     return bench;
 }
 
@@ -269,7 +294,8 @@ std::vector<ReplayRow> replayCapture(const char* path) {
         row.command = real.command;
         if (!answered || !sim.wellFormed) {
             row.result = "MISMATCH";
-            row.detail = "simulator produced no well-formed reply";
+            row.detail = "simulator produced no well-formed reply; variables=" + textProperty(*device.component, "hartVariablesStatus") +
+                         "; commands=" + textProperty(*device.component, "hartCommandsStatus");
         } else if (simulated == exchange.response) {
             row.result = "EXACT";
         } else if (real.command == 0 && real.data.size() == 22 && sim.data.size() == 22 && real.status == sim.status &&
@@ -335,14 +361,15 @@ int main(int argc, char** argv) {
               "S4 the inner device's properties and the terminal block (cold junction) temperature are exported");
         nlohmann::json commands = nlohmann::json::array();
         try { commands = nlohmann::json::parse(device ? device->at("properties").value("hartCommandsJson", std::string{"[]"}) : "[]"); } catch (...) {}
-        bool allDeviceSpecific = commands.size() == 19;
+        bool allDeviceSpecific = commands.size() == 21;
         for (const auto& command : commands) allDeviceSpecific = allDeviceSpecific && command.value("id", 0) >= 128 && command.value("id", 0) <= 253;
-        check(allDeviceSpecific, "S5 the 19 TT301 commands are Lasec HART DSL data (Device-Specific 128-253)");
+        check(allDeviceSpecific, "S5 the 21 TT301 commands are Lasec HART DSL data (Device-Specific 128-253)");
         Device tt301;
+        const auto variablesStatus = textProperty(*tt301.component, "hartVariablesStatus");
+        const auto commandsStatus = textProperty(*tt301.component, "hartCommandsStatus");
         check(tt301.component->pins().size() == 4 && std::string(tt301.component->typeId()) == "protocol.hart.device.standard" &&
-                  textProperty(*tt301.component, "hartVariablesStatus").find("ERROR") == std::string::npos &&
-                  textProperty(*tt301.component, "hartCommandsStatus").find("ERROR") == std::string::npos,
-              "S6 the subcircuit's device compiles: standard C++ HART device, variables and commands accepted");
+                  variablesStatus.find("ERROR") == std::string::npos && commandsStatus.find("ERROR") == std::string::npos,
+              "S6 the subcircuit's device compiles: standard C++ HART device, variables [" + variablesStatus + "] and commands [" + commandsStatus + "] accepted");
         check(document.value("iconPath", std::string{}) == "./tt301.svg", "S7 the TT301 artwork is the palette icon and symbol");
         const auto ports = tt301.component->signalPorts();
         const auto port = [&](const char* id) { return std::find_if(ports.begin(), ports.end(), [&](const auto& p) { return p.id == id; }); };
@@ -368,9 +395,9 @@ int main(int argc, char** argv) {
         const Reply shortFrame = device.send(requestFrame(0, {}, false));
         check(shortFrame.wellFormed && shortFrame.delimiter == 0x06 && shortFrame.preambles == 5 && shortFrame.address == Bytes{0x80},
               "A1 Command 0 answers the short-frame poll with 5 preambles");
-        check(shortFrame.data == fromHex("FE 3E 02 05 07 08 60 10 00 01 0C 3A 05 09 00 28 00 00 3E 00 3E 01"),
+        check(shortFrame.data == fromHex("FE 3E 02 05 07 08 60 10 00 01 0C 3A 05 09 00 52 00 00 3E 00 3E 01"),
               "A2 HART 7 Command 0 (fig01): Smar 3E, TT301 02, 5 preambles, univ rev 7, device rev 8, sw 6.00, hw 16, ID 68666, "
-              "9 device variables, counter 0x0028, private label Smar, profile 1");
+              "9 device variables, current live counter 0x0052 after live PID writes, private label Smar, profile 1");
         const Reply longFrame = device.cmd(0);
         check(longFrame.wellFormed && longFrame.delimiter == 0x86 && longFrame.address == Bytes{0xBE, 0x02, 0x01, 0x0C, 0x3A} &&
                   longFrame.data == shortFrame.data,
@@ -385,6 +412,41 @@ int main(int argc, char** argv) {
         check(device.cmd(14).data == fromHex("00 00 00 20 44 54 80 00 C3 48 00 00 41 20 00 00"),
               "A8 Command 14: Pt100 limits 850 / -200 degC, minimum span 10 (fig08)");
         check(device.cmd(20).responseCode == 0, "A9 HART 7 command set: Command 20 (Long Tag) is implemented");
+        const Reply pvVariable = device.cmd(9, {0x02});
+        check(pvVariable.responseCode == 0 && pvVariable.data.size() == 13 && pvVariable.data[0] == 0x00 &&
+                  pvVariable.data[1] == 0x02 && pvVariable.data[2] == 0x40 && pvVariable.data[3] == 0x20 &&
+                  std::fabs(floatAt(pvVariable.data, 4) - 25.0f) < 1e-5f && pvVariable.data[8] == 0xC0,
+              "A10 Command 9 reports TT301 PV selector 2 as Celsius with the live PV value");
+        const Reply pvPercentAlias = device.cmd(33, {0x04});
+        check(pvPercentAlias.responseCode == 0 && pvPercentAlias.data.size() == 6 && pvPercentAlias.data[0] == 0x04 &&
+                  pvPercentAlias.data[1] == 0x39 && std::fabs(floatAt(pvPercentAlias.data, 2) - (100.0f * 225.0f / 1050.0f)) < 1e-5f,
+              "A11 Command 33 selector 4 reports PV percent in the TT301 layout");
+        // Exercise every captured TT301 Device Variable slot.  Cmd 9 returns
+        // selector/classification/units/value/status records; Cmd 33 returns
+        // code/units/value tuples.  These loops keep the wire shape covered
+        // even when live PV and current change between runs.
+        for (uint8_t selector = 0; selector <= 8; ++selector) {
+            const Reply row = device.cmd(9, {selector});
+            check(row.responseCode == 0 && row.data.size() == 13 && row.data[0] == 0x00 &&
+                      row.data[1] == selector && row.data[8] == 0xC0,
+                  "A11a Cmd 9 selector " + std::to_string(selector) + " has the captured TT301 record/status layout");
+            const Reply common = device.cmd(33, {selector});
+            check(common.responseCode == 0 && common.data.size() == 6 && common.data[0] == selector,
+                  "A11b Cmd 33 selector " + std::to_string(selector) + " has the captured TT301 tuple layout");
+        }
+        for (uint8_t selector = 0xF4; selector <= 0xF9; ++selector) {
+            const Reply universal = device.cmd(9, {selector});
+            check(universal.responseCode == 0 && universal.data.size() == 13 && universal.data[1] == selector &&
+                      universal.data[8] == 0xC0,
+                  "A11c Cmd 9 alias " + std::to_string(selector) + " preserves the requested alias");
+            const Reply common = device.cmd(33, {selector});
+            check(common.responseCode == 0 && common.data.size() == 6 && common.data[0] == 0x00 && common.data[1] == 0x27,
+                  "A11d TT301 Cmd 33 alias " + std::to_string(selector) + " maps to the captured current tuple");
+        }
+        check(device.cmd(50).data == Bytes{0x02, 0x03, 0x01, 0x02},
+              "A12 Command 50 returns the observed dynamic-variable assignments 2,3,1,2");
+        check(device.cmd(54, {0x00}).responseCode == 64,
+              "A13 unsupported Command 54 is reported as unavailable on the TT301");
     }
 
     // --------------------------------------------------------- B. initial state
@@ -393,10 +455,15 @@ int main(int argc, char** argv) {
         const Reply first = device.cmd(1);
         check(first.status == 0x60, "B1 first reply to the primary master: Configuration Changed + Cold Start (sensor wired, in range)");
         check(device.cmd(1).status == 0x40, "B2 Cold Start is cleared after the first reply");
-        check(device.cmd(1).data == cat({Bytes{0x20}, f32(25.0f)}), "B3 PV 25 degC with a sensor wired (Command 1)");
-        check(device.cmd(15).data == fromHex("01 00 20 44 48 00 00 00 00 00 00 00 00 00 00 FF FA"),
-              "B4 Command 15 (17 bytes, fig05): burnout code 01, linear, degC, URV 800, LRV 0, damping 0, write protect FF, 250");
-        check(device.cmd(2).data == cat({f32(4.5f), f32(3.125f)}), "B5 Command 2: 25 degC in 0..800 = 3.125 % = 4.5 mA");
+        const Reply command1 = device.cmd(1);
+        check(command1.data == cat({Bytes{0x20}, f32(25.0f)}), "B3 PV 25 degC with a sensor wired (Command 1), got " + hex(command1.data));
+        const Reply command15 = device.cmd(15);
+        check(command15.data == fromHex("01 00 20 44 54 80 00 C3 48 00 00 00 00 00 00 01 FA"),
+              "B4 Command 15 (17 bytes): live Pt100 range -200..850, damping 0, write protect 01, got " + hex(command15.data));
+        const Reply command2 = device.cmd(2);
+        check(command2.data.size() == 8 && std::fabs(floatAt(command2.data, 0) - 7.428571f) < 1e-5f &&
+                  std::fabs(floatAt(command2.data, 4) - 21.428571f) < 1e-5f,
+              "B5 Command 2: 25 degC in -200..850 = 21.428571 % = 7.428571 mA, got " + hex(command2.data));
     }
 
     // ------------------------------------------- E. TT301 manufacturer commands
@@ -404,25 +471,25 @@ int main(int argc, char** argv) {
         Device device;
         device.cmd(0);
         check(device.cmd(130, {0x02}).data == Bytes{0x02, 0x01, 0x02, 0x01, 0x01}, "E1 Command 130: RTD / Pt 100 IEC / two wires (fig06a)");
-        check(device.cmd(187, {0x02}).data == Bytes{0x02, 0xFF}, "E2 Command 187: no cold junction with an RTD");
+        check(device.cmd(187, {0x02}).data == Bytes{0x02, 0x00}, "E2 Command 187: live RTD configuration returns cold-junction code 00");
         check(device.cmd(198, {0x02}).data == Bytes{0x02, 0x00, 0x00, 0x00, 0x00}, "E3 Command 198");
         check(device.cmd(223, {0x02}).data == fromHex("02 42 C8 00 00 3B 80 11 32 B5 1B 05 7F AC 93 2D 1D"),
               "E4 Command 223: Callendar-Van Dusen R0 100, A 3.9083e-3, B -5.775e-7, C -4.183e-12 (IEC 751 Pt100)");
-        check(device.cmd(168, {0x02}).data == Bytes{0x02, 0xFF, 0xFF}, "E5 Command 168: write protection FF FF (fig05a read/write)");
+        check(device.cmd(168, {0x02}).data == Bytes{0x02, 0x01, 0xFF}, "E5 Command 168: write protection 01 FF (live device)");
         check(device.cmd(162, {0x02}).data == Bytes{0x02, 0x01}, "E6 Command 162: burnout code 01 = High (fig05a)");
-        check(device.cmd(164, {0x02}).data == Bytes{0x02, 0x02, 0x02}, "E7 Command 164: LCD Temp. PV / Temp. PV (fig05a)");
+        check(device.cmd(164, {0x02}).data == Bytes{0x02, 0x03, 0x02}, "E7 Command 164: LCD Temp. / Temp. PV (live device)");
         const Reply pidMode = device.cmd(136, {0x02});
-        check(pidMode.responseCode == 112 && pidMode.data == Bytes{0x02, 0xFF, 0xFF, 0xFF}, "E8 Command 136: warning 112 + PID off (fig07)");
+        check(pidMode.responseCode == 112 && pidMode.data == Bytes{0x02, 0xFF, 0xFF, 0x01}, "E8 Command 136: warning 112 + PID off (final live state)");
         check(device.cmd(138, {0x02}).data == Bytes{0x02, 0xFF}, "E9 Command 138: controller mode Off");
         const Reply pidLoop = device.cmd(140, {0x02});
         check(pidLoop.responseCode == 112 &&
-                  pidLoop.data == cat({Bytes{0x02, 0x39}, f32(3.125f), Bytes{0x39}, f32(0.0f), Bytes{0x39}, f32(3.125f),
-                                       Bytes{0xFF, 0xFF, 0x39}, f32(0.0f)}),
-              "E10 Command 140 (same layout as the LD301 behind the slot byte): PV%, SP 0, MV, mode/tracking FF, error 0");
+                  pidLoop.data == cat({Bytes{0x02, 0x39}, f32(100.0f * 225.0f / 1050.0f), Bytes{0x39}, f32(0.0f), Bytes{0x39}, f32(100.0f * 225.0f / 1050.0f),
+                                       Bytes{0xFF, 0xFF, 0x39}, f32(100.0f * 225.0f / 1050.0f)}),
+              "E10 Command 140 (same layout as the LD301 behind the slot byte): PV%, SP 0, MV, mode/tracking FF, error PV%-SP% when mode byte is 01");
         check(device.cmd(152, {0x02}).data == cat({Bytes{0x02}, f32(0.0f), Bytes{0xFF, 0xFF}}), "E11 Command 152: SP generator Off (fig07)");
         const Reply tuning = device.cmd(142, {0x02});
-        check(tuning.responseCode == 112 && tuning.data == cat({Bytes{0x02}, f32(1.0f), f32(0.01f), f32(0.0f), f32(0.0f), f32(0.1f)}),
-              "E12 Command 142 (inferred from the LD301): Kp 1, Tr 0.01, Td 0");
+        check(tuning.responseCode == 112 && tuning.data == cat({Bytes{0x02}, f32(1.0f), f32(10.0f), f32(0.0f), f32(0.0f), f32(100.0f)}),
+              "E12 Command 142: live TT301 PID tuning Kp 1, Tr 10, Td 0");
         check(device.cmd(130).responseCode == 5 && device.cmd(140).responseCode == 5,
               "E13 the vendor commands need their first data byte (02): RC 5 without it");
         check(device.cmd(128).responseCode == 64 && device.cmd(166).responseCode == 64,
@@ -436,7 +503,7 @@ int main(int argc, char** argv) {
         const Reply sensor = device.cmd(131, {0x02, 0x83, 0x02, 0x01});
         check(sensor.responseCode == 0 && sensor.data == Bytes{0x02, 0x83, 0x02, 0x01} &&
                   device.cmd(130, {0x02}).data == Bytes{0x02, 0x83, 0x02, 0x01, 0x01},
-              "X1 Command 131 TC / J NBS / two wires (fig06b) echoes and reads back through Command 130");
+              "X1 Command 131 TC / J NBS / two wires (fig06b) echoes and reads back through Command 130; RC=" + std::to_string(sensor.responseCode) + " data=" + hex(sensor.data) + " variables=" + textProperty(*device.component, "hartVariablesStatus") + " commands=" + textProperty(*device.component, "hartCommandsStatus"));
         check(device.cmd(186, {0x02, 0x00}).data == Bytes{0x02, 0x00} && device.cmd(187, {0x02}).data == Bytes{0x02, 0x00},
               "X2 Command 186 enables the cold junction (00), read back by Command 187");
         check(device.cmd(165, {0x02, 0x03, 0x02}).data == Bytes{0x02, 0x03, 0x02} && device.cmd(164, {0x02}).data == Bytes{0x02, 0x03, 0x02},
@@ -448,7 +515,7 @@ int main(int argc, char** argv) {
               "X5 Command 15 reports the Smar code 01 as its Write Protect Code, and the TT301 stays writable (captured 165 after 169)");
         check(device.cmd(163, {0x02, 0x01}).data == Bytes{0x02, 0x01} && device.cmd(15).data[0] == 0x01,
               "X6 Command 163 writes the burnout (Command 15 byte 0)");
-        check(device.cmd(0).data[14] == 0x00 && device.cmd(0).data[15] > 0x28,
+        check(device.cmd(0).data[14] == 0x00 && device.cmd(0).data[15] > 0x52,
               "X7 each configuration write increments the HART 7 Configuration Change Counter (Command 0)");
     }
 
@@ -457,14 +524,17 @@ int main(int argc, char** argv) {
         Device device;
         device.cmd(0);
         const auto current = [&](double pv) { device.component->setSignalInput("PV", pv); return floatAt(device.cmd(2).data, 0); };
-        check(current(0.0) == 4.0f && current(800.0) == 20.0f && current(400.0) == 12.0f, "F1 0 / 400 / 800 degC -> 4 / 12 / 20 mA");
-        check(current(-50.0) == 3.8f && (device.cmd(1).status & 0x04), "F2 below the range: 3.8 mA saturated (manual 5.1)");
-        check(current(840.0) == 20.5f && (device.cmd(1).status & 0x04), "F3 above the range: 20.5 mA saturated");
+        check(current(-200.0) == 4.0f && current(850.0) == 20.0f && current(325.0) == 12.0f, "F1 -200 / 325 / 850 degC -> 4 / 12 / 20 mA");
+        check(current(-213.125) == 3.8f && (device.cmd(1).status & 0x04), "F2 below the range: 3.8 mA saturated (manual 5.1)");
+        const float aboveCurrent = current(860.0);
+        const auto abovePV = device.cmd(1);
+        check(std::fabs(aboveCurrent - static_cast<float>(4.0 + 16.0 * 1060.0 / 1050.0)) < 1e-5f && (abovePV.status & 0x01), "F3 above the sensor limit reports PV Out Of Limits while the output follows the configured upper saturation; mA=" + std::to_string(aboveCurrent) + " status=" + std::to_string(abovePV.status));
         device.component->setSignalInput("PV", 900.0);
         check(device.cmd(1).status & 0x01, "F4 beyond the 850 degC sensor limit: PV Out Of Limits");
         const Reply range = device.cmd(35, cat({Bytes{0x20}, f32(100.0f), f32(0.0f)}));
-        check(range.responseCode == 0 && device.cmd(15).data == fromHex("01 00 20 42 C8 00 00 00 00 00 00 00 00 00 00 FF FA"),
-              "F5 Command 35 (calibration without reference, manual 3.15) sets 0..100 degC");
+        const auto rangeRead = device.cmd(15);
+        check(range.responseCode == 0 && rangeRead.data == fromHex("01 00 20 42 C8 00 00 00 00 00 00 00 00 00 00 01 FA"),
+              "F5 Command 35 (calibration without reference, manual 3.15) sets 0..100 degC; RC=" + std::to_string(range.responseCode) + " data=" + hex(range.data) + " read=" + hex(rangeRead.data));
         check(device.cmd(35, cat({Bytes{0x20}, f32(900.0f), f32(0.0f)})).responseCode == 11,
               "F6 an URV beyond the 850 degC limit is refused (manual: values within the calibration limits)");
         check(device.cmd(35, cat({Bytes{0x20}, f32(5.0f), f32(0.0f)})).responseCode == 29,
@@ -488,7 +558,7 @@ int main(int argc, char** argv) {
         check(floatAt(failed.data, 0) == 21.0f && floatAt(failed.data, 4) == 106.25f && failed.status == 0xC1,
               "R1 open sensor, burnout High (code 01): 21 mA = 106.25 %, status 0xC1 as captured (no Saturated bit)");
         check(device.cmd(163, {0x02, 0x00}).responseCode == 0 && floatAt(device.cmd(2).data, 0) == 3.6f,
-              "R2 burnout Low (code 00, inferred) drives 3.6 mA");
+              "R2 burnout Low (code 00, live readback confirmed; output-current value remains manual-derived) drives 3.6 mA");
         for (auto& descriptor : device.component->propertyDescriptors())
             if (descriptor.schema.id == "sensorFault") descriptor.set(false);
         device.component->setSignalInput("PV", 400.0);
@@ -515,10 +585,10 @@ int main(int argc, char** argv) {
         for (size_t i = 2; i < 4; ++i) tt301.onPinConnectionChanged(i, true); // LOOP+/LOOP- only: TEMP is a signal
         tt301.setSignalInput("PV", 200.0);
         tt301.stamp(matrix);
-        check(!matrix.currents.empty() && std::fabs(std::get<2>(matrix.currents.back()) * 1000.0 - 8.0) < 1e-6 &&
+        check(!matrix.currents.empty() && std::fabs(std::get<2>(matrix.currents.back()) * 1000.0 - (4.0 + 16.0 * 400.0 / 1050.0)) < 1e-6 &&
                   std::get<0>(matrix.currents.back()) == "loop_plus",
-              "Q1 200 degC on the TEMP input drives 8 mA into LOOP+ -> LOOP-");
-        check(std::fabs(tt301.loopCurrentMilliamps() - 8.0) < 1e-9, "Q2 the loop current is readable as a device property");
+              "Q1 200 degC on the TEMP input drives 10.095 mA into LOOP+ -> LOOP-");
+        check(std::fabs(tt301.loopCurrentMilliamps() - (4.0 + 16.0 * 400.0 / 1050.0)) < 1e-5, "Q2 the loop current is readable as a device property");
     }
 
     // ------------------------------------------------------------ V. LCD
@@ -534,24 +604,27 @@ int main(int argc, char** argv) {
             return std::string(expected.numeric.begin(), expected.numeric.end());
         };
         HartLcdFrame frame = device.component->displayFrame(3 * s);
-        check(numeric(frame) == "  1234" && frame.decimalPoints == (1u << 4) && (frame.annunciators & HartLcdAnnunciator::Degree) &&
+        check(numeric(frame) == "   250" && frame.decimalPoints == (1u << 4) && (frame.annunciators & HartLcdAnnunciator::Degree) &&
                   alpha(frame) == "    C",
-              "V2 first variable Temp. PV (code 2): 123.4 degC, one decimal like the manual's 25.0 degC (Fig. 2.7)");
+              "V2 first LCD page is Temp. (terminal temperature 25.0 degC); the second page is Temp. PV (Fig. 2.7)");
+        const HartLcdFrame secondPage = device.component->displayFrame(6 * s + s / 10);
+        check(numeric(secondPage) == "  1234" && (secondPage.annunciators & HartLcdAnnunciator::Degree) && alpha(secondPage) == "    C",
+              "V2b second LCD page is Temp. PV (123.4 degC)");
         check(frame.glass == HartLcdGlass::Tt301, "V3 the TT301 glass (manual Fig. 2.9: ACK, no square-root marks)");
         device.cmd(0);
         device.cmd(165, {0x02, 0x03, 0x00});
         frame = device.component->displayFrame(3 * s);
         check(numeric(frame) == shown(25.0, 1) && numeric(frame) == "   250" && alpha(frame) == "    C" &&
-                  numeric(device.component->displayFrame(6 * s + s / 10)) == shown(4.0 + 16.0 * 123.4 / 800.0) &&
+                  numeric(device.component->displayFrame(6 * s + s / 10)) == shown(4.0 + 16.0 * (123.4 + 200.0) / 1050.0) &&
                   alpha(device.component->displayFrame(6 * s + s / 10)) == "   mA",
-              "V4 Temp. (code 3) shows the terminal temperature 25.0 degC; Out (mA) (code 0) 6.468 mA");
+              "V4 Temp. (code 3) shows terminal temperature 25.0 degC; Out (mA) (code 0) follows the -200..850 degC range");
         device.cmd(165, {0x02, 0x04, 0x01});
         frame = device.component->displayFrame(3 * s);
-        check(numeric(frame) == shown(100.0 * 123.4 / 800.0) && (frame.annunciators & HartLcdAnnunciator::Percent) &&
+        check(numeric(frame) == shown(100.0 * (123.4 + 200.0) / 1050.0) && (frame.annunciators & HartLcdAnnunciator::Percent) &&
                   (frame.annunciators & HartLcdAnnunciator::ProcessVariable),
               "V5 PV (%) (code 4, manual 3.9 order): 15.425 %");
         frame = device.component->displayFrame(6 * s + s / 10);
-        check(numeric(frame) == shown(100.0 * 123.4 / 800.0) && (frame.annunciators & HartLcdAnnunciator::Percent),
+        check(numeric(frame) == shown(100.0 * (123.4 + 200.0) / 1050.0) && (frame.annunciators & HartLcdAnnunciator::Percent),
               "V6 Out (%) (code 1): the output in percent");
         device.component->setSignalInput("PV", 840.0);
         check(alpha(device.component->displayFrame(4 * s + s / 2)) == "     ",
@@ -569,19 +642,53 @@ int main(int argc, char** argv) {
         Device device;
         device.cmd(0);
         device.cmd(131, {0x02, 0x83, 0x02, 0x01}); // TC J NBS (fig06b)
-        check(device.cmd(15).data == cat({Bytes{0x01, 0x00, 0x20}, f32(750.0f), f32(-150.0f), f32(0.0f), Bytes{0xFF, 0xFA}}) &&
+        check(device.cmd(15).data == cat({Bytes{0x01, 0x00, 0x20}, f32(750.0f), f32(-150.0f), f32(0.0f), Bytes{0x01, 0xFA}}) &&
                   device.cmd(14).data == cat({Bytes{0x00, 0x00, 0x00, 0x20}, f32(750.0f), f32(-150.0f), f32(30.0f)}),
-              "Z1 TC J NBS: range and limits -150..750 degC, minimum span 30 (manual Table 6.1)");
+              "Z1 TC J NBS: range and limits -150..750 degC, minimum span 30 (manual Table 6.1), cmd15=" + hex(device.cmd(15).data) + " cmd14=" + hex(device.cmd(14).data));
+        Device sameCategory;
+        sameCategory.cmd(131, {0x02, 0x83, 0x02, 0x01}); // RTD -> TC J
+        sameCategory.cmd(131, {0x02, 0x83, 0x03, 0x01}); // TC J -> TC K
+        check(sameCategory.cmd(130, {0x02}).data == Bytes{0x02, 0x83, 0x03, 0x01, 0x01} &&
+                  sameCategory.cmd(15).data == cat({Bytes{0x01, 0x00, 0x20}, f32(750.0f), f32(-150.0f), f32(0.0f), Bytes{0x01, 0xFA}}) &&
+                  sameCategory.cmd(14).data == cat({Bytes{0x00, 0x00, 0x00, 0x20}, f32(750.0f), f32(-150.0f), f32(30.0f)}),
+              "Z1b changing TC model J to K preserves the existing range and calibration limits");
         check(device.cmd(35, cat({Bytes{0x20}, f32(800.0f), f32(0.0f)})).responseCode == 11,
               "Z2 the range is now checked against the J limits: URV 800 > 750 -> RC 11");
         device.cmd(131, {0x02, 0x01, 0x02, 0x01}); // RTD Pt100 IEC
-        check(device.cmd(15).data == fromHex("01 00 20 44 54 80 00 C3 48 00 00 00 00 00 00 FF FA") &&
+        check(device.cmd(15).data == fromHex("01 00 20 44 54 80 00 C3 48 00 00 00 00 00 00 01 FA") &&
                   device.cmd(14).data == fromHex("00 00 00 20 44 54 80 00 C3 48 00 00 41 20 00 00"),
-              "Z3 back to RTD Pt100 IEC: -200..850 degC, span 10 -- the captured Commands 15 and 14 (fig08)");
+              "Z3 back to RTD Pt100 IEC: -200..850 degC, span 10 -- the captured Commands 15 and 14 (fig08), cmd15=" + hex(device.cmd(15).data) + " cmd14=" + hex(device.cmd(14).data));
         device.cmd(131, {0x02, 0x83, 0x03, 0x01}); // TC K NBS (inferred code)
         const auto range = [](Device& on) { const Bytes data = on.cmd(15).data; return Bytes(data.begin() + 3, data.begin() + 11); };
         check(range(device) == cat({f32(1350.0f), f32(-200.0f)}),
               "Z4 TC K NBS (inferred code 83 03): -200..1350 degC");
+        struct ThermocoupleProfile { uint8_t model; float lower; float upper; float minimumSpan; };
+        constexpr std::array<ThermocoupleProfile, 12> thermocouples{{
+            {0x00, 100.0f, 1800.0f, 50.0f}, {0x01, -100.0f, 1000.0f, 20.0f},
+            {0x02, -150.0f, 750.0f, 30.0f}, {0x03, -200.0f, 1350.0f, 60.0f},
+            {0x04, -100.0f, 1300.0f, 50.0f}, {0x05, 0.0f, 1750.0f, 40.0f},
+            {0x06, 0.0f, 1750.0f, 40.0f}, {0x07, -200.0f, 400.0f, 15.0f},
+            {0x08, -200.0f, 900.0f, 35.0f}, {0x09, -200.0f, 600.0f, 50.0f},
+            {0x0A, 0.0f, 2200.0f, 60.0f}, {0x0B, -200.0f, 800.0f, 60.0f},
+        }};
+        for (const auto& profile : thermocouples) {
+            Device typeProbe;
+            const Reply changed = typeProbe.cmd(131, {0x02, 0x83, profile.model, 0x01});
+            const Reply sensorInfo = typeProbe.cmd(14);
+            const Reply deviceInfo = typeProbe.cmd(15);
+            check(changed.responseCode == 0 && typeProbe.cmd(130, {0x02}).data == Bytes{0x02, 0x83, profile.model, 0x01, 0x01} &&
+                      floatAt(sensorInfo.data, 4) == profile.upper && floatAt(sensorInfo.data, 8) == profile.lower &&
+                      floatAt(sensorInfo.data, 12) == profile.minimumSpan &&
+                      floatAt(deviceInfo.data, 3) == profile.upper && floatAt(deviceInfo.data, 7) == profile.lower,
+                  "Z4a TC model 83 " + std::to_string(profile.model) + " loads the documented range and minimum span");
+        }
+        for (uint8_t connection = 0; connection <= 7; ++connection) {
+            Device connectionProbe;
+            const Reply changed = connectionProbe.cmd(131, {0x02, 0x01, 0x02, connection});
+            check(changed.responseCode == 0 &&
+                      connectionProbe.cmd(130, {0x02}).data == Bytes{0x02, 0x01, 0x02, connection, 0x01},
+                  "Z4b Cmd 131 stores and Cmd 130 reads back RTD connection mode " + std::to_string(connection));
+        }
         device.cmd(35, cat({Bytes{0x20}, f32(500.0f), f32(100.0f)}));
         device.cmd(131, {0x02, 0x05, 0x07, 0x01}); // a code without a known sensor
         check(range(device) == cat({f32(500.0f), f32(100.0f)}) &&
@@ -609,7 +716,7 @@ int main(int argc, char** argv) {
         check(reopened.cmd(130, {0x02}).data == Bytes{0x02, 0x83, 0x02, 0x01, 0x01} &&
                   reopened.cmd(164, {0x02}).data == Bytes{0x02, 0x03, 0x00} && reopened.cmd(162, {0x02}).data == Bytes{0x02, 0x00},
               "L1 sensor, LCD and burnout written over HART survive save/reopen");
-        check(reopened.cmd(0).data[15] == 0x2B, "L2 the Configuration Change Counter survives save/reopen (40 + 3 writes)");
+        check(reopened.cmd(0).data[15] == 0x55, "L2 the Configuration Change Counter survives save/reopen (0x52 + 3 writes)");
     }
 
     // ------------------------------------------------- O. captured-session replay
