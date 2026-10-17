@@ -79,10 +79,10 @@ calc("q_out", [("u", "u_out"), ("h", "tank"), ("H", "c_height"), ("SG", "c_sg_pr
      "Qmax*((u>0)*u)/100*((h>0.02)+(h<0.02)*h/0.02)*((((SG*h+0.101972*Pg)>0)*(SG*h+0.101972*Pg))/(SG*H+0.101972*Pg))^0.5",
      420, 160, "Vazão de saída (m³/h)")
 
-# --- level: dh/dt = (Qin - Qout)/A, A = pi*D^2/4 (control.tank with area 1 integrates m/s) -------
+# --- level: dh/dt = (Qin - Qout)/A, A = pi*D^2/4 (control.accumulator integrates m/s, floor at 0) -------
 calc("dh_in", [("q", "q_in"), ("D", "c_diameter")], "q/3600/(0.785398163*D^2)", 620, 80, "Entrada (m/s)")
 calc("dh_out", [("q", "q_out"), ("D", "c_diameter")], "q/3600/(0.785398163*D^2)", 620, 160, "Saída (m/s)")
-comp("tank", "control.tank", {"area": 1, "initial": 1.5, "samplePeriodNs": PERIOD}, 820, 120, "Nível (m)")
+comp("tank", "control.accumulator", {"initial": 1.5, "samplePeriodNs": PERIOD}, 820, 120, "Nível (m)")
 wire("dh_in", "tank", "in")
 wire("dh_out", "tank", "outflow")
 

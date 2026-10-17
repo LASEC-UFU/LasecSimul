@@ -607,9 +607,8 @@
     },
     {
       "id": "setup_timer",
-      "typeId": "control.tank",
+      "typeId": "control.accumulator",
       "properties": {
-        "area": 1,
         "initial": 0,
         "samplePeriodNs": 1000000
       },
@@ -714,9 +713,8 @@
     },
     {
       "id": "hold_rest",
-      "typeId": "control.tank",
+      "typeId": "control.accumulator",
       "properties": {
-        "area": 1,
         "initial": 0,
         "samplePeriodNs": 1000000
       },
@@ -777,9 +775,8 @@
     },
     {
       "id": "hold_full",
-      "typeId": "control.tank",
+      "typeId": "control.accumulator",
       "properties": {
-        "area": 1,
         "initial": 30,
         "samplePeriodNs": 1000000
       },

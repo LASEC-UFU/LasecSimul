@@ -183,7 +183,7 @@ resetUndoHistory(mainUndoHistory);
 const componentElementsById = new Map<string, HTMLElement>();
 /** `${outerComponentId}:${innerComponentId}` -> `<svg>` do item exposto no overlay de Modo Placa
  * (`renderBoardOverlaysFor`) -- permite `patchBoardOverlayRuntimeVisuals` atualizar SÓ o desenho do
- * LED a cada tick de telemetria (~300ms) sem chamar `render()` (que reconstrói o esquemático
+ * LED a cada tick de telemetria (~50 ms com o padrão de 20 Hz) sem chamar `render()` (que reconstrói o esquemático
  * INTEIRO). Diferente de `componentElementsById`, os `<div>` do overlay são recriados a CADA
  * `render()` (não reaproveitados entre chamadas) -- por isso este Map é limpo e repovoado no início
  * de cada `render()`, só serve pra achar o elemento vivo ENTRE duas chamadas de `render()`. */
@@ -559,7 +559,7 @@ let telemetryLastFrameReceivedAtMs: number | undefined;
 let hmiTelemetryStale = false;
 /** Base64 do estado visual vivo, somente para packages que declaram `runtimeState`. */
 let visualStatesByComponentId: Record<string, string> = {};
-// Histórico APROXIMADO (1 amostra por poll de IPC, ~300ms de parede, sem relação com o tempo
+// Histórico APROXIMADO (1 amostra por poll de IPC, ~50 ms de parede com o padrão de 20 Hz, sem relação com o tempo
 // SIMULADO do circuito) -- só pra pré-visualização PEQUENA no canvas (`scopePanelSvg`/
 // `logicAnalyzerPanelSvg`), onde não compensa buscar o histórico real de alta resolução pra todo
 // instrumento do projeto a cada poll. A janela "Expande" usa `realScopeHistoryByComponentId`/
@@ -719,10 +719,10 @@ const activePushShortcutIds = new Set<string>();
 /** `true` durante QUALQUER gesto de arrastar componente em andamento (mouse ainda pressionado) --
  * mesmo com shell persistente, o render de telemetria pode trocar SVG interno e estado visual no
  * meio de um gesto que depende de `setPointerCapture()`/listeners `pointermove`/`pointerup`.
- * Como `componentReadout`/`wireVoltages` chegam a cada ~300ms DURANTE a simulação e cada um chama
+ * Como `componentReadout`/`wireVoltages` chegam a cada ~50 ms com o padrão de 20 Hz DURANTE a simulação e cada um chama
  * `render()` sem condição, um arrasto em andamento durante a simulação era interrompido a cada
  * poll -- o usuário só conseguia mover um pedacinho por vez, "soltar e começar de novo" a cada
- * ~300ms (bug relatado 2026-06-30). Enquanto isto for `true`, esses dois handlers pulam o
+ * ~50 ms com o padrão de 20 Hz (bug relatado 2026-06-30). Enquanto isto for `true`, esses dois handlers pulam o
  * `render()` (ainda atualizam os dados em cache -- a tela só fica "atrasada" até o solte do mouse,
  * que já chama `render()` no fim do gesto). */
 let isDraggingComponent = false;
@@ -730,7 +730,7 @@ let isDraggingGraphicalOperator = false;
 
 /** Guarda de render concorrente GENÉRICA (UI-1) -- `true` durante QUALQUER gesto de arrastar em
  * andamento (componente OU canto/segmento de fio, ver `wireCornerDrag`/`wireSegmentDrag`), não só
- * componente. Motivo é o mesmo de `isDraggingComponent` (telemetria chegando a cada ~300ms durante a
+ * componente. Motivo é o mesmo de `isDraggingComponent` (telemetria chegando a cada ~50 ms com o padrão de 20 Hz durante a
  * simulação chamaria `render()` sem condição, atropelando o gesto em andamento) -- antes só cobria
  * arrasto de componente, então um `render()` de telemetria no meio de um arrasto de fio (agora
  * incremental via `updateWireVisual`, ver UI-2/UI-3) reconstruiria o canvas inteiro à toa. */
@@ -2207,7 +2207,7 @@ function renderBoardOverlaysFor(component: WebviewComponentModel): HTMLElement[]
 
 /** Atualiza SÓ o preenchimento do LED de cada item exposto no overlay de Modo Placa -- NUNCA chama
  * `render()` (fix real 2026-07-18: chamar `render()`, que reconstrói o esquemático INTEIRO, a cada
- * tick de telemetria (~300ms) enquanto a simulação roda deixava a Webview tão ocupada reconstruindo
+ * tick de telemetria (~50 ms com o padrão de 20 Hz) enquanto a simulação roda deixava a Webview tão ocupada reconstruindo
  * DOM que o clique em "Parar" demorava a ser processado -- o mesmo motivo pelo qual
  * `componentReadout`/`wireVoltages` já faziam patch pontual em vez de `render()` incondicional, ver
  * os comentários deles; este handler violava esse princípio já estabelecido). Encontra o `<svg>` já
@@ -3324,7 +3324,7 @@ function simulationRateText(): string {
   return ` (${Math.round(simulationRate * 100)}%)`;
 }
 
-/** Atualização pontual do número de taxa SEM `render()` completo -- chega a cada ~300ms enquanto
+/** Atualização pontual do número de taxa SEM `render()` completo -- chega a cada ~50 ms com o padrão de 20 Hz enquanto
  * roda, um `render()` inteiro nessa cadência seria desperdício (mesmo raciocínio de
  * `updateWiresTouchingComponent` em vez de reconstruir tudo). */
 function updateSimulationRateLabel(): void {
@@ -3873,11 +3873,11 @@ function propertyDialogHasLiveReadoutField(componentTypeId: string): boolean {
 }
 
 /** Bug real corrigido 2026-07-18 ("Abrir do LasecPlot nunca reage a clique NENHUM enquanto a
- * simulação roda"): `componentReadout` chega a cada ~300ms durante a simulação e chamava
+ * simulação roda"): `componentReadout` chega a cada ~50 ms com o padrão de 20 Hz durante a simulação e chamava
  * `refreshOpenPropertyDialog` incondicionalmente pra QUALQUER diálogo aberto -- que reconstrói
  * `propertyDialog.innerHTML` inteiro (`openPropertyDialog` -> `renderPropertySheet`), destruindo e
  * recriando TODOS os elementos, inclusive o alvo de um clique em andamento. Se o `mousedown` e o
- * `mouseup` do usuário caíssem em reconstruções diferentes (bem provável numa janela de ~300ms
+ * `mouseup` do usuário caíssem em reconstruções diferentes (bem provável numa janela de ~50 ms com o padrão de 20 Hz
  * repetida sem parar), o evento `click` nunca chegava a disparar em NENHUM botão do diálogo --
  * indistinguível de "o botão não funciona". LasecPlot não tem nenhum campo `showOnSymbol`+"display"
  * (não mostra leitura ao vivo nenhuma no painel de Propriedades), então essa reconstrução nunca
@@ -7203,7 +7203,7 @@ function updateReadoutHistories(readouts: Record<string, ComponentReadoutValue>)
   }
   scopeHistoryByComponentId = scopeHistories;
   logicHistoryByComponentId = logicHistories;
-  // Mesmo ritmo do poll de telemetria pequena (~300ms) -- só pros componentes com janela "Expande"
+  // Mesmo ritmo do poll de telemetria pequena (~50 ms com o padrão de 20 Hz) -- só pros componentes com janela "Expande"
   // aberta agora, ver doc de `realScopeHistoryByComponentId` acima.
   for (const componentId of instrumentPopups.keys()) requestInstrumentHistoryRefresh(componentId);
   // Telemetria é hot path: mantém janela/inputs/resize no DOM e troca somente o framebuffer SVG.
@@ -12151,7 +12151,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     const changedReadoutIds = new Set([...previousReadoutIds, ...Object.keys(message.readoutsByComponentId)]);
     const currentReadoutIds = new Set(Object.keys(message.readoutsByComponentId));
     updateReadoutHistories(message.readoutsByComponentId);
-    // `render()` reconstrói o DOM inteiro -- chamado SEM CONDIÇÃO a cada poll de telemetria (~300ms
+    // `render()` reconstrói o DOM inteiro -- chamado SEM CONDIÇÃO a cada poll de telemetria (~50 ms com o padrão de 20 Hz
     // durante a simulação) destruiria um arrasto em andamento (ver doc de
     // `isInteractiveGestureInProgress`). Os dados (`readoutsByComponentId`) já ficaram atualizados
     // acima; só a TELA fica momentaneamente atrasada até o usuário soltar o mouse (que já atualiza).
@@ -12236,7 +12236,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     boardOverlayTransportStatus = message.transportStatus ?? "connected";
     boardOverlaySampleTimestampNs = message.sampleTimestampNs;
     // Fix real 2026-07-18 ("Parar" ficava sem resposta durante a simulação): NUNCA `render()` aqui
-    // -- reconstruiria o esquemático INTEIRO a cada ~300ms só pra atualizar o brilho de 1 LED.
+    // -- reconstruiria o esquemático INTEIRO a cada ~50 ms com o padrão de 20 Hz só pra atualizar o brilho de 1 LED.
     // `patchBoardOverlayRuntimeVisuals` faz o patch pontual (mesmo princípio de `componentReadout`/
     // `wireVoltages` abaixo, que já evitavam `render()` incondicional por este MESMO motivo).
     if (!isInteractiveGestureInProgress()) patchBoardOverlayRuntimeVisuals();

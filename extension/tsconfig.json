@@ -2,7 +2,9 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "outDir": "out",
     "rootDir": "src",
     "strict": true,
@@ -13,6 +15,16 @@
     "skipLibCheck": true,
     "sourceMap": true
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "out", "out-webview", "test", "src/ui/webview/main.ts", "src/ui/webview/palette.ts"]
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "out",
+    "out-webview",
+    "test",
+    "src/ui/webview/main.ts",
+    "src/ui/webview/palette.ts",
+    "src/ui/webview/lab/ui/**"
+  ]
 }

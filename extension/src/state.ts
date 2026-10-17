@@ -57,6 +57,7 @@ export const state = {
     components: WebviewProjectState["components"];
     topology: WebviewProjectState["topology"];
     hmiApplication: WebviewProjectState["hmiApplication"];
+    calculusLab: WebviewProjectState["calculusLab"];
   } | undefined,
   /** Pilha de sessões "Abrir Subcircuito" em andamento (ver `extension.ts::
    * openSubcircuitForEditingCommand`/`closeSubcircuitEditorCommand`) -- empilha em vez de um único

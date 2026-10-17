@@ -3,7 +3,10 @@
     "module": "ES2022",
     "moduleResolution": "Bundler",
     "target": "ES2022",
-    "lib": ["ES2022", "DOM"],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "outDir": "out-webview",
     "rootDir": "src/ui/webview",
     "strict": true,
@@ -29,6 +32,10 @@
     "src/ui/webview/serialFormat.ts",
     "src/ui/webview/contextMenuPosition.ts",
     "src/ui/webview/hartCommonTables.ts",
-    "src/ui/webview/hartCommonTablesData.ts"
+    "src/ui/webview/hartCommonTablesData.ts",
+    "src/ui/webview/lab/**/*.ts"
+  ],
+  "exclude": [
+    "src/ui/webview/lab/**/*.test.ts"
   ]
 }

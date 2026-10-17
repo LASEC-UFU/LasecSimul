@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self'">
+<title>PoC Tanque</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="tank.css">
+</head>
+<body>
+<header class="lab-header">
+  <div><strong>LasecSimul</strong> | Laboratório de Cálculo — Tanque: da vazão à integral <span class="tag">prova de conceito — física de referência em JS, no produto ela roda no Core</span></div>
+  <nav aria-label="Áreas"><a href="index.html">Limites</a></nav>
+</header>
+<main class="tank-layout">
+  <section class="process" aria-label="Processo">
+    <h2>Processo <span id="status" class="status" role="status"></span></h2>
+    <svg id="tankSvg" viewBox="0 0 320 300" role="img" aria-labelledby="tankCaption"></svg>
+    <p id="tankCaption" class="note"></p>
+    <div class="sliders">
+      <label>Vazão de entrada <output id="qInOut"></output><input id="qIn" type="range" min="0" max="2" step="0.05" value="1"></label>
+      <label id="qOutLabel">Vazão de saída (bomba) <output id="qOutOut"></output><input id="qOut" type="range" min="0" max="2" step="0.05" value="0.4"></label>
+      <label id="kLabel" hidden>Válvula k <output id="kOut"></output><input id="k" type="range" min="0.5" max="5" step="0.1" value="2"></label>
+      <label>Área do tanque A <output id="AOut"></output><input id="A" type="range" min="0.03" max="0.2" step="0.005" value="0.1"></label>
+    </div>
+    <div class="config">
+      <label>Saída <select id="mode"><option value="pump">bomba (vazão imposta)</option><option value="valve">válvula (q = k·h)</option></select></label>
+      <label>V₀ (L) <input id="V0" type="number" min="0" max="200" step="1" value="20"></label>
+      <label>h<sub>máx</sub> (m) <input id="hMax" type="number" min="0.2" max="3" step="0.1" value="1"></label>
+      <p id="paramError" class="error" role="alert"></p>
+    </div>
+    <div id="runBar" class="run-bar" role="toolbar" aria-label="Execução"></div>
+  </section>
+  <section class="charts" aria-label="Gráficos">
+    <div class="chart-head"><h2>Nível × tempo</h2><span id="modeBadge" class="badge"></span></div>
+    <svg id="chartH" class="chart" viewBox="0 0 640 230" tabindex="0" aria-label="Gráfico do nível; setas movem o cursor"></svg>
+    <div class="chart-head"><h2>Vazão líquida × tempo + Riemann</h2>
+      <label>método <select id="method"><option value="left">esquerda</option><option value="right">direita</option><option value="midpoint">ponto médio</option><option value="trapezoid">trapézio</option></select></label>
+      <label>n <input id="n" type="range" min="1" max="200" step="1" value="10"><output id="nOut">10</output></label>
+    </div>
+    <svg id="chartQ" class="chart" viewBox="0 0 640 230" aria-label="Gráfico da vazão líquida com retângulos de Riemann entre a e b"></svg>
+  </section>
+</main>
+<section class="tank-bottom">
+  <div id="equations" class="equations" aria-live="polite"></div>
+  <div id="riemannResult" class="riemann" aria-live="polite"></div>
+  <div class="question"><strong>Explore:</strong> com a válvula, a área de Riemann entre a e b converge para V(b) − V(a)? E se você mudar A no meio do intervalo?
+    <ul id="eventsList" class="events" aria-label="Eventos"></ul>
+  </div>
+</section>
+<script type="module" src="tank-app.mjs"></script>
+</body>
+</html>

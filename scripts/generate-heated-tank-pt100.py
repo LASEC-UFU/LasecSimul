@@ -87,7 +87,7 @@ calc("mc", [("V", "c_volume")], "4186*V", "Capacidade térmica m·c (J/K)")
 calc("heat_in", [("q", "q_heat"), ("l", "q_loss"), ("T", "temp"), ("mc", "mc")],
      "((T<100)*q+(T>99.9999)*((q<l)*q+(q>l-0.000001)*l))/mc", "Ganho de temperatura (K/s)")
 calc("heat_out", [("l", "q_loss"), ("mc", "mc")], "l/mc", "Perda de temperatura (K/s)")
-comp("temp", "control.tank", {"area": 1, "initial": 25, "samplePeriodNs": PERIOD}, 40, 320, "Temperatura da água (°C)")
+comp("temp", "control.accumulator", {"initial": 25, "samplePeriodNs": PERIOD}, 40, 320, "Temperatura da água (°C)")
 wire("heat_in", "temp", "in")
 wire("heat_out", "temp", "outflow")
 calc("tau_th", [("mc", "mc"), ("UA", "c_ua")], "mc/UA/60", "Constante de tempo térmica (min)")
@@ -95,7 +95,7 @@ calc("tau_th", [("mc", "mc"), ("UA", "c_ua")], "mc/UA/60", "Constante de tempo t
 # --- thermowell + Pt100 --------------------------------------------------------------------------------
 calc("well_in", [("T", "temp"), ("tau", "c_tau")], "T/((tau>0.1)*tau+(tau<0.1)*0.1)", "Poço: entrada")
 calc("well_out", [("Ts", "sensor_temp"), ("tau", "c_tau")], "Ts/((tau>0.1)*tau+(tau<0.1)*0.1)", "Poço: saída")
-comp("sensor_temp", "control.tank", {"area": 1, "initial": 25, "samplePeriodNs": PERIOD}, 40, 440, "Temperatura no sensor (°C)")
+comp("sensor_temp", "control.accumulator", {"initial": 25, "samplePeriodNs": PERIOD}, 40, 440, "Temperatura no sensor (°C)")
 wire("well_in", "sensor_temp", "in")
 wire("well_out", "sensor_temp", "outflow")
 calc("r_pt100", [("Ts", "sensor_temp"), ("d", "c_dev"), ("R0", "c_r0")],

@@ -91,7 +91,7 @@ calc("q_heat", [("u", "u"), ("P", "c_pmax")], "1000*P*((u>0)*(u<100)*u+(u>99.999
 calc("q_loss", [("T", "temp"), ("UA", "c_ua"), ("Ta", "c_tamb")], "UA*(T-Ta)", "Perdas para o ambiente (W)")
 calc("heat_in", [("q", "q_heat"), ("C", "c_cap")], "q/(1000*C)", "Ganho de temperatura (K/s)")
 calc("heat_out", [("l", "q_loss"), ("C", "c_cap")], "l/(1000*C)", "Perda de temperatura (K/s)")
-comp("temp", "control.tank", {"area": 1, "initial": 25, "samplePeriodNs": PERIOD}, 40, 320, "Temperatura do forno (°C)")
+comp("temp", "control.accumulator", {"initial": 25, "samplePeriodNs": PERIOD}, 40, 320, "Temperatura do forno (°C)")
 wire("heat_in", "temp", "in")
 wire("heat_out", "temp", "outflow")
 calc("tau_th", [("C", "c_cap"), ("UA", "c_ua")], "1000*C/UA/60", "Constante de tempo térmica (min)")
@@ -100,7 +100,7 @@ calc("t_steady", [("P", "c_pmax"), ("UA", "c_ua"), ("Ta", "c_tamb")], "Ta+1000*P
 # --- protection tube + thermocouple ---------------------------------------------------------------------
 calc("well_in", [("T", "temp"), ("tau", "c_tau")], "T/((tau>0.1)*tau+(tau<0.1)*0.1)", "Tubo: entrada")
 calc("well_out", [("Ts", "sensor_temp"), ("tau", "c_tau")], "Ts/((tau>0.1)*tau+(tau<0.1)*0.1)", "Tubo: saída")
-comp("sensor_temp", "control.tank", {"area": 1, "initial": 25, "samplePeriodNs": PERIOD}, 40, 440, "Temperatura da junta de medição (°C)")
+comp("sensor_temp", "control.accumulator", {"initial": 25, "samplePeriodNs": PERIOD}, 40, 440, "Temperatura da junta de medição (°C)")
 wire("well_in", "sensor_temp", "in")
 wire("well_out", "sensor_temp", "outflow")
 

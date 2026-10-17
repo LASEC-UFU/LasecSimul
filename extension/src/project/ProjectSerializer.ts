@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { validateCalculusLab } from "../ui/webview/lab/activity";
 import {
   LS_PROJ_SCHEMA_VERSION,
   HmiApplication,
@@ -414,11 +415,11 @@ export class ProjectSerializer {
             absoluteTolerance: asNumber(parsed.simulationSettings.absoluteTolerance),
             maximumNewtonIterations: asNumber(parsed.simulationSettings.maximumNewtonIterations),
             threadCount: asNumber(parsed.simulationSettings.threadCount),
-            telemetryRateHz: asNumber(parsed.simulationSettings.telemetryRateHz),
             adaptiveTimeStep: asBoolean(parsed.simulationSettings.adaptiveTimeStep),
           }
         : {},
       hmiApplication: validateHmiApplication(parsed.hmiApplication),
+      calculusLab: validateCalculusLab(parsed.calculusLab),
       mcuFirmware: Array.isArray(parsed.mcuFirmware)
         ? parsed.mcuFirmware.filter(isObject).map((entry) => ({
             chipId: asString(entry.chipId) ?? "",
@@ -437,6 +438,7 @@ export class ProjectSerializer {
       visual: { viewport: project.visual.viewport, wireRoutes: "explicit" as const },
       simulationSettings: project.simulationSettings,
       hmiApplication: project.hmiApplication,
+      calculusLab: validateCalculusLab(project.calculusLab),
       mcuFirmware: project.mcuFirmware,
     };
     await fs.mkdir(path.dirname(filePath), { recursive: true });

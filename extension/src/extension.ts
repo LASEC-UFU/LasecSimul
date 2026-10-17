@@ -9,6 +9,8 @@ import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { PidTuningPanel } from "./ui/panels/PidTuningPanel";
+import { CalculusLabPanel } from "./ui/panels/CalculusLabPanel";
+import { createCalculusLabHost } from "./lab/calculusLabHost";
 import { createInitialWebviewState } from "./ui/webview/catalog";
 import { CanonicalTopologyDocument, JUNCTION_TYPE_ID, PackageDescriptor, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, portEndpoint } from "./ui/webview/model";
 import { autoRoutedWirePoints, connectEndpointToNode, normalizeWireGeometry, removeOrphanNodes, splitSegmentAtPoint } from "./ui/webview/wireTopology";
@@ -222,6 +224,7 @@ function syncSchematicPanel(): void {
   lasecPlotManager?.sync();
   serialTerminalManager?.sync();
   serialPortManager?.sync();
+  CalculusLabPanel.current?.syncFromProject();
   const lastSynced = state.lastSyncedProjectState;
   if (lastSynced &&
       (lastSynced.components !== state.schematicState.components || lastSynced.topology.conductors !== state.schematicState.topology.conductors) &&
@@ -2554,6 +2557,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   context.subscriptions.push(
     { dispose: disposeDeviceReferenceWatchers },
     vscode.commands.registerCommand("lasecsimul.showSimulationLog", () => showSimulationLogChannel()),
+    vscode.commands.registerCommand("lasecsimul.openCalculusLab", () => { CalculusLabPanel.show(context.extensionUri, createCalculusLabHost((message) => CalculusLabPanel.current?.post(message))); }),
     OpenPlcEditorProvider.register(context),
     registerMachineNetworkSetupCommand(context),
     // Diagnóstico via Command Palette (achado 2026-07-18, pedido explícito do usuário: "tem algum

@@ -49,7 +49,7 @@ def calc(cid, inputs, expression, label):
 
 
 def tank(cid, rate_in, rate_out, initial, label):
-    comp(cid, "control.tank", {"area": 1, "initial": initial, "samplePeriodNs": PERIOD}, 40, 300 + 60 * len([c for c in components if c["typeId"] == "control.tank"]), label)
+    comp(cid, "control.accumulator", {"initial": initial, "samplePeriodNs": PERIOD}, 40, 300 + 60 * len([c for c in components if c["typeId"] == "control.accumulator"]), label)
     link(rate_in, "out", cid, "in")
     link(rate_out, "out", cid, "outflow")
 

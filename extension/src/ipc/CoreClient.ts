@@ -42,10 +42,47 @@ export interface RegisteredSubcircuitInfo {
   iconPath?: string | null;
 }
 
+/** Pedido de escoamento de uma série gravada no Core (ADR 0012). `columns` só dimensiona o lote. */
+export interface SeriesDrainRequest {
+  subscriptionId: number;
+  generation?: number;
+  sinceSeq: number;
+  sinceEventSeq: number;
+  columns: number;
+}
+
 export interface TelemetryFrameSubscription {
   items: Array<{ key: string; instanceId: string }>;
   probes: Array<{ key: string; instanceId: string; pinId: string }>;
+  series?: SeriesDrainRequest[];
 }
+
+export interface SeriesEventDto {
+  seq: number;
+  tNs: number;
+  kind: "start" | "parameter";
+  instanceId?: string;
+  name?: string;
+  value?: number;
+}
+
+/** Linhas `[fromSeq, toSeq)` de uma assinatura. Coluna `null` no JSON = canal sem porta no plano (NaN). */
+export interface SeriesChunkDto {
+  subscriptionId: number;
+  missing?: boolean;
+  generation: number;
+  fromSeq: number;
+  toSeq: number;
+  lost: number;
+  more: boolean;
+  tNs: number[];
+  columns: Array<Array<number | null>>;
+  resolved: number[];
+  events: SeriesEventDto[];
+  nextEventSeq: number;
+}
+
+export interface SeriesChannel { instanceId: string; port?: string; element?: number }
 
 export interface TelemetryFrame {
   planGeneration: number;
@@ -55,6 +92,7 @@ export interface TelemetryFrame {
   componentStates: Record<string, Buffer>;
   nodeVoltages: Record<string, number>;
   runtime: { simulatedNs: number; mcuVirtualNs?: number };
+  series: SeriesChunkDto[];
   missingProbes: string[];
 }
 
@@ -214,11 +252,13 @@ export class CoreClient {
   /** `requiresRestart: true` quando a propriedade alterada tem essa flag no schema (`Core` já
    * aplicou a mudança normalmente; reinício automático não é feito aqui — ver Épico A do roadmap de
    * pendências, decisão A3). Quem chama decide como avisar o usuário. */
-  async setProperty(instanceId: string, name: string, value: unknown): Promise<{ requiresRestart: boolean }> {
+  /** `appliedAtNs`: tempo simulado em que o Core aplicou o valor -- o instante do evento
+   * `parameter` nas séries assinadas (ADR 0012). */
+  async setProperty(instanceId: string, name: string, value: unknown): Promise<{ requiresRestart: boolean; appliedAtNs?: number }> {
     const resp = (await this.request("setProperty", { instanceId, name, value })) as
-      | { requiresRestart?: boolean }
+      | { requiresRestart?: boolean; appliedAtNs?: number }
       | undefined;
-    return { requiresRestart: Boolean(resp?.requiresRestart) };
+    return { requiresRestart: Boolean(resp?.requiresRestart), appliedAtNs: resp?.appliedAtNs };
   }
 
   async getProperty(instanceId: string, name: string): Promise<unknown> {
@@ -245,8 +285,23 @@ export class CoreClient {
   /** Edita uma propriedade de um componente DENTRO de um subcircuito, endereçando por id local
    * (ex: "button_en") em vez do índice Core -- usado pelo overlay de Modo Placa no circuito
    * principal, ver `core/src/app/CoreApplication.cpp::"setSubcircuitChildProperty"`. */
-  async setSubcircuitChildProperty(instanceId: string, localId: string, name: string, value: unknown): Promise<void> {
-    await this.request("setSubcircuitChildProperty", { instanceId, localId, name, value });
+  async setSubcircuitChildProperty(instanceId: string, localId: string, name: string, value: unknown): Promise<{ appliedAtNs?: number }> {
+    const resp = (await this.request("setSubcircuitChildProperty", { instanceId, localId, name, value })) as
+      | { appliedAtNs?: number }
+      | undefined;
+    return { appliedAtNs: resp?.appliedAtNs };
+  }
+
+  /** Assina portas de sinal para gravação no Core; as linhas chegam pelo frame de telemetria
+   * (`TelemetryFrameSubscription.series`). `periodNs` = grade em tempo simulado (0 = a cada mudança). */
+  async subscribeSeries(channels: SeriesChannel[], options: { periodNs?: number; capacityRows?: number } = {}): Promise<number> {
+    const resp = await this.request("subscribeSeries", { channels, ...options }) as { subscriptionId: number };
+    return resp.subscriptionId;
+  }
+
+  async unsubscribeSeries(subscriptionId: number): Promise<boolean> {
+    const resp = await this.request("unsubscribeSeries", { subscriptionId }) as { removed: boolean };
+    return resp.removed;
   }
 
   /** Resolve o `componentIndex` real no Core de um filho interno de subcircuito identificado pelo
@@ -382,6 +437,7 @@ export class CoreClient {
         componentStates: Record<string, string>;
         nodeVoltages: Record<string, number>;
         runtime: { simulatedNs: number; mcuVirtualNs?: number };
+        series?: SeriesChunkDto[];
       };
       missingProbes?: string[];
     };
@@ -395,6 +451,7 @@ export class CoreClient {
       ),
       nodeVoltages: resp.groups.nodeVoltages,
       runtime: resp.groups.runtime,
+      series: resp.groups.series ?? [],
       missingProbes: resp.missingProbes ?? [],
     };
   }

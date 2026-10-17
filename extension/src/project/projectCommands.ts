@@ -195,6 +195,7 @@ function projectToWebviewState(project: ProjectDocument, projectDir?: string): W
     catalog,
     components,
     hmiApplication: project.hmiApplication,
+    calculusLab: project.calculusLab,
     topology,
     viewport: project.visual.viewport,
     selectedComponentIds: [],
@@ -305,11 +306,13 @@ function projectContentSnapshot(): {
   components: WebviewProjectState["components"];
   topology: WebviewProjectState["topology"];
   hmiApplication: WebviewProjectState["hmiApplication"];
+  calculusLab: WebviewProjectState["calculusLab"];
 } {
   return {
     components: state.schematicState.components,
     topology: state.schematicState.topology,
     hmiApplication: state.schematicState.hmiApplication ? structuredClone(state.schematicState.hmiApplication) : undefined,
+    calculusLab: state.schematicState.calculusLab ? structuredClone(state.schematicState.calculusLab) : undefined,
   };
 }
 
@@ -322,7 +325,7 @@ function markProjectSaved(): void {
  * um esquemático vazio recém-aberto não deve disparar aviso nenhum. */
 export function isProjectDirty(): boolean {
   const current = projectContentSnapshot();
-  if (!state.lastSavedProjectState) return current.components.length > 0 || current.topology.conductors.length > 0 || Boolean(current.hmiApplication);
+  if (!state.lastSavedProjectState) return current.components.length > 0 || current.topology.conductors.length > 0 || Boolean(current.hmiApplication) || Boolean(current.calculusLab);
   return JSON.stringify(current) !== JSON.stringify(state.lastSavedProjectState);
 }
 
@@ -470,6 +473,7 @@ async function writeProjectToFile(filePath: string): Promise<boolean> {
     wires: [],
     topology: canonicalTopology,
     hmiApplication: state.schematicState.hmiApplication,
+    calculusLab: state.schematicState.calculusLab,
     visual: {
       wires: state.schematicState.topology.conductors
         .filter((wire) => wire.points && wire.points.length > 0)

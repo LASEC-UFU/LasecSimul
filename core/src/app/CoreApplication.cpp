@@ -1,5 +1,7 @@
 #include "CoreApplication.hpp"
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include "../ipc/IpcServer.hpp"
 #include "../ipc/Protocol.hpp"
 #include "../plugins/GlobalPluginCache.hpp"
@@ -172,7 +174,7 @@ const std::unordered_map<std::string_view, std::pair<const char*, const char*>>&
         {"control.lead_lag", {"Lead-Lag", "Lead-Lag"}},
         {"control.fopdt", {"FOPDT", "FOPDT"}},
         {"control.transfer_function", {"Função de Transferência", "Transfer Function"}},
-        {"control.tank", {"Tanque", "Tank"}},
+        {"control.accumulator", {"Acumulador", "Accumulator"}},
         {"control.valve_characteristic", {"Característica de Válvula", "Valve Characteristic"}},
         {"control.saturation", {"Saturação", "Saturation"}},
         {"control.limiter", {"Limitador", "Limiter"}},
@@ -1931,8 +1933,9 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
             const std::string name = payload.value("name", std::string{});
             const std::optional<PropertySchema> schema = session.propertySchemaOf(instanceId, name);
+            uint64_t appliedAtNs = 0;
             const std::optional<std::string> error =
-                session.setProperty(instanceId, name, jsonToPropertyValue(payload.at("value")));
+                session.setProperty(instanceId, name, jsonToPropertyValue(payload.at("value")), &appliedAtNs);
 
             if (error) {
                 const ParsedPropertyError parsed = parsePropertyError(*error);
@@ -1941,9 +1944,11 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                 resp.payloadJson = nlohmann::json{{"errorCode", parsed.code}}.dump();
             } else {
                 resp.ok = true;
-                if (schema && (schema->flags & PropertySchemaRequiresRestart) != 0) {
-                    resp.payloadJson = nlohmann::json{{"requiresRestart", true}}.dump();
-                }
+                // `appliedAtNs`: tempo simulado em que o Core aplicou o valor (ADR 0012) -- o mesmo
+                // instante do evento `parameter` das séries assinadas.
+                nlohmann::json result{{"appliedAtNs", appliedAtNs}};
+                if (schema && (schema->flags & PropertySchemaRequiresRestart) != 0) result["requiresRestart"] = true;
+                resp.payloadJson = result.dump();
             }
         } catch (const std::exception& e) {
             resp.ok = false;
@@ -2184,8 +2189,9 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             const std::string name = payload.value("name", std::string{});
             // Busca do filho + escrita numa só passagem pela fila de comandos (como "setProperty"):
             // com a simulação rodando a edição espera o passo em vez de falhar com "ocupada".
+            uint64_t appliedAtNs = 0;
             const std::optional<std::string> error =
-                session.setSubcircuitChildProperty(outerInstanceId, localId, name, jsonToPropertyValue(payload.at("value")));
+                session.setSubcircuitChildProperty(outerInstanceId, localId, name, jsonToPropertyValue(payload.at("value")), &appliedAtNs);
             if (error) {
                 const ParsedPropertyError parsed = parsePropertyError(*error);
                 resp.ok = false;
@@ -2195,6 +2201,7 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                 resp.payloadJson = nlohmann::json{{"errorCode", parsed.code}}.dump();
             } else {
                 resp.ok = true;
+                resp.payloadJson = nlohmann::json{{"appliedAtNs", appliedAtNs}}.dump();
             }
         } catch (const std::exception& e) {
             resp.ok = false;
@@ -2316,6 +2323,42 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
         }
         return resp;
     }
+    if (msg.type == "subscribeSeries") {
+        // Séries gravadas no Core (ADR 0012). `channels[].instanceId` é o índice Core do componente
+        // (para filhos de subcircuito, o de `getSubcircuitChildInstanceId`).
+        try {
+            const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
+            simulation::SeriesSubscriptionRequest request;
+            request.periodNs = payload.value("periodNs", uint64_t{0});
+            request.capacityRows = payload.value("capacityRows", uint32_t{65536});
+            for (const auto& channel : payload.at("channels")) {
+                simulation::SeriesChannelRequest parsed;
+                parsed.componentIndex = static_cast<uint32_t>(std::stoul(channel.at("instanceId").get<std::string>()));
+                parsed.port = channel.value("port", std::string{"out"});
+                parsed.element = channel.value("element", uint16_t{0});
+                request.channels.push_back(std::move(parsed));
+            }
+            const uint32_t subscriptionId = session.subscribeSeries(std::move(request));
+            resp.ok = true;
+            resp.payloadJson = nlohmann::json{{"subscriptionId", subscriptionId}}.dump();
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("subscribeSeries falhou: ") + e.what();
+        }
+        return resp;
+    }
+    if (msg.type == "unsubscribeSeries") {
+        try {
+            const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
+            const bool removed = session.unsubscribeSeries(payload.at("subscriptionId").get<uint32_t>());
+            resp.ok = true;
+            resp.payloadJson = nlohmann::json{{"removed", removed}}.dump();
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("unsubscribeSeries falhou: ") + e.what();
+        }
+        return resp;
+    }
     if (msg.type == "getTelemetryFrame") {
         try {
             const nlohmann::json payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
@@ -2364,15 +2407,56 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
 
             nlohmann::json runtime{{"simulatedNs", frame.timestampNs}};
             if (const auto mcuVirtualNs = session.firstMcuVirtualTimeNs()) runtime["mcuVirtualNs"] = *mcuVirtualNs;
+
+            // Séries: o que foi gravado desde `sinceSeq`, no mesmo IPC do tick. Cada linha custa ~24
+            // bytes por coluna em JSON; um quarto do orçamento do frame fica para as séries e o resto
+            // sai no tick seguinte (`more`).
+            nlohmann::json series = nlohmann::json::array();
+            bool seriesHasData = false;
+            if (subscription.contains("series")) {
+                const uint64_t seriesBudget = session.resourceGovernor().budget().telemetryQueueBytes / 4;
+                uint64_t spent = 0;
+                for (const auto& request : subscription.at("series")) {
+                    const uint32_t id = request.at("subscriptionId").get<uint32_t>();
+                    std::optional<uint64_t> generation;
+                    if (request.contains("generation") && request.at("generation").is_number())
+                        generation = request.at("generation").get<uint64_t>();
+                    const uint64_t columns = std::max<uint64_t>(1, request.value("columns", uint64_t{8}));
+                    const uint64_t rowBytes = 24 * (1 + columns);
+                    const uint64_t remaining = seriesBudget > spent ? seriesBudget - spent : 0;
+                    const uint32_t maxRows = static_cast<uint32_t>(std::clamp<uint64_t>(remaining / rowBytes, 1, 16384));
+                    const std::optional<simulation::SeriesChunk> chunk = session.drainSeries(
+                        id, generation, request.value("sinceSeq", uint64_t{0}), request.value("sinceEventSeq", uint64_t{0}), maxRows);
+                    if (!chunk) { series.push_back({{"subscriptionId", id}, {"missing", true}}); continue; }
+                    nlohmann::json events = nlohmann::json::array();
+                    for (const simulation::SeriesEvent& event : chunk->events) {
+                        nlohmann::json encoded{{"seq", event.seq}, {"tNs", event.timestampNs}, {"kind", event.kind}};
+                        if (event.componentIndex != std::numeric_limits<uint32_t>::max())
+                            encoded["instanceId"] = std::to_string(event.componentIndex);
+                        if (!event.name.empty()) encoded["name"] = event.name;
+                        if (std::isfinite(event.value)) encoded["value"] = event.value;
+                        events.push_back(std::move(encoded));
+                    }
+                    seriesHasData = seriesHasData || chunk->toSeq > chunk->fromSeq || !chunk->events.empty();
+                    spent += rowBytes * (chunk->toSeq - chunk->fromSeq);
+                    series.push_back({{"subscriptionId", id}, {"generation", chunk->generation},
+                                      {"fromSeq", chunk->fromSeq}, {"toSeq", chunk->toSeq}, {"lost", chunk->lost},
+                                      {"more", chunk->more}, {"tNs", chunk->timestampsNs}, {"columns", chunk->columns},
+                                      {"resolved", chunk->resolved}, {"events", std::move(events)},
+                                      {"nextEventSeq", chunk->nextEventSeq}});
+                }
+            }
+
             const uint64_t sinceGeneration = payload.value("sinceGeneration", uint64_t{0});
             const std::string encodedFrame = nlohmann::json{
                 {"planGeneration", frame.planGeneration},
                 {"telemetryGeneration", frame.telemetryGeneration},
                 {"timestampNs", frame.timestampNs},
-                {"unchanged", sinceGeneration != 0 && sinceGeneration == frame.telemetryGeneration},
+                {"unchanged", !seriesHasData && sinceGeneration != 0 && sinceGeneration == frame.telemetryGeneration},
                 {"groups", nlohmann::json{{"componentStates", std::move(states)},
                                            {"nodeVoltages", std::move(voltages)},
-                                           {"runtime", std::move(runtime)}}},
+                                           {"runtime", std::move(runtime)},
+                                           {"series", std::move(series)}}},
                 {"missingProbes", std::move(missingProbes)}}.dump();
             if (encodedFrame.size() > session.resourceGovernor().budget().telemetryQueueBytes)
                 throw std::runtime_error("frame serializado excede ResourceBudget");

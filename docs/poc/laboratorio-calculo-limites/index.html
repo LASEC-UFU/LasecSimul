@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Mesma política restritiva de uma Webview do VS Code: sem eval, sem CDN, sem script inline. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self'">
+<title>PoC Limites</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <h1>Qual é a velocidade de subida da água aos 4 segundos?</h1>
+  <p>Aproxime Q de P pelos dois lados. Observe a tendência. <span class="tag">prova de conceito — não é produção</span> · <a href="tanque.html">Tanque</a></p>
+</header>
+<main>
+  <section class="tank" aria-label="Tanque reconstruído pelo modelo">
+    <svg id="tank" viewBox="0 0 200 320" role="img" aria-labelledby="tankLabel"></svg>
+    <p id="tankLabel" class="note"></p>
+    <div class="model">
+      <span class="model-label">Modelo: <math><mrow><mi>h</mi><mo>(</mo><mi>t</mi><mo>)</mo><mo>=</mo></mrow></math></span>
+      <div id="modelEditor"></div>
+      <p id="modelError" class="error" role="alert"></p>
+      <small>t em segundos · h em centímetros</small>
+    </div>
+  </section>
+  <section class="plot" aria-label="Gráfico h(t)">
+    <div class="plot-head">
+      <h2>Dois pontos cada vez mais próximos</h2>
+      <div id="toolbar" class="toolbar" role="toolbar" aria-label="Ferramentas do gráfico"></div>
+    </div>
+    <svg id="plot" viewBox="0 0 600 420" tabindex="-1"></svg>
+    <div class="controls">
+      <fieldset>
+        <legend>Lado</legend>
+        <label><input type="radio" name="side" value="1" checked> <span id="iconRight"></span> pela direita (Δt &gt; 0)</label>
+        <label><input type="radio" name="side" value="-1"> <span id="iconLeft"></span> pela esquerda (Δt &lt; 0)</label>
+      </fieldset>
+      <label class="slider">|Δt| (escala log)
+        <input id="dtSlider" type="range" min="-3" max="0" step="0.01" value="-0.30103" aria-describedby="dtValue">
+      </label>
+      <label>|Δt| =
+        <input id="dtInput" type="number" min="0" max="2" step="0.001" value="0.5" inputmode="decimal">
+      </label>
+    </div>
+    <p id="dtValue" class="note" aria-live="polite"></p>
+  </section>
+  <section class="table" aria-label="Velocidade média">
+    <h2>Velocidade média</h2>
+    <table>
+      <thead><tr><th scope="col">Δt (s)</th><th scope="col" class="right">Pela direita (cm/s)</th><th scope="col" class="left">Pela esquerda (cm/s)</th></tr></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <p class="limit" id="limit"></p>
+    <p class="warning" id="warning" role="status"></p>
+  </section>
+</main>
+<section class="calc" aria-label="Calculadora de Cálculo">
+  <div class="calc-main">
+    <h2>Calculadora — limite, derivada, integral e somatório sobre h</h2>
+    <div id="calcEditor"></div>
+    <div id="calcResult" class="calc-result" aria-live="polite"></div>
+    <div id="examples" class="examples" aria-label="Exemplos"></div>
+  </div>
+  <div id="palette" aria-label="Teclado matemático"></div>
+</section>
+<footer>
+  <p id="equation" class="equation" aria-live="polite"></p>
+  <p class="prompt">O que muda ao aproximar pelo outro lado?</p>
+</footer>
+<script type="module" src="app.mjs"></script>
+</body>
+</html>

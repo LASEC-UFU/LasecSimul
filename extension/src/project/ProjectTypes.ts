@@ -1,5 +1,6 @@
 import type { IpdLineClass } from "../ui/webview/ipdLineStyle";
 import type { HmiApplication } from "../ui/webview/model";
+import type { CalculusLab } from "../ui/webview/lab/activity";
 export type { HmiApplication, HmiPage, HmiPageElement, HmiPageNavigationItem } from "../ui/webview/model";
 
 export const LS_PROJ_SCHEMA_VERSION = 2 as const;
@@ -16,7 +17,6 @@ export interface ProjectSimulationSettings {
   absoluteTolerance?: number;
   maximumNewtonIterations?: number;
   threadCount?: number;
-  telemetryRateHz?: number;
   adaptiveTimeStep?: boolean;
 }
 
@@ -158,6 +158,8 @@ export interface ProjectDocument {
   mcuFirmware?: ProjectFirmwareConfig[];
   /** Campo aditivo opcional para compatibilidade com projetos anteriores ao modelo HMI. */
   hmiApplication?: HmiApplication;
+  /** Laboratório de Cálculo (ADR 0015): `schemaVersion` próprio; não altera `LS_PROJ_SCHEMA_VERSION`. */
+  calculusLab?: CalculusLab;
 }
 
 export function createEmptyProject(): ProjectDocument {

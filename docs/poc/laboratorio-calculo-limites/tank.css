@@ -1,0 +1,30 @@
+.lab-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; color: #e2e8f0; gap: 12px; flex-wrap: wrap; }
+.lab-header a { color: #93c5fd; }
+.tank-layout { display: grid; grid-template-columns: minmax(300px, 0.9fr) minmax(360px, 1.6fr); gap: 12px; padding: 0 16px 12px; }
+.process { background: #10294d; color: #e2e8f0; border-radius: 10px; padding: 10px; }
+.process h2 { color: #e2e8f0; display: flex; justify-content: space-between; gap: 8px; }
+.status { font-size: 13px; font-weight: 400; color: #bbf7d0; }
+.sliders { display: grid; gap: 6px; }
+.sliders label { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; font-size: 14px; }
+.sliders input[type=range] { grid-column: 1 / -1; width: 100%; }
+.sliders output { font-variant-numeric: tabular-nums; color: #fde68a; }
+.config { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; font-size: 14px; align-items: center; }
+.config input { width: 5em; }
+.config select:disabled, .config input:disabled { opacity: 0.55; }
+.run-bar { display: flex; gap: 6px; margin-top: 10px; align-items: center; }
+.run-bar select { height: 40px; border-radius: 8px; }
+.charts { background: var(--panel); color: var(--ink); border-radius: 10px; padding: 10px; min-width: 0; }
+.chart-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.chart-head h2 { margin: 0; }
+.chart { touch-action: none; cursor: crosshair; }
+.chart:focus-visible { outline: 3px solid #f59e0b; }
+.tank-bottom { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 12px; padding: 0 16px 16px; }
+.tank-bottom > div { background: #10294d; color: #e2e8f0; border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.equations math { font-size: 18px; }
+.equations p { margin: 4px 0; }
+.equations .note, .riemann .note { color: #cbd5e1; }
+.riemann h3 { margin: 0 0 4px; font-size: 15px; }
+.riemann p { margin: 3px 0; font-size: 14px; }
+.events { margin: 8px 0 0; padding-left: 18px; font-size: 12px; color: #cbd5e1; }
+@media (max-width: 1000px) { .tank-layout, .tank-bottom { grid-template-columns: 1fr; } }
+.chart, .chart text { user-select: none; -webkit-user-select: none; }

@@ -277,6 +277,13 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
             return {accept, maximumError};
         });
     m_scheduler.setStableStepCallback([this](uint64_t timestampNs) { onStableStepUnlocked(timestampNs); });
+    m_seriesResolver = [this](const simulation::SeriesChannelRequest& channel) -> std::optional<simulation::SignalSlotHandle> {
+        try {
+            return m_runtimeState.signals.output(signalPortBlockId(channel.componentIndex, channel.port));
+        } catch (const std::exception&) {
+            return std::nullopt; // porta fora do plano em execução: coluna NaN, `resolved` = 0
+        }
+    };
     m_scheduler.setCommandDrainCallback([this] { drainCommandQueue(); });
     m_scheduler.setCommandPendingCallback([this] { return m_commandQueue.hasPending(); });
     m_scheduler.setAdvanceLimitCallback([this] { return computeSlowestMcuPositionNs(); });
@@ -1194,6 +1201,9 @@ void SimulationSession::onStableStepUnlocked(uint64_t timestampNs) {
     // Sampling only inside hartTransact left the LCD and loop current frozen
     // until an external HART master happened to issue a command.
     sampleHartInputsFromSignalUnlocked();
+    // Depois de todo o trabalho de sinal deste instante (blocos, eventos PLC, HART): a linha gravada
+    // é o valor que vale em t, na resolução real do bloco -- nunca na cadência da tela.
+    m_signalRecorder.record(timestampNs, m_runtimeState.sessionExecutionId, m_runtimeState.signals, m_seriesResolver);
     scheduleNextSignalBoundaryUnlocked(timestampNs);
     publishSnapshot();
     publishTelemetrySnapshotIfRequested(timestampNs);
@@ -1566,16 +1576,44 @@ void SimulationSession::setTunnelNameUnlocked(uint32_t component, const std::str
 }
 
 std::optional<std::string> SimulationSession::setProperty(uint32_t component, const std::string& propertyName,
-                                                          const PropertyValue& value) {
+                                                          const PropertyValue& value, uint64_t* appliedAtNs) {
     // Redesign de concorrência 2026-07-19 (fase 2): antes bloqueava a thread de IPC inteira em
     // `Scheduler::synchronized()` até o ciclo de settle em andamento terminar -- mesma classe do bug
     // de head-of-line-blocking já corrigido em `tryDrainUartRx` (ver
     // project_lasecsimul_drainuart_headofline_blocking_fix), só que síncrono em vez de num poll
     // contínuo. Agora enfileira e espera só o Scheduler aplicar (uma iteração de settle, não o ciclo
     // inteiro) -- mesmo contrato observável (código/mensagem de erro idênticos).
-    return runViaCommandQueue([component, propertyName, value](SimulationSession& self) {
-        return self.setPropertyUnlocked(component, propertyName, value);
+    return runViaCommandQueue([component, propertyName, value, appliedAtNs](SimulationSession& self) {
+        std::optional<std::string> error = self.setPropertyUnlocked(component, propertyName, value);
+        if (!error) self.notePropertyAppliedUnlocked(component, propertyName, value, appliedAtNs);
+        return error;
     });
+}
+
+void SimulationSession::notePropertyAppliedUnlocked(uint32_t component, const std::string& propertyName,
+                                                    const PropertyValue& value, uint64_t* appliedAtNs) {
+    // Tempo do relógio de sinal no instante em que o comando rodou: entre dois passos estáveis, logo
+    // a mudança vale a partir deste t (quem calcula h = V/A no Host usa exatamente este instante).
+    const uint64_t timestampNs = m_runtimeState.virtualTimeNs;
+    if (appliedAtNs) *appliedAtNs = timestampNs;
+    if (!m_runtimeState.executionActive) return;
+    double numeric = std::numeric_limits<double>::quiet_NaN();
+    if (const double* number = std::get_if<double>(&value)) numeric = *number;
+    else if (const bool* flag = std::get_if<bool>(&value)) numeric = *flag ? 1.0 : 0.0;
+    m_signalRecorder.noteParameter(timestampNs, m_runtimeState.sessionExecutionId, component, propertyName, numeric,
+                                   m_runtimeState.signals, m_seriesResolver);
+}
+
+uint32_t SimulationSession::subscribeSeries(simulation::SeriesSubscriptionRequest request) {
+    runViaCommandQueue([&request](SimulationSession& self) {
+        for (const simulation::SeriesChannelRequest& channel : request.channels) {
+            if (channel.componentIndex >= self.m_componentInstances.size() || !self.m_componentInstances[channel.componentIndex])
+                throw std::invalid_argument("subscribeSeries: componente inexistente " + std::to_string(channel.componentIndex));
+            if (!self.findSignalPortUnlocked(channel.componentIndex, channel.port))
+                throw std::invalid_argument("subscribeSeries: porta de sinal inexistente " + channel.port);
+        }
+    });
+    return m_signalRecorder.subscribe(std::move(request));
 }
 
 std::optional<SignalPortDescriptor> SimulationSession::findSignalPortUnlocked(
@@ -2749,11 +2787,14 @@ std::optional<uint32_t> SimulationSession::findSubcircuitChildByLocalIdUnlocked(
 }
 
 std::optional<std::string> SimulationSession::setSubcircuitChildProperty(uint32_t subcircuitInstanceId, const std::string& localId,
-                                                                         const std::string& propertyName, const PropertyValue& value) {
-    return runViaCommandQueue([subcircuitInstanceId, localId, propertyName, value](SimulationSession& self) -> std::optional<std::string> {
+                                                                         const std::string& propertyName, const PropertyValue& value,
+                                                                         uint64_t* appliedAtNs) {
+    return runViaCommandQueue([subcircuitInstanceId, localId, propertyName, value, appliedAtNs](SimulationSession& self) -> std::optional<std::string> {
         const std::optional<uint32_t> child = self.findSubcircuitChildByLocalIdUnlocked(subcircuitInstanceId, localId);
         if (!child) return "child_not_found|" + localId;
-        return self.setPropertyUnlocked(*child, propertyName, value);
+        std::optional<std::string> error = self.setPropertyUnlocked(*child, propertyName, value);
+        if (!error) self.notePropertyAppliedUnlocked(*child, propertyName, value, appliedAtNs);
+        return error;
     });
 }
 

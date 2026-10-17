@@ -236,7 +236,7 @@ void checkedInControlBlockLibraryCompilesAndRuns() {
         "control_pid.lssubcircuit", "control_integrator.lssubcircuit", "control_filtered_derivative.lssubcircuit",
         "control_unit_delay.lssubcircuit", "control_dead_time.lssubcircuit", "control_first_order.lssubcircuit",
         "control_second_order.lssubcircuit", "control_lead_lag.lssubcircuit", "control_fopdt.lssubcircuit",
-        "control_transfer_function.lssubcircuit", "control_tank.lssubcircuit", "control_valve_characteristic.lssubcircuit",
+        "control_transfer_function.lssubcircuit", "control_accumulator.lssubcircuit", "control_valve_characteristic.lssubcircuit",
         "control_saturation.lssubcircuit", "control_deadband.lssubcircuit", "control_hysteresis.lssubcircuit",
         "control_stiction.lssubcircuit", "control_rate_limiter.lssubcircuit", "control_limiter.lssubcircuit"};
     for (const std::string& file : files) {

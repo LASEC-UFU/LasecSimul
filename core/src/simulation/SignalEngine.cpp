@@ -35,6 +35,28 @@ UnitInfo unitInfo(std::string_view symbol) {
     if (symbol == "kPa") return {"pressure", 1e3, 0.0};
     if (symbol == "K") return {"temperature", 1.0, 0.0};
     if (symbol == "degC") return {"temperature", 1.0, 273.15};
+    // Grandezas de processo/hidráulica (Laboratório de Cálculo, tanques): mesma tabela espelhada em
+    // extension/src/ui/webview/lab/units.ts -- um teste da Extension compara as duas.
+    if (symbol == "bar") return {"pressure", 1e5, 0.0};
+    if (symbol == "min") return {"time", 60.0, 0.0};
+    if (symbol == "h") return {"time", 3600.0, 0.0};
+    if (symbol == "m") return {"length", 1.0, 0.0};
+    if (symbol == "cm") return {"length", 1e-2, 0.0};
+    if (symbol == "mm") return {"length", 1e-3, 0.0};
+    if (symbol == "m2") return {"area", 1.0, 0.0};
+    if (symbol == "cm2") return {"area", 1e-4, 0.0};
+    if (symbol == "m3") return {"volume", 1.0, 0.0};
+    if (symbol == "cm3") return {"volume", 1e-6, 0.0};
+    if (symbol == "L") return {"volume", 1e-3, 0.0};
+    if (symbol == "mL") return {"volume", 1e-6, 0.0};
+    if (symbol == "m3/s") return {"volumetricFlow", 1.0, 0.0};
+    if (symbol == "m3/h") return {"volumetricFlow", 1.0 / 3600.0, 0.0};
+    if (symbol == "L/s") return {"volumetricFlow", 1e-3, 0.0};
+    if (symbol == "L/min") return {"volumetricFlow", 1e-3 / 60.0, 0.0};
+    if (symbol == "m/s") return {"velocity", 1.0, 0.0};
+    if (symbol == "cm/s") return {"velocity", 1e-2, 0.0};
+    if (symbol == "rad") return {"angle", 1.0, 0.0};
+    if (symbol == "deg") return {"angle", 3.14159265358979323846 / 180.0, 0.0};
     throw std::invalid_argument("unidade de sinal desconhecida: " + std::string(symbol));
 }
 
@@ -224,7 +246,7 @@ bool isContinuous(SignalBlockKind kind) {
     case SignalBlockKind::SecondOrder:
     case SignalBlockKind::LeadLag:
     case SignalBlockKind::Fopdt:
-    case SignalBlockKind::Tank:
+    case SignalBlockKind::Accumulator:
     case SignalBlockKind::RateLimiter:
         return true;
     default:
@@ -258,8 +280,6 @@ size_t expectedInputCount(SignalBlockKind kind) {
     case SignalBlockKind::Stiction:
     case SignalBlockKind::RateLimiter:
         return 1;
-    case SignalBlockKind::Tank:
-        return 2;
     case SignalBlockKind::Pid:
         return std::numeric_limits<size_t>::max();
     default:
@@ -277,7 +297,7 @@ size_t minimumParameterCount(SignalBlockKind kind) {
     case SignalBlockKind::SecondOrder: return 5;            // gain, omega, zeta, y0, dy0
     case SignalBlockKind::LeadLag: return 4;                 // gain, lead tau, lag tau, initial filter
     case SignalBlockKind::Fopdt: return 4;                   // gain, tau, delay seconds, initial
-    case SignalBlockKind::Tank: return 2;                    // area, initial level
+    case SignalBlockKind::Accumulator: return 5;             // initial, lower, upper, lower/upper por entrada
     case SignalBlockKind::ValveCharacteristic: return 2;    // coefficient, exponent
     case SignalBlockKind::Saturation: return 2;              // minimum, maximum
     case SignalBlockKind::Deadband: return 1;                // full width
@@ -388,8 +408,30 @@ void validateBlock(const SignalBlockDefinition& block, uint16_t maxWidth) {
         throw std::invalid_argument("SecondOrder exige frequencia positiva e amortecimento nao negativo: " + block.id);
     if (block.kind == SignalBlockKind::LeadLag && (!(block.realParameters[2] > 0.0) || block.realParameters[1] < 0.0))
         throw std::invalid_argument("LeadLag exige constantes de tempo validas: " + block.id);
-    if (block.kind == SignalBlockKind::Tank && !(block.realParameters[0] > 0.0))
-        throw std::invalid_argument("Tank exige area positiva: " + block.id);
+    if (block.kind == SignalBlockKind::Accumulator) {
+        const auto& p = block.realParameters;
+        if (p.size() < minimumParameterCount(block.kind))
+            throw std::invalid_argument("Accumulator exige initial, lower, upper e as flags de entrada: " + block.id);
+        const size_t expected = 2 + (p[3] != 0.0 ? 1 : 0) + (p[4] != 0.0 ? 1 : 0);
+        if (count != expected)
+            throw std::invalid_argument("Accumulator exige entradas in, outflow e as fronteiras declaradas: " + block.id);
+        if (block.output.type != SignalDataType{SignalScalarType::Real, AccumulatorWidth})
+            throw std::invalid_argument("Accumulator exige saida Real de largura 10: " + block.id);
+        for (const auto& input : block.inputs)
+            if (input.type != SignalDataType{SignalScalarType::Real, 1})
+                throw std::invalid_argument("Accumulator exige entradas Real escalares: " + block.id);
+        if (std::isnan(p[0]) || std::isnan(p[1]) || std::isnan(p[2]) || !(p[2] > p[1]))
+            throw std::invalid_argument("Accumulator exige lower < upper: " + block.id);
+    }
+    if (block.kind == SignalBlockKind::Element) {
+        if (count != 1 || block.inputs[0].type.scalar != SignalScalarType::Real)
+            throw std::invalid_argument("Element exige uma entrada Real: " + block.id);
+        if (block.output.type != SignalDataType{SignalScalarType::Real, 1})
+            throw std::invalid_argument("Element exige saida Real escalar: " + block.id);
+        const double index = block.realParameters.empty() ? -1.0 : block.realParameters[0];
+        if (!(index >= 0.0) || index != std::floor(index) || index >= block.inputs[0].type.width)
+            throw std::invalid_argument("Element exige indice inteiro dentro do vetor de entrada: " + block.id);
+    }
     if ((block.kind == SignalBlockKind::DeadTime || block.kind == SignalBlockKind::Fopdt) && block.historyCapacity < 2)
         throw std::invalid_argument("atraso exige historyCapacity >= 2: " + block.id);
     if (block.kind == SignalBlockKind::Saturation && block.realParameters[0] > block.realParameters[1])
@@ -488,7 +530,10 @@ std::shared_ptr<const CompiledSignalGraph> SignalCompiler::compile(const SignalG
         inputSources[targetIndex][port] = sourceIndex;
         // Continuous state and UnitDelay consume their input for a future accepted state. Their
         // incoming edge is therefore not an instantaneous algebraic dependency and breaks SCCs.
-        if (!isContinuous(target.kind) && target.kind != SignalBlockKind::UnitDelay)
+        // Exceção: as fronteiras do Accumulator (portas 2+) são lidas na própria ativação
+        // (`projectedAccumulator`), então quem as calcula precisa rodar antes.
+        const bool accumulatorBound = target.kind == SignalBlockKind::Accumulator && port >= 2;
+        if ((!isContinuous(target.kind) && target.kind != SignalBlockKind::UnitDelay) || accumulatorBound)
             edges[sourceIndex].push_back(targetIndex);
     }
     for (uint32_t block = 0; block < count; ++block) for (uint32_t source : inputSources[block])
@@ -597,6 +642,92 @@ T readSlot(const std::vector<T>& values, const InputBinding& binding, uint16_t e
     return convertedValue(values[binding.source.offset + element], binding.conversion);
 }
 
+/** Fronteira NaN = ausente; topo abaixo do fundo colapsa no fundo (estado preso, tudo transborda). */
+void normalizeAccumulatorBounds(double& lower, double& upper) {
+    if (std::isnan(lower)) lower = -std::numeric_limits<double>::infinity();
+    if (std::isnan(upper) || upper < lower) upper = lower;
+}
+
+/** Fronteiras vigentes: parâmetro compilado ou entrada amostrada (`realParameters[3]`/`[4]`). */
+template <class Read>
+std::pair<double, double> accumulatorBounds(const CompiledBlock& block, Read read) {
+    const bool lowerInput = block.realParameters[3] != 0.0;
+    const bool upperInput = block.realParameters[4] != 0.0;
+    double lower = lowerInput ? read(block.inputs[2]) : block.realParameters[1];
+    double upper = upperInput ? read(block.inputs[lowerInput ? 3 : 2]) : block.realParameters[2];
+    normalizeAccumulatorBounds(lower, upper);
+    return {lower, upper};
+}
+
+/**
+ * Projeção do estado nas fronteiras AMOSTRADAS, na própria ativação do bloco: quando `upper` passa a
+ * valer menos que o estado (ex.: Vmax = A·hmax com A ajustável), o excesso sai como derramamento
+ * discreto no mesmo instante em que a nova fronteira é lida -- quem lê o estado nessa ativação
+ * (h = V/A) já vê o tanque no topo, nunca acima dele. Função pura do snapshot: idempotente nas
+ * iterações de ponto fixo.
+ */
+double projectedAccumulator(const CompiledBlock& block, const std::vector<double>& reals, uint16_t element) {
+    const uint32_t offset = block.output.offset;
+    const auto [lower, upper] = accumulatorBounds(block, [&](const InputBinding& input) { return readSlot(reals, input, 0); });
+    const double x = reals[offset + AccumulatorState];
+    const double projected = std::clamp(x, lower, upper);
+    if (element == AccumulatorState) return projected;
+    if (element == AccumulatorCumSpill) return reals[offset + AccumulatorCumSpill] + (x - projected);
+    return reals[offset + element];
+}
+
+/**
+ * Um passo do acumulador conservativo com entradas ZOH em [t, t+dt] (docs/53 §2.2; oráculo:
+ * docs/poc/laboratorio-calculo-limites/accumulator.mjs). O estado é linear por partes; o contato com
+ * a fronteira é analítico; depois dele o estado fica na fronteira e o excesso vira overflow (topo) ou
+ * unmet (fundo). Uma fronteira que se moveu para dentro do estado (upper ao vivo, ex.: Vmax = A·hmax
+ * com A ajustável) gera derramamento DISCRETO contabilizado em cumOverflow. Os acumulados fecham
+ * x - x0 = cumIn - cumOut - cumOverflow a menos de arredondamento.
+ */
+void stepAccumulator(const double* state, double* next, double demandIn, double demandOut,
+                     double lower, double upper, double dt) {
+    std::copy_n(state, AccumulatorWidth, next);
+    normalizeAccumulatorBounds(lower, upper);
+    // Demandas com sinal, como o Tank que este bloco substitui: os modelos térmicos usam "saída" =
+    // k·(T - ambiente), negativa abaixo do ambiente. Não negatividade de vazão física (tanque do
+    // Laboratório) é política de quem define o parâmetro (Host), não do bloco. NaN conta como 0.
+    const double qIn = std::isnan(demandIn) ? 0.0 : demandIn;
+    const double qOut = std::isnan(demandOut) ? 0.0 : demandOut;
+    double x = state[AccumulatorState];
+    // Normalmente já projetado na ativação (`projectedAccumulator`); fica aqui para fronteiras que
+    // mudam entre ativações (fonte mais rápida que o bloco).
+    if (x > upper) { next[AccumulatorCumSpill] += x - upper; x = upper; }
+    else if (x < lower) { next[AccumulatorCumSpill] -= lower - x; x = lower; }
+    const double net = qIn - qOut;
+    double overflowVolume = 0.0;
+    double unmetVolume = 0.0;
+    if (net > 0.0 && std::isfinite(upper)) {
+        const double contact = (upper - x) / net;
+        if (contact < dt) { overflowVolume = net * (dt - std::max(contact, 0.0)); x = upper; }
+        else x += net * dt;
+    } else if (net < 0.0 && std::isfinite(lower)) {
+        const double contact = (x - lower) / -net;
+        if (contact < dt) { unmetVolume = -net * (dt - std::max(contact, 0.0)); x = lower; }
+        else x += net * dt;
+    } else {
+        x += net * dt;
+    }
+    // Arredondamento perto da fronteira entra na contabilidade, nunca some.
+    if (x > upper) { overflowVolume += x - upper; x = upper; }
+    if (x < lower) { unmetVolume += lower - x; x = lower; }
+    next[AccumulatorState] = x;
+    next[AccumulatorCumIn] += qIn * dt;
+    next[AccumulatorCumOut] += qOut * dt - unmetVolume;
+    next[AccumulatorCumOverflow] += overflowVolume;
+    next[AccumulatorCumUnmet] += unmetVolume;
+    const bool atUpper = x >= upper && net > 0.0;
+    const bool atLower = x <= lower && net < 0.0;
+    next[AccumulatorInActual] = qIn;
+    next[AccumulatorOutActual] = atLower ? qIn : qOut;
+    next[AccumulatorOverflow] = atUpper ? net : 0.0;
+    next[AccumulatorUnmet] = atLower ? -net : 0.0;
+}
+
 int64_t wrapAdd(int64_t left, int64_t right) {
     return std::bit_cast<int64_t>(std::bit_cast<uint64_t>(left) + std::bit_cast<uint64_t>(right));
 }
@@ -635,6 +766,12 @@ void evaluate(const CompiledBlock& block, const std::vector<double>& reals, cons
                 value = std::abs(input) <= halfWidth ? 0.0 : input - std::copysign(halfWidth, input);
                 break;
             }
+            case SignalBlockKind::Element:
+                value = readSlot(reals, block.inputs[0], static_cast<uint16_t>(block.realParameters[0]));
+                break;
+            case SignalBlockKind::Accumulator:
+                value = projectedAccumulator(block, reals, element);
+                break;
             case SignalBlockKind::Integrator:
             case SignalBlockKind::FilteredDerivative:
             case SignalBlockKind::UnitDelay:
@@ -643,7 +780,6 @@ void evaluate(const CompiledBlock& block, const std::vector<double>& reals, cons
             case SignalBlockKind::SecondOrder:
             case SignalBlockKind::LeadLag:
             case SignalBlockKind::Fopdt:
-            case SignalBlockKind::Tank:
             case SignalBlockKind::Hysteresis:
             case SignalBlockKind::Stiction:
             case SignalBlockKind::RateLimiter:
@@ -799,6 +935,13 @@ void SignalRuntime::bind(std::shared_ptr<const CompiledSignalGraph> graph) {
                     m_reals[block.output.offset + element] = std::clamp(initialOutput, block.realParameters[5], block.realParameters[6]);
                     continue;
                 }
+                if (block.kind == SignalBlockKind::Accumulator) {
+                    const double initial = element == AccumulatorState
+                        ? std::clamp(block.realParameters[0], block.realParameters[1], block.realParameters[2]) : 0.0;
+                    m_dynamicState[block.stateOffset + element] = initial;
+                    m_reals[block.output.offset + element] = initial;
+                    continue;
+                }
                 double initial = 0.0;
                 switch (block.kind) {
                 case SignalBlockKind::Integrator: initial = block.realParameters[1]; break;
@@ -811,7 +954,6 @@ void SignalRuntime::bind(std::shared_ptr<const CompiledSignalGraph> graph) {
                     break;
                 case SignalBlockKind::LeadLag: initial = block.realParameters[3]; break;
                 case SignalBlockKind::Fopdt: initial = block.realParameters[3]; break;
-                case SignalBlockKind::Tank: initial = block.realParameters[1]; break;
                 case SignalBlockKind::Hysteresis: initial = block.realParameters[4]; break;
                 case SignalBlockKind::Stiction: initial = block.realParameters[2]; break;
                 case SignalBlockKind::RateLimiter: initial = block.realParameters[2]; break;
@@ -1025,6 +1167,9 @@ void SignalRuntime::activateGroup(uint32_t groupIndex, uint64_t timestampNs) {
         const CompiledBlock& block = m_graph->blocks[blockIndex];
         if (block.kind == SignalBlockKind::UnitDelay) for (uint16_t element = 0; element < block.output.width; ++element)
             m_dynamicState[block.stateOffset + element] = readSlot(m_reals, block.inputs[0], element);
+        // Projeção nas fronteiras feita nesta ativação: o estado contínuo passa a ser a saída publicada.
+        if (block.kind == SignalBlockKind::Accumulator)
+            std::copy_n(m_reals.begin() + block.output.offset, AccumulatorWidth, m_dynamicState.begin() + block.stateOffset);
     }
 
     // Record only input changes. Ring storage was allocated by bind(); no push_back occurs here.
@@ -1084,6 +1229,16 @@ void SignalRuntime::beginContinuousStep(uint64_t previousNs, uint64_t currentNs)
 
     for (uint32_t blockIndex : m_graph->continuousBlocks) {
         const CompiledBlock& block = m_graph->blocks[blockIndex];
+        if (block.kind == SignalBlockKind::Accumulator) {
+            // Exato para entradas ZOH no passo: full == half, erro estimado 0 (como o Tank que substitui).
+            const auto [lower, upper] = accumulatorBounds(block, [&](const InputBinding& input) { return readSlot(m_reals, input, 0); });
+            double* candidate = m_dynamicCandidate.data() + block.stateOffset;
+            stepAccumulator(m_dynamicState.data() + block.stateOffset, candidate, readSlot(m_reals, block.inputs[0], 0),
+                            readSlot(m_reals, block.inputs[1], 0), lower, upper, dt);
+            std::copy_n(candidate, AccumulatorWidth, m_dynamicFullStep.data() + block.stateOffset);
+            std::copy_n(candidate, AccumulatorWidth, m_dynamicOutputCandidate.data() + block.output.offset);
+            continue;
+        }
         for (uint16_t element = 0; element < block.output.width; ++element) {
             const uint32_t stateIndex = block.stateOffset + element;
             const double state = m_dynamicState[stateIndex];
@@ -1138,14 +1293,6 @@ void SignalRuntime::beginContinuousStep(uint64_t previousNs, uint64_t currentNs)
                 half = rk4Scalar(rk4Scalar(state, dt * 0.5, derivative), dt * 0.5, derivative);
                 const double ratio = block.realParameters[1] / lag;
                 output = block.realParameters[0] * (ratio * rawInput + (1.0 - ratio) * half);
-                break;
-            }
-            case SignalBlockKind::Tank: {
-                const double outflow = readSlot(m_reals, block.inputs[1], element);
-                const double derivative = (input - outflow) / block.realParameters[0];
-                full = std::max(0.0, state + dt * derivative);
-                half = std::max(0.0, state + dt * derivative);
-                output = half;
                 break;
             }
             case SignalBlockKind::RateLimiter: {

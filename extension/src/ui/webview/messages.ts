@@ -300,7 +300,7 @@ export type WebviewToHostMessage =
   | { version: number; type: "requestExportInstrumentData"; suggestedFileName: string; csvContent: string }
   /** Pedido de histórico REAL pra janela "Expande" -- ver `InstrumentHistoryPayload`. Mandado ao
    * abrir a janela e a cada `componentReadout` enquanto ela continuar aberta (mesmo ritmo de
-   * atualização do resto da telemetria, ~300ms, ver `pollInstrumentReadouts`). */
+   * atualização do resto da telemetria, ~50 ms com o padrão de 20 Hz, ver `pollInstrumentReadouts`). */
   | { version: number; type: "requestInstrumentHistory"; componentId: string }
   /** Pedido de dados pro overlay de Modo Placa E pro submenu por componente exposto do menu de
    * contexto -- ver `boardOverlayData`. */

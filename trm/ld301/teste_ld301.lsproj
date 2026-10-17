@@ -487,9 +487,8 @@
             },
             {
               "id": "tank",
-              "typeId": "control.tank",
+              "typeId": "control.accumulator",
               "properties": {
-                "area": 1,
                 "initial": 1.5,
                 "samplePeriodNs": 10000000
               },

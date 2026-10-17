@@ -26,6 +26,7 @@
 #include "../simulation/Netlist.hpp"
 #include "../simulation/RuntimeState.hpp"
 #include "../simulation/Scheduler.hpp"
+#include "../simulation/SignalRecorder.hpp"
 #include "../python/PythonRuntime.hpp"
 #include "../plc/PlcNativeModule.hpp"
 #include "../plc/PlcRuntime.hpp"
@@ -469,7 +470,7 @@ public:
      * no próximo settleStep(). Túnel continua usando setTunnelName() acima, não isto (ver nota em
      * Tunnel.hpp). `std::nullopt` = sucesso; valor presente = "codigo|mensagem". */
     std::optional<std::string> setProperty(uint32_t component, const std::string& propertyName,
-                                           const PropertyValue& value);
+                                           const PropertyValue& value, uint64_t* appliedAtNs = nullptr);
     std::optional<std::vector<uint8_t>> hartTransact(uint32_t componentIndex,
                                                      std::span<const uint8_t> request);
 
@@ -487,7 +488,18 @@ public:
      * ocupada" (`findSubcircuitChildByLocalId` só TENTA o lock). Filho inexistente devolve o erro
      * "child_not_found|<localId>"; os demais erros são os de `setProperty`. */
     std::optional<std::string> setSubcircuitChildProperty(uint32_t subcircuitInstanceId, const std::string& localId,
-                                                          const std::string& propertyName, const PropertyValue& value);
+                                                          const std::string& propertyName, const PropertyValue& value,
+                                                          uint64_t* appliedAtNs = nullptr);
+
+    /** Séries gravadas no Core (ADR 0012): assina portas de sinal; as linhas saem pelo frame de
+     * telemetria (`drainSeries`). Valida componente/porta na fila de comandos; a porta só precisa
+     * existir no plano quando a simulação roda (antes disso a coluna sai NaN e `resolved` = 0). */
+    uint32_t subscribeSeries(simulation::SeriesSubscriptionRequest request);
+    bool unsubscribeSeries(uint32_t subscriptionId) { return m_signalRecorder.unsubscribe(subscriptionId); }
+    std::optional<simulation::SeriesChunk> drainSeries(uint32_t subscriptionId, std::optional<uint64_t> generation,
+                                                       uint64_t sinceSeq, uint64_t sinceEventSeq, uint32_t maxRows) const {
+        return m_signalRecorder.drain(subscriptionId, generation, sinceSeq, sinceEventSeq, maxRows);
+    }
 
     std::optional<PropertySchema> propertySchemaOf(uint32_t component, const std::string& propertyName) const;
     std::optional<PropertyValue> propertyValueOf(uint32_t component, const std::string& propertyName) const;
@@ -798,6 +810,12 @@ private:
 
     std::vector<std::unique_ptr<IComponentModel>> m_componentInstances;
     simulation::RuntimeState m_runtimeState;
+    simulation::SignalRecorder m_signalRecorder;
+    /** Porta de sinal -> slot no plano em execução (montado uma vez; `record()` não aloca). */
+    simulation::SignalRecorder::Resolver m_seriesResolver;
+    /** Depois de uma propriedade aplicada com sucesso (thread do Scheduler): tempo exato + evento. */
+    void notePropertyAppliedUnlocked(uint32_t component, const std::string& propertyName,
+                                     const PropertyValue& value, uint64_t* appliedAtNs);
     /** Per-step signal<->electrical bridges, resolved once instead of every stable step: the
      * scheduler thread used to dynamic_cast every active component four times per step and scan
      * every signal wire (string compares) for each component -- O(components x wires) per step.

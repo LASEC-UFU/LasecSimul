@@ -983,7 +983,7 @@
           mvPercentSymbol.textContent = '%';
           bindModeActions();
           window.__PID_NATIVE__ = true;
-          window.addEventListener('message', event => { const data = event.data; if (!data || data.type !== 'pidSnapshot') return; const v = data.values; if (Number.isFinite(v.sp)) { spValueInput.value = Number(v.sp).toFixed(1); setpoint = Number(v.sp); } if (Number.isFinite(v.pv)) pvValueInput.value = Number(v.pv).toFixed(1); if (Number.isFinite(v.mv)) mvValueInput.value = Number(v.mv).toFixed(2); updateModeButtons(v.manual ? 0 : 1); updateAccessButtons(v.localMode ? 1 : 0); window.__pidLocalMode = Boolean(v.localMode); if (plot && Number.isFinite(v.pv) && Number.isFinite(v.sp) && Number.isFinite(v.mv)) { tAccum += Math.max(0.001, Number(data.dt || 0.3)); extendAt(tAccum, Number(v.pv), Number(v.sp), Number(v.mv)); } });
+          window.addEventListener('message', event => { const data = event.data; if (!data || data.type !== 'pidSnapshot') return; const v = data.values; if (Number.isFinite(v.sp)) { spValueInput.value = Number(v.sp).toFixed(1); setpoint = Number(v.sp); } if (Number.isFinite(v.pv)) pvValueInput.value = Number(v.pv).toFixed(1); if (Number.isFinite(v.mv)) mvValueInput.value = Number(v.mv).toFixed(2); updateModeButtons(v.manual ? 0 : 1); updateAccessButtons(v.localMode ? 1 : 0); window.__pidLocalMode = Boolean(v.localMode); if (plot && Number.isFinite(v.pv) && Number.isFinite(v.sp) && Number.isFinite(v.mv)) { { const dtSim = Number(data.dt); tAccum += Number.isFinite(dtSim) && dtSim > 0 ? dtSim : 0; } extendAt(tAccum, Number(v.pv), Number(v.sp), Number(v.mv)); } });
 
           // select period
           const s = Math.max(0.5, Math.round(PERIOD_MS / 100) / 10);
@@ -993,12 +993,12 @@
           // Plotly
           const local = ctxPath + "/resources/plotly-2.30.0.min.js";
           const loadScript = src => new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = src; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc); });
-          loadScript(local).catch(() => loadScript("https://cdn.plot.ly/plotly-2.30.0.min.js"))
+          loadScript(local) // empacotado na extensão; sem CDN (a Webview roda offline)
             .then(() => setupPlot())
             .catch(() => {
               const el = document.getElementById('plotBox');
               el.style.padding = '16px'; el.style.color = '#c62828';
-              el.innerText = 'Plotly não encontrado (local e CDN).';
+              el.innerText = 'Plotly local não encontrado.';
             });
         });
       </script>

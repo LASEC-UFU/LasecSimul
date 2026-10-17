@@ -1,12 +1,12 @@
 {
   "schemaVersion": 3,
-  "typeId": "subcircuits.control.tank",
-  "name": "Tanque",
+  "typeId": "subcircuits.control.accumulator",
+  "name": "Acumulador",
   "language": "pt-BR",
   "folderPath": [],
   "workspaceSection": "control",
   "help": {
-    "description": "Bloco Tanque executado pelo SignalEngine do Core."
+    "description": "Estoque conservativo (volume, energia, carga) executado pelo SignalEngine do Core: integra entrada − saída, para nas fronteiras inferior e superior e contabiliza o excedente (transbordo) e a demanda não atendida. Com fronteira inferior em 0 equivale ao antigo Tanque."
   },
   "components": [
     {
@@ -43,11 +43,14 @@
     },
     {
       "id": "stage",
-      "typeId": "control.tank",
-      "label": "Tanque",
+      "typeId": "control.accumulator",
+      "label": "Acumulador",
       "properties": {
-        "area": 1,
         "initial": 0,
+        "lowerLimitEnabled": true,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "upperLimit": 100,
         "samplePeriodNs": 10000000
       },
       "visual": {
@@ -123,7 +126,7 @@
   "interface": [
     {
       "pinId": "in",
-      "label": "Vazao de entrada",
+      "label": "Entrada",
       "internalTunnel": "in",
       "domain": "signal",
       "direction": "in",
@@ -132,7 +135,7 @@
     },
     {
       "pinId": "outflow",
-      "label": "Vazao de saida",
+      "label": "Saída",
       "internalTunnel": "outflow",
       "domain": "signal",
       "direction": "in",
@@ -141,7 +144,7 @@
     },
     {
       "pinId": "out",
-      "label": "OUT",
+      "label": "Estado",
       "internalTunnel": "out",
       "domain": "signal",
       "direction": "out",
@@ -159,7 +162,7 @@
         "kind": "text",
         "x": 90,
         "y": 18,
-        "value": "Tanque",
+        "value": "Acumulador",
         "fontSize": 10,
         "textAnchor": "middle",
         "color": "#111827"
@@ -173,7 +176,7 @@
         "y": 28,
         "angle": 180,
         "length": 8,
-        "label": "Vazao de entrada"
+        "label": "Entrada"
       },
       {
         "id": "outflow",
@@ -182,7 +185,7 @@
         "y": 56,
         "angle": 180,
         "length": 8,
-        "label": "Vazao de saida"
+        "label": "Saída"
       },
       {
         "id": "out",
@@ -191,7 +194,7 @@
         "y": 56,
         "angle": 0,
         "length": 8,
-        "label": "OUT"
+        "label": "Estado"
       }
     ]
   },

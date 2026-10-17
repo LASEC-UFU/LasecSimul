@@ -38,6 +38,10 @@
       "manifest": "process_pressurized_tank_dp.lssubcircuit"
     },
     {
+      "typeId": "subcircuits.process.hydraulic_tank",
+      "manifest": "process_hydraulic_tank.lssubcircuit"
+    },
+    {
       "typeId": "subcircuits.tdps.basic_flow_loop",
       "manifest": "tdps_basic_flow_loop.lssubcircuit"
     },
@@ -186,8 +190,8 @@
       "manifest": "control_transfer_function.lssubcircuit"
     },
     {
-      "typeId": "subcircuits.control.tank",
-      "manifest": "control_tank.lssubcircuit"
+      "typeId": "subcircuits.control.accumulator",
+      "manifest": "control_accumulator.lssubcircuit"
     },
     {
       "typeId": "subcircuits.control.valve_characteristic",

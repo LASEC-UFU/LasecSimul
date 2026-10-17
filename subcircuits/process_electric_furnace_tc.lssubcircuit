@@ -305,9 +305,8 @@
     },
     {
       "id": "temp",
-      "typeId": "control.tank",
+      "typeId": "control.accumulator",
       "properties": {
-        "area": 1,
         "initial": 25,
         "samplePeriodNs": 10000000
       },
@@ -409,9 +408,8 @@
     },
     {
       "id": "sensor_temp",
-      "typeId": "control.tank",
+      "typeId": "control.accumulator",
       "properties": {
-        "area": 1,
         "initial": 25,
         "samplePeriodNs": 10000000
       },

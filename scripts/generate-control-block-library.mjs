@@ -21,9 +21,9 @@ const blocks = [
   ["lead_lag", "Lead-Lag", "control.lead_lag", [{ id: "in", label: "IN", direction: "in" }], { gain: 1, leadTau: 0, lagTau: 1, initial: 0 }],
   ["fopdt", "FOPDT", "control.fopdt", [{ id: "in", label: "IN", direction: "in" }], { gain: 1, tau: 1, delay: 0.1, initial: 0 }],
   ["transfer_function", "Funcao de transferencia", "control.transfer_function", [{ id: "in", label: "IN", direction: "in" }], { model: "first_order", gain: 1, tau: 1, initial: 0 }],
-  // Tank calcula d(nivel)/dt = (entrada - saida) / area -- exige DUAS entradas reais (ver
-  // ProcessSubcircuitCompiler.cpp's caso "control.tank" e SignalEngine.cpp::expectedInputCount).
-  ["tank", "Tanque", "control.tank", [{ id: "in", label: "Vazao de entrada", direction: "in" }, { id: "outflow", label: "Vazao de saida", direction: "in" }], { area: 1, initial: 0 }],
+  // Acumulador conservativo (ADR 0013): integra entrada - saida com fronteiras -- DUAS entradas reais
+  // (ver ProcessSubcircuitCompiler.cpp's caso "control.accumulator").
+  ["accumulator", "Acumulador", "control.accumulator", [{ id: "in", label: "Entrada", direction: "in" }, { id: "outflow", label: "Saida", direction: "in" }], { initial: 0, lowerLimitEnabled: true, lowerLimit: 0, upperLimitEnabled: false, upperLimit: 100 }],
   ["valve_characteristic", "Caracteristica de valvula", "control.valve_characteristic", [{ id: "in", label: "IN", direction: "in" }], { coefficient: 1, exponent: 1 }],
   ["saturation", "Saturacao", "control.saturation", [{ id: "in", label: "IN", direction: "in" }], { minimum: 0, maximum: 100 }],
   ["deadband", "Banda morta", "control.deadband", [{ id: "in", label: "IN", direction: "in" }], { width: 0 }],

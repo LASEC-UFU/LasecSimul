@@ -1,5 +1,6 @@
 import type { WorkspaceSection } from "./workspace";
 import type { IpdLineClass } from "./ipdLineStyle";
+import type { CalculusLab } from "./lab/activity";
 
 export interface WebviewPinModel {
   id: string;
@@ -1039,6 +1040,8 @@ export interface WebviewProjectState {
   topology: CanonicalTopologyDocument;
   /** Páginas HMI opcionais, separadas da geometria original dos componentes do esquemático. */
   hmiApplication?: HmiApplication;
+  /** Definição do Laboratório de Cálculo (ADR 0015). Editada só pelo painel do laboratório; não é sincronizada com a Webview do esquemático. */
+  calculusLab?: CalculusLab;
   locale?: "pt-BR" | "en";
   catalog: WebviewComponentCatalogEntry[];
   components: WebviewComponentModel[];

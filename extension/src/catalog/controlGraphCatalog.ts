@@ -20,8 +20,27 @@ const multi: ControlDefinition[] = [
   ["control.pid_station", "Estação de sintonia PID", ["sp", "pv", "am", "lr", "out"], { kc: 1, ti: 10, td: 0, bias: 0, outputMin: 0, outputMax: 100, manual: false, manualOutput: 0, localMode: false, localSetpoint: 50 }],
   ["control.sum", "Soma", ["in0", "in1", "out"], { inputs: "in0,in1" }], ["control.product", "Produto", ["in0", "in1", "out"], { inputs: "in0,in1" }],
   ["control.subtract", "Subtração", ["in0", "in1", "out"]], ["control.divide", "Divisão", ["in0", "in1", "out"]],
-  ["control.tank", "Tanque", ["in", "outflow", "out"], { area: 1, initial: 0 }], ["control.calc_expression", "Expressão", ["x0", "x1", "out"], { expression: "x0", inputs: "x0" }],
+  ["control.calc_expression", "Expressão", ["x0", "x1", "out"], { expression: "x0", inputs: "x0" }],
 ];
+
+/** Portas de saída do `control.accumulator`, na ordem do vetor do bloco no Core
+ * (`SignalMathBlock::accumulatorOutputPortIds`). */
+export const ACCUMULATOR_OUTPUT_PORTS = ["out", "inActual", "outActual", "overflow", "unmet", "cumIn", "cumOut", "cumOverflow", "cumUnmet", "cumSpill"] as const;
+const ACCUMULATOR_OUTPUT_LABELS: Readonly<Record<string, string>> = {
+  out: "X", inActual: "IN real", outActual: "OUT real", overflow: "TRANSB.", unmet: "FALTA",
+  cumIn: "∫IN", cumOut: "∫OUT", cumOverflow: "∫TRANSB.", cumUnmet: "∫FALTA", cumSpill: "DERRAM.",
+};
+const ACCUMULATOR_DEFAULTS = { initial: 0, lowerLimitEnabled: true, lowerLimit: 0, upperLimitEnabled: false, upperLimit: 100, lowerInput: false, upperInput: false };
+
+/** Acumulador: entradas à esquerda, estado e acumulados à direita (uma saída por porta nomeada). */
+function accumulatorPackage(): PackageDescriptor {
+  const height = 24 + ACCUMULATOR_OUTPUT_PORTS.length * 14;
+  const inputs = [["in", "IN"], ["outflow", "OUTFLOW"]].map(([id, label], index) => ({ id: id!, x: 0, y: 20 + index * 16, angle: 180 as const, length: 8, label: label! }));
+  const outputs = ACCUMULATOR_OUTPUT_PORTS.map((id, index) => ({ id, x: 132, y: 20 + index * 14, angle: 0 as const, length: 8, label: ACCUMULATOR_OUTPUT_LABELS[id]! }));
+  return { width: 132, height, border: false,
+    shapes: [{ kind: "rect", x: 8, y: 4, w: 116, h: height - 8, fill: "#e0f2fe", stroke: "#0369a1", strokeWidth: 1.5 }, { kind: "text", x: 66, y: 16, value: "Acumulador", fontSize: 10, textAnchor: "middle", fill: "#0c4a6e" }],
+    pins: [...inputs, ...outputs] };
+}
 
 function packageFor(label: string, pins: readonly string[]): PackageDescriptor {
   const inputPins = pins.slice(0, -1).map((id, index) => ({ id, x: 0, y: 16 + index * 16, angle: 180 as const, length: 8, label: id.toUpperCase() }));
@@ -82,6 +101,7 @@ export const controlGraphCatalog: WebviewComponentCatalogEntry[] = [
   { typeId: "control.observer", label: "Sonda", category: "Controle", folderPath: [], workspaceSection: "control", icon: "package", hidden: false, graphical: true, pinCount: 1, pinIds: ["in"], defaultProperties: { observerOnly: true }, readoutFormat: { kind: "scalar", unit: "" }, package: observerPackage("Sonda") },
   { typeId: "connectors.signal_tunnel", label: "Túnel de sinal", category: "Conectores", folderPath: ["Conectores"], workspaceSection: "misc", icon: "tunel", hidden: false, graphical: true, pinCount: 1, pinIds: ["value"], defaultProperties: { name: "signal", direction: "Input", valueType: "Real" }, package: packageFor("SINAL", ["value"]) },
   ...unary.map(entry), ...multi.map(entry),
+  { ...entry(["control.accumulator", "Acumulador", ["in", "outflow", ...ACCUMULATOR_OUTPUT_PORTS], ACCUMULATOR_DEFAULTS]), package: accumulatorPackage() },
 ];
 
 const dynamicInputTypes = new Set(["control.calc_expression", "control.sum", "control.product"]);
@@ -89,6 +109,10 @@ const dynamicInputTypes = new Set(["control.calc_expression", "control.sum", "co
 /** The persisted TDPS model retains the canonical input names.  The visual
  * catalog supplies defaults, while this resolves the instance-specific ports. */
 export function controlGraphPinIds(typeId: string, properties: Record<string, unknown>): string[] | undefined {
+  // Fronteiras por entrada (ex.: Vmax = A·hmax ao vivo) só existem quando a instância as declara.
+  if (typeId === "control.accumulator") {
+    return ["in", "outflow", ...(properties.lowerInput === true ? ["lower"] : []), ...(properties.upperInput === true ? ["upper"] : []), ...ACCUMULATOR_OUTPUT_PORTS];
+  }
   if (!dynamicInputTypes.has(typeId)) return undefined;
   const raw = properties.inputs;
   const inputs = Array.isArray(raw) ? raw.filter((value): value is string => typeof value === "string" && value.length > 0)

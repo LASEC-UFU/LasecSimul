@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    {
+      "id": "tanque-lab",
+      "typeId": "subcircuits.process.hydraulic_tank",
+      "properties": {},
+      "label": "Tanque do laboratório",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 160,
+        "y": 80,
+        "rotation": 0
+      }
+    }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": []
+  },
+  "visual": {
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    }
+  },
+  "simulationSettings": {},
+  "calculusLab": {
+    "schemaVersion": 1,
+    "activities": [
+      {
+        "id": "limites-velocidade-4s",
+        "kind": "limits",
+        "title": "Limites — velocidade de subida aos 4 s",
+        "question": "Qual é a velocidade de subida da água aos 4 segundos?",
+        "variable": "t",
+        "units": {
+          "x": "s",
+          "y": "cm"
+        },
+        "model": "0.5t^2",
+        "a": 4,
+        "domain": [
+          0,
+          6
+        ],
+        "rows": [
+          1,
+          0.1,
+          0.01
+        ],
+        "initialDelta": 0.5
+      },
+      {
+        "id": "tanque-vazao-integral",
+        "kind": "tank",
+        "title": "Tanque — da vazão à integral",
+        "question": "Com 1 L/s entrando e 0,4 L/s saindo, quanto o volume aumenta em 10 s?",
+        "plantComponentId": "tanque-lab",
+        "parameters": {
+          "qIn": 1,
+          "qOut": 0.4,
+          "area": 0.1,
+          "k": 2,
+          "valve": 0,
+          "hMax": 1,
+          "v0": 20
+        },
+        "riemann": {
+          "a": 5,
+          "b": 25,
+          "n": 10,
+          "method": "left"
+        }
+      }
+    ]
+  }
+}

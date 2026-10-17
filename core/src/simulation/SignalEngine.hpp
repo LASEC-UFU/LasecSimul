@@ -49,7 +49,10 @@ enum class SignalBlockKind : uint8_t {
     SecondOrder,
     LeadLag,
     Fopdt,
-    Tank,
+    /** Estoque conservativo (ADR 0013): saída vetorial [x, inActual, outActual, overflow, unmet,
+     * cumIn, cumOut, cumOverflow, cumUnmet, cumSpill]; entradas in, outflow e, opcionais,
+     * lower/upper (amostradas: o estado é projetado nelas na própria ativação). */
+    Accumulator,
     ValveCharacteristic,
     Saturation,
     Deadband,
@@ -57,6 +60,24 @@ enum class SignalBlockKind : uint8_t {
     Stiction,
     RateLimiter,
     Pid,
+    /** Extrai o elemento `realParameters[0]` de um vetor Real (portas nomeadas do Accumulator). */
+    Element,
+};
+
+/** Posições do vetor de saída/estado do Accumulator. */
+enum AccumulatorElement : uint16_t {
+    AccumulatorState = 0,
+    AccumulatorInActual,
+    AccumulatorOutActual,
+    AccumulatorOverflow,
+    AccumulatorUnmet,
+    AccumulatorCumIn,
+    AccumulatorCumOut,
+    AccumulatorCumOverflow,
+    AccumulatorCumUnmet,
+    /** Volume que saiu (ou entrou, se negativo) porque uma fronteira se moveu para dentro do estado. */
+    AccumulatorCumSpill,
+    AccumulatorWidth,
 };
 
 enum class AlgebraicLoopPolicy : uint8_t { Reject, FixedPoint };

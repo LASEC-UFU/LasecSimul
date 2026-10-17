@@ -69,7 +69,7 @@ public:
             "control.gain", "control.sum", "control.product", "control.subtract", "control.divide",
             "control.bias", "control.integrator", "control.filtered_derivative", "control.unit_delay",
             "control.dead_time", "control.first_order", "control.second_order", "control.lead_lag",
-            "control.fopdt", "control.transfer_function", "control.tank", "control.valve_characteristic",
+            "control.fopdt", "control.transfer_function", "control.accumulator", "control.valve_characteristic",
             "control.saturation", "control.limiter", "control.deadband", "control.hysteresis",
             "control.stiction", "control.rate_limiter", "control.pid", "control.pid_station", "control.calc_expression",
             "control.probe", "control.observer", "control.process",
@@ -112,10 +112,23 @@ public:
         if (buffer && size >= sizeof(double)) std::memcpy(&m_lastOutput, buffer, sizeof(double));
     }
 
+    /** Portas de saída do `control.accumulator`, na ordem do vetor do bloco (`AccumulatorElement`). */
+    static std::span<const std::string_view> accumulatorOutputPortIds() {
+        static constexpr std::string_view kIds[] = {
+            "out", "inActual", "outActual", "overflow", "unmet", "cumIn", "cumOut", "cumOverflow", "cumUnmet", "cumSpill",
+        };
+        return {kIds, std::size(kIds)};
+    }
+
     std::vector<SignalPortDescriptor> signalPorts() const override {
         std::vector<SignalPortDescriptor> ports;
         for (const std::string& input : inputPortIds())
             ports.push_back({input, SignalPortDirection::Input, SignalValueKind::Analog, ""});
+        if (m_typeId == "control.accumulator") {
+            for (std::string_view output : accumulatorOutputPortIds())
+                ports.push_back({std::string(output), SignalPortDirection::Output, SignalValueKind::Analog, ""});
+            return ports;
+        }
         ports.push_back({"out", SignalPortDirection::Output, SignalValueKind::Analog, ""});
         return ports;
     }
@@ -216,6 +229,32 @@ public:
             return graph;
         }
 
+        if (m_typeId == "control.accumulator") {
+            // Estoque conservativo (ADR 0013): um bloco vetorial com o estado e os acumulados e um
+            // `Element` por porta nomeada -- o consumidor de qualquer porta lê o valor do mesmo passo.
+            const bool lowerInput = boolean("lowerInput", false);
+            const bool upperInput = boolean("upperInput", false);
+            const double infinity = std::numeric_limits<double>::infinity();
+            const double lower = lowerInput || !boolean("lowerLimitEnabled", true) ? -infinity : number("lowerLimit", 0.0);
+            const double upper = upperInput || !boolean("upperLimitEnabled", false) ? infinity : number("upperLimit", 100.0);
+            const std::string vectorId = outId + "::acc";
+            simulation::SignalBlockDefinition acc = makeBlock(vectorId, simulation::SignalBlockKind::Accumulator, inputs,
+                {number("initial", 0.0), lower, upper, lowerInput ? 1.0 : 0.0, upperInput ? 1.0 : 0.0}, periodNs);
+            acc.output = {"out", {simulation::SignalScalarType::Real, simulation::AccumulatorWidth}, ""};
+            graph.blocks.push_back(std::move(acc));
+            connectInputs(graph, componentIndex, inputs, vectorId);
+            const std::span<const std::string_view> outputs = accumulatorOutputPortIds();
+            for (uint16_t index = 0; index < outputs.size(); ++index) {
+                const std::string id = index == 0 ? outId : signalPortBlockId(componentIndex, outputs[index]);
+                simulation::SignalBlockDefinition element =
+                    makeBlock(id, simulation::SignalBlockKind::Element, {}, {static_cast<double>(index)}, periodNs);
+                element.inputs = {{"in", {simulation::SignalScalarType::Real, simulation::AccumulatorWidth}, ""}};
+                graph.blocks.push_back(std::move(element));
+                graph.connections.push_back({vectorId, "out", id, "in", false});
+            }
+            return graph;
+        }
+
         if (m_typeId == "control.calc_expression" || m_typeId == "control.bias" ||
             m_typeId == "control.subtract" || m_typeId == "control.divide") {
             // `CalcExpression` resolve variáveis pelo NOME declarado em `inputs` -- a expressão dos
@@ -260,7 +299,12 @@ private:
     std::vector<std::string> inputPortIds() const {
         if (m_typeId == "control.pid_station") return {"sp", "pv", "am", "lr"};
         if (m_typeId == "control.pid") return {"sp", "pv"};
-        if (m_typeId == "control.tank") return {"in", "outflow"};
+        if (m_typeId == "control.accumulator") {
+            std::vector<std::string> ids{"in", "outflow"};
+            if (boolean("lowerInput", false)) ids.push_back("lower");
+            if (boolean("upperInput", false)) ids.push_back("upper");
+            return ids;
+        }
         if (m_typeId == "control.bias") {
             const std::vector<std::string> declared = declaredInputIds();
             return declared.empty() ? std::vector<std::string>{"in"} : std::vector<std::string>{declared.front()};
@@ -326,7 +370,6 @@ private:
         if (m_typeId == "control.second_order") return Kind::SecondOrder;
         if (m_typeId == "control.lead_lag") return Kind::LeadLag;
         if (m_typeId == "control.fopdt") return Kind::Fopdt;
-        if (m_typeId == "control.tank") return Kind::Tank;
         if (m_typeId == "control.valve_characteristic") return Kind::ValveCharacteristic;
         if (m_typeId == "control.saturation") return Kind::Saturation;
         if (m_typeId == "control.limiter") return Kind::Limiter;
@@ -369,7 +412,6 @@ private:
                 return {number("gain", 1.0), number("leadTau", 0.0), number("lagTau", 1.0), number("initial", 0.0)};
             case Kind::Fopdt:
                 return {number("gain", 1.0), number("tau", 1.0), number("delay", 0.1), number("initial", 0.0)};
-            case Kind::Tank: return {number("area", 1.0), number("initial", 0.0)};
             case Kind::ValveCharacteristic: return {number("coefficient", 1.0), number("exponent", 1.0)};
             case Kind::Saturation:
             case Kind::Limiter: return {number("minimum", 0.0), number("maximum", 100.0)};

@@ -4,6 +4,7 @@ import { filePathFromSourceId } from "../project/embeddedSubcircuits";
 import { childPropertyOverrides, parseChildPropertyKey, withoutChildPropertyOverrides } from "../ui/webview/childPropertyOverrides";
 import * as path from "path";
 import { IpcError } from "../ipc/protocol";
+import type { SeriesChunkDto, SeriesDrainRequest } from "../ipc/CoreClient";
 import { ComponentReadoutValue, InstrumentHistoryPayload, InternalComponentSnapshot, SimulationStatus } from "../ui/webview/messages";
 import { gatherInternalComponentSnapshots } from "../catalog/subcircuitInternals";
 import { resolveSubcircuitChildCoreId } from "../mcu/mcuCommands";
@@ -701,6 +702,11 @@ export async function pollInstrumentReadouts(expectedGeneration?: number): Promi
   }
   if (expectedGeneration !== undefined && expectedGeneration !== telemetryGeneration) return;
   state.schematicPanel.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId, transportStatus: "connected" });
+}
+
+/** Amostras da sintonia PID a partir de UM frame de telemetria: o intervalo entre amostras vem do
+ * tempo SIMULADO do frame (`sampleTimestampNs`), nunca do relógio de parede da Extension. */
+export function publishPidSamples(readoutsByComponentId: Record<string, ComponentReadoutValue>, sampleTimestampNs: number): void {
   const scalarValue = (id: string | undefined): number | undefined => {
     if (!id) return undefined;
     const value = readoutsByComponentId[id];
@@ -736,7 +742,7 @@ export async function pollInstrumentReadouts(expectedGeneration?: number): Promi
       manual,
       localMode,
       ...(spSourceId && componentById.get(spSourceId)?.typeId === "control.constant" ? { setpointSourceId: spSourceId } : {}),
-    });
+    }, sampleTimestampNs);
   }
 }
 
@@ -771,7 +777,7 @@ export async function pollComponentVisualStates(expectedGeneration?: number): Pr
 /** Quais componentes internos de um `.lssubcircuit` são expostos e possuem leitura ou estado visual
  * (candidatos a acender de verdade no overlay de Modo Placa) -- cacheado por `sourceId` pra não bater
  * disco (`gatherInternalComponentSnapshots` lê o arquivo JSON inteiro) a cada tick de telemetria
- * (~300ms enquanto rodando). Igual a `boardOverlayDataByComponentId` do lado Webview: a lista de
+ * (~50 ms com o padrão de 20 Hz enquanto rodando). Igual a `boardOverlayDataByComponentId` do lado Webview: a lista de
  * expostos é conceito de EDIÇÃO do subcircuito, não muda durante uma simulação rodando. */
 const boardOverlayExposedItemsBySourceId = new Map<string, InternalComponentSnapshot[]>();
 
@@ -937,6 +943,48 @@ async function pollSimulationRate(expectedGeneration?: number): Promise<void> {
 
 let lastTelemetryFrameGeneration = 0;
 
+/** Consumidor de séries gravadas no Core (ADR 0012; hoje o Laboratório de Cálculo): o pedido viaja
+ * no MESMO frame do tick de telemetria -- nenhum timer ou canal novo. */
+export interface SeriesDrain {
+  readonly subscriptionId: number;
+  request(): SeriesDrainRequest;
+  deliver(chunk: SeriesChunkDto): void;
+}
+const seriesDrains = new Set<SeriesDrain>();
+
+export function addSeriesDrain(drain: SeriesDrain): () => void {
+  seriesDrains.add(drain);
+  return () => { seriesDrains.delete(drain); };
+}
+
+function deliverSeries(chunks: SeriesChunkDto[]): void {
+  for (const chunk of chunks) for (const drain of seriesDrains) if (drain.subscriptionId === chunk.subscriptionId) drain.deliver(chunk);
+}
+
+/** Escoa o que restou no Core (pausa/parada: o tick não roda mais). */
+export async function flushSeries(): Promise<void> {
+  if (!state.coreClient || seriesDrains.size === 0) return;
+  for (let round = 0; round < 50; round++) {
+    const frame = await state.coreClient.getTelemetryFrame({ items: [], probes: [], series: [...seriesDrains].map((drain) => drain.request()) });
+    deliverSeries(frame.series);
+    if (!frame.series.some((chunk) => chunk.more)) return;
+  }
+}
+
+const simulationStatusListeners = new Set<(status: SimulationStatus) => void>();
+export function onSimulationStatusChange(listener: (status: SimulationStatus) => void): () => void {
+  simulationStatusListeners.add(listener);
+  return () => { simulationStatusListeners.delete(listener); };
+}
+
+/** Chamado dentro da reconstrução (instâncias novas, ids novos), antes de retomar a execução. Quem
+ * escuta usa `state.coreClient` direto -- nunca `enqueueCoreMutation`, que esperaria a si mesma. */
+const coreRebuiltListeners = new Set<() => Promise<void> | void>();
+export function onCoreRebuilt(listener: () => Promise<void> | void): () => void {
+  coreRebuiltListeners.add(listener);
+  return () => { coreRebuiltListeners.delete(listener); };
+}
+
 /** Um tick visual = um frame logico/um request IPC. A montagem da assinatura permanece na
  * Extension (ela conhece catalogo e ids visuais); o Core resolve todos os grupos contra o mesmo
  * snapshot imutavel de stable step. */
@@ -1005,13 +1053,15 @@ async function pollTelemetryFrame(expectedGeneration: number): Promise<void> {
   let frame: Awaited<ReturnType<NonNullable<typeof state.coreClient>["getTelemetryFrame"]>>;
   try {
     frame = await state.coreClient.getTelemetryFrame(
-      { items: [...requestItems.values()], probes },
+      { items: [...requestItems.values()], probes, series: [...seriesDrains].map((drain) => drain.request()) },
       lastTelemetryFrameGeneration
     );
   } catch {
     if (expectedGeneration === telemetryGeneration) clearTelemetrySnapshotsForDisconnect();
     return;
   }
+  // Séries não dependem da coalescência por geração: cada fatia continua de onde a anterior parou.
+  deliverSeries(frame.series);
   if (expectedGeneration !== telemetryGeneration) return;
   if (frame.telemetryGeneration <= lastTelemetryFrameGeneration) return;
   lastTelemetryFrameGeneration = frame.telemetryGeneration;
@@ -1024,6 +1074,7 @@ async function pollTelemetryFrame(expectedGeneration: number): Promise<void> {
     if (readout !== undefined) readoutsByComponentId[component.id] = readout;
   }
   state.schematicPanel.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId, transportStatus: "connected", sampleTimestampNs: frame.timestampNs });
+  publishPidSamples(readoutsByComponentId, frame.timestampNs);
 
   const statesByComponentId: Record<string, string> = {};
   for (const component of visual) {
@@ -1118,6 +1169,9 @@ export function setSimulationStatus(status: SimulationStatus): void {
   // PropertyInspectorViewProvider::setSimulationStatus).
   state.propertyInspectorView?.setSimulationStatus(status);
   state.schematicPanel?.postMessage({ version: 1, type: "simulationStatus", status });
+  for (const listener of simulationStatusListeners) {
+    try { listener(status); } catch (err) { reportCoreWarning("notificar estado da simulação", err); }
+  }
 }
 
 let simulationStatusRevision = 0;
@@ -1379,6 +1433,10 @@ async function rebuildCoreFromSchematicStateNow(options: { alreadyStopped?: bool
     } catch (err) {
       reportCoreWarning(`recriar fio "${wire.id}"`, err);
     }
+  }
+
+  for (const listener of coreRebuiltListeners) {
+    try { await listener(); } catch (err) { reportCoreWarning("religar consumidores após reconstruir o circuito", err); }
   }
 
   if (runningBeforeRebuild) {

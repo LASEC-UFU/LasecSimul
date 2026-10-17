@@ -7,11 +7,12 @@ export class PidTuningPanel {
   private static current = false;
   private static componentId: string | undefined;
   private static onPropertyChange: ((name: string, value: string | number | boolean) => void) | undefined;
-  private static lastSampleAt = 0;
+  /** Tempo SIMULADO (ns) da última amostra enviada ao diálogo; `undefined` = nenhuma ainda. */
+  private static lastSampleNs: number | undefined;
   private static lastValues = new Map<string, { sp?: number; pv?: number; mv?: number; manual?: boolean; localMode?: boolean }>();
 
   static open(extensionUri: vscode.Uri, componentId: string, tag = "Controller", onChange: (name: string, value: string | number | boolean) => void): void {
-    if (this.componentId !== componentId) this.lastSampleAt = 0;
+    if (this.componentId !== componentId) this.lastSampleNs = undefined;
     this.componentId = componentId;
     this.onPropertyChange = onChange;
     const schematic = SchematicPanel.current;
@@ -30,13 +31,13 @@ export class PidTuningPanel {
     html = html.replace(/<script(?![^>]*\bnonce=)/g, `<script nonce="${nonce}"`);
     html = html.replace(/(let TITLE = )"Controller";/, `$1${JSON.stringify(tag)};`);
     const bridge = `<script nonce="${nonce}">window.PID_COMPONENT_ID=${JSON.stringify(componentId)};const vscode={postMessage:(message)=>parent.postMessage({type:'pidDialogPropertyChanged',message},'*')};</script>`;
-    const policy = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${context.cspSource} data:; style-src ${context.cspSource} 'unsafe-inline'; script-src ${context.cspSource} https://cdn.plot.ly 'nonce-${nonce}';">`;
+    const policy = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${context.cspSource} data:; style-src ${context.cspSource} 'unsafe-inline'; script-src ${context.cspSource} 'nonce-${nonce}';">`;
     const fitLayout = `<style nonce="${nonce}">html,body{width:100%;height:100%;overflow:hidden}body{align-items:stretch!important;justify-content:stretch!important;padding:0!important}.controller-body{width:100%;height:100%;min-height:0;grid-template-columns:minmax(240px,.6fr) minmax(0,2.4fr);align-items:stretch}.controller-display,.controller-graph{min-height:0}.controller-display{overflow:auto}.controller-graph{min-width:0}#plotBox{min-height:0}@media(max-width:850px){.controller-body{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}.controller-display{max-height:42vh}}</style>`;
     html = html.replace("<head>", `<head>${policy}${fitLayout}${bridge}`);
     this.current = true;
     schematic.showPidDialog(componentId, html);
     const sample = this.latestSample(componentId);
-    if (sample) this.updateSample(componentId, sample);
+    if (sample) void SchematicPanel.current?.postMessage({ version: 1, type: "pidDialogSnapshot", values: sample, dt: 0 });
   }
 
   static handlePropertyChange(message: { componentId: string; name: string; value: string | number | boolean }): void {
@@ -52,12 +53,18 @@ export class PidTuningPanel {
     this.onPropertyChange = undefined;
   }
 
-  static updateSample(componentId: string, values: { sp?: number; pv?: number; mv?: number; manual?: boolean; localMode?: boolean; setpointSourceId?: string }): void {
+  /** `sampleTimestampNs` é o tempo simulado do frame de telemetria que produziu a amostra. O eixo do
+   * gráfico avança pelo intervalo SIMULADO entre frames, então acompanha o ritmo real da simulação
+   * (rápida, lenta ou pausada) em vez da cadência de entrega das mensagens. */
+  static updateSample(componentId: string, values: { sp?: number; pv?: number; mv?: number; manual?: boolean; localMode?: boolean; setpointSourceId?: string }, sampleTimestampNs: number): void {
     this.lastValues.set(componentId, values);
     if (!this.current || this.componentId !== componentId) return;
-    const now = Date.now();
-    void SchematicPanel.current?.postMessage({ version: 1, type: "pidDialogSnapshot", values, dt: this.lastSampleAt ? (now - this.lastSampleAt) / 1000 : 0.3 });
-    this.lastSampleAt = now;
+    const previous = this.lastSampleNs;
+    if (previous !== undefined && sampleTimestampNs === previous) return; // mesmo instante: nada novo a plotar
+    // Relógio voltou (Stop + Run): nova série, sem salto negativo no eixo.
+    const dt = previous === undefined || sampleTimestampNs < previous ? 0 : (sampleTimestampNs - previous) / 1e9;
+    void SchematicPanel.current?.postMessage({ version: 1, type: "pidDialogSnapshot", values, dt });
+    this.lastSampleNs = sampleTimestampNs;
   }
 
   static latestSample(componentId: string): { sp?: number; pv?: number; mv?: number; manual?: boolean; localMode?: boolean } | undefined {

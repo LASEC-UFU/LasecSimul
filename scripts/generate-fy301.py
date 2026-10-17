@@ -171,7 +171,7 @@ link("sp_r", "out", "fy301", "spFinal")
 # --- Auto Setup ----------------------------------------------------------------------------------------------
 calc("setup_in", [("s", "c_setup")], "(s>0.5)", "Auto Setup: contagem")
 calc("setup_reset", [("s", "c_setup"), ("t", "setup_timer")], "(s<0.5)*10*t", "Auto Setup: zera")
-comp("setup_timer", "control.tank", {"area": 1, "initial": 0, "samplePeriodNs": PERIOD}, 420, 660, "Tempo do Auto Setup (s)")
+comp("setup_timer", "control.accumulator", {"initial": 0, "samplePeriodNs": PERIOD}, 420, 660, "Tempo do Auto Setup (s)")
 link("setup_in", "out", "setup_timer", "in")
 link("setup_reset", "out", "setup_timer", "outflow")
 calc("setup_active", [("s", "c_setup"), ("t", "setup_timer")], "(s>0.5)*(t<50)", "Auto Setup em andamento")
@@ -182,7 +182,7 @@ for name, start, end, initial, source in (("rest", 20, 25, 0, None), ("full", 45
          f"{gate}*((x-h)>0)*(x-h)*5", f"Auto Setup: grava a posição ({name})")
     calc(f"hold_{name}_out", [("s", "c_setup"), ("t", "setup_timer"), ("x", "t_position"), ("h", f"hold_{name}")],
          f"{gate}*((h-x)>0)*(h-x)*5", f"Auto Setup: grava a posição ({name})")
-    comp(f"hold_{name}", "control.tank", {"area": 1, "initial": 30 if name == "full" else 0, "samplePeriodNs": PERIOD}, 420,
+    comp(f"hold_{name}", "control.accumulator", {"initial": 30 if name == "full" else 0, "samplePeriodNs": PERIOD}, 420,
          720 + 60 * (name == "full"), "Posição sem ar (mm)" if name == "rest" else "Posição com ar total (mm)")
     link(f"hold_{name}_in", "out", f"hold_{name}", "in")
     link(f"hold_{name}_out", "out", f"hold_{name}", "outflow")

@@ -304,9 +304,8 @@
     },
     {
       "id": "p_act",
-      "typeId": "control.tank",
+      "typeId": "control.accumulator",
       "properties": {
-        "area": 1,
         "initial": 0,
         "samplePeriodNs": 1000000
       },
@@ -412,9 +411,8 @@
     },
     {
       "id": "stem",
-      "typeId": "control.tank",
+      "typeId": "control.accumulator",
       "properties": {
-        "area": 1,
         "initial": 0,
         "samplePeriodNs": 1000000
       },
