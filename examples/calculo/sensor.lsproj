@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    {
+      "id": "sensor-lab",
+      "typeId": "subcircuits.process.sensor_4_20",
+      "properties": {},
+      "label": "Sensor 4–20 mA do laboratório",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 760,
+        "y": 360,
+        "rotation": 0
+      }
+    }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": []
+  },
+  "visual": {
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    }
+  },
+  "simulationSettings": {},
+  "calculusLab": {
+    "schemaVersion": 1,
+    "activities": [
+      {
+        "id": "sensor-4-20",
+        "title": "Sensor 4–20 mA — função afim",
+        "question": "Que pressão produz 12 mA? O que acontece acima de Pmax?",
+        "steps": [
+          {
+            "id": "prever",
+            "phase": "predict",
+            "prompt": "Prever: com faixa 0–200 kPa, quanto vale I em 50 kPa?",
+            "hints": []
+          },
+          {
+            "id": "doze",
+            "phase": "explore",
+            "prompt": "Mova P até 12 mA. Escreva a inversa P(I).",
+            "hints": []
+          },
+          {
+            "id": "saturacao",
+            "phase": "apply",
+            "prompt": "Passe de Pmax: o que a corrente faz? E o valor sem saturação?",
+            "hints": []
+          }
+        ],
+        "plantComponentId": "sensor-lab",
+        "parameters": {
+          "p": 100,
+          "pmin": 0,
+          "pmax": 200
+        },
+        "kind": "sensor"
+      }
+    ]
+  }
+}

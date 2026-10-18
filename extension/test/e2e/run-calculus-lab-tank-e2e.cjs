@@ -1,6 +1,7 @@
 // E2E da vertical do tanque (docs/53 §2) no VS Code real com o Core real: projeto de exemplo com o
 // subcircuito hydraulic_tank, Laboratório de Cálculo, execução, parâmetros ao vivo (A com derramamento),
-// pausa, Riemann sobre a série gravada e Reiniciar.
+// pausa, Riemann sobre a série gravada, inspeção sem comandos ao Core, Reiniciar, primeira ordem (τ),
+// sensor 4–20 mA (12 mA e saturação) e gravar/reabrir o projeto com a atividade editada.
 // Uso: npm run test:lab:tank:e2e
 const { chromium } = require("@playwright/test");
 const { downloadAndUnzipVSCode } = require("@vscode/test-electron");
@@ -14,6 +15,16 @@ const example = path.resolve(extensionPath, "../examples/calculo/laboratorio-cal
 const artifacts = path.resolve(__dirname, "artifacts");
 fs.mkdirSync(artifacts, { recursive: true });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function command(workbench, title) {
+  await workbench.keyboard.press("Control+Shift+P");
+  const input = workbench.locator(".quick-input-widget input, .quick-input-box input").first();
+  await input.waitFor({ state: "visible" });
+  await input.fill(`>${title}`);
+  await workbench.locator(".quick-input-list .monaco-list-row", { hasText: title }).first().waitFor({ state: "visible", timeout: 30000 });
+  await sleep(300);
+  await workbench.keyboard.press("Enter");
+}
 
 let failures = 0;
 const check = (cond, label, detail = "") => { console.log(`${cond ? "ok  " : "FAIL"} ${label}${detail ? ` -- ${detail}` : ""}`); if (!cond) failures++; };
@@ -68,12 +79,7 @@ const check = (cond, label, detail = "") => { console.log(`${cond ? "ok  " : "FA
     check(schematic, "projeto de exemplo abre com o tanque do laboratório no esquemático");
 
     // abre o laboratório
-    await workbench.keyboard.press("Control+Shift+P");
-    const palette = workbench.locator(".quick-input-widget input, .quick-input-box input").first();
-    await palette.waitFor({ state: "visible" });
-    await palette.fill(">LasecSimul: Laboratório de Cálculo");
-    await sleep(500);
-    await workbench.keyboard.press("Enter");
+    await command(workbench, "LasecSimul: Laboratório de Cálculo");
     let lab;
     for (let attempt = 0; attempt < 160 && !lab; attempt++) {
       for (const frame of workbench.frames()) {
@@ -147,6 +153,16 @@ const check = (cond, label, detail = "") => { console.log(`${cond ? "ok  " : "FA
     await sleep(300);
     check(/1,2/.test(await lab.locator("#tkRiemannSum").innerText()), "resultado de Riemann na tela");
 
+    // inspeção não comanda o Core e só redesenha o que depende dela (docs/53 §2.6 itens 9 e 14)
+    const beforeInspect = await view(() => ({ sent: { ...window.__lab.sent }, renders: { ...window.__lab.view.stats.renders } }));
+    await view(() => { const g = window.__lab.view.graph; g.batch(() => { g.set("n", 20); g.set("method", "trapezoid"); }); });
+    await sleep(500);
+    const afterInspect = await view(() => ({ sent: { ...window.__lab.sent }, renders: { ...window.__lab.view.stats.renders } }));
+    check(JSON.stringify(afterInspect.sent) === JSON.stringify(beforeInspect.sent), "inspeção (n, método) não envia nada ao Host", JSON.stringify(afterInspect.sent));
+    const untouched = ["baseH", "baseQ", "tank", "plant", "status"].filter((id) => afterInspect.renders[id] !== beforeInspect.renders[id]);
+    check(untouched.length === 0 && afterInspect.renders.riemannText > (beforeInspect.renders.riemannText ?? 0),
+      "inspeção redesenha só Riemann (gráficos-base, tanque, planta e estado intactos)", untouched.length ? `redesenhou: ${untouched.join(", ")}` : `riemannText ${beforeInspect.renders.riemannText} → ${afterInspect.renders.riemannText}`);
+
     // equações no cursor
     await view(() => window.__lab.view.graph.set("cursor", 2));
     await sleep(300);
@@ -162,8 +178,78 @@ const check = (cond, label, detail = "") => { console.log(`${cond ? "ok  " : "FA
     const restored = await view(() => ({ ...window.__lab.view.graph.get("params"), slider: document.getElementById("tk_area").value }));
     check(restored.qIn === 1 && restored.qOut === 0.4 && restored.area === 0.1 && restored.slider === "0.1", "parâmetros voltam aos valores da atividade", JSON.stringify(restored));
 
-    const csp = await view(() => window.__csp);
-    check(csp.length === 0, "nenhuma violação de CSP", csp.join("; "));
+    // ---------------------------------------------------------------- primeira ordem (Core real)
+    await lab.locator('#labTabs button[data-kind="firstOrder"]').click();
+    check(await waitFor(() => document.querySelector("#foPlant")?.classList.contains("ok"), null, 30000, "planta de 1ª ordem ligada"),
+      "atividade de 1ª ordem liga-se ao bloco do projeto", await lab.locator("#foPlant").innerText().catch(() => ""));
+    await lab.locator("#foRun").click();
+    check(await waitFor(() => window.__lab.view?.buffer?.now >= 6, null, 40000, "6 s simulados"), "1ª ordem executa e grava y(t)");
+    const t63Text = await lab.locator("#foT63").innerText();
+    const t63 = Number((/t − t₀ = ([\d,]+) s/.exec(t63Text)?.[1] ?? "NaN").replace(",", "."));
+    check(Math.abs(t63 - 5) < 0.05, "y cruza 63,2 % do salto em t − t₀ ≈ τ = 5 s", t63Text);
+    const yFinal = await view(() => window.__lab.view.buffer.last("y"));
+    check(yFinal > 1.26 && yFinal < 2, "y caminha para K·u = 2", String(yFinal));
+    await lab.locator("#foRestart").click();
+    check(await waitFor(() => /Configuração/.test(document.getElementById("foStatus").textContent), null, 30000, "reinício 1ª ordem"), "Reiniciar a 1ª ordem");
+
+    // ---------------------------------------------------------------- sensor 4–20 mA (Core real)
+    await lab.locator('#labTabs button[data-kind="sensor"]').click();
+    check(await waitFor(() => document.querySelector("#snPlant")?.classList.contains("ok"), null, 30000, "sensor ligado"),
+      "atividade do sensor liga-se ao subcircuito do projeto", await lab.locator("#snPlant").innerText().catch(() => ""));
+    await lab.locator("#snRun").click();
+    check(await waitFor(() => /I = 12 mA/.test(document.getElementById("snCurrent")?.textContent ?? ""), null, 30000, "12 mA"),
+      "P = 100 kPa na faixa 0–200 kPa lê 12 mA do simulador", await lab.locator("#snReadout").innerText().catch(() => ""));
+    await setSlider("sn_p", 250);
+    check(await waitFor(() => Boolean(document.getElementById("snSaturated")) && /I = 20,5 mA/.test(document.getElementById("snCurrent").textContent), null, 20000, "saturação"),
+      "acima de Pmax a corrente satura em 20,5 mA", await lab.locator("#snReadout").innerText().catch(() => ""));
+    check(/sem saturação 24 mA/.test(await lab.locator("#snReadout").innerText()), "mostra o valor sem saturação (24 mA)");
+    await lab.locator("#snRestart").click();
+    check(await waitFor(() => /Configuração/.test(document.getElementById("snStatus").textContent), null, 30000, "reinício sensor"), "Reiniciar o sensor");
+
+    const cspProcess = await view(() => window.__csp);
+    check(cspProcess.length === 0, "nenhuma violação de CSP", cspProcess.join("; "));
+
+    // ---------------------------------------------------------------- gravar e reabrir (item 10)
+    const question = "Quanto o volume aumenta em 10 s? (gravada pelo e2e)";
+    await lab.locator('#labTabs button[data-kind="tank"]').click();
+    await lab.locator("#labTeacher").click();
+    await lab.locator("#tkQuestionInput").waitFor({ state: "visible", timeout: 10000 });
+    await lab.locator("#tkQuestionInput").fill(question);
+    await lab.locator("#tkSave").click();
+    await lab.locator("#tkSaveStatus").filter({ hasText: "gravada" }).waitFor({ timeout: 10000 });
+    await command(workbench, "LasecSimul: Save Project");
+    const projectFile = path.join(workspace, "laboratorio-calculo.lsproj");
+    let onDisk;
+    for (let attempt = 0; attempt < 60; attempt++) {
+      try { onDisk = JSON.parse(fs.readFileSync(projectFile, "utf8")); } catch { onDisk = undefined; }
+      if (onDisk?.calculusLab?.activities?.some((a) => a.kind === "tank" && a.question === question)) break;
+      await sleep(250);
+    }
+    const savedTank = onDisk?.calculusLab?.activities?.find((a) => a.kind === "tank");
+    check(savedTank?.question === question && onDisk.calculusLab.activities.length === 6, "o .lsproj gravado traz a atividade editada", savedTank?.question ?? "(sem calculusLab)");
+
+    await command(workbench, "View: Close All Editors");
+    await sleep(1500);
+    lab = undefined;
+    await workbench.keyboard.press("Control+P");
+    const reopen = workbench.locator(".quick-input-widget input").first();
+    await reopen.waitFor({ state: "visible", timeout: 15000 });
+    await reopen.fill("laboratorio-calculo.lsproj");
+    await sleep(1200);
+    await workbench.keyboard.press("Enter");
+    await sleep(3000);
+    await command(workbench, "LasecSimul: Laboratório de Cálculo");
+    for (let attempt = 0; attempt < 160 && !lab; attempt++) {
+      for (const frame of workbench.frames()) {
+        if (frame === workbench.mainFrame()) continue;
+        try { if (await frame.locator('#labTabs button[data-kind="tank"]').count()) { lab = frame; break; } } catch { /* frame em troca */ }
+      }
+      if (!lab) await sleep(250);
+    }
+    if (!lab) throw new Error("laboratório não reabriu");
+    await lab.locator('#labTabs button[data-kind="tank"]').click();
+    check(await waitFor((q) => document.getElementById("tkQuestion")?.textContent === q, question, 15000, "pergunta reaberta"),
+      "reabrir o projeto devolve a atividade gravada", await lab.locator("#tkQuestion").innerText().catch(() => ""));
   } catch (error) {
     console.error(error);
     failures++;

@@ -41,6 +41,11 @@ export function paletteKeys(variable: string): Record<string, Key[]> {
       { label: "pi", face: m("<mi>π</mi>"), act: (e) => e.typeText("π") },
       { label: "número de Euler", face: m("<mi>e</mi>"), act: (e) => e.typeText("e") },
       { label: "delta", face: m("<mi>Δ</mi>"), act: (e) => e.typeText("Δ") },
+      { label: "função por partes", face: m(`<mrow><mo>{</mo><mtable><mtr><mtd>${PH}</mtd><mtd><mtext>se</mtext></mtd></mtr><mtr><mtd>${PH}</mtd><mtd><mtext>senão</mtext></mtd></mtr></mtable></mrow>`), act: (e) => e.insertTemplate("cases") },
+      { label: "menor que", face: "<", act: (e) => e.typeText("<") },
+      { label: "menor ou igual", face: "≤", act: (e) => e.typeText("≤") },
+      { label: "maior que", face: ">", act: (e) => e.typeText(">") },
+      { label: "maior ou igual", face: "≥", act: (e) => e.typeText("≥") },
       ...Object.entries(FN_NAMES).map(([name, [label, shown]]): Key => ({
         label, face: m(`<mrow><mi>${shown}</mi><mo>(</mo>${PH}<mo>)</mo></mrow>`), act: (e) => e.insertTemplate("fn", { name }),
       })),

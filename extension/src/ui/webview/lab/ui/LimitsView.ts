@@ -1,5 +1,6 @@
 import type { LimitsActivity } from "../activity.js";
-import { parseExpression, type Ast, type UserFunction } from "../calc/ast.js";
+import { epsilonDelta, type EpsilonDeltaResult } from "../calc/analysis.js";
+import { parseExpression, substitute, type Ast, type UserFunction } from "../calc/ast.js";
 import { compileExpression, type CompiledExpression, type Evaluation } from "../calc/compile.js";
 import { differentiate, simplify } from "../calc/derivative.js";
 import { astToMathML, escapeXml } from "../calc/mathml.js";
@@ -10,6 +11,8 @@ import { byId, clear, digitsFor, fmt, svg } from "./dom.js";
 import { EditorView } from "./EditorView.js";
 import { ICONS, iconButton } from "./icons.js";
 import { mountPalette } from "./palette.js";
+import { XYChart } from "./chart.js";
+import { StepsPanel } from "./steps.js";
 
 interface View { xMin: number; xMax: number; yMin: number; yMax: number }
 interface Transform { v: View; W: number; H: number; L: number; R: number; T: number; B: number; toPx: (x: number, y: number) => Point; toWorldX: (px: number) => number }
@@ -53,10 +56,63 @@ export class LimitsView {
     this.buildDrawables();
     this.bindInteraction();
     this.buildEditors();
+    this.buildEpsilonDelta();
+    new StepsPanel(byId("limSteps"), this.activity.steps);
     this.requestFrame();
   }
 
   dispose(): void { this.disposed = true; clear(this.root); }
+
+  // ------------------------------------------------------------------ ε–δ (M7)
+  /** Quociente q(Δ) = [H(a+Δ) − H(a)]/Δ com H = modelo (ou o contraexemplo com salto em a); L = limite exato
+   * do modelo quando polinomial, senão a avaliação de lim do núcleo. δ é a maior faixa verificada por amostras. */
+  private buildEpsilonDelta(): void {
+    const g = this.graph, v = this.activity.variable;
+    g.source("epsilon", this.activity.epsilon, { kind: "inspection" });
+    g.source("counter", false, { kind: "inspection" });
+    g.derived("quotientFn", ["ast", "a", "counter"], (ast: Ast, a: number, counter: boolean) => {
+      const model: Ast = counter ? ["If", ["Less", v, a], ast, ["Add", ast, 1]] : ast;
+      const at = (x: Ast): Ast => substitute(model, v, x);
+      return compileExpression(["Divide", ["Subtract", at(["Add", a, "Δ"]), at(a)], "Δ"], ["Δ"]);
+    }, { equals: Object.is });
+    g.derived("limitL", ["exactQuotient", "ast", "a"], (exact: number[] | null, ast: Ast, a: number) => {
+      if (exact) return exact[0] ?? NaN;
+      const at = (x: Ast): Ast => substitute(ast, v, x);
+      const r = compileExpression(["Limit", ["Divide", ["Subtract", at(["Add", a, "Δ"]), at(a)], "Δ"], "Δ", 0, 0], []).evaluate([]);
+      return r.kind === "finite" ? r.value : NaN;
+    });
+    g.derived("epsDelta", ["quotientFn", "limitL", "epsilon"], (fn: CompiledExpression, L: number, eps: number) => epsilonDelta(fn, 0, L, eps, 1), { equals: () => false });
+    const chart = new XYChart(byId("limEpsChart") as unknown as SVGSVGElement, { W: 600, H: 240, L: 50, R: 12, T: 18, B: 30 });
+    const draw = (): void => {
+      const fn = g.get<CompiledExpression>("quotientFn"), L = g.get<number>("limitL"), eps = g.get<number>("epsilon"), r = g.get<EpsilonDeltaResult>("epsDelta");
+      const span = Math.max(1, Math.abs(L)) * 0.6 + eps * 2;
+      chart.setView({ x0: -1, x1: 1, y0: (Number.isFinite(L) ? L : 0) - span, y1: (Number.isFinite(L) ? L : 0) + span });
+      const under = chart.layer("under"), base = chart.layer("base"), over = chart.layer("over");
+      if (Number.isFinite(L)) svg("rect", { x: chart.x(-1), y: chart.y(L + eps), width: chart.x(1) - chart.x(-1), height: chart.y(L - eps) - chart.y(L + eps), fill: "#dcfce7", "data-band": "epsilon" }, under);
+      if (r.kind === "delta") svg("rect", { x: chart.x(-r.delta), y: chart.geo.T, width: chart.x(r.delta) - chart.x(-r.delta), height: chart.geo.H - chart.geo.T - chart.geo.B, fill: "#dbeafe", "fill-opacity": 0.6, "data-band": "delta" }, under);
+      chart.axes(base, { xLabel: `Δ${v}`, yLabel: "q(Δ)" });
+      const xs = Array.from({ length: 401 }, (_, k) => -1 + k / 200).filter((x) => x !== 0);
+      const left = xs.filter((x) => x < 0).map((x) => [x, fn.value([x])] as [number, number]).filter(([, y]) => Number.isFinite(y));
+      const right = xs.filter((x) => x > 0).map((x) => [x, fn.value([x])] as [number, number]).filter(([, y]) => Number.isFinite(y));
+      chart.path(base, [left, right], { stroke: "#1d4ed8", "stroke-width": 2, "data-series": "quotient" });
+      if (Number.isFinite(L)) {
+        chart.dot(over, 0, L, { r: 5, fill: "#fff", stroke: "#1d4ed8", "stroke-width": 2 }); // Δ = 0 fora do domínio
+        chart.hLine(over, L, { stroke: "#16a34a", "stroke-dasharray": "4 3" });
+      }
+      if (r.kind === "none" && Number.isFinite(r.witness)) chart.dot(over, r.witness, fn.value([r.witness]), { r: 5, fill: "#dc2626", "data-witness": "1" });
+      byId("limEpsOut").textContent = fmt(eps, 4);
+      byId<HTMLInputElement>("limEps").value = String(Math.log10(eps));
+      byId("limEpsResult").innerHTML = !Number.isFinite(L)
+        ? "<p>sem L: o limite do quociente não foi encontrado</p>"
+        : r.kind === "delta"
+          ? `<p id="limDelta">Para ε = ${fmt(eps, 4)}: δ = <strong>${fmt(r.delta, 4)}</strong> funciona (L = ${fmt(L, 6)})</p><p class="note">verificado em ${r.samples} amostras de 0 &lt; |Δ| &lt; δ — evidência numérica, não prova</p>`
+          : `<p id="limDelta">Nenhum δ serve para ε = ${fmt(eps, 4)}: perto de Δ = 0 há ${fmt(r.witness, 6)} com |q − L| = ${fmt(r.gap, 4)} ≥ ε.</p><p class="note">${escapeXml(r.reason)}</p>`;
+    };
+    this.drawables.push({ id: "epsilon", inputs: ["epsDelta", "quotientFn", "limitL", "epsilon"], draw });
+    this.dirty.add("epsilon");
+    byId<HTMLInputElement>("limEps").addEventListener("input", (ev) => { this.markInput(); g.set("epsilon", Number((10 ** Number((ev.target as HTMLInputElement).value)).toPrecision(3))); });
+    byId<HTMLInputElement>("limCounter").addEventListener("change", (ev) => g.set("counter", (ev.target as HTMLInputElement).checked));
+  }
 
   // ------------------------------------------------------------------ layout
   private renderLayout(): void {
@@ -65,6 +121,7 @@ export class LimitsView {
     this.root.innerHTML = `
 <section class="lim-question"><h1 id="limQuestion">${escapeXml(a.question)}</h1>
   <p class="note">Aproxime Q de P pelos dois lados e observe a tendência.</p></section>
+<div id="limSteps"></div>
 <div class="lim-grid">
   <section class="panel dark" aria-label="Processo reconstruído pelo modelo">
     <svg id="limTank" viewBox="0 0 200 320" role="img" aria-labelledby="limTankLabel"></svg>
@@ -112,7 +169,18 @@ export class LimitsView {
   </div>
   <div id="limPalette" class="panel" aria-label="Teclado matemático"></div>
 </section>
-<footer class="lim-footer"><p id="limEquation" class="equation" aria-live="polite"></p></footer>`;
+<footer class="lim-footer"><p id="limEquation" class="equation" aria-live="polite"></p></footer>
+<section class="calc eps" aria-label="ε–δ">
+  <div class="panel">
+    <h2>ε–δ: o quociente fica a menos de ε de L sempre que 0 &lt; |Δ${escapeXml(a.variable)}| &lt; δ?</h2>
+    <svg id="limEpsChart" class="chart" aria-label="Quociente em função de Δ, faixa L ± ε e faixa ± δ"></svg>
+  </div>
+  <div class="panel">
+    <label>ε <output id="limEpsOut"></output><input id="limEps" type="range" min="-3" max="0.5" step="0.01" aria-label="ε (escala log)" /></label>
+    <label><input type="checkbox" id="limCounter" /> contraexemplo pronto: h com salto de 1 em ${escapeXml(a.variable)} = a</label>
+    <div id="limEpsResult" class="calc-result" aria-live="polite"></div>
+  </div>
+</section>`;
   }
 
   // ------------------------------------------------------------------ grafo
@@ -440,7 +508,7 @@ export class LimitsView {
   currentActivity(): LimitsActivity {
     const questionInput = document.getElementById("limQuestionInput") as HTMLInputElement | null;
     const question = (this.options.teacher ? questionInput?.value.trim() : "") || this.activity.question;
-    return { ...this.activity, question, model: this.graph.get<string>("expr"), a: this.graph.get<number>("a"), domain: this.graph.get<[number, number]>("domain") };
+    return { ...this.activity, question, model: this.graph.get<string>("expr"), a: this.graph.get<number>("a"), domain: this.graph.get<[number, number]>("domain"), epsilon: this.graph.get<number>("epsilon") };
   }
 
   private save(): void {

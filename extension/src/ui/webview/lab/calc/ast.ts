@@ -8,6 +8,8 @@
  *   ["D", corpo, v]                             derivada em relação a v (v continua livre)
  *   ["Limit", corpo, v, alvo, lado]             lado: 0 bilateral, 1 direita, -1 esquerda
  *   ["Sum" | "Product", corpo, ["Limits", k, m, n]]
+ *   ["If", condição, então, senão]              função por partes: se(x < 2, x^2, 4)
+ *   ["Less" | "LessEqual" | "Greater" | "GreaterEqual", a, b]   comparações (1 verdadeiro, 0 falso)
  * Nada aqui gera código: o parser produz dados, `compile.ts` produz closures.
  */
 export type Ast = number | string | AstNode;
@@ -81,8 +83,9 @@ function tokenize(text: string): Token[] {
       tokens.push({ kind: "id", name: text.slice(start, i), pos: start });
       continue;
     }
-    const op = c === "·" || c === "×" ? "*" : c === "−" ? "-" : c;
-    if ("+-*/^(),".includes(op)) { tokens.push({ kind: "op", op, pos: i }); i++; continue; }
+    if ((c === "<" || c === ">") && at(i + 1) === "=") { tokens.push({ kind: "op", op: `${c}=`, pos: i }); i += 2; continue; }
+    const op = c === "·" || c === "×" ? "*" : c === "−" ? "-" : c === "≤" ? "<=" : c === "≥" ? ">=" : c;
+    if ("+-*/^(),<>".includes(op) || op === "<=" || op === ">=") { tokens.push({ kind: "op", op, pos: i }); i++; continue; }
     throw new ExpressionError(`caractere inesperado "${c}"`, i);
   }
   tokens.push({ kind: "end", pos: text.length });
@@ -90,8 +93,12 @@ function tokenize(text: string): Token[] {
 }
 
 const BINARY: Readonly<Record<string, readonly [number, string]>> = {
+  "<": [0, "Less"], "<=": [0, "LessEqual"], ">": [0, "Greater"], ">=": [0, "GreaterEqual"],
   "+": [1, "Add"], "-": [1, "Subtract"], "*": [2, "Multiply"], "/": [2, "Divide"], "^": [4, "Power"],
 };
+export const COMPARISONS = new Set(["Less", "LessEqual", "Greater", "GreaterEqual"]);
+/** Nomes da função por partes na sintaxe linear (o editor gera `se(...)`). */
+const PIECEWISE = new Set(["se", "if"]);
 
 /** Pratt parser. `symbols`: variáveis livres permitidas (allowlist). */
 export function parseExpression(text: string, symbols: readonly string[], options: ParseOptions = {}): Ast {
@@ -122,6 +129,17 @@ export function parseExpression(text: string, symbols: readonly string[], option
       const unary = Object.hasOwn(UNARY, t.name) ? UNARY[t.name] : undefined;
       if (unary) { expectOp("("); const a = expression(0, scope); expectOp(")"); return [unary, a]; }
       if (Object.hasOwn(BINDERS, t.name)) return binder(t.name, scope);
+      if (PIECEWISE.has(t.name) && isOp(peek(), "(")) {
+        next();
+        const condition = expression(0, scope);
+        if (!(isNode(condition) && COMPARISONS.has(condition[0]))) throw new ExpressionError("a condição de se(...) precisa ser uma comparação (<, ≤, >, ≥)", t.pos);
+        expectOp(",");
+        const whenTrue = expression(0, scope);
+        expectOp(",");
+        const whenFalse = expression(0, scope);
+        expectOp(")");
+        return ["If", condition, whenTrue, whenFalse];
+      }
       const fn = Object.hasOwn(functions, t.name) ? functions[t.name] : undefined;
       if (fn && isOp(peek(), "(")) {
         next();

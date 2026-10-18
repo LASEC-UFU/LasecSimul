@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -170,6 +171,29 @@ void generationsAndEvents() {
     CHECK(!recorder.drain(id, std::nullopt, 0, 0, 10), "assinatura cancelada não escoa");
 }
 
+/** Custo por passo estável (docs/54 M3 "sobrecarga do passo"): sem assinatura (caminho rápido) e com
+ * uma assinatura de 13 canais como a do tanque. Imprime ns/passo; o limite é só um teto de sanidade. */
+void measureRecordOverhead() {
+    SignalRuntime runtime;
+    runtime.bind(SignalCompiler::compile(rampGraph()));
+    runtime.executeUntil(0);
+    const auto resolve = resolverFor(runtime);
+    const auto perStep = [&](SignalRecorder& recorder, int steps) {
+        const auto start = std::chrono::steady_clock::now();
+        for (int i = 1; i <= steps; ++i) recorder.record(static_cast<uint64_t>(i) * 100'000ull, 1, runtime, resolve);
+        return std::chrono::duration<double, std::nano>(std::chrono::steady_clock::now() - start).count() / steps;
+    };
+    SignalRecorder idle;
+    const double idleNs = perStep(idle, 1'000'000);
+    SignalRecorder busy;
+    std::vector<SeriesChannelRequest> channels;
+    for (int c = 0; c < 13; ++c) channels.push_back({static_cast<uint32_t>(c % 3), "out", 0});
+    busy.subscribe({channels, 10 * kMs, 65536});
+    const double busyNs = perStep(busy, 1'000'000);
+    std::printf("  gravador: %.1f ns/passo sem assinatura, %.1f ns/passo com 13 canais (grade de 10 ms, passos de 100 us)\n", idleNs, busyNs);
+    CHECK(idleNs < 1000.0 && busyNs < 20000.0, "custo por passo dentro do teto de sanidade");
+}
+
 void rejectsInvalidSubscriptions() {
     SignalRecorder recorder;
     bool threw = false;
@@ -189,6 +213,7 @@ int main() {
     ringOverflowReportsLostRows();
     generationsAndEvents();
     rejectsInvalidSubscriptions();
+    measureRecordOverhead();
     if (failures == 0) std::puts("SignalRecorderTest: OK");
     return failures == 0 ? 0 : 1;
 }

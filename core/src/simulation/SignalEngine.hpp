@@ -50,8 +50,9 @@ enum class SignalBlockKind : uint8_t {
     LeadLag,
     Fopdt,
     /** Estoque conservativo (ADR 0013): saída vetorial [x, inActual, outActual, overflow, unmet,
-     * cumIn, cumOut, cumOverflow, cumUnmet, cumSpill]; entradas in, outflow e, opcionais,
-     * lower/upper (amostradas: o estado é projetado nelas na própria ativação). */
+     * cumIn, cumOut, cumOverflow, cumUnmet, cumSpill, upperContactTime, lowerContactTime, +5
+     * compensações internas]; entradas in, outflow e, opcionais, lower/upper (amostradas: o estado é
+     * projetado nelas na própria ativação). */
     Accumulator,
     ValveCharacteristic,
     Saturation,
@@ -64,7 +65,7 @@ enum class SignalBlockKind : uint8_t {
     Element,
 };
 
-/** Posições do vetor de saída/estado do Accumulator. */
+/** Posições do vetor de saída/estado do Accumulator (as 12 primeiras têm porta nomeada). */
 enum AccumulatorElement : uint16_t {
     AccumulatorState = 0,
     AccumulatorInActual,
@@ -77,6 +78,16 @@ enum AccumulatorElement : uint16_t {
     AccumulatorCumUnmet,
     /** Volume que saiu (ou entrou, se negativo) porque uma fronteira se moveu para dentro do estado. */
     AccumulatorCumSpill,
+    /** Instante exato (s) do último contato com o topo / o fundo vindo de dentro; -1 = nunca. */
+    AccumulatorUpperContactTime,
+    AccumulatorLowerContactTime,
+    /** Compensações de Neumaier (internas, sem porta): o balanço fecha em ~1e-15 relativo mesmo com
+     * centenas de milhares de passos de 100 µs. */
+    AccumulatorCompState,
+    AccumulatorCompCumIn,
+    AccumulatorCompCumOut,
+    AccumulatorCompCumOverflow,
+    AccumulatorCompCumUnmet,
     AccumulatorWidth,
 };
 

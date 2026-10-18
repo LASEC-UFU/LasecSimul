@@ -261,6 +261,10 @@ add_executable(signal_recorder_test
 target_include_directories(signal_recorder_test PRIVATE include src)
 add_test(NAME signal_recorder COMMAND signal_recorder_test)
 
+add_executable(instrument_history_filter_test test/core/app/InstrumentHistoryFilterTest.cpp)
+target_include_directories(instrument_history_filter_test PRIVATE include src)
+add_test(NAME instrument_history_filter COMMAND instrument_history_filter_test)
+
 find_package(Python3 COMPONENTS Interpreter QUIET)
 add_executable(python_runtime_test
     test/core/python/PythonRuntimeTest.cpp
@@ -1951,7 +1955,7 @@ add_test(NAME plugin_watchdog COMMAND plugin_watchdog_test)
 # Mantenha todos os testes em exatamente um grupo: o runner descobre os nomes via CTest e usa
 # estes labels, sem duplicar listas de testes em JavaScript ou no workflow de CI.
 set(LASECSIMUL_HERMETIC_TESTS
-    pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues shared_host_capacity simulation_plan signal_engine signal_dynamics signal_recorder signal_bridge signal_graph_wiring signal_graph_subcircuit_boundary process_subcircuit simulation_plan_session dense_hot_path voltage_divider circuit_group_reuse diode zener_led
+    pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues shared_host_capacity simulation_plan signal_engine signal_dynamics signal_recorder instrument_history_filter signal_bridge signal_graph_wiring signal_graph_subcircuit_boundary process_subcircuit simulation_plan_session dense_hot_path voltage_divider circuit_group_reuse diode zener_led
     inert_components_fix probe_pause_on_change subcircuit simulide_sources_meters voltmeter
     component_removal netlist union_find scheduler sparse_set core_bootstrap circuit_group circuit_gauge_equivalence logic_value
     session_execution_identity vnext_b_arbiter vnext_b_wait_dispatcher drain_cutoff_gate dynamic_component_dispatch i2c_fast_path_dispatch mcu_pin_transition_observers hart_engine hart_ld301 hart_tt301 hart_physical_layer hart_wire_loop

@@ -275,6 +275,22 @@ const { test, finish } = createTestRunner("CoreClient — testes de IPC");
     await client.stop(); await server.stop();
   });
 
+  await test("histórico do Oscope por deltas: envia sinceNs no layout channelHistory e devolve filtered/latestNs", async () => {
+    const name = `lasecsimul-test-history-since-${process.pid}`;
+    const received: RequestEnvelope[] = [];
+    const server = new MockCoreServer(name, PROTOCOL_VERSION, (msg) => {
+      received.push(msg);
+      return { id: msg.id, ok: true, payload: { stateHex: "00ff", filtered: true, latestNs: 1234 } };
+    });
+    await server.start();
+    const client = new CoreClient(name); await client.start();
+    const delta = await client.getComponentHistorySince("9", 4, 1000);
+    const history = (received.find((m) => m.type === "getComponentState")?.payload as { history?: { kind: string; channels: number; sinceNs: number } }).history;
+    assert(history?.kind === "channelHistory" && history.channels === 4 && history.sinceNs === 1000, "pedido com o layout e o instante");
+    assert(delta.filtered && delta.latestNs === 1234 && delta.state.equals(Buffer.from([0, 255])), "resposta decodificada");
+    await client.stop(); await server.stop();
+  });
+
   const { failed } = finish();
   process.exitCode = failed > 0 ? 1 : 0;
 })();

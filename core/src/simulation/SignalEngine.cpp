@@ -416,7 +416,7 @@ void validateBlock(const SignalBlockDefinition& block, uint16_t maxWidth) {
         if (count != expected)
             throw std::invalid_argument("Accumulator exige entradas in, outflow e as fronteiras declaradas: " + block.id);
         if (block.output.type != SignalDataType{SignalScalarType::Real, AccumulatorWidth})
-            throw std::invalid_argument("Accumulator exige saida Real de largura 10: " + block.id);
+            throw std::invalid_argument("Accumulator exige saida Real de largura 17: " + block.id);
         for (const auto& input : block.inputs)
             if (input.type != SignalDataType{SignalScalarType::Real, 1})
                 throw std::invalid_argument("Accumulator exige entradas Real escalares: " + block.id);
@@ -684,8 +684,25 @@ double projectedAccumulator(const CompiledBlock& block, const std::vector<double
  * com A ajustável) gera derramamento DISCRETO contabilizado em cumOverflow. Os acumulados fecham
  * x - x0 = cumIn - cumOut - cumOverflow a menos de arredondamento.
  */
-void stepAccumulator(const double* state, double* next, double demandIn, double demandOut,
-                     double lower, double upper, double dt) {
+/** Soma de Neumaier: `sum + compensation` acompanha o valor exato da série de parcelas. */
+void neumaierAdd(double& sum, double& compensation, double value) {
+    const double total = sum + value;
+    compensation += std::abs(sum) >= std::abs(value) ? (sum - total) + value : (value - total) + sum;
+    sum = total;
+}
+
+/** Vetor publicado: igual ao estado, com as somas compensadas (x e acumulados) já combinadas. */
+void publishAccumulator(const double* state, double* output) {
+    std::copy_n(state, AccumulatorWidth, output);
+    output[AccumulatorState] = state[AccumulatorState] + state[AccumulatorCompState];
+    output[AccumulatorCumIn] = state[AccumulatorCumIn] + state[AccumulatorCompCumIn];
+    output[AccumulatorCumOut] = state[AccumulatorCumOut] + state[AccumulatorCompCumOut];
+    output[AccumulatorCumOverflow] = state[AccumulatorCumOverflow] + state[AccumulatorCompCumOverflow];
+    output[AccumulatorCumUnmet] = state[AccumulatorCumUnmet] + state[AccumulatorCompCumUnmet];
+}
+
+void stepAccumulator(const double* state, double* next, double* output, double demandIn, double demandOut,
+                     double lower, double upper, double startS, double dt) {
     std::copy_n(state, AccumulatorWidth, next);
     normalizeAccumulatorBounds(lower, upper);
     // Demandas com sinal, como o Tank que este bloco substitui: os modelos térmicos usam "saída" =
@@ -693,39 +710,55 @@ void stepAccumulator(const double* state, double* next, double demandIn, double 
     // Laboratório) é política de quem define o parâmetro (Host), não do bloco. NaN conta como 0.
     const double qIn = std::isnan(demandIn) ? 0.0 : demandIn;
     const double qOut = std::isnan(demandOut) ? 0.0 : demandOut;
-    double x = state[AccumulatorState];
+    double& xs = next[AccumulatorState];
+    double& xc = next[AccumulatorCompState];
+    const auto pin = [&](double boundary) { xs = boundary; xc = 0.0; };
+    double x = xs + xc;
     // Normalmente já projetado na ativação (`projectedAccumulator`); fica aqui para fronteiras que
     // mudam entre ativações (fonte mais rápida que o bloco).
-    if (x > upper) { next[AccumulatorCumSpill] += x - upper; x = upper; }
-    else if (x < lower) { next[AccumulatorCumSpill] -= lower - x; x = lower; }
+    if (x > upper) { next[AccumulatorCumSpill] += x - upper; pin(upper); x = upper; }
+    else if (x < lower) { next[AccumulatorCumSpill] -= lower - x; pin(lower); x = lower; }
     const double net = qIn - qOut;
     double overflowVolume = 0.0;
     double unmetVolume = 0.0;
+    bool contactRecorded = false;
     if (net > 0.0 && std::isfinite(upper)) {
         const double contact = (upper - x) / net;
-        if (contact < dt) { overflowVolume = net * (dt - std::max(contact, 0.0)); x = upper; }
-        else x += net * dt;
+        // Contato vindo de dentro, inclusive exatamente no fim do passo: evento com o instante analítico.
+        if (x < upper && contact <= dt) { next[AccumulatorUpperContactTime] = startS + contact; contactRecorded = true; }
+        if (contact <= dt) { overflowVolume = net * (dt - std::max(contact, 0.0)); pin(upper); }
+        else neumaierAdd(xs, xc, net * dt);
     } else if (net < 0.0 && std::isfinite(lower)) {
         const double contact = (x - lower) / -net;
-        if (contact < dt) { unmetVolume = -net * (dt - std::max(contact, 0.0)); x = lower; }
-        else x += net * dt;
+        if (x > lower && contact <= dt) { next[AccumulatorLowerContactTime] = startS + contact; contactRecorded = true; }
+        if (contact <= dt) { unmetVolume = -net * (dt - std::max(contact, 0.0)); pin(lower); }
+        else neumaierAdd(xs, xc, net * dt);
     } else {
-        x += net * dt;
+        neumaierAdd(xs, xc, net * dt);
     }
     // Arredondamento perto da fronteira entra na contabilidade, nunca some.
-    if (x > upper) { overflowVolume += x - upper; x = upper; }
-    if (x < lower) { unmetVolume += lower - x; x = lower; }
-    next[AccumulatorState] = x;
-    next[AccumulatorCumIn] += qIn * dt;
-    next[AccumulatorCumOut] += qOut * dt - unmetVolume;
-    next[AccumulatorCumOverflow] += overflowVolume;
-    next[AccumulatorCumUnmet] += unmetVolume;
-    const bool atUpper = x >= upper && net > 0.0;
-    const bool atLower = x <= lower && net < 0.0;
+    const double reached = xs + xc;
+    if (reached > upper) {
+        overflowVolume += reached - upper;
+        if (!contactRecorded && x < upper) next[AccumulatorUpperContactTime] = startS + dt;
+        pin(upper);
+    } else if (reached < lower) {
+        unmetVolume += lower - reached;
+        if (!contactRecorded && x > lower) next[AccumulatorLowerContactTime] = startS + dt;
+        pin(lower);
+    }
+    neumaierAdd(next[AccumulatorCumIn], next[AccumulatorCompCumIn], qIn * dt);
+    neumaierAdd(next[AccumulatorCumOut], next[AccumulatorCompCumOut], qOut * dt - unmetVolume);
+    neumaierAdd(next[AccumulatorCumOverflow], next[AccumulatorCompCumOverflow], overflowVolume);
+    neumaierAdd(next[AccumulatorCumUnmet], next[AccumulatorCompCumUnmet], unmetVolume);
+    const double finalX = xs + xc;
+    const bool atUpper = finalX >= upper && net > 0.0;
+    const bool atLower = finalX <= lower && net < 0.0;
     next[AccumulatorInActual] = qIn;
     next[AccumulatorOutActual] = atLower ? qIn : qOut;
     next[AccumulatorOverflow] = atUpper ? net : 0.0;
     next[AccumulatorUnmet] = atLower ? -net : 0.0;
+    publishAccumulator(next, output);
 }
 
 int64_t wrapAdd(int64_t left, int64_t right) {
@@ -936,8 +969,11 @@ void SignalRuntime::bind(std::shared_ptr<const CompiledSignalGraph> graph) {
                     continue;
                 }
                 if (block.kind == SignalBlockKind::Accumulator) {
-                    const double initial = element == AccumulatorState
-                        ? std::clamp(block.realParameters[0], block.realParameters[1], block.realParameters[2]) : 0.0;
+                    double initial = 0.0;
+                    if (element == AccumulatorState)
+                        initial = std::clamp(block.realParameters[0], block.realParameters[1], block.realParameters[2]);
+                    else if (element == AccumulatorUpperContactTime || element == AccumulatorLowerContactTime)
+                        initial = -1.0;
                     m_dynamicState[block.stateOffset + element] = initial;
                     m_reals[block.output.offset + element] = initial;
                     continue;
@@ -1167,9 +1203,17 @@ void SignalRuntime::activateGroup(uint32_t groupIndex, uint64_t timestampNs) {
         const CompiledBlock& block = m_graph->blocks[blockIndex];
         if (block.kind == SignalBlockKind::UnitDelay) for (uint16_t element = 0; element < block.output.width; ++element)
             m_dynamicState[block.stateOffset + element] = readSlot(m_reals, block.inputs[0], element);
-        // Projeção nas fronteiras feita nesta ativação: o estado contínuo passa a ser a saída publicada.
-        if (block.kind == SignalBlockKind::Accumulator)
-            std::copy_n(m_reals.begin() + block.output.offset, AccumulatorWidth, m_dynamicState.begin() + block.stateOffset);
+        // Projeção nas fronteiras feita nesta ativação: só x e cumSpill mudam (o resto do estado,
+        // inclusive as compensações, segue o passo contínuo).
+        if (block.kind == SignalBlockKind::Accumulator) {
+            double* state = m_dynamicState.data() + block.stateOffset;
+            const double published = m_reals[block.output.offset + AccumulatorState];
+            if (published != state[AccumulatorState] + state[AccumulatorCompState]) {
+                state[AccumulatorState] = published;
+                state[AccumulatorCompState] = 0.0;
+            }
+            state[AccumulatorCumSpill] = m_reals[block.output.offset + AccumulatorCumSpill];
+        }
     }
 
     // Record only input changes. Ring storage was allocated by bind(); no push_back occurs here.
@@ -1233,10 +1277,10 @@ void SignalRuntime::beginContinuousStep(uint64_t previousNs, uint64_t currentNs)
             // Exato para entradas ZOH no passo: full == half, erro estimado 0 (como o Tank que substitui).
             const auto [lower, upper] = accumulatorBounds(block, [&](const InputBinding& input) { return readSlot(m_reals, input, 0); });
             double* candidate = m_dynamicCandidate.data() + block.stateOffset;
-            stepAccumulator(m_dynamicState.data() + block.stateOffset, candidate, readSlot(m_reals, block.inputs[0], 0),
-                            readSlot(m_reals, block.inputs[1], 0), lower, upper, dt);
+            stepAccumulator(m_dynamicState.data() + block.stateOffset, candidate,
+                            m_dynamicOutputCandidate.data() + block.output.offset, readSlot(m_reals, block.inputs[0], 0),
+                            readSlot(m_reals, block.inputs[1], 0), lower, upper, static_cast<double>(previousNs) * 1e-9, dt);
             std::copy_n(candidate, AccumulatorWidth, m_dynamicFullStep.data() + block.stateOffset);
-            std::copy_n(candidate, AccumulatorWidth, m_dynamicOutputCandidate.data() + block.output.offset);
             continue;
         }
         for (uint16_t element = 0; element < block.output.width; ++element) {

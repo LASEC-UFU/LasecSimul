@@ -613,7 +613,7 @@ export function legacyMasksToVectorHistory(timestampsNs: number[], masks: number
 
 const instrumentHistoryRequestsInFlight = new Set<string>();
 
-export async function sendInstrumentHistory(componentId: string): Promise<void> {
+export async function sendInstrumentHistory(componentId: string, sinceNs?: number): Promise<void> {
   if (!state.coreClient || !state.schematicPanel) return;
   // A Webview pede histórico a cada frame enquanto o popup está aberto. Se o snapshot anterior
   // ainda está atravessando Core -> Extension -> Webview, o próximo pedido seria redundante e
@@ -625,10 +625,20 @@ export async function sendInstrumentHistory(componentId: string): Promise<void> 
   if (!coreId) return;
   instrumentHistoryRequestsInFlight.add(componentId);
   try {
+    const readoutFormat = findCatalogEntry(component.typeId)?.readoutFormat;
+    // Janela do Oscope por deltas: com o último instante que a Webview já tem, o Core manda só o que é
+    // novo (antes: até 4 × 512 amostras em hex a cada quadro). Relógio que voltou = histórico inteiro.
+    if (sinceNs !== undefined && readoutFormat?.kind === "channelHistory") {
+      const delta = await state.coreClient.getComponentHistorySince(coreId, readoutFormat.channels, sinceNs);
+      if (delta.filtered && (delta.latestNs === undefined || delta.latestNs >= sinceNs)) {
+        const channels = decodeInstrumentHistory(component.typeId, delta.state);
+        if (channels) state.schematicPanel.postMessage({ version: 1, type: "instrumentHistory", componentId, append: true, oscope: channels as InstrumentHistoryPayload["oscope"] });
+        return;
+      }
+    }
     const coreState = await state.coreClient.getComponentState(coreId);
     const decoded = decodeInstrumentHistory(component.typeId, coreState);
     if (!decoded) return;
-    const readoutFormat = findCatalogEntry(component.typeId)?.readoutFormat;
     // `readoutFormat.kind` (ABI v2) diz qual dos 2 formatos `decoded` tem -- `channelHistory` é
     // sempre o payload "oscope" (N canais analógicos), `bitmaskHistory` sempre "logic" (1 palavra
     // digital). Fallback legado (mesmos 2 typeIds do fallback de `decodeInstrumentHistory` acima)

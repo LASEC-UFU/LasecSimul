@@ -6,7 +6,8 @@ import type { LabSeriesDelta, LabSeriesEvent } from "../messages.js";
  * gravadas; nada é reamostrado. Colunas derivadas aqui:
  *  - `q`: vazão líquida MÉDIA realizada no passo (tᵢ₋₁, tᵢ] sem derramamentos discretos,
  *    Δ(cumIn − cumOut − cumOverflow)/Δt -- com ela ∫q dt sobre a série é exatamente ΔV + derramamentos;
- *  - eventos `spill` (salto de cumSpill) e `boundary` (início de transbordo/falta de água).
+ *  - eventos `spill` (salto de cumSpill) e `boundary` com o instante EXATO de contato que o Core grava
+ *    (`upperContact`/`lowerContact`); sem essas colunas, o início de transbordo/falta de água na amostra.
  */
 export type DerivedEventKind = "spill" | "boundary:upper" | "boundary:lower";
 export interface BufferEvent { tS: number; kind: LabSeriesEvent["kind"] | DerivedEventKind; name?: string; value?: number; volume?: number }
@@ -64,12 +65,16 @@ export class SeriesBuffer {
     const spill = this.has("cumSpill") ? this.col("cumSpill") : undefined;
     const overflow = this.has("overflow") ? this.col("overflow") : undefined;
     const unmet = this.has("unmet") ? this.col("unmet") : undefined;
+    const upperContact = this.has("upperContact") ? this.col("upperContact") : undefined;
+    const lowerContact = this.has("lowerContact") ? this.col("lowerContact") : undefined;
     for (let i = start; i < this.size; i++) {
       if (i === 0 || !(t[i]! > t[i - 1]!)) { q[i] = NaN; continue; }
       q[i] = ((cumIn[i]! - cumIn[i - 1]!) - (cumOut[i]! - cumOut[i - 1]!) - (cumOverflow[i]! - cumOverflow[i - 1]!)) / (t[i]! - t[i - 1]!);
       if (spill && spill[i]! !== spill[i - 1]!) this.events.push({ tS: t[i]!, kind: "spill", volume: spill[i]! - spill[i - 1]! });
-      if (overflow && overflow[i]! > 0 && !(overflow[i - 1]! > 0)) this.events.push({ tS: t[i]!, kind: "boundary:upper" });
-      if (unmet && unmet[i]! > 0 && !(unmet[i - 1]! > 0)) this.events.push({ tS: t[i]!, kind: "boundary:lower" });
+      if (upperContact) { if (upperContact[i]! >= 0 && upperContact[i] !== upperContact[i - 1]) this.events.push({ tS: upperContact[i]!, kind: "boundary:upper" }); }
+      else if (overflow && overflow[i]! > 0 && !(overflow[i - 1]! > 0)) this.events.push({ tS: t[i]!, kind: "boundary:upper" });
+      if (lowerContact) { if (lowerContact[i]! >= 0 && lowerContact[i] !== lowerContact[i - 1]) this.events.push({ tS: lowerContact[i]!, kind: "boundary:lower" }); }
+      else if (unmet && unmet[i]! > 0 && !(unmet[i - 1]! > 0)) this.events.push({ tS: t[i]!, kind: "boundary:lower" });
     }
     this.events.sort((a, b) => a.tS - b.tS);
   }
@@ -99,11 +104,13 @@ export class SeriesBuffer {
     return { kind: "interpolated", value: values[a]! + w * (values[b]! - values[a]!), between: [t[a]!, t[b]!] };
   }
 
-  /** Valor do degrau que contém x: a linha i vale em (tᵢ₋₁, tᵢ]; side = +1 lado direito de x, −1 esquerdo. */
+  /** Valor do degrau que contém x: a linha i vale em (tᵢ₋₁, tᵢ]; side = +1 lado direito de x, −1 esquerdo.
+   * Fronteiras a menos de 1 ns contam como a própria amostra (t = ns·1e-9 não é exato em binário). */
   stepValueAt(column: string, x: number, side: 1 | -1 = 1): number {
     if (this.size < 2) return NaN;
     const t = this.times, values = this.col(column);
-    const i = side > 0 ? this.upperBound(x) : this.lowerBound(x);
+    const tol = 1e-9 * Math.max(1, Math.abs(x));
+    const i = side > 0 ? this.upperBound(x + tol) : this.lowerBound(x - tol);
     for (let k = Math.max(1, i); k < this.size; k++) { const v = values[k]!; if (!Number.isNaN(v) && t[k]! > t[k - 1]!) return v; }
     return NaN;
   }

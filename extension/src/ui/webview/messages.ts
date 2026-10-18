@@ -41,6 +41,8 @@ export interface AnalyzerVectorHistory {
  * pediu. */
 export interface InstrumentHistoryPayload {
   componentId: string;
+  /** `true`: só as amostras posteriores ao `sinceNs` do pedido (anexar ao que a janela já tem). */
+  append?: boolean;
   oscope?: { channels: Array<{ timestampsNs: number[]; values: number[] }> };
   logic?: AnalyzerVectorHistory;
 }
@@ -113,6 +115,8 @@ export type HostToWebviewMessage =
   | { version: number; type: "componentReadout"; readoutsByComponentId: Record<string, ComponentReadoutValue>; transportStatus?: "connected" | "disconnected"; sampleTimestampNs?: number }
   | { version: number; type: "pidDialogOpen"; componentId: string; html: string }
   | { version: number; type: "pidDialogSnapshot"; values: { sp?: number; pv?: number; mv?: number; manual?: boolean; localMode?: boolean }; dt: number }
+  /** Séries gravadas no Core para o gráfico da sintonia (ADR 0012): tempos simulados exatos, em segundos. */
+  | { version: number; type: "pidDialogSeries"; reset: boolean; t: number[]; pv: number[]; sp: number[]; mv: number[] }
   /** Estado opaco de `getComponentState()` para packages com `runtimeState`. O package declara
    * offsets e encoding; esta mensagem não conhece nenhum dispositivo específico. */
   | { version: number; type: "componentVisualState"; statesByComponentId: Record<string, string> }
@@ -301,7 +305,7 @@ export type WebviewToHostMessage =
   /** Pedido de histórico REAL pra janela "Expande" -- ver `InstrumentHistoryPayload`. Mandado ao
    * abrir a janela e a cada `componentReadout` enquanto ela continuar aberta (mesmo ritmo de
    * atualização do resto da telemetria, ~50 ms com o padrão de 20 Hz, ver `pollInstrumentReadouts`). */
-  | { version: number; type: "requestInstrumentHistory"; componentId: string }
+  | { version: number; type: "requestInstrumentHistory"; componentId: string; sinceNs?: number }
   /** Pedido de dados pro overlay de Modo Placa E pro submenu por componente exposto do menu de
    * contexto -- ver `boardOverlayData`. */
   | { version: number; type: "requestBoardOverlayData"; componentId: string; sourceId: string }

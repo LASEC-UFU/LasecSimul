@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    {
+      "id": "primeira-ordem-lab",
+      "typeId": "subcircuits.process.first_order_lab",
+      "properties": {},
+      "label": "Primeira ordem do laboratório",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 760,
+        "y": 80,
+        "rotation": 0
+      }
+    }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": []
+  },
+  "visual": {
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    }
+  },
+  "simulationSettings": {},
+  "calculusLab": {
+    "schemaVersion": 1,
+    "activities": [
+      {
+        "id": "primeira-ordem",
+        "title": "Primeira ordem — exponencial",
+        "question": "Em que instante a resposta alcança 63,2 % do salto?",
+        "steps": [
+          {
+            "id": "prever",
+            "phase": "predict",
+            "prompt": "Prever: qual o valor final de y para K = 2 e u = 1?",
+            "hints": []
+          },
+          {
+            "id": "tau",
+            "phase": "explore",
+            "prompt": "Ache o instante em que y cruza a linha de 63,2 %. Compare com τ.",
+            "hints": []
+          },
+          {
+            "id": "tangente",
+            "phase": "formalize",
+            "prompt": "A tangente em t = 0 cruza o valor final em t = τ? Verifique.",
+            "hints": []
+          },
+          {
+            "id": "degrau",
+            "phase": "apply",
+            "prompt": "Mude u durante a execução: só o futuro muda?",
+            "hints": []
+          }
+        ],
+        "plantComponentId": "primeira-ordem-lab",
+        "parameters": {
+          "u": 1,
+          "K": 2,
+          "tau": 5,
+          "y0": 0
+        },
+        "kind": "firstOrder"
+      }
+    ]
+  }
+}

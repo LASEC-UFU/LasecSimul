@@ -7,8 +7,8 @@ Open tank of constant cross-section A (the "Tanque — da vazão à integral" ve
 Calculus Lab), built on control.accumulator (ADR 0013):
 - state V [L] with floor 0 and top Vmax = 1000·A·hmax as a sampled INPUT (A can change while
   running: V is preserved, h = V/(1000·A) jumps, the excess above Vmax spills at once into cumSpill);
-- inlet pump q_in [L/s]; outlet either a pump q_out [L/s] (valve = 0) or a linear gravity valve
-  q_out = k·h [L/s] (valve = 1);
+- inlet pump q_in [L/s]; outlet (c_outlet) a pump q_out [L/s] (0), a linear gravity valve q_out = k·h
+  [L/s] (1) or an orifice/Torricelli outlet q_out = c·√h [L/s] (2);
 - every block runs at 10 ms; parameters are control.constant (live) and the initial volume is the
   accumulator's `initial` (stop-required).
 """
@@ -50,14 +50,16 @@ PARAMETERS = [
     ("c_area", "Área da seção do tanque (A)", 0.1, "m²"),
     ("c_hmax", "Altura da borda (h máx.)", 1.0, "m"),
     ("c_k", "Coeficiente da válvula de saída (q = k·h)", 2.0, "L/(s·m)"),
-    ("c_valve", "Saída por válvula (1) ou por bomba (0)", 0.0, ""),
+    ("c_torr", "Coeficiente do orifício (q = c·√h)", 1.4, "L/(s·√m)"),
+    ("c_outlet", "Saída: 0 bomba, 1 válvula linear (k·h), 2 orifício (c·√h)", 0.0, ""),
 ]
 for index, (cid, label, value, unit) in enumerate(PARAMETERS):
     comp(cid, "control.constant", {"value": value, "unit": unit}, 40, 40 + index * 60, label)
 
 # --- model --------------------------------------------------------------------------------------
 calc("vmax", [("a", "c_area"), ("hm", "c_hmax")], "a*hm*1000", 240, 120, "Volume máximo (L)")
-calc("q_out", [("qo", "c_qout"), ("m", "c_valve"), ("k", "c_k"), ("h", "h")], "(1-m)*qo+m*k*h", 240, 240, "Saída demandada (L/s)")
+calc("q_out", [("qo", "c_qout"), ("m", "c_outlet"), ("k", "c_k"), ("c", "c_torr"), ("h", "h")],
+     "(m<0.5)*qo+(m>0.5)*(m<1.5)*k*h+(m>1.5)*c*h^0.5", 240, 240, "Saída demandada (L/s)")
 comp("acc", "control.accumulator", {"initial": 20, "lowerLimitEnabled": True, "lowerLimit": 0, "upperLimitEnabled": False,
                                     "upperLimit": 100, "lowerInput": False, "upperInput": True, "samplePeriodNs": PERIOD},
      460, 160, "Volume (L)")
@@ -115,7 +117,7 @@ shapes = [
     {"kind": "text", "x": 12, "y": 62, "value": "bomba de entrada", "fontSize": 10, "textAnchor": "start", "color": "#334155"},
     {"kind": "line", "x1": TANK["x"] + 40, "y1": TANK["y"] + TANK["h"] - 6, "x2": TANK["x"] + 40, "y2": H - 22, "stroke": PIPE, "strokeWidth": 6},
     {"kind": "line", "x1": 12, "y1": H - 22, "x2": TANK["x"] + 40, "y2": H - 22, "stroke": PIPE, "strokeWidth": 6},
-    {"kind": "text", "x": 12, "y": H - 30, "value": "saída (bomba ou válvula)", "fontSize": 10, "textAnchor": "start", "color": "#334155"},
+    {"kind": "text", "x": 12, "y": H - 30, "value": "saída (bomba, válvula ou orifício)", "fontSize": 10, "textAnchor": "start", "color": "#334155"},
 ]
 pins = [{"id": name, "kind": "ANALOG_OUT", "x": W, "y": 70 + index * 40, "angle": 0, "length": 8, "label": label}
         for index, (name, _source, _port, label) in enumerate(OUTPUTS)]
@@ -132,7 +134,7 @@ document = {
     "help": {"description": (
         "Tanque aberto de seção A constante para o Laboratório de Cálculo: o volume V (L) integra a vazão de entrada menos a de "
         "saída num acumulador conservativo (fundo 0, borda Vmax = 1000·A·hmax). Saída por bomba (q = q_saída) ou por válvula "
-        "(q = k·h). Com a área A mudando durante a execução, V é preservado, h = V/A salta e o excesso acima da borda derrama de "
+        "(q = k·h) ou por orifício (q = c·√h, Torricelli). Com a área A mudando durante a execução, V é preservado, h = V/A salta e o excesso acima da borda derrama de "
         "uma vez. Vazões, área, borda, k e o modo de saída ficam em Propriedades Exportadas e mudam com a simulação rodando; o "
         "volume inicial é a propriedade 'initial' do acumulador (com a simulação parada). Todos os blocos rodam a 10 ms.")},
     "components": components,

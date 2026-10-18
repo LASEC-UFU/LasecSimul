@@ -1,5 +1,6 @@
-import { Ast, arg, argNode, argString, isNode } from "./ast.js";
+import { Ast, arg, argNode, argString, dependsOn, isNode } from "./ast.js";
 import { differentiate } from "./derivative.js";
+import { antiderivative } from "./integral.js";
 import { deflate, polyEval, rationalParts, toPolynomial } from "./poly.js";
 
 /** Resultado com proveniência: exato (álgebra/substituição) ou numérico (método declarado). */
@@ -62,6 +63,11 @@ export function compileExpression(ast: Ast, symbols: readonly string[]): Compile
       case "Exp": { const f = unary(); return (e) => Math.exp(f(e)); }
       case "Abs": { const f = unary(); return (e) => Math.abs(f(e)); }
       case "Sign": { const f = unary(); return (e) => { const x = f(e); return x === 0 ? fail("não diferenciável: |u| tem canto onde u = 0") : Math.sign(x); }; }
+      case "Less": { const f = unary(), g = build(arg(node, 2)); return (e) => (f(e) < g(e) ? 1 : 0); }
+      case "LessEqual": { const f = unary(), g = build(arg(node, 2)); return (e) => (f(e) <= g(e) ? 1 : 0); }
+      case "Greater": { const f = unary(), g = build(arg(node, 2)); return (e) => (f(e) > g(e) ? 1 : 0); }
+      case "GreaterEqual": { const f = unary(), g = build(arg(node, 2)); return (e) => (f(e) >= g(e) ? 1 : 0); }
+      case "If": return buildIf(node);
       case "D": {
         const v = argString(node, 2);
         if (!slots.has(v)) throw new Error(`a variável de derivação "${v}" precisa ser variável da expressão`);
@@ -76,6 +82,48 @@ export function compileExpression(ast: Ast, symbols: readonly string[]): Compile
     }
   }
 
+  /** Função por partes. Com `["Junction", lhs, rhs, então, senão]` (vindo da derivada) confere, na
+   * fronteira lhs = rhs, continuidade e igualdade das derivadas laterais (docs/52 §4.4). */
+  function buildIf(node: Ast): Fn {
+    if (!isNode(node)) throw new Error("se(...) inválido");
+    const condition = build(arg(node, 1)), whenTrue = build(arg(node, 2)), whenFalse = build(arg(node, 3));
+    const junction = node[4];
+    if (junction !== undefined && isNode(junction) && junction[0] === "Junction") {
+      const lhs = build(arg(junction, 1)), rhs = build(arg(junction, 2)), left = build(arg(junction, 3)), right = build(arg(junction, 4));
+      return (e) => {
+        note("derivada de função por partes (fronteira verificada)");
+        const l = lhs(e), r = rhs(e), scale = Math.max(1, Math.abs(l));
+        if (Math.abs(l - r) <= 1e-12 * scale) {
+          const fa = left(e), fb = right(e);
+          if (!(Math.abs(fa - fb) <= 1e-9 * Math.max(1, Math.abs(fa)))) return fail("não diferenciável na fronteira: a função salta ali");
+          const da = whenTrue(e), db = whenFalse(e);
+          if (!(Math.abs(da - db) <= 1e-9 * Math.max(1, Math.abs(da)))) return fail("não diferenciável na fronteira: derivadas laterais diferentes");
+        }
+        return condition(e) !== 0 ? whenTrue(e) : whenFalse(e);
+      };
+    }
+    return (e) => { note("função por partes"); return condition(e) !== 0 ? whenTrue(e) : whenFalse(e); };
+  }
+
+  /** Fronteiras de funções por partes do integrando do tipo `v op expr` (ou `expr op v`). */
+  function piecewiseBoundaries(body: Ast, v: string): Ast[] {
+    const found: Ast[] = [];
+    const walk = (node: Ast): void => {
+      if (!isNode(node)) return;
+      if (node[0] === "If") {
+        const c = arg(node, 1);
+        if (isNode(c)) {
+          const l = arg(c, 1), r = arg(c, 2);
+          if (l === v && !dependsOn(r, v)) found.push(r);
+          else if (r === v && !dependsOn(l, v)) found.push(l);
+        }
+      }
+      node.slice(1).forEach(walk);
+    };
+    walk(body);
+    return found;
+  }
+
   function buildIntegral(body: Ast, limits: Ast): Fn {
     if (!isNode(limits)) throw new Error("limites de integração inválidos");
     const v = argString(limits, 1);
@@ -85,14 +133,46 @@ export function compileExpression(ast: Ast, symbols: readonly string[]): Compile
       const anti = [0, ...poly.map((c, k) => c / (k + 1))];
       return (e) => { note("antiderivada de polinômio (exata)"); return polyEval(anti, fHi(e)) - polyEval(anti, fLo(e)); };
     }
+    const symbolic = antiderivative(body, v);
+    const conditions = symbolic?.conditions.map((c) => ({ a: build(c.a), b: build(c.b), rule: c.rule })) ?? [];
+    const boundaries = piecewiseBoundaries(body, v).map((b) => build(b));
     return withSlot(v, (slot) => {
       const f = build(body);
+      const F = symbolic ? build(symbolic.ast) : undefined;
+      /** As hipóteses de domínio da antiderivada valem em todo [lo, hi]? (senão a integral é imprópria) */
+      const domainHolds = (e: Float64Array, lo: number, hi: number): boolean => conditions.every(({ a, b, rule }) => {
+        const A = a(e), B = b(e), ulo = A * lo + B, uhi = A * hi + B;
+        if (rule === "positive") return ulo > 0 && uhi > 0;
+        if (rule === "nonnegative") return ulo >= 0 && uhi >= 0;
+        return Math.sign(ulo) === Math.sign(uhi) && ulo !== 0 && uhi !== 0;
+      });
       return (e) => {
         const lo = fLo(e), hi = fHi(e);
         if (!Number.isFinite(lo) || !Number.isFinite(hi)) return fail("limites de integração não finitos");
+        if (F && domainHolds(e, lo, hi)) {
+          e[slot] = hi; const upper = F(e);
+          e[slot] = lo; const lower = F(e);
+          if (Number.isFinite(upper) && Number.isFinite(lower)) {
+            for (const method of symbolic!.methods) note(method);
+            return upper - lower;
+          }
+        }
         approx("Simpson adaptativo (tolerância 1e-10)");
-        const r = adaptiveSimpson((x) => { e[slot] = x; return f(e); }, lo, hi, 1e-10, 40);
-        return Number.isFinite(r) ? r : fail("integrando indefinido no intervalo");
+        // Fronteiras de funções por partes dentro do intervalo: integra cada trecho liso separadamente.
+        const cuts = boundaries.map((b) => b(e)).filter((x) => x > Math.min(lo, hi) && x < Math.max(lo, hi)).sort((x, y) => x - y);
+        if (cuts.length) note("intervalo dividido nas fronteiras da função por partes");
+        const points = lo <= hi ? [lo, ...cuts, hi] : [lo, ...cuts.reverse(), hi];
+        let total = 0;
+        for (let i = 0; i + 1 < points.length; i++) {
+          const r = adaptiveSimpson((x) => { e[slot] = x; return f(e); }, points[i]!, points[i + 1]!, 1e-10, 40);
+          if (!Number.isFinite(r)) {
+            const cause = ctx.reason;
+            ctx.reason = undefined;
+            return fail(`integral imprópria: o integrando é indefinido em [${points[0]}, ${points[points.length - 1]}]${cause ? ` (${cause})` : ""}`);
+          }
+          total += r;
+        }
+        return total;
       };
     });
   }

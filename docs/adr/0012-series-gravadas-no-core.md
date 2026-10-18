@@ -11,6 +11,10 @@ Aceita e implementada (2026-10-17): `core/src/simulation/SignalRecorder.hpp`, co
 grupo `series` do `getTelemetryFrame`. Gravação numa grade por assinatura (`periodNs`), não em todo passo estável; eventos
 `start` e `parameter` (com `appliedAtNs`). Detalhes e decisões refinadas em [`docs/54 §0`](../54-laboratorio-calculo-validacao-e-riscos.md).
 
+Complemento (2026-10-18): o painel PID também lê do gravador (`PidSeriesFeed`); a janela do Oscope, que continua no estado
+do componente, passou a ser pedida por deltas (`history.sinceNs`). Custo medido: 5,2 ns por passo sem inscrição, 99,1 ns com
+13 colunas.
+
 ## Contexto
 
 - A telemetria contínua (`pollTelemetryFrame` → `getTelemetryFrame`) entrega o **último valor** de cada componente

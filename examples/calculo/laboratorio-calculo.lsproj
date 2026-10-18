@@ -13,6 +13,32 @@
         "y": 80,
         "rotation": 0
       }
+    },
+    {
+      "id": "primeira-ordem-lab",
+      "typeId": "subcircuits.process.first_order_lab",
+      "properties": {},
+      "label": "Primeira ordem do laboratório",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 760,
+        "y": 80,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "sensor-lab",
+      "typeId": "subcircuits.process.sensor_4_20",
+      "properties": {},
+      "label": "Sensor 4–20 mA do laboratório",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 760,
+        "y": 360,
+        "rotation": 0
+      }
     }
   ],
   "topology": {
@@ -32,10 +58,147 @@
     "schemaVersion": 1,
     "activities": [
       {
+        "id": "funcoes-explorador",
+        "title": "Funções — explorador",
+        "question": "Como os parâmetros a, b e c mudam o gráfico de f(x) = a·x² + b·x + c?",
+        "steps": [
+          {
+            "id": "prever",
+            "phase": "predict",
+            "prompt": "Prever: o que acontece com a parábola quando a fica negativo?",
+            "hints": []
+          },
+          {
+            "id": "raizes",
+            "phase": "explore",
+            "prompt": "Encontre valores de c para os quais f não tem raízes reais.",
+            "hints": []
+          },
+          {
+            "id": "intersecao",
+            "phase": "explore",
+            "prompt": "Onde f cruza g(x) = x + 1? Compare com a tabela.",
+            "hints": []
+          },
+          {
+            "id": "derivada",
+            "phase": "formalize",
+            "prompt": "Ligue f′: onde f′(x) = 0, o que acontece com f?",
+            "hints": []
+          }
+        ],
+        "kind": "functions",
+        "variable": "x",
+        "f": "a x^2 + b x + c",
+        "g": "x + 1",
+        "parameters": [
+          {
+            "name": "a",
+            "min": -3,
+            "max": 3,
+            "step": 0.1,
+            "value": 1
+          },
+          {
+            "name": "b",
+            "min": -5,
+            "max": 5,
+            "step": 0.1,
+            "value": 0
+          },
+          {
+            "name": "c",
+            "min": -5,
+            "max": 5,
+            "step": 0.1,
+            "value": -2
+          }
+        ],
+        "domain": [
+          -5,
+          5
+        ],
+        "range": [
+          -6,
+          10
+        ],
+        "show": {
+          "derivative": false,
+          "integral": false,
+          "asymptotes": true,
+          "roots": true,
+          "table": true
+        },
+        "integralFrom": 0,
+        "tableStep": 1
+      },
+      {
+        "id": "sensor-4-20",
+        "title": "Sensor 4–20 mA — função afim",
+        "question": "Que pressão produz 12 mA? O que acontece acima de Pmax?",
+        "steps": [
+          {
+            "id": "prever",
+            "phase": "predict",
+            "prompt": "Prever: com faixa 0–200 kPa, quanto vale I em 50 kPa?",
+            "hints": []
+          },
+          {
+            "id": "doze",
+            "phase": "explore",
+            "prompt": "Mova P até 12 mA. Escreva a inversa P(I).",
+            "hints": []
+          },
+          {
+            "id": "saturacao",
+            "phase": "apply",
+            "prompt": "Passe de Pmax: o que a corrente faz? E o valor sem saturação?",
+            "hints": []
+          }
+        ],
+        "plantComponentId": "sensor-lab",
+        "parameters": {
+          "p": 100,
+          "pmin": 0,
+          "pmax": 200
+        },
+        "kind": "sensor"
+      },
+      {
         "id": "limites-velocidade-4s",
-        "kind": "limits",
         "title": "Limites — velocidade de subida aos 4 s",
         "question": "Qual é a velocidade de subida da água aos 4 segundos?",
+        "steps": [
+          {
+            "id": "prever",
+            "phase": "predict",
+            "prompt": "Antes de mexer: a velocidade aos 4 s é maior ou menor que a velocidade média entre 0 e 4 s?",
+            "hints": []
+          },
+          {
+            "id": "aproximar",
+            "phase": "explore",
+            "prompt": "Aproxime Q de P pela direita e pela esquerda. O que acontece com a taxa média?",
+            "hints": [
+              "Use a tabela: compare as linhas com Δt = 0,1 e 0,01."
+            ]
+          },
+          {
+            "id": "formalizar",
+            "phase": "formalize",
+            "prompt": "Escreva o limite do quociente incremental e calcule-o com a calculadora.",
+            "hints": [
+              "Teclado › Cálculo › lim"
+            ]
+          },
+          {
+            "id": "epsilon",
+            "phase": "apply",
+            "prompt": "Modo ε–δ: para ε = 0,1, que δ garante |taxa − L| < ε?",
+            "hints": []
+          }
+        ],
+        "kind": "limits",
         "variable": "t",
         "units": {
           "x": "s",
@@ -52,23 +215,127 @@
           0.1,
           0.01
         ],
-        "initialDelta": 0.5
+        "initialDelta": 0.5,
+        "epsilon": 0.5
+      },
+      {
+        "id": "eixo-trajetoria",
+        "title": "Eixo — posição, velocidade e aceleração",
+        "question": "Quando a velocidade do eixo é zero e onde a aceleração é máxima?",
+        "steps": [
+          {
+            "id": "prever",
+            "phase": "predict",
+            "prompt": "Prever: em que instante o eixo anda mais rápido?",
+            "hints": []
+          },
+          {
+            "id": "tangente",
+            "phase": "explore",
+            "prompt": "Mova t₀: a reta tangente a x(t) aproxima a posição perto de t₀?",
+            "hints": []
+          },
+          {
+            "id": "derivadas",
+            "phase": "formalize",
+            "prompt": "Compare v(t) com a inclinação de x(t) e a(t) com a inclinação de v(t).",
+            "hints": []
+          }
+        ],
+        "kind": "axis",
+        "L": 200,
+        "T": 4,
+        "t0": 1
+      },
+      {
+        "id": "primeira-ordem",
+        "title": "Primeira ordem — exponencial",
+        "question": "Em que instante a resposta alcança 63,2 % do salto?",
+        "steps": [
+          {
+            "id": "prever",
+            "phase": "predict",
+            "prompt": "Prever: qual o valor final de y para K = 2 e u = 1?",
+            "hints": []
+          },
+          {
+            "id": "tau",
+            "phase": "explore",
+            "prompt": "Ache o instante em que y cruza a linha de 63,2 %. Compare com τ.",
+            "hints": []
+          },
+          {
+            "id": "tangente",
+            "phase": "formalize",
+            "prompt": "A tangente em t = 0 cruza o valor final em t = τ? Verifique.",
+            "hints": []
+          },
+          {
+            "id": "degrau",
+            "phase": "apply",
+            "prompt": "Mude u durante a execução: só o futuro muda?",
+            "hints": []
+          }
+        ],
+        "plantComponentId": "primeira-ordem-lab",
+        "parameters": {
+          "u": 1,
+          "K": 2,
+          "tau": 5,
+          "y0": 0
+        },
+        "kind": "firstOrder"
       },
       {
         "id": "tanque-vazao-integral",
-        "kind": "tank",
         "title": "Tanque — da vazão à integral",
         "question": "Com 1 L/s entrando e 0,4 L/s saindo, quanto o volume aumenta em 10 s?",
+        "steps": [
+          {
+            "id": "prever",
+            "phase": "predict",
+            "prompt": "Com 1 L/s entrando e 0,4 L/s saindo, quanto o volume aumenta em 10 s?",
+            "hints": []
+          },
+          {
+            "id": "medir",
+            "phase": "explore",
+            "prompt": "Execute e marque a = 0 s e b = 10 s: ΔV e a inclinação da secante batem com q?",
+            "hints": [
+              "Com q constante, qualquer Riemann é exato — por quê?"
+            ]
+          },
+          {
+            "id": "mudar",
+            "phase": "explore",
+            "prompt": "Mude a vazão de entrada durante a execução: o que acontece com V e com q no instante da mudança?",
+            "hints": []
+          },
+          {
+            "id": "valvula",
+            "phase": "formalize",
+            "prompt": "Reinicie com a válvula (q = k·h): compare Riemann à esquerda, à direita e trapézio com V(b) − V(a).",
+            "hints": []
+          },
+          {
+            "id": "area",
+            "phase": "apply",
+            "prompt": "Mude a área A durante a execução: h salta, V não. Explique com h = V/A.",
+            "hints": []
+          }
+        ],
         "plantComponentId": "tanque-lab",
         "parameters": {
           "qIn": 1,
           "qOut": 0.4,
           "area": 0.1,
           "k": 2,
-          "valve": 0,
+          "torr": 1.4,
+          "outlet": 0,
           "hMax": 1,
           "v0": 20
         },
+        "kind": "tank",
         "riemann": {
           "a": 5,
           "b": 25,

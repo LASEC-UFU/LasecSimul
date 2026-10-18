@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 2,
+  "components": [],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": []
+  },
+  "visual": {
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    }
+  },
+  "simulationSettings": {},
+  "calculusLab": {
+    "schemaVersion": 1,
+    "activities": [
+      {
+        "id": "funcoes-explorador",
+        "title": "Funções — explorador",
+        "question": "Como os parâmetros a, b e c mudam o gráfico de f(x) = a·x² + b·x + c?",
+        "steps": [
+          {
+            "id": "prever",
+            "phase": "predict",
+            "prompt": "Prever: o que acontece com a parábola quando a fica negativo?",
+            "hints": []
+          },
+          {
+            "id": "raizes",
+            "phase": "explore",
+            "prompt": "Encontre valores de c para os quais f não tem raízes reais.",
+            "hints": []
+          },
+          {
+            "id": "intersecao",
+            "phase": "explore",
+            "prompt": "Onde f cruza g(x) = x + 1? Compare com a tabela.",
+            "hints": []
+          },
+          {
+            "id": "derivada",
+            "phase": "formalize",
+            "prompt": "Ligue f′: onde f′(x) = 0, o que acontece com f?",
+            "hints": []
+          }
+        ],
+        "kind": "functions",
+        "variable": "x",
+        "f": "a x^2 + b x + c",
+        "g": "x + 1",
+        "parameters": [
+          {
+            "name": "a",
+            "min": -3,
+            "max": 3,
+            "step": 0.1,
+            "value": 1
+          },
+          {
+            "name": "b",
+            "min": -5,
+            "max": 5,
+            "step": 0.1,
+            "value": 0
+          },
+          {
+            "name": "c",
+            "min": -5,
+            "max": 5,
+            "step": 0.1,
+            "value": -2
+          }
+        ],
+        "domain": [
+          -5,
+          5
+        ],
+        "range": [
+          -6,
+          10
+        ],
+        "show": {
+          "derivative": false,
+          "integral": false,
+          "asymptotes": true,
+          "roots": true,
+          "table": true
+        },
+        "integralFrom": 0,
+        "tableStep": 1
+      },
+      {
+        "id": "limites-velocidade-4s",
+        "title": "Limites — velocidade de subida aos 4 s",
+        "question": "Qual é a velocidade de subida da água aos 4 segundos?",
+        "steps": [
+          {
+            "id": "prever",
+            "phase": "predict",
+            "prompt": "Antes de mexer: a velocidade aos 4 s é maior ou menor que a velocidade média entre 0 e 4 s?",
+            "hints": []
+          },
+          {
+            "id": "aproximar",
+            "phase": "explore",
+            "prompt": "Aproxime Q de P pela direita e pela esquerda. O que acontece com a taxa média?",
+            "hints": [
+              "Use a tabela: compare as linhas com Δt = 0,1 e 0,01."
+            ]
+          },
+          {
+            "id": "formalizar",
+            "phase": "formalize",
+            "prompt": "Escreva o limite do quociente incremental e calcule-o com a calculadora.",
+            "hints": [
+              "Teclado › Cálculo › lim"
+            ]
+          },
+          {
+            "id": "epsilon",
+            "phase": "apply",
+            "prompt": "Modo ε–δ: para ε = 0,1, que δ garante |taxa − L| < ε?",
+            "hints": []
+          }
+        ],
+        "kind": "limits",
+        "variable": "t",
+        "units": {
+          "x": "s",
+          "y": "cm"
+        },
+        "model": "0.5t^2",
+        "a": 4,
+        "domain": [
+          0,
+          6
+        ],
+        "rows": [
+          1,
+          0.1,
+          0.01
+        ],
+        "initialDelta": 0.5,
+        "epsilon": 0.5
+      },
+      {
+        "id": "eixo-trajetoria",
+        "title": "Eixo — posição, velocidade e aceleração",
+        "question": "Quando a velocidade do eixo é zero e onde a aceleração é máxima?",
+        "steps": [
+          {
+            "id": "prever",
+            "phase": "predict",
+            "prompt": "Prever: em que instante o eixo anda mais rápido?",
+            "hints": []
+          },
+          {
+            "id": "tangente",
+            "phase": "explore",
+            "prompt": "Mova t₀: a reta tangente a x(t) aproxima a posição perto de t₀?",
+            "hints": []
+          },
+          {
+            "id": "derivadas",
+            "phase": "formalize",
+            "prompt": "Compare v(t) com a inclinação de x(t) e a(t) com a inclinação de v(t).",
+            "hints": []
+          }
+        ],
+        "kind": "axis",
+        "L": 200,
+        "T": 4,
+        "t0": 1
+      }
+    ]
+  }
+}

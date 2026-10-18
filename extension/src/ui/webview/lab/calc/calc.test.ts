@@ -67,10 +67,11 @@ const reason = (e: Evaluation): string => (e.kind === "undefined" ? e.reason : "
     assert(value(calc("Limit(x, ∞, 0, (3x^2+1)/(x^2-5))")) === 3);
     assert(/sem convergência/.test(reason(calc("Limit(x, 0, 0, sin(1/x))"))));
   });
-  await test("∫₀⁴ h = 32/3 exato; ∫₀^π sen = 2 numérico; ∫₋₁¹ x = 0 (com sinal)", () => {
-    const a = calc("Integrate(t, 0, 4, h(t))"), b = calc("Integrate(x, 0, π, sin(x))");
+  await test("∫₀⁴ h = 32/3 exato; ∫₀^π sen = 2 exato (antiderivada); ∫₀¹ e^(x²) numérico; ∫₋₁¹ x = 0", () => {
+    const a = calc("Integrate(t, 0, 4, h(t))"), b = calc("Integrate(x, 0, π, sin(x))"), c = calc("Integrate(x, 0, 1, exp(x^2))");
     assert(a.kind === "finite" && close(a.value, 32 / 3) && a.exact);
-    assert(b.kind === "finite" && Math.abs(b.value - 2) < 1e-9 && !b.exact);
+    assert(b.kind === "finite" && Math.abs(b.value - 2) < 1e-12 && b.exact);
+    assert(c.kind === "finite" && Math.abs(c.value - 1.4626517459071816) < 1e-9 && !c.exact, "sem antiderivada elementar: Simpson");
     assert(Math.abs(value(calc("Integrate(x, -1, 1, x)"))) < 1e-15);
   });
   await test("Σ e Π finitos; Riemann à esquerda de h em [0,4] com n=8 = 8,75", () => {

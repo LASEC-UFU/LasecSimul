@@ -79,5 +79,21 @@ const evalText = (text: string, symbols: string[] = [], env: number[] = []): num
     assert(ml.includes('class="caret"') && ml.includes('class="ph"') && ml.startsWith("<math"));
   });
 
+  await test("digitar se( cria o template por partes; <= vira ≤; texto avalia nos dois trechos", () => {
+    const m = typed([..."se(", ..."x^2", "Tab", "Tab", ..."x<=2", "Tab", ..."4"], "x"); // 1º Tab sai do expoente
+    assert(m.text().startsWith("se(") && m.text().includes("<=") && m.render().includes("caso contrário") && m.render().includes("≤"), m.text());
+    assert(evalText(m.text(), ["x"], [1]) === 1 && evalText(m.text(), ["x"], [3]) === 4, m.text());
+    assert(m.emptyFields() === 0, "três campos preenchidos");
+  });
+  await test("AST por partes volta ao editor (fromAst) e preserva o texto", () => {
+    const m = new EditorModel("x");
+    m.setAst(parseExpression("se(x >= 0, x, -x)", ["x"]));
+    assert(evalText(m.text(), ["x"], [-2]) === 2 && m.render().includes("≥"), m.text());
+  });
+  await test("\"sen\" continua virando seno (o gatilho de por partes exige o parêntese)", () => {
+    const m = typed([..."sen", ..."x"], "x");
+    assert(m.text() === "sin(x)", m.text());
+  });
+
   finish();
 })();

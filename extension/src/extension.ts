@@ -11,6 +11,7 @@ import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { PidTuningPanel } from "./ui/panels/PidTuningPanel";
 import { CalculusLabPanel } from "./ui/panels/CalculusLabPanel";
 import { createCalculusLabHost } from "./lab/calculusLabHost";
+import { PidSeriesFeed } from "./lab/pidSeries";
 import { createInitialWebviewState } from "./ui/webview/catalog";
 import { CanonicalTopologyDocument, JUNCTION_TYPE_ID, PackageDescriptor, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, portEndpoint } from "./ui/webview/model";
 import { autoRoutedWirePoints, connectEndpointToNode, normalizeWireGeometry, removeOrphanNodes, splitSegmentAtPoint } from "./ui/webview/wireTopology";
@@ -1262,6 +1263,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         return;
       }
       try {
+        PidSeriesFeed.attach(component.id);
         PidTuningPanel.open(state.extensionContext.extensionUri, component.id, component.label,
         (name, value) => {
           const liveComponent = state.schematicState.components.find((item) => item.id === component.id && item.typeId === "control.pid_station");
@@ -1314,6 +1316,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     }
     case "pidDialogClosed": {
       PidTuningPanel.close();
+      PidSeriesFeed.detach();
       return;
     }
     case "requestOpenDslEditor": {
@@ -1339,7 +1342,10 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         JSON.stringify([project.components, project.topology.nodes, project.topology.conductors]);
       const topologyChanged = contentOf(previous) !== contentOf(message.project);
       const revision = previous.topology.revision + (topologyChanged ? 1 : 0);
-      state.schematicState = { ...message.project, topology: { ...message.project.topology, revision } };
+      // `calculusLab` é do Laboratório de Cálculo (painel próprio): a cópia que o esquemático carrega
+      // pode estar atrasada e nunca é editada lá -- sem preservar a do Host, mover um componente
+      // depois de gravar uma atividade apagava a gravação.
+      state.schematicState = { ...message.project, calculusLab: previous.calculusLab, topology: { ...message.project.topology, revision } };
       // Tudo neste snapshot veio da Webview, então ela já o tem. Marcar como sincronizado impede que
       // o próximo `syncSchematicPanel()` devolva o estado inteiro como "mudança" (toda referência é
       // nova depois do postMessage). Esse eco chegava atrasado e sobrescrevia o que o usuário já
@@ -1911,7 +1917,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       void exportInstrumentDataCommand(message.suggestedFileName, message.csvContent);
       return;
     case "requestInstrumentHistory":
-      void sendInstrumentHistory(message.componentId);
+      void sendInstrumentHistory(message.componentId, message.sinceNs);
       return;
     case "requestUpdateBoardOverlayProperty":
       updateBoardOverlayPropertyCommand(message.outerComponentId, message.innerComponentId, message.name, message.value, mcuCommandOptions());

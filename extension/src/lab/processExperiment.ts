@@ -1,15 +1,10 @@
 import * as vscode from "vscode";
 import { addSeriesDrain, enqueueCoreMutation, flushSeries, onCoreRebuilt, onSimulationStatusChange } from "../core/coreLifecycle";
 import { coreInstanceIdByComponentId, state } from "../state";
-import type { TankActivity } from "../ui/webview/lab/activity";
+import type { ProcessActivity } from "../ui/webview/lab/activity";
 import { LAB_MESSAGE_VERSION, type HostToLabMessage, type LabRunStatus, type LabSeriesDelta } from "../ui/webview/lab/messages";
-import {
-  TANK_PARAMETERS, TANK_PLANT_TYPE_ID, TANK_SERIES_CHANNELS, checkTankParameter,
-  type TankParameterId, type TankParameterValues,
-} from "../ui/webview/lab/tankModel";
+import { PLANTS, checkPlantParameter, type ParameterValues, type PlantSpec } from "../ui/webview/lab/plants";
 import { SeriesStore, type SeriesDelta } from "./SeriesStore";
-
-const SAMPLE_PERIOD_NS = 10_000_000;
 
 interface BoundPlant {
   componentId: string;
@@ -18,21 +13,31 @@ interface BoundPlant {
   children: Map<string, string>;
 }
 
+/** Instância do processo que a atividade usa: a referenciada, ou a única do tipo no projeto. */
+export function resolvePlantComponentId(activity: ProcessActivity): string | undefined {
+  const typeId = PLANTS[activity.kind].typeId;
+  const components = state.schematicState.components.filter((component) => component.typeId === typeId);
+  if (activity.plantComponentId) return components.find((component) => component.id === activity.plantComponentId)?.id;
+  return components[0]?.id;
+}
+
 /**
- * Experimento do tanque (docs/51 §8): liga a atividade à instância de `hydraulic_tank` do projeto,
- * assina as séries no Core, repassa deltas à Webview e aplica parâmetros pela política do Host.
- * Uma reconstrução do Core (Parar/Reiniciar, edição estrutural) troca os ids das instâncias: a
- * assinatura é refeita e os parâmetros correntes do laboratório são reaplicados.
+ * Experimento de processo (docs/51 §8): liga a atividade à instância do subcircuito no projeto, assina as
+ * séries no Core, repassa deltas à Webview e aplica parâmetros pela política do Host (`plants.ts`). Uma
+ * reconstrução do Core (Parar/Reiniciar, edição estrutural) troca os ids das instâncias: a assinatura é
+ * refeita e os parâmetros correntes do laboratório são reaplicados.
  */
-export class TankExperiment {
+export class ProcessExperiment {
+  private readonly plantSpec: PlantSpec;
   private plant: BoundPlant | undefined;
   private store: SeriesStore | undefined;
   private removeDrain: (() => void) | undefined;
-  private parameters: TankParameterValues;
+  private parameters: ParameterValues;
   private readonly disposers: Array<() => void> = [];
   private disposed = false;
 
-  constructor(private activity: TankActivity, private readonly post: (message: HostToLabMessage) => void) {
+  constructor(private readonly activity: ProcessActivity, private readonly post: (message: HostToLabMessage) => void) {
+    this.plantSpec = PLANTS[activity.kind];
     this.parameters = { ...activity.parameters };
     this.disposers.push(
       // Dentro da reconstrução: `bind` usa o cliente direto, nunca a fila de mutações (que esperaria a si mesma).
@@ -64,8 +69,8 @@ export class TankExperiment {
   }
 
   /** Reiniciar: volta aos valores autorados; parar reconstrói o Core e o `onCoreRebuilt` religa tudo. */
-  async restart(parameters: TankParameterValues): Promise<void> {
-    this.parameters = { ...parameters };
+  async restart(parameters: ParameterValues): Promise<void> {
+    this.parameters = { ...this.plantSpec.defaults, ...parameters };
     if (state.simulationStatus !== "stopped") {
       await vscode.commands.executeCommand("lasecsimul.stop");
       return;
@@ -73,12 +78,15 @@ export class TankExperiment {
     await enqueueCoreMutation(() => this.bind());
   }
 
-  async setParameter(id: TankParameterId, value: number): Promise<void> {
+  async setParameter(id: string, value: number): Promise<void> {
     const running = state.simulationStatus !== "stopped";
-    const reason = checkTankParameter(id, value, running);
+    const reason = checkPlantParameter(this.plantSpec, id, value, running, this.parameters);
     if (reason) { this.post({ version: LAB_MESSAGE_VERSION, type: "labParameterRejected", activityId: this.activity.id, id, value, reason }); return; }
     this.parameters[id] = value;
-    if (!this.plant) return;
+    if (!this.plant) {
+      this.post({ version: LAB_MESSAGE_VERSION, type: "labParameter", activityId: this.activity.id, id, value });
+      return;
+    }
     try {
       const appliedAtNs = await enqueueCoreMutation(() => this.applyParameter(id, value));
       this.post({ version: LAB_MESSAGE_VERSION, type: "labParameter", activityId: this.activity.id, id, value,
@@ -91,13 +99,8 @@ export class TankExperiment {
 
   /** Insere o processo no projeto pela paleta (mesmo caminho do usuário) e liga a atividade a ele. */
   async insertPlant(): Promise<void> {
-    await vscode.commands.executeCommand("lasecsimul.palette.addComponent", TANK_PLANT_TYPE_ID);
+    await vscode.commands.executeCommand("lasecsimul.palette.addComponent", this.plantSpec.typeId);
     await enqueueCoreMutation(() => this.bind());
-  }
-
-  private findPlantComponentId(): string | undefined {
-    const components = state.schematicState.components.filter((component) => component.typeId === TANK_PLANT_TYPE_ID);
-    return (components.find((component) => component.id === this.activity.plantComponentId) ?? components[0])?.id;
   }
 
   /** Resolve a instância, reaplica os parâmetros e refaz a assinatura. Usa `state.coreClient` direto. */
@@ -105,25 +108,30 @@ export class TankExperiment {
     if (this.disposed) return;
     await this.unbind();
     const client = state.coreClient;
-    const componentId = this.findPlantComponentId();
-    if (!componentId) { this.postPlant({ state: "missing" }); return; }
+    const componentId = resolvePlantComponentId(this.activity);
+    if (!componentId) {
+      if (this.activity.plantComponentId) this.postPlant({ state: "error", message: `o componente "${this.activity.plantComponentId}" não existe mais no projeto (religue no editor de atividades)` });
+      else this.postPlant({ state: "missing" });
+      return;
+    }
     const outerInstanceId = coreInstanceIdByComponentId.get(componentId);
-    if (!client || !outerInstanceId) { this.postPlant({ state: "error", message: "O Core ainda não criou o tanque deste projeto." }); return; }
+    if (!client || !outerInstanceId) { this.postPlant({ state: "error", message: "O Core ainda não criou o processo deste projeto." }); return; }
     try {
-      const localIds = new Set([...TANK_SERIES_CHANNELS.map((c) => c.localId), ...TANK_PARAMETERS.map((p) => p.localId)]);
+      const localIds = new Set([...this.plantSpec.series.map((c) => c.localId), ...this.plantSpec.parameters.map((p) => p.localId)]);
       const children = new Map<string, string>();
       for (const localId of localIds) children.set(localId, await client.getSubcircuitChildInstanceId(outerInstanceId, localId));
       this.plant = { componentId, outerInstanceId, children };
       const status = state.simulationStatus;
-      for (const spec of TANK_PARAMETERS) {
+      for (const spec of this.plantSpec.parameters) {
         if (status !== "stopped" && spec.policy !== "live") continue;
-        await this.applyParameter(spec.id, this.parameters[spec.id]);
+        const value = this.parameters[spec.id];
+        if (value !== undefined) await this.applyParameter(spec.id, value);
       }
       const subscriptionId = await client.subscribeSeries(
-        TANK_SERIES_CHANNELS.map((channel) => ({ instanceId: children.get(channel.localId)!, port: channel.port })),
-        { periodNs: SAMPLE_PERIOD_NS },
+        this.plantSpec.series.map((channel) => ({ instanceId: children.get(channel.localId)!, port: channel.port })),
+        { periodNs: this.plantSpec.periodNs },
       );
-      const store = new SeriesStore(subscriptionId, TANK_SERIES_CHANNELS.map((channel) => channel.id));
+      const store = new SeriesStore(subscriptionId, this.plantSpec.series.map((channel) => channel.id));
       this.store = store;
       this.removeDrain = addSeriesDrain({
         subscriptionId,
@@ -148,9 +156,9 @@ export class TankExperiment {
     if (store && state.coreClient) await state.coreClient.unsubscribeSeries(store.subscriptionId).catch(() => false);
   }
 
-  private async applyParameter(id: TankParameterId, value: number): Promise<number | undefined> {
-    const spec = TANK_PARAMETERS.find((candidate) => candidate.id === id)!;
-    if (!this.plant || !state.coreClient) return undefined;
+  private async applyParameter(id: string, value: number): Promise<number | undefined> {
+    const spec = this.plantSpec.parameters.find((candidate) => candidate.id === id);
+    if (!spec || !this.plant || !state.coreClient) return undefined;
     const result = await state.coreClient.setSubcircuitChildProperty(this.plant.outerInstanceId, spec.localId, spec.property, value);
     return result.appliedAtNs;
   }
@@ -170,15 +178,15 @@ export class TankExperiment {
   }
 
   /** O Core informa a instância filha e a propriedade; a Webview conhece o parâmetro (`area`, `qIn`...). */
-  private parameterIdOf(instanceId: string | undefined, property: string | undefined): TankParameterId | undefined {
+  private parameterIdOf(instanceId: string | undefined, property: string | undefined): string | undefined {
     const children = this.plant?.children;
     if (!children || instanceId === undefined) return undefined;
-    return TANK_PARAMETERS.find((spec) => children.get(spec.localId) === instanceId && spec.property === property)?.id;
+    return this.plantSpec.parameters.find((spec) => children.get(spec.localId) === instanceId && spec.property === property)?.id;
   }
 
   private postSeries(delta: SeriesDelta): void {
     const message: LabSeriesDelta = {
-      reset: delta.reset, generation: delta.generation, columns: TANK_SERIES_CHANNELS.map((channel) => channel.id),
+      reset: delta.reset, generation: delta.generation, columns: this.plantSpec.series.map((channel) => channel.id),
       t: delta.t, values: delta.columns, lost: delta.lost,
       events: delta.events.map((event) => ({ tS: event.tNs * 1e-9, kind: event.kind,
         ...(event.kind === "parameter" ? { name: this.parameterIdOf(event.instanceId, event.name) ?? event.name } : {}),

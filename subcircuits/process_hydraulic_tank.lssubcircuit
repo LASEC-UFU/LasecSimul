@@ -8,7 +8,7 @@
   ],
   "workspaceSection": "process",
   "help": {
-    "description": "Tanque aberto de seção A constante para o Laboratório de Cálculo: o volume V (L) integra a vazão de entrada menos a de saída num acumulador conservativo (fundo 0, borda Vmax = 1000·A·hmax). Saída por bomba (q = q_saída) ou por válvula (q = k·h). Com a área A mudando durante a execução, V é preservado, h = V/A salta e o excesso acima da borda derrama de uma vez. Vazões, área, borda, k e o modo de saída ficam em Propriedades Exportadas e mudam com a simulação rodando; o volume inicial é a propriedade 'initial' do acumulador (com a simulação parada). Todos os blocos rodam a 10 ms."
+    "description": "Tanque aberto de seção A constante para o Laboratório de Cálculo: o volume V (L) integra a vazão de entrada menos a de saída num acumulador conservativo (fundo 0, borda Vmax = 1000·A·hmax). Saída por bomba (q = q_saída) ou por válvula (q = k·h) ou por orifício (q = c·√h, Torricelli). Com a área A mudando durante a execução, V é preservado, h = V/A salta e o excesso acima da borda derrama de uma vez. Vazões, área, borda, k e o modo de saída ficam em Propriedades Exportadas e mudam com a simulação rodando; o volume inicial é a propriedade 'initial' do acumulador (com a simulação parada). Todos os blocos rodam a 10 ms."
   },
   "components": [
     {
@@ -82,7 +82,21 @@
       "label": "Coeficiente da válvula de saída (q = k·h)"
     },
     {
-      "id": "c_valve",
+      "id": "c_torr",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 1.4,
+        "unit": "L/(s·√m)"
+      },
+      "visual": {
+        "x": 40,
+        "y": 340,
+        "rotation": 0
+      },
+      "label": "Coeficiente do orifício (q = c·√h)"
+    },
+    {
+      "id": "c_outlet",
       "typeId": "control.constant",
       "properties": {
         "value": 0.0,
@@ -90,10 +104,10 @@
       },
       "visual": {
         "x": 40,
-        "y": 340,
+        "y": 400,
         "rotation": 0
       },
-      "label": "Saída por válvula (1) ou por bomba (0)"
+      "label": "Saída: 0 bomba, 1 válvula linear (k·h), 2 orifício (c·√h)"
     },
     {
       "id": "vmax",
@@ -121,11 +135,12 @@
       "id": "q_out",
       "typeId": "control.calc_expression",
       "properties": {
-        "expression": "(1-m)*qo+m*k*h",
+        "expression": "(m<0.5)*qo+(m>0.5)*(m<1.5)*k*h+(m>1.5)*c*h^0.5",
         "inputs": [
           "qo",
           "m",
           "k",
+          "c",
           "h"
         ],
         "upperLimit": 0,
@@ -537,7 +552,7 @@
         "id": "w-4",
         "from": {
           "kind": "port",
-          "componentId": "c_valve",
+          "componentId": "c_outlet",
           "pinId": "out"
         },
         "to": {
@@ -565,6 +580,20 @@
         "id": "w-6",
         "from": {
           "kind": "port",
+          "componentId": "c_torr",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_out",
+          "pinId": "c"
+        },
+        "points": []
+      },
+      {
+        "id": "w-7",
+        "from": {
+          "kind": "port",
           "componentId": "h",
           "pinId": "out"
         },
@@ -576,7 +605,7 @@
         "points": []
       },
       {
-        "id": "w-7",
+        "id": "w-8",
         "from": {
           "kind": "port",
           "componentId": "c_qin",
@@ -590,7 +619,7 @@
         "points": []
       },
       {
-        "id": "w-8",
+        "id": "w-9",
         "from": {
           "kind": "port",
           "componentId": "q_out",
@@ -604,7 +633,7 @@
         "points": []
       },
       {
-        "id": "w-9",
+        "id": "w-10",
         "from": {
           "kind": "port",
           "componentId": "vmax",
@@ -618,7 +647,7 @@
         "points": []
       },
       {
-        "id": "w-10",
+        "id": "w-11",
         "from": {
           "kind": "port",
           "componentId": "acc",
@@ -632,7 +661,7 @@
         "points": []
       },
       {
-        "id": "w-11",
+        "id": "w-12",
         "from": {
           "kind": "port",
           "componentId": "c_area",
@@ -646,7 +675,7 @@
         "points": []
       },
       {
-        "id": "w-12",
+        "id": "w-13",
         "from": {
           "kind": "port",
           "componentId": "h",
@@ -660,7 +689,7 @@
         "points": []
       },
       {
-        "id": "w-13",
+        "id": "w-14",
         "from": {
           "kind": "port",
           "componentId": "c_hmax",
@@ -674,7 +703,7 @@
         "points": []
       },
       {
-        "id": "w-14",
+        "id": "w-15",
         "from": {
           "kind": "port",
           "componentId": "acc",
@@ -688,7 +717,7 @@
         "points": []
       },
       {
-        "id": "w-15",
+        "id": "w-16",
         "from": {
           "kind": "port",
           "componentId": "acc",
@@ -702,7 +731,7 @@
         "points": []
       },
       {
-        "id": "w-16",
+        "id": "w-17",
         "from": {
           "kind": "port",
           "componentId": "acc",
@@ -716,7 +745,7 @@
         "points": []
       },
       {
-        "id": "w-17",
+        "id": "w-18",
         "from": {
           "kind": "port",
           "componentId": "h",
@@ -730,7 +759,7 @@
         "points": []
       },
       {
-        "id": "w-18",
+        "id": "w-19",
         "from": {
           "kind": "port",
           "componentId": "level_percent",
@@ -744,7 +773,7 @@
         "points": []
       },
       {
-        "id": "w-19",
+        "id": "w-20",
         "from": {
           "kind": "port",
           "componentId": "acc",
@@ -852,7 +881,7 @@
         "kind": "text",
         "x": 12,
         "y": 300,
-        "value": "saída (bomba ou válvula)",
+        "value": "saída (bomba, válvula ou orifício)",
         "fontSize": 10,
         "textAnchor": "start",
         "color": "#334155"
@@ -975,6 +1004,7 @@
     "c_area",
     "c_hmax",
     "c_k",
-    "c_valve"
+    "c_torr",
+    "c_outlet"
   ]
 }

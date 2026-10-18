@@ -7362,8 +7362,14 @@ function persistInstrumentPopup(popup: InstrumentPopupState): void {
   }, 180));
 }
 
+/** Capacidade do histórico do Oscope no Core (`Oscope::kHistoryCapacity`). */
+const SCOPE_HISTORY_CAPACITY = 512;
+
 function requestInstrumentHistoryRefresh(componentId: string): void {
-  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInstrumentHistory", componentId });
+  // Com histórico real já recebido, pede só o que vier depois da última amostra (deltas).
+  const last = realScopeHistoryByComponentId.get(componentId)?.[0]?.timestampsNs;
+  const sinceNs = last && last.length ? last[last.length - 1] : undefined;
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInstrumentHistory", componentId, ...(sinceNs !== undefined ? { sinceNs } : {}) });
 }
 
 function toggleInstrumentPopup(component: WebviewComponentModel): void {
@@ -11974,6 +11980,9 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     showPidDialog(message.componentId, message.html);
     return;
   }
+  if (message.type === "pidDialogSeries") {
+    pidDialogIframe?.contentWindow?.postMessage({ type: "pidSeries", reset: message.reset, t: message.t, pv: message.pv, sp: message.sp, mv: message.mv }, "*");
+  }
   if (message.type === "pidDialogSnapshot") {
     pidDialogIframe?.contentWindow?.postMessage({ type: "pidSnapshot", values: message.values, dt: message.dt }, "*");
     return;
@@ -12203,7 +12212,15 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   }
 
   if (message.type === "instrumentHistory") {
-    if (message.oscope) realScopeHistoryByComponentId.set(message.componentId, message.oscope.channels);
+    const previous = realScopeHistoryByComponentId.get(message.componentId);
+    if (message.oscope && message.append && previous) { // deltas: anexa e mantém a janela do instrumento (512 amostras)
+      realScopeHistoryByComponentId.set(message.componentId, previous.map((channel, index) => {
+        const incoming = message.oscope!.channels[index] ?? { timestampsNs: [], values: [] };
+        const timestampsNs = [...channel.timestampsNs, ...incoming.timestampsNs], values = [...channel.values, ...incoming.values];
+        const drop = Math.max(0, timestampsNs.length - SCOPE_HISTORY_CAPACITY);
+        return { timestampsNs: timestampsNs.slice(drop), values: values.slice(drop) };
+      }));
+    } else if (message.oscope && !message.append) realScopeHistoryByComponentId.set(message.componentId, message.oscope.channels);
     if (message.logic) realLogicHistoryByComponentId.set(message.componentId, message.logic);
     refreshInstrumentPopupPlots();
   }

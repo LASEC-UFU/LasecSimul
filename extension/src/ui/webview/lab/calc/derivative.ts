@@ -6,6 +6,7 @@ import { Ast, AstNode, arg, argNode, argString, dependsOn, isNode, substitute } 
  * (ex.: limite dentro de uma derivada).
  */
 export function differentiate(ast: Ast, v: string): Ast {
+  if (isNode(ast) && ast[0] === "If" && !dependsOn(arg(ast, 2), v) && !dependsOn(arg(ast, 3), v) && !dependsOn(arg(ast, 1), v)) return 0;
   if (!dependsOn(ast, v)) return 0;
   if (ast === v) return 1;
   if (!isNode(ast)) return 0;
@@ -32,6 +33,11 @@ export function differentiate(ast: Ast, v: string): Ast {
     case "Log": return S(["Divide", d(a()), ["Multiply", a(), ["Ln", 10]]]);
     case "Abs": return S(["Multiply", d(a()), ["Sign", a()]]);
     case "Sign": return 0; // fora de 0; em 0 a própria função é indefinida
+    case "If": { // derivada por partes; a fronteira é conferida na avaliação (continuidade + derivadas laterais)
+      const condition = arg(ast, 1);
+      const junction: Ast = isNode(condition) ? ["Junction", arg(condition, 1), arg(condition, 2), arg(ast, 2), arg(ast, 3)] : 0;
+      return ["If", condition, d(arg(ast, 2)), d(arg(ast, 3)), junction];
+    }
     case "D": return differentiate(differentiate(a(), argString(ast, 2)), v);
     case "Integrate": { // Leibniz / Teorema Fundamental, com integrando independente de v
       const limits = argNode(ast, 2);

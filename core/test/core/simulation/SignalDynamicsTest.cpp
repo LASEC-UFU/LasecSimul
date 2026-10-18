@@ -329,6 +329,38 @@ void accumulatorProjectsOnSampledBoundary() {
           "no topo, passa a transbordar 0,6 L/s");
 }
 
+/** docs/53 §2.6 itens 3-5: instante exato de contato e identidade de balanço em toda linha. */
+void accumulatorContactTimesAndBalanceAtSchedulerStep() {
+    {   // Transbordo: de 20 L com líquida 0,6 L/s até 100 L -> contato em 133,333... s.
+        AccumulatorRig rig = accumulatorRig(20.0, 0.0, 100.0, 1.0, 0.4);
+        CHECK(rig.value(AccumulatorUpperContactTime) == -1.0, "sem contato no início");
+        for (int i = 0; i < 14000; ++i) rig.step(0.01);
+        CHECK(std::abs(rig.value(AccumulatorUpperContactTime) - 400.0 / 3.0) <= 1e-9, "contato com o topo em 133,333... s (<= 1 ns)");
+        CHECK(rig.value(AccumulatorLowerContactTime) == -1.0, "nenhum contato com o fundo");
+    }
+    {   // Esvaziamento: de 20 L, saída 2 L/s -> contato com o fundo em 10 s; depois saída real 0 e falta 2 L/s.
+        AccumulatorRig rig = accumulatorRig(20.0, 0.0, 100.0, 0.0, 2.0);
+        for (int i = 0; i < 1200; ++i) rig.step(0.01);
+        CHECK(std::abs(rig.value(AccumulatorLowerContactTime) - 10.0) <= 1e-9, "contato com o fundo em 10 s (<= 1 ns)");
+        CHECK(rig.value(AccumulatorOutActual) == 0.0 && rig.value(AccumulatorUnmet) == 2.0, "no fundo: saída real 0, falta 2 L/s");
+    }
+    {   // Passo do Scheduler (100 µs) por 60 s com demandas variando: identidade <= 1e-12·max(1, Vmax) em toda amostra.
+        AccumulatorRig rig = accumulatorRig(20.0, 0.0, 100.0, 1.0, 0.4);
+        double worst = 0.0;
+        for (int i = 0; i < 600000; ++i) {
+            if (i % 50000 == 0) {
+                rig.runtime.setExternalReal("qin", (i / 50000) % 3 == 0 ? 25.0 : 0.7);
+                rig.runtime.setExternalReal("qout", (i / 50000) % 2 == 0 ? 0.4 : 30.0);
+            }
+            rig.step(1e-4);
+            if (i % 997 == 0) worst = std::max(worst, std::abs(rig.residual()));
+        }
+        CHECK(worst <= 1e-12 * 100.0, "identidade de balanço <= 1e-10 L em 600 mil passos de 100 µs");
+        CHECK(rig.value(AccumulatorCumOverflow) > 0.0 && rig.value(AccumulatorCumUnmet) > 0.0, "o roteiro tocou o topo e o fundo");
+        std::printf("  resíduo máximo em 600 mil passos: %.3g L\n", worst);
+    }
+}
+
 void accumulatorRejectsInvalidDefinitions() {
     const auto rejects = [](SignalGraphDefinition graph) {
         try { SignalCompiler::compile(graph); } catch (const std::invalid_argument&) { return true; }
@@ -361,6 +393,7 @@ int main() {
     remainingContinuousPrimitivesAndChainExecute();
     accumulatorMatchesConservativeOracle();
     accumulatorProjectsOnSampledBoundary();
+    accumulatorContactTimesAndBalanceAtSchedulerStep();
     accumulatorRejectsInvalidDefinitions();
     if (failures == 0) std::puts("SignalDynamicsTest: OK");
     return failures == 0 ? 0 : 1;

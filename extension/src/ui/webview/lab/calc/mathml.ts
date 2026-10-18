@@ -3,6 +3,7 @@ import { Ast, arg, argNode, argString } from "./ast.js";
 const PREC: Readonly<Record<string, number>> = { Add: 1, Subtract: 1, Multiply: 2, Divide: 3, Negate: 3, Power: 4 };
 const FN_LABEL: Readonly<Record<string, string>> = { Sin: "sen", Cos: "cos", Tan: "tg", Exp: "exp", Ln: "ln", Log: "log", Sign: "sgn" };
 const IMPLICIT_RIGHT = new Set(["Power", "Sin", "Cos", "Tan", "Exp", "Ln", "Log", "Sqrt", "Call"]);
+const COMPARISON_SIGN: Readonly<Record<string, string>> = { Less: "&lt;", LessEqual: "≤", Greater: "&gt;", GreaterEqual: "≥" };
 
 export const escapeXml = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
 
@@ -37,6 +38,9 @@ export function astToMathML(ast: Ast, display: "inline" | "block" = "inline"): s
       case "Sqrt": return `<msqrt>${go(arg(node, 1))}</msqrt>`;
       case "Abs": return `<mrow><mo>|</mo>${go(arg(node, 1))}<mo>|</mo></mrow>`;
       case "Equal": return `<mrow>${go(arg(node, 1))}<mo>=</mo>${go(arg(node, 2))}</mrow>`;
+      case "Less": case "LessEqual": case "Greater": case "GreaterEqual":
+        return `<mrow>${go(arg(node, 1))}<mo>${COMPARISON_SIGN[head]}</mo>${go(arg(node, 2))}</mrow>`;
+      case "If": return `<mrow><mo>{</mo><mtable columnalign="left"><mtr><mtd>${go(arg(node, 2))}</mtd><mtd><mtext>se&#xA0;</mtext>${go(arg(node, 1))}</mtd></mtr><mtr><mtd>${go(arg(node, 3))}</mtd><mtd><mtext>caso contrário</mtext></mtd></mtr></mtable></mrow>`;
       case "Call": return fn(escapeXml(argString(node, 1)), arg(node, 2));
       case "Integrate": {
         const L = argNode(node, 2);

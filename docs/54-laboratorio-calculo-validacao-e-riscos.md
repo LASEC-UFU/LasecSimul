@@ -16,18 +16,20 @@ flowchart LR
   M6 --> M7[M7 expansão e otimizações]
 ```
 
-## 0. Estado da implementação (2026-10-17)
+## 0. Estado da implementação (2026-10-18)
 
 Entregue e verificado por execução **[E]**; o resto do documento continua sendo o plano.
 
 | Marco | Entregue | Verificação |
 |---|---|---|
-| M0 | painel PID com tempo simulado (`sampleTimestampNs`), CDN fora dos CSP, campo morto `telemetryRateHz` removido | `npm test` |
+| M0 | painel PID com tempo simulado (`sampleTimestampNs`), CDN fora dos CSP, campo morto `telemetryRateHz` removido; harness de linha de base (§0.1) | `npm test`; `npm run test:telemetry:baseline` |
 | M1 | `extension/src/ui/webview/lab/{calc,graph,editor}`: parser/AST, derivada simbólica, compilação sem `eval`, limites/∫/Σ/Π com proveniência, `LabGraph`, modelo do editor com templates de Cálculo | 15 + 5 + 12 testes |
-| M2 | `CalculusLabPanel` + comando `lasecsimul.openCalculusLab`, atividade Limites, editor MathML, teclado (123/f(x)/Cálculo), calculadora, modo professor, `calculusLab` no `.lsproj` | `npm run test:lab:e2e` (11 checks no VS Code real) |
+| M2 | `CalculusLabPanel` + comando `lasecsimul.openCalculusLab`, seis tipos de atividade (funções, sensor, limites, eixo, primeira ordem, tanque) em abas na ordem pedagógica, etapas guiadas (`StepsPanel`), editor MathML, teclado (123/f(x)/Cálculo), calculadora, modo professor, modo apresentação, `calculusLab` no `.lsproj` | `npm run test:lab:e2e` (30 checks no VS Code real) |
 | M3 | `core/src/simulation/SignalRecorder.hpp` (anéis, grade por assinatura, linha extra no mesmo t, eventos `start`/`parameter`, gerações, `lost`); `subscribeSeries`/`unsubscribeSeries`; grupo `series` no `getTelemetryFrame`; `appliedAtNs` em `setProperty`/`setSubcircuitChildProperty`; unidades de comprimento/área/volume/vazão/velocidade no Core espelhadas em `lab/units.ts` | `signal_recorder_test`; `units.test`; `seriesRecorder.realCore.test` |
-| M4 | `SignalBlockKind::Accumulator` + `Element`; `control.accumulator` (10 saídas nomeadas); `Tank`/`control.tank` removidos; 10 instâncias, 5 geradores, 5 projetos `trm/` e o bloco `control_accumulator.lssubcircuit` migrados | `signal_dynamics_test` (oráculo da PoC); `process_subcircuit`, `control_block_subcircuit`, `signal_graph_*`; 26 testes de Core real dos modelos migrados com os mesmos valores |
-| M5 (vertical do tanque) | `subcircuits/process_hydraulic_tank.lssubcircuit` (gerador `scripts/generate-hydraulic-tank.py`); Host `SeriesStore`, `TankExperiment` (papel de `ExperimentSession` + `ParameterPolicy`), drenos de série no tick, ganchos de estado/reconstrução; Webview `SeriesBuffer` e `TankView` (processo, h(t), q(t), cursor, A/B, Riemann, equações, eventos, A ao vivo); `examples/calculo/laboratorio-calculo.lsproj` | `hydraulicTank.realCore.test` (aceites 1, 2, A ao vivo, válvula, esvaziamento); `SeriesStore.test`, `SeriesBuffer.test`; `npm run test:lab:tank:e2e` (19 checks) |
+| M4 | `SignalBlockKind::Accumulator` + `Element`; `control.accumulator` (12 saídas nomeadas, incluindo `upperContactTime`/`lowerContactTime`; vetor de 17 posições com 5 compensações de Neumaier ocultas); `Tank`/`control.tank` removidos; 10 instâncias, 5 geradores, 5 projetos `trm/` e o bloco `control_accumulator.lssubcircuit` migrados | `signal_dynamics_test` (oráculo da PoC); `process_subcircuit`, `control_block_subcircuit`, `signal_graph_*`; 26 testes de Core real dos modelos migrados com os mesmos valores |
+| M5 | Tanque (B): `process_hydraulic_tank.lssubcircuit` com saída bomba / válvula (q = k·h) / Torricelli (q = c·√h), A ao vivo com derramamento, eventos de contato com instante exato; primeira ordem (D): `process_first_order_lab.lssubcircuit`, 63,2 % e tangente em t₀; sensor 4–20 mA (A): `process_sensor_4_20.lssubcircuit` com saturação 3,8–20,5 mA e valor sem saturação. Host `SeriesStore`, `ProcessExperiment` (papel de `ExperimentSession` + `ParameterPolicy`, uma especificação por planta em `plants.ts`); Webview `SeriesBuffer`, `ProcessShell`, `TankView`, `FirstOrderView`, `SensorView`; exemplos `examples/calculo/{laboratorio-calculo,tanque,primeira-ordem,sensor,funcoes-e-limites}.lsproj` | `hydraulicTank.realCore.test` (8: aceites 1–8, 12, 13 e Torricelli); `firstOrderSensor.realCore.test` (5); `SeriesStore.test`, `SeriesBuffer.test`; `npm run test:lab:tank:e2e` (33 checks, incluindo itens 9, 10 e 14 de [53 §2.6](53-laboratorio-calculo-experimentos-e-tanque.md)) |
+| M6 | Editor de atividades no modo professor: lista (subir, descer, duplicar, remover, adicionar por tipo), formulário por tipo, etapas, parâmetros, escolha da planta do projeto, auditoria de referências (`audit.ts`, puro) com religar/desligar, desfazer/refazer da definição no Host (`labUndo`/`labRedo`, Ctrl+Z/Ctrl+Y), validação de expressões antes de gravar | `audit.test` (3); `npm run test:lab:e2e` (adicionar, gravar, desfazer, refazer) |
+| M7 | `calc-core`: comparações e `se(cond, a, b)` (por partes com MathML `cases`), derivada de por partes com checagem na junção, antiderivada simbólica (regras, por partes, condições de domínio), raízes, interseções, assíntotas, pontos de por partes abertos/fechados, ε–δ com contraexemplo; Torricelli no tanque; painel PID lendo séries do gravador (`PidSeriesFeed`) e desenhando com `media/pid/miniplot.js` (≈11 KB, inline no diálogo) — Plotly (3,6 MB) removido; janela do Oscope por deltas (`InstrumentHistoryFilter.hpp`); alças de gráfico acessíveis por teclado; CSS do laboratório em `media/lab` (empacotado no VSIX) | `analysis.test` (11), `calc.test` (15), `EditorModel.test` (15); `instrument_history_filter_test`; `oscopeHistory.realCore.test` (2); `noEval.test` (3); `npm run test:pid:e2e` (7) |
 
 **Decisões refinadas na implementação (substituem o texto anterior onde divergirem):**
 
@@ -42,9 +44,44 @@ Entregue e verificado por execução **[E]**; o resto do documento continua send
 5. **Grade de gravação por assinatura** (`periodNs`; 10 ms no tanque) em vez de "uma linha por ativação": o passo máximo do
    Scheduler é 100 µs e gravar todo passo estável inundaria o IPC.
 6. Unidades no Core em ASCII (`m2`, `m3/s`, `L/s`); `displayUnit` converte para exibição.
+7. **Contato com a fronteira tem instante exato.** O acumulador grava `upperContactTime`/`lowerContactTime` (instante dentro do passo em
+   que x tocou a borda); o Host gera os eventos de contato a partir dessas colunas, com tolerância de 1 ns na comparação de grade.
+8. **Somas compensadas (Neumaier).** Estado e acumulados carregam a compensação em 5 posições ocultas do vetor (largura 17); o
+   balanço fecha com resíduo 7,1·10⁻¹⁴ depois de 600 mil passos (`signal_dynamics_test`).
+9. **Oscope por deltas:** `latestNs` é o instante da amostra gravada por último, não o máximo — depois de Parar o buffer não é
+   limpo e as amostras novas (t pequeno) entram depois das antigas; `latestNs < sinceNs` faz o Host pedir o histórico inteiro.
+10. **Diálogo PID é um iframe `srcdoc`:** o service worker da Webview não atende requisições dele, então nenhum script externo
+    carrega ali; o miniplot vai inline com nonce (achado do `test:pid:e2e`; o carregador externo ficou só como alternativa).
+11. **Ids internos de subcircuito não repetem ids de pino** (o validador da extensão rejeita): no sensor, `i_raw`/`i_loop`
+    alimentam os pinos públicos `raw`/`current`.
 
-**Pendente:** experimentos D (primeira ordem) e A (sensor) de M5; painel PID lendo séries do gravador; eventos de contato com
-tempo exato `t*` (hoje o contato aparece na amostra seguinte, via `overflow`/`unmet`); M6 (editor de atividades) e M7.
+**Fora deste ciclo (registrado, não feito):** metas de §4 ainda sem medida — atraso Core→pixel p95 com ritmo 1× e memória com
+retenção de 30 min; otimizações 2–5 de §5 (hex → base64, pool de snapshots, inscrições de `getComponentTelemetryStates`, undo do
+editor); porte do plotter intervalar do GeoGebra (nenhum caso de teste exigiu). Um único painel do laboratório por janela, então
+"dois painéis compartilham uma inscrição" (§3.3) não se aplica. O teste de Core real `hartTt301Subcircuit` (Command 0, byte
+0x52 × 0x32 esperado) falha desde os commits do TT301, sem relação com o laboratório.
+
+### 0.1 Linha de base de telemetria (M0 e) [E]
+
+`npm run test:telemetry:baseline` (`extension/test/performance/telemetry-baseline.cjs`): Core Release, `realTimeRate = 1` (o padrão
+do Host), quadros a 20 Hz por 4 s, escada RC (fonte + terra + seções R–C), todos os componentes no grupo de estados e uma sonda por
+nó. Bytes = JSON da resposta; duração = ida e volta do pedido no Host.
+
+| Cenário | Bytes por quadro (p50 / p95) | Duração (p50 / p95 / máx.) |
+|---|---|---|
+| 10 componentes, 4 sondas | 440 / 441 B | 0,33 / 0,58 / 0,65 ms |
+| 100 componentes, 49 sondas | 3047 / 3076 B | 1,26 / 1,60 / 1,80 ms |
+
+Janela expandida do Oscope (4 canais × 512 amostras), bytes por quadro:
+
+| Intervalo de amostra | Estado inteiro | Delta (`history.sinceNs`) |
+|---|---|---|
+| 1 ms | 65 623 B | 6 909 B (p95 7 165 B): −89 % |
+| 50 µs | 65 623 B | 65 661 B: sem ganho — em tempo real entram 1000 amostras por quadro e o anel de 512 dá a volta |
+
+Com a simulação rodando, `getComponentState` é adiado quando o Scheduler está ocupado ("simulacao ocupada; telemetria adiada"):
+13–16 de ~80 pedidos por cenário; o Host já pula o quadro e pede de novo no seguinte. O gravador custa 5,2 ns por passo sem
+inscrição e 99,1 ns com 13 colunas (`signal_recorder_test`).
 
 ## 1. Marcos
 
@@ -195,7 +232,7 @@ tempo exato `t*` (hoje o contato aparece na amostra seguinte, via `overflow`/`un
 | Arrastar ponto/slider com 3 gráficos | entrada→fim do quadro p95 | ≤ 16 ms no VS Code | PoC Limites p95 ≈ 2 ms (Edge headless) [E] |
 | Mover cursor no tanque com histórico | entrada→fim do quadro p95 | ≤ 16 ms | PoC: 13,5 ms com redesenho total → 8,4 ms com camadas [E] |
 | Tanque, ritmo 1×, telemetria 20 Hz | atraso Core→pixel p95 | ≤ 150 ms | — |
-| Gravador, 13 colunas a 100 Hz | sobrecarga no passo do Core | ≤ 2 % do tempo de passo; 0 alocações | — |
+| Gravador, 13 colunas a 100 Hz | sobrecarga no passo do Core | ≤ 2 % do tempo de passo; 0 alocações | 99,1 ns por registro; 5,2 ns ocioso [E] |
 | Ingestão no Host | custo por tick | ≤ 1 ms | — |
 | Retenção 30 min do tanque | memória Host + Webview | ≤ 2 × 19 MB | estimativa [53 §2.4](53-laboratorio-calculo-experimentos-e-tanque.md) |
 | Partida do painel | até o 1º quadro | ≤ 500 ms | PoC ≈ 135 ms [E] |
@@ -206,12 +243,12 @@ Otimização sem ganho medido é revertida.
 
 ## 5. Otimizações de recursos existentes (registradas à parte; aplicar só com medição)
 
-1. Janela expandida do Oscope pede o histórico inteiro a cada quadro (até 4 × 512 × 16 B em hex) — trocar por deltas com sequência (M7).
+1. ~~Janela expandida do Oscope pede o histórico inteiro a cada quadro~~ — feito (M7): deltas por `sinceNs`, −89 % com amostra de 1 ms (§0.1).
 2. Estados no frame trafegam em hex (2× o tamanho) — base64 ou binário se M0 mostrar relevância.
 3. `publishTelemetrySnapshotIfRequested` aloca `shared_ptr` e vetores a cada publicação — pool se aparecer no perfil.
 4. `getComponentTelemetryStates` só insere inscrições (nunca limpa), diferente de `getTelemetryFrameSnapshot` — confirmar efeito e alinhar.
 5. Undo do editor clona projeto e HMI inteiros por edição — medir com projetos grandes antes de mudar.
-6. Plotly (3,6 MB) só para o painel PID — remover após migração (M7).
+6. ~~Plotly (3,6 MB) só para o painel PID~~ — removido (M7): `miniplot.js`, ≈11 KB.
 
 ## 6. Riscos
 

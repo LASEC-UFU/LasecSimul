@@ -3,6 +3,7 @@
 #include <cmath>
 #include <limits>
 #include "../ipc/IpcServer.hpp"
+#include "InstrumentHistoryFilter.hpp"
 #include "../ipc/Protocol.hpp"
 #include "../plugins/GlobalPluginCache.hpp"
 #include "../registry/PropertyJson.hpp"
@@ -2279,7 +2280,18 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             const nlohmann::json payload =
                 msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
             const uint32_t instanceId = static_cast<uint32_t>(std::stoul(payload.value("instanceId", std::string{"0"})));
-            const std::vector<uint8_t> state = session.getComponentState(instanceId);
+            std::vector<uint8_t> state = session.getComponentState(instanceId);
+            // Janela expandida do Oscope por deltas: `history` = {kind:"channelHistory", channels, sinceNs}
+            // devolve só as amostras novas (mesmo layout) e o maior timestamp do histórico inteiro.
+            nlohmann::json extra = nlohmann::json::object();
+            if (payload.contains("history") && payload.at("history").value("kind", std::string{}) == "channelHistory") {
+                const nlohmann::json& history = payload.at("history");
+                if (const auto filtered = app::filterChannelHistorySince(state, history.value("channels", uint32_t{0}),
+                                                                          history.value("sinceNs", uint64_t{0}))) {
+                    state = filtered->bytes;
+                    extra = {{"filtered", true}, {"latestNs", filtered->latestNs}};
+                }
+            }
             static const char kHexDigits[] = "0123456789abcdef";
             std::string hex;
             hex.reserve(state.size() * 2);
@@ -2288,7 +2300,8 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
                 hex.push_back(kHexDigits[byte & 0xF]);
             }
             resp.ok = true;
-            resp.payloadJson = nlohmann::json{{"stateHex", hex}}.dump();
+            extra["stateHex"] = std::move(hex);
+            resp.payloadJson = extra.dump();
         } catch (const std::exception& e) {
             resp.ok = false;
             resp.error = std::string("getComponentState falhou: ") + e.what();

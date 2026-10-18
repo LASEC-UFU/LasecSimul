@@ -116,6 +116,7 @@ public:
     static std::span<const std::string_view> accumulatorOutputPortIds() {
         static constexpr std::string_view kIds[] = {
             "out", "inActual", "outActual", "overflow", "unmet", "cumIn", "cumOut", "cumOverflow", "cumUnmet", "cumSpill",
+            "upperContactTime", "lowerContactTime",
         };
         return {kIds, std::size(kIds)};
     }

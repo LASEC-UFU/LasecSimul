@@ -421,6 +421,15 @@ export class CoreClient {
     return Buffer.from(stateHex, "hex");
   }
 
+  /** Histórico `channelHistory` só com as amostras posteriores a `sinceNs` (janela do Oscope por
+   * deltas). `filtered` falso = o Core não reconheceu o layout e mandou o estado inteiro; `latestNs`
+   * menor que `sinceNs` = o relógio voltou (Parar/Executar) e quem chama deve pedir tudo de novo. */
+  async getComponentHistorySince(instanceId: string, channels: number, sinceNs: number): Promise<{ state: Buffer; filtered: boolean; latestNs?: number }> {
+    const resp = await this.request("getComponentState", { instanceId, history: { kind: "channelHistory", channels, sinceNs } }) as
+      { stateHex: string; filtered?: boolean; latestNs?: number };
+    return { state: Buffer.from(resp.stateHex, "hex"), filtered: resp.filtered === true, latestNs: resp.latestNs };
+  }
+
   async getComponentStates(items: Array<{ key: string; instanceId: string }>): Promise<Record<string, Buffer>> {
     const resp = await this.request("getComponentStates", { items });
     const encoded = (resp as { states: Record<string, string> }).states;

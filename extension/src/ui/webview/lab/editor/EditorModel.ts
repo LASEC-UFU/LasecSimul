@@ -4,12 +4,13 @@
  * Comportamento estudado no `editor-base` do GeoGebra (EUPL-1.2; nenhum código copiado): árvore em vez de
  * texto; "/" leva o operando à esquerda para o numerador; "^" abre expoente; "|" abre módulo; nomes de
  * função viram template ao serem digitados; campo vazio exibe placeholder; setas e Tab percorrem campos.
- * Templates de Cálculo: ∫ definida, d/d□, lim (bilateral, ⁺, ⁻), Σ e Π.
+ * Templates de Cálculo: ∫ definida, d/d□, lim (bilateral, ⁺, ⁻), Σ e Π; função por partes ("se(" vira o
+ * template { □ se □ ; □ caso contrário }).
  */
 import { Ast, arg, argNode, argString, isNode } from "../calc/ast.js";
 import { escapeXml } from "../calc/mathml.js";
 
-export type TemplateKind = "frac" | "pow" | "sqrt" | "abs" | "paren" | "fn" | "int" | "deriv" | "lim" | "sum" | "prod";
+export type TemplateKind = "frac" | "pow" | "sqrt" | "abs" | "paren" | "fn" | "int" | "deriv" | "lim" | "sum" | "prod" | "cases";
 interface Seq { kind: "seq"; id: number; items: Item[] }
 interface CharItem { kind: "char"; c: string }
 interface TemplateItem { kind: TemplateKind; fields: Seq[]; name?: string; dir?: number }
@@ -17,7 +18,7 @@ type Item = CharItem | TemplateItem;
 interface Cursor { seq: Seq; offset: number }
 interface Parent { node: TemplateItem; field: number; owner: Seq }
 
-const OPERATORS = new Set(["+", "−", "·", "=", "<", ">"]);
+const OPERATORS = new Set(["+", "−", "·", "=", "<", ">", "≤", "≥"]);
 /** Nomes digitados que viram template (mais longos primeiro). */
 const WORDS: ReadonlyArray<readonly [string, { kind: TemplateKind | "char"; name?: string; c?: string }]> = [
   ["sqrt", { kind: "sqrt" }], ["prod", { kind: "prod" }], ["sum", { kind: "sum" }], ["int", { kind: "int" }],
@@ -27,7 +28,7 @@ const WORDS: ReadonlyArray<readonly [string, { kind: TemplateKind | "char"; name
 ];
 const FN_LABEL: Readonly<Record<string, string>> = { sin: "sen", cos: "cos", tan: "tg", exp: "exp", ln: "ln", log: "log" };
 /** Campos que contam para "template vazio" (variável e início pré-preenchidos não contam). */
-const CONTENT_FIELDS: Partial<Record<TemplateKind, readonly number[]>> = { int: [0, 1, 2], deriv: [1], lim: [1, 2], sum: [2, 3], prod: [2, 3] };
+const CONTENT_FIELDS: Partial<Record<TemplateKind, readonly number[]>> = { int: [0, 1, 2], deriv: [1], lim: [1, 2], sum: [2, 3], prod: [2, 3], cases: [0, 1, 2] };
 const CARET = '<mspace class="caret" width="0.08em" height="0.95em" depth="0.2em"></mspace>';
 
 let nextSeqId = 0;
@@ -131,15 +132,38 @@ export class EditorModel {
   private typeChar(c: string): void {
     if (c === "/" || c === "÷") { this.makeFraction(); return; }
     if (c === "^") { this.insertTemplateRaw("pow"); return; }
-    if (c === "(" || c === "[") { this.insertTemplateRaw("paren"); return; }
+    if (c === "(" || c === "[") {
+      if (c === "(" && this.takeWord(["se", "if"])) { this.insertTemplateRaw("cases"); return; }
+      this.insertTemplateRaw("paren");
+      return;
+    }
     if (c === ")" || c === "]") { this.closeParen(); return; }
     if (c === "|") { this.insertTemplateRaw("abs"); return; }
     if (c === "√") { this.insertTemplateRaw("sqrt"); return; }
     if (c === "²") { this.insertTemplateRaw("pow2"); return; }
     const mapped = c === "*" || c === "×" ? "·" : c === "-" ? "−" : c === "." ? "," : c;
-    if (!/^[0-9,+−·=<>a-zA-ZΔπ∞]$/.test(mapped)) return;
+    if (mapped === "=" && this.mergeComparison()) return;
+    if (!/^[0-9,+−·=<>≤≥a-zA-ZΔπ∞]$/.test(mapped)) return;
     this.insert(chr(mapped));
     if (/[a-zA-Z]/.test(mapped)) this.detectWord();
+  }
+  /** "<" ou ">" seguido de "=" vira "≤"/"≥". */
+  private mergeComparison(): boolean {
+    const items = this.cursor.seq.items, previous = items[this.cursor.offset - 1];
+    if (!previous || previous.kind !== "char" || (previous.c !== "<" && previous.c !== ">")) return false;
+    items[this.cursor.offset - 1] = chr(previous.c === "<" ? "≤" : "≥");
+    return true;
+  }
+  /** Remove a palavra digitada logo antes do cursor se for uma das dadas. */
+  private takeWord(words: readonly string[]): boolean {
+    const items = this.cursor.seq.items;
+    let start = this.cursor.offset;
+    while (start > 0) { const it = items[start - 1]; if (!it || it.kind !== "char" || !/[a-zA-Z]/.test(it.c)) break; start--; }
+    const word = items.slice(start, this.cursor.offset).map((it) => (it.kind === "char" ? it.c : "")).join("");
+    if (!words.includes(word)) return false;
+    items.splice(start, this.cursor.offset - start);
+    this.cursor.offset = start;
+    return true;
   }
   private detectWord(): void {
     const items = this.cursor.seq.items;
@@ -181,6 +205,7 @@ export class EditorModel {
       case "deriv": node = tpl("deriv", [v(), seq()]); field = 1; break;
       case "lim": node = tpl("lim", [v(), seq(), seq()], { dir: options.dir ?? 0 }); field = 1; break;
       case "sum": case "prod": node = tpl(kind, [seq([chr("k")]), seq([chr("1")]), seq(), seq()]); field = 2; break;
+      case "cases": node = tpl("cases", [seq(), seq(), seq()]); break; // [valor se, condição, caso contrário]
     }
     this.insert(node);
     this.enter(node, field);
@@ -221,6 +246,7 @@ export class EditorModel {
         const up = input.key === "ArrowUp";
         const pairs: Partial<Record<TemplateKind, readonly [number, number]>> = {
           frac: up ? [1, 0] : [0, 1], int: up ? [0, 1] : [1, 0], sum: up ? [1, 2] : [2, 1], prod: up ? [1, 2] : [2, 1],
+          cases: up ? [2, 0] : [0, 2],
         };
         const pair = pairs[p.node.kind];
         if (pair && p.field === pair[0]) this.enter(p.node, pair[1], true);
@@ -268,7 +294,7 @@ export class EditorModel {
   }
   private seqText(s: Seq): string { return s.items.map((item) => this.itemText(item)).join(""); }
   private itemText(item: Item): string {
-    if (!isTemplate(item)) return item.c === "·" ? "*" : item.c === "−" ? "-" : item.c === "," ? "." : item.c;
+    if (!isTemplate(item)) return item.c === "·" ? "*" : item.c === "−" ? "-" : item.c === "," ? "." : item.c === "≤" ? "<=" : item.c === "≥" ? ">=" : item.c;
     const f = (i: number): string => this.seqText(item.fields[i] as Seq);
     switch (item.kind) {
       case "frac": return `((${f(0)})/(${f(1)}))`;
@@ -280,6 +306,7 @@ export class EditorModel {
       case "int": return `Integrate(${f(3)}, (${f(0)}), (${f(1)}), (${f(2)}))`;
       case "deriv": return `D(${f(0)}, (${f(1)}))`;
       case "lim": return `Limit(${f(0)}, (${f(1)}), ${item.dir ?? 0}, (${f(2)}))`;
+      case "cases": return `se(${f(1)}, (${f(0)}), (${f(2)}))`;
       default: return `${item.kind === "sum" ? "Sum" : "Product"}(${f(0)}, (${f(1)}), (${f(2)}), (${f(3)}))`;
     }
   }
@@ -324,13 +351,16 @@ export class EditorModel {
         const target = dir ? `<msup>${r(1)}<mo>${dir > 0 ? "+" : "−"}</mo></msup>` : r(1);
         return `<mrow ${at}><munder><mo movablelimits="false">lim</mo><mrow>${r(0)}<mo>→</mo>${target}</mrow></munder>${r(2)}</mrow>`;
       }
+      case "cases":
+        return `<mrow ${at}><mo>{</mo><mtable columnalign="left"><mtr><mtd>${r(0)}</mtd><mtd><mtext>se&#xA0;</mtext>${r(1)}</mtd></mtr><mtr><mtd>${r(2)}</mtd><mtd><mtext>caso contrário</mtext></mtd></mtr></mtable></mrow>`;
       default: return `<mrow ${at}><munderover><mo movablelimits="false">${item.kind === "sum" ? "∑" : "∏"}</mo><mrow>${r(0)}<mo>=</mo>${r(1)}</mrow>${r(2)}</munderover>${r(3)}</mrow>`;
     }
   }
 }
 
 /** AST do núcleo -> itens do editor (carregar uma expressão existente). */
-const PREC: Readonly<Record<string, number>> = { Add: 1, Subtract: 1, Multiply: 2, Divide: 5, Negate: 3, Power: 4 };
+const PREC: Readonly<Record<string, number>> = { Add: 1, Subtract: 1, Multiply: 2, Divide: 5, Negate: 3, Power: 4, Less: 0, LessEqual: 0, Greater: 0, GreaterEqual: 0 };
+const COMPARISON_CHAR: Readonly<Record<string, string>> = { Less: "<", LessEqual: "≤", Greater: ">", GreaterEqual: "≥" };
 function fromAst(node: Ast): Item[] {
   const prec = (x: Ast): number => (isNode(x) ? PREC[x[0]] ?? 5 : typeof x === "number" && x < 0 ? 3 : 5);
   const wrap = (x: Ast, min: number): Item[] => (prec(x) < min ? [tpl("paren", [seq(fromAst(x))])] : fromAst(x));
@@ -365,6 +395,8 @@ function fromAst(node: Ast): Item[] {
       const [v, m, n] = limits(argNode(node, 2)) as [Seq, Seq, Seq];
       return [tpl(node[0] === "Sum" ? "sum" : "prod", [v, m, n, seq(fromAst(a()))])];
     }
+    case "Less": case "LessEqual": case "Greater": case "GreaterEqual": return [...wrap(a(), 1), chr(COMPARISON_CHAR[node[0]] as string), ...wrap(b(), 1)];
+    case "If": return [tpl("cases", [seq(fromAst(b())), seq(fromAst(a())), seq(fromAst(arg(node, 3)))])];
     default: throw new Error(`não há template para ${node[0]}`);
   }
 }

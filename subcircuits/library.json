@@ -42,6 +42,14 @@
       "manifest": "process_hydraulic_tank.lssubcircuit"
     },
     {
+      "typeId": "subcircuits.process.first_order_lab",
+      "manifest": "process_first_order_lab.lssubcircuit"
+    },
+    {
+      "typeId": "subcircuits.process.sensor_4_20",
+      "manifest": "process_sensor_4_20.lssubcircuit"
+    },
+    {
       "typeId": "subcircuits.tdps.basic_flow_loop",
       "manifest": "tdps_basic_flow_loop.lssubcircuit"
     },

@@ -12,6 +12,10 @@ Aceita e implementada (2026-10-17): `SignalBlockKind::Accumulator` + `Element`, 
 ver [`docs/54 §0`](../54-laboratorio-calculo-validacao-e-riscos.md)). `Tank` removido e instâncias migradas. Oráculo executável:
 [`docs/poc/laboratorio-calculo-limites/accumulator.mjs`](../poc/laboratorio-calculo-limites/accumulator.mjs).
 
+Complemento (2026-10-18): 12 saídas publicadas, com `upperContactTime`/`lowerContactTime` (instante exato do contato dentro
+do passo, −1 sem contato); somas compensadas de Neumaier em 5 posições ocultas do vetor (largura 17) — resíduo de balanço
+7,1·10⁻¹⁴ depois de 600 mil passos.
+
 ## Contexto
 
 `Tank` integra `(in − outflow)/area` e aplica `max(0, …)`: o volume que "atravessaria" zero desaparece sem registro.

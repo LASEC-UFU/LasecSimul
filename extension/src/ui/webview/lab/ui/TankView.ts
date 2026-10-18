@@ -1,14 +1,15 @@
-import type { TankActivity, RiemannMethod } from "../activity.js";
+import type { RiemannMethod, TankActivity } from "../activity.js";
 import { LabGraph } from "../graph/LabGraph.js";
 import type { LabPlantStatus, LabRunStatus, LabSeriesDelta, LabToHostMessage } from "../messages.js";
-import { LAB_MESSAGE_VERSION } from "../messages.js";
-import { SeriesBuffer, riemannOnSteps, type BufferEvent } from "../series/SeriesBuffer.js";
-import { TANK_PARAMETERS, type TankParameterId, type TankParameterValues } from "../tankModel.js";
+import type { ParameterValues } from "../plants.js";
+import { riemannOnSteps, type BufferEvent } from "../series/SeriesBuffer.js";
 import { byId, clear, svg } from "./dom.js";
 import { iconButton } from "./icons.js";
 import type { ViewStats } from "./LimitsView.js";
+import { ProcessShell } from "./processShell.js";
+import { StepsPanel } from "./steps.js";
 
-export interface TankViewOptions {
+export interface ProcessViewOptions {
   teacher: boolean;
   send: (message: LabToHostMessage) => void;
   onSave: (activity: TankActivity) => void;
@@ -16,17 +17,13 @@ export interface TankViewOptions {
 
 const nf = (x: number, d = 3): string => (Number.isFinite(x) ? x.toLocaleString("pt-BR", { maximumFractionDigits: d }) : "—");
 const GEO = { W: 640, H: 230, Lm: 54, R: 12, T: 16, B: 28 };
-const SLIDERS: ReadonlyArray<{ id: TankParameterId; label: string; unit: string }> = [
-  { id: "qIn", label: "Vazão de entrada", unit: " L/s" },
-  { id: "qOut", label: "Vazão de saída (bomba)", unit: " L/s" },
-  { id: "k", label: "Válvula k", unit: " L/(s·m)" },
-  { id: "area", label: "Área do tanque A", unit: " m²" },
-];
+/** Gráfico 1: nível, volume ou a acumulada V0 + ∫q (Teorema Fundamental). */
+type FirstChart = "h" | "V" | "ftc";
 
 interface Sample {
   t: number;
-  V: ReturnType<SeriesBuffer["linearAt"]>;
-  h: ReturnType<SeriesBuffer["linearAt"]>;
+  V: ReturnType<ProcessShell["buffer"]["linearAt"]>;
+  h: ReturnType<ProcessShell["buffer"]["linearAt"]>;
   A: number; q: number; qIn: number; qOut: number; overflow: number; unmet: number;
   cumIn: number; cumOut: number; cumOverflow: number; cumSpill: number;
 }
@@ -35,63 +32,47 @@ interface RiemannResult { a: number; b: number; n: number; method: RiemannMethod
 /**
  * Atividade "Tanque — da vazão à integral" (docs/53 §2). A física roda no Core (subcircuito
  * `hydraulic_tank`, acumulador conservativo); esta vista só lê as séries gravadas que o Host repassa:
- * gráficos, cursor, Riemann e equações nunca consultam estado interno. Parâmetros vão ao Core pelo
- * Host (política live/stop-required); o valor exibido é o aceito.
+ * gráficos, cursor, Riemann e equações nunca consultam estado interno.
  */
 export class TankView {
   readonly graph = new LabGraph();
-  readonly buffer = new SeriesBuffer();
+  readonly shell: ProcessShell;
   readonly stats: ViewStats = { renders: {}, latencies: [], frames: 0 };
   private readonly dirty = new Set<string>();
   private readonly drawables: Array<{ id: string; inputs: string[]; draw: () => void }> = [];
   private frameRequested = false;
   private pendingInputAt: number | undefined;
   private disposed = false;
-  /** Último valor aceito pelo Core para cada parâmetro (o slider volta a ele se o Host recusar). */
-  private readonly accepted: TankParameterValues;
-  private readonly pendingSend = new Map<TankParameterId, number>();
-  private plantComponentId: string | undefined;
 
-  constructor(private readonly root: HTMLElement, private activity: TankActivity, private readonly options: TankViewOptions) {
-    this.accepted = { ...activity.parameters };
+  constructor(private readonly root: HTMLElement, private activity: TankActivity, private readonly options: ProcessViewOptions) {
+    this.shell = new ProcessShell("tk", activity, this.graph, options.send, () => this.markInput());
     this.renderLayout();
     this.buildGraph();
     this.buildDrawables();
     this.bindControls();
     this.requestFrame();
-    options.send({ version: LAB_MESSAGE_VERSION, type: "labActivate", activity });
+    options.send({ version: 1, type: "labActivate", activity });
   }
 
-  dispose(): void { this.disposed = true; clear(this.root); }
+  get buffer() { return this.shell.buffer; }
+
+  dispose(): void { this.disposed = true; this.shell.dispose(); clear(this.root); }
 
   // ------------------------------------------------------------------ mensagens do Host
-  plant(status: LabPlantStatus): void {
-    this.plantComponentId = status.state === "bound" ? status.componentId : undefined;
-    this.graph.set("plant", status);
-  }
-  runState(status: LabRunStatus): void { this.graph.set("status", status); }
-  series(delta: LabSeriesDelta): void {
-    this.buffer.ingest(delta);
-    this.graph.set("rev", this.buffer.revision);
-  }
-  parameterAccepted(id: TankParameterId, value: number): void {
-    this.accepted[id] = value;
-    this.graph.set("params", { ...this.accepted });
-    byId("tkParamError").textContent = "";
-  }
-  parameterRejected(id: TankParameterId, reason: string): void {
-    byId("tkParamError").textContent = reason;
-    this.showParameter(id, this.accepted[id]);
-  }
+  plant(status: LabPlantStatus): void { this.shell.plant(status); }
+  runState(status: LabRunStatus): void { this.shell.runState(status); }
+  series(delta: LabSeriesDelta): void { this.shell.series(delta); }
+  parameterAccepted(id: string, value: number): void { this.shell.parameterAccepted(id, value); }
+  parameterRejected(id: string, reason: string): void { this.shell.parameterRejected(id, reason); }
 
   currentActivity(): TankActivity {
     const questionInput = document.getElementById("tkQuestionInput") as HTMLInputElement | null;
     const question = (this.options.teacher ? questionInput?.value.trim() : "") || this.activity.question;
     const a = this.graph.get<number>("a"), b = this.graph.get<number>("b");
     return {
-      ...this.activity, question, parameters: { ...this.accepted },
+      ...this.activity, question, parameters: { ...this.shell.accepted },
       riemann: { a: Math.min(a, b), b: Math.max(a, b, Math.min(a, b) + 0.01), n: this.graph.get<number>("n"), method: this.graph.get<RiemannMethod>("method") },
-      ...(this.plantComponentId ? { plantComponentId: this.plantComponentId } : {}),
+      ...(this.shell.plantComponentId ? { plantComponentId: this.shell.plantComponentId } : {}),
     };
   }
 
@@ -99,29 +80,17 @@ export class TankView {
 
   // ------------------------------------------------------------------ layout
   private renderLayout(): void {
-    const a = this.activity;
-    const slider = (s: (typeof SLIDERS)[number]): string => {
-      const spec = TANK_PARAMETERS.find((p) => p.id === s.id)!;
-      return `<label id="tkLabel_${s.id}">${s.label} <output id="tkOut_${s.id}"></output>
-        <input id="tk_${s.id}" type="range" min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${a.parameters[s.id]}" /></label>`;
-    };
     this.root.innerHTML = `
 <section class="lim-question"><h1 id="tkQuestion"></h1>
   <p class="note">O processo roda no simulador; gráficos, cursor e Riemann leem só as séries gravadas pelo Core.</p></section>
 <div id="tkPlant" class="plant-status" role="status"></div>
+<div id="tkSteps"></div>
 <main class="tank-layout">
   <section class="panel dark" aria-label="Processo">
     <h2>Processo <span id="tkStatus" class="status" role="status"></span></h2>
     <svg id="tkTank" viewBox="0 0 320 300" role="img" aria-labelledby="tkTankCaption"></svg>
     <p id="tkTankCaption" class="note"></p>
-    <div class="sliders">${SLIDERS.map(slider).join("")}</div>
-    <div class="config">
-      <label>Saída <select id="tkMode"><option value="0">bomba (vazão imposta)</option><option value="1">válvula (q = k·h)</option></select></label>
-      <label>V₀ (L) <input id="tkV0" type="number" min="0" max="400" step="1" /></label>
-      <label>h<sub>máx</sub> (m) <input id="tkHMax" type="number" min="0.2" max="2" step="0.05" /></label>
-      <p id="tkParamError" class="error" role="alert"></p>
-    </div>
-    <div id="tkRunBar" class="toolbar" role="toolbar" aria-label="Execução"></div>
+    ${this.shell.controlsHtml()}
     <div id="tkTeacher" class="teacher" hidden>
       <label>Pergunta <input id="tkQuestionInput" type="text" /></label>
       <p class="note">Os valores atuais dos controles e o intervalo de Riemann viram os valores iniciais da atividade.</p>
@@ -129,8 +98,10 @@ export class TankView {
     </div>
   </section>
   <section class="panel" aria-label="Gráficos">
-    <div class="chart-head"><h2>Nível × tempo</h2><span id="tkModeBadge" class="badge"></span></div>
-    <svg id="tkChartH" class="chart" viewBox="0 0 640 230" tabindex="0" aria-label="Gráfico do nível; setas movem o cursor, Esc volta ao vivo"></svg>
+    <div class="chart-head"><h2 id="tkChartTitle">Nível × tempo</h2>
+      <label>gráfico <select id="tkFirstChart"><option value="h">h(t)</option><option value="V">V(t)</option><option value="ftc">V₀ + ∫q (TFC)</option></select></label>
+      <span id="tkModeBadge" class="badge"></span></div>
+    <svg id="tkChartH" class="chart" viewBox="0 0 640 230" tabindex="0" aria-label="Gráfico 1; setas movem o cursor, Esc volta ao vivo"></svg>
     <div class="chart-head"><h2>Vazão líquida × tempo + Riemann</h2>
       <label>método <select id="tkMethod"><option value="left">esquerda</option><option value="right">direita</option><option value="midpoint">ponto médio</option><option value="trapezoid">trapézio</option></select></label>
       <label>n <input id="tkN" type="range" min="1" max="200" step="1" /><output id="tkNOut"></output></label>
@@ -141,36 +112,30 @@ export class TankView {
 <section class="tank-bottom">
   <div id="tkEquations" class="equations" aria-live="polite"></div>
   <div id="tkRiemann" class="riemann" aria-live="polite"></div>
-  <div class="question"><strong>Explore:</strong> com a válvula, a área de Riemann entre a e b converge para V(b) − V(a)? E se você mudar A no meio do intervalo?
+  <div class="question"><strong>Eventos</strong>
     <ul id="tkEvents" class="events" aria-label="Eventos"></ul>
   </div>
 </section>`;
-    byId("tkQuestion").textContent = a.question;
-    byId<HTMLInputElement>("tkQuestionInput").value = a.question;
+    byId("tkQuestion").textContent = this.activity.question;
+    byId<HTMLInputElement>("tkQuestionInput").value = this.activity.question;
     byId("tkTeacher").hidden = !this.options.teacher;
     if (this.options.teacher) {
       const save = iconButton("save", "Gravar atividade no projeto", { id: "tkSave" });
       save.addEventListener("click", () => this.options.onSave(this.currentActivity()));
       byId("tkTeacher").appendChild(save);
     }
-    for (const s of SLIDERS) this.showParameter(s.id, a.parameters[s.id]);
-    this.showParameter("valve", a.parameters.valve);
-    this.showParameter("v0", a.parameters.v0);
-    this.showParameter("hMax", a.parameters.hMax);
+    new StepsPanel(byId("tkSteps"), this.activity.steps);
   }
 
   // ------------------------------------------------------------------ grafo
   private buildGraph(): void {
     const g = this.graph, r = this.activity.riemann;
-    g.source("rev", 0, { kind: "series" });
-    g.source("status", "stopped" as LabRunStatus, { kind: "execution" });
-    g.source("plant", { state: "missing" } as LabPlantStatus, { kind: "execution" });
-    g.source("params", { ...this.accepted }, { kind: "parameter-mirror", equals: (x, y) => JSON.stringify(x) === JSON.stringify(y) });
     g.source("cursor", null as number | null, { kind: "inspection" });
     g.source("a", r.a, { kind: "inspection" });
     g.source("b", r.b, { kind: "inspection" });
     g.source("n", r.n, { kind: "inspection" });
     g.source("method", r.method, { kind: "inspection" });
+    g.source("firstChart", "h" as FirstChart, { kind: "view" });
     g.derived("now", ["rev"], () => this.buffer.now);
     g.derived("window", ["now"], (now: number) => ({ t0: 0, t1: Math.max(60, Math.ceil((now + 1) / 30) * 30) }), { equals: (x, y) => JSON.stringify(x) === JSON.stringify(y) });
     g.derived("inspectT", ["cursor", "now"], (cursor: number | null, now: number) => (cursor === null ? now : Math.min(cursor, now)));
@@ -203,18 +168,25 @@ export class TankView {
   // ------------------------------------------------------------------ desenho com invalidação seletiva
   private buildDrawables(): void {
     this.drawables.push(
-      { id: "baseH", inputs: ["window", "rev", "params"], draw: () => this.drawBase("h") },
+      { id: "baseH", inputs: ["window", "rev", "params", "firstChart"], draw: () => this.drawBase("h") },
       { id: "baseQ", inputs: ["window", "rev"], draw: () => this.drawBase("q") },
       { id: "riemannBars", inputs: ["window", "riemann"], draw: () => this.drawRiemannBars() },
-      { id: "overH", inputs: ["window", "inspectT", "cursor", "a", "b", "params"], draw: () => this.drawOver("h") },
+      { id: "overH", inputs: ["window", "inspectT", "cursor", "a", "b", "params", "firstChart", "rev"], draw: () => this.drawOver("h") },
       { id: "overQ", inputs: ["window", "inspectT", "cursor", "a", "b"], draw: () => this.drawOver("q") },
       { id: "tank", inputs: ["atT", "cursor", "params"], draw: () => this.drawTank() },
       { id: "equations", inputs: ["atT"], draw: () => this.drawEquations() },
       { id: "riemannText", inputs: ["riemann"], draw: () => this.drawRiemann() },
       { id: "events", inputs: ["rev"], draw: () => this.drawEvents() },
       { id: "status", inputs: ["status", "now", "cursor", "plant"], draw: () => this.drawStatus() },
-      { id: "plant", inputs: ["plant"], draw: () => this.drawPlant() },
-      { id: "inspect", inputs: ["method", "n"], draw: () => { byId<HTMLSelectElement>("tkMethod").value = this.graph.get("method"); byId<HTMLInputElement>("tkN").value = String(this.graph.get("n")); byId("tkNOut").textContent = String(this.graph.get("n")); } },
+      { id: "plant", inputs: ["plant"], draw: () => this.shell.drawPlant(byId("tkPlant")) },
+      { id: "inspect", inputs: ["method", "n", "firstChart"], draw: () => {
+        byId<HTMLSelectElement>("tkMethod").value = this.graph.get("method");
+        byId<HTMLInputElement>("tkN").value = String(this.graph.get("n"));
+        byId("tkNOut").textContent = String(this.graph.get("n"));
+        const chart = this.graph.get<FirstChart>("firstChart");
+        byId<HTMLSelectElement>("tkFirstChart").value = chart;
+        byId("tkChartTitle").textContent = chart === "h" ? "Nível × tempo" : chart === "V" ? "Volume × tempo" : "Acumulada V₀ + ∫q × tempo (TFC)";
+      } },
     );
     for (const d of this.drawables) this.dirty.add(d.id);
     this.graph.onChange((changed) => {
@@ -233,16 +205,21 @@ export class TankView {
       for (const d of this.drawables) if (this.dirty.has(d.id)) { d.draw(); this.stats.renders[d.id] = (this.stats.renders[d.id] ?? 0) + 1; }
       this.dirty.clear();
       if (this.pendingInputAt !== undefined) { this.stats.latencies.push(performance.now() - this.pendingInputAt); this.pendingInputAt = undefined; }
-      for (const [id, value] of this.pendingSend) this.options.send({ version: LAB_MESSAGE_VERSION, type: "labSetParameter", id, value });
-      this.pendingSend.clear();
     });
   }
   private markInput(): void { if (this.pendingInputAt === undefined) this.pendingInputAt = performance.now(); }
 
+  /** Coluna e faixa do gráfico 1. A acumulada do TFC é V₀ + (cumIn − cumOut − cumOverflow): ∫q, sem os derramamentos. */
+  private firstColumn(): { column: string; label: string; range: [number, number] } {
+    const params = this.graph.get<ParameterValues>("params"), chart = this.graph.get<FirstChart>("firstChart");
+    if (chart === "h") return { column: "h", label: "h (m)", range: [0, params.hMax! * 1.1] };
+    const vmax = 1000 * 0.2 * params.hMax!;
+    return { column: chart === "V" ? "V" : "integral", label: chart === "V" ? "V (L)" : "V₀ + ∫q (L)", range: [0, Math.max(vmax, 10)] };
+  }
+
   private axes(kind: "h" | "q") {
     const { t0, t1 } = this.graph.get<{ t0: number; t1: number }>("window");
-    const hMax = this.graph.get<TankParameterValues>("params").hMax;
-    const [y0, y1] = kind === "h" ? [0, hMax * 1.1] : [-2.2, 2.2];
+    const [y0, y1] = kind === "h" ? this.firstColumn().range : [-2.2, 2.2];
     const x = (t: number) => GEO.Lm + ((t - t0) / (t1 - t0)) * (GEO.W - GEO.Lm - GEO.R);
     const y = (v: number) => GEO.H - GEO.B - ((v - y0) / (y1 - y0)) * (GEO.H - GEO.T - GEO.B);
     const tAt = (px: number) => t0 + ((px - GEO.Lm) / (GEO.W - GEO.Lm - GEO.R)) * (t1 - t0);
@@ -260,14 +237,21 @@ export class TankView {
     return group;
   }
 
-  /** Trechos contínuos da coluna: quebra onde A mudou (h salta na amostra seguinte) e onde houve derramamento. */
-  private segments(column: "h" | "q"): Array<[number, number]> {
+  /** Valor da coluna do gráfico 1 na linha i (a acumulada do TFC é derivada aqui). */
+  private firstValue(column: string, i: number): number {
+    const s = this.buffer;
+    if (column !== "integral") return s.col(column)[i]!;
+    return s.col("V")[0]! + s.col("cumIn")[i]! - s.col("cumOut")[i]! - s.col("cumOverflow")[i]!;
+  }
+
+  /** Trechos contínuos: quebra onde A mudou (h salta na amostra seguinte) e onde houve derramamento. */
+  private segments(column: string): Array<[number, number]> {
     const s = this.buffer, n = s.length;
     if (n === 0) return [];
     const A = s.col("A"), spill = s.col("cumSpill"), cuts: number[] = [];
     for (let i = 1; i < n; i++) {
       if (A[i] !== A[i - 1] && column === "h" && i + 1 < n) cuts.push(i + 1);
-      if (spill[i] !== spill[i - 1]) cuts.push(i);
+      if (spill[i] !== spill[i - 1] && column !== "integral") cuts.push(i);
     }
     const bounds = [0, ...[...new Set(cuts)].sort((x, y) => x - y), n];
     const result: Array<[number, number]> = [];
@@ -275,13 +259,13 @@ export class TankView {
     return result;
   }
 
-  /** Envelope mín/máx por coluna de pixel (só desenho; cálculos usam todas as linhas). `holdTo`: mantém o último valor até esse t. */
-  private pathFor(column: "h" | "q", i0: number, i1: number, ax: ReturnType<TankView["axes"]>, holdTo?: number): string {
-    const s = this.buffer, t = s.t, values = s.col(column), columns = 600, points: Array<[number, number]> = [];
+  /** Envelope mín/máx por coluna de pixel (só desenho). `holdTo`: mantém o último valor até esse t. */
+  private pathFor(column: string, i0: number, i1: number, ax: ReturnType<TankView["axes"]>, holdTo?: number): string {
+    const t = this.buffer.t, columns = 600, points: Array<[number, number]> = [];
     let bucket = -1, lo = 0, hi = 0, tl = 0, th = 0, last = NaN;
     const flush = () => { if (bucket >= 0) (tl <= th ? points.push([tl, lo], [th, hi]) : points.push([th, hi], [tl, lo])); };
     for (let i = i0; i < i1; i++) {
-      const v = values[i]!;
+      const v = column === "q" ? this.buffer.col("q")[i]! : this.firstValue(column, i);
       if (Number.isNaN(v)) continue;
       last = v;
       const b = Math.floor(((t[i]! - ax.t0) / (ax.t1 - ax.t0)) * columns);
@@ -293,24 +277,29 @@ export class TankView {
   }
 
   private drawBase(kind: "h" | "q"): void {
-    const group = this.layer(kind, "base"), ax = this.axes(kind), hMax = this.graph.get<TankParameterValues>("params").hMax;
+    const group = this.layer(kind, "base"), ax = this.axes(kind), params = this.graph.get<ParameterValues>("params");
+    const first = this.firstColumn();
     svg("line", { x1: GEO.Lm, y1: ax.y(0), x2: GEO.W - GEO.R, y2: ax.y(0), stroke: "#94a3b8" }, group);
     svg("line", { x1: GEO.Lm, y1: GEO.T, x2: GEO.Lm, y2: GEO.H - GEO.B, stroke: "#94a3b8" }, group);
     const tStep = (ax.t1 - ax.t0) / 6;
     for (let t = 0; t <= ax.t1 + 1e-9; t += tStep) svg("text", { x: ax.x(t), y: GEO.H - 10, "text-anchor": "middle", "font-size": 11, fill: "#475569" }, group).textContent = nf(t, 0);
-    const ticks = kind === "h" ? [0, hMax / 2, hMax] : [-2, -1, 0, 1, 2];
+    const ticks = kind === "h" ? [first.range[0], (first.range[0] + first.range[1]) / 2, first.range[1] / 1.1] : [-2, -1, 0, 1, 2];
     for (const v of ticks) svg("text", { x: GEO.Lm - 6, y: ax.y(v) + 4, "text-anchor": "end", "font-size": 11, fill: "#475569" }, group).textContent = nf(v, 2);
-    svg("text", { x: 6, y: 12, "font-size": 12, fill: "#0f172a" }, group).textContent = kind === "h" ? "h (m)" : "q (L/s)";
+    svg("text", { x: 6, y: 12, "font-size": 12, fill: "#0f172a" }, group).textContent = kind === "h" ? first.label : "q (L/s)";
     // Título do eixo do tempo no canto superior direito: no rodapé colidia com o último rótulo.
     svg("text", { x: GEO.W - GEO.R, y: 12, "text-anchor": "end", "font-size": 12, fill: "#0f172a" }, group).textContent = "t (s)";
-    if (kind === "h") svg("line", { x1: GEO.Lm, y1: ax.y(hMax), x2: GEO.W - GEO.R, y2: ax.y(hMax), stroke: "#dc2626", "stroke-dasharray": "4 3" }, group);
-    const column = kind === "h" ? "h" : "q";
+    if (kind === "h" && first.column === "h") svg("line", { x1: GEO.Lm, y1: ax.y(params.hMax!), x2: GEO.W - GEO.R, y2: ax.y(params.hMax!), stroke: "#dc2626", "stroke-dasharray": "4 3" }, group);
+    if (this.buffer.length === 0) return;
+    const column = kind === "h" ? first.column : "q";
     const segments = this.segments(column);
     segments.forEach(([i0, i1], index) => {
       const next = segments[index + 1];
-      const holdTo = kind === "h" && next ? this.buffer.t[next[0]] : undefined;
+      const holdTo = kind === "h" && column === "h" && next ? this.buffer.t[next[0]] : undefined;
       svg("path", { d: this.pathFor(column, i0, i1, ax, holdTo), fill: "none", stroke: kind === "h" ? "#1d4ed8" : "#0e7490", "stroke-width": 2, "data-series": column }, group);
     });
+    if (kind === "h" && column === "integral") { // no TFC, V(t) medido tracejado ao lado da acumulada: diferem pelos derramamentos
+      svg("path", { d: this.pathFor("V", 0, this.buffer.length, ax), fill: "none", stroke: "#64748b", "stroke-width": 1.5, "stroke-dasharray": "5 4", "data-series": "V" }, group);
+    }
     if (kind === "q") for (const e of this.buffer.events) {
       if (e.kind === "start") continue;
       const color = e.kind === "parameter" ? "#2563eb" : e.kind === "spill" ? "#dc2626" : "#d97706";
@@ -339,30 +328,39 @@ export class TankView {
       svg("text", { x: px + 4, y: GEO.T + 12, "font-size": 13, "font-weight": 700, fill: "#7c3aed" }, group).textContent = name;
       if (kind === "q") svg("circle", { cx: px, cy: GEO.T + 2, r: 7, fill: "#7c3aed", "data-handle": name }, group);
     }
-    const live = this.graph.get<number | null>("cursor") === null, cx = ax.x(this.graph.get<number>("inspectT"));
+    const live = this.graph.get<number | null>("cursor") === null, t = this.graph.get<number>("inspectT"), cx = ax.x(t);
     svg("line", { x1: cx, y1: GEO.T, x2: cx, y2: GEO.H - GEO.B, stroke: live ? "#16a34a" : "#ea580c", "stroke-width": live ? 1 : 2, "stroke-dasharray": live ? "2 3" : "6 3" }, group);
     svg("text", { x: cx + 4, y: GEO.H - GEO.B - 6, "font-size": 12, fill: live ? "#16a34a" : "#ea580c" }, group).textContent = live ? "agora" : "t";
+    // TFC: tangente à acumulada no cursor com inclinação q(t) -- a mesma reta que a derivada desenharia.
+    if (kind === "h" && this.firstColumn().column === "integral" && this.buffer.length > 1) {
+      const s = this.sampleAt(t);
+      if (s && Number.isFinite(s.q)) {
+        const y = this.buffer.col("V")[0]! + s.cumIn - s.cumOut - s.cumOverflow, span = (ax.t1 - ax.t0) / 8;
+        svg("line", { x1: ax.x(t - span), y1: ax.y(y - s.q * span), x2: ax.x(t + span), y2: ax.y(y + s.q * span), stroke: "#ea580c", "stroke-width": 2, "data-tangent": "ftc" }, group);
+        svg("text", { x: ax.x(t) + 6, y: ax.y(y) - 8, "font-size": 12, fill: "#9a3412" }, group).textContent = `inclinação = q(t) = ${nf(s.q, 3)} L/s`;
+      }
+    }
   }
 
   private describeEvent(e: BufferEvent): string {
-    const t = nf(e.tS, 2);
-    const names: Record<string, string> = { qIn: "vazão de entrada", qOut: "vazão de saída", area: "área A", k: "válvula k", valve: "modo de saída", hMax: "h máx.", v0: "V₀" };
+    const t = nf(e.tS, 3);
+    const names: Record<string, string> = { qIn: "vazão de entrada", qOut: "vazão de saída", area: "área A", k: "válvula k", torr: "orifício c", outlet: "saída", hMax: "h máx.", v0: "V₀" };
     if (e.kind === "parameter") return `t = ${t} s: ${names[e.name ?? ""] ?? e.name} → ${nf(e.value ?? NaN, 3)} (vale na amostra seguinte, 10 ms)`;
     if (e.kind === "spill") return `t = ${t} s: derramamento instantâneo de ${nf(e.volume ?? NaN, 3)} L (A·h_máx < V)`;
-    if (e.kind === "boundary:upper") return `t = ${t} s: atingiu a borda (transborda)`;
-    if (e.kind === "boundary:lower") return `t = ${t} s: esvaziou (saída sem água)`;
+    if (e.kind === "boundary:upper") return `t = ${t} s: atingiu a borda (transborda) — instante exato do Core`;
+    if (e.kind === "boundary:lower") return `t = ${t} s: esvaziou (saída sem água) — instante exato do Core`;
     return `t = ${t} s: início`;
   }
 
   // ------------------------------------------------------------------ processo (reconstruído das séries)
   private drawTank(): void {
     const s = this.graph.get<Sample | undefined>("atT"), root = byId("tkTank") as unknown as SVGSVGElement;
-    const params = this.graph.get<TankParameterValues>("params");
+    const params = this.graph.get<ParameterValues>("params");
     const live = this.graph.get<number | null>("cursor") === null;
     clear(root);
-    const A = s?.A ?? params.area, hMax = params.hMax;
+    const A = s?.A ?? params.area!, hMax = params.hMax!;
     const w = 60 + ((A - 0.03) / 0.17) * 150, x0 = 160 - w / 2, top = 40, H = 210;
-    const level = s ? Math.max(0, Math.min(1, s.h.value / hMax)) : (params.v0 / (1000 * A)) / hMax;
+    const level = s ? Math.max(0, Math.min(1, s.h.value / hMax)) : Math.min(1, (params.v0! / (1000 * A)) / hMax);
     svg("rect", { x: x0, y: top, width: w, height: H, fill: "#0b1f3a", stroke: "#cbd5e1", "stroke-width": 3 }, root);
     svg("rect", { x: x0 + 2, y: top + H * (1 - level), width: w - 4, height: H * level, fill: "#38bdf8", "fill-opacity": 0.85, "data-level": level.toFixed(4) }, root);
     for (let k = 0; k <= 4; k++) {
@@ -372,7 +370,7 @@ export class TankView {
     }
     svg("text", { x: x0 + w + 8, y: top - 6, "font-size": 10, fill: "#e2e8f0" }, root).textContent = "h (m)";
     svg("path", { d: `M10 22 H${x0 + 22} V${top + 14}`, stroke: "#60a5fa", "stroke-width": 6, fill: "none" }, root);
-    svg("text", { x: 10, y: 14, "font-size": 12, fill: "#bfdbfe" }, root).textContent = `entrada ${nf(s?.qIn ?? params.qIn)} L/s`;
+    svg("text", { x: 10, y: 14, "font-size": 12, fill: "#bfdbfe" }, root).textContent = `entrada ${nf(s?.qIn ?? params.qIn!)} L/s`;
     svg("path", { d: `M${x0 + w - 10} ${top + H} V${top + H + 22} H312`, stroke: "#60a5fa", "stroke-width": 6, fill: "none" }, root);
     const outText = s && s.unmet > 0 ? `saída ${nf(s.qOut)} L/s (falta ${nf(s.unmet)})` : `saída ${nf(s?.qOut ?? NaN)} L/s`;
     svg("text", { x: 312, y: top + H + 42, "text-anchor": "end", "font-size": 12, fill: "#bfdbfe" }, root).textContent = outText;
@@ -380,13 +378,12 @@ export class TankView {
       svg("path", { d: `M${x0 + w} ${top + 2} q 18 0 22 30 v 160`, stroke: "#f87171", "stroke-width": 4, fill: "none", "stroke-dasharray": "6 4" }, root);
       svg("text", { x: x0 + w + 6, y: top + 60, "font-size": 11, fill: "#fecaca" }, root).textContent = `transborda ${nf(s.overflow)} L/s`;
     }
-    svg("text", { x: 160, y: top + H - 8, "text-anchor": "middle", "font-size": 13, fill: "#0f172a", "font-weight": 700 }, root).textContent = `V = ${nf(s?.V.value ?? params.v0, 2)} L`;
+    svg("text", { x: 160, y: top + H - 8, "text-anchor": "middle", "font-size": 13, fill: "#0f172a", "font-weight": 700 }, root).textContent = `V = ${nf(s?.V.value ?? params.v0!, 2)} L`;
     svg("text", { x: 160, y: 296, "text-anchor": "middle", "font-size": 11, fill: "#cbd5e1" }, root).textContent = `A = ${nf(A, 3)} m²`;
     byId("tkTankCaption").textContent = !s ? "Sem dados: execute a simulação." : live ? "Ao vivo: último dado gravado pelo Core."
       : `Inspeção em t = ${nf(s.t, 2)} s — reconstrução a partir das séries gravadas; o simulador continua no presente.`;
   }
 
-  // ------------------------------------------------------------------ equações e Riemann
   private drawEquations(): void {
     const s = this.graph.get<Sample | undefined>("atT"), box = byId("tkEquations");
     if (!s) { box.innerHTML = '<p class="note">As equações mostram os valores no cursor assim que houver dados.</p>'; return; }
@@ -426,86 +423,26 @@ export class TankView {
   }
 
   private drawStatus(): void {
-    const status = this.graph.get<LabRunStatus>("status"), live = this.graph.get<number | null>("cursor") === null;
-    const bound = this.graph.get<LabPlantStatus>("plant").state === "bound";
-    byId("tkStatus").textContent = `${{ stopped: "Configuração", running: "Executando", paused: "Pausado" }[status]} · t = ${nf(this.graph.get<number>("now"), 2)} s`;
+    const live = this.graph.get<number | null>("cursor") === null;
+    this.shell.drawStatus(byId("tkStatus"), this.graph.get<number>("now"));
     const badge = byId("tkModeBadge");
     badge.textContent = live ? "ao vivo" : "inspeção (passado)";
     badge.className = `badge ${live ? "exact" : "numeric"}`;
-    for (const id of ["tkMode", "tkV0", "tkHMax"]) {
-      const input = byId<HTMLInputElement>(id);
-      input.disabled = status !== "stopped";
-      input.title = status !== "stopped" ? "Só muda com a simulação parada: use Reiniciar" : "";
-    }
-    for (const id of ["tkRun", "tkPause", "tkRestart"]) byId<HTMLButtonElement>(id).disabled = !bound;
-  }
-
-  private drawPlant(): void {
-    const status = this.graph.get<LabPlantStatus>("plant"), box = byId("tkPlant");
-    clear(box);
-    if (status.state === "bound") { box.className = "plant-status ok"; box.textContent = `Processo ligado: ${status.label}`; return; }
-    box.className = "plant-status warn";
-    const text = document.createElement("span");
-    text.textContent = status.state === "missing"
-      ? "Este projeto ainda não tem o tanque do laboratório (Processo › Modelos › Tanque hidráulico)."
-      : `Processo indisponível: ${status.message}`;
-    box.appendChild(text);
-    if (status.state === "missing") {
-      const insert = document.createElement("button");
-      insert.type = "button";
-      insert.id = "tkInsertPlant";
-      insert.textContent = "Inserir tanque no projeto";
-      insert.addEventListener("click", () => this.options.send({ version: LAB_MESSAGE_VERSION, type: "labInsertPlant" }));
-      box.appendChild(insert);
-    }
   }
 
   // ------------------------------------------------------------------ controles
-  private showParameter(id: TankParameterId, value: number): void {
-    if (id === "valve") {
-      byId<HTMLSelectElement>("tkMode").value = String(value);
-      byId("tkLabel_qOut").hidden = value !== 0;
-      byId("tkLabel_k").hidden = value !== 1;
-      return;
-    }
-    if (id === "v0") { byId<HTMLInputElement>("tkV0").value = String(value); return; }
-    if (id === "hMax") { byId<HTMLInputElement>("tkHMax").value = String(value); return; }
-    const slider = SLIDERS.find((s) => s.id === id)!;
-    byId<HTMLInputElement>(`tk_${id}`).value = String(value);
-    byId(`tkOut_${id}`).textContent = `${nf(value, 3)}${slider.unit}`;
-  }
-
-  private requestParameter(id: TankParameterId, value: number): void {
-    this.markInput();
-    this.showParameter(id, value);
-    this.pendingSend.set(id, value);
-    this.requestFrame();
-  }
-
   private bindControls(): void {
-    for (const s of SLIDERS) byId<HTMLInputElement>(`tk_${s.id}`).addEventListener("input", (ev) => this.requestParameter(s.id, Number((ev.target as HTMLInputElement).value)));
-    byId<HTMLSelectElement>("tkMode").addEventListener("change", (ev) => this.requestParameter("valve", Number((ev.target as HTMLSelectElement).value)));
-    byId<HTMLInputElement>("tkV0").addEventListener("change", (ev) => this.requestParameter("v0", Number((ev.target as HTMLInputElement).value)));
-    byId<HTMLInputElement>("tkHMax").addEventListener("change", (ev) => this.requestParameter("hMax", Number((ev.target as HTMLInputElement).value)));
-
-    const bar = byId("tkRunBar");
-    const buttons: Array<[HTMLButtonElement, () => void]> = [
-      [iconButton("play", "Executar / retomar", { id: "tkRun" }), () => this.options.send({ version: LAB_MESSAGE_VERSION, type: "labRun" })],
-      [iconButton("pause", "Pausar", { id: "tkPause" }), () => this.options.send({ version: LAB_MESSAGE_VERSION, type: "labPause" })],
-      [iconButton("restart", "Reiniciar (volta aos valores iniciais da atividade)", { id: "tkRestart" }), () => this.restart()],
-      [iconButton("live", "Voltar ao vivo", { id: "tkLive" }), () => this.graph.set("cursor", null)],
-    ];
-    for (const [button, action] of buttons) { button.addEventListener("click", action); bar.appendChild(button); }
-
+    this.shell.bind(() => this.graph.set("cursor", null));
     byId<HTMLSelectElement>("tkMethod").addEventListener("change", (ev) => { this.markInput(); this.graph.set("method", (ev.target as HTMLSelectElement).value); });
     byId<HTMLInputElement>("tkN").addEventListener("input", (ev) => { this.markInput(); this.graph.set("n", Number((ev.target as HTMLInputElement).value)); });
+    byId<HTMLSelectElement>("tkFirstChart").addEventListener("change", (ev) => this.graph.set("firstChart", (ev.target as HTMLSelectElement).value));
 
     let drag: "cursor" | "a" | "b" | null = null;
     for (const id of ["tkChartH", "tkChartQ"]) {
       const chart = byId(id) as unknown as SVGSVGElement;
       const tFrom = (ev: PointerEvent): number => {
         const rect = chart.getBoundingClientRect();
-        const t = this.axes("h").tAt(((ev.clientX - rect.left) / rect.width) * GEO.W);
+        const t = this.axes("q").tAt(((ev.clientX - rect.left) / rect.width) * GEO.W);
         return Math.max(0, Math.min(this.graph.get<number>("now"), t));
       };
       chart.addEventListener("pointerdown", (ev) => {
@@ -527,13 +464,5 @@ export class TankView {
       }
       if (ev.key === "Escape") this.graph.set("cursor", null);
     });
-  }
-
-  private restart(): void {
-    const initial = { ...this.activity.parameters };
-    for (const id of Object.keys(initial) as TankParameterId[]) { this.accepted[id] = initial[id]; this.showParameter(id, initial[id]); }
-    byId("tkParamError").textContent = "";
-    this.graph.batch(() => { this.graph.set("cursor", null); this.graph.set("params", { ...initial }); });
-    this.options.send({ version: LAB_MESSAGE_VERSION, type: "labRestart", parameters: initial });
   }
 }

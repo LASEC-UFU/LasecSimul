@@ -97,7 +97,7 @@ processo físico contínuo. Regras:
 2. **V é preservado** (conservação); **h = V/A salta** no mesmo instante. O gravador registra **duas linhas com o mesmo t**
    (antes/depois); gráficos quebram o traçado ali e nenhuma interpolação, secante ou tangente atravessa o instante.
 3. `Vmax = A·h_max` é recalculado; se `V > Vmax`, o excesso sai como **derramamento discreto** (evento `spill` com volume), contabilizado
-   em `cumOverflow` — o balanço continua fechando (resíduo medido 8,8e-15 m³ [E]).
+   em `cumSpill` (separado do transbordo contínuo `cumOverflow`) — o balanço continua fechando (resíduo medido 8,8e-15 m³ [E]).
 4. `dV/dt` não muda com A; `dh/dt = q/A` muda — é exatamente a pergunta didática ("mesma vazão, outra velocidade de subida").
 5. A tangente a h no instante da mudança não existe; derivadas laterais são mostradas.
 
@@ -154,9 +154,13 @@ Geometria anterior (A = 0,02 m², h_max = 5 m) descrevia um tubo de 16 cm × 5 m
 | 9 | Inspeção (cursor, A/B, n, método, zoom): 0 mensagens ao Host | contador |
 | 10 | Salvar/reabrir: definição e referências preservadas; nenhum dado de série ou estado transitório gravado | diff do `.lsproj` |
 | 11 | Os 5 subcircuitos migrados de `control.tank` reproduzem os testes atuais enquanto não tocam a fronteira | testes de sessão |
-| 12 | A ao vivo: evento `parameter` em `appliedAtNs`; V contínuo; h com duas linhas no mesmo t; traçado de h quebrado | exato [E na PoC] |
+| 12 | A ao vivo: evento `parameter` em `appliedAtNs`; V contínuo; h salta na ativação seguinte do bloco (≤ 10 ms), gravado com duas linhas no mesmo t; traçado de h quebrado | exato [E] |
 | 13 | A ao vivo com `V > A·h_max`: evento `spill` com o volume; identidade `ΔV = ∫q − Σ derramamentos` em qualquer intervalo | `≤ 10⁻¹²·max(1, Vmax)` [E na PoC] |
-| 14 | Mover cursor, a/b, n ou método não envia nada ao Core e não redesenha a camada da série | contadores [E na PoC] |
+| 14 | Mover cursor, a/b, n ou método não envia nada ao Core e não redesenha a camada da série | contadores [E] |
+
+**Estado (2026-10-18):** todos verificados [E] — 1–8, 12, 13 e Torricelli em `extension/src/lab/hydraulicTank.realCore.test.ts`
+(Core real); 9, 10 e 14 em `npm run test:lab:tank:e2e` (VS Code real: contadores de mensagens e de redesenho, `.lsproj` gravado e
+reaberto); 11 nos testes de sessão e de Core real dos modelos migrados.
 
 ### 2.7 Simplificações admitidas e proibidas
 
