@@ -3,6 +3,8 @@ import { assert, createTestRunner } from "../ipc/testSupport/MockCoreServer";
 import { CoreProcess } from "../ipc/CoreProcess";
 import { CoreClient } from "../ipc/CoreClient";
 import { resolveCoreExecutablePath } from "../core/coreExecutable";
+import { materializeEmbeddedSubcircuit } from "../project/embeddedSubcircuits";
+import { createPlantTemplateLookup } from "../project/plantTemplates";
 
 /**
  * Heated tank with a Pt100 (`subcircuits/process_heated_tank_pt100.lssubcircuit`) wired with a 4-wire
@@ -47,6 +49,10 @@ function simulate(seconds: number, heaterPercent: number, start = { water: 25, s
   try {
     await client.start();
     await client.loadDeviceLibrary(path.join(repoRoot, "subcircuits", "library.json"));
+    // Plantas não são registradas globalmente (fora de library.json): como num projeto, a definição
+    // incorporada da planta é registrada avulsa (ver project/plantTemplates.ts).
+    const plantTemplate = createPlantTemplateLookup(path.join(repoRoot, "subcircuits"));
+    await client.registerAdhocSubcircuitDefinition(materializeEmbeddedSubcircuit(plantTemplate("subcircuits.process.heated_tank_pt100")!.manifest));
     const plant = await client.addComponent("subcircuits.process.heated_tank_pt100", {}, [], "Tanque aquecido (teste)");
     const tt301 = await client.addComponent("subcircuits.hart.smar_tt301", {}, tt301Pins, "TT301 (teste)");
     const inner = await client.getSubcircuitChildInstanceId(tt301.instanceId, "tt301");

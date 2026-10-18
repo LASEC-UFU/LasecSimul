@@ -1,7 +1,9 @@
 import { createTestRunner, assert } from "../../ipc/testSupport/MockCoreServer";
-import { buildPaletteTree, resolvePaletteFolderPath, PaletteRenderableEntry } from "./paletteTree";
+import { buildPaletteTree, paletteFolderPathForEntry, resolvePaletteFolderPath, PaletteRenderableEntry } from "./paletteTree";
+import { workspaceSectionForCatalogEntry } from "./workspace";
 import { defaultComponentCatalog } from "./catalog";
 import { controlGraphCatalog } from "../../catalog/controlGraphCatalog";
+import { loadUnifiedCatalog } from "../../catalog/UnifiedCatalog";
 
 const catalog: PaletteRenderableEntry[] = [
   {
@@ -103,9 +105,8 @@ const catalog: PaletteRenderableEntry[] = [
     assert(!digital.includes("passive.resistor"), "Digital não deveria conter o resistor");
   });
 
-  await test("seções futuras de Controle/Processo permanecem vazias sem itens declarados", () => {
+  await test("Controle permanece vazia sem itens declarados", () => {
     assert(buildPaletteTree(catalog, "", "control").length === 0, "Controle deveria iniciar vazia");
-    assert(buildPaletteTree(catalog, "", "process").length === 0, "Processo deveria iniciar vazia");
   });
 
   await test("Microcontroladores e sempre a PRIMEIRA subpasta de Analogico, mesmo chegando depois de outras no catalogo", () => {
@@ -122,43 +123,73 @@ const catalog: PaletteRenderableEntry[] = [
     assert(JSON.stringify(remainingLabels) === JSON.stringify(["Fontes", "Passivos", "Medidores"]), `ordem das demais pastas nao deveria mudar, veio ${JSON.stringify(remainingLabels)}`);
   });
 
-  await test("Processo: PLC, Protocolos Industriais, Ferramentas e Modelos nesta ordem", () => {
+  await test("Controle: PLC, Protocolos Industriais, Ferramentas e Blocos Funcionais nesta ordem", () => {
     const entries: PaletteRenderableEntry[] = [
-      { typeId: "subcircuits.process.fopdt", label: "Processo FOPDT", category: "Modelos", folderPath: ["Modelos"], workspaceSection: "process", pinCount: 2, defaultProperties: {} },
-      { typeId: "protocol.hart.modem", label: "Modem HART", category: "Protocolos", folderPath: ["Protocolos Industriais", "HART"], workspaceSection: "process", pinCount: 2, defaultProperties: {} },
-      { typeId: "protocol.modbus.server", label: "Servidor Modbus", category: "Protocolos", folderPath: ["Protocolos Industriais", "Modbus"], workspaceSection: "process", pinCount: 0, defaultProperties: {} },
-      { typeId: "control.pid_station", label: "Sintonia", category: "Ferramentas", folderPath: ["Ferramentas"], workspaceSection: "process", pinCount: 5, defaultProperties: {} },
-      { typeId: "plc.instance", label: "PLC IEC 61131-3", category: "PLC", folderPath: ["PLC IEC 61131-3"], workspaceSection: "process", pinCount: 0, defaultProperties: {} },
+      { typeId: "control.constant", label: "Constante", category: "Controle", folderPath: [], workspaceSection: "control", pinCount: 1, defaultProperties: {} },
+      { typeId: "subcircuits.control.gain", label: "Ganho", category: "Controle", folderPath: [], workspaceSection: "control", pinCount: 2, defaultProperties: {} },
+      { typeId: "protocol.hart.modem", label: "Modem HART", category: "Protocolos", folderPath: ["Protocolos Industriais", "HART"], workspaceSection: "control", pinCount: 2, defaultProperties: {} },
+      { typeId: "protocol.modbus.server", label: "Servidor Modbus", category: "Protocolos", folderPath: ["Protocolos Industriais", "Modbus"], workspaceSection: "control", pinCount: 0, defaultProperties: {} },
+      { typeId: "control.pid_station", label: "Sintonia", category: "Ferramentas", folderPath: ["Ferramentas"], workspaceSection: "control", pinCount: 5, defaultProperties: {} },
+      { typeId: "plc.instance", label: "PLC IEC 61131-3", category: "PLC", folderPath: ["PLC IEC 61131-3"], workspaceSection: "control", pinCount: 0, defaultProperties: {} },
     ];
-    const tree = buildPaletteTree(entries, "", "process", "pt-BR");
+    const tree = buildPaletteTree(entries, "", "control", "pt-BR");
     const labels = tree.map((node) => node.label);
-    assert(JSON.stringify(labels) === JSON.stringify(["PLC IEC 61131-3", "Protocolos Industriais", "Ferramentas", "Modelos"]), `ordem das pastas de Processo: ${JSON.stringify(labels)}`);
+    assert(JSON.stringify(labels) === JSON.stringify(["PLC IEC 61131-3", "Protocolos Industriais", "Ferramentas", "Blocos Funcionais"]), `ordem das subseções de Controle: ${JSON.stringify(labels)}`);
     const first = tree[0];
     assert(first?.kind === "folder" && first.children.length === 1 && first.children[0]?.kind === "component" && first.children[0].typeId === "plc.instance",
-      "o primeiro item de Processo deveria ser o PLC");
+      "o primeiro item de Controle deveria ser o PLC");
+    const blocks = tree[3];
+    const blockTypeIds = blocks?.kind === "folder" ? blocks.children.map((node) => (node.kind === "component" ? node.typeId : `folder:${node.label}`)) : [];
+    assert(JSON.stringify(blockTypeIds) === JSON.stringify(["control.constant", "subcircuits.control.gain"]),
+      `o que estava na raiz de Controle deveria estar em Blocos Funcionais, sem subpasta extra: ${JSON.stringify(blockTypeIds)}`);
+    assert(tree.every((node) => node.kind === "folder"), "nada deveria sobrar na raiz de Controle");
   });
 
-  await test("Processo em ingles: catalogo meio traduzido nao duplica a pasta de protocolos nem tira o PLC do topo", () => {
-    // Como o catálogo real chega em inglês: PLC e Modbus com a pasta traduzida, HART e modelos não.
+  await test("Controle em ingles: catalogo meio traduzido nao duplica pastas nem tira o PLC do topo", () => {
+    // Como o catálogo real chega em inglês: PLC e Modbus com a pasta traduzida, HART e blocos não.
     const entries: PaletteRenderableEntry[] = [
-      { typeId: "protocol.hart.modem", label: "Modem HART", category: "Protocolos", folderPath: ["Protocolos Industriais", "HART"], workspaceSection: "process", pinCount: 2, defaultProperties: {} },
-      { typeId: "subcircuits.process.fopdt", label: "Processo FOPDT", category: "Modelos", folderPath: ["Modelos"], workspaceSection: "process", pinCount: 2, defaultProperties: {} },
-      { typeId: "plc.instance", label: "IEC 61131-3 PLC", category: "PLC", folderPath: ["IEC 61131-3 PLC"], workspaceSection: "process", pinCount: 0, defaultProperties: {} },
-      { typeId: "protocol.modbus.server", label: "Modbus Server", category: "Protocolos", folderPath: ["Industrial Protocols", "Modbus"], workspaceSection: "process", pinCount: 0, defaultProperties: {} },
-      { typeId: "control.pid_station", label: "Tuning", category: "Tools", folderPath: ["Ferramentas"], workspaceSection: "process", pinCount: 5, defaultProperties: {} },
+      { typeId: "protocol.hart.modem", label: "Modem HART", category: "Protocolos", folderPath: ["Protocolos Industriais", "HART"], workspaceSection: "control", pinCount: 2, defaultProperties: {} },
+      { typeId: "subcircuits.control.gain", label: "Ganho", category: "Controle", folderPath: [], workspaceSection: "control", pinCount: 2, defaultProperties: {} },
+      { typeId: "plc.instance", label: "IEC 61131-3 PLC", category: "PLC", folderPath: ["IEC 61131-3 PLC"], workspaceSection: "control", pinCount: 0, defaultProperties: {} },
+      { typeId: "protocol.modbus.server", label: "Modbus Server", category: "Protocolos", folderPath: ["Industrial Protocols", "Modbus"], workspaceSection: "control", pinCount: 0, defaultProperties: {} },
+      { typeId: "control.pid_station", label: "Tuning", category: "Tools", folderPath: ["Ferramentas"], workspaceSection: "control", pinCount: 5, defaultProperties: {} },
     ];
-    const tree = buildPaletteTree(entries, "", "process", "en");
+    const tree = buildPaletteTree(entries, "", "control", "en");
     const labels = tree.map((node) => node.label);
-    assert(JSON.stringify(labels) === JSON.stringify(["IEC 61131-3 PLC", "Industrial Protocols", "Tools", "Models"]), `ordem das pastas de Processo em ingles: ${JSON.stringify(labels)}`);
+    assert(JSON.stringify(labels) === JSON.stringify(["IEC 61131-3 PLC", "Industrial Protocols", "Tools", "Function Blocks"]), `ordem das subseções de Controle em ingles: ${JSON.stringify(labels)}`);
     const protocols = tree[1];
     const subfolders = protocols?.kind === "folder" ? protocols.children.map((node) => node.label).sort() : [];
     assert(JSON.stringify(subfolders) === JSON.stringify(["HART", "Modbus"]), `HART e Modbus deveriam dividir a MESMA pasta: ${JSON.stringify(subfolders)}`);
     // Em português, as mesmas entradas voltam aos nomes em português (a pasta é a mesma).
-    const portuguese = buildPaletteTree(entries, "", "process", "pt-BR").map((node) => node.label);
-    assert(JSON.stringify(portuguese) === JSON.stringify(["PLC IEC 61131-3", "Protocolos Industriais", "Ferramentas", "Modelos"]), `mesmas entradas em portugues: ${JSON.stringify(portuguese)}`);
+    const portuguese = buildPaletteTree(entries, "", "control", "pt-BR").map((node) => node.label);
+    assert(JSON.stringify(portuguese) === JSON.stringify(["PLC IEC 61131-3", "Protocolos Industriais", "Ferramentas", "Blocos Funcionais"]), `mesmas entradas em portugues: ${JSON.stringify(portuguese)}`);
     // Sem língua informada os nomes ficam como vieram, mas o PLC continua no topo.
-    const untouched = buildPaletteTree(entries, "", "process");
+    const untouched = buildPaletteTree(entries, "", "control");
     assert(untouched[0]?.label === "IEC 61131-3 PLC", `PLC deveria continuar primeiro sem lingua informada, veio ${untouched[0]?.label}`);
+  });
+
+  await test("metadado legado \"process\" (antiga aba Processo) aparece em Controle na mesma subseção", () => {
+    const entries: PaletteRenderableEntry[] = [
+      { typeId: "subcircuits.hart.smar_ld301", label: "SMAR LD301", category: "Subcircuitos", folderPath: ["Protocolos Industriais", "HART"], workspaceSection: "process", pinCount: 4, defaultProperties: {} },
+      { typeId: "registered.custom_model", label: "Modelo do usuario", category: "Subcircuitos", folderPath: ["Modelos"], workspaceSection: "process", pinCount: 2, defaultProperties: {} },
+      { typeId: "subcircuits.control.gain", label: "Ganho", category: "Controle", folderPath: [], workspaceSection: "control", pinCount: 2, defaultProperties: {} },
+    ];
+    const tree = buildPaletteTree(entries, "", "control", "pt-BR");
+    assert(JSON.stringify(tree.map((node) => node.label)) === JSON.stringify(["Protocolos Industriais", "Blocos Funcionais", "Modelos"]),
+      `subseções conhecidas primeiro, a do item legado preservada depois: ${JSON.stringify(tree.map((node) => node.label))}`);
+    const protocols = tree[0];
+    assert(protocols?.kind === "folder" && protocols.children[0]?.kind === "folder" && protocols.children[0].label === "HART", "HART legado deveria ficar em Controle > Protocolos Industriais > HART");
+  });
+
+  await test("busca encontra blocos pela subseção Blocos Funcionais", () => {
+    const entries: PaletteRenderableEntry[] = [
+      { typeId: "control.constant", label: "Constante", category: "Controle", folderPath: [], workspaceSection: "control", pinCount: 1, defaultProperties: {} },
+      { typeId: "plc.instance", label: "PLC IEC 61131-3", category: "PLC", folderPath: ["PLC IEC 61131-3"], workspaceSection: "control", pinCount: 0, defaultProperties: {} },
+    ];
+    const found = JSON.stringify(buildPaletteTree(entries, "blocos funcionais", "control", "pt-BR"));
+    assert(found.includes("control.constant") && !found.includes("plc.instance"), `busca por "blocos funcionais" deveria achar só os blocos: ${found}`);
+    assert(paletteFolderPathForEntry(entries[0]!).join("/") === "Blocos Funcionais", "caminho efetivo de um bloco de Controle sem pasta");
+    assert(paletteFolderPathForEntry({ typeId: "x", category: "Fontes", folderPath: [] }).length === 0, "fora de Controle o caminho não muda");
   });
 
   await test("prioridade de pasta so se aplica dentro da aba configurada (Digital nao e afetado)", () => {
@@ -192,10 +223,27 @@ const catalog: PaletteRenderableEntry[] = [
     }
   });
 
-  await test("catalogo real expoe Modbus e HART em Process/Protocolos Industriais", () => {
-    const processTree = JSON.stringify(buildPaletteTree(defaultComponentCatalog, "", "process"));
-    assert(processTree.includes("protocol.modbus.server") && processTree.includes("protocol.modbus.client"), "Processo deveria conter servidor e cliente Modbus");
-    assert(!processTree.includes("protocol.hart.transmitter") && !processTree.includes("protocol.hart.communicator"),
+  await test("catalogo canonico: uma unica subsecao Conectores/Connectors, a segunda de Miscelaneos, nas duas linguas", () => {
+    // Os periféricos (LasecPlot, porta serial...) chegam da biblioteca de dispositivos com a pasta "peripherals".
+    const peripheral: PaletteRenderableEntry = { typeId: "peripherals.lasecplot", label: "LasecPlot", category: "peripherals", folderPath: ["peripherals"], workspaceSection: "misc", pinCount: 0, defaultProperties: {} };
+    for (const [language, expected] of [["pt-BR", "Conectores"], ["en", "Connectors"]] as const) {
+      const tree = buildPaletteTree([...loadUnifiedCatalog(process.cwd(), language).catalog, peripheral], "", "misc", language);
+      const labels = tree.map((node) => node.label);
+      assert(labels.filter((label) => label === "Conectores" || label === "Connectors").length === 1, `${language}: uma só pasta de conectores, veio ${JSON.stringify(labels)}`);
+      assert(labels[0] === "peripherals" && labels[1] === expected, `${language}: ${expected} deveria ser a segunda subseção, veio ${JSON.stringify(labels)}`);
+      const connectors = tree[1];
+      const types = connectors?.kind === "folder" ? connectors.children.map((node) => (node.kind === "component" ? node.typeId : `folder:${node.label}`)) : [];
+      for (const typeId of ["connectors.bus", "connectors.tunnel", "connectors.socket", "connectors.header", "connectors.signal_tunnel"]) {
+        assert(types.includes(typeId), `${language}: ${typeId} deveria estar em ${expected}, veio ${JSON.stringify(types)}`);
+      }
+    }
+  });
+
+  await test("catalogo real expoe Modbus e HART em Controle/Protocolos Industriais e nao tem mais aba Processo", () => {
+    const controlTree = JSON.stringify(buildPaletteTree(defaultComponentCatalog, "", "control"));
+    assert(controlTree.includes("plc.instance"), "Controle deveria conter o PLC IEC 61131-3");
+    assert(controlTree.includes("protocol.modbus.server") && controlTree.includes("protocol.modbus.client"), "Controle deveria conter servidor e cliente Modbus");
+    assert(!controlTree.includes("protocol.hart.transmitter") && !controlTree.includes("protocol.hart.communicator"),
       "os blocos HART de barramento virtual antigo não devem aparecer na paleta");
     const miscTree = JSON.stringify(buildPaletteTree(defaultComponentCatalog, "", "misc"));
     // O UDP direto no dispositivo saiu: o UDP agora é uma opção do Modem HART.
@@ -204,31 +252,42 @@ const catalog: PaletteRenderableEntry[] = [
     // hart_smar_tt301 sobre o dispositivo HART padrão; os tipos built-in
     // antigos ficam ocultos.
     for (const typeId of ["protocol.hart.device.standard"]) {
-      assert(processTree.includes(typeId), `${typeId} deveria aparecer na paleta HART`);
+      assert(controlTree.includes(typeId), `${typeId} deveria aparecer na paleta HART`);
     }
-    assert(!processTree.includes("protocol.hart.device.smar_fy301"), "o FY301 built-in legado não deveria aparecer na paleta");
-    assert(!processTree.includes("protocol.hart.device.smar_ld301"), "o LD301 built-in legado não deveria aparecer na paleta");
-    assert(!processTree.includes("protocol.hart.device.smar_tt301"), "o TT301 built-in legado não deveria aparecer na paleta");
+    assert(!controlTree.includes("protocol.hart.device.smar_fy301"), "o FY301 built-in legado não deveria aparecer na paleta");
+    assert(!controlTree.includes("protocol.hart.device.smar_ld301"), "o LD301 built-in legado não deveria aparecer na paleta");
+    assert(!controlTree.includes("protocol.hart.device.smar_tt301"), "o TT301 built-in legado não deveria aparecer na paleta");
     // O PC fala HART pelo fio: o Modem HART (em série no laço) fica na mesma pasta.
-    assert(processTree.includes("protocol.hart.modem"), "o Modem HART deveria aparecer na paleta HART");
-    assert(processTree.includes("Protocolos Industriais"), "protocolos deveriam ficar sob Process/Protocolos Industriais");
+    assert(controlTree.includes("protocol.hart.modem"), "o Modem HART deveria aparecer na paleta HART");
+    assert(controlTree.includes("Protocolos Industriais"), "protocolos deveriam ficar sob Controle/Protocolos Industriais");
+    assert(defaultComponentCatalog.every((entry) => entry.workspaceSection !== "process"), "o catálogo embutido não deveria mais declarar a aba Processo");
+    assert(defaultComponentCatalog.filter((entry) => entry.typeId === "plc.instance" || entry.typeId.startsWith("protocol."))
+      .every((entry) => workspaceSectionForCatalogEntry(entry) === "control"), "PLC e protocolos deveriam estar em Controle");
   });
 
-  await test("PID e uma ferramenta em Processo; os demais primitivos de controle permanecem na aba Controle", () => {
-    const processTree = JSON.stringify(buildPaletteTree(controlGraphCatalog, "", "process"));
-    assert(!processTree.includes("Controle"), "Processo nao deveria mais ter a subsecao Controle");
-    assert(!processTree.includes("\"control.pid\""), "o PID antigo sem portas A/M e L/R nao deveria aparecer em Processo");
+  await test("Sintonia em Controle/Ferramentas; os primitivos visiveis de controle em Controle/Blocos Funcionais", () => {
+    const controlTree = buildPaletteTree(controlGraphCatalog, "", "control", "pt-BR");
+    const labels = controlTree.map((node) => node.label);
+    assert(JSON.stringify(labels) === JSON.stringify(["Ferramentas", "Blocos Funcionais"]), `subseções de Controle do grafo: ${JSON.stringify(labels)}`);
+    const serialized = JSON.stringify(controlTree);
+    assert(!serialized.includes("\"control.pid\""), "o PID antigo sem portas A/M e L/R nao deveria aparecer na paleta");
     const station = controlGraphCatalog.find((item) => item.typeId === "control.pid_station");
     assert(JSON.stringify(station?.pinIds) === JSON.stringify(["sp", "pv", "am", "lr", "out"]), `a estacao precisa expor SP, PV, A/M, L/R e MV: ${JSON.stringify(station?.pinIds)}`);
-    assert(processTree.includes("control.pid_station") && processTree.includes("Ferramentas"), "a estação de sintonia deveria aparecer em Processo/Ferramentas");
-    assert(!processTree.includes("control.process"), "o bloco de processo genérico nao deveria aparecer em Processo");
+    const tools = controlTree[0];
+    assert(tools?.kind === "folder" && tools.children.length === 1 && tools.children[0]?.kind === "component" && tools.children[0].typeId === "control.pid_station",
+      "a estação de sintonia deveria aparecer em Controle/Ferramentas");
 
-    const controlTree = buildPaletteTree(controlGraphCatalog, "", "control");
-    const typeIds = controlTree.map((node) => (node.kind === "component" ? node.typeId : `folder:${node.label}`)).sort();
+    const blocks = controlTree[1];
+    const typeIds = blocks?.kind === "folder" ? blocks.children.map((node) => (node.kind === "component" ? node.typeId : `folder:${node.label}`)).sort() : [];
     assert(
       JSON.stringify(typeIds) === JSON.stringify(["control.calc_expression", "control.constant", "control.observer", "control.process"]),
-      `Controle deveria expor so Sonda/Expressao/Processo/Constante na raiz, sem subpasta -- veio ${JSON.stringify(typeIds)}`
+      `Blocos Funcionais deveria expor so Sonda/Expressao/Processo/Constante, sem subpasta -- veio ${JSON.stringify(typeIds)}`
     );
+    // IDs, pinos e propriedades não mudam com a reorganização: só a apresentação.
+    for (const typeId of ["control.calc_expression", "control.constant", "control.observer", "control.process"]) {
+      const entry = controlGraphCatalog.find((item) => item.typeId === typeId);
+      assert(entry?.workspaceSection === "control" && Array.isArray(entry.folderPath) && entry.folderPath.length === 0, `${typeId} continua declarado como antes`);
+    }
 
     // `paletteHidden` some SO da paleta: `hidden` apagaria a instancia do render (ver
     // `model.ts::WebviewComponentCatalogEntry.paletteHidden`) e os modelos TDPS/os 24 blocos de

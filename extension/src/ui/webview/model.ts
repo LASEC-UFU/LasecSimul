@@ -1,4 +1,4 @@
-import type { WorkspaceSection } from "./workspace";
+import type { CatalogWorkspaceSection } from "./workspace";
 import type { IpdLineClass } from "./ipdLineStyle";
 import type { CalculusLab } from "./lab/activity";
 
@@ -930,8 +930,9 @@ export interface WebviewComponentCatalogEntry {
    * `category`/`subcategory` para manter compatibilidade com catálogos legados. */
   folderPath?: string[];
   /** Área exclusiva da toolbox. Ausente mantém compatibilidade pela classificação central de
-   * `workspace.ts`; componentes novos podem declarar o destino sem alterar a UI. */
-  workspaceSection?: WorkspaceSection;
+   * `workspace.ts`; componentes novos podem declarar o destino sem alterar a UI. O legado
+   * `"process"` (aba Processo removida) é aceito e apresentado em Controle. */
+  workspaceSection?: CatalogWorkspaceSection;
   /** Caminho relativo a `extension/media/components/{light,dark}/<icon>` (sem extensão/tema) —
    * ex: "resistor" resolve para "media/components/light/resistor.svg" ou ".../dark/resistor.svg"
    * conforme o tema ativo do VSCode. */

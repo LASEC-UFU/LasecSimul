@@ -20,6 +20,7 @@ import {
 import { isIpdLineClass } from "../ui/webview/ipdLineStyle";
 import { defaultHmiNavigationVisual } from "../ui/webview/model";
 import { migrateLegacySignalTunnels } from "../catalog/legacySignalTunnelMigration";
+import { migrateLegacyTankBlocks } from "../catalog/legacyTankMigration";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -368,12 +369,16 @@ function validateTopology(value: unknown, componentIds: ReadonlySet<string>): Pr
 export class ProjectSerializer {
   async load(filePath: string): Promise<ProjectDocument> {
     const raw = await fs.readFile(filePath, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
+    // Editores no Windows (ex.: PowerShell `Set-Content -Encoding UTF8`) gravam BOM; `JSON.parse`
+    // recusa o U+FEFF inicial e o projeto não abria. O conteúdo em si não muda.
+    const parsed = JSON.parse(raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw) as unknown;
     if (!isObject(parsed)) throw new Error("Projeto inválido");
     if (parsed.schemaVersion !== LS_PROJ_SCHEMA_VERSION) {
       throw new Error(`schemaVersion incompatível: esperado ${LS_PROJ_SCHEMA_VERSION}, recebido ${String(parsed.schemaVersion)}`);
     }
-    const components = Array.isArray(parsed.components) ? parsed.components.map(validateComponent) : [];
+    const validated = Array.isArray(parsed.components) ? parsed.components.map(validateComponent) : [];
+    // Bloco `control.tank` (removido do Core) gravado no projeto ou dentro de plantas incorporadas.
+    const components = migrateLegacyTankBlocks(validated).components;
     const componentIds = new Set(components.map((c) => c.id));
     const topology = validateTopology(parsed.topology, componentIds);
     const migrated = migrateLegacySignalTunnels(components, topology);

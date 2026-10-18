@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "description": "Modelos de planta preservados como arquivos .lssubcircuit. NAO e uma biblioteca: nada aqui e registrado no catalogo, na paleta nem no Core. Uso: (1) incorporar a planta (subcircuitRef.embedded) ao abrir projetos antigos que guardam estes typeIds; (2) o Laboratorio de Calculo inserir sua planta incorporada ao projeto; (3) gerar um .lsproj independente por planta (scripts/generate-plant-projects.cjs).",
+  "plants": [
+    {
+      "typeId": "subcircuits.process.fopdt",
+      "manifest": "process_fopdt.lssubcircuit",
+      "project": "planta_processo_fopdt.lsproj"
+    },
+    {
+      "typeId": "subcircuits.process.heated_tank_pt100",
+      "manifest": "process_heated_tank_pt100.lssubcircuit",
+      "project": "planta_tanque_aquecido_com_pt100.lsproj"
+    },
+    {
+      "typeId": "subcircuits.process.electric_furnace_tc",
+      "manifest": "process_electric_furnace_tc.lssubcircuit",
+      "project": "planta_forno_eletrico_com_termopar.lsproj"
+    },
+    {
+      "typeId": "subcircuits.process.control_valve",
+      "manifest": "process_control_valve.lssubcircuit",
+      "project": "planta_valvula_de_controle_com_atuador_pneumatico.lsproj"
+    },
+    {
+      "typeId": "subcircuits.process.orifice_flow_dp",
+      "manifest": "process_orifice_flow_dp.lssubcircuit",
+      "project": "planta_placa_de_orificio_vazao_por_dp.lsproj"
+    },
+    {
+      "typeId": "subcircuits.process.pressurized_tank_dp",
+      "manifest": "process_pressurized_tank_dp.lssubcircuit",
+      "project": "planta_tanque_pressurizado_nivel_por_dp.lsproj"
+    },
+    {
+      "typeId": "subcircuits.process.hydraulic_tank",
+      "manifest": "process_hydraulic_tank.lssubcircuit",
+      "project": "planta_tanque_hidraulico_vazao_volume.lsproj"
+    },
+    {
+      "typeId": "subcircuits.process.first_order_lab",
+      "manifest": "process_first_order_lab.lssubcircuit",
+      "project": "planta_resposta_de_primeira_ordem_laboratorio.lsproj"
+    },
+    {
+      "typeId": "subcircuits.process.sensor_4_20",
+      "manifest": "process_sensor_4_20.lssubcircuit",
+      "project": "planta_sensor_4_20_ma_laboratorio.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.basic_flow_loop",
+      "manifest": "tdps_basic_flow_loop.lssubcircuit",
+      "project": "planta_vazao_linear_simples.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.boiler",
+      "manifest": "tdps_boiler.lssubcircuit",
+      "project": "planta_caldeira_industrial_v1_boiler.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.combustion_cross_limits",
+      "manifest": "tdps_combustion_cross_limits.lssubcircuit",
+      "project": "planta_combustao_com_limites_cruzados.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.combustion_dynamic_cross_limits",
+      "manifest": "tdps_combustion_dynamic_cross_limits.lssubcircuit",
+      "project": "planta_combustao_com_limites_cruzados_dinamicos.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.combustion_ratio",
+      "manifest": "tdps_combustion_ratio.lssubcircuit",
+      "project": "planta_controle_de_razao_para_combustao.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.combustion_two_fuels",
+      "manifest": "tdps_combustion_two_fuels.lssubcircuit",
+      "project": "planta_queima_com_dois_combustiveis.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.cooling_plant",
+      "manifest": "tdps_cooling_plant.lssubcircuit",
+      "project": "planta_torre_de_resfriamento.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.course_fine_flow_loop",
+      "manifest": "tdps_course_fine_flow_loop.lssubcircuit",
+      "project": "planta_controle_de_vazao_course_fine.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.ethane_plant",
+      "manifest": "tdps_ethane_plant.lssubcircuit",
+      "project": "planta_torre_deetanizadora.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.frequency_response",
+      "manifest": "tdps_frequency_response.lssubcircuit",
+      "project": "planta_laboratorio_de_resposta_em_frequencia.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.furnace_master_slave",
+      "manifest": "tdps_furnace_master_slave.lssubcircuit",
+      "project": "planta_forno_mestre_escravo.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.furnace",
+      "manifest": "tdps_furnace.lssubcircuit",
+      "project": "planta_controle_de_temperatura_de_forno.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.header_pressure_three_consumers",
+      "manifest": "tdps_header_pressure_three_consumers.lssubcircuit",
+      "project": "planta_pressao_de_header_com_tres_consumidores.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.heat_exchanger",
+      "manifest": "tdps_heat_exchanger.lssubcircuit",
+      "project": "planta_temperatura_com_trocador_de_calor_v1.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.industrial_boiler",
+      "manifest": "tdps_industrial_boiler.lssubcircuit",
+      "project": "planta_caldeira_industrial_v1.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.linearized_ph",
+      "manifest": "tdps_linearized_ph.lssubcircuit",
+      "project": "planta_controle_ph_linearizado.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.ph_control",
+      "manifest": "tdps_ph_control.lssubcircuit",
+      "project": "planta_controle_ph_linearizado_alternativo.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.nonlinear_flow_processes",
+      "manifest": "tdps_nonlinear_flow_processes.lssubcircuit",
+      "project": "planta_processos_de_vazao_nao_lineares.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.four_linear_processes",
+      "manifest": "tdps_four_linear_processes.lssubcircuit",
+      "project": "planta_sistemas_dinamicos_lineares.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.reactor",
+      "manifest": "tdps_reactor.lssubcircuit",
+      "project": "planta_controle_regulatorio_em_reator.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.regulatory_level",
+      "manifest": "tdps_regulatory_level.lssubcircuit",
+      "project": "planta_controle_de_nivel_v1.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.smith_predictor",
+      "manifest": "tdps_smith_predictor.lssubcircuit",
+      "project": "planta_espessura_de_camada_com_preditor_de_smith.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.split_range",
+      "manifest": "tdps_split_range.lssubcircuit",
+      "project": "planta_controle_de_temperatura_com_split_range.lsproj"
+    },
+    {
+      "typeId": "subcircuits.tdps.surge_tank",
+      "manifest": "tdps_surge_tank.lssubcircuit",
+      "project": "planta_caixa_de_polpa.lsproj"
+    }
+  ]
+}

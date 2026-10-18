@@ -3,6 +3,8 @@ import { assert, createTestRunner } from "../ipc/testSupport/MockCoreServer";
 import { CoreProcess } from "../ipc/CoreProcess";
 import { CoreClient } from "../ipc/CoreClient";
 import { resolveCoreExecutablePath } from "../core/coreExecutable";
+import { materializeEmbeddedSubcircuit } from "../project/embeddedSubcircuits";
+import { createPlantTemplateLookup } from "../project/plantTemplates";
 
 /**
  * FY301 valve positioner (`subcircuits/hart_smar_fy301.lssubcircuit`) on a globe valve with a
@@ -34,6 +36,10 @@ function request(command: number, data: number[] = []): string {
   try {
     await client.start();
     await client.loadDeviceLibrary(path.join(repoRoot, "subcircuits", "library.json"));
+    // Plantas não são registradas globalmente (fora de library.json): como num projeto, a definição
+    // incorporada da planta é registrada avulsa (ver project/plantTemplates.ts).
+    const plantTemplate = createPlantTemplateLookup(path.join(repoRoot, "subcircuits"));
+    await client.registerAdhocSubcircuitDefinition(materializeEmbeddedSubcircuit(plantTemplate("subcircuits.process.control_valve")!.manifest));
     const valve = await client.addComponent("subcircuits.process.control_valve", {}, [], "Válvula (teste)");
     const fy = await client.addComponent("subcircuits.hart.smar_fy301", {}, fyPins, "FY301 (teste)");
     const inner = await client.getSubcircuitChildInstanceId(fy.instanceId, "fy301");

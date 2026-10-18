@@ -30,18 +30,30 @@ for (const entry of manifest.entries) {
   fs.writeFileSync(path.join(outputDir, entry.file), `${JSON.stringify(document, null, 2)}\n`, "utf8");
 }
 
-// library.json é a única porta de entrada da biblioteca integrada. Reconstituir
-// a fatia TDPS a partir do mesmo inventário evita itens órfãos ou uma paleta que
-// mostre só parte do corpus depois de regenerar os manifests.
+// Plantas NÃO entram em library.json (nada de registro global no catálogo/Core): os modelos TDPS são
+// listados só em plants.json, o índice de modelos usado para incorporar a planta aos projetos e gerar
+// um .lsproj independente por planta (scripts/generate-plant-projects.cjs). Remove de library.json
+// qualquer entrada TDPS que uma versão antiga deste script tenha gravado.
 const libraryPath = path.join(outputDir, "library.json");
 const library = JSON.parse(fs.readFileSync(libraryPath, "utf8"));
-const retained = library.subcircuits.filter((entry) => !String(entry.typeId).startsWith("subcircuits.tdps."));
-const firstTdpsIndex = library.subcircuits.findIndex((entry) => String(entry.typeId).startsWith("subcircuits.tdps."));
-const generated = manifest.entries.map(({ typeId, file }) => ({ typeId, manifest: file }));
-library.subcircuits = firstTdpsIndex < 0
-  ? [...retained, ...generated]
-  : [...retained.slice(0, firstTdpsIndex), ...generated, ...retained.slice(firstTdpsIndex)];
-fs.writeFileSync(libraryPath, `${JSON.stringify(library, null, 2)}\n`, "utf8");
+const withoutTdps = library.subcircuits.filter((entry) => !String(entry.typeId).startsWith("subcircuits.tdps."));
+if (withoutTdps.length !== library.subcircuits.length) {
+  library.subcircuits = withoutTdps;
+  fs.writeFileSync(libraryPath, `${JSON.stringify(library, null, 2)}\n`, "utf8");
+}
+const plantsPath = path.join(outputDir, "plants.json");
+const plants = JSON.parse(fs.readFileSync(plantsPath, "utf8"));
+const knownProjects = new Map(plants.plants.map((entry) => [entry.typeId, entry.project]));
+const slug = (text) => text.normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toLowerCase();
+const retainedPlants = plants.plants.filter((entry) => !String(entry.typeId).startsWith("subcircuits.tdps."));
+const firstTdpsPlant = plants.plants.findIndex((entry) => String(entry.typeId).startsWith("subcircuits.tdps."));
+const generatedPlants = manifest.entries.map(({ typeId, file, label }) => ({
+  typeId, manifest: file, project: knownProjects.get(typeId) ?? `planta_${slug(label)}.lsproj`,
+}));
+plants.plants = firstTdpsPlant < 0
+  ? [...retainedPlants, ...generatedPlants]
+  : [...retainedPlants.slice(0, firstTdpsPlant), ...generatedPlants, ...retainedPlants.slice(firstTdpsPlant)];
+fs.writeFileSync(plantsPath, `${JSON.stringify(plants, null, 2)}\n`, "utf8");
 
 // Telas de processo NATIVAS (biblioteca grafica `graphics.*`), nunca mais o bitmap de referencia:
 // `apply-tdps-reference-symbols.mjs` gravava `symbol.background = {kind:"image", asset:"<png>"}` e

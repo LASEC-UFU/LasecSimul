@@ -57,7 +57,7 @@ export function resolvePaletteFolderPath(entry: Pick<WebviewComponentCatalogEntr
   return [entry.category, ...(entry.subcategory ? [entry.subcategory] : [])].filter((segment) => segment.length > 0);
 }
 
-function entryMatchesQuery(entry: PaletteRenderableEntry, query: string): boolean {
+function entryMatchesQuery(entry: PaletteRenderableEntry, query: string, folderPath: readonly string[]): boolean {
   if (!query) return true;
   const haystack = normalizeSearchText(
     [
@@ -65,7 +65,7 @@ function entryMatchesQuery(entry: PaletteRenderableEntry, query: string): boolea
       entry.typeId,
       entry.category,
       entry.subcategory,
-      ...resolvePaletteFolderPath(entry),
+      ...folderPath,
     ]
       .filter(Boolean)
       .join(" ")
@@ -112,21 +112,29 @@ export type PaletteLanguage = "pt-BR" | "en";
 
 /** Uma pasta de topo prioritária e os nomes com que ela chega do catálogo: o da língua base
  * (pt-BR) e, quando existe, o traduzido. A pasta é A MESMA nos dois casos. */
-interface RootFolderName {
+export interface RootFolderName {
   readonly "pt-BR": string;
   readonly en?: string;
 }
 
+/** Subseção de Controle que recebe tudo o que antes ficava na RAIZ da aba Controle (blocos de
+ * diagrama: Constante, Sonda, Expressão, Processo genérico e os 24 `subcircuits.control.*`). */
+export const FUNCTION_BLOCKS_FOLDER: RootFolderName = { "pt-BR": "Blocos Funcionais", en: "Function Blocks" };
+
 const ROOT_FOLDER_PRIORITY: Partial<Record<WorkspaceSection, readonly RootFolderName[]>> = {
   analog: [{ "pt-BR": "Microcontroladores" }],
-  // PLC-IEC, Protocolos Industriais, Ferramentas e Modelos -- nesta ordem -- dentro de Processo.
-  process: [
+  // PLC-IEC, Protocolos Industriais, Ferramentas e Blocos Funcionais -- nesta ordem -- dentro de
+  // Controle. Os três primeiros vieram da antiga aba Processo, sem mudar de subseção.
+  control: [
     { "pt-BR": "PLC IEC 61131-3", en: "IEC 61131-3 PLC" },
     { "pt-BR": "Protocolos Industriais", en: "Industrial Protocols" },
     { "pt-BR": "Ferramentas", en: "Tools" },
-    { "pt-BR": "Modelos", en: "Models" },
+    FUNCTION_BLOCKS_FOLDER,
   ],
-  misc: [{ "pt-BR": "peripherals" }],
+  // Conectores logo depois dos periféricos. Os conectores do catálogo canônico chegam em inglês
+  // ("Connectors", tradução) e o túnel de sinal (`controlGraphCatalog.ts`, sem tradução) em
+  // português: listar os dois nomes aqui é o que os junta numa pasta só, na língua da paleta.
+  misc: [{ "pt-BR": "peripherals" }, { "pt-BR": "Conectores", en: "Connectors" }],
 };
 
 function rootFolderPriorityIndex(workspaceSection: WorkspaceSection | undefined, label: string): number {
@@ -134,12 +142,27 @@ function rootFolderPriorityIndex(workspaceSection: WorkspaceSection | undefined,
   return priority ? priority.findIndex((name) => name["pt-BR"] === label || name.en === label) : -1;
 }
 
+/**
+ * Caminho de pasta de uma entrada DENTRO da sua aba. Igual a `resolvePaletteFolderPath`, exceto em
+ * Controle: um item declarado `workspaceSection: "control"` que não esteja já numa das subseções
+ * conhecidas (PLC, Protocolos Industriais, Ferramentas, Blocos Funcionais) vai para Blocos
+ * Funcionais -- é o que antes aparecia direto na raiz de Controle (o catálogo e os manifestos
+ * gravados continuam com `folderPath: []`; só a apresentação muda, IDs/pinos/propriedades não). O
+ * legado `"process"` (antiga aba Processo) mantém a subseção que já declarava.
+ */
+export function paletteFolderPathForEntry(entry: Pick<PaletteRenderableEntry, "folderPath" | "category" | "subcategory" | "typeId" | "workspaceSection">): string[] {
+  const segments = resolvePaletteFolderPath(entry);
+  if (entry.workspaceSection !== "control") return segments;
+  if (segments.length > 0 && rootFolderPriorityIndex("control", segments[0]!) >= 0) return segments;
+  return [FUNCTION_BLOCKS_FOLDER["pt-BR"], ...segments];
+}
+
 /** Nome de uma pasta de topo conhecida na língua da paleta. Só PARTE do catálogo traduz
  * `folderPath` (`component-catalog.json::translations`): em inglês o PLC e o Modbus chegam com a
- * pasta traduzida, e HART e os modelos (subcircuitos) chegam em português. Sem unificar aqui, a
+ * pasta traduzida, e HART e os blocos (subcircuitos) chegam em português. Sem unificar aqui, a
  * paleta em inglês mostrava "Protocolos Industriais" (HART) e "Industrial Protocols" (Modbus) como
- * duas pastas, e a do PLC -- com o nome traduzido, fora da lista de prioridade -- ia parar depois
- * de "Modelos". Sem `language`, o nome fica como veio. */
+ * duas pastas, e a do PLC -- com o nome traduzido, fora da lista de prioridade -- saía do topo.
+ * Sem `language`, o nome fica como veio. */
 function localizedRootFolder(segment: string, workspaceSection: WorkspaceSection | undefined, language: PaletteLanguage | undefined): string {
   if (!language || !workspaceSection) return segment;
   const name = ROOT_FOLDER_PRIORITY[workspaceSection]?.[rootFolderPriorityIndex(workspaceSection, segment)];
@@ -170,8 +193,9 @@ export function buildPaletteTree(entries: PaletteRenderableEntry[], rawQuery: st
   const query = normalizeSearchText(rawQuery);
 
   for (const entry of entries) {
-    if (entry.hidden || entry.paletteHidden || (workspaceSection && workspaceSectionForCatalogEntry(entry) !== workspaceSection) || !entryMatchesQuery(entry, query)) continue;
-    const pathSegments = resolvePaletteFolderPath(entry);
+    if (entry.hidden || entry.paletteHidden || (workspaceSection && workspaceSectionForCatalogEntry(entry) !== workspaceSection)) continue;
+    const pathSegments = paletteFolderPathForEntry(entry);
+    if (!entryMatchesQuery(entry, query, pathSegments)) continue;
     if (pathSegments.length > 0) pathSegments[0] = localizedRootFolder(pathSegments[0]!, workspaceSection, language);
 
     let targetChildren = roots;

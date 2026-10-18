@@ -7672,14 +7672,14 @@
       "pinCount": 1,
       "icon": "tunel",
       "folderPath": [
-        "Connectors"
+        "Conectores"
       ],
       "defaultProperties": {},
       "hidden": true,
       "help": {
         "description": "Ponto de junção elétrica entre 3 ou mais fios. Nasce automaticamente ao clicar/terminar sobre um fio existente -- não é colocável manualmente."
       },
-      "category": "Connectors",
+      "category": "Conectores",
       "workspaceSection": "misc"
     },
     {
@@ -7688,7 +7688,7 @@
       "pinCount": 10,
       "icon": "bus",
       "folderPath": [
-        "Connectors"
+        "Conectores"
       ],
       "defaultProperties": {
         "width": 8,
@@ -7799,7 +7799,7 @@
           ]
         }
       },
-      "category": "Connectors",
+      "category": "Conectores",
       "workspaceSection": "misc",
       "help": {
         "description": "Conector gráfico para agrupar ou organizar linhas de sinal no esquemático."
@@ -7814,7 +7814,7 @@
       ],
       "icon": "tunel",
       "folderPath": [
-        "Connectors"
+        "Conectores"
       ],
       "defaultProperties": {
         "name": "NetA"
@@ -7822,7 +7822,7 @@
       "help": {
         "description": "Conecta pinos por nome compartilhado em vez de fio desenhado. Serve tanto o circuito elétrico quanto os blocos de sinal (Controle/TDPS) -- o Core decide o domínio pelo que está ligado em cada ponta, igual o par 4-20mA de um transmissor HART: para você é o mesmo túnel, por dentro pode ser elétrico numa ponta e sinal na outra (nunca misturado na mesma ponta)."
       },
-      "category": "Connectors",
+      "category": "Conectores",
       "workspaceSection": "misc"
     },
     {
@@ -8471,7 +8471,7 @@
       "icon": "socket",
       "graphical": true,
       "folderPath": [
-        "Connectors"
+        "Conectores"
       ],
       "defaultProperties": {},
       "package": {
@@ -8614,7 +8614,7 @@
         "pin-7",
         "pin-8"
       ],
-      "category": "Connectors",
+      "category": "Conectores",
       "workspaceSection": "misc",
       "help": {
         "description": "Conector genérico multipino para organizar interfaces de circuito."
@@ -8627,7 +8627,7 @@
       "icon": "header",
       "graphical": true,
       "folderPath": [
-        "Connectors"
+        "Conectores"
       ],
       "defaultProperties": {},
       "package": {
@@ -8770,7 +8770,7 @@
         "pin-7",
         "pin-8"
       ],
-      "category": "Connectors",
+      "category": "Conectores",
       "workspaceSection": "misc",
       "help": {
         "description": "Barra de pinos genérica usada para representar conectores de placas e módulos."
@@ -20479,7 +20479,7 @@
       "folderPath": [
         "PLC IEC 61131-3"
       ],
-      "workspaceSection": "process",
+      "workspaceSection": "control",
       "defaultProperties": {
         "plcIecProjectRef": "",
         "plcArtifactRef": "",
@@ -20540,7 +20540,7 @@
         "Protocolos Industriais",
         "Modbus"
       ],
-      "workspaceSection": "process",
+      "workspaceSection": "control",
       "defaultProperties": {
         "channel": "modbus-1",
         "enabled": true,
@@ -20569,7 +20569,7 @@
         "Protocolos Industriais",
         "Modbus"
       ],
-      "workspaceSection": "process",
+      "workspaceSection": "control",
       "defaultProperties": {
         "channel": "modbus-1",
         "enabled": true,
@@ -20621,7 +20621,7 @@
         "Protocolos Industriais",
         "HART"
       ],
-      "workspaceSection": "process",
+      "workspaceSection": "control",
       "graphical": true,
       "package": {
         "width": 88,
@@ -20732,7 +20732,7 @@
         "Protocolos Industriais",
         "HART"
       ],
-      "workspaceSection": "process",
+      "workspaceSection": "control",
       "graphical": true,
       "package": {
         "width": 72,
@@ -20866,7 +20866,7 @@
         "Protocolos Industriais",
         "HART"
       ],
-      "workspaceSection": "process",
+      "workspaceSection": "control",
       "defaultProperties": {
         "enabled": true,
         "pollingAddress": 0,
@@ -20897,7 +20897,7 @@
         "Protocolos Industriais",
         "HART"
       ],
-      "workspaceSection": "process",
+      "workspaceSection": "control",
       "graphical": true,
       "package": {
         "width": 150,
@@ -21024,7 +21024,7 @@
         "Protocolos Industriais",
         "HART"
       ],
-      "workspaceSection": "process",
+      "workspaceSection": "control",
       "graphical": true,
       "package": {
         "width": 150,

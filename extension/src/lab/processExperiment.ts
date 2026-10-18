@@ -97,9 +97,14 @@ export class ProcessExperiment {
     }
   }
 
-  /** Insere o processo no projeto pela paleta (mesmo caminho do usuário) e liga a atividade a ele. */
+  /** Insere o processo no projeto JÁ INCORPORADO (plantas não ficam na paleta: o projeto carrega a
+   * sua, ver `project/plantTemplates.ts`) e liga a atividade a ele. */
   async insertPlant(): Promise<void> {
-    await vscode.commands.executeCommand("lasecsimul.palette.addComponent", this.plantSpec.typeId);
+    const componentId = await vscode.commands.executeCommand<string | undefined>("lasecsimul.lab.insertEmbeddedPlant", this.plantSpec.typeId);
+    if (!componentId) {
+      this.postPlant({ state: "error", message: `o modelo "${this.plantSpec.name}" não foi encontrado no pacote do LasecSimul` });
+      return;
+    }
     await enqueueCoreMutation(() => this.bind());
   }
 

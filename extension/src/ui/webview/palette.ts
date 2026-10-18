@@ -24,14 +24,19 @@ const persisted = (vscode?.getState() as { query?: string; section?: unknown } |
 
 let state: PaletteState = initialState;
 let query = persisted.query ?? "";
-/** Aba ativa da paleta -- filtra o catalogo por dominio (Analogico/Digital/Controle/Processo).
+/** Aba ativa da paleta -- filtra o catalogo por dominio (Analogico/Digital/Controle/Miscelaneos).
  * Estado puramente local da paleta (nunca compartilhado com o editor, ver FEAT-011): o editor mostra
- * o circuito inteiro sempre, essas abas so existem aqui pra organizar a busca por componente. */
+ * o circuito inteiro sempre, essas abas so existem aqui pra organizar a busca por componente.
+ * `normalizeWorkspaceSelection` aceita o que qualquer versao gravou -- inclusive `"process"`, a aba
+ * Processo removida, que volta como Controle. */
 let section: WorkspaceSection = normalizeWorkspaceSelection(persisted.section).section;
 
 function persistNavigationState(): void {
   vscode?.setState({ query, section });
 }
+
+// Regrava ja migrado (ex.: `"process"` -> `"control"`) para o estado antigo nao ser relido a cada abertura.
+if (persisted.section !== undefined && persisted.section !== section) persistNavigationState();
 
 const UI_TEXT = {
   "pt-BR": {
@@ -46,7 +51,6 @@ const UI_TEXT = {
     workspaceAnalog: "Analógico",
     workspaceDigital: "Digital",
     workspaceControl: "Controle",
-    workspaceProcess: "Processo",
     workspaceMisc: "Miscelâneos",
   },
   en: {
@@ -61,7 +65,6 @@ const UI_TEXT = {
     workspaceAnalog: "Analog",
     workspaceDigital: "Digital",
     workspaceControl: "Control",
-    workspaceProcess: "Process",
     workspaceMisc: "Miscellaneous",
   },
 } as const;
@@ -70,7 +73,6 @@ const WORKSPACE_SECTION_LABEL_KEY: Record<WorkspaceSection, keyof typeof UI_TEXT
   analog: "workspaceAnalog",
   digital: "workspaceDigital",
   control: "workspaceControl",
-  process: "workspaceProcess",
   misc: "workspaceMisc",
 };
 
@@ -103,14 +105,10 @@ function renderWorkspaceTabIcon(tabSection: WorkspaceSection): SVGSVGElement {
       break;
     // Controle: resposta ao degrau com overshoot assentando no setpoint (tracejado) -- o par
     // Analogico(senoide)/Digital(onda quadrada) ja usa a forma de onda como identidade da aba, e
-    // estas duas seguem a mesma linguagem em vez dos simbolos genericos anteriores (seta circular
-    // e erlenmeyer, que nao diziam nada sobre malha de controle nem sobre planta industrial).
+    // esta segue a mesma linguagem em vez de um simbolo generico (seta circular), que nao dizia
+    // nada sobre malha de controle.
     case "control":
       svg.innerHTML = '<path d="M3 9h18" stroke-dasharray="2.5 2.5" opacity="0.6"></path><path d="M3 19h3c3 0 2-15 6-15 3 0 2 9 5 9h4"></path>';
-      break;
-    // Processo: tanque com nivel e tubulacao de entrada/saida (leitura P&ID de planta).
-    case "process":
-      svg.innerHTML = '<path d="M12 2v6"></path><rect x="5" y="8" width="13" height="12" rx="1.5"></rect><path d="M5 13h13"></path><path d="M18 17h4"></path>';
       break;
     case "misc":
       svg.innerHTML = '<circle cx="5" cy="12" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"></circle><circle cx="19" cy="12" r="1.8" fill="currentColor" stroke="none"></circle>';
@@ -140,7 +138,7 @@ function workspaceTabButton(tabSection: WorkspaceSection, active: boolean): HTML
   return button;
 }
 
-/** Setas movem foco+seleção entre as 4 abas (padrão `role="tablist"`), com wrap nas pontas. */
+/** Setas movem foco+seleção entre as abas (padrão `role="tablist"`), com wrap nas pontas. */
 function handleWorkspaceTabsKeydown(event: KeyboardEvent, navigation: HTMLElement): void {
   if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
   const currentIndex = WORKSPACE_SECTION_ORDER.indexOf(section);

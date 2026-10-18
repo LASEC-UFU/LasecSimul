@@ -171,7 +171,7 @@ export class ProcessShell {
     box.className = "plant-status warn";
     const text = document.createElement("span");
     text.textContent = status.state === "missing"
-      ? `Este projeto ainda não tem o processo desta atividade (Processo › Modelos › ${this.plantSpec.name}).`
+      ? `Este projeto ainda não tem o processo desta atividade (${this.plantSpec.name}). "Inserir no projeto" incorpora a planta ao próprio projeto.`
       : `Processo indisponível: ${status.message}`;
     box.appendChild(text);
     if (status.state === "missing") {

@@ -5506,7 +5506,9 @@ function pasteClipboardItems(): void {
   const components = clipboardItems.components.map((source) => {
     const component = cloneComponent(source);
     const descriptor = catalogEntryFor(component.typeId);
-    const baseLabel = descriptor?.label ?? component.typeId;
+    // Sem entrada no catálogo (subcircuito incorporado colado de OUTRO projeto, resolvido pelo host
+    // logo depois): o nome-base vem do rótulo de origem, não do typeId cru.
+    const baseLabel = descriptor?.label ?? (source.label.replace(/-\d+$/, "") || component.typeId);
     const nextId = newComponentId();
     idMap.set(component.id, nextId);
     component.id = nextId;

@@ -25,7 +25,7 @@ export interface PlantParameterSpec {
 export interface PlantSpec {
   kind: ProcessKind;
   typeId: string;
-  /** Nome do modelo na paleta (Processo › Modelos), para a mensagem de planta ausente. */
+  /** Nome do modelo (planta incorporada ao projeto, fora da paleta), para a mensagem de planta ausente. */
   name: string;
   periodNs: number;
   series: readonly PlantSeriesChannel[];

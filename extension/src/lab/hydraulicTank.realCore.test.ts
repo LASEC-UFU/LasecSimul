@@ -6,6 +6,8 @@ import { resolveCoreExecutablePath } from "../core/coreExecutable";
 import { SeriesStore } from "./SeriesStore";
 import { TANK_PLANT } from "../ui/webview/lab/plants";
 import { SeriesBuffer, riemannOnSteps } from "../ui/webview/lab/series/SeriesBuffer";
+import { materializeEmbeddedSubcircuit } from "../project/embeddedSubcircuits";
+import { createPlantTemplateLookup } from "../project/plantTemplates";
 
 /**
  * Vertical "Tanque — da vazão à integral" (docs/53 §2.6) no Core REAL: o subcircuito
@@ -28,6 +30,10 @@ const ids = TANK_PLANT.series.map((c) => c.id);
   try {
     await client.start();
     await client.loadDeviceLibrary(path.join(repoRoot, "subcircuits", "library.json"));
+    // Plantas não são registradas globalmente (fora de library.json): como num projeto, a definição
+    // incorporada da planta é registrada avulsa (ver project/plantTemplates.ts).
+    const plantTemplate = createPlantTemplateLookup(path.join(repoRoot, "subcircuits"));
+    await client.registerAdhocSubcircuitDefinition(materializeEmbeddedSubcircuit(plantTemplate("subcircuits.process.hydraulic_tank")!.manifest));
     const plant = await client.addComponent("subcircuits.process.hydraulic_tank", {}, [], "Tanque (teste)");
     const child = (localId: string) => client.getSubcircuitChildInstanceId(plant.instanceId, localId);
     const channels: SeriesChannel[] = await Promise.all(TANK_PLANT.series.map(async (c) => ({ instanceId: await child(c.localId), port: c.port })));

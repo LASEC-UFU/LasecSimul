@@ -10,7 +10,7 @@ import { sanitizeMcuSerialPorts } from "./catalogMetadata";
 import { SUBCIRCUIT_SCHEMA_VERSION, schemaVersionRejectionMessage } from "./subcircuitDocument";
 import { livePackagePreviewSymbolSvg } from "../ui/webview/componentSymbols";
 import { externalFolderPath } from "./externalComponents";
-import { WorkspaceSection } from "../ui/webview/workspace";
+import { CatalogWorkspaceSection, parseCatalogWorkspaceSection } from "../ui/webview/workspace";
 import { manifestHartDeviceComponentId } from "../hart/hartManifest";
 
 /** Converte um `icon{}` canônico (`PackageDescriptor`, sem pinos) num `<svg>` autocontido pra usar
@@ -322,7 +322,7 @@ export interface ParsedSubcircuitManifest {
   defaultProperties: Record<string, string | number | boolean>;
   help?: WebviewComponentCatalogEntry["help"];
   folderPath: string[] | undefined;
-  workspaceSection?: WorkspaceSection;
+  workspaceSection?: CatalogWorkspaceSection;
   mcuHost: boolean;
   hartDeviceComponentId?: string;
   serialPorts: ReturnType<typeof sanitizeMcuSerialPorts>;
@@ -334,11 +334,8 @@ function manifestFolderPath(json: Record<string, unknown>): string[] | undefined
     : undefined;
 }
 
-function manifestWorkspaceSection(json: Record<string, unknown>): WorkspaceSection | undefined {
-  const value = json.workspaceSection;
-  return value === "analog" || value === "digital" || value === "control" || value === "process" || value === "misc"
-    ? value
-    : undefined;
+function manifestWorkspaceSection(json: Record<string, unknown>): CatalogWorkspaceSection | undefined {
+  return parseCatalogWorkspaceSection(json.workspaceSection);
 }
 
 function manifestIconFields(json: Record<string, unknown>, manifestDir: string): Pick<ParsedSubcircuitManifest, "icon" | "iconSvgInline" | "iconFilePath"> {

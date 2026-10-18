@@ -12,6 +12,406 @@
         "x": 760,
         "y": 360,
         "rotation": 0
+      },
+      "subcircuitRef": {
+        "path": "process_sensor_4_20.lssubcircuit",
+        "lastKnownTypeId": "subcircuits.process.sensor_4_20",
+        "lastKnownPinIds": [
+          "current",
+          "raw"
+        ],
+        "embedded": {
+          "schemaVersion": 3,
+          "typeId": "subcircuits.process.sensor_4_20",
+          "name": "Sensor 4–20 mA (laboratório)",
+          "language": "pt-BR",
+          "folderPath": [
+            "Modelos"
+          ],
+          "workspaceSection": "process",
+          "help": {
+            "description": "Transmissor de pressão como função afim: I = 4 mA + 16 mA·(P − Pmin)/(Pmax − Pmin), saturado em 3,8–20,5 mA como um laço 4–20 mA real. A saída 'raw' mostra o valor sem saturação. P muda com a simulação rodando; a faixa Pmin–Pmax é configuração. Usado pelo experimento A do Laboratório de Cálculo (função afim, ganho/offset, inversa, saturação)."
+          },
+          "components": [
+            {
+              "id": "c_p",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 100,
+                "unit": "kPa"
+              },
+              "visual": {
+                "x": 40,
+                "y": 40,
+                "rotation": 0
+              },
+              "label": "Pressão aplicada P"
+            },
+            {
+              "id": "c_pmin",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 0,
+                "unit": "kPa"
+              },
+              "visual": {
+                "x": 40,
+                "y": 100,
+                "rotation": 0
+              },
+              "label": "Início da faixa (Pmin → 4 mA)"
+            },
+            {
+              "id": "c_pmax",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 200,
+                "unit": "kPa"
+              },
+              "visual": {
+                "x": 40,
+                "y": 160,
+                "rotation": 0
+              },
+              "label": "Fim da faixa (Pmax → 20 mA)"
+            },
+            {
+              "id": "i_raw",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "4+16*(p-pmin)/(pmax-pmin)",
+                "inputs": [
+                  "p",
+                  "pmin",
+                  "pmax"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 240,
+                "y": 80,
+                "rotation": 0
+              },
+              "label": "Corrente sem saturação (mA)"
+            },
+            {
+              "id": "i_loop",
+              "typeId": "control.saturation",
+              "properties": {
+                "minimum": 3.8,
+                "maximum": 20.5,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 440,
+                "y": 80,
+                "rotation": 0
+              },
+              "label": "Corrente do laço (mA)"
+            },
+            {
+              "id": "t_current",
+              "typeId": "connectors.signal_tunnel",
+              "properties": {
+                "name": "current",
+                "pinId": "current",
+                "direction": "Output",
+                "valueType": "Real"
+              },
+              "visual": {
+                "x": 640,
+                "y": 80,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "t_raw",
+              "typeId": "connectors.signal_tunnel",
+              "properties": {
+                "name": "raw",
+                "pinId": "raw",
+                "direction": "Output",
+                "valueType": "Real"
+              },
+              "visual": {
+                "x": 640,
+                "y": 160,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_p",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 150,
+                "height": 40,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "Pressão",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "c_p",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000,
+                "bindMax": 1000000000,
+                "bindUnit": "kPa",
+                "bindDecimals": 1
+              },
+              "visual": {
+                "x": 210,
+                "y": 50,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_i",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 150,
+                "height": 40,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "Corrente",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "i_loop",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000,
+                "bindMax": 1000000000,
+                "bindUnit": "mA",
+                "bindDecimals": 3
+              },
+              "visual": {
+                "x": 210,
+                "y": 106,
+                "rotation": 0
+              }
+            }
+          ],
+          "topology": {
+            "revision": 0,
+            "nodes": [],
+            "conductors": [
+              {
+                "id": "w-1",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_p",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "i_raw",
+                  "pinId": "p"
+                },
+                "points": []
+              },
+              {
+                "id": "w-2",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_pmin",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "i_raw",
+                  "pinId": "pmin"
+                },
+                "points": []
+              },
+              {
+                "id": "w-3",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_pmax",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "i_raw",
+                  "pinId": "pmax"
+                },
+                "points": []
+              },
+              {
+                "id": "w-4",
+                "from": {
+                  "kind": "port",
+                  "componentId": "i_raw",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "i_loop",
+                  "pinId": "in"
+                },
+                "points": []
+              },
+              {
+                "id": "w-5",
+                "from": {
+                  "kind": "port",
+                  "componentId": "i_loop",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_current",
+                  "pinId": "value"
+                },
+                "points": []
+              },
+              {
+                "id": "w-6",
+                "from": {
+                  "kind": "port",
+                  "componentId": "i_raw",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_raw",
+                  "pinId": "value"
+                },
+                "points": []
+              }
+            ]
+          },
+          "interface": [
+            {
+              "pinId": "current",
+              "label": "Corrente (mA)",
+              "internalTunnel": "current",
+              "domain": "signal",
+              "direction": "out",
+              "valueType": "Real",
+              "width": 1
+            },
+            {
+              "pinId": "raw",
+              "label": "Corrente sem saturação (mA)",
+              "internalTunnel": "raw",
+              "domain": "signal",
+              "direction": "out",
+              "valueType": "Real",
+              "width": 1
+            }
+          ],
+          "symbolMode": "custom",
+          "symbol": {
+            "width": 380,
+            "height": 220,
+            "border": true,
+            "shapes": [
+              {
+                "kind": "text",
+                "x": 12,
+                "y": 22,
+                "value": "Transmissor 4–20 mA (função afim)",
+                "fontSize": 13,
+                "textAnchor": "start",
+                "color": "#0f172a"
+              },
+              {
+                "kind": "rect",
+                "x": 24,
+                "y": 60,
+                "w": 150,
+                "h": 100,
+                "fill": "#e0f2fe",
+                "stroke": "#0369a1",
+                "strokeWidth": 1.5
+              },
+              {
+                "kind": "text",
+                "x": 99,
+                "y": 100,
+                "value": "I = 4 + 16·(P − Pmin)",
+                "fontSize": 10,
+                "textAnchor": "middle",
+                "color": "#0c4a6e"
+              },
+              {
+                "kind": "text",
+                "x": 99,
+                "y": 118,
+                "value": "/(Pmax − Pmin)",
+                "fontSize": 10,
+                "textAnchor": "middle",
+                "color": "#0c4a6e"
+              },
+              {
+                "kind": "text",
+                "x": 99,
+                "y": 142,
+                "value": "saturação 3,8–20,5 mA",
+                "fontSize": 9,
+                "textAnchor": "middle",
+                "color": "#0c4a6e"
+              }
+            ],
+            "pins": [
+              {
+                "id": "current",
+                "kind": "ANALOG_OUT",
+                "x": 380,
+                "y": 90,
+                "angle": 0,
+                "length": 8,
+                "label": "Corrente (mA)"
+              },
+              {
+                "id": "raw",
+                "kind": "ANALOG_OUT",
+                "x": 380,
+                "y": 130,
+                "angle": 0,
+                "length": 8,
+                "label": "Corrente sem saturação (mA)"
+              }
+            ]
+          },
+          "exposedComponents": [
+            {
+              "componentId": "g_p",
+              "x": 210,
+              "y": 50,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 0
+            },
+            {
+              "componentId": "g_i",
+              "x": 210,
+              "y": 106,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 1
+            }
+          ],
+          "exportedPropertyComponentIds": [
+            "c_p",
+            "c_pmin",
+            "c_pmax"
+          ]
+        }
       }
     }
   ],

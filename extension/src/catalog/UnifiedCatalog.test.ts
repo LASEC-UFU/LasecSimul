@@ -119,14 +119,14 @@ test("entryToWebview: pinIds válido sobrevive intacto", () => {
 test("catalogo canonico registra PLC, Modbus e HART nas areas visiveis", () => {
   const catalog = loadUnifiedCatalog(process.cwd(), "pt-BR").catalog;
   const byTypeId = new Map(catalog.map((entry) => [entry.typeId, entry]));
-  // PLC-IEC mora em Processo (primeira subseção, ver paletteTree.ts::ROOT_FOLDER_PRIORITY), não
-  // mais em Controle -- reorganização que tirou também o nível redundante "Process" de folderPath.
-  assert(byTypeId.get("plc.instance")?.workspaceSection === "process", "PLC deve existir na aba Processo");
-  assert(byTypeId.get("plc.instance")?.folderPath?.[0] === "PLC IEC 61131-3", "PLC deve ficar na sua própria subseção, direto em Processo");
+  // PLC-IEC é a primeira subseção de Controle (ver paletteTree.ts::ROOT_FOLDER_PRIORITY); a antiga
+  // aba Processo, onde morava, foi removida sem mudar a subseção nem o folderPath.
+  assert(byTypeId.get("plc.instance")?.workspaceSection === "control", "PLC deve existir na aba Controle");
+  assert(byTypeId.get("plc.instance")?.folderPath?.[0] === "PLC IEC 61131-3", "PLC deve ficar na sua própria subseção, direto em Controle");
   for (const typeId of ["protocol.modbus.server", "protocol.modbus.client", "protocol.hart.device.standard", "protocol.hart.device.smar_tt301", "protocol.hart.device.smar_fy301", "protocol.hart.modem"]) {
     const entry = byTypeId.get(typeId);
-    assert(entry?.workspaceSection === "process", `${typeId} deve existir na aba Processo`);
-    assert(entry?.folderPath?.[0] === "Protocolos Industriais", `${typeId} deve ficar sob Processo/Protocolos Industriais, sem nível redundante "Process"`);
+    assert(entry?.workspaceSection === "control", `${typeId} deve existir na aba Controle`);
+    assert(entry?.folderPath?.[0] === "Protocolos Industriais", `${typeId} deve ficar sob Controle/Protocolos Industriais, sem nível redundante "Process"`);
   }
   assert(!byTypeId.has("protocol.hart.transmitter") && !byTypeId.has("protocol.hart.communicator"),
     "os blocos HART de barramento virtual antigo não devem existir no catálogo");

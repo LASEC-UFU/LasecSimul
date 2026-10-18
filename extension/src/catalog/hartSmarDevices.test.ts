@@ -5,6 +5,7 @@ import { assert, createTestRunner } from "../ipc/testSupport/MockCoreServer";
 import { loadUnifiedCatalog } from "./UnifiedCatalog";
 import { sanitizePackage } from "./packageSanitizers";
 import { buildPaletteTree, PaletteTreeNode } from "../ui/webview/paletteTree";
+import { workspaceSectionForCatalogEntry } from "../ui/webview/workspace";
 import { livePackagePreviewSymbolSvg } from "../ui/webview/componentSymbols";
 
 // The standard HART field device is the base every transmitter is built
@@ -28,14 +29,14 @@ function findFolder(nodes: PaletteTreeNode[], label: string): Extract<PaletteTre
       assert(matches.length === 1, `esperava exatamente uma entrada para ${typeId}`);
       const entry = matches[0];
       if (!entry) throw new Error(`entrada ausente: ${typeId}`);
-      assert(entry.workspaceSection === "process", `${typeId} deveria pertencer a Processo`);
+      assert(workspaceSectionForCatalogEntry(entry) === "control", `${typeId} deveria pertencer a Controle`);
       assert(JSON.stringify(entry.folderPath) === JSON.stringify(["Protocolos Industriais", "HART"]), `${typeId} deveria reutilizar a pasta HART`);
       assert(!entry.disabled, `${typeId} não deveria estar desabilitado`);
     }
   });
 
-  await test("the Process palette has one HART folder containing the HART devices", () => {
-    const industrial = findFolder(buildPaletteTree(catalog, "", "process"), "Protocolos Industriais");
+  await test("the Control palette has one HART folder containing the HART devices", () => {
+    const industrial = findFolder(buildPaletteTree(catalog, "", "control"), "Protocolos Industriais");
     assert(Boolean(industrial), "pasta Protocolos Industriais ausente");
     if (!industrial) throw new Error("pasta Protocolos Industriais ausente");
     const hart = findFolder(industrial.children, "HART");

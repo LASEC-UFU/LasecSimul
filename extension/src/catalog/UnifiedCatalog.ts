@@ -5,7 +5,7 @@ import { defaultComponentCatalog } from "../ui/webview/catalog";
 import { controlGraphCatalog } from "./controlGraphCatalog";
 import { sanitizeMcuSerialPorts } from "./catalogMetadata";
 import { sanitizePackage, simulidePaintHasRelativeImage } from "./packageSanitizers";
-import { WorkspaceSection } from "../ui/webview/workspace";
+import { CatalogWorkspaceSection } from "../ui/webview/workspace";
 
 export type RegisteredSourceKind = "abi-device" | "mcu-adapter" | "subcircuit-file";
 
@@ -32,7 +32,7 @@ export interface UnifiedCatalogItem {
   propertySchema?: PropertySchemaEntry[];
   help?: { description?: string; url?: string; file?: string };
   folderPath?: string[];
-  workspaceSection?: WorkspaceSection;
+  workspaceSection?: CatalogWorkspaceSection;
   category?: string;
   subcategory?: string;
   hidden?: boolean;

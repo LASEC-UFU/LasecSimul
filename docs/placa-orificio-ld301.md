@@ -2,7 +2,9 @@
 
 Subcircuito `subcircuits.process.orifice_flow_dp`
 (`subcircuits/process_orifice_flow_dp.lssubcircuit`, gerado por
-`scripts/generate-orifice-flow.py`). Fica na paleta em *Processo › Modelos*.
+`scripts/generate-orifice-flow.py`). Não fica na paleta: plantas não são registradas
+globalmente; cada projeto traz a sua incorporada e o modelo avulso é o `.lsproj`
+`planta_placa_de_orificio_vazao_por_dp.lsproj` (gerado por `scripts/generate-plant-projects.cjs`).
 O projeto pronto é `trm/ld301/placa_orificio_ld301.lsproj`.
 
 É um trecho de tubulação com uma placa de orifício concêntrica (ISO 5167-2)

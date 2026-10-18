@@ -122,53 +122,57 @@ async function domClick(locator) {
     }
     if (!paletteFrame) throw new Error("Paleta real do LasecSimul nao abriu");
 
-    const processTab = paletteFrame.getByRole("tab", { name: /^(Processo|Process)$/ }).first();
-    await processTab.waitFor({ state: "visible", timeout: 30000 });
-    await domClick(processTab);
+    // A antiga aba Processo não existe mais: PLC, protocolos e ferramentas moram em Controle.
+    if (await paletteFrame.getByRole("tab", { name: /^(Processo|Process)$/ }).count()) throw new Error("a aba Processo não deveria mais existir");
+    const controlTab = paletteFrame.getByRole("tab", { name: /^(Controle|Control)$/ }).first();
+    await controlTab.waitFor({ state: "visible", timeout: 30000 });
+    await domClick(controlTab);
 
-    const requiredProcessTypeIds = [
+    const requiredControlTypeIds = [
       "plc.instance",
       "protocol.modbus.server",
       "protocol.modbus.client",
       "protocol.hart.device.standard",
       "protocol.hart.modem",
-      "subcircuits.process.fopdt",
-      "subcircuits.tdps.basic_flow_loop",
-      "subcircuits.tdps.smith_predictor",
-      "subcircuits.tdps.split_range",
-      "subcircuits.tdps.surge_tank",
-      "subcircuits.tdps.heat_exchanger",
-      "subcircuits.tdps.furnace",
-      "subcircuits.tdps.boiler",
-      "subcircuits.tdps.reactor",
-      "subcircuits.tdps.ph_control",
+      "control.pid_station",
+      "control.constant",
+      "control.observer",
+      "subcircuits.control.gain",
+      "subcircuits.control.pid",
     ];
-    for (const typeId of requiredProcessTypeIds) {
+    for (const typeId of requiredControlTypeIds) {
       // O título é "typeId\ncaminho\ndica": o `\a ` (quebra de linha em CSS) exige o typeId INTEIRO,
-      // senão `subcircuits.tdps.furnace` também casaria com `subcircuits.tdps.furnace_master_slave`.
+      // senão `subcircuits.control.pid` também casaria com outro typeId que comece igual.
       await paletteFrame.locator(`.palette-item[title^="${typeId}\\a "]`).waitFor({ state: "attached", timeout: 30000 });
     }
-    const processLayout = await paletteFrame.evaluate(() => {
+    // Plantas não são registradas globalmente: nenhuma aparece na paleta (cada projeto traz a sua).
+    for (const typeId of ["subcircuits.process.fopdt", "subcircuits.tdps.basic_flow_loop", "subcircuits.tdps.boiler", "subcircuits.process.hydraulic_tank"]) {
+      if (await paletteFrame.locator(`.palette-item[title^="${typeId}\\a "]`).count()) throw new Error(`a planta ${typeId} não deveria estar na paleta`);
+    }
+    const controlLayout = await paletteFrame.evaluate(() => {
       const typeIdOf = (item) => (item.getAttribute("title") || "").split("\n")[0];
       return Array.from(document.querySelectorAll(".palette__tree > .palette-folder")).map((folder) => ({
         label: (folder.querySelector(":scope > .palette-folder__summary")?.textContent || "").replace(/^[>v\s]+/, "").trim(),
         typeIds: Array.from(folder.querySelectorAll(".palette-item")).map(typeIdOf),
       }));
     });
-    const folderOf = (typeId) => processLayout.findIndex((folder) => folder.typeIds.includes(typeId));
-    const layoutText = JSON.stringify(processLayout.map((folder) => folder.label));
-    if (processLayout[0]?.typeIds[0] !== "plc.instance") throw new Error(`o PLC deveria ser o primeiro item de Processo: ${layoutText}`);
+    const folderOf = (typeId) => controlLayout.findIndex((folder) => folder.typeIds.includes(typeId));
+    const layoutText = JSON.stringify(controlLayout.map((folder) => folder.label));
+    if (controlLayout[0]?.typeIds[0] !== "plc.instance") throw new Error(`o PLC deveria ser o primeiro item de Controle: ${layoutText}`);
     if (folderOf("protocol.modbus.server") !== 1 || folderOf("protocol.hart.modem") !== 1) {
       throw new Error(`Modbus e HART deveriam estar na mesma pasta, logo depois do PLC: ${layoutText}`);
     }
-    if (folderOf("subcircuits.process.fopdt") !== 2) throw new Error(`os modelos deveriam vir depois dos protocolos: ${layoutText}`);
+    if (folderOf("control.pid_station") !== 2) throw new Error(`Ferramentas deveria vir depois dos protocolos: ${layoutText}`);
+    if (folderOf("control.constant") !== 3 || folderOf("subcircuits.control.gain") !== 3) {
+      throw new Error(`os blocos que estavam na raiz de Controle deveriam estar em Blocos Funcionais, depois de Ferramentas: ${layoutText}`);
+    }
 
     // A paleta é reconstruída quando o catálogo chega de novo (ex.: Core terminando de subir); se
     // isso acontecer no meio da captura, o elemento some e basta tentar outra vez.
     for (let attempt = 0; ; attempt += 1) {
       try {
         await paletteFrame.locator(".palette").screenshot({
-          path: path.join(artifacts, "process-palette.actual.png"),
+          path: path.join(artifacts, "control-palette.actual.png"),
           animations: "disabled",
         });
         break;

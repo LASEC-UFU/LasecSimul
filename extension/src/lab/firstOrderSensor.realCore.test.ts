@@ -5,6 +5,8 @@ import { CoreClient } from "../ipc/CoreClient";
 import { resolveCoreExecutablePath } from "../core/coreExecutable";
 import { SeriesStore } from "./SeriesStore";
 import { FIRST_ORDER_PLANT, SENSOR_PLANT, type PlantSpec } from "../ui/webview/lab/plants";
+import { materializeEmbeddedSubcircuit } from "../project/embeddedSubcircuits";
+import { createPlantTemplateLookup } from "../project/plantTemplates";
 
 /**
  * Experimentos D (primeira ordem) e A (sensor 4–20 mA) de docs/53 §1 no Core REAL, pelas mesmas séries e
@@ -26,6 +28,11 @@ const MS = 1_000_000;
   try {
     await client.start();
     await client.loadDeviceLibrary(path.join(repoRoot, "subcircuits", "library.json"));
+    // Plantas não são registradas globalmente (fora de library.json): como num projeto, a definição
+    // incorporada da planta é registrada avulsa (ver project/plantTemplates.ts).
+    const plantTemplate = createPlantTemplateLookup(path.join(repoRoot, "subcircuits"));
+    await client.registerAdhocSubcircuitDefinition(materializeEmbeddedSubcircuit(plantTemplate("subcircuits.process.first_order_lab")!.manifest));
+    await client.registerAdhocSubcircuitDefinition(materializeEmbeddedSubcircuit(plantTemplate("subcircuits.process.sensor_4_20")!.manifest));
 
     const attach = async (plant: PlantSpec) => {
       const outer = await client.addComponent(plant.typeId, {}, [], plant.name);

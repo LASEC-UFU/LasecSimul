@@ -2,7 +2,9 @@
 
 Subcircuito `subcircuits.process.pressurized_tank_dp`
 (`subcircuits/process_pressurized_tank_dp.lssubcircuit`, gerado por
-`scripts/generate-pressurized-tank.py`). Fica na paleta em *Processo › Modelos*.
+`scripts/generate-pressurized-tank.py`). Não fica na paleta: plantas não são registradas
+globalmente; cada projeto traz a sua incorporada e o modelo avulso é o `.lsproj`
+`planta_tanque_pressurizado_nivel_por_dp.lsproj` (gerado por `scripts/generate-plant-projects.cjs`).
 
 É um tanque fechado e pressurizado com:
 

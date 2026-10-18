@@ -1,5 +1,5 @@
 import { PackageDescriptor } from "../ui/webview/model";
-import { WorkspaceSection } from "../ui/webview/workspace";
+import { CatalogWorkspaceSection, parseCatalogWorkspaceSection } from "../ui/webview/workspace";
 import { ProjectComponent, ProjectTopology, ProjectTopologyEndpoint } from "../project/ProjectTypes";
 import { sanitizePackage } from "./packageSanitizers";
 import { isIpdLineClass } from "../ui/webview/ipdLineStyle";
@@ -68,7 +68,7 @@ export interface SubcircuitDocument {
   translations?: Record<string, { name?: string }>;
   serialPorts?: Array<{ label: string; usartIndex: 0 | 1 | 2 }>;
   folderPath?: string[];
-  workspaceSection?: WorkspaceSection;
+  workspaceSection?: CatalogWorkspaceSection;
   icon?: PackageDescriptor;
   /** Metadados de catálogo -- passam intocados (o Core/paleta já entendem esses campos hoje,
    * inalterados por esta refatoração). */
@@ -218,9 +218,7 @@ export function parseSubcircuitDocument(raw: unknown, manifestDir: string): Pars
     translations: typeof obj.translations === "object" && obj.translations !== null ? (obj.translations as Record<string, { name?: string }>) : undefined,
     serialPorts: Array.isArray(obj.serialPorts) ? (obj.serialPorts as SubcircuitDocument["serialPorts"]) : undefined,
     folderPath: Array.isArray(obj.folderPath) ? (obj.folderPath as string[]) : undefined,
-    workspaceSection: obj.workspaceSection === "analog" || obj.workspaceSection === "digital" || obj.workspaceSection === "control" || obj.workspaceSection === "process"
-      ? obj.workspaceSection
-      : undefined,
+    workspaceSection: parseCatalogWorkspaceSection(obj.workspaceSection),
     defaultProperties: typeof obj.defaultProperties === "object" && obj.defaultProperties !== null ? (obj.defaultProperties as Record<string, unknown>) : undefined,
     propertySchema: Array.isArray(obj.propertySchema) ? (obj.propertySchema as unknown[]) : undefined,
     help: typeof obj.help === "object" && obj.help !== null ? (obj.help as { description?: string }) : undefined,

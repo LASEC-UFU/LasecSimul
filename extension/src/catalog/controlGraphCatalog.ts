@@ -76,10 +76,11 @@ function pidStationPackage(pins: readonly string[]): PackageDescriptor {
 
 /** Os únicos primitivos que os modelos TDPS instanciam DIRETO e que não têm um bloco
  * `subcircuits.control.*` equivalente (ver `scripts/generate-control-block-library.mjs`): só estes
- * aparecem na paleta, na RAIZ da aba Controle (`folderPath: []`), junto dos 24 blocos da
- * biblioteca. Todo o resto de `control.*` é a implementação interna desses 24 blocos (o "stage"
- * de cada `.lssubcircuit`) -- duplicar isso na paleta era justamente a subseção "Controle" que
- * aparecia dentro de Processo. */
+ * aparecem na paleta, em Controle › Blocos Funcionais junto dos 24 blocos da biblioteca
+ * (`folderPath: []` + `workspaceSection: "control"`; a subseção vem de
+ * `paletteTree.ts::paletteFolderPathForEntry`). Todo o resto de `control.*` é a implementação interna
+ * desses 24 blocos (o "stage" de cada `.lssubcircuit`) -- duplicar isso na paleta era justamente a
+ * subseção "Controle" que aparecia dentro da antiga aba Processo. */
 const PALETTE_VISIBLE_TYPE_IDS = new Set(["control.observer", "control.calc_expression", "control.process", "control.constant", "control.pid_station"]);
 
 function entry(definition: ControlDefinition): WebviewComponentCatalogEntry {
@@ -87,7 +88,7 @@ function entry(definition: ControlDefinition): WebviewComponentCatalogEntry {
   const isPid = typeId === "control.pid_station";
   // `paletteHidden` (só a paleta), nunca `hidden` (que apagaria a INSTÂNCIA do render): no editor de
   // subcircuito estes blocos são o conteúdo principal e precisam aparecer junto dos túneis.
-  return { typeId, label: isPid ? "Sintonia" : label, category: isPid ? "Ferramentas" : "Controle", folderPath: isPid ? ["Ferramentas"] : [], workspaceSection: isPid ? "process" : "control", icon: "package", hidden: false,
+  return { typeId, label: isPid ? "Sintonia" : label, category: isPid ? "Ferramentas" : "Controle", folderPath: isPid ? ["Ferramentas"] : [], workspaceSection: "control", icon: "package", hidden: false,
     paletteHidden: !PALETTE_VISIBLE_TYPE_IDS.has(typeId), graphical: true,
     pinCount: pins.length, pinIds: [...pins], defaultProperties: { ...defaults },
     ...(typeId.startsWith("control.") ? { readoutFormat: { kind: "scalar" as const, unit: "" } } : {}),

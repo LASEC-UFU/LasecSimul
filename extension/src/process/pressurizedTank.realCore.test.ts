@@ -3,6 +3,8 @@ import { assert, createTestRunner } from "../ipc/testSupport/MockCoreServer";
 import { CoreProcess } from "../ipc/CoreProcess";
 import { CoreClient } from "../ipc/CoreClient";
 import { resolveCoreExecutablePath } from "../core/coreExecutable";
+import { materializeEmbeddedSubcircuit } from "../project/embeddedSubcircuits";
+import { createPlantTemplateLookup } from "../project/plantTemplates";
 
 /**
  * Pressurized tank (`subcircuits/process_pressurized_tank_dp.lssubcircuit`) wired to the LD301 on a
@@ -35,6 +37,10 @@ function hartRequest(command: number, data: Buffer = Buffer.alloc(0)): string {
   try {
     await client.start();
     await client.loadDeviceLibrary(path.join(repoRoot, "subcircuits", "library.json"));
+    // Plantas não são registradas globalmente (fora de library.json): como num projeto, a definição
+    // incorporada da planta é registrada avulsa (ver project/plantTemplates.ts).
+    const plantTemplate = createPlantTemplateLookup(path.join(repoRoot, "subcircuits"));
+    await client.registerAdhocSubcircuitDefinition(materializeEmbeddedSubcircuit(plantTemplate("subcircuits.process.pressurized_tank_dp")!.manifest));
     const plant = await client.addComponent("subcircuits.process.pressurized_tank_dp", {}, [], "Tanque (teste)");
     const ld301 = await client.addComponent("subcircuits.hart.smar_ld301", {}, ld301Pins, "LD301 (teste)");
     const inner = await client.getSubcircuitChildInstanceId(ld301.instanceId, "ld301");

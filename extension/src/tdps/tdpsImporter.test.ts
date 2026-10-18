@@ -124,8 +124,10 @@ function listSmpFiles(root: string): string[] {
       const validation = validateSubcircuitDocument(parsed.document);
       assert(validation.errors.length === 0, `${entry.file}: ${validation.errors.join(" | ")}`);
       assert(parsed.document.typeId === entry.typeId && parsed.document.name === entry.label, `${entry.file} deve manter identidade e nome do inventario`);
-      assert(parsed.document.workspaceSection === "process", `${entry.file} deveria estar no workspace Process`);
-      assert(JSON.stringify(parsed.document.folderPath) === JSON.stringify(["Modelos"]), `${entry.file} deveria aparecer diretamente em Processo > Modelos`);
+      // Metadado de origem preservado (não editado em massa); a planta não está em library.json e só
+      // entra num projeto incorporada -- ver project/plantTemplates.ts.
+      assert(parsed.document.workspaceSection === "process", `${entry.file} deveria manter o metadado de origem (workspaceSection legado)`);
+      assert(JSON.stringify(parsed.document.folderPath) === JSON.stringify(["Modelos"]), `${entry.file} deveria manter folderPath de origem`);
       assert(parsed.document.components.some((component) => component.typeId === "connectors.signal_tunnel"), `${entry.file} deve usar túnel de sinal`);
       assert(parsed.document.components.every((component) => component.typeId !== "connectors.tunnel"), `${entry.file} não deve misturar túnel elétrico`);
       for (const component of parsed.document.components) {

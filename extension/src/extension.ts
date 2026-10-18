@@ -22,7 +22,7 @@ import { PropertyInspectorViewProvider } from "./ui/views/PropertyInspectorViewP
 import { hartSignalGraphPinIds } from "./ui/views/hartInspectorSections";
 import { materializePinGroup, registerPackage } from "./ui/webview/componentSymbols";
 import { buildGenericSubcircuitPackage, buildGenericSubcircuitSymbol, regenerateGenericSubcircuitState } from "./ui/webview/genericSubcircuitPackage";
-import { absoluteDeviceRefPath, absoluteSubcircuitRefPath, importProjectCommand, openProjectCommand, openProjectFile, openRecentProjectCommand, projectComponentToWebviewComponent, refreshDirtyIndicator, saveProjectAsCommand, saveProjectCommand, webviewComponentToProjectComponent } from "./project/projectCommands";
+import { absoluteDeviceRefPath, absoluteSubcircuitRefPath, importProjectCommand, insertEmbeddedPlant, openProjectCommand, openProjectFile, openRecentProjectCommand, projectComponentToWebviewComponent, refreshDirtyIndicator, resolveCurrentProjectSubcircuitReferences, saveProjectAsCommand, saveProjectCommand, webviewComponentToProjectComponent } from "./project/projectCommands";
 import { loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./catalog/UnifiedCatalog";
 import { attachPropertySchemas, refreshUnifiedCatalogState, registerCatalogFileCommand, removeRegisteredCatalogItemCommand } from "./catalog/catalogCommands";
 import { hasShowOnSymbolProperty, nextIndexedLabel } from "./catalog/catalogMerge";
@@ -1436,7 +1436,17 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         selectedWireIds: wires.map((wire) => wire.id),
       };
       void (async () => {
-        for (const component of inserted.inserted) await pushComponentToCore(component.id, component.typeId, component.properties, component.pins);
+        // Colado de OUTRO projeto (ex.: a planta copiada do `.lsproj` independente dela): o subcircuito
+        // incorporado/por caminho ainda não está no catálogo deste projeto -- resolve antes do Core,
+        // como na abertura (registro avulso, entrada `projectLocal` fora da paleta).
+        if (inserted.inserted.some((component) => component.subcircuitRef && !state.schematicState.catalog.some((entry) => entry.typeId === component.typeId))) {
+          await resolveCurrentProjectSubcircuitReferences();
+          syncSchematicPanel();
+        }
+        for (const insertedComponent of inserted.inserted) {
+          const component = state.schematicState.components.find((candidate) => candidate.id === insertedComponent.id) ?? insertedComponent;
+          await pushComponentToCore(component.id, component.typeId, component.properties, component.pins);
+        }
         for (const wire of wires) await pushWireToCore(wire);
       })();
       syncSchematicPanel();
@@ -2728,6 +2738,12 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
       }
     }),
     vscode.commands.registerCommand("lasecsimul.palette.addComponent", (typeId: string) => addPaletteComponent(typeId)),
+    // Interno (Laboratório de Cálculo): plantas não estão na paleta; a da atividade entra no projeto
+    // aberto já incorporada (`subcircuitRef.embedded`). Devolve o id do componente criado.
+    vscode.commands.registerCommand("lasecsimul.lab.insertEmbeddedPlant", async (typeId: string) => {
+      if (!state.schematicPanel) openSchematicEditor(context.extensionUri);
+      return insertEmbeddedPlant(typeId, syncSchematicPanel);
+    }),
     vscode.commands.registerCommand("lasecsimul.run", () => void runSimulationWithFirmwareCheck()),
     vscode.commands.registerCommand("lasecsimul.debugFirmware", () => void debugMcuFirmwareCommand(mcuCommandOptions())),
     vscode.commands.registerCommand("lasecsimul.pause", () => pauseSimulation()),
@@ -2749,9 +2765,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
       syncSchematicPanel,
     })),
     vscode.commands.registerCommand("lasecsimul.importProject", () => importProjectCommand({ syncSchematicPanel })),
-    vscode.commands.registerCommand("lasecsimul.importTdps", () => importTdpsSmpCommand({
-      refreshCatalog: () => refreshUnifiedCatalogState(true, catalogCommandOptions()),
-    })),
+    vscode.commands.registerCommand("lasecsimul.importTdps", () => importTdpsSmpCommand()),
     vscode.commands.registerCommand("lasecsimul.plc.newProject", () => newIecProjectCommand()),
     vscode.commands.registerCommand("lasecsimul.plc.importOpenPlcProject", (target?: vscode.Uri) => importOpenPlcProjectCommand(target)),
     vscode.commands.registerCommand("lasecsimul.plc.exportOpenPlcProject", (target?: vscode.Uri) => exportOpenPlcProjectCommand(target)),
