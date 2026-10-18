@@ -82,7 +82,7 @@ São gerados por `scripts/generate-calculus-lab-examples.cjs` (depois de `npm ru
 Os testes de Core real e os e2e precisam do Core compilado (`npm run build:core -- --config Release` na raiz). Compile só os alvos
 necessários e rode os executáveis de teste um de cada vez: o build completo com paralelismo irrestrito pode travar a máquina.
 
-**Empacotamento.** O VSIX leva `out/`, `out-webview/` e `media/`. Por isso o CSS do laboratório fica em `media/lab/lab.css` (a
-v0.0.94 saiu sem ele, corrigido na v0.0.95) e o gráfico do PID em `media/pid/miniplot.js`. O diálogo PID é um iframe `srcdoc`
+**Empacotamento.** O VSIX leva `out/`, `out-webview/` e `media/`. Por isso o CSS do laboratório fica em `media/lab/lab.css` (o commit
+da tag v0.0.94 ainda o deixava fora; essa versão não chegou a ser publicada) e o gráfico do PID em `media/pid/miniplot.js`. O diálogo PID é um iframe `srcdoc`
 que não consegue buscar recursos da Webview: o miniplot é injetado inline pelo `PidTuningPanel`. Subcircuitos novos entram em
 `subcircuits/library.json`, e ids de componentes internos não podem repetir ids de pinos do símbolo (o validador recusa a biblioteca).
