@@ -102,7 +102,13 @@ async function main() {
     console.log(`[bundled-plc] OK ${language.toUpperCase()}: ${result.module.programName} compilado com ${result.module.cxxToolchainVersion || "g++"} ` +
       `em ${(result.durationMs / 1000).toFixed(1)} s (STruCpp ${result.module.strucppVersion})`);
   }
-  fs.rmSync(work, { recursive: true, force: true });
+  // Limpeza do temporário não faz parte do portão: no runner Windows um arquivo do worker ainda pode estar
+  // preso logo depois da compilação (ENOTEMPTY derrubou a v0.0.94 com tudo aprovado). Tenta de novo e só avisa.
+  try {
+    fs.rmSync(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+  } catch (error) {
+    console.warn(`[bundled-plc] aviso: não removeu ${work}: ${error && error.message ? error.message : error}`);
+  }
 }
 
 main().catch((error) => fail(error && error.stack ? error.stack : String(error)));
