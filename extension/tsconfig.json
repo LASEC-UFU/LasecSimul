@@ -24,6 +24,7 @@
     "out-webview",
     "test",
     "src/ui/webview/main.ts",
+    "src/ui/webview/controlDesigner/main.ts",
     "src/ui/webview/palette.ts",
     "src/ui/webview/lab/ui/**"
   ]
