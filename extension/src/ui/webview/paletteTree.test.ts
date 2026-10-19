@@ -280,11 +280,11 @@ const catalog: PaletteRenderableEntry[] = [
     const blocks = controlTree[1];
     const typeIds = blocks?.kind === "folder" ? blocks.children.map((node) => (node.kind === "component" ? node.typeId : `folder:${node.label}`)).sort() : [];
     assert(
-      JSON.stringify(typeIds) === JSON.stringify(["control.calc_expression", "control.constant", "control.observer", "control.process"]),
+      JSON.stringify(typeIds) === JSON.stringify(["control.calc_expression", "control.constant", "control.observer", "control.process", "control.state_space"]),
       `Blocos Funcionais deveria expor so Sonda/Expressao/Processo/Constante, sem subpasta -- veio ${JSON.stringify(typeIds)}`
     );
     // IDs, pinos e propriedades não mudam com a reorganização: só a apresentação.
-    for (const typeId of ["control.calc_expression", "control.constant", "control.observer", "control.process"]) {
+    for (const typeId of ["control.calc_expression", "control.constant", "control.observer", "control.process", "control.state_space"]) {
       const entry = controlGraphCatalog.find((item) => item.typeId === typeId);
       assert(entry?.workspaceSection === "control" && Array.isArray(entry.folderPath) && entry.folderPath.length === 0, `${typeId} continua declarado como antes`);
     }

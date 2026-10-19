@@ -217,10 +217,13 @@ function renderTreeNode(node: PaletteTreeNode, depth: number): HTMLElement {
   const rowTag = node.disabled ? "div" : "button";
   const row = document.createElement(rowTag);
   row.className = `palette-item${node.disabled ? " palette-item--disabled" : " palette-item--button"}`;
+  row.dataset.typeId = node.typeId;
   row.style.setProperty("--palette-indent", indent);
   if (!node.disabled) {
     row.setAttribute("type", "button");
-    row.addEventListener("click", () => vscode?.postMessage({ type: "startPlacingComponent", typeId: node.typeId }));
+    row.addEventListener("click", () => vscode?.postMessage(node.paletteActionCommand
+      ? { type: "runPaletteAction", command: node.paletteActionCommand }
+      : { type: "startPlacingComponent", typeId: node.typeId }));
   }
 
   const icon = document.createElement("img");
@@ -236,12 +239,14 @@ function renderTreeNode(node: PaletteTreeNode, depth: number): HTMLElement {
   label.textContent = node.label;
   const meta = document.createElement("div");
   meta.className = "palette-item__meta";
-  meta.textContent = node.disabled ? (node.disabledReason ?? t("unavailable")) : node.pinCount === 0 ? t("visual") : pinCountLabel(node.pinCount);
+  meta.textContent = node.paletteActionCommand ? "Abrir ferramenta" : node.disabled ? (node.disabledReason ?? t("unavailable")) : node.pinCount === 0 ? t("visual") : pinCountLabel(node.pinCount);
   text.append(label, meta);
 
-  row.title = node.disabled
+  row.title = node.typeId === "action.ident"
+    ? "Identificar modelos dinâmicos a partir de dados de entrada e saída"
+    : node.disabled
     ? `${node.typeId}\n${node.pathSegments.join(" > ")}\n${node.disabledReason ?? t("unavailable")}`
-    : `${node.typeId}\n${node.pathSegments.join(" > ")}\n${t("addHint")}`;
+    : node.paletteActionCommand ? "Abrir o ambiente de projeto e análise de controladores" : `${node.typeId}\n${node.pathSegments.join(" > ")}\n${t("addHint")}`;
 
   row.append(icon, text);
 
@@ -294,7 +299,9 @@ function render(): void {
     if (event.key === "Enter" && visibleComponents.length === 1) {
       event.preventDefault();
       const singleMatch = visibleComponents[0];
-      if (singleMatch) vscode?.postMessage({ type: "startPlacingComponent", typeId: singleMatch.typeId });
+      if (singleMatch) vscode?.postMessage(singleMatch.paletteActionCommand
+        ? { type: "runPaletteAction", command: singleMatch.paletteActionCommand }
+        : { type: "startPlacingComponent", typeId: singleMatch.typeId });
     }
   });
 

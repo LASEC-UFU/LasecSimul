@@ -87,6 +87,7 @@ export type HostToWebviewMessage =
   | { version: number; type: "selectComponent"; componentId: string | null }
   | { version: number; type: "inspectorUpdateProperty"; componentId: string; name: string; value: string | number | boolean }
   | { version: number; type: "beginComponentPlacement"; typeId: string }
+  | { version: number; type: "insertIdentifiedModel"; typeId: string; label: string; properties: Record<string, string | number | boolean> }
   | { version: number; type: "syncState"; project: WebviewProjectState }
   /** PC-1/EX-7 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec) -- versão incremental de "syncState": só os
    * campos de nível superior de `WebviewProjectState` que MUDARAM desde o último sync (comparação
@@ -196,7 +197,7 @@ export type WebviewToHostMessage =
   | { version: number; type: "requestOpenPidTuning"; componentId: string }
   | { version: number; type: "pidPropertyChanged"; componentId: string; name: string; value: string | number | boolean }
   | { version: number; type: "pidDialogClosed" }
-  | { version: number; type: "selectionChanged"; componentId: string | null }
+  | { version: number; type: "selectionChanged"; componentId: string | null; selectedComponentIds?: string[] }
   | { version: number; type: "webviewReady" }
   /** Toolbar conversion actions: the textual DSL is a view of the same
    * authoring model, never a parallel circuit representation. */

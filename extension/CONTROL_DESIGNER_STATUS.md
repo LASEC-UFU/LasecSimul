@@ -80,3 +80,26 @@ Verificação desta atualização: `npm run compile`, `npm run test:control-desi
 - Lugar das raízes refina com tolerâncias de curvatura e deslocamento e informa resíduo e esgotamento dos limites. Atingir as tolerâncias não prova que não exista um ramo estreito entre amostras.
 - A interface agora apresenta essas condições como tolerâncias numéricas e explicita que a curva do lugar das raízes não tem certificado formal de cobertura. A limitação de certificação permanece aberta: removê-la requer isolamento/certificação de raízes com aritmética intervalar ou exata e subdivisão certificada, não apenas mais amostras.
 - Validação desta rodada: `npm run test:control-designer` passou (34 testes LTI e 11 de integração); `npm run compile` passou.
+
+## Atualização: certificação sob demanda
+
+- O botão **Certificar análises** executa uma rotina independente dos cálculos usados para renderizar os gráficos. O painel de progresso do VS Code permite cancelar; a rotina tem orçamento de 10 s e encerra como inconclusiva se excedido.
+- Nyquist certifica a contagem de polos instáveis com aritmética racional exata dos coeficientes IEEE-754 recebidos e tabela de Routh. A transformação bilinear trata o domínio discreto. Ordem acima de 8, singularidades e casos na fronteira retornam inconclusivo.
+- Bode e lugar das raízes ainda retornam inconclusivo: o isolamento Sturm existe como base, mas a derivação exata do polinômio de magnitude ainda não está ligada ao fluxo; a prova de cobertura dos ramos por intervalos de ganho ainda não existe. A interface não apresenta esses resultados como certificados.
+- O cálculo interativo dos gráficos permanece independente dessa ação.
+- Validação: `npm run compile` e `npm run test:control-designer` passaram (35 casos LTI, 11 de integração).
+
+## Atualização da certificação de Bode e lugar das raízes
+
+- Bode agora forma exatamente, em racionais, a equação derivada de |G(jω)|² ou |G(e^(jωTs))|² e usa Sturm para contar todas as raízes reais dentro da faixa física. Só marca a contagem como certificada quando o número concorda com os candidatos localizados numericamente. A contagem é formal; as frequências desenhadas continuam aproximações, pois ainda não são exibidos intervalos certificados de localização.
+- Lugar das raízes agora tem uma prova fechada para plantas de primeira ordem: a única raiz é uma função racional monotônica do ganho, e os valores extremos delimitam todo o ramo para K entre 10^-3 e 10^3. Para ordem maior ou ramo que vai ao infinito, a rotina retorna inconclusivo.
+- Nyquist mantém a prova racional exata por Routh já descrita.
+- Limites efetivos: tempo máximo de 10 s, cancelamento pelo usuário e limite de ordem explícito em cada método. As análises numéricas que desenham os gráficos seguem independentes.
+
+## Atualização final: certificados de cobertura
+
+- Bode constrói a equação estacionária com racionais exatos a partir dos coeficientes binários de entrada. Sturm isola cada raiz real da equação na banda física em intervalos racionais disjuntos; cada intervalo precisa corresponder a um candidato do localizador numérico antes do status ser certificado. O resultado inclui a largura máxima dos intervalos. Ordem acima de 6, associação ambígua, tempo excedido ou limite de subdivisões resulta em inconclusivo.
+- Lugar das raízes usa subdivisão do ganho e o teorema de Rouché com aritmética racional: discos disjuntos são provados conter a multiplicidade correta para todo ganho do subintervalo. A soma das multiplicidades deve igualar o grau do polinômio, cobrindo todos os polos para cada ganho. Suporta ordens 1 a 4; ordem maior, passagem pelo infinito, dificuldade numérica, cancelamento ou orçamento esgotado resulta em inconclusivo. O relatório inclui subintervalos certificados e raio máximo das caixas.
+- Nyquist mantém a contagem exata por Routh racional, com transformação bilinear para modelos discretos, até ordem 8. Casos singulares ou na fronteira retornam inconclusivo.
+- O botão sob demanda exibe progresso e aceita cancelamento. O padrão limita a execução a 10 s e 2.048 subdivisões do lugar das raízes; os gráficos interativos continuam usando os cálculos rápidos existentes.
+- Validação: `npm run compile` e `npm run test:control-designer` passaram (35 testes LTI e 11 testes de integração), incluindo certificados Bode contínuo/discreto e lugar das raízes de segunda ordem nos dois domínios.

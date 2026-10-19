@@ -182,6 +182,55 @@ CompiledProcessSubcircuit ProcessSubcircuitCompiler::compile(
             ports[component.id].inputs["in"] = {component.id, "in"};
             ports[component.id].output = {component.id, "out"};
         };
+        if (component.typeId == "control.state_space") {
+            const auto parseJson = [&](const char* key) { return nlohmann::json::parse(properties.value(key, std::string("[]"))); };
+            const auto matrix = parseJson("A"), vectorB = parseJson("B"), vectorC = parseJson("C");
+            if (!matrix.is_array() || matrix.empty() || matrix.size() > 24 || !vectorB.is_array() || !vectorC.is_array() ||
+                vectorB.size() != matrix.size() || vectorC.size() != matrix.size())
+                throw std::invalid_argument("A/B/C invalidas no espaco de estados: " + component.id);
+            const size_t n = matrix.size();
+            std::vector<double> parameters;
+            parameters.reserve(n * n + 2 * n + 1);
+            for (const auto& row : matrix) {
+                if (!row.is_array() || row.size() != n) throw std::invalid_argument("A deve ser quadrada: " + component.id);
+                for (const auto& value : row) {
+                    if (!value.is_number() || !std::isfinite(value.get<double>())) throw std::invalid_argument("A deve ser finita: " + component.id);
+                    parameters.push_back(value.get<double>());
+                }
+            }
+            for (const auto* vector : {&vectorB, &vectorC}) for (const auto& value : *vector) {
+                if (!value.is_number() || !std::isfinite(value.get<double>())) throw std::invalid_argument("B/C devem ser finitas: " + component.id);
+                parameters.push_back(value.get<double>());
+            }
+            const double direct = number(properties, "D", 0.0);
+            if (!std::isfinite(direct)) throw std::invalid_argument("D deve ser finito: " + component.id);
+            parameters.push_back(direct);
+            const auto initial = properties.contains("x0") ? (properties.at("x0").is_string() ? nlohmann::json::parse(properties.at("x0").get<std::string>()) : properties.at("x0")) : nlohmann::json::array();
+            if (!initial.is_array() || (!initial.empty() && initial.size() != n))
+                throw std::invalid_argument("x0 deve ser um vetor vazio ou ter n elementos: " + component.id);
+            for (size_t i = 0; i < n; ++i) {
+                const double value = initial.empty() ? 0.0 : initial[i].get<double>();
+                if (!std::isfinite(value)) throw std::invalid_argument("x0 deve conter valores finitos: " + component.id);
+                parameters.push_back(value);
+            }
+            const std::string domain = properties.value("domain", std::string("continuous"));
+            uint64_t rateNs = periodNs;
+            SignalBlockKind kind = SignalBlockKind::StateSpaceContinuous;
+            if (domain == "discrete") {
+                const double samplePeriod = number(properties, "samplePeriodNs", 0.0);
+                if (!(samplePeriod > 0.0) || !std::isfinite(samplePeriod) || std::floor(samplePeriod) != samplePeriod ||
+                    samplePeriod >= static_cast<double>(UINT64_MAX))
+                    throw std::invalid_argument("espaco de estados discreto exige samplePeriodNs inteiro e positivo: " + component.id);
+                rateNs = static_cast<uint64_t>(samplePeriod);
+                kind = SignalBlockKind::StateSpaceDiscrete;
+            } else if (domain != "continuous") throw std::invalid_argument("domain invalido no espaco de estados: " + component.id);
+            SignalBlockDefinition block = realBlock(component.id, kind, {"in"}, std::move(parameters), rateNs);
+            block.intParameters = {static_cast<int64_t>(n)};
+            result.graph.blocks.push_back(std::move(block));
+            ports[component.id].inputs["in"] = {component.id, "in"};
+            ports[component.id].output = {component.id, "out"};
+            continue;
+        }
         if (component.typeId == "control.gain") { controlUnary(SignalBlockKind::Gain, {number(properties, "gain", 1.0)}); continue; }
         if (component.typeId == "control.integrator") { controlUnary(SignalBlockKind::Integrator, {number(properties, "gain", 1.0), number(properties, "initial", 0.0)}); continue; }
         if (component.typeId == "control.filtered_derivative") { controlUnary(SignalBlockKind::FilteredDerivative, {number(properties, "gain", 1.0), number(properties, "filterTau", 0.01), number(properties, "initial", 0.0)}); continue; }
@@ -220,6 +269,48 @@ CompiledProcessSubcircuit ProcessSubcircuitCompiler::compile(
         if (component.typeId == "control.rate_limiter") { controlUnary(SignalBlockKind::RateLimiter, {number(properties, "riseRate", 1.0), number(properties, "fallRate", 1.0), number(properties, "initial", 0.0)}); continue; }
         if (component.typeId == "control.transfer_function") {
             const std::string model = properties.value("model", std::string("first_order"));
+            if (model == "discrete_transfer_function") {
+                if (!properties.contains("samplePeriodNs") || !properties["samplePeriodNs"].is_number())
+                    throw std::invalid_argument("funcao discreta exige Ts explicitamente especificado: " + component.id);
+                const double samplePeriod = properties["samplePeriodNs"].get<double>();
+                if (!std::isfinite(samplePeriod) || samplePeriod <= 0.0 || std::floor(samplePeriod) != samplePeriod ||
+                    samplePeriod >= static_cast<double>(std::numeric_limits<uint64_t>::max()))
+                    throw std::invalid_argument("samplePeriodNs discreto precisa ser inteiro, finito e positivo: " + component.id);
+                const uint64_t discretePeriodNs = static_cast<uint64_t>(samplePeriod);
+                const auto coefficients = [&](const char* key) {
+                    const std::string value = properties.value(key, std::string{});
+                    std::vector<double> result;
+                    size_t start = 0;
+                    while (start <= value.size()) {
+                        const size_t end = value.find(',', start);
+                        const std::string token = value.substr(start, end == std::string::npos ? std::string::npos : end - start);
+                        size_t consumed = 0;
+                        const double coefficient = std::stod(token, &consumed);
+                        if (consumed != token.size() || !std::isfinite(coefficient))
+                            throw std::invalid_argument("coeficiente discreto invalido: " + component.id);
+                        result.push_back(coefficient);
+                        if (end == std::string::npos) break;
+                        start = end + 1;
+                    }
+                    return result;
+                };
+                auto numerator = coefficients("numeratorCoefficients");
+                auto denominator = coefficients("denominatorCoefficients");
+                if (numerator.empty() || denominator.size() < 2 || numerator.size() > denominator.size())
+                    throw std::invalid_argument("funcao discreta exige coeficientes proprios, denominador dinamico e Ts: " + component.id);
+                if (denominator.front() == 0.0) throw std::invalid_argument("denominador discreto nao pode iniciar em zero: " + component.id);
+                const double leading = denominator.front();
+                for (double& value : numerator) value /= leading;
+                for (double& value : denominator) value /= leading;
+                SignalBlockDefinition block = realBlock(component.id, SignalBlockKind::DiscreteTransferFunction,
+                    {"in"}, numerator, discretePeriodNs);
+                block.realParameters.insert(block.realParameters.end(), denominator.begin(), denominator.end());
+                block.intParameters = {static_cast<int64_t>(numerator.size()), static_cast<int64_t>(denominator.size())};
+                result.graph.blocks.push_back(std::move(block));
+                ports[component.id].inputs["in"] = {component.id, "in"};
+                ports[component.id].output = {component.id, "out"};
+                continue;
+            }
             if (model == "first_order") { controlUnary(SignalBlockKind::FirstOrder, {number(properties, "gain", 1.0), number(properties, "tau", 1.0), number(properties, "initial", 0.0)}); continue; }
             if (model == "second_order") { controlUnary(SignalBlockKind::SecondOrder, {number(properties, "gain", 1.0), number(properties, "omega", 1.0), number(properties, "zeta", 1.0), number(properties, "initial", 0.0), number(properties, "initialDerivative", 0.0)}); continue; }
             if (model == "lead_lag") { controlUnary(SignalBlockKind::LeadLag, {number(properties, "gain", 1.0), number(properties, "leadTau", 0.0), number(properties, "lagTau", 1.0), number(properties, "initial", 0.0)}); continue; }

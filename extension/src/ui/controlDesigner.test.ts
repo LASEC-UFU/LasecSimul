@@ -1,4 +1,5 @@
 import { createTestRunner, assert as assertWithMessage } from "../ipc/testSupport/MockCoreServer";
+import { certifyAnalyses, certifiedRealRootCount } from "./webview/controlDesigner/certification";
 import { bode, closeLoop, closedLoopInitialStateResponse, controllerForm, convertDomain, convertEuler, convertZoh, fromZInverse, interpretDiscretePole, isStable, classifyStability, margins, nyquistEncirclements, polynomialRoots, poles, rootLocus, stateSpaceToTf, stepMetrics, timeResponse, timeResponseForInput, toZInverse, transferFromPolesZeros, validateTf, type TransferFunction } from "./webview/controlDesigner/lti";
 const assert = (ok: boolean, message = "falhou"): void => assertWithMessage(ok, message);
 const near = (a: number, b: number, tol = 1e-5) => Math.abs(a - b) <= tol * Math.max(1, Math.abs(b));
@@ -177,6 +178,31 @@ const near = (a: number, b: number, tol = 1e-5) => Math.abs(a - b) <= tol * Math
     assert(improper&&mixed,"mistura de din?micas incompat?veis foi aceita");
     const result=closeLoop({num:[1],den:[1],domain:"continuous"},{num:[2],den:[1],domain:"continuous"},{num:[1],den:[1,-.5],domain:"discrete",sampleTime:.1},{num:[1],den:[1],domain:"continuous"});
     assert(result.output.domain==="discrete"&&result.output.sampleTime===.1,"ganhos est?ticos n?o adotaram o dom?nio da din?mica");
+  });
+  await test("isolamento de Sturm e contagem de Nyquist certificados usam coeficientes racionais exatos", async () => {
+    assert(certifiedRealRootCount([1, 1, -2], 0, 2) === 1, "Sturm deveria isolar uma raiz no intervalo (0,2)");
+    const result = await certifyAnalyses({ num: [2], den: [1, -1], domain: "continuous" });
+    const nyquist = result.find(item => item.analysis === "nyquist");
+    assert(nyquist?.status === "certified" && nyquist.details?.encirclements === -1, JSON.stringify(nyquist));
+    const discrete = await certifyAnalyses({ num: [2], den: [1, -1.5], domain: "discrete", sampleTime: .1 });
+    const discreteNyquist = discrete.find(item => item.analysis === "nyquist");
+    assert(discreteNyquist?.status === "certified" && discreteNyquist.details?.encirclements === 1, JSON.stringify(discreteNyquist));
+    const discreteSecondOrder = await certifyAnalyses({ num: [2], den: [1, -2, .75], domain: "discrete", sampleTime: .1 });
+    assert(discreteSecondOrder.find(item => item.analysis === "nyquist")?.status === "certified" && discreteSecondOrder.find(item => item.analysis === "nyquist")?.details?.encirclements === -1, JSON.stringify(discreteSecondOrder));
+    const boundary = await certifyAnalyses({ num: [1], den: [1, 1], domain: "discrete", sampleTime: .1 });
+    assert(boundary.find(item => item.analysis === "nyquist")?.status === "inconclusive", "polo discreto na fronteira deve impedir certificado");
+    const bodeProof = await certifyAnalyses({ num: [1], den: [1, .002, 1], domain: "continuous" });
+    const bode = bodeProof.find(item => item.analysis === "bode");
+    assert(bode?.status === "certified" && bode.details?.stationaryPoints === 1, JSON.stringify(bode));
+    const discreteBodeProof = await certifyAnalyses({ num: [1], den: [1, -.5], domain: "discrete", sampleTime: .1 });
+    assert(discreteBodeProof.find(item => item.analysis === "bode")?.status === "certified", JSON.stringify(discreteBodeProof));
+    const locusProof = await certifyAnalyses({ num: [1], den: [1, 1], domain: "continuous" });
+    const locus = locusProof.find(item => item.analysis === "root-locus");
+    assert(locus?.status === "certified" && locus.details?.branches === 1 && Number(locus.details.rootMin) < -1, JSON.stringify(locus));
+    const secondOrderLocus = (await certifyAnalyses({ num: [1], den: [1, 3, 2], domain: "continuous" })).find(item => item.analysis === "root-locus");
+    assert(secondOrderLocus?.status === "certified" && secondOrderLocus.details?.branches === 2, JSON.stringify(secondOrderLocus));
+    const discreteLocus = (await certifyAnalyses({ num: [1], den: [1, -1.2, .32], domain: "discrete", sampleTime: .1 })).find(item => item.analysis === "root-locus");
+    assert(discreteLocus?.status === "certified" && discreteLocus.details?.branches === 2, JSON.stringify(discreteLocus));
   });
   await test("z and z^-1 conversion preserves sample delay",()=>{
     const zModel={num:[.1],den:[1,-.9],domain:"discrete" as const,sampleTime:.1},inverse=toZInverse(zModel);

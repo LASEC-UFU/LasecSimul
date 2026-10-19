@@ -123,6 +123,33 @@ void invalidDynamicParametersFailDuringCompilation() {
     CHECK(rejected, "buffer de atraso sem capacidade falha no cold path");
 }
 
+void stateSpaceBlocksPreserveOriginalDynamics() {
+    SignalGraphDefinition continuous;
+    auto plant = unary("plant", SignalBlockKind::StateSpaceContinuous, {-1.0, 1.0, 1.0, 0.0});
+    plant.intParameters = {1};
+    continuous.blocks = {source("step", 1.0), plant};
+    connect(continuous, "step", "plant");
+    SignalRuntime runtime = runtimeFor(continuous);
+    uint64_t now = 0;
+    for (int i = 0; i < 1000; ++i) acceptedStep(runtime, now, 1'000'000, 1e-10, 1e-5);
+    CHECK(std::abs(runtime.real(runtime.output("plant")) - (1.0 - std::exp(-1.0))) < 1e-6,
+          "continuous A/B/C/D executes its original state equation");
+
+    SignalGraphDefinition discrete;
+    SignalBlockDefinition sampled = unary("sampled", SignalBlockKind::StateSpaceDiscrete, {0.5, 1.0, 1.0, 0.0});
+    sampled.intParameters = {1}; sampled.rate = {100'000'000ull, 0, 0};
+    discrete.blocks = {source("input", 1.0), sampled};
+    connect(discrete, "input", "sampled");
+    SignalRuntime digital = runtimeFor(discrete);
+    CHECK(std::abs(digital.real(digital.output("sampled"))) < 1e-12, "discrete realization starts at x[0]=0");
+    digital.executeUntil(100'000'000ull);
+    CHECK(std::abs(digital.real(digital.output("sampled"))) < 1e-12, "discrete output uses Cx[k]+Du[k]");
+    digital.executeUntil(200'000'000ull);
+    CHECK(std::abs(digital.real(digital.output("sampled")) - 1.0) < 1e-12, "discrete state updates with A x[k]+B u[k]");
+    digital.executeUntil(300'000'000ull);
+    CHECK(std::abs(digital.real(digital.output("sampled")) - 1.5) < 1e-12, "discrete output follows its sampled state");
+}
+
 void discreteAndNonlinearPrimitivesAreIsolated() {
     SignalGraphDefinition graph;
     SignalBlockDefinition delay = unary("z1", SignalBlockKind::UnitDelay, {-1.0});
@@ -143,6 +170,36 @@ void discreteAndNonlinearPrimitivesAreIsolated() {
     CHECK(runtime.real(runtime.output("stick")) == 2.75, "Stiction aplica breakaway/slip");
     runtime.executeUntil(10'000'000'000ull);
     CHECK(runtime.real(runtime.output("z1")) == 3.0, "UnitDelay atualiza na ativacao seguinte");
+}
+
+void discreteTransferFunctionRunsOnItsSampleClock() {
+    SignalGraphDefinition graph;
+    SignalBlockDefinition input = source("step", 1.0);
+    input.rate = {100'000'000ull, 0, 0};
+    auto discrete = unary("digital", SignalBlockKind::DiscreteTransferFunction, {0.1, 1.0, -0.9});
+    discrete.rate = {100'000'000ull, 0, 0};
+    discrete.intParameters = {1, 2};
+    graph.blocks = {input, discrete}; connect(graph, "step", "digital");
+    SignalRuntime runtime = runtimeFor(graph);
+    CHECK(std::abs(runtime.real(runtime.output("digital"))) < 1e-12, "funcao propria discreta inicia sem transmissao direta");
+    runtime.executeUntil(100'000'000ull);
+    CHECK(std::abs(runtime.real(runtime.output("digital")) - 0.1) < 1e-12, "primeira amostra usa x[k-1]");
+    runtime.executeUntil(200'000'000ull);
+    CHECK(std::abs(runtime.real(runtime.output("digital")) - 0.19) < 1e-12, "recorrencia z^-1 segue resposta analitica");
+    runtime.executeUntil(300'000'000ull);
+    CHECK(std::abs(runtime.real(runtime.output("digital")) - 0.271) < 1e-12, "terceira amostra segue resposta analitica");
+
+    SignalGraphDefinition directGraph;
+    auto direct = unary("direct", SignalBlockKind::DiscreteTransferFunction, {2.0, 1.0, 1.0, -0.5});
+    direct.rate = {100'000'000ull, 0, 0}; direct.intParameters = {2, 2};
+    auto directInput = source("step", 1.0); directInput.rate = direct.rate;
+    directGraph.blocks = {directInput, direct}; connect(directGraph, "step", "direct");
+    SignalRuntime directRuntime = runtimeFor(directGraph);
+    CHECK(std::abs(directRuntime.real(directRuntime.output("direct")) - 2.0) < 1e-12,
+          "transmissao direta discreta e avaliada na mesma amostra");
+    directRuntime.executeUntil(100'000'000ull);
+    CHECK(std::abs(directRuntime.real(directRuntime.output("direct")) - 4.0) < 1e-12,
+          "estado da recorrencia direta e atualizado uma vez por tick");
 }
 
 void remainingContinuousPrimitivesAndChainExecute() {
@@ -389,7 +446,9 @@ int main() {
     firstOrderAndFopdtMatchGoldens();
     adaptiveCandidateRollsBackAndConverges();
     invalidDynamicParametersFailDuringCompilation();
+    stateSpaceBlocksPreserveOriginalDynamics();
     discreteAndNonlinearPrimitivesAreIsolated();
+    discreteTransferFunctionRunsOnItsSampleClock();
     remainingContinuousPrimitivesAndChainExecute();
     accumulatorMatchesConservativeOracle();
     accumulatorProjectsOnSampledBoundary();

@@ -18,6 +18,7 @@ export interface PaletteComponentNode {
   kind: "component";
   key: string;
   typeId: string;
+  paletteActionCommand?: string;
   label: string;
   category: string;
   subcategory?: string;
@@ -218,6 +219,7 @@ export function buildPaletteTree(entries: PaletteRenderableEntry[], rawQuery: st
       kind: "component",
       key: `component:${entry.typeId}`,
       typeId: entry.typeId,
+      paletteActionCommand: entry.paletteActionCommand,
       label: entry.label,
       category: entry.category,
       subcategory: entry.subcategory,

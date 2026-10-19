@@ -44,6 +44,11 @@ enum class SignalBlockKind : uint8_t {
     Integrator,
     FilteredDerivative,
     UnitDelay,
+    /** Causal discrete-time transfer function in descending powers of z, clocked by its RateGroup. */
+    DiscreteTransferFunction,
+    /** SISO realization with real A/B/C/D parameters; parameters are row-major A, B, C, D. */
+    StateSpaceContinuous,
+    StateSpaceDiscrete,
     DeadTime,
     FirstOrder,
     SecondOrder,
@@ -221,6 +226,7 @@ private:
     std::vector<uint8_t> m_passiveGroup;
     std::vector<double> m_dynamicState;
     std::vector<double> m_dynamicCandidate;
+    std::vector<double> m_dynamicScratch;
     std::vector<double> m_dynamicFullStep;
     std::vector<double> m_dynamicOutputCandidate;
     std::vector<DelayBuffer> m_delayBuffers;

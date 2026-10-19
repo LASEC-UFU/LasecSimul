@@ -12,7 +12,10 @@
     { "id": "b4", "typeId": "sources.rail", "label": "B4", "properties": { "voltage": 0 }, "visual": { "x": 30, "y": 460, "rotation": 0 } },
     { "id": "b5", "typeId": "sources.rail", "label": "B5", "properties": { "voltage": 5 }, "visual": { "x": 30, "y": 480, "rotation": 0 } },
     { "id": "b6", "typeId": "sources.rail", "label": "B6", "properties": { "voltage": 0 }, "visual": { "x": 30, "y": 500, "rotation": 0 } },
-    { "id": "b7", "typeId": "sources.rail", "label": "B7", "properties": { "voltage": 5 }, "visual": { "x": 30, "y": 520, "rotation": 0 } }
+    { "id": "b7", "typeId": "sources.rail", "label": "B7", "properties": { "voltage": 5 }, "visual": { "x": 30, "y": 520, "rotation": 0 } },
+    { "id": "designerGain", "typeId": "control.gain", "label": "Designer Gain", "properties": { "gain": 1 }, "visual": { "x": 300, "y": 600, "rotation": 0 } },
+    { "id": "designerPlant", "typeId": "control.first_order", "label": "Designer Plant", "properties": { "gain": 2, "tau": 3, "initial": 0 }, "visual": { "x": 450, "y": 600, "rotation": 0 } },
+    { "id": "designerDiscreteTf", "typeId": "control.transfer_function", "label": "Designer Discrete TF", "properties": { "model": "discrete_transfer_function", "numeratorCoefficients": "0.1", "denominatorCoefficients": "1,-0.9", "samplePeriodNs": 100000000 }, "visual": { "x": 600, "y": 600, "rotation": 0 } }
   ],
   "topology": {
     "revision": 0,

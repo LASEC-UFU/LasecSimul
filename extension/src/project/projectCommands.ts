@@ -207,6 +207,8 @@ function projectToWebviewState(project: ProjectDocument, projectDir?: string): W
     // Caminhos de sistemas externos usados dentro das definições: absolutos em memória (como os dos
     // componentes acima); `projectWithRelativeExternalRefs` volta a relativizar ao gravar.
     subsystems: projectDir ? mapTableRefPaths(project.subsystems ?? [], (refPath) => (path.isAbsolute(refPath) ? path.normalize(refPath) : path.resolve(projectDir, refPath))) : project.subsystems ?? [],
+    controlDesignProject: project.controlDesignProject,
+    identProject: project.identProject,
     topology,
     viewport: project.visual.viewport,
     selectedComponentIds: [],
@@ -359,6 +361,8 @@ function projectContentSnapshot(): {
   topology: WebviewProjectState["topology"];
   hmiApplication: WebviewProjectState["hmiApplication"];
   calculusLab: WebviewProjectState["calculusLab"];
+  controlDesignProject: WebviewProjectState["controlDesignProject"];
+  identProject: WebviewProjectState["identProject"];
   subsystems: WebviewProjectState["subsystems"];
 } {
   return {
@@ -367,6 +371,8 @@ function projectContentSnapshot(): {
     topology: state.schematicState.topology,
     hmiApplication: state.schematicState.hmiApplication ? structuredClone(state.schematicState.hmiApplication) : undefined,
     calculusLab: state.schematicState.calculusLab ? structuredClone(state.schematicState.calculusLab) : undefined,
+    controlDesignProject: state.schematicState.controlDesignProject ? structuredClone(state.schematicState.controlDesignProject) : undefined,
+    identProject: state.schematicState.identProject ? structuredClone(state.schematicState.identProject) : undefined,
   };
 }
 
@@ -379,7 +385,7 @@ function markProjectSaved(): void {
  * um esquemático vazio recém-aberto não deve disparar aviso nenhum. */
 export function isProjectDirty(): boolean {
   const current = projectContentSnapshot();
-  if (!state.lastSavedProjectState) return current.components.length > 0 || current.topology.conductors.length > 0 || Boolean(current.hmiApplication) || Boolean(current.calculusLab) || (current.subsystems?.length ?? 0) > 0;
+  if (!state.lastSavedProjectState) return current.components.length > 0 || current.topology.conductors.length > 0 || Boolean(current.hmiApplication) || Boolean(current.calculusLab) || Boolean(current.controlDesignProject) || Boolean(current.identProject) || (current.subsystems?.length ?? 0) > 0;
   return JSON.stringify(current) !== JSON.stringify(state.lastSavedProjectState);
 }
 
@@ -509,6 +515,8 @@ async function writeProjectToFile(filePath: string): Promise<boolean> {
     hmiApplication: state.schematicState.hmiApplication,
     calculusLab: state.schematicState.calculusLab,
     subsystems: state.schematicState.subsystems ?? [],
+    controlDesignProject: state.schematicState.controlDesignProject,
+    identProject: state.schematicState.identProject,
     visual: {
       wires: state.schematicState.topology.conductors
         .filter((wire) => wire.points && wire.points.length > 0)

@@ -17,6 +17,7 @@ interface PaletteHostState {
 type PaletteWebviewMessage =
   | { type: "webviewReady" }
   | { type: "startPlacingComponent"; typeId: string }
+  | { type: "runPaletteAction"; command: string }
   | { type: "removeRegistered"; sourceId: string };
 
 type IconUriPair = { light: vscode.Uri; dark: vscode.Uri };
@@ -31,6 +32,7 @@ export class ComponentPaletteViewProvider implements vscode.WebviewViewProvider 
     private language: LasecSimulLanguage,
     private readonly onAddComponent: (typeId: string) => void,
     private readonly onRemoveRegistered: (item: { sourceId?: string }) => void | Promise<void>,
+    private readonly onRunAction: (command: string) => void = () => undefined,
   ) {
     this.catalog = [...catalog];
   }
@@ -80,6 +82,10 @@ export class ComponentPaletteViewProvider implements vscode.WebviewViewProvider 
       this.onAddComponent(message.typeId);
       return;
     }
+    if (message.type === "runPaletteAction") {
+      if (message.command === "lasecsimul.openControlDesigner" || message.command === "lasecsimul.openIdent") this.onRunAction(message.command);
+      return;
+    }
     if (message.type === "removeRegistered") {
       void this.onRemoveRegistered({ sourceId: message.sourceId });
       return;
@@ -95,8 +101,20 @@ export class ComponentPaletteViewProvider implements vscode.WebviewViewProvider 
   }
 
   private currentState(): PaletteHostState {
+    const action: WebviewComponentCatalogEntry = {
+      typeId: "action.controlDesigner", label: "SisoTools", category: "Ferramentas",
+      folderPath: ["Ferramentas"], workspaceSection: "control", icon: "control", pinCount: 0,
+      iconSvgInline: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 17h4l3-10 4 12 3-8h4"/><circle cx="10" cy="7" r="1.5" fill="currentColor"/></svg>',
+      defaultProperties: {}, paletteActionCommand: "lasecsimul.openControlDesigner",
+    };
+    const identAction: WebviewComponentCatalogEntry = {
+      typeId: "action.ident", label: "Ident", category: "Ferramentas",
+      folderPath: ["Ferramentas"], workspaceSection: "control", icon: "control", pinCount: 0,
+      iconSvgInline: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 18h18M5 15l4-5 3 3 6-8"/><circle cx="18" cy="5" r="2"/></svg>',
+      defaultProperties: {}, paletteActionCommand: "lasecsimul.openIdent",
+    };
     return {
-      catalog: this.catalog.map((entry) => this.decorateCatalogEntry(entry)),
+      catalog: [...this.catalog.map((entry) => this.decorateCatalogEntry(entry)), this.decorateCatalogEntry(action), this.decorateCatalogEntry(identAction)],
       language: this.language,
     };
   }

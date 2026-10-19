@@ -21,6 +21,33 @@ import { resolveProjectSourcePaths } from "../../src/project/projectPathPolicy";
   assert.strictEqual(loaded.components.length, 0);
   assert.strictEqual(loaded.wires.length, 0);
 
+  const controlProject = createEmptyProject();
+  controlProject.controlDesignProject = {
+    version: 1, domain: "continuous", sampleTime: 0.1, discretizationMethod: "tustin", frequencyUnit: "rad/s", coefficientConvention: "z-descending",
+    F: { num: "1", den: "1" }, C: { num: "4", den: "1" },
+    G: { num: "1", den: "1, 2, 0" }, plantStateSpace: { A: [[0, 1], [-2, -3]], B: [0, 1], C: [1, 0], D: 0 }, H: { num: "1", den: "1" },
+    response: "output", requirements: [{ id: "os", kind: "overshoot", value: 20 }],
+    alternatives: [{ name: "PI", color: "#4daafc", controller: { num: "1, 1", den: "1, 0" } }],
+    activeAlternative: "",
+    sourceBindings: { G: { componentId: "plant-1", typeId: "control.first_order", label: "P1", signature: '["control.first_order",{"gain":2,"tau":3}]', modelSignature: '["2","3, 1"]' } },
+  };
+  const controlPath = path.join(tmpDir, "control-design.lsproj");
+  await serializer.save(controlPath, controlProject);
+  assert.deepStrictEqual((await serializer.load(controlPath)).controlDesignProject, controlProject.controlDesignProject,
+    "o projeto de controladores deve sobreviver ao salvar e reabrir o .lsproj");
+
+  const discreteControlProject = createEmptyProject();
+  discreteControlProject.controlDesignProject = {
+    version: 1, domain: "discrete", sampleTime: 0.1, discretizationMethod: "zoh", frequencyUnit: "rad/s", coefficientConvention: "z-inverse",
+    F: { num: "1", den: "1" }, C: { num: "0.1", den: "1, -0.9" },
+    G: { num: "0.1", den: "1, -0.9" }, H: { num: "1", den: "1" }, response: "output",
+    requirements: [{ id: "rho", kind: "poleRadius", value: 0.98, unit: "|z|" }, { id: "upeak", kind: "controlPeak", value: 3, unit: "amplitude", path: "control" }], alternatives: [], activeAlternative: "", plotViewBoxes: { rl: "0 0 640 330" },
+  };
+  const discreteControlPath = path.join(tmpDir, "discrete-control-design.lsproj");
+  await serializer.save(discreteControlPath, discreteControlProject);
+  assert.deepStrictEqual((await serializer.load(discreteControlPath)).controlDesignProject, discreteControlProject.controlDesignProject,
+    "discrete domain, Ts, conversion method and plot view must survive save/reopen");
+
   const auditProject = createEmptyProject();
   const auditHmi = {
     startPageId: "home",

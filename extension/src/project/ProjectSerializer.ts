@@ -1,6 +1,8 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { validateCalculusLab } from "../ui/webview/lab/activity";
+import { validateControlDesignProject } from "../ui/webview/controlDesigner/types";
+import { validateIdentProject } from "../ident/identification";
 import {
   LS_PROJ_SCHEMA_VERSION,
   HmiApplication,
@@ -451,6 +453,8 @@ export class ProjectSerializer {
         : {},
       hmiApplication: validateHmiApplication(parsed.hmiApplication),
       calculusLab: validateCalculusLab(parsed.calculusLab),
+      controlDesignProject: validateControlDesignProject(parsed.controlDesignProject),
+      identProject: validateIdentProject(parsed.identProject),
       ...(subsystems.length > 0 ? { subsystems } : {}),
       mcuFirmware: Array.isArray(parsed.mcuFirmware)
         ? parsed.mcuFirmware.filter(isObject).map((entry) => ({
@@ -471,6 +475,8 @@ export class ProjectSerializer {
       simulationSettings: project.simulationSettings,
       hmiApplication: project.hmiApplication,
       calculusLab: validateCalculusLab(project.calculusLab),
+      controlDesignProject: validateControlDesignProject(project.controlDesignProject),
+      identProject: validateIdentProject(project.identProject),
       subsystems: project.subsystems && project.subsystems.length > 0 ? project.subsystems : undefined,
       mcuFirmware: project.mcuFirmware,
     };

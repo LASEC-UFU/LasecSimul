@@ -2698,12 +2698,60 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && pidDialogOverlay) closePidDialog();
 });
 
-function createHmiPageFromSelection(): void {
+/** Webviews do VS Code bloqueiam window.prompt/alert (sandbox sem allow-modals); este diálogo os substitui. */
+function askText(message: string, initial?: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const dialog = document.createElement("dialog");
+    dialog.style.cssText = "padding:16px;min-width:320px;max-width:520px;";
+    const form = document.createElement("form");
+    form.method = "dialog";
+    const label = document.createElement("p");
+    label.style.whiteSpace = "pre-wrap";
+    label.textContent = message;
+    form.appendChild(label);
+    let input: HTMLInputElement | undefined;
+    if (initial !== undefined) {
+      input = document.createElement("input");
+      input.type = "text";
+      input.value = initial;
+      input.style.width = "100%";
+      form.appendChild(input);
+    }
+    const actions = document.createElement("div");
+    actions.style.cssText = "display:flex;gap:8px;justify-content:flex-end;margin-top:12px;";
+    const ok = document.createElement("button");
+    ok.type = "submit";
+    ok.textContent = "OK";
+    actions.appendChild(ok);
+    if (input) {
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.textContent = currentLocale() === "pt-BR" ? "Cancelar" : "Cancel";
+      cancel.addEventListener("click", () => dialog.close());
+      actions.appendChild(cancel);
+    }
+    form.appendChild(actions);
+    dialog.appendChild(form);
+    let submitted = false;
+    form.addEventListener("submit", () => { submitted = true; });
+    dialog.addEventListener("close", () => {
+      const value = submitted ? (input?.value ?? "") : null;
+      dialog.remove();
+      resolve(value);
+    });
+    document.body.appendChild(dialog);
+    dialog.showModal();
+    input?.focus();
+    input?.select();
+  });
+}
+
+async function createHmiPageFromSelection(): Promise<void> {
   if (subcircuitEditorMode === "hmi") commitHmiSceneToPage();
   const selectedItems = activeSceneComponents().filter((component) =>
     state.selectedComponentIds.includes(component.id) && component.typeId !== TUNNEL_TYPE_ID && component.typeId !== "connectors.signal_tunnel");
-  const name = window.prompt(currentLocale() === "pt-BR" ? "Nome da página HMI:" : "HMI page name:",
-    `${currentLocale() === "pt-BR" ? "Página" : "Page"} ${(state.hmiApplication?.pages.length ?? 0) + 1}`)?.trim();
+  const name = (await askText(currentLocale() === "pt-BR" ? "Nome da página HMI:" : "HMI page name:",
+    `${currentLocale() === "pt-BR" ? "Página" : "Page"} ${(state.hmiApplication?.pages.length ?? 0) + 1}`))?.trim();
   if (!name) return;
   const pageId = `hmi-page-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
   const page = {
@@ -2754,19 +2802,20 @@ function setHmiStartPage(): void {
   persistState(); render();
 }
 
-function setHmiPageDimensions(): void {
+async function setHmiPageDimensions(): Promise<void> {
   const page = hmiPageForEditing();
   if (!page || !state.hmiApplication) return;
-  const widthText = window.prompt(currentLocale() === "pt-BR" ? "Largura da página HMI:" : "HMI page width:", String(page.width))?.trim();
+  const widthText = (await askText(currentLocale() === "pt-BR" ? "Largura da página HMI:" : "HMI page width:", String(page.width)))?.trim();
   if (!widthText) return;
-  const heightText = window.prompt(currentLocale() === "pt-BR" ? "Altura da página HMI:" : "HMI page height:", String(page.height))?.trim();
+  const heightText = (await askText(currentLocale() === "pt-BR" ? "Altura da página HMI:" : "HMI page height:", String(page.height)))?.trim();
   if (!heightText) return;
   const width = Number(widthText);
   const height = Number(heightText);
   if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
-    window.alert(currentLocale() === "pt-BR" ? "As dimensões devem ser números maiores que zero." : "Dimensions must be numbers greater than zero.");
+    await askText(currentLocale() === "pt-BR" ? "As dimensões devem ser números maiores que zero." : "Dimensions must be numbers greater than zero.");
     return;
   }
+  if (!state.hmiApplication) return;
   commitHmiSceneToPage();
   state = { ...state, hmiApplication: { ...state.hmiApplication, pages: state.hmiApplication.pages.map((entry) =>
     entry.id === page.id ? {
@@ -2790,10 +2839,10 @@ function setHmiPageDimensions(): void {
   zoomToFitAllDeferred();
 }
 
-function setHmiStaleTimeout(): void {
+async function setHmiStaleTimeout(): Promise<void> {
   const app = state.hmiApplication;
   if (!app) return;
-  const response = window.prompt(
+  const response = await askText(
     currentLocale() === "pt-BR"
       ? "Marcar bindings como STALE apos quantos ms sem novo frame? Use 0 para desativar."
       : "Mark bindings STALE after how many ms without a new frame? Use 0 to disable.",
@@ -2802,7 +2851,7 @@ function setHmiStaleTimeout(): void {
   if (response === null) return;
   const value = Number(response.trim());
   if (!Number.isFinite(value) || value < 0) {
-    window.alert(currentLocale() === "pt-BR" ? "Informe um numero finito nao negativo." : "Enter a finite non-negative number.");
+    await askText(currentLocale() === "pt-BR" ? "Informe um numero finito nao negativo." : "Enter a finite non-negative number.");
     return;
   }
   const { staleAfterMs: _staleAfterMs, ...rest } = app;
@@ -3076,33 +3125,33 @@ function downloadHmiAuditArtifact(content: string, mimeType: string, fileName: s
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function renameHmiPage(): void {
+async function renameHmiPage(): Promise<void> {
   const page = hmiPageForEditing();
   if (!page || !state.hmiApplication) return;
-  const name = window.prompt(currentLocale() === "pt-BR" ? "Nome da página HMI:" : "HMI page name:", page.name)?.trim();
-  if (!name) return;
+  const name = (await askText(currentLocale() === "pt-BR" ? "Nome da página HMI:" : "HMI page name:", page.name))?.trim();
+  if (!name || !state.hmiApplication) return;
   state = { ...state, hmiApplication: { ...state.hmiApplication, pages: state.hmiApplication.pages.map((entry) => entry.id === page.id ? { ...entry, name } : entry) } };
   persistState(); render();
 }
 
-function addHmiPageNavigation(): void {
+async function addHmiPageNavigation(): Promise<void> {
   const page = hmiPageForEditing();
   const app = state.hmiApplication;
   if (!page || !app) return;
   const choices = app.pages.filter((entry) => entry.id !== page.id);
   if (!choices.length) return;
   const choiceList = choices.map((entry, index) => `${index + 1}. ${entry.name}`).join("\n");
-  const targetIndexText = window.prompt(currentLocale() === "pt-BR"
+  const targetIndexText = (await askText(currentLocale() === "pt-BR"
     ? `Número da página de destino:\n${choiceList}`
-    : `Destination page number:\n${choiceList}`)?.trim();
+    : `Destination page number:\n${choiceList}`, ""))?.trim();
   if (!targetIndexText) return;
   const targetIndex = Number(targetIndexText);
   const target = Number.isInteger(targetIndex) && targetIndex >= 1 ? choices[targetIndex - 1] : undefined;
   if (!target) {
-    window.alert(currentLocale() === "pt-BR" ? "Número de página inválido." : "Invalid page number.");
+    await askText(currentLocale() === "pt-BR" ? "Número de página inválido." : "Invalid page number.");
     return;
   }
-  const label = window.prompt(currentLocale() === "pt-BR" ? "Texto do atalho:" : "Shortcut label:", target.name)?.trim();
+  const label = (await askText(currentLocale() === "pt-BR" ? "Texto do atalho:" : "Shortcut label:", target.name))?.trim();
   if (!label) return;
   const navigation = [...(page.navigation ?? []).filter((item) => item.targetPageId !== target.id), {
     id: `hmi-nav-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`, label, targetPageId: target.id,
@@ -3295,7 +3344,7 @@ function selectOnlyComponent(componentId: string): void {
   selectedWireSegment = undefined;
   selectedWireCorner = undefined;
   selectedTextLabels = [];
-  send({ version: WEBVIEW_MESSAGE_VERSION, type: "selectionChanged", componentId });
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "selectionChanged", componentId, selectedComponentIds: [...state.selectedComponentIds] });
 }
 
 /** Keeps the persistent sidebar in sync with every selection gesture.  The
@@ -3303,7 +3352,7 @@ function selectOnlyComponent(componentId: string): void {
  * multi-selection deliberately clears it instead of showing stale values. */
 function syncPropertyInspectorSelection(): void {
   const componentId = state.selectedComponentIds.length === 1 ? state.selectedComponentIds[0]! : null;
-  send({ version: WEBVIEW_MESSAGE_VERSION, type: "selectionChanged", componentId });
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "selectionChanged", componentId, selectedComponentIds: [...state.selectedComponentIds] });
   renderPropertyDock();
 }
 
@@ -3827,7 +3876,7 @@ function openBatchPropertyDialog(components: WebviewComponentModel[]): void {
   if (components.length === 1) return selectOnlyComponent(components[0]!.id);
   state.selectedComponentIds = components.map((component) => component.id);
   state.selectedWireIds = [];
-  send({ version: WEBVIEW_MESSAGE_VERSION, type: "selectionChanged", componentId: null });
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "selectionChanged", componentId: null, selectedComponentIds: [] });
   render();
 }
 
@@ -7470,6 +7519,25 @@ function scopeChannelsFor(componentId: string): Array<{ timestampsNs: number[]; 
 function logicChannelFor(componentId: string): AnalyzerVectorHistory {
   const real = realLogicHistoryByComponentId.get(componentId);
   if (real) return real;
+  const component = state.components.find((entry) => entry.id === componentId);
+  const configured = component?.properties.signalChannels;
+  if (typeof configured === "string") {
+    try {
+      const parsed = JSON.parse(configured) as unknown;
+      if (Array.isArray(parsed) && parsed.length) {
+        const channels = parsed.flatMap((item) => {
+          if (typeof item !== "object" || item === null) return [];
+          const record = item as Record<string, unknown>, source = typeof record.source === "string" ? record.source : "";
+          if (!source) return [];
+          const match = source.match(/\[(\d+)(?::(\d+))?\]/), msb = match ? Number(match[1]) : 0, lsb = match?.[2] ? Number(match[2]) : msb;
+          const label = typeof record.label === "string" && record.label ? record.label : typeof record.id === "string" ? record.id : source;
+          const kind = (record.kind === "analog" || record.kind === "unsigned" ? record.kind : "digital") as AnalyzerVectorHistory["channels"][number]["kind"];
+          return [{ channelId: typeof record.id === "string" ? record.id : source, label, source, kind, width: Math.abs(msb - lsb) + 1, msb, lsb }];
+        });
+        if (channels.length) return { formatVersion: 2, channels, timestampsNs: [], values: [] };
+      }
+    } catch { /* Configuração inválida: usa o fallback genérico até chegar histórico do Core. */ }
+  }
   const approx = logicHistoryByComponentId[componentId] ?? [];
   return {
     formatVersion: 2,
@@ -12218,6 +12286,14 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     enterPlacementMode(message.typeId);
   }
 
+  if (message.type === "insertIdentifiedModel") {
+    const component = makeComponentFromTypeId(message.typeId);
+    component.label = message.label;
+    component.properties = { ...component.properties, ...message.properties };
+    recordUndoSnapshotIfChanged();
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: "schematic", components: [component], wires: [] });
+  }
+
   if (message.type === "selectComponent") {
     state.selectedComponentIds = message.componentId ? [message.componentId] : [];
     state.selectedWireIds = [];
@@ -12519,7 +12595,7 @@ function nextIndexedLabel(typeId: string, baseLabel: string, components: Webview
  * próprio manifesto (`labelX`/`labelY`) e não é editada pelo esquemático. */
 function enterPlacementMode(typeId: string): void {
   if (subcircuitEditorMode === "hmi" && !typeId.startsWith("graphics.")) {
-    window.alert(currentLocale() === "pt-BR" ? "No modo HMI, adicione elementos gráficos (graphics.*)." : "In HMI mode, place graphic elements (graphics.*).");
+    void askText(currentLocale() === "pt-BR" ? "No modo HMI, adicione elementos gráficos (graphics.*)." : "In HMI mode, place graphic elements (graphics.*).");
     return;
   }
   // Cancela qualquer derivação de fio em andamento primeiro -- as duas ferramentas nunca ficam

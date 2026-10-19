@@ -9,6 +9,7 @@ const unary: ControlDefinition[] = [
   ["control.first_order", "Primeira ordem", ["in", "out"], { gain: 1, tau: 1, initial: 0 }], ["control.second_order", "Segunda ordem", ["in", "out"], { gain: 1, omega: 1, zeta: 1, initial: 0 }],
   ["control.lead_lag", "Lead-Lag", ["in", "out"], { gain: 1, leadTau: 0, lagTau: 1, initial: 0 }], ["control.fopdt", "FOPDT", ["in", "out"], { gain: 1, tau: 1, delay: 0.1, initial: 0 }],
   ["control.transfer_function", "Função de transferência", ["in", "out"], { model: "first_order", gain: 1, tau: 1, initial: 0 }], ["control.valve_characteristic", "Característica de válvula", ["in", "out"], { coefficient: 1, exponent: 1 }],
+  ["control.state_space", "Espaço de estados SISO", ["in", "out"], { A: "[[-1]]", B: "[1]", C: "[1]", D: 0, x0: "[0]", domain: "continuous", samplePeriodNs: 100000000 }],
   ["control.saturation", "Saturação", ["in", "out"], { minimum: 0, maximum: 100 }], ["control.limiter", "Limitador", ["in", "out"], { minimum: 0, maximum: 100 }],
   ["control.deadband", "Banda morta", ["in", "out"], { width: 0 }], ["control.hysteresis", "Histerese", ["in", "out"], { low: 0, high: 1 }],
   ["control.stiction", "Stiction", ["in", "out"], { breakaway: 0, slip: 0 }], ["control.rate_limiter", "Limitador de taxa", ["in", "out"], { riseRate: 1, fallRate: 1 }],
@@ -81,7 +82,7 @@ function pidStationPackage(pins: readonly string[]): PackageDescriptor {
  * `paletteTree.ts::paletteFolderPathForEntry`). Todo o resto de `control.*` é a implementação interna
  * desses 24 blocos (o "stage" de cada `.lssubcircuit`) -- duplicar isso na paleta era justamente a
  * subseção "Controle" que aparecia dentro da antiga aba Processo. */
-const PALETTE_VISIBLE_TYPE_IDS = new Set(["control.observer", "control.calc_expression", "control.process", "control.constant", "control.pid_station"]);
+const PALETTE_VISIBLE_TYPE_IDS = new Set(["control.observer", "control.calc_expression", "control.process", "control.constant", "control.pid_station", "control.state_space"]);
 
 function entry(definition: ControlDefinition): WebviewComponentCatalogEntry {
   const [typeId, label, pins, defaults = {}] = definition;

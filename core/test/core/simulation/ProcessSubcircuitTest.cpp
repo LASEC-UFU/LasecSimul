@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
@@ -264,6 +266,60 @@ void checkedInControlBlockLibraryCompilesAndRuns() {
     }
 }
 
+void discreteTransferFunctionCompilesFromPersistedBlockProperties() {
+    SubcircuitDefinition definition;
+    definition.typeId = "process.discrete-controller";
+    definition.components = {
+        {"input", "connectors.tunnel", R"({"name":"u"})"},
+        {"controller", "control.transfer_function", R"({"model":"discrete_transfer_function","numeratorCoefficients":"0.1","denominatorCoefficients":"1,-0.9","samplePeriodNs":100000000})"},
+        {"output", "connectors.tunnel", R"({"name":"y"})"},
+    };
+    definition.wires = {{"input", "pin", "controller", "in"}, {"controller", "out", "output", "pin"}};
+    definition.interfaceDefs = {signalInterface("u", "in"), signalInterface("y", "out")};
+    SubcircuitRegistry registry; registry.registerDefinition(definition);
+    const auto compiled = ProcessSubcircuitCompiler::compile(registry, definition.typeId);
+    SignalRuntime runtime; runtime.bind(SignalCompiler::compile(compiled.graph));
+    runtime.setExternalReal(compiled.externalInputs.at("u"), 1.0); runtime.executeUntil(0);
+    CHECK(std::abs(runtime.real(runtime.output(compiled.externalOutputs.at("y")))) < 1e-12,
+          "bloco discreto publica valor inicial antes do primeiro tick");
+    runtime.executeUntil(100'000'000ull);
+    CHECK(std::abs(runtime.real(runtime.output(compiled.externalOutputs.at("y"))) - 0.1) < 1e-12,
+          "ProcessSubcircuitCompiler compila coeficientes e samplePeriodNs preservados");
+
+    definition.components[1].propertiesJson = R"({"model":"discrete_transfer_function","numeratorCoefficients":"0.1","denominatorCoefficients":"1,-0.9"})";
+    SubcircuitRegistry missingPeriodRegistry; missingPeriodRegistry.registerDefinition(definition);
+    bool rejectedMissingPeriod = false;
+    try { (void)ProcessSubcircuitCompiler::compile(missingPeriodRegistry, definition.typeId); }
+    catch (const std::invalid_argument&) { rejectedMissingPeriod = true; }
+    CHECK(rejectedMissingPeriod, "modelo discreto dinamico sem Ts explicito nao inventa o periodo padrao");
+}
+
+void stateSpacePropertiesCompileToOriginalContinuousAndDiscreteBlocks() {
+    for (const auto& [domain, expectedKind] : std::array{
+             std::pair{"continuous", SignalBlockKind::StateSpaceContinuous},
+             std::pair{"discrete", SignalBlockKind::StateSpaceDiscrete}}) {
+        SubcircuitDefinition definition;
+        definition.typeId = std::string("process.state-space-") + domain;
+        const std::string properties = std::string(R"({"A":"[[-1]]","B":"[1]","C":"[1]","D":0,"domain":")") + domain +
+            R"(","samplePeriodNs":100000000})";
+        definition.components = {
+            {"input", "connectors.tunnel", R"({"name":"u"})"},
+            {"plant", "control.state_space", properties},
+            {"output", "connectors.tunnel", R"({"name":"y"})"},
+        };
+        definition.wires = {{"input", "pin", "plant", "in"}, {"plant", "out", "output", "pin"}};
+        definition.interfaceDefs = {signalInterface("u", "in"), signalInterface("y", "out")};
+        SubcircuitRegistry registry; registry.registerDefinition(definition);
+        const auto compiled = ProcessSubcircuitCompiler::compile(registry, definition.typeId);
+        const auto block = std::find_if(compiled.graph.blocks.begin(), compiled.graph.blocks.end(), [](const auto& item) { return item.id == "plant"; });
+        CHECK(block != compiled.graph.blocks.end(), "bloco A/B/C/D compilado");
+        if (block != compiled.graph.blocks.end()) {
+            CHECK(block->kind == expectedKind && block->intParameters == std::vector<int64_t>{1}, "dominio e dimensão são preservados");
+            CHECK(block->realParameters == std::vector<double>({-1.0, 1.0, 1.0, 0.0}), "matrizes originais são mantidas no plano compilado");
+        }
+    }
+}
+
 } // namespace
 
 int main() {
@@ -273,6 +329,8 @@ int main() {
     canonicalCalcSupportsConstantsLimitsAndObserverProbes();
     checkedInProcessLibraryCompilesAndRuns();
     checkedInControlBlockLibraryCompilesAndRuns();
+    discreteTransferFunctionCompilesFromPersistedBlockProperties();
+    stateSpacePropertiesCompileToOriginalContinuousAndDiscreteBlocks();
     if (failures == 0) std::puts("ProcessSubcircuitTest: OK");
     return failures == 0 ? 0 : 1;
 }

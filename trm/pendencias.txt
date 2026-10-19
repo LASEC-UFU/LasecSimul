@@ -1,0 +1,4 @@
+faça um plano de colocar todos este recurso que estão no laboratorio de calculo na sessão miscelaneus de forma que eu o user possa contruir esta tele arrastando e soltando este elementos
+
+
+quando eu abro um um HMI ele abre em outra tela igual a parte de calculo ou no proprio shematico ? Se é no proprio esquematico o que muda do subcircuit ? Pergunto isto pois acho que poderia ser uma coisa só onde ambos poderia funcionar como uma coisa só ? Tipo o simbolo do subcircuito poderia ser um HMI onde cada elemento poderia ser instaciado pelo ID, faça um plano sobre isto veja quais os impactos positivos e negativos e se seria muito complexo para implementar ou se realmente so coisas diferente e juntas so teremos prejuizo é que no subcircutio o esquema de exportar elementos me parece muito estranho e colocar elementos HMI mais logico

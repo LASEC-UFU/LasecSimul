@@ -2,6 +2,8 @@ import type { SubsystemDefinition } from "./subsystemModel";
 import type { CatalogWorkspaceSection } from "./workspace";
 import type { IpdLineClass } from "./ipdLineStyle";
 import type { CalculusLab } from "./lab/activity";
+import type { ControlDesignProject } from "./controlDesigner/types";
+import type { IdentProject } from "./ident/types";
 
 export interface WebviewPinModel {
   id: string;
@@ -915,6 +917,8 @@ export interface PackageDescriptor {
 
 export interface WebviewComponentCatalogEntry {
   typeId: string;
+  /** Comando de ação da paleta; itens assim nunca iniciam inserção no circuito. */
+  paletteActionCommand?: string;
   label: string;
   /** Licença/origem acompanha o item até a Webview; não é descartada na projeção do catálogo. */
   provenance?: PackageProvenance;
@@ -1047,6 +1051,8 @@ export interface WebviewProjectState {
   hmiApplication?: HmiApplication;
   /** Definição do Laboratório de Cálculo (ADR 0015). Editada só pelo painel do laboratório; não é sincronizada com a Webview do esquemático. */
   calculusLab?: CalculusLab;
+  controlDesignProject?: ControlDesignProject;
+  identProject?: IdentProject;
   /** Definições de subsistemas INTERNOS do documento em edição (projeto, ou o sistema externo aberto):
    * manifestos completos guardados no próprio documento; instâncias as usam pelo `typeId`. */
   subsystems?: SubsystemDefinition[];

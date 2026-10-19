@@ -248,6 +248,7 @@ bool isContinuous(SignalBlockKind kind) {
     case SignalBlockKind::Fopdt:
     case SignalBlockKind::Accumulator:
     case SignalBlockKind::RateLimiter:
+    case SignalBlockKind::StateSpaceContinuous:
         return true;
     default:
         return false;
@@ -256,7 +257,8 @@ bool isContinuous(SignalBlockKind kind) {
 
 bool isDiscreteState(SignalBlockKind kind) {
     return kind == SignalBlockKind::UnitDelay || kind == SignalBlockKind::Hysteresis ||
-           kind == SignalBlockKind::Stiction || kind == SignalBlockKind::Pid;
+           kind == SignalBlockKind::Stiction || kind == SignalBlockKind::Pid ||
+           kind == SignalBlockKind::DiscreteTransferFunction || kind == SignalBlockKind::StateSpaceDiscrete;
 }
 
 bool usesDelay(SignalBlockKind kind) {
@@ -268,6 +270,9 @@ size_t expectedInputCount(SignalBlockKind kind) {
     case SignalBlockKind::Integrator:
     case SignalBlockKind::FilteredDerivative:
     case SignalBlockKind::UnitDelay:
+    case SignalBlockKind::DiscreteTransferFunction:
+    case SignalBlockKind::StateSpaceContinuous:
+    case SignalBlockKind::StateSpaceDiscrete:
     case SignalBlockKind::DeadTime:
     case SignalBlockKind::FirstOrder:
     case SignalBlockKind::SecondOrder:
@@ -292,6 +297,7 @@ size_t minimumParameterCount(SignalBlockKind kind) {
     case SignalBlockKind::Integrator: return 2;             // gain, initial
     case SignalBlockKind::FilteredDerivative: return 3;    // gain, filter tau, initial filter
     case SignalBlockKind::UnitDelay: return 1;              // initial
+    case SignalBlockKind::DiscreteTransferFunction: return 1; // dynamic coefficient count is validated separately
     case SignalBlockKind::DeadTime: return 2;               // delay seconds, initial
     case SignalBlockKind::FirstOrder: return 3;             // gain, tau, initial
     case SignalBlockKind::SecondOrder: return 5;            // gain, omega, zeta, y0, dy0
@@ -311,6 +317,17 @@ size_t minimumParameterCount(SignalBlockKind kind) {
 
 uint16_t stateWidthFor(const SignalBlockDefinition& block) {
     if (!isContinuous(block.kind) && !isDiscreteState(block.kind)) return 0;
+    if (block.kind == SignalBlockKind::StateSpaceContinuous || block.kind == SignalBlockKind::StateSpaceDiscrete) {
+        if (block.intParameters.size() != 1 || block.intParameters[0] < 1 || block.intParameters[0] > 24)
+            throw std::invalid_argument("realizacao de espaco de estados exige de 1 a 24 estados: " + block.id);
+        return static_cast<uint16_t>(block.intParameters[0]);
+    }
+    if (block.kind == SignalBlockKind::DiscreteTransferFunction) {
+        if (block.intParameters.size() != 2 || block.intParameters[1] < 2) return 0;
+        const uint64_t width = 2ull * static_cast<uint64_t>(block.intParameters[1] - 1);
+        if (width > std::numeric_limits<uint16_t>::max()) throw std::invalid_argument("ordem do controlador discreto excede o limite do bloco: " + block.id);
+        return static_cast<uint16_t>(width);
+    }
     return static_cast<uint16_t>(block.output.type.width *
         (block.kind == SignalBlockKind::SecondOrder ? 2u : block.kind == SignalBlockKind::Pid ? 4u : 1u));
 }
@@ -383,6 +400,28 @@ void validateBlock(const SignalBlockDefinition& block, uint16_t maxWidth) {
         if (reversed) throw std::invalid_argument("Limiter exige minimo <= maximo: " + block.id);
     }
     const size_t dynamicInputs = expectedInputCount(block.kind);
+    if (block.kind == SignalBlockKind::DiscreteTransferFunction) {
+        if (count != 1 || block.output.type != SignalDataType{SignalScalarType::Real, 1} ||
+            block.inputs[0].type != SignalDataType{SignalScalarType::Real, 1})
+            throw std::invalid_argument("funcao discreta exige uma entrada e uma saida Real escalar: " + block.id);
+        if (block.intParameters.size() != 2 || block.intParameters[0] < 1 || block.intParameters[1] < 2 ||
+            block.intParameters[0] > block.intParameters[1] ||
+            block.realParameters.size() != static_cast<size_t>(block.intParameters[0] + block.intParameters[1]))
+            throw std::invalid_argument("coeficientes invalidos na funcao discreta: " + block.id);
+        if (block.realParameters[static_cast<size_t>(block.intParameters[0])] == 0.0 ||
+            !std::all_of(block.realParameters.begin(), block.realParameters.end(), [](double value) { return std::isfinite(value); }))
+            throw std::invalid_argument("funcao discreta exige coeficientes finitos e denominador nao nulo: " + block.id);
+    }
+    if (block.kind == SignalBlockKind::StateSpaceContinuous || block.kind == SignalBlockKind::StateSpaceDiscrete) {
+        if (block.intParameters.size() != 1 || block.intParameters[0] < 1 || block.intParameters[0] > 24)
+            throw std::invalid_argument("espaco de estados exige de 1 a 24 estados: " + block.id);
+        const size_t n = static_cast<size_t>(block.intParameters[0]);
+        if (count != 1 || block.output.type != SignalDataType{SignalScalarType::Real, 1} ||
+            block.inputs[0].type != SignalDataType{SignalScalarType::Real, 1} ||
+            (block.realParameters.size() != n * n + 2 * n + 1 && block.realParameters.size() != n * n + 3 * n + 1) ||
+            !std::all_of(block.realParameters.begin(), block.realParameters.end(), [](double value) { return std::isfinite(value); }))
+            throw std::invalid_argument("matrizes SISO A/B/C/D invalidas no bloco: " + block.id);
+    }
     if (block.kind == SignalBlockKind::Pid) {
         if (count != 2 && count != 4)
             throw std::invalid_argument("PID exige entradas SP/PV e, opcionalmente, A/M e L/R: " + block.id);
@@ -533,7 +572,14 @@ std::shared_ptr<const CompiledSignalGraph> SignalCompiler::compile(const SignalG
         // Exceção: as fronteiras do Accumulator (portas 2+) são lidas na própria ativação
         // (`projectedAccumulator`), então quem as calcula precisa rodar antes.
         const bool accumulatorBound = target.kind == SignalBlockKind::Accumulator && port >= 2;
-        if ((!isContinuous(target.kind) && target.kind != SignalBlockKind::UnitDelay) || accumulatorBound)
+        bool delayedInput = target.kind == SignalBlockKind::UnitDelay;
+        if (target.kind == SignalBlockKind::DiscreteTransferFunction) {
+            const size_t numeratorCount = static_cast<size_t>(target.intParameters.at(0));
+            const size_t denominatorCount = static_cast<size_t>(target.intParameters.at(1));
+            const double direct = denominatorCount == numeratorCount ? target.realParameters.front() : 0.0;
+            delayedInput = direct == 0.0;
+        }
+        if ((!isContinuous(target.kind) && !delayedInput) || accumulatorBound)
             edges[sourceIndex].push_back(targetIndex);
     }
     for (uint32_t block = 0; block < count; ++block) for (uint32_t source : inputSources[block])
@@ -573,6 +619,13 @@ std::shared_ptr<const CompiledSignalGraph> SignalCompiler::compile(const SignalG
             if (next == components[component].front()) cyclic[component] = 1;
         if (!cyclic[component]) continue;
         const auto& first = definition.blocks[components[component].front()];
+        for (uint32_t blockIndex : components[component]) if (definition.blocks[blockIndex].kind == SignalBlockKind::DiscreteTransferFunction) {
+            const auto& discrete = definition.blocks[blockIndex];
+            const size_t numeratorCount = static_cast<size_t>(discrete.intParameters.at(0));
+            const size_t denominatorCount = static_cast<size_t>(discrete.intParameters.at(1));
+            if (denominatorCount == numeratorCount && discrete.realParameters.front() != 0.0)
+                throw std::invalid_argument("funcao discreta com transmissao direta cria uma malha algebrica nao suportada: " + discrete.id);
+        }
         if (first.loopPolicy != AlgebraicLoopPolicy::FixedPoint)
             throw std::invalid_argument("loop algebrico sem politica explicita no bloco: " + first.id);
         for (uint32_t block : components[component]) {
@@ -769,7 +822,7 @@ int64_t wrapMultiply(int64_t left, int64_t right) {
     return std::bit_cast<int64_t>(std::bit_cast<uint64_t>(left) * std::bit_cast<uint64_t>(right));
 }
 
-void evaluate(const CompiledBlock& block, const std::vector<double>& reals, const std::vector<int64_t>& ints,
+void evaluate(const CompiledBlock& block, const std::vector<double>& reals, const std::vector<double>& dynamicState, const std::vector<int64_t>& ints,
               const std::vector<uint8_t>& bools, std::vector<double>& realOut, std::vector<int64_t>& intOut,
               std::vector<uint8_t>& boolOut, std::vector<double>& stack) {
     const uint16_t width = block.output.width;
@@ -819,6 +872,15 @@ void evaluate(const CompiledBlock& block, const std::vector<double>& reals, cons
             case SignalBlockKind::Pid:
                 value = reals[block.output.offset + element];
                 break;
+            case SignalBlockKind::StateSpaceContinuous:
+            case SignalBlockKind::StateSpaceDiscrete: {
+                const size_t n = static_cast<size_t>(block.intParameters[0]);
+                const size_t cOffset = n * n + n;
+                for (size_t state = 0; state < n; ++state)
+                    value += block.realParameters[cOffset + state] * dynamicState[block.stateOffset + state];
+                value += block.realParameters[n * n + 2 * n] * readSlot(reals, block.inputs[0], 0);
+                break;
+            }
             case SignalBlockKind::CalcExpression: {
                 uint16_t top = 0;
                 for (const auto& instruction : block.expression) switch (instruction.op) {
@@ -927,6 +989,7 @@ void SignalRuntime::bind(std::shared_ptr<const CompiledSignalGraph> graph) {
     m_dynamicState.assign(stateCount, 0.0);
     m_dynamicCandidate.assign(stateCount, 0.0);
     m_dynamicFullStep.assign(stateCount, 0.0);
+    m_dynamicScratch.assign(static_cast<size_t>(stateCount) * 5, 0.0);
     m_dynamicOutputCandidate.assign(reals, 0.0);
     m_delayBuffers.clear();
     m_passiveGroup.assign(m_graph ? m_graph->rateGroups.size() : 0, 0);
@@ -956,6 +1019,20 @@ void SignalRuntime::bind(std::shared_ptr<const CompiledSignalGraph> graph) {
                 }
             }
             if (block.stateOffset == UINT32_MAX) continue;
+            if (block.kind == SignalBlockKind::StateSpaceContinuous || block.kind == SignalBlockKind::StateSpaceDiscrete) {
+                const size_t n = static_cast<size_t>(block.intParameters[0]);
+                const size_t x0Offset = n * n + 2 * n + 1;
+                for (size_t i = 0; i < n; ++i)
+                    m_dynamicState[block.stateOffset + i] = block.realParameters.size() >= x0Offset + n
+                        ? block.realParameters[x0Offset + i] : 0.0;
+                double initialOutput = 0.0;
+                const size_t cOffset = n * n + n;
+                for (size_t i = 0; i < n; ++i)
+                    initialOutput += block.realParameters[cOffset + i] * m_dynamicState[block.stateOffset + i];
+                initialOutput += block.realParameters[n * n + 2 * n] * readSlot(m_reals, block.inputs[0], 0);
+                m_reals[block.output.offset] = initialOutput;
+                continue;
+            }
             for (uint16_t element = 0; element < block.output.width; ++element) {
                 if (block.kind == SignalBlockKind::Pid) {
                     m_dynamicState[block.stateOffset + element] = block.realParameters[9];
@@ -1084,6 +1161,23 @@ void SignalRuntime::activateGroup(uint32_t groupIndex, uint64_t timestampNs) {
                 const CompiledBlock& block = m_graph->blocks[blockIndex];
                 if (isDiscreteState(block.kind)) {
                     for (uint16_t element = 0; element < block.output.width; ++element) {
+                        if (block.kind == SignalBlockKind::DiscreteTransferFunction) {
+                            const size_t numeratorCount = static_cast<size_t>(block.intParameters[0]);
+                            const size_t denominatorCount = static_cast<size_t>(block.intParameters[1]);
+                            const size_t order = denominatorCount - 1;
+                            const size_t relativeDegree = denominatorCount - numeratorCount;
+                            const double input = readSlot(m_realSnapshot, block.inputs[0], element);
+                            double output = relativeDegree == 0 ? block.realParameters[0] * input : 0.0;
+                            for (size_t j = 1; j <= order; ++j) {
+                                const size_t numeratorIndex = j >= relativeDegree ? j - relativeDegree : numeratorCount;
+                                if (numeratorIndex < numeratorCount)
+                                    output += block.realParameters[numeratorIndex] * m_dynamicState[block.stateOffset + j - 1];
+                                output -= block.realParameters[numeratorCount + j] *
+                                          m_dynamicState[block.stateOffset + order + j - 1];
+                            }
+                            m_realCandidate[block.output.offset + element] = output;
+                            continue;
+                        }
                         if (block.kind == SignalBlockKind::Pid) {
                             const uint32_t width = block.output.width;
                             double& integral = m_dynamicState[block.stateOffset + element];
@@ -1161,7 +1255,7 @@ void SignalRuntime::activateGroup(uint32_t groupIndex, uint64_t timestampNs) {
                             m_dynamicState[block.stateOffset + element] = output;
                     }
                 } else {
-                    evaluate(block, m_realSnapshot, m_intSnapshot, m_boolSnapshot, m_realCandidate, m_intCandidate,
+                    evaluate(block, m_realSnapshot, m_dynamicState, m_intSnapshot, m_boolSnapshot, m_realCandidate, m_intCandidate,
                              m_boolCandidate, m_expressionStack);
                 }
                 ++m_metrics.blockEvaluations;
@@ -1178,7 +1272,7 @@ void SignalRuntime::activateGroup(uint32_t groupIndex, uint64_t timestampNs) {
         for (uint32_t iteration = 0; iteration < item.maxIterations; ++iteration) {
             m_realSnapshot = m_reals; m_intSnapshot = m_ints; m_boolSnapshot = m_bools;
             for (uint32_t blockIndex : item.blocks) {
-                evaluate(m_graph->blocks[blockIndex], m_realSnapshot, m_intSnapshot, m_boolSnapshot,
+                evaluate(m_graph->blocks[blockIndex], m_realSnapshot, m_dynamicState, m_intSnapshot, m_boolSnapshot,
                          m_realCandidate, m_intCandidate, m_boolCandidate, m_expressionStack);
                 ++m_metrics.blockEvaluations;
             }
@@ -1203,6 +1297,28 @@ void SignalRuntime::activateGroup(uint32_t groupIndex, uint64_t timestampNs) {
         const CompiledBlock& block = m_graph->blocks[blockIndex];
         if (block.kind == SignalBlockKind::UnitDelay) for (uint16_t element = 0; element < block.output.width; ++element)
             m_dynamicState[block.stateOffset + element] = readSlot(m_reals, block.inputs[0], element);
+        if (block.kind == SignalBlockKind::DiscreteTransferFunction) {
+            const size_t order = static_cast<size_t>(block.intParameters[1] - 1);
+            double* state = m_dynamicState.data() + block.stateOffset;
+            for (size_t j = order; j > 1; --j) { state[j - 1] = state[j - 2]; state[order + j - 1] = state[order + j - 2]; }
+            if (order) {
+                state[0] = readSlot(m_reals, block.inputs[0], 0);
+                state[order] = m_reals[block.output.offset];
+            }
+        }
+        if (block.kind == SignalBlockKind::StateSpaceDiscrete) {
+            const size_t n = static_cast<size_t>(block.intParameters[0]);
+            const double input = readSlot(m_reals, block.inputs[0], 0);
+            const double* a = block.realParameters.data();
+            const double* b = a + n * n;
+            for (size_t row = 0; row < n; ++row) {
+                double next = b[row] * input;
+                for (size_t column = 0; column < n; ++column)
+                    next += a[row * n + column] * m_dynamicState[block.stateOffset + column];
+                m_dynamicCandidate[block.stateOffset + row] = next;
+            }
+            std::copy_n(m_dynamicCandidate.data() + block.stateOffset, n, m_dynamicState.data() + block.stateOffset);
+        }
         // Projeção nas fronteiras feita nesta ativação: só x e cumSpill mudam (o resto do estado,
         // inclusive as compensações, segue o passo contínuo).
         if (block.kind == SignalBlockKind::Accumulator) {
@@ -1273,6 +1389,53 @@ void SignalRuntime::beginContinuousStep(uint64_t previousNs, uint64_t currentNs)
 
     for (uint32_t blockIndex : m_graph->continuousBlocks) {
         const CompiledBlock& block = m_graph->blocks[blockIndex];
+        if (block.kind == SignalBlockKind::StateSpaceContinuous) {
+            const size_t n = static_cast<size_t>(block.intParameters[0]);
+            const double* a = block.realParameters.data();
+            const double* b = a + n * n;
+            const double* c = b + n;
+            const double d = block.realParameters[n * n + 2 * n];
+            const double input = readSlot(m_reals, block.inputs[0], 0);
+            const size_t totalStates = m_dynamicState.size(), offset = block.stateOffset;
+            double* k1 = m_dynamicScratch.data() + offset;
+            double* k2 = m_dynamicScratch.data() + totalStates + offset;
+            double* k3 = m_dynamicScratch.data() + 2 * totalStates + offset;
+            double* k4 = m_dynamicScratch.data() + 3 * totalStates + offset;
+            double* temporary = m_dynamicScratch.data() + 4 * totalStates + offset;
+            const auto rk4 = [&](const double* initial, double* result, double step) {
+                for (size_t row = 0; row < n; ++row) {
+                    k1[row] = b[row] * input;
+                    for (size_t column = 0; column < n; ++column) k1[row] += a[row * n + column] * initial[column];
+                    temporary[row] = initial[row] + 0.5 * step * k1[row];
+                }
+                for (size_t row = 0; row < n; ++row) {
+                    k2[row] = b[row] * input;
+                    for (size_t column = 0; column < n; ++column) k2[row] += a[row * n + column] * temporary[column];
+                    temporary[row] = initial[row] + 0.5 * step * k2[row];
+                }
+                for (size_t row = 0; row < n; ++row) {
+                    k3[row] = b[row] * input;
+                    for (size_t column = 0; column < n; ++column) k3[row] += a[row * n + column] * temporary[column];
+                    temporary[row] = initial[row] + step * k3[row];
+                }
+                for (size_t row = 0; row < n; ++row) {
+                    k4[row] = b[row] * input;
+                    for (size_t column = 0; column < n; ++column) k4[row] += a[row * n + column] * temporary[column];
+                    result[row] = initial[row] + step * (k1[row] + 2.0 * k2[row] + 2.0 * k3[row] + k4[row]) / 6.0;
+                }
+            };
+            const double* state = m_dynamicState.data() + offset;
+            double* full = m_dynamicFullStep.data() + offset;
+            double* half = m_dynamicCandidate.data() + offset;
+            rk4(state, full, dt);
+            rk4(state, half, dt * 0.5);
+            rk4(half, half, dt * 0.5);
+            double output = d * input;
+            for (size_t state = 0; state < n; ++state)
+                output += c[state] * m_dynamicCandidate[block.stateOffset + state];
+            m_dynamicOutputCandidate[block.output.offset] = output;
+            continue;
+        }
         if (block.kind == SignalBlockKind::Accumulator) {
             // Exato para entradas ZOH no passo: full == half, erro estimado 0 (como o Tank que substitui).
             const auto [lower, upper] = accumulatorBounds(block, [&](const InputBinding& input) { return readSlot(m_reals, input, 0); });

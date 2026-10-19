@@ -72,7 +72,7 @@ public:
             "control.fopdt", "control.transfer_function", "control.accumulator", "control.valve_characteristic",
             "control.saturation", "control.limiter", "control.deadband", "control.hysteresis",
             "control.stiction", "control.rate_limiter", "control.pid", "control.pid_station", "control.calc_expression",
-            "control.probe", "control.observer", "control.process",
+            "control.probe", "control.observer", "control.process", "control.state_space",
         };
         return {kIds, std::size(kIds)};
     }
@@ -201,6 +201,55 @@ public:
             graph.blocks.push_back(std::move(block));
         };
 
+        if (m_typeId == "control.state_space") {
+            const auto parsed = [&](const char* key) { return nlohmann::json::parse(text(key, "[]")); };
+            const auto matrix = parsed("A"), rawB = parsed("B"), rawC = parsed("C");
+            if (!matrix.is_array() || matrix.empty() || matrix.size() > 24 || !rawB.is_array() || !rawC.is_array() ||
+                rawB.size() != matrix.size() || rawC.size() != matrix.size())
+                throw std::invalid_argument("A/B/C devem representar uma realizacao SISO de 1 a 24 estados");
+            const size_t n = matrix.size();
+            std::vector<double> parameters;
+            parameters.reserve(n * n + 2 * n + 1);
+            for (const auto& row : matrix) {
+                if (!row.is_array() || row.size() != n) throw std::invalid_argument("A deve ser quadrada");
+                for (const auto& entry : row) {
+                    if (!entry.is_number() || !std::isfinite(entry.get<double>())) throw std::invalid_argument("A deve conter valores reais finitos");
+                    parameters.push_back(entry.get<double>());
+                }
+            }
+            for (const auto* vector : {&rawB, &rawC}) for (const auto& entry : *vector) {
+                if (!entry.is_number() || !std::isfinite(entry.get<double>())) throw std::invalid_argument("B/C devem conter valores reais finitos");
+                parameters.push_back(entry.get<double>());
+            }
+            const double direct = number("D", 0.0);
+            if (!std::isfinite(direct)) throw std::invalid_argument("D deve ser real finito");
+            parameters.push_back(direct);
+            const auto initial = properties.contains("x0") ? (properties.at("x0").is_string() ? nlohmann::json::parse(properties.at("x0").get<std::string>()) : properties.at("x0")) : nlohmann::json::array();
+            if (!initial.is_array() || (!initial.empty() && initial.size() != n))
+                throw std::invalid_argument("x0 deve ser vazio ou ter n elementos");
+            for (size_t i = 0; i < n; ++i) {
+                const double value = initial.empty() ? 0.0 : initial[i].get<double>();
+                if (!std::isfinite(value)) throw std::invalid_argument("x0 deve conter valores finitos");
+                parameters.push_back(value);
+            }
+            const std::string domain = text("domain", "continuous");
+            uint64_t rateNs = periodNs;
+            simulation::SignalBlockKind kind = simulation::SignalBlockKind::StateSpaceContinuous;
+            if (domain == "discrete") {
+                const double samplePeriod = number("samplePeriodNs", 0.0);
+                if (!(samplePeriod > 0.0) || !std::isfinite(samplePeriod) || std::floor(samplePeriod) != samplePeriod ||
+                    samplePeriod >= static_cast<double>(UINT64_MAX))
+                    throw std::invalid_argument("espaco de estados discreto exige samplePeriodNs inteiro e positivo");
+                rateNs = static_cast<uint64_t>(samplePeriod);
+                kind = simulation::SignalBlockKind::StateSpaceDiscrete;
+            } else if (domain != "continuous") throw std::invalid_argument("domain precisa ser continuous ou discrete");
+            simulation::SignalBlockDefinition block = makeBlock(outId, kind, inputs, std::move(parameters), rateNs);
+            block.intParameters = {static_cast<int64_t>(n)};
+            graph.blocks.push_back(std::move(block));
+            connectInputs(graph, componentIndex, inputs, outId);
+            return graph;
+        }
+
         if (m_typeId == "control.process") {
             // Mesma composição do TDPS: atuador (histerese/stiction/rate/tau) -> ganho -> atrasos
             // dinâmicos -> lead-lag -> tempo morto -> saturação opcional. Estágio só existe quando
@@ -286,7 +335,29 @@ public:
             return graph;
         }
 
-        simulation::SignalBlockDefinition block = makeBlock(outId, kindOf(), inputs, parametersOf(), periodNs);
+        const simulation::SignalBlockKind kind = kindOf();
+        if (kind == simulation::SignalBlockKind::DiscreteTransferFunction) {
+            const double samplePeriod = number("samplePeriodNs", std::numeric_limits<double>::quiet_NaN());
+            if (!std::isfinite(samplePeriod) || samplePeriod <= 0.0 || std::floor(samplePeriod) != samplePeriod ||
+                samplePeriod >= static_cast<double>(std::numeric_limits<uint64_t>::max()))
+                throw std::invalid_argument("funcao discreta exige samplePeriodNs inteiro, finito e positivo");
+            auto numerator = numberList("numeratorCoefficients");
+            auto denominator = numberList("denominatorCoefficients");
+            if (numerator.empty() || denominator.size() < 2 || numerator.size() > denominator.size())
+                throw std::invalid_argument("funcao discreta exige coeficientes proprios e denominador dinamico");
+            if (denominator.front() == 0.0) throw std::invalid_argument("denominador discreto nao pode iniciar em zero");
+            const double leading = denominator.front();
+            for (double& value : numerator) value /= leading;
+            for (double& value : denominator) value /= leading;
+            simulation::SignalBlockDefinition block = makeBlock(outId, kind, inputs, {}, static_cast<uint64_t>(samplePeriod));
+            block.realParameters = numerator;
+            block.realParameters.insert(block.realParameters.end(), denominator.begin(), denominator.end());
+            block.intParameters = {static_cast<int64_t>(numerator.size()), static_cast<int64_t>(denominator.size())};
+            graph.blocks.push_back(std::move(block));
+            connectInputs(graph, componentIndex, inputs, outId);
+            return graph;
+        }
+        simulation::SignalBlockDefinition block = makeBlock(outId, kind, inputs, parametersOf(), periodNs);
         if (block.kind == simulation::SignalBlockKind::DeadTime)
             block.historyCapacity = deadTimeCapacity(block.realParameters.front(), periodNs);
         if (block.kind == simulation::SignalBlockKind::Fopdt)
@@ -298,6 +369,7 @@ public:
 
 private:
     std::vector<std::string> inputPortIds() const {
+        if (m_typeId == "control.state_space") return {"in"};
         if (m_typeId == "control.pid_station") return {"sp", "pv", "am", "lr"};
         if (m_typeId == "control.pid") return {"sp", "pv"};
         if (m_typeId == "control.accumulator") {
@@ -386,6 +458,7 @@ private:
 
     simulation::SignalBlockKind transferFunctionKind() const {
         const std::string model = text("model", "first_order");
+        if (model == "discrete_transfer_function") return simulation::SignalBlockKind::DiscreteTransferFunction;
         if (model == "first_order") return simulation::SignalBlockKind::FirstOrder;
         if (model == "second_order") return simulation::SignalBlockKind::SecondOrder;
         if (model == "lead_lag") return simulation::SignalBlockKind::LeadLag;
@@ -431,6 +504,25 @@ private:
                         number("localSetpoint", 50.0)};
             default: return {};
         }
+    }
+
+    std::vector<double> numberList(std::string_view key) const {
+        const std::string encoded = text(key, "");
+        if (encoded.empty()) throw std::invalid_argument("lista de coeficientes vazia: " + std::string(key));
+        std::vector<double> values;
+        size_t start = 0;
+        while (start <= encoded.size()) {
+            const size_t end = encoded.find(',', start);
+            const std::string token = encoded.substr(start, end == std::string::npos ? std::string::npos : end - start);
+            size_t consumed = 0;
+            const double value = std::stod(token, &consumed);
+            if (consumed != token.size() || !std::isfinite(value))
+                throw std::invalid_argument("coeficiente discreto invalido: " + token);
+            values.push_back(value);
+            if (end == std::string::npos) break;
+            start = end + 1;
+        }
+        return values;
     }
 
     static simulation::SignalBlockDefinition makeBlock(std::string id, simulation::SignalBlockKind kind,

@@ -2,6 +2,8 @@ import type { IpdLineClass } from "../ui/webview/ipdLineStyle";
 import type { HmiApplication } from "../ui/webview/model";
 import type { CalculusLab } from "../ui/webview/lab/activity";
 import type { SubsystemDefinition } from "../ui/webview/subsystemModel";
+import type { ControlDesignProject } from "../ui/webview/controlDesigner/types";
+import type { IdentProject } from "../ident/identification";
 export type { HmiApplication, HmiPage, HmiPageElement, HmiPageNavigationItem } from "../ui/webview/model";
 
 export const LS_PROJ_SCHEMA_VERSION = 2 as const;
@@ -164,6 +166,8 @@ export interface ProjectDocument {
   /** Definições de subsistemas INTERNOS (manifestos schemaVersion 3 completos, ver
    * `ui/webview/subsystemModel.ts`): o projeto não depende de arquivo externo para elas. */
   subsystems?: SubsystemDefinition[];
+  controlDesignProject?: ControlDesignProject;
+  identProject?: IdentProject;
 }
 
 export function createEmptyProject(): ProjectDocument {

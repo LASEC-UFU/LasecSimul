@@ -175,6 +175,7 @@ const std::unordered_map<std::string_view, std::pair<const char*, const char*>>&
         {"control.lead_lag", {"Lead-Lag", "Lead-Lag"}},
         {"control.fopdt", {"FOPDT", "FOPDT"}},
         {"control.transfer_function", {"Função de Transferência", "Transfer Function"}},
+        {"control.state_space", {"Espaço de Estados SISO", "SISO State Space"}},
         {"control.accumulator", {"Acumulador", "Accumulator"}},
         {"control.valve_characteristic", {"Característica de Válvula", "Valve Characteristic"}},
         {"control.saturation", {"Saturação", "Saturation"}},

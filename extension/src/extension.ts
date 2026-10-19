@@ -10,6 +10,10 @@ import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, d
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { PidTuningPanel } from "./ui/panels/PidTuningPanel";
 import { CalculusLabPanel } from "./ui/panels/CalculusLabPanel";
+import { ControlDesignerPanel } from "./ui/panels/ControlDesignerPanel";
+import { IdentPanel } from "./ui/panels/IdentPanel";
+import { IdentAcquisition } from "./ident/acquisition";
+import { controllerToBlockProperties, selectedSeriesNetworkToTransfer, signalBlockSignature, signalBlockToTransfer } from "./ui/controlDesignerCircuit";
 import { createCalculusLabHost } from "./lab/calculusLabHost";
 import { PidSeriesFeed } from "./lab/pidSeries";
 import { createInitialWebviewState } from "./ui/webview/catalog";
@@ -66,6 +70,7 @@ import {
   coreInstanceIdByComponentId,
   mcuTargetCoreIdByComponentId,
 } from "./state";
+let identAcquisition: IdentAcquisition | undefined;
 import {
   reportCoreWarning,
   pushComponentToCore,
@@ -260,6 +265,7 @@ function syncSchematicPanel(): void {
   state.schematicPanel?.setLanguage(state.schematicState.locale ?? currentLasecSimulLanguage());
   const patch = computeProjectStatePatch();
   if (patch) state.schematicPanel?.postMessage({ version: 1, type: "syncStatePatch", patch });
+  ControlDesignerPanel.syncBindings(state.schematicState.controlDesignProject, state.schematicState.components);
   state.schematicPanel?.postMessage({ version: 1, type: "simulationStatus", status: state.simulationStatus });
   refreshDirtyIndicator();
 }
@@ -1358,6 +1364,9 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       return;
     }
     case "selectionChanged": {
+      if (Array.isArray(message.selectedComponentIds)) {
+        state.schematicState = { ...state.schematicState, selectedComponentIds: message.selectedComponentIds.filter((id) => state.schematicState.components.some((component) => component.id === id)) };
+      }
       const selected = message.componentId ? state.schematicState.components.find((c) => c.id === message.componentId) : undefined;
       propertyInspectorView?.setSelection(selected);
       return;
@@ -1375,7 +1384,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       // `calculusLab` é do Laboratório de Cálculo (painel próprio): a cópia que o esquemático carrega
       // pode estar atrasada e nunca é editada lá -- sem preservar a do Host, mover um componente
       // depois de gravar uma atividade apagava a gravação.
-      state.schematicState = { ...message.project, calculusLab: previous.calculusLab, topology: { ...message.project.topology, revision } };
+      state.schematicState = { ...message.project, calculusLab: previous.calculusLab, controlDesignProject: previous.controlDesignProject, identProject: previous.identProject, topology: { ...message.project.topology, revision } };
       // Desfazer/refazer de operações com definições (criar, colar, duplicar, excluir...) troca a
       // tabela inteira: catálogo e Core acompanham ANTES de a reconstrução recriar as instâncias.
       const subsystemsChanged = previous.subsystems !== message.project.subsystems &&
@@ -1758,6 +1767,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestUpdateProperty": {
       const ref = getElement(state.schematicState, message.componentId);
       if (!ref) return;
+      identAcquisition?.noteParameterChange(message.componentId);
       const prevComponent = ref.element;
       if (prevComponent.typeId === "peripherals.lasecplot" && message.name === "source_name" && !String(message.value).trim()) {
         vscode.window.showErrorMessage("LasecPlot: Nome da fonte não pode ficar vazio.");
@@ -3066,6 +3076,142 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     { dispose: disposeDeviceReferenceWatchers },
     vscode.commands.registerCommand("lasecsimul.showSimulationLog", () => showSimulationLogChannel()),
     vscode.commands.registerCommand("lasecsimul.openCalculusLab", () => { CalculusLabPanel.show(context.extensionUri, createCalculusLabHost((message) => CalculusLabPanel.current?.post(message))); }),
+    vscode.commands.registerCommand("lasecsimul.openControlDesigner", () => {
+      ControlDesignerPanel.show(context, state.schematicState.controlDesignProject, (project) => {
+      state.schematicState = { ...state.schematicState, controlDesignProject: project };
+      refreshDirtyIndicator();
+      ControlDesignerPanel.syncBindings(project, state.schematicState.components);
+    }, async () => {
+      const selected = state.schematicState.selectedComponentIds;
+      if (selected.length > 1) {
+        try {
+          const model = selectedSeriesNetworkToTransfer({ components: state.schematicState.components, conductors: state.schematicState.topology.conductors, selectedComponentIds: selected });
+          if (!model) throw new Error("Selecione um bloco LTI compatível ou uma rede linear conectada com uma entrada e uma saída.");
+          const label = selected.map((id) => state.schematicState.components.find((item) => item.id === id)?.label ?? id).join(" × ");
+          return { label: `Rede linear: ${label}`, num: model.num, den: model.den, domain: model.domain, sampleTime: model.sampleTime };
+        } catch (error) {
+          void vscode.window.showWarningMessage(error instanceof Error ? error.message : String(error));
+          return undefined;
+        }
+      }
+      if (selected.length !== 1) { void vscode.window.showWarningMessage("Selecione um bloco LTI compatível ou uma rede linear conectada com uma entrada e uma saída."); return undefined; }
+      const block = state.schematicState.components.find((item) => item.id === selected[0]);
+      if (!block) return undefined;
+      const model = signalBlockToTransfer(block);
+      if (!model) {
+        const action = await vscode.window.showWarningMessage(`“${block.label}” (${block.typeId}) não tem uma representação LTI compatível para importação. Atraso puro/FOPDT exige aproximação explícita.`);
+        void action; return undefined;
+      }
+      return { label: block.label, num: model.num, den: model.den, domain: model.domain, sampleTime: model.sampleTime, stateSpace: model.stateSpace, binding: { componentId: block.id, typeId: block.typeId, label: block.label, signature: signalBlockSignature(block) } };
+    }, async (controller, plantStateSpace) => {
+      if (plantStateSpace) {
+        if (state.schematicState.selectedComponentIds.length !== 1) throw new Error("Selecione um bloco Espaço de estados SISO como destino.");
+        const id = state.schematicState.selectedComponentIds[0]!;
+        const block = state.schematicState.components.find((item) => item.id === id);
+        if (!block || block.typeId !== "control.state_space") throw new Error("O destino precisa ser um bloco control.state_space arrastado da paleta.");
+        const props: Record<string, string | number> = {
+          A: JSON.stringify(plantStateSpace.A), B: JSON.stringify(plantStateSpace.B),
+          C: JSON.stringify(plantStateSpace.C), D: plantStateSpace.D, domain: controller.domain,
+        };
+        if (controller.domain === "discrete") {
+          const samplePeriodNs = Math.round(controller.sampleTime * 1e9);
+          if (!(samplePeriodNs > 0) || !Number.isSafeInteger(samplePeriodNs) || Math.abs(samplePeriodNs / 1e9 - controller.sampleTime) > 1e-12)
+            throw new Error("Ts discreto precisa ser representável em nanossegundos inteiros para o circuito.");
+          props.samplePeriodNs = samplePeriodNs;
+        }
+        const summary = `A=${props.A}; B=${props.B}; C=${props.C}; D=${props.D}; domínio=${props.domain}${props.samplePeriodNs ? `; Ts=${Number(props.samplePeriodNs) / 1e9} s` : ""}`;
+        const choice = process.env.LASECSIMUL_E2E === "1" ? "Aplicar" : await vscode.window.showInformationMessage(`Aplicar a planta A/B/C/D em “${block.label}”?\n${summary}`, { modal: true }, "Aplicar");
+        if (choice !== "Aplicar") return;
+        const updated = updateElement(state.schematicState, id, { properties: { ...block.properties, ...props } });
+        if (!updated.ok) throw new Error("Não foi possível atualizar o bloco de espaço de estados selecionado.");
+        state.schematicState = updated.value.state;
+        for (const [key, value] of Object.entries(props)) pushPropertyToCore(id, key, value);
+        syncSchematicPanel();
+        return { componentId: id, typeId: block.typeId, label: block.label, signature: signalBlockSignature({ ...block, properties: { ...block.properties, ...props } }) };
+      }
+      if (state.schematicState.selectedComponentIds.length !== 1) throw new Error("Selecione exatamente um bloco de função de transferência como destino no esquemático e tente novamente.");
+      const id = state.schematicState.selectedComponentIds[0]!;
+      const block = state.schematicState.components.find((item) => item.id === id);
+      if (!block || (block.typeId !== "control.transfer_function" && block.typeId !== "control.gain")) throw new Error("O destino precisa ser um bloco control.transfer_function ou control.gain.");
+      if (controller.domain === "discrete") {
+        if (!Number.isFinite(controller.sampleTime) || controller.sampleTime <= 0) throw new Error("Ts precisa ser positivo.");
+        const numerator = controller.num.split(",").map((v) => Number(v.trim()));
+        const denominator = controller.den.split(",").map((v) => Number(v.trim()));
+        if (denominator.length === 1 && block.typeId === "control.gain") {
+          const converted = controllerToBlockProperties({ num: numerator, den: denominator }, block.typeId);
+          const props = converted.properties;
+          const choice = process.env.LASECSIMUL_E2E === "1" ? "Aplicar" : await vscode.window.showInformationMessage(`Aplicar ganho estático C em “${block.label}”?`, { modal: true }, "Aplicar");
+          if (choice !== "Aplicar") return;
+          const updated = updateElement(state.schematicState, id, { properties: { ...block.properties, ...props } });
+          if (!updated.ok) throw new Error("Não foi possível atualizar o bloco selecionado.");
+          state.schematicState = updated.value.state;
+          for (const [key, value] of Object.entries(props)) pushPropertyToCore(id, key, value);
+          syncSchematicPanel();
+          return { componentId: id, typeId: block.typeId, label: block.label, signature: signalBlockSignature({ ...block, properties: { ...block.properties, ...props } }) };
+        }
+        if (block.typeId !== "control.transfer_function") throw new Error("Modelos dinâmicos discretos exigem um bloco control.transfer_function.");
+        if (!numerator.length || denominator.length < 2 || numerator.length > denominator.length || [...numerator, ...denominator].some((v) => !Number.isFinite(v)) || denominator[0] === 0)
+          throw new Error("C(z) precisa ter coeficientes finitos, denominador dinâmico e forma própria em potências decrescentes de z.");
+        const leadingDenominator = denominator[0]!;
+        const normalizedDen = denominator.map((v) => v / leadingDenominator);
+        const normalizedNum = numerator.map((v) => v / leadingDenominator);
+        const props = { model: "discrete_transfer_function", numeratorCoefficients: normalizedNum.join(","), denominatorCoefficients: normalizedDen.join(","), samplePeriodNs: controller.sampleTime * 1e9 };
+        const summary = `C(z) = ${normalizedNum.join(", ")} / (${normalizedDen.join(", ")}), Ts=${controller.sampleTime} s`;
+        const choice = process.env.LASECSIMUL_E2E === "1" ? "Aplicar" : await vscode.window.showInformationMessage(`Aplicar C discreto em “${block.label}”?\n${summary}`, { modal: true }, "Aplicar");
+        if (choice !== "Aplicar") return;
+        const updated = updateElement(state.schematicState, id, { properties: { ...block.properties, ...props } });
+        if (!updated.ok) throw new Error("Não foi possível atualizar o bloco selecionado.");
+        state.schematicState = updated.value.state;
+        for (const [key, value] of Object.entries(props)) pushPropertyToCore(id, key, value);
+        syncSchematicPanel();
+        return { componentId: id, typeId: block.typeId, label: block.label, signature: signalBlockSignature({ ...block, properties: { ...block.properties, ...props } }) };
+      }
+      const project = state.schematicState.controlDesignProject;
+      if (project && project.domain !== "continuous") throw new Error("A aplicação automática requer controlador contínuo; discretize explicitamente antes de aplicar.");
+      let converted: ReturnType<typeof controllerToBlockProperties>;
+      try { converted = controllerToBlockProperties({ num: controller.num.split(",").map((v) => Number(v.trim())), den: controller.den.split(",").map((v) => Number(v.trim())) }, block.typeId); }
+      catch (error) { throw error; }
+      const props = converted.properties;
+      const summary = `${controller.num} / (${controller.den}) → ${converted.representation}`;
+      // O diálogo modal do VS Code não é controlável pelo runner CDP headless. No E2E, o clique
+      // real em “Aplicar C” continua atravessando o painel e este callback; só a confirmação é
+      // automática para permitir validar a mutação do esquemático e undo/redo.
+      const choice = process.env.LASECSIMUL_E2E === "1" ? "Aplicar" : await vscode.window.showInformationMessage(`Aplicar C em “${block.label}”?\n${summary}`, { modal: true }, "Aplicar");
+      if (choice !== "Aplicar") return;
+      const updated = updateElement(state.schematicState, id, { properties: { ...block.properties, ...props } });
+      if (!updated.ok) throw new Error("Não foi possível atualizar o bloco selecionado.");
+      state.schematicState = updated.value.state;
+      for (const [key, value] of Object.entries(props)) pushPropertyToCore(id, key, value);
+      syncSchematicPanel();
+      return { componentId: id, typeId: block.typeId, label: block.label, signature: signalBlockSignature({ ...block, properties: { ...block.properties, ...props } }) };
+    });
+      ControlDesignerPanel.syncBindings(state.schematicState.controlDesignProject, state.schematicState.components);
+    }),
+    vscode.commands.registerCommand("lasecsimul.openIdent", () => {
+      const signals = state.schematicState.components.filter((component) => component.typeId.startsWith("control.") && coreInstanceIdByComponentId.has(component.id) && component.pins.some((pin) => pin.id === "out"))
+        .map((component) => ({ id: component.id, label: `${component.label} · ${component.typeId}` }));
+      IdentPanel.show(context, state.schematicState.identProject, (project) => {
+        state.schematicState = { ...state.schematicState, identProject: project };
+        refreshDirtyIndicator();
+      }, (component) => {
+        openSchematicEditor(context.extensionUri);
+        state.schematicPanel?.postMessage({ version: 1, type: "insertIdentifiedModel", ...component });
+      }, signals, (request) => {
+        const input = state.schematicState.components.find((item) => item.id === request.inputId);
+        const output = state.schematicState.components.find((item) => item.id === request.outputId);
+        if (!input || !output || input.id===output.id || !Number.isFinite(request.startSeconds) || request.startSeconds < 0 || !Number.isFinite(request.durationSeconds) || request.durationSeconds <= 0 || !Number.isFinite(request.sampleTime) || request.sampleTime <= 0) {
+          IdentPanel.post({ type: "error", message: "Sinais ou parâmetros de aquisição inválidos." }); return;
+        }
+        identAcquisition?.cancel();
+        const acquisition = new IdentAcquisition(input.label, output.label, request.startSeconds, request.durationSeconds, request.sampleTime,
+          (dataset, error) => { if (identAcquisition === acquisition) identAcquisition = undefined; IdentPanel.post({ type: "acquisitionDataset", payload: { dataset, error } }); });
+        identAcquisition=acquisition;
+        void acquisition.start(input.id, output.id).catch((error: unknown) => { if(identAcquisition===acquisition)identAcquisition=undefined; IdentPanel.post({ type: "error", message: error instanceof Error ? error.message : String(error) }); });
+      }, () => { identAcquisition?.cancel(); identAcquisition=undefined; }, (model) => {
+        ControlDesignerPanel.importIdentifiedModel(model);
+        void vscode.commands.executeCommand("lasecsimul.openControlDesigner");
+      });
+    }),
     OpenPlcEditorProvider.register(context),
     registerMachineNetworkSetupCommand(context),
     // Diagnóstico via Command Palette (achado 2026-07-18, pedido explícito do usuário: "tem algum
@@ -3180,6 +3326,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     currentLasecSimulLanguage(),
     addPaletteComponent,
     (item) => removeRegisteredCatalogItemCommand(item, catalogCommandOptions()),
+    (command) => { void vscode.commands.executeCommand(command); },
   );
   context.subscriptions.push(registerDslDraftCloseTracking());
 
