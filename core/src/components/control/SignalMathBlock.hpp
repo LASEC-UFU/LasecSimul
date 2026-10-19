@@ -224,7 +224,7 @@ public:
             const double direct = number("D", 0.0);
             if (!std::isfinite(direct)) throw std::invalid_argument("D deve ser real finito");
             parameters.push_back(direct);
-            const auto initial = properties.contains("x0") ? (properties.at("x0").is_string() ? nlohmann::json::parse(properties.at("x0").get<std::string>()) : properties.at("x0")) : nlohmann::json::array();
+            const auto initial = nlohmann::json::parse(text("x0", "[]"));
             if (!initial.is_array() || (!initial.empty() && initial.size() != n))
                 throw std::invalid_argument("x0 deve ser vazio ou ter n elementos");
             for (size_t i = 0; i < n; ++i) {
