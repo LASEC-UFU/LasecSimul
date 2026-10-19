@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <memory>
 #include <optional>
+#include <string>
 
 #include "components/connectors/SignalTunnel.hpp"
 #include "lasecsimul/IComponentModel.hpp"
@@ -426,6 +427,31 @@ void renamingHartDisplayNameInsideSubcircuitNeverBreaksBoundaryWire() {
 
 // (10) casos invalidos de fronteira: endpoint interno inexistente, direcao incompativel, escritor
 // duplicado, porta exposta orfa -- todos rejeitados atomicamente, sem mutacao parcial.
+// Fio para pino inexistente devolve mensagem clara (antes: a instancia EXTERNA do subcircuito, id
+// com flag, caia em `vector<bool>::at` -> "invalid vector<bool> subscript"; num bloco comum a
+// mensagem falava em dominio incompativel, nao em pino inexistente).
+void wireToMissingPinReportsClearError() {
+    GlobalPluginCache cache;
+    SimulationSession session(cache);
+    registerCommon(session);
+    session.subcircuits().registerDefinition(makeSignalPassthroughDefinition());
+    const SubcircuitExpansionResult expansion = session.addSubcircuitInstance("subcircuits.signal_passthrough");
+    const uint32_t source = session.addComponent("test.fake_signal_source", {});
+    const uint32_t sink = session.addComponent("test.fake_signal_sink", {});
+    const auto messageOf = [&](auto&& wire) -> std::string {
+        try { wire(); } catch (const std::exception& ex) { return ex.what(); }
+        return {};
+    };
+    const std::string onSubcircuit = messageOf([&] { session.connectWire(source, "value", expansion.subcircuitInstanceId, "in"); });
+    check(onSubcircuit.find("\"in\" não existe na interface do subcircuito") != std::string::npos,
+          "pino fora da interface do subcircuito: mensagem clara (nao vector<bool>)");
+    const std::string onBlock = messageOf([&] { session.connectWire(source, "value", sink, "nao_existe"); });
+    check(onBlock.find("test.fake_signal_sink não tem o pino \"nao_existe\"") != std::string::npos,
+          "pino inexistente em bloco comum: diz qual componente e qual pino");
+    const std::string unknownId = messageOf([&] { session.connectWire(source, "value", 9999, "reading"); });
+    check(unknownId.find("componente inexistente") != std::string::npos, "id de componente desconhecido: mensagem clara");
+}
+
 void invalidSignalBoundaryDeclarationsAreRejected() {
     // (10a) interface de sinal referencia um SignalTunnel interno que nao existe.
     {
@@ -552,6 +578,7 @@ int main() {
         renamingHartDisplayNameInsideSubcircuitNeverBreaksBoundaryWire();
         freshSessionReplayingSubcircuitBoundarySequenceReproducesSameWire();
         invalidSignalBoundaryDeclarationsAreRejected();
+        wireToMissingPinReportsClearError();
     } catch (const std::exception& ex) {
         std::fprintf(stderr, "EXCECAO NAO TRATADA: %s\n", ex.what());
         return 2;

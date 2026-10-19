@@ -1390,23 +1390,24 @@ void SimulationSession::connectWireUnlocked(uint32_t componentA, const std::stri
     if (m_scheduler.isRunning()) {
         throw std::runtime_error("connectWire requer simulacao parada para publicar ElectricalPlan");
     }
-    if (m_netlist.isComponentRemoved(componentA) || m_netlist.isComponentRemoved(componentB))
+    // Ids que não são componentes da netlist viram mensagem clara (antes: `vector<bool>::at` estourava
+    // com "invalid vector<bool> subscript"). A instância EXTERNA de um subcircuito (id com
+    // `kSubcircuitInstanceFlag`) não tem pinos próprios: quem liga usa o componente interno devolvido em
+    // exposedPins/exposedSignalPins, então chegar aqui com ela significa pino fora da interface.
+    for (const auto& [component, pinId] : {std::pair<uint32_t, const std::string&>{componentA, pinIdA},
+                                           std::pair<uint32_t, const std::string&>{componentB, pinIdB}}) {
+        if (isSubcircuitInstance(component)) {
+            throw std::invalid_argument("SimulationSession::connectWire: o pino \"" + pinId +
+                                        "\" não existe na interface do subcircuito (instância " +
+                                        std::to_string(component) + ")");
+        }
+        if (component >= m_componentInstances.size())
+            throw std::invalid_argument("SimulationSession::connectWire: componente inexistente: " +
+                                        std::to_string(component));
+    }
+    if (m_netlist.isComponentRemoved(componentA) || m_netlist.isComponentRemoved(componentB) ||
+        !m_componentInstances[componentA] || !m_componentInstances[componentB])
         throw std::invalid_argument("SimulationSession::connectWire: componente removido");
-    // Detecta domínio ANTES de qualquer resolução elétrica: um `(componente,pinId)` que resolve
-    // como Signal Graph port nunca deveria disparar a exceção elétrica "pin inexistente" só porque
-    // não está em `Netlist::pinSlotsOf`. Mesma entrada IPC (`connectWire`/`applyWireTopologyTransaction`)
-    // pros dois domínios -- nunca um segundo mecanismo de fiação, ver `SignalWireDefinition`.
-    const std::optional<SignalPortDescriptor> signalPortA = findSignalPortUnlocked(componentA, pinIdA);
-    const std::optional<SignalPortDescriptor> signalPortB = findSignalPortUnlocked(componentB, pinIdB);
-    if (signalPortA && signalPortB) {
-        connectSignalWireUnlocked(componentA, *signalPortA, componentB, *signalPortB);
-        return;
-    }
-    if (signalPortA || signalPortB) {
-        throw std::invalid_argument(
-            "SimulationSession::connectWire: não é possível ligar uma porta Signal Graph a um pino elétrico ("
-            + pinIdA + " / " + pinIdB + ")");
-    }
     // Arquivos de autoria antigos e alguns packages genéricos usam `pin-N`, enquanto a factory
     // elétrica pode publicar ids semânticos (`p1`, `p2`, `out`...). Preserve primeiro o id exato;
     // o fallback posicional só é aceito para o formato genérico estrito e dentro do span real.
@@ -1435,6 +1436,31 @@ void SimulationSession::connectWireUnlocked(uint32_t componentA, const std::stri
         }
         return slots;
     };
+    // Detecta domínio ANTES de qualquer resolução elétrica: um `(componente,pinId)` que resolve
+    // como Signal Graph port nunca deveria disparar a exceção elétrica "pin inexistente" só porque
+    // não está em `Netlist::pinSlotsOf`. Mesma entrada IPC (`connectWire`/`applyWireTopologyTransaction`)
+    // pros dois domínios -- nunca um segundo mecanismo de fiação, ver `SignalWireDefinition`.
+    const std::optional<SignalPortDescriptor> signalPortA = findSignalPortUnlocked(componentA, pinIdA);
+    const std::optional<SignalPortDescriptor> signalPortB = findSignalPortUnlocked(componentB, pinIdB);
+    if (signalPortA && signalPortB) {
+        connectSignalWireUnlocked(componentA, *signalPortA, componentB, *signalPortB);
+        return;
+    }
+    if (signalPortA || signalPortB) {
+        // O outro lado nem tem esse pino: diga isso (não "domínio incompatível").
+        const uint32_t otherComponent = signalPortA ? componentB : componentA;
+        const std::string& otherPin = signalPortA ? pinIdB : pinIdA;
+        try {
+            resolveEndpoint(otherComponent, otherPin);
+        } catch (const std::out_of_range&) {
+            throw std::invalid_argument(std::string("SimulationSession::connectWire: o componente ") +
+                                        m_componentInstances[otherComponent]->typeId() + " não tem o pino \"" +
+                                        otherPin + "\"");
+        }
+        throw std::invalid_argument(
+            "SimulationSession::connectWire: não é possível ligar uma porta Signal Graph a um pino elétrico ("
+            + pinIdA + " / " + pinIdB + ")");
+    }
     const std::vector<uint32_t> slotsA = resolveEndpoint(componentA, pinIdA);
     const std::vector<uint32_t> slotsB = resolveEndpoint(componentB, pinIdB);
     if (slotsA.size() != slotsB.size()) {
