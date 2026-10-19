@@ -1,11 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
 import { LS_PROJ_SCHEMA_VERSION, ProjectComponent, ProjectDocument } from "./ProjectTypes";
+import { importExternalAsSubsystem } from "../ui/webview/subsystemModel";
 
 /**
  * Plantas (modelos de processo) NÃO são registradas no catálogo, na paleta nem no Core: cada projeto
- * carrega a sua incorporada (`subcircuitRef.embedded`, ver `embeddedSubcircuits.ts`), e cada planta
- * existe também como um `.lsproj` independente que se abre ou se importa ("Importar Circuito").
+ * carrega a sua como subsistema INTERNO (tabela `subsystems`, ver `ui/webview/subsystemModel.ts`), e
+ * cada planta existe também como um `.lsproj` independente que se abre ou se importa.
  *
  * Os manifestos continuam versionados em `subcircuits/` só como MODELOS de origem, listados em
  * `subcircuits/plants.json` -- que deliberadamente não é um `library.json` (nenhum carregador de
@@ -168,22 +169,24 @@ export function plantDisplayName(manifest: Record<string, unknown>): string {
   return typeof manifest.name === "string" && manifest.name.trim() ? manifest.name : String(manifest.typeId ?? "planta");
 }
 
-/** Projeto independente de UMA planta: só a instância incorporada, pronta para abrir, simular ou
- * importar em outro projeto ("Importar Circuito"). Não depende de nenhum registro global. */
+/** Projeto independente de UMA planta: a planta como subsistema INTERNO (definição na tabela do
+ * projeto) e uma instância dela, pronta para abrir, simular ou importar em outro projeto
+ * ("Importar Circuito"/copiar e colar). Não depende de nenhum registro global nem de arquivo. */
 export function buildStandalonePlantProject(loaded: LoadedPlantTemplate, componentId = "planta"): ProjectDocument {
+  const { table, typeId } = importExternalAsSubsystem([], loaded.manifest);
   return {
     schemaVersion: LS_PROJ_SCHEMA_VERSION,
     components: [{
       id: componentId,
-      typeId: loaded.template.typeId,
+      typeId,
       properties: {},
       label: plantDisplayName(loaded.manifest),
       visual: { x: 200, y: 140, rotation: 0 },
-      subcircuitRef: embeddedPlantRef(loaded),
     }],
     wires: [],
     topology: { revision: 0, nodes: [], conductors: [] },
     visual: { wires: [], viewport: { x: 0, y: 0, zoom: 1 }, wireRoutes: "explicit" },
     simulationSettings: {},
+    subsystems: table,
   };
 }

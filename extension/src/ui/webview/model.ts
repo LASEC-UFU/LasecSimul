@@ -1,3 +1,4 @@
+import type { SubsystemDefinition } from "./subsystemModel";
 import type { CatalogWorkspaceSection } from "./workspace";
 import type { IpdLineClass } from "./ipdLineStyle";
 import type { CalculusLab } from "./lab/activity";
@@ -1001,6 +1002,9 @@ export interface WebviewComponentCatalogEntry {
   /** Subcircuito do PROJETO aberto (por caminho ou incorporado ao `.lsproj`): sobrevive à recarga do
    * catálogo da biblioteca e é registrado no Core a cada reconstrução (`coreLifecycle.ts`). */
   projectLocal?: boolean;
+  /** Definição de subsistema INTERNO do documento aberto (`WebviewProjectState.subsystems`), não um
+   * sistema externo por arquivo -- muda as ações oferecidas (ver `subsystemModel.ts`). */
+  internalSubsystem?: boolean;
   /** ID estável da fonte registrada (usado para remoção por menu de contexto). */
   registeredSourceId?: string;
   /** False quando o item é integrado ao catálogo base e não pode ser removido pela UI. */
@@ -1043,6 +1047,9 @@ export interface WebviewProjectState {
   hmiApplication?: HmiApplication;
   /** Definição do Laboratório de Cálculo (ADR 0015). Editada só pelo painel do laboratório; não é sincronizada com a Webview do esquemático. */
   calculusLab?: CalculusLab;
+  /** Definições de subsistemas INTERNOS do documento em edição (projeto, ou o sistema externo aberto):
+   * manifestos completos guardados no próprio documento; instâncias as usam pelo `typeId`. */
+  subsystems?: SubsystemDefinition[];
   locale?: "pt-BR" | "en";
   catalog: WebviewComponentCatalogEntry[];
   components: WebviewComponentModel[];
@@ -1066,7 +1073,17 @@ export interface WebviewProjectState {
    * usa isto pra mostrar a faixa "Editando subcircuito" com o botão "Voltar ao Circuito Principal" e
    * desabilitar Abrir/Salvar/Importar Projeto (formatos incompatíveis: `.lsproj` vs `.lssubcircuit`)
    * enquanto durar a sessão. */
-  subcircuitEditingContext?: { sourceId: string; typeId: string; name: string };
+  subcircuitEditingContext?: {
+    sourceId: string;
+    typeId: string;
+    name: string;
+    /** Caminho hierárquico exibido na navegação ("Projeto › Planta › Sensor"), do topo até aqui. */
+    path?: string[];
+    /** Definição interna do documento (`true`) ou sistema externo `.lssubcircuit` (`false`). */
+    internal?: boolean;
+    /** Cena aberta ao entrar ("Editar Painel" abre direto no Painel). */
+    initialMode?: "circuit" | "symbol";
+  };
   /** Política de autoria do encapsulamento durante uma sessão de subcircuito. */
   symbolMode?: "generic" | "custom";
   /** Cena do Modo Símbolo (refatoração Subcircuito/Símbolo/Ícone) -- elementos gráficos + pinos

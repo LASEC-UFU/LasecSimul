@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import { currentLasecSimulLanguage } from "../currentLanguage";
 import { normalizeAbsolutePath, readJsonFile } from "../pathUtils";
 import { state } from "../state";
+import { registerExternalSystemFile } from "../project/subsystemRuntime";
 import { WebviewComponentCatalogEntry } from "../ui/webview/model";
 import { mergePropertySchemas } from "./catalogMerge";
 import { LoadedUnifiedCatalog, loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./UnifiedCatalog";
@@ -197,7 +198,8 @@ export async function refreshUnifiedCatalogState(
   if (loadLibrariesInCore && state.coreClient) {
     for (const absolutePath of adhocSubcircuits) {
       try {
-        await state.coreClient.registerAdhocSubcircuitDefinition(absolutePath);
+        // Sistema externo: as definições internas dele entram em espaço de nomes próprio.
+        await registerExternalSystemFile(absolutePath);
       } catch (err) {
         adhocFailures.set(absolutePath, err instanceof Error ? err.message : String(err));
       }

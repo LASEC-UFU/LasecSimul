@@ -212,6 +212,21 @@ function makeIdFactory(prefix: string): () => string {
     assert(entry?.domain === "signal" && entry.direction === "in" && entry.unit === "%", "tipagem deveria sobreviver ao save");
   });
 
+  await test("interface re-derivada sem metadado anterior usa o túnel de SINAL (domínio, direção, tipo)", () => {
+    const signalTunnel = (id: string, pinId: string, direction: "Input" | "Output") => ({ id, typeId: "connectors.signal_tunnel", properties: { name: pinId, pinId, direction, valueType: "Real" }, visual: { x: 0, y: 0, rotation: 0 as const } });
+    const doc: SubcircuitDocument = {
+      ...emptyDocument(),
+      components: [signalTunnel("t1", "P1", "Input"), signalTunnel("t2", "P2", "Output"), { id: "t3", typeId: TUNNEL_TYPE_ID, properties: { name: "P3", pinId: "P3" }, visual: { x: 0, y: 0, rotation: 0 } }],
+      symbol: { width: 80, height: 40, pins: [
+        { id: "P1", x: 0, y: 8, angle: 180, length: 8 }, { id: "P2", x: 80, y: 8, angle: 0, length: 8 }, { id: "P3", x: 0, y: 24, angle: 180, length: 8 },
+      ] },
+    };
+    const [p1, p2, p3] = finalizeSubcircuitDocumentForSave(doc).interface;
+    assert(p1?.domain === "signal" && p1.direction === "in" && p1.valueType === "Real" && p1.width === 1, JSON.stringify(p1));
+    assert(p2?.domain === "signal" && p2.direction === "out", JSON.stringify(p2));
+    assert(p3 !== undefined && p3.domain === undefined, `pino elétrico continua sem domínio: ${JSON.stringify(p3)}`);
+  });
+
   const { failed } = finish();
   process.exitCode = failed > 0 ? 1 : 0;
 })();

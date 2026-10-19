@@ -1,3 +1,4 @@
+import type { SubsystemDefinition } from "./subsystemModel";
 import { WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
 import { ConnectionEndpoint } from "./wireTopology.js";
 
@@ -209,7 +210,10 @@ export type WebviewToHostMessage =
    * interno real E tentava sincronizar com o Core (bug real: nunca deveria acontecer, símbolo/ícone
    * nunca têm presença no Core). `wires` só é significativo quando `scope === "schematic"` (Símbolo/
    * Ícone nunca têm fios/topologia). */
-  | { version: number; type: "requestInsertItems"; scope: "schematic" | "symbol" | "icon"; components: WebviewComponentModel[]; wires: WebviewWireModel[] }
+  /** `subsystems`: definições INTERNAS do documento de origem usadas pelos componentes colados (com
+   * as dependências) -- o host importa no documento de destino com remapeamento, sem vínculo com a
+   * origem (ver `subsystemModel.ts::importSubsystemDefinitions`). */
+  | { version: number; type: "requestInsertItems"; scope: "schematic" | "symbol" | "icon"; components: WebviewComponentModel[]; wires: WebviewWireModel[]; subsystems?: SubsystemDefinition[] }
   | { version: number; type: "requestRemoveComponent"; componentId: string }
   | { version: number; type: "requestRemoveWire"; wireId: string }
   | { version: number; type: "requestRotateComponent"; componentId: string; rotation: 0 | 90 | 180 | 270 }
@@ -335,6 +339,14 @@ export type WebviewToHostMessage =
    * depois. Ver `extension.ts::openSubcircuitForEditingCommand`/`WebviewProjectState.
    * subcircuitEditingContext`. */
   | { version: number; type: "requestOpenSubcircuit"; sourceId: string }
+  /** Subsistemas (internos e externos) -- ações explícitas, nunca implícitas na colagem. */
+  | { version: number; type: "requestOpenSubsystemPanel"; sourceId: string }
+  | { version: number; type: "requestInsertSubsystemInstance"; typeId: string }
+  | { version: number; type: "requestDuplicateSubsystem"; componentId: string }
+  | { version: number; type: "requestRenameSubsystem"; typeId: string }
+  | { version: number; type: "requestExportSubsystem"; typeId: string }
+  | { version: number; type: "requestEmbedExternalSystem"; componentId: string }
+  | { version: number; type: "requestAddExternalToPalette"; componentId: string }
   /** "Voltar ao Circuito Principal" -- grava `components`/`wires` atuais de volta no `.lssubcircuit`
    * da sessão em andamento (topo da pilha) e restaura o circuito empilhado. No-op se nenhuma sessão
    * estiver ativa. */

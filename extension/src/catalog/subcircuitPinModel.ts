@@ -14,6 +14,8 @@ import { SubcircuitDocument, SubcircuitInterfaceEntry } from "./subcircuitDocume
  * existe um estado intermediário onde um pino não tem túnel, ou um túnel aponta pra um pino
  * inexistente; cada função aplica a mudança inteira de uma vez. */
 
+const SIGNAL_TUNNEL_TYPE_ID = "connectors.signal_tunnel";
+
 function tunnelPinId(component: ProjectComponent): string | undefined {
   const value = component.properties.pinId;
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -170,16 +172,37 @@ export function renameCanonicalTunnelNames(document: SubcircuitDocument): Subcir
 export function deriveInterfaceEntries(document: SubcircuitDocument): SubcircuitInterfaceEntry[] {
   const pins = document.symbol?.pins ?? [];
   const existingByPinId = new Map(document.interface.map((entry) => [entry.pinId, entry]));
+  // Túnel de sinal define a fronteira como signal mesmo sem metadado anterior (pino criado/editado
+  // nesta sessão, ou documento cujo `interface[]` veio vazio para ser re-derivado).
+  const signalTunnelByName = new Map<string, ProjectComponent>();
+  for (const component of document.components) {
+    if (component.typeId !== SIGNAL_TUNNEL_TYPE_ID) continue;
+    for (const key of [component.properties.pinId, component.properties.name]) {
+      if (typeof key === "string" && key && !signalTunnelByName.has(key)) signalTunnelByName.set(key, component);
+    }
+  }
   return pins.map((pin) => {
     const existing = existingByPinId.get(pin.id);
+    const signalTunnel = signalTunnelByName.get(pin.id);
+    const tunnelValueType = signalTunnel?.properties.valueType;
+    const signal = signalTunnel
+      ? {
+          domain: "signal" as const,
+          direction: existing?.direction && existing.direction !== "inout" ? existing.direction : signalTunnel.properties.direction === "Output" ? "out" as const : "in" as const,
+          valueType: existing?.valueType ?? (tunnelValueType === "Bool" || tunnelValueType === "Int64" ? tunnelValueType : "Real" as const),
+          width: existing?.width ?? 1,
+        }
+      : undefined;
     return {
       pinId: pin.id,
       label: pin.label ?? pin.id,
       internalTunnel: pin.id,
-      ...(existing?.domain ? { domain: existing.domain } : {}),
-      ...(existing?.direction ? { direction: existing.direction } : {}),
-      ...(existing?.valueType ? { valueType: existing.valueType } : {}),
-      ...(existing?.width !== undefined ? { width: existing.width } : {}),
+      ...(signal ?? {
+        ...(existing?.domain ? { domain: existing.domain } : {}),
+        ...(existing?.direction ? { direction: existing.direction } : {}),
+        ...(existing?.valueType ? { valueType: existing.valueType } : {}),
+        ...(existing?.width !== undefined ? { width: existing.width } : {}),
+      }),
       ...(existing?.unit !== undefined ? { unit: existing.unit } : {}),
     };
   });

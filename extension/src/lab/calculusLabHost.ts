@@ -118,6 +118,15 @@ class LabExperiments {
   }
 }
 
+/** Instâncias de subsistemas internos aparecem para o laboratório com o `typeId` da planta-modelo de
+ * origem (`origin.typeId`): o laboratório continua reconhecendo "o tanque", "a primeira ordem"... */
+function labVisibleComponents(): Array<{ id: string; typeId: string; label?: string }> {
+  const originByTypeId = new Map((state.schematicState.subsystems ?? [])
+    .filter((definition) => typeof definition.origin?.typeId === "string")
+    .map((definition) => [definition.typeId, definition.origin!.typeId!]));
+  return state.schematicState.components.map((component) => ({ id: component.id, typeId: originByTypeId.get(component.typeId) ?? component.typeId, label: component.label }));
+}
+
 export function createCalculusLabHost(post: (message: HostToLabMessage) => void): CalculusLabHost {
   const experiments = new LabExperiments(post);
   return {
@@ -128,7 +137,7 @@ export function createCalculusLabHost(post: (message: HostToLabMessage) => void)
     undo: () => { const done = undoLab(); if (done) experiments.reset(); return done; },
     redo: () => { const done = redoLab(); if (done) experiments.reset(); return done; },
     history: labHistoryState,
-    project: () => labProjectInfo(currentCalculusLab(), state.schematicState.components),
+    project: () => labProjectInfo(currentCalculusLab(), labVisibleComponents()),
     projectName: () => (state.currentProjectFilePath ? path.basename(state.currentProjectFilePath) : undefined),
     locale: () => state.schematicState.locale ?? "pt-BR",
     onMessage: (message) => experiments.receive(message),

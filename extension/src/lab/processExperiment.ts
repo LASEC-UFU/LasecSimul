@@ -16,7 +16,12 @@ interface BoundPlant {
 /** Instância do processo que a atividade usa: a referenciada, ou a única do tipo no projeto. */
 export function resolvePlantComponentId(activity: ProcessActivity): string | undefined {
   const typeId = PLANTS[activity.kind].typeId;
-  const components = state.schematicState.components.filter((component) => component.typeId === typeId);
+  // A planta-modelo vive no projeto como subsistema interno (`subsystem.*`) cuja origem registra o
+  // `typeId` da planta; instâncias com o próprio `typeId` da planta também valem.
+  const fromPlant = new Set([typeId, ...(state.schematicState.subsystems ?? [])
+    .filter((definition) => definition.origin?.typeId === typeId)
+    .map((definition) => definition.typeId)]);
+  const components = state.schematicState.components.filter((component) => fromPlant.has(component.typeId));
   if (activity.plantComponentId) return components.find((component) => component.id === activity.plantComponentId)?.id;
   return components[0]?.id;
 }

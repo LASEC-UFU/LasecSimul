@@ -1,5 +1,6 @@
 import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
 import { CanonicalEndpoint, CanonicalTopologyDocument, HmiApplication, HmiPage, HmiPageElement, InteractionKindEntry, McuSerialPortEntry, PackagePin, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, TopologyNode, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, defaultHmiNavigationVisual, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
+import { isSubsystemTypeId, subsystemClosure, type SubsystemDefinition } from "./subsystemModel.js";
 import { reorderedZOrder, zOrderModeForKey, type ZOrderMode } from "./zOrder.js";
 import { graphicalRuntimeProperties, isGraphicalTypeId } from "./graphicsBinding.js";
 import { auditHmiApplication, createHmiAuditHtml, createHmiAuditReport, defaultHmiAuditRuleProfile, filterHmiAuditFindings, fingerprintHmiAuditInputs, HMI_AUDIT_RULE_IDS, hmiAuditFindingKey } from "./hmiAudit.js";
@@ -295,12 +296,20 @@ const UI_TEXT = {
     noProperties: "Nenhuma propriedade disponivel nesta aba.",
     type: "Type",
     uid: "Uid",
-    openSubcircuit: "Abrir Subcircuito",
+    openSubcircuit: "Abrir Sistema Externo",
+    openInternalModel: "Abrir Modelo Interno",
+    editSubsystemPanel: "Editar Painel",
+    insertAnotherInstance: "Inserir outra instância",
+    duplicateSubsystem: "Duplicar como definição independente…",
+    renameSubsystem: "Renomear subsistema…",
+    exportSubsystem: "Exportar como sistema externo…",
+    embedExternalSystem: "Incorporar ao projeto",
+    addExternalToPalette: "Adicionar à paleta",
     chooseSubcircuitFile: "Procurar...",
     noSubcircuitFileChosen: "(nenhum)",
     plcProgramNone: "(nenhum programa vinculado)",
     plcOpenProgram: "Abrir programa",
-    locateSubcircuitFile: "Localizar arquivo do subcircuito...",
+    locateSubcircuitFile: "Localizar arquivo do sistema externo...",
     locateDeviceFile: "Localizar ou recarregar arquivo do Device...",
     linkToTunnel: "Vincular a túnel...",
     unlinkTunnel: "Desvincular túnel",
@@ -347,7 +356,7 @@ const UI_TEXT = {
     exportedPropertiesDialogTitle: "Propriedades Exportadas",
     exportProperties: "Exportar propriedades",
     unexportProperties: "Remover exportação de propriedades",
-    createSubcircuit: "Criar Subcircuito da Seleção",
+    createSubcircuit: "Criar Subsistema Interno",
     selectAll: "Selecionar tudo",
     unknownComponent: "Componente desconhecido",
     zoomFitSelection: "Ajustar zoom à seleção",
@@ -358,8 +367,8 @@ const UI_TEXT = {
     saveProjectAs: "Salvar Como",
     importCircuit: "Importar Circuito...",
     editingSubcircuit: "Editando:",
-    subcircuitEditorModeCircuit: "Subcircuito",
-    subcircuitEditorModeSymbol: "Faceplate",
+    subcircuitEditorModeCircuit: "Modelo Interno",
+    subcircuitEditorModeSymbol: "Painel",
     subcircuitEditorModeIcon: "Ícone",
     createPin: "Criar Pino",
     createHmiPage: "Criar página HMI com a seleção",
@@ -368,9 +377,9 @@ const UI_TEXT = {
     replaceCustomEncapsulation: "Substituir o encapsulamento personalizado pelo genérico? O desenho atual será descartado.",
     pinElectricalId: "ID Elétrico do Pino",
     createAdditionalTunnel: "Criar túnel adicional",
-    exposeComponent: "Expor no Faceplate",
-    unexposeComponent: "Remover exposição no Faceplate",
-    backToMainCircuit: "Voltar ao Circuito Principal",
+    exposeComponent: "Expor no Painel",
+    unexposeComponent: "Remover exposição no Painel",
+    backToMainCircuit: "Voltar ao nível superior",
     componentsSelected: "componentes selecionados",
     labelsSelected: "rótulos selecionados",
     mixedValuePlaceholder: "(vários valores)",
@@ -453,12 +462,20 @@ const UI_TEXT = {
     noProperties: "No properties available in this tab.",
     type: "Type",
     uid: "Uid",
-    openSubcircuit: "Open Subcircuit",
+    openSubcircuit: "Open External System",
+    openInternalModel: "Open Internal Model",
+    editSubsystemPanel: "Edit Panel",
+    insertAnotherInstance: "Insert another instance",
+    duplicateSubsystem: "Duplicate as independent definition…",
+    renameSubsystem: "Rename subsystem…",
+    exportSubsystem: "Export as external system…",
+    embedExternalSystem: "Embed into project",
+    addExternalToPalette: "Add to palette",
     chooseSubcircuitFile: "Browse...",
     noSubcircuitFileChosen: "(none)",
     plcProgramNone: "(no program linked)",
     plcOpenProgram: "Open program",
-    locateSubcircuitFile: "Locate subcircuit file...",
+    locateSubcircuitFile: "Locate external system file...",
     locateDeviceFile: "Locate or reload Device file...",
     linkToTunnel: "Link to tunnel...",
     unlinkTunnel: "Unlink tunnel",
@@ -505,7 +522,7 @@ const UI_TEXT = {
     exportedPropertiesDialogTitle: "Exported Properties",
     exportProperties: "Export properties",
     unexportProperties: "Remove property export",
-    createSubcircuit: "Create Subcircuit from Selection",
+    createSubcircuit: "Create Internal Subsystem",
     selectAll: "Select all",
     unknownComponent: "Unknown component",
     zoomFitSelection: "Zoom to selection",
@@ -516,8 +533,8 @@ const UI_TEXT = {
     saveProjectAs: "Save As",
     importCircuit: "Import Circuit...",
     editingSubcircuit: "Editing:",
-    subcircuitEditorModeCircuit: "Subcircuit",
-    subcircuitEditorModeSymbol: "Faceplate",
+    subcircuitEditorModeCircuit: "Internal Model",
+    subcircuitEditorModeSymbol: "Panel",
     subcircuitEditorModeIcon: "Icon",
     createPin: "Create Pin",
     createHmiPage: "Create HMI page from selection",
@@ -526,9 +543,9 @@ const UI_TEXT = {
     replaceCustomEncapsulation: "Replace the custom encapsulation with the generic one? The current drawing will be discarded.",
     pinElectricalId: "Pin Electrical ID",
     createAdditionalTunnel: "Create additional tunnel",
-    exposeComponent: "Expose in Faceplate",
-    unexposeComponent: "Remove exposure in Faceplate",
-    backToMainCircuit: "Back to Main Circuit",
+    exposeComponent: "Expose in Panel",
+    unexposeComponent: "Remove exposure in Panel",
+    backToMainCircuit: "Up one level",
     componentsSelected: "components selected",
     labelsSelected: "labels selected",
     mixedValuePlaceholder: "(multiple values)",
@@ -714,7 +731,9 @@ interface McuSerialMonitorRuntime {
 }
 const mcuSerialMonitorRuntime = new Map<string, McuSerialMonitorRuntime>();
 let mcuSerialMonitorLayer: HTMLDivElement | undefined;
-let clipboardItems: { components: WebviewComponentModel[]; wires: WebviewWireModel[]; hmiSourceByClipboardId?: Map<string, string> } | undefined;
+/** `subsystems`: definições INTERNAS do documento de origem usadas pelos componentes copiados (com as
+ * dependências, cópia profunda) -- a colagem em outro documento as importa sem depender da origem. */
+let clipboardItems: { components: WebviewComponentModel[]; wires: WebviewWireModel[]; hmiSourceByClipboardId?: Map<string, string>; subsystems?: SubsystemDefinition[] } | undefined;
 const activePushShortcutIds = new Set<string>();
 /** `true` durante QUALQUER gesto de arrastar componente em andamento (mouse ainda pressionado) --
  * mesmo com shell persistente, o render de telemetria pode trocar SVG interno e estado visual no
@@ -2372,6 +2391,8 @@ interface UndoSnapshot {
   symbolCanvas?: WebviewProjectState["symbolCanvas"];
   hmiApplication?: HmiApplication;
   selectedHmiPageId?: string;
+  /** Tabela de definições internas: criar/colar/duplicar/excluir/editar subsistema é desfazível. */
+  subsystems?: SubsystemDefinition[];
 }
 
 interface UndoHistory {
@@ -2393,8 +2414,9 @@ function activeUndoHistory(): UndoHistory {
   return mainUndoHistory;
 }
 
-function snapshotOfProjectState(project: Pick<WebviewProjectState, "components" | "topology" | "selectedComponentIds" | "selectedWireIds" | "symbolMode" | "symbolCanvas" | "hmiApplication">): UndoSnapshot {
+function snapshotOfProjectState(project: Pick<WebviewProjectState, "components" | "topology" | "selectedComponentIds" | "selectedWireIds" | "symbolMode" | "symbolCanvas" | "hmiApplication" | "subsystems">): UndoSnapshot {
   return {
+    subsystems: project.subsystems ? structuredClone(project.subsystems) : undefined,
     components: structuredClone(project.components),
     topology: structuredClone(project.topology),
     selectedComponentIds: [...project.selectedComponentIds],
@@ -2413,11 +2435,11 @@ function captureUndoSnapshot(): UndoSnapshot {
 }
 
 /** Chave de comparação -- conteúdo da cena + política/canvas do símbolo (nunca seleção). */
-function undoContentKey(snapshot: { components: WebviewComponentModel[]; topology: CanonicalTopologyDocument; symbolMode?: WebviewProjectState["symbolMode"]; symbolCanvas?: WebviewProjectState["symbolCanvas"]; hmiApplication?: HmiApplication }): string {
+function undoContentKey(snapshot: { components: WebviewComponentModel[]; topology: CanonicalTopologyDocument; symbolMode?: WebviewProjectState["symbolMode"]; symbolCanvas?: WebviewProjectState["symbolCanvas"]; hmiApplication?: HmiApplication; subsystems?: SubsystemDefinition[] }): string {
   const hmiForUndo = snapshot.hmiApplication ? { ...snapshot.hmiApplication, auditExceptions: undefined } : undefined;
   // `topology.revision` fica de fora: é um contador do Host, não conteúdo. Com ele na chave, cada
   // revisão nova virava uma entrada de desfazer idêntica à anterior (Ctrl+Z "sem efeito").
-  return JSON.stringify([snapshot.components, snapshot.topology.nodes, snapshot.topology.conductors, snapshot.symbolMode, snapshot.symbolCanvas, hmiForUndo]);
+  return JSON.stringify([snapshot.components, snapshot.topology.nodes, snapshot.topology.conductors, snapshot.symbolMode, snapshot.symbolCanvas, hmiForUndo, snapshot.subsystems ?? []]);
 }
 
 /** Reseta o histórico (undo E redo) pro estado ATUAL de `state` -- chamado ao entrar/sair da sessão
@@ -2466,7 +2488,7 @@ function recordUndoTransition(currentKey: string, captureCurrent: () => UndoSnap
  * mudança de SELEÇÃO apenas (nunca vira entrada de undo, ver `undoContentKey`) -- antes clonava
  * `components`/`wires` inteiros só pra descobrir isso a cada uma. */
 function recordUndoSnapshotIfChanged(): void {
-  const currentKey = undoContentKey({ components: activeSceneComponents(), topology: state.topology, symbolMode: state.symbolMode, symbolCanvas: state.symbolCanvas, hmiApplication: state.hmiApplication });
+  const currentKey = undoContentKey({ components: activeSceneComponents(), topology: state.topology, symbolMode: state.symbolMode, symbolCanvas: state.symbolCanvas, hmiApplication: state.hmiApplication, subsystems: state.subsystems });
   recordUndoTransition(currentKey, captureUndoSnapshot);
 }
 
@@ -2506,6 +2528,8 @@ function applyUndoSnapshot(snapshot: UndoSnapshot): void {
     state.selectedWireIds = [...snapshot.selectedWireIds];
     state.symbolMode = snapshot.symbolMode;
     state.symbolCanvas = snapshot.symbolCanvas ? structuredClone(snapshot.symbolCanvas) : undefined;
+    // Restaura a tabela junto: o host reconcilia catálogo/Core ao receber o projeto (`projectChanged`).
+    state.subsystems = snapshot.subsystems ? structuredClone(snapshot.subsystems) : [];
     clearPendingWire();
     selectedWireSegment = undefined;
     selectedWireCorner = undefined;
@@ -2516,6 +2540,31 @@ function applyUndoSnapshot(snapshot: UndoSnapshot): void {
   } finally {
     isApplyingUndoSnapshot = false;
   }
+}
+
+/** Profundidade do nível em edição: 0 == documento principal. */
+function editingDepth(context: WebviewProjectState["subcircuitEditingContext"]): number {
+  return context ? Math.max(1, (context.path?.length ?? 2) - 1) : 0;
+}
+
+/** Um histórico de desfazer POR NÍVEL: entrar num subsistema guarda o histórico do nível de fora e
+ * começa um novo; voltar restaura o de fora e registra a mudança da tabela (definição editada/criada
+ * lá dentro) como UM passo desfazível deste nível. */
+const outerUndoHistories: UndoHistory[] = [];
+function switchUndoHistoryLevel(previousDepth: number, nextDepth: number): void {
+  if (nextDepth > previousDepth) {
+    outerUndoHistories.push(mainUndoHistory);
+    mainUndoHistory = createUndoHistory();
+    resetUndoHistory(mainUndoHistory);
+    return;
+  }
+  const restored = nextDepth < previousDepth ? outerUndoHistories.pop() : undefined;
+  if (!restored) {
+    resetUndoHistory(mainUndoHistory);
+    return;
+  }
+  mainUndoHistory = restored;
+  recordUndoSnapshotIfChanged();
 }
 
 function undo(): void {
@@ -4187,8 +4236,10 @@ function renderAppBar(): HTMLElement {
     // "Editando:" fixo (pedido real) -- não mais o NOME do subcircuito aqui, o combobox ao lado já
     // deixa claro qual sessão/modo está ativo; nome completo continua disponível como `title` do
     // grupo pra quem quiser conferir sem abrir o combobox.
-    label.textContent = t("editingSubcircuit");
-    subcircuitGroup.title = state.subcircuitEditingContext.name;
+    // Caminho hierárquico ("Projeto › Planta › Sensor"); voltar sobe UM nível.
+    const navigationPath = state.subcircuitEditingContext.path ?? [state.subcircuitEditingContext.name];
+    label.textContent = `${t("editingSubcircuit")} ${navigationPath.join(" › ")}`;
+    subcircuitGroup.title = `${navigationPath.join(" › ")}${state.subcircuitEditingContext.internal === false ? (currentLocale() === "pt-BR" ? " (sistema externo)" : " (external system)") : ""}`;
     subcircuitGroup.hidden = hmiPresentationMode;
 
     // ComboBox Subcircuito/Símbolo/Ícone -- substitui o texto estático "Editando subcircuito:"
@@ -5449,7 +5500,11 @@ function copySelectedItems(): boolean {
     .filter((wire) => selectedComponentIds.has(endpointId(wire.from)) && selectedComponentIds.has(endpointId(wire.to)))
     .map(cloneWire);
 
-  clipboardItems = { components, wires, hmiSourceByClipboardId };
+  // Subsistemas internos copiados levam a definição e toda a hierarquia abaixo dela; sistemas externos
+  // levam só a referência (caminho absoluto) e continuam externos no destino.
+  const internalTypeIds = [...new Set(components.map((component) => component.typeId).filter((typeId) => isSubsystemTypeId(typeId)))];
+  const subsystems = internalTypeIds.length > 0 ? structuredClone(subsystemClosure(internalTypeIds, state.subsystems ?? [])) : undefined;
+  clipboardItems = { components, wires, hmiSourceByClipboardId, ...(subsystems && subsystems.length > 0 ? { subsystems } : {}) };
   return true;
 }
 
@@ -5557,7 +5612,7 @@ function pasteClipboardItems(): void {
     selectedWireIds: wires.map((wire) => wire.id),
   };
   storeWebviewState();
-  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: currentElementScope(), components: remintedComponents, wires });
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: currentElementScope(), components: remintedComponents, wires, ...(clipboardItems.subsystems && currentElementScope() === "schematic" ? { subsystems: structuredClone(clipboardItems.subsystems) } : {}) });
   if (newTunnels.length > 0) send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertItems", scope: "schematic", components: newTunnels, wires: [] });
   render();
 }
@@ -9194,9 +9249,25 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     // "Abrir Subcircuito" -- entra no circuito INTERNO do `.lssubcircuit` já registrado (ver
     // `extension.ts::openSubcircuitForEditingCommand`); fica logo após o(s) submenu(s) de
     // componente(s) expostos, ainda antes de Copiar/Cortar/Remover.
-    const openSubcircuitMenuItems: ContextMenuItem[] = isSubcircuitWithPackage
-      ? [{ label: t("openSubcircuit"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenSubcircuit", sourceId: sourceId! }) }]
-      : [];
+    // Subsistema INTERNO (definição na tabela do documento) e sistema EXTERNO (arquivo) têm ações
+    // diferentes; converter um no outro é sempre uma ação explícita, nunca efeito de colar.
+    const isInternalSubsystem = isSubcircuitWithPackage && catalogEntry?.internalSubsystem === true;
+    const openSubcircuitMenuItems: ContextMenuItem[] = !isSubcircuitWithPackage
+      ? []
+      : isInternalSubsystem
+        ? [
+            { label: t("openInternalModel"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenSubcircuit", sourceId: sourceId! }) },
+            { label: t("editSubsystemPanel"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenSubsystemPanel", sourceId: sourceId! }) },
+            { label: t("insertAnotherInstance"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertSubsystemInstance", typeId: component.typeId }) },
+            { label: t("duplicateSubsystem"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestDuplicateSubsystem", componentId: component.id }) },
+            { label: t("renameSubsystem"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRenameSubsystem", typeId: component.typeId }) },
+            { label: t("exportSubsystem"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestExportSubsystem", typeId: component.typeId }) },
+          ]
+        : [
+            { label: t("openSubcircuit"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenSubcircuit", sourceId: sourceId! }) },
+            { label: t("embedExternalSystem"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestEmbedExternalSystem", componentId: component.id }) },
+            ...(catalogEntry?.projectLocal ? [{ label: t("addExternalToPalette"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestAddExternalToPalette", componentId: component.id }) }] : []),
+          ];
     const mcuMenuItems: ContextMenuItem[] = !isGroup && !isSubcircuitWithPackage && isMcuHostComponent(component)
       ? [
           { kind: "separator" },
@@ -9236,7 +9307,9 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           { kind: "separator" },
         ]
       : [];
-    const createSubcircuitMenuItems: ContextMenuItem[] = isGroup
+    // Um bloco só também pode virar subsistema (encapsular para reutilizar/instanciar). Nunca no
+    // Painel/Ícone: lá a seleção são elementos gráficos, não componentes do modelo.
+    const createSubcircuitMenuItems: ContextMenuItem[] = selectedComponents.length > 0 && currentElementScope() === "schematic"
       ? [
           { kind: "separator" },
           { label: t("createSubcircuit"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestCreateSubcircuitFromSelection", componentIds: state.selectedComponentIds }) },
@@ -12080,6 +12153,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     // (antes vs. depois do merge) distingue "sessão realmente trocou" de "o campo só veio de novo no
     // patch com o mesmo conteúdo".
     const previousSubcircuitSourceId = state.subcircuitEditingContext?.sourceId;
+    const previousSubcircuitDepth = editingDepth(state.subcircuitEditingContext);
     const enteringOrLeavingSubcircuitSession = previousSubcircuitSourceId !== merged.subcircuitEditingContext?.sourceId;
     // Mesmo motivo do `keepLocalViewport` do handler de "syncState" acima.
     if (viewportPersistTimer !== undefined && !enteringOrLeavingSubcircuitSession) merged.viewport = state.viewport;
@@ -12096,7 +12170,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       subcircuitEditorMode = "circuit";
       hmiPresentationMode = false;
     }
-    if (enteringOrLeavingSubcircuitSession) resetUndoHistory(mainUndoHistory);
+    if (enteringOrLeavingSubcircuitSession) switchUndoHistoryLevel(previousSubcircuitDepth, editingDepth(merged.subcircuitEditingContext));
     // Ao SAIR de uma sessão de "Abrir Subcircuito" de volta pro circuito principal, o overlay de
     // Modo Placa (`renderBoardOverlaysFor`) de QUALQUER instância deste subcircuito no circuito de
     // fora precisa refletir o que acabou de ser salvo -- mas `ensureBoardOverlayData` só busca uma
@@ -12129,6 +12203,8 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     // `setSubcircuitEditorMode`. A sessão sempre começa em Modo Subcircuito (linha acima), então isto
     // enquadra o circuito interno logo na abertura.
     if (enteringOrLeavingSubcircuitSession && merged.subcircuitEditingContext) zoomToFitAllDeferred();
+    // "Editar Painel": a sessão abre direto na cena do Painel (símbolo do sistema).
+    if (enteringOrLeavingSubcircuitSession && merged.subcircuitEditingContext?.initialMode === "symbol") setSubcircuitEditorMode("symbol");
   }
 
   // Número de revisão novo depois de um `"projectChanged"` nosso que mexeu na topologia. É só o

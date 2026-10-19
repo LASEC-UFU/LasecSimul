@@ -125,8 +125,9 @@ const FORMERLY_REGISTERED_PLANTS = [
         await serializer.save(target, buildStandalonePlantProject(loadPlantTemplate(templateDir, template)));
         const reopened = await serializer.load(target);
         const plant = reopened.components[0];
-        assert(reopened.components.length === 1 && plant?.typeId === template.typeId, `${template.project}: uma instância da planta`);
-        assert(plant?.subcircuitRef?.embedded?.typeId === template.typeId, `${template.project}: planta incorporada`);
+        const definition = reopened.subsystems?.find((entry) => entry.typeId === plant?.typeId);
+        assert(reopened.components.length === 1 && Boolean(plant?.typeId.startsWith("subsystem.")), `${template.project}: uma instância de subsistema interno`);
+        assert(definition?.origin?.typeId === template.typeId && !plant?.subcircuitRef, `${template.project}: planta como definição interna (origem ${template.typeId})`);
         assert(embedLegacyPlantReferences(reopened.components, () => undefined).embedded.length === 0, `${template.project}: não depende de migração`);
       }
     } finally {
@@ -140,8 +141,10 @@ const FORMERLY_REGISTERED_PLANTS = [
     const examplesDir = path.join(repoRoot, "examples", "calculo");
     for (const file of fs.readdirSync(examplesDir).filter((name) => name.endsWith(".lsproj"))) {
       const project = await serializer.load(path.join(examplesDir, file));
-      for (const component of project.components.filter((candidate) => plantTypeIds.has(candidate.typeId))) {
-        assert(component.subcircuitRef?.embedded?.typeId === component.typeId, `${file}/${component.id}: planta ${component.typeId} deveria estar incorporada`);
+      assert(project.components.every((component) => !plantTypeIds.has(component.typeId) && !component.subcircuitRef?.embedded), `${file}: nenhuma planta por tipo global nem cópia por instância`);
+      for (const component of project.components.filter((candidate) => candidate.typeId.startsWith("subsystem."))) {
+        const definition = project.subsystems?.find((entry) => entry.typeId === component.typeId);
+        assert(Boolean(definition?.origin?.typeId && plantTypeIds.has(definition.origin.typeId)), `${file}/${component.id}: planta como subsistema interno do projeto`);
       }
     }
   });

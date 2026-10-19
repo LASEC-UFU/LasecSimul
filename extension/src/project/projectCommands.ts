@@ -14,8 +14,9 @@ import { decideSaveTarget } from "./savePolicy";
 import { resolveProjectSourcePaths } from "./projectPathPolicy";
 import { isSimulideCircuitPath } from "../import/simulide/SimulideImporter";
 import { openSimulideAsLsproj } from "../import/simulide/SimulideOpenWorkflow";
-import { fileSourceId, filePathFromSourceId, materializeEmbeddedSubcircuit, readMaterializedSubcircuit } from "./embeddedSubcircuits";
-import { createPlantTemplateLookup, embedLegacyPlantReferences, embeddedPlantRef, plantDisplayName, resolvePlantTemplateDir } from "./plantTemplates";
+import { createPlantTemplateLookup, embedLegacyPlantReferences, plantDisplayName, plantPinIds, resolvePlantTemplateDir } from "./plantTemplates";
+import { currentDocumentDir, projectLocalCatalogEntry, reservedSubsystemTypeIds, syncDocumentSubsystems, tryRegisterExternalSystemFile } from "./subsystemRuntime";
+import { hoistEmbeddedSubsystems, importExternalAsSubsystem, importSubsystemDefinitions, isSubsystemTypeId, mapTableRefPaths, rewriteComponentTypeIds } from "../ui/webview/subsystemModel";
 
 export function absoluteSubcircuitRefPath(refPath: string): string {
   if (path.isAbsolute(refPath)) return path.normalize(refPath);
@@ -27,43 +28,45 @@ export const absoluteDeviceRefPath = absoluteSubcircuitRefPath;
 
 function projectWithRelativeExternalRefs(project: ProjectDocument, targetProjectPath: string): ProjectDocument {
   const targetDir = path.dirname(targetProjectPath);
+  const portable = (refPath: string): string => {
+    const absolutePath = absoluteSubcircuitRefPath(refPath);
+    const relativePath = path.relative(targetDir, absolutePath);
+    return relativePath && !path.isAbsolute(relativePath) ? relativePath : absolutePath;
+  };
+  // Sistemas externos: relativo com "/" (o projeto copiado abre também fora do Windows).
+  const portableSystemRef = (refPath: string): string => {
+    const value = portable(refPath);
+    return path.isAbsolute(value) ? value : value.split(path.sep).join("/");
+  };
   return {
     ...project,
-    components: project.components.map((component) => {
-      const portable = (refPath: string): string => {
-        const absolutePath = absoluteSubcircuitRefPath(refPath);
-        const relativePath = path.relative(targetDir, absolutePath);
-        return relativePath && !path.isAbsolute(relativePath) ? relativePath : absolutePath;
-      };
-      const embeddedSource = component.subcircuitRef?.embedded
-        ? filePathFromSourceId(state.schematicState.catalog.find((entry) => entry.typeId === component.typeId)?.registeredSourceId ?? "")
-        : undefined;
-      return {
-        ...component,
-        ...(component.subcircuitRef?.embedded ? { subcircuitRef: {
-          ...component.subcircuitRef,
-          // Incorporado: o manifesto vai no próprio projeto (com as edições feitas no editor de
-          // subcircuito, que trabalha sobre o arquivo materializado); `path` é só o nome de referência.
-          embedded: (embeddedSource ? readMaterializedSubcircuit(embeddedSource) : undefined) ?? component.subcircuitRef.embedded,
-        } } : component.subcircuitRef?.path ? { subcircuitRef: {
-          ...component.subcircuitRef,
-          path: portable(component.subcircuitRef.path),
-        } } : {}),
-        ...(component.deviceRef?.path ? { deviceRef: {
-          ...component.deviceRef,
-          path: portable(component.deviceRef.path),
-        } } : {}),
-        ...(component.fpga?.sources.length ? { fpga: {
-          ...component.fpga,
-          sources: component.fpga.sources.map(portable),
-        } } : {}),
-        ...(component.plc ? { plc: {
-          ...component.plc,
-          ...(component.plc.iecProjectRef ? { iecProjectRef: portable(component.plc.iecProjectRef) } : {}),
-          ...(component.plc.artifactRef ? { artifactRef: portable(component.plc.artifactRef) } : {}),
-        } } : {}),
-      };
-    }),
+    components: project.components.map((component) => ({
+      ...component,
+      ...(component.subcircuitRef?.path ? { subcircuitRef: {
+        ...component.subcircuitRef,
+        path: portableSystemRef(component.subcircuitRef.path),
+      } } : {}),
+      ...(component.deviceRef?.path ? { deviceRef: {
+        ...component.deviceRef,
+        path: portable(component.deviceRef.path),
+      } } : {}),
+      ...(component.fpga?.sources.length ? { fpga: {
+        ...component.fpga,
+        sources: component.fpga.sources.map(portable),
+      } } : {}),
+      ...(component.plc ? { plc: {
+        ...component.plc,
+        ...(component.plc.iecProjectRef ? { iecProjectRef: portable(component.plc.iecProjectRef) } : {}),
+        ...(component.plc.artifactRef ? { artifactRef: portable(component.plc.artifactRef) } : {}),
+      } } : {}),
+    })),
+    // Sistemas externos usados DENTRO das definições internas também viajam relativos ao projeto.
+    ...(project.subsystems ? { subsystems: project.subsystems.map((definition) => ({
+      ...definition,
+      components: (definition.components ?? []).map((component) => (component.subcircuitRef?.path
+        ? { ...component, subcircuitRef: { ...component.subcircuitRef, path: portableSystemRef(component.subcircuitRef.path) } }
+        : component)),
+    })) } : {}),
   };
 }
 
@@ -144,7 +147,11 @@ function projectToWebviewState(project: ProjectDocument, projectDir?: string): W
     ])
   );
   const components: WebviewComponentModel[] = project.components.map((component) => {
-    const mapped = projectComponentToWebviewComponent(component, catalog);
+    const loaded = projectComponentToWebviewComponent(component, catalog);
+    // Referência a sistema externo: absoluta em memória (copiar/colar entre pastas resolve no destino).
+    const mapped = projectDir && loaded.subcircuitRef?.path && !path.isAbsolute(loaded.subcircuitRef.path)
+      ? { ...loaded, subcircuitRef: { ...loaded.subcircuitRef, path: path.resolve(projectDir, loaded.subcircuitRef.path) } }
+      : loaded;
     if (!projectDir || (!mapped.fpga && !mapped.plc)) return mapped;
     return {
       ...mapped,
@@ -197,6 +204,9 @@ function projectToWebviewState(project: ProjectDocument, projectDir?: string): W
     components,
     hmiApplication: project.hmiApplication,
     calculusLab: project.calculusLab,
+    // Caminhos de sistemas externos usados dentro das definições: absolutos em memória (como os dos
+    // componentes acima); `projectWithRelativeExternalRefs` volta a relativizar ao gravar.
+    subsystems: projectDir ? mapTableRefPaths(project.subsystems ?? [], (refPath) => (path.isAbsolute(refPath) ? path.normalize(refPath) : path.resolve(projectDir, refPath))) : project.subsystems ?? [],
     topology,
     viewport: project.visual.viewport,
     selectedComponentIds: [],
@@ -208,53 +218,45 @@ function projectToWebviewState(project: ProjectDocument, projectDir?: string): W
   };
 }
 
+/** Sistemas EXTERNOS usados por referência (`subcircuitRef.path`): lê cada arquivo, registra no Core
+ * (com os subsistemas internos dele em espaço de nomes próprio) e cria a entrada de catálogo do
+ * projeto. Subsistemas internos não passam por aqui (ver `syncDocumentSubsystems`). */
 async function resolveProjectSubcircuitReferences(projectDir: string): Promise<void> {
-  const componentsWithRef = state.schematicState.components.filter((component) => component.subcircuitRef);
+  const componentsWithRef = state.schematicState.components.filter((component) => component.subcircuitRef?.path && !isSubsystemTypeId(component.typeId));
   if (componentsWithRef.length === 0) return;
 
   const language = currentLasecSimulLanguage();
   const newCatalogEntries: WebviewComponentCatalogEntry[] = [];
   const updatedComponents = new Map<string, WebviewComponentModel>();
   let missingCount = 0;
-
   const mcuTypeIds = new Set(state.schematicState.catalog.filter((entry) => entry.registeredSourceKind === "mcu-adapter").map((entry) => entry.typeId));
-  const plantLookup = plantTemplateLookup();
 
   for (const component of componentsWithRef) {
     const ref = component.subcircuitRef!;
-    const absolutePath = ref.embedded ? materializeEmbeddedSubcircuit(ref.embedded) : normalizeAbsolutePath(projectDir, ref.path);
+    const absolutePath = normalizeAbsolutePath(projectDir, ref.path);
     if (!fileExists(absolutePath)) {
       missingCount++;
       continue;
     }
-    const manifest = readJsonFile(absolutePath) as Record<string, unknown>;
-    // Antes do próprio subcircuito: as plantas antes globais que ele instancia por dentro.
-    await registerNestedLegacyPlants(manifest, newCatalogEntries, plantLookup, language, mcuTypeIds);
-    // O catálogo sai do arquivo; o Core pode ainda estar subindo (projeto restaurado na ativação
-    // da extensão): a definição é registrada de novo em toda reconstrução do Core
-    // (`registerProjectSubcircuitsInCore`), então aqui é só uma tentativa antecipada.
-    await tryRegisterAdhocSubcircuit(absolutePath);
-    const parsed = parseSubcircuitManifest(
-      manifest,
-      // Arte relativa de um manifesto incorporado mora ao lado do projeto, não no cache.
-      ref.embedded ? projectDir : path.dirname(absolutePath),
-      language,
-      mcuTypeIds
-    );
+    // O Core pode ainda estar subindo (projeto restaurado na ativação): a reconstrução registra de
+    // novo (`registerProjectSubcircuitsInCore`), então aqui é só uma tentativa antecipada.
+    await tryRegisterExternalSystemFile(absolutePath);
+    const parsed = parseSubcircuitManifest(readJsonFile(absolutePath) as Record<string, unknown>, path.dirname(absolutePath), language, mcuTypeIds);
     if (parsed.schemaVersionRejected || !parsed.typeId) {
       // Versão de formato antiga tratada igual a "arquivo ausente" (placeholder/relink) -- nunca
       // meio-carregado com pinos/símbolo desatualizados.
       missingCount++;
       continue;
     }
-
     const newPinIds = parsed.pinIds.length > 0 ? parsed.pinIds : Array.from({ length: parsed.pinCount }, (_, index) => `pin-${index + 1}`);
     newCatalogEntries.push(projectLocalCatalogEntry(parsed, absolutePath));
     updatedComponents.set(component.id, {
       ...component,
       typeId: parsed.typeId,
       pins: newPinIds.map((id, index) => ({ id, x: 0, y: index * 12 })),
-      subcircuitRef: { path: ref.path, lastKnownTypeId: parsed.typeId, lastKnownPinIds: newPinIds, ...(ref.embedded ? { embedded: ref.embedded } : {}) },
+      // Em memória o caminho fica ABSOLUTO (copiar/colar entre pastas resolve no destino); ao salvar
+      // volta a relativo à pasta do projeto (`projectWithRelativeExternalRefs`).
+      subcircuitRef: { path: absolutePath, lastKnownTypeId: parsed.typeId, lastKnownPinIds: newPinIds },
     });
   }
 
@@ -269,95 +271,35 @@ async function resolveProjectSubcircuitReferences(projectDir: string): Promise<v
 
   if (missingCount > 0) {
     vscode.window.showWarningMessage(
-      `${missingCount} subcircuito(s) não encontrado(s). Clique com o botão direito no bloco para localizar o arquivo.`
+      `${missingCount} sistema(s) externo(s) não encontrado(s). Clique com o botão direito no bloco para localizar o arquivo.`
     );
   }
 }
 
-/** Mesma resolução da abertura, para o projeto aberto (ex.: subcircuito incorporado colado de outro
- * projeto). Referências por caminho são relativas à pasta do projeto atual. */
+/** Mesma resolução da abertura, para o documento aberto (ex.: sistema externo colado de outro
+ * projeto). Referências por caminho relativo usam a pasta do documento atual. */
 export function resolveCurrentProjectSubcircuitReferences(): Promise<void> {
-  return resolveProjectSubcircuitReferences(state.currentProjectFilePath ? path.dirname(state.currentProjectFilePath) : process.cwd());
-}
-
-async function tryRegisterAdhocSubcircuit(absolutePath: string): Promise<void> {
-  if (!state.coreClient) return;
-  try {
-    await state.coreClient.registerAdhocSubcircuitDefinition(absolutePath, { replace: true });
-  } catch {
-    // Core ainda não pronto ou manifesto recusado: a reconstrução tenta de novo e relata.
-  }
-}
-
-/** Entrada de catálogo de um subcircuito DO PROJETO (por caminho ou incorporado): fora da paleta,
- * registrada no Core a cada reconstrução e descartada ao abrir outro projeto. */
-function projectLocalCatalogEntry(parsed: ReturnType<typeof parseSubcircuitManifest>, absolutePath: string): WebviewComponentCatalogEntry {
-  return {
-    typeId: parsed.typeId,
-    label: parsed.label || parsed.typeId,
-    category: "Subcircuitos",
-    // Só fora da paleta: `hidden` do catálogo passa para a INSTÂNCIA ao reabrir o projeto
-    // (`projectComponentToWebviewComponent`) e a planta sumia do desenho na segunda abertura.
-    paletteHidden: true,
-    pinCount: parsed.pinCount,
-    pinIds: parsed.pinIds.length > 0 ? parsed.pinIds : undefined,
-    defaultProperties: parsed.defaultProperties,
-    icon: parsed.icon,
-    iconFilePath: parsed.iconFilePath,
-    iconSvgInline: parsed.iconSvgInline,
-    package: parsed.package,
-    logicSymbolPackage: parsed.logicSymbolPackage,
-    disabled: false,
-    mcuHost: parsed.mcuHost,
-    ...(parsed.hartDeviceComponentId ? { hartDeviceComponentId: parsed.hartDeviceComponentId } : {}),
-    serialPorts: parsed.serialPorts,
-    // Mesmo contrato dos subcircuitos da biblioteca: componentes internos expostos (gráficos ao
-    // vivo, propriedades exportadas, "Abrir Subcircuito") resolvidos pelo arquivo.
-    registeredSourceKind: "subcircuit-file",
-    registeredSourceId: fileSourceId(absolutePath),
-    projectLocal: true,
-  };
-}
-
-/**
- * Compatibilidade: um subcircuito do projeto que instancia POR DENTRO uma planta antes registrada
- * globalmente (ex.: criado da seleção quando a planta vinha da paleta) guarda só o `typeId` dela.
- * Sem registro global, o Core não resolveria esse filho; a planta-modelo é registrada SÓ para este
- * projeto (entrada `projectLocal`, fora da paleta, descartada ao abrir outro projeto), antes do
- * subcircuito que a usa. Nada é gravado em `registeredSources[]` nem em `library.json`.
- */
-async function registerNestedLegacyPlants(
-  manifest: Record<string, unknown>,
-  entries: WebviewComponentCatalogEntry[],
-  lookup: ReturnType<typeof createPlantTemplateLookup>,
-  language: ReturnType<typeof currentLasecSimulLanguage>,
-  mcuTypeIds: ReadonlySet<string>
-): Promise<void> {
-  const nestedTypeIds = new Set((Array.isArray(manifest.components) ? manifest.components : [])
-    .map((nested) => (typeof nested === "object" && nested !== null ? (nested as { typeId?: unknown }).typeId : undefined))
-    .filter((typeId): typeId is string => typeof typeId === "string" && typeId !== manifest.typeId));
-  for (const typeId of nestedTypeIds) {
-    if (entries.some((entry) => entry.typeId === typeId) || state.schematicState.catalog.some((entry) => entry.typeId === typeId)) continue;
-    const loaded = lookup(typeId);
-    if (!loaded) continue;
-    const templatePath = materializeEmbeddedSubcircuit(loaded.manifest);
-    await tryRegisterAdhocSubcircuit(templatePath);
-    const parsed = parseSubcircuitManifest(loaded.manifest, path.dirname(templatePath), language, mcuTypeIds);
-    if (!parsed.schemaVersionRejected && parsed.typeId) entries.push(projectLocalCatalogEntry(parsed, templatePath));
-  }
+  return resolveProjectSubcircuitReferences(currentDocumentDir());
 }
 
 function plantTemplateLookup(): ReturnType<typeof createPlantTemplateLookup> {
   return createPlantTemplateLookup(state.extensionContext ? resolvePlantTemplateDir(state.extensionContext.extensionPath) : undefined);
 }
 
-/** Migração de leitura de projetos gravados quando as plantas eram registradas globalmente (ver
- * `plantTemplates.ts::embedLegacyPlantReferences`): a instância passa a carregar o modelo. */
+/** Migração de leitura de projetos gravados quando as plantas eram registradas globalmente (guardam
+ * só o `typeId`, em qualquer nível): cada planta vira uma definição interna da tabela. */
 function embedLegacyPlants(project: ProjectDocument): { project: ProjectDocument; count: number } {
-  const migration = embedLegacyPlantReferences(project.components, plantTemplateLookup());
-  return migration.embedded.length === 0
-    ? { project, count: 0 }
-    : { project: { ...project, components: migration.components }, count: migration.embedded.length };
+  const lookup = plantTemplateLookup();
+  const top = embedLegacyPlantReferences(project.components, lookup);
+  let count = top.embedded.length;
+  const table = (project.subsystems ?? []).map((definition) => {
+    const nested = embedLegacyPlantReferences((definition.components ?? []) as unknown as ProjectComponent[], lookup);
+    count += nested.embedded.length;
+    return nested.embedded.length > 0 ? { ...definition, components: nested.components } : definition;
+  });
+  if (count === 0) return { project, count: 0 };
+  const hoisted = hoistEmbeddedSubsystems(top.components, table);
+  return { project: { ...project, components: hoisted.components, subsystems: hoisted.table }, count };
 }
 
 /** O projeto aberto funciona igual; só o arquivo em disco ainda não contém a planta. Avisa e
@@ -368,8 +310,8 @@ function notifyLegacyPlantsEmbedded(count: number, projectFilePath: string | und
   const save = english ? "Save" : "Salvar";
   const name = projectFilePath ? path.basename(projectFilePath) : "";
   const message = english
-    ? `${count} plant(s) that used to come from the global catalog were embedded in this project${name ? ` (${name})` : ""}. Save the project so the file contains the plant and no longer depends on any registration.`
-    : `${count} planta(s) que antes vinham do catálogo global foram incorporadas a este projeto${name ? ` (${name})` : ""}. Salve o projeto para que o arquivo passe a conter a planta e não dependa de nenhum registro.`;
+    ? `${count} plant(s) that used to come from the global catalog became internal subsystems of this project${name ? ` (${name})` : ""}. Save the project so the file contains them and no longer depends on any registration.`
+    : `${count} planta(s) que antes vinham do catálogo global viraram subsistemas internos deste projeto${name ? ` (${name})` : ""}. Salve o projeto para que o arquivo passe a contê-las e não dependa de nenhum registro.`;
   void vscode.window.showInformationMessage(message, save).then((choice) => {
     // Só salva o MESMO projeto do aviso (o usuário pode ter trocado de projeto antes de clicar).
     if (choice === save && projectFilePath && state.currentProjectFilePath === projectFilePath) void saveProjectCommand();
@@ -377,33 +319,32 @@ function notifyLegacyPlantsEmbedded(count: number, projectFilePath: string | und
 }
 
 /**
- * Insere no projeto aberto uma planta-modelo (`subcircuits/plants.json`) JÁ INCORPORADA
- * (`subcircuitRef.embedded`) -- usado pelo Laboratório de Cálculo no lugar do antigo
- * `palette.addComponent`, que dependia da planta registrada na paleta. Mesmo caminho de resolução
- * de um projeto aberto (`resolveProjectSubcircuitReferences`): registro avulso no Core e entrada
- * `projectLocal` fora da paleta. `undefined` quando o modelo não existe no pacote.
+ * Insere no documento aberto uma planta-modelo (`subcircuits/plants.json`) como subsistema INTERNO --
+ * usado pelo Laboratório de Cálculo. Uma cópia idêntica já incorporada é reaproveitada (mesma
+ * definição, outra instância). `undefined` quando o modelo não existe no pacote.
  */
 export async function insertEmbeddedPlant(typeId: string, syncSchematicPanel: () => void): Promise<string | undefined> {
   const loaded = plantTemplateLookup()(typeId);
   if (!loaded) return undefined;
-  const subcircuitRef = embeddedPlantRef(loaded);
+  const imported = importExternalAsSubsystem(state.schematicState.subsystems ?? [], loaded.manifest, { reservedTypeIds: reservedSubsystemTypeIds(), reuseEquivalent: true });
+  state.schematicState = { ...state.schematicState, subsystems: imported.table };
+  await syncDocumentSubsystems();
+  const entry = state.schematicState.catalog.find((candidate) => candidate.typeId === imported.typeId);
   const components = state.schematicState.components;
   const componentId = `component-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
   const component: WebviewComponentModel = {
     id: componentId,
-    typeId,
-    label: nextIndexedLabel(typeId, plantDisplayName(loaded.manifest), components),
+    typeId: imported.typeId,
+    label: nextIndexedLabel(imported.typeId, plantDisplayName(loaded.manifest), components),
     hidden: false,
     showDialValue: false,
     x: 140 + components.length * 24,
     y: 140 + components.length * 24,
     rotation: 0,
-    pins: (subcircuitRef.lastKnownPinIds ?? []).map((id, index) => ({ id, x: 0, y: index * 12 })),
+    pins: (entry?.pinIds ?? plantPinIds(loaded.manifest)).map((id, index) => ({ id, x: 0, y: index * 12 })),
     properties: {},
-    subcircuitRef,
   };
   state.schematicState = { ...state.schematicState, components: [...components, component], selectedComponentIds: [componentId], selectedWireIds: [] };
-  await resolveCurrentProjectSubcircuitReferences();
   syncSchematicPanel();
   await rebuildCoreFromSchematicState();
   return componentId;
@@ -418,9 +359,11 @@ function projectContentSnapshot(): {
   topology: WebviewProjectState["topology"];
   hmiApplication: WebviewProjectState["hmiApplication"];
   calculusLab: WebviewProjectState["calculusLab"];
+  subsystems: WebviewProjectState["subsystems"];
 } {
   return {
     components: state.schematicState.components,
+    subsystems: state.schematicState.subsystems ?? [],
     topology: state.schematicState.topology,
     hmiApplication: state.schematicState.hmiApplication ? structuredClone(state.schematicState.hmiApplication) : undefined,
     calculusLab: state.schematicState.calculusLab ? structuredClone(state.schematicState.calculusLab) : undefined,
@@ -436,7 +379,7 @@ function markProjectSaved(): void {
  * um esquemático vazio recém-aberto não deve disparar aviso nenhum. */
 export function isProjectDirty(): boolean {
   const current = projectContentSnapshot();
-  if (!state.lastSavedProjectState) return current.components.length > 0 || current.topology.conductors.length > 0 || Boolean(current.hmiApplication) || Boolean(current.calculusLab);
+  if (!state.lastSavedProjectState) return current.components.length > 0 || current.topology.conductors.length > 0 || Boolean(current.hmiApplication) || Boolean(current.calculusLab) || (current.subsystems?.length ?? 0) > 0;
   return JSON.stringify(current) !== JSON.stringify(state.lastSavedProjectState);
 }
 
@@ -507,7 +450,7 @@ export async function openRecentProjectCommand(options: {
 function warnIfEditingSubcircuit(): boolean {
   if (state.subcircuitEditingStack.length === 0) return true;
   vscode.window.showWarningMessage(
-    "Termine a edição do subcircuito atual (\"Voltar ao Circuito Principal\") antes de abrir, salvar ou importar um projeto."
+    "Termine a edição do sistema/subsistema atual (\"Voltar ao nível superior\" até o projeto) antes de abrir, salvar ou importar um projeto."
   );
   return false;
 }
@@ -565,6 +508,7 @@ async function writeProjectToFile(filePath: string): Promise<boolean> {
     topology: canonicalTopology,
     hmiApplication: state.schematicState.hmiApplication,
     calculusLab: state.schematicState.calculusLab,
+    subsystems: state.schematicState.subsystems ?? [],
     visual: {
       wires: state.schematicState.topology.conductors
         .filter((wire) => wire.points && wire.points.length > 0)
@@ -689,6 +633,7 @@ export async function openProjectFile(filePath: string, options: {
   // reconstrução (`registerProjectSubcircuitsInCore`) enquanto outro projeto estava aberto.
   state.schematicState = { ...state.schematicState, catalog: state.schematicState.catalog.filter((entry) => !entry.projectLocal) };
   state.schematicState = projectToWebviewState(legacyPlants.project, path.dirname(filePath));
+  await syncDocumentSubsystems();
   await resolveProjectSubcircuitReferences(path.dirname(filePath));
   await options.resolveExternalDeviceReferences?.(path.dirname(filePath));
   // Depois de resolver subcircuitos/dispositivos: a geometria de pino/caixa já é a definitiva.
@@ -757,6 +702,10 @@ export async function importProjectCommand(options: { syncSchematicPanel: () => 
 
   const legacyPlants = embedLegacyPlants(project);
   const imported = projectToWebviewState(legacyPlants.project, path.dirname(selected.fsPath));
+  // Definições internas do projeto importado: entram na tabela deste com remapeamento (nunca
+  // sobrescrevem, nunca criam vínculo com o arquivo de origem).
+  const importedTable = importSubsystemDefinitions(state.schematicState.subsystems ?? [], imported.subsystems ?? [], reservedSubsystemTypeIds());
+  imported.components = rewriteComponentTypeIds(imported.components, importedTable.typeIdMap);
   const idMap = new Map<string, string>();
   const components: WebviewComponentModel[] = imported.components.map((component) => {
     const nextComponentId = nextImportedId("component");
@@ -793,6 +742,7 @@ export async function importProjectCommand(options: { syncSchematicPanel: () => 
   state.schematicState = {
     ...state.schematicState,
     catalog: [...state.schematicState.catalog, ...imported.catalog.filter((entry) => !state.schematicState.catalog.some((existing) => existing.typeId === entry.typeId))],
+    subsystems: importedTable.table,
     components: [...state.schematicState.components, ...components],
     topology: {
       ...state.schematicState.topology,
@@ -802,6 +752,7 @@ export async function importProjectCommand(options: { syncSchematicPanel: () => 
     selectedComponentIds: components.map((component) => component.id),
     selectedWireIds: wires.map((wire) => wire.id),
   };
+  await syncDocumentSubsystems();
   await resolveProjectSubcircuitReferences(path.dirname(selected.fsPath));
   options.syncSchematicPanel();
   await rebuildCoreFromSchematicState();

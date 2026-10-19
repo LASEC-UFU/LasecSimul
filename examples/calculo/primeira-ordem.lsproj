@@ -2,266 +2,33 @@
   "schemaVersion": 2,
   "components": [
     {
+      "id": "nota-laboratorio",
+      "typeId": "graphics.text",
+      "properties": {
+        "text": "Atividades: Ctrl+Shift+P → LasecSimul: Laboratório de Cálculo",
+        "fontSize": 14,
+        "color": "#1f2937"
+      },
+      "label": "nota-laboratorio",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 40,
+        "y": 20,
+        "rotation": 0
+      }
+    },
+    {
       "id": "primeira-ordem-lab",
-      "typeId": "subcircuits.process.first_order_lab",
+      "typeId": "subsystem.process.first_order_lab",
       "properties": {},
       "label": "Primeira ordem do laboratório",
       "showValue": false,
       "showDialValue": false,
       "visual": {
-        "x": 760,
+        "x": 40,
         "y": 80,
         "rotation": 0
-      },
-      "subcircuitRef": {
-        "path": "process_first_order_lab.lssubcircuit",
-        "lastKnownTypeId": "subcircuits.process.first_order_lab",
-        "lastKnownPinIds": [
-          "y"
-        ],
-        "embedded": {
-          "schemaVersion": 3,
-          "typeId": "subcircuits.process.first_order_lab",
-          "name": "Resposta de primeira ordem (laboratório)",
-          "language": "pt-BR",
-          "folderPath": [
-            "Modelos"
-          ],
-          "workspaceSection": "process",
-          "help": {
-            "description": "Degrau u (constante, muda com a simulação rodando) aplicado a um bloco de primeira ordem K/(τs+1) com saída inicial y₀: y(t) = Ku + (y₀ − Ku)·e^(−t/τ). Ganho, constante de tempo e y₀ são propriedades do bloco (mudam com a simulação parada). Usado pelo experimento D do Laboratório de Cálculo (exponencial, valor final, tangente em t = 0, 63,2 %)."
-          },
-          "components": [
-            {
-              "id": "c_u",
-              "typeId": "control.constant",
-              "properties": {
-                "value": 1,
-                "unit": ""
-              },
-              "visual": {
-                "x": 40,
-                "y": 80,
-                "rotation": 0
-              },
-              "label": "Degrau de entrada u"
-            },
-            {
-              "id": "fo",
-              "typeId": "control.first_order",
-              "properties": {
-                "gain": 2,
-                "tau": 5,
-                "initial": 0,
-                "samplePeriodNs": 10000000
-              },
-              "visual": {
-                "x": 240,
-                "y": 80,
-                "rotation": 0
-              },
-              "label": "Primeira ordem K/(τs+1)"
-            },
-            {
-              "id": "t_y",
-              "typeId": "connectors.signal_tunnel",
-              "properties": {
-                "name": "y",
-                "pinId": "y",
-                "direction": "Output",
-                "valueType": "Real"
-              },
-              "visual": {
-                "x": 440,
-                "y": 80,
-                "rotation": 0
-              }
-            },
-            {
-              "id": "g_u",
-              "typeId": "graphics.value_display",
-              "properties": {
-                "width": 150,
-                "height": 40,
-                "stroke": "currentColor",
-                "fill": "#f8fafc",
-                "strokeWidth": 1.5,
-                "opacity": 1,
-                "label": "Entrada u",
-                "valueColor": "#0f172a",
-                "value": 0,
-                "bindSource": "c_u",
-                "bindChannel": 0,
-                "bindScale": 1,
-                "bindOffset": 0,
-                "bindMin": -1000000000,
-                "bindMax": 1000000000,
-                "bindUnit": "",
-                "bindDecimals": 3
-              },
-              "visual": {
-                "x": 190,
-                "y": 50,
-                "rotation": 0
-              }
-            },
-            {
-              "id": "g_y",
-              "typeId": "graphics.value_display",
-              "properties": {
-                "width": 150,
-                "height": 40,
-                "stroke": "currentColor",
-                "fill": "#f8fafc",
-                "strokeWidth": 1.5,
-                "opacity": 1,
-                "label": "Saída y",
-                "valueColor": "#0f172a",
-                "value": 0,
-                "bindSource": "fo",
-                "bindChannel": 0,
-                "bindScale": 1,
-                "bindOffset": 0,
-                "bindMin": -1000000000,
-                "bindMax": 1000000000,
-                "bindUnit": "",
-                "bindDecimals": 4
-              },
-              "visual": {
-                "x": 190,
-                "y": 106,
-                "rotation": 0
-              }
-            }
-          ],
-          "topology": {
-            "revision": 0,
-            "nodes": [],
-            "conductors": [
-              {
-                "id": "w-1",
-                "from": {
-                  "kind": "port",
-                  "componentId": "c_u",
-                  "pinId": "out"
-                },
-                "to": {
-                  "kind": "port",
-                  "componentId": "fo",
-                  "pinId": "in"
-                },
-                "points": []
-              },
-              {
-                "id": "w-2",
-                "from": {
-                  "kind": "port",
-                  "componentId": "fo",
-                  "pinId": "out"
-                },
-                "to": {
-                  "kind": "port",
-                  "componentId": "t_y",
-                  "pinId": "value"
-                },
-                "points": []
-              }
-            ]
-          },
-          "interface": [
-            {
-              "pinId": "y",
-              "label": "Saída y",
-              "internalTunnel": "y",
-              "domain": "signal",
-              "direction": "out",
-              "valueType": "Real",
-              "width": 1
-            }
-          ],
-          "symbolMode": "custom",
-          "symbol": {
-            "width": 360,
-            "height": 200,
-            "border": true,
-            "shapes": [
-              {
-                "kind": "text",
-                "x": 12,
-                "y": 22,
-                "value": "Resposta de primeira ordem",
-                "fontSize": 13,
-                "textAnchor": "start",
-                "color": "#0f172a"
-              },
-              {
-                "kind": "rect",
-                "x": 24,
-                "y": 60,
-                "w": 130,
-                "h": 80,
-                "fill": "#e0f2fe",
-                "stroke": "#0369a1",
-                "strokeWidth": 1.5
-              },
-              {
-                "kind": "text",
-                "x": 89,
-                "y": 96,
-                "value": "K / (τs + 1)",
-                "fontSize": 14,
-                "textAnchor": "middle",
-                "color": "#0c4a6e"
-              },
-              {
-                "kind": "text",
-                "x": 89,
-                "y": 120,
-                "value": "y = Ku + (y₀ − Ku)e^(−t/τ)",
-                "fontSize": 9,
-                "textAnchor": "middle",
-                "color": "#0c4a6e"
-              }
-            ],
-            "pins": [
-              {
-                "id": "y",
-                "kind": "ANALOG_OUT",
-                "x": 360,
-                "y": 100,
-                "angle": 0,
-                "length": 8,
-                "label": "y"
-              }
-            ]
-          },
-          "exposedComponents": [
-            {
-              "componentId": "g_u",
-              "x": 190,
-              "y": 50,
-              "rotation": 0,
-              "flipH": false,
-              "flipV": false,
-              "scale": 1,
-              "layer": 0
-            },
-            {
-              "componentId": "g_y",
-              "x": 190,
-              "y": 106,
-              "rotation": 0,
-              "flipH": false,
-              "flipV": false,
-              "scale": 1,
-              "layer": 1
-            }
-          ],
-          "exportedPropertyComponentIds": [
-            "c_u",
-            "fo"
-          ]
-        }
       }
     }
   ],
@@ -321,5 +88,253 @@
         "kind": "firstOrder"
       }
     ]
-  }
+  },
+  "subsystems": [
+    {
+      "schemaVersion": 3,
+      "typeId": "subsystem.process.first_order_lab",
+      "name": "Resposta de primeira ordem (laboratório)",
+      "language": "pt-BR",
+      "folderPath": [
+        "Modelos"
+      ],
+      "workspaceSection": "process",
+      "help": {
+        "description": "Degrau u (constante, muda com a simulação rodando) aplicado a um bloco de primeira ordem K/(τs+1) com saída inicial y₀: y(t) = Ku + (y₀ − Ku)·e^(−t/τ). Ganho, constante de tempo e y₀ são propriedades do bloco (mudam com a simulação parada). Usado pelo experimento D do Laboratório de Cálculo (exponencial, valor final, tangente em t = 0, 63,2 %)."
+      },
+      "components": [
+        {
+          "id": "c_u",
+          "typeId": "control.constant",
+          "properties": {
+            "value": 1,
+            "unit": ""
+          },
+          "visual": {
+            "x": 40,
+            "y": 80,
+            "rotation": 0
+          },
+          "label": "Degrau de entrada u"
+        },
+        {
+          "id": "fo",
+          "typeId": "control.first_order",
+          "properties": {
+            "gain": 2,
+            "tau": 5,
+            "initial": 0,
+            "samplePeriodNs": 10000000
+          },
+          "visual": {
+            "x": 240,
+            "y": 80,
+            "rotation": 0
+          },
+          "label": "Primeira ordem K/(τs+1)"
+        },
+        {
+          "id": "t_y",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "y",
+            "pinId": "y",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 440,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "g_u",
+          "typeId": "graphics.value_display",
+          "properties": {
+            "width": 150,
+            "height": 40,
+            "stroke": "currentColor",
+            "fill": "#f8fafc",
+            "strokeWidth": 1.5,
+            "opacity": 1,
+            "label": "Entrada u",
+            "valueColor": "#0f172a",
+            "value": 0,
+            "bindSource": "c_u",
+            "bindChannel": 0,
+            "bindScale": 1,
+            "bindOffset": 0,
+            "bindMin": -1000000000,
+            "bindMax": 1000000000,
+            "bindUnit": "",
+            "bindDecimals": 3
+          },
+          "visual": {
+            "x": 190,
+            "y": 50,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "g_y",
+          "typeId": "graphics.value_display",
+          "properties": {
+            "width": 150,
+            "height": 40,
+            "stroke": "currentColor",
+            "fill": "#f8fafc",
+            "strokeWidth": 1.5,
+            "opacity": 1,
+            "label": "Saída y",
+            "valueColor": "#0f172a",
+            "value": 0,
+            "bindSource": "fo",
+            "bindChannel": 0,
+            "bindScale": 1,
+            "bindOffset": 0,
+            "bindMin": -1000000000,
+            "bindMax": 1000000000,
+            "bindUnit": "",
+            "bindDecimals": 4
+          },
+          "visual": {
+            "x": 190,
+            "y": 106,
+            "rotation": 0
+          }
+        }
+      ],
+      "topology": {
+        "revision": 0,
+        "nodes": [],
+        "conductors": [
+          {
+            "id": "w-1",
+            "from": {
+              "kind": "port",
+              "componentId": "c_u",
+              "pinId": "out"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "fo",
+              "pinId": "in"
+            },
+            "points": []
+          },
+          {
+            "id": "w-2",
+            "from": {
+              "kind": "port",
+              "componentId": "fo",
+              "pinId": "out"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "t_y",
+              "pinId": "value"
+            },
+            "points": []
+          }
+        ]
+      },
+      "interface": [
+        {
+          "pinId": "y",
+          "label": "Saída y",
+          "internalTunnel": "y",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        }
+      ],
+      "symbolMode": "custom",
+      "symbol": {
+        "width": 360,
+        "height": 200,
+        "border": true,
+        "shapes": [
+          {
+            "kind": "text",
+            "x": 12,
+            "y": 22,
+            "value": "Resposta de primeira ordem",
+            "fontSize": 13,
+            "textAnchor": "start",
+            "color": "#0f172a"
+          },
+          {
+            "kind": "rect",
+            "x": 24,
+            "y": 60,
+            "w": 130,
+            "h": 80,
+            "fill": "#e0f2fe",
+            "stroke": "#0369a1",
+            "strokeWidth": 1.5
+          },
+          {
+            "kind": "text",
+            "x": 89,
+            "y": 96,
+            "value": "K / (τs + 1)",
+            "fontSize": 14,
+            "textAnchor": "middle",
+            "color": "#0c4a6e"
+          },
+          {
+            "kind": "text",
+            "x": 89,
+            "y": 120,
+            "value": "y = Ku + (y₀ − Ku)e^(−t/τ)",
+            "fontSize": 9,
+            "textAnchor": "middle",
+            "color": "#0c4a6e"
+          }
+        ],
+        "pins": [
+          {
+            "id": "y",
+            "kind": "ANALOG_OUT",
+            "x": 360,
+            "y": 100,
+            "angle": 0,
+            "length": 8,
+            "label": "y"
+          }
+        ]
+      },
+      "exposedComponents": [
+        {
+          "componentId": "g_u",
+          "x": 190,
+          "y": 50,
+          "rotation": 0,
+          "flipH": false,
+          "flipV": false,
+          "scale": 1,
+          "layer": 0
+        },
+        {
+          "componentId": "g_y",
+          "x": 190,
+          "y": 106,
+          "rotation": 0,
+          "flipH": false,
+          "flipV": false,
+          "scale": 1,
+          "layer": 1
+        }
+      ],
+      "exportedPropertyComponentIds": [
+        "c_u",
+        "fo"
+      ],
+      "origin": {
+        "typeId": "subcircuits.process.first_order_lab"
+      }
+    }
+  ]
 }

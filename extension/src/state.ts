@@ -69,7 +69,17 @@ export const state = {
    * VIVA (`state.schematicState`) na hora de gravar, nunca reaproveitados deste snapshot. */
   subcircuitEditingStack: [] as Array<{
     sourceId: string;
+    /** Arquivo `.lssubcircuit` gravado ao salvar -- vazio numa definição INTERNA (vai para a tabela). */
     filePath: string;
+    /** `"internal"`: definição da tabela do documento de fora; `"external"`: arquivo `.lssubcircuit`. */
+    kind: "internal" | "external";
+    /** `typeId` da definição interna em edição. */
+    definitionTypeId?: string;
+    /** Documento dono da tabela `subsystems` neste nível (o `.lssubcircuit` externo, ou o mesmo do
+     * nível de fora numa definição interna); `undefined` == projeto aberto. */
+    documentFilePath?: string;
+    /** Caminho exibido na navegação, do topo até este nível. */
+    path: string[];
     originalDocument: SubcircuitDocument;
     outerSchematicState: WebviewProjectState;
     outerProjectFilePath: string | undefined;

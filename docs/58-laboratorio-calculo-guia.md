@@ -23,7 +23,7 @@ Cada atividade traz **etapas** (prever → explorar → formalizar → aplicar) 
 
 ## 2. Atividades com o simulador
 
-As abas de processo ligam-se à instância do subcircuito correspondente no projeto. Se não houver nenhuma, o painel oferece
+As abas de processo ligam-se à instância da planta correspondente no projeto (subsistema interno ou sistema externo). Se não houver nenhuma, o painel oferece
 **Inserir no projeto**. Com o processo ligado:
 
 - **Executar / Pausar / Reiniciar** controlam a simulação. Reiniciar volta aos parâmetros da atividade e começa uma série nova.
@@ -54,9 +54,12 @@ Em `examples/calculo/`:
 |---|---|
 | `laboratorio-calculo.lsproj` | as seis atividades e as três plantas (tanque, primeira ordem, sensor) |
 | `tanque.lsproj`, `primeira-ordem.lsproj`, `sensor.lsproj` | uma planta e a atividade dela |
-| `funcoes-e-limites.lsproj` | só as atividades analíticas |
+| `funcoes-e-limites.lsproj` | só as atividades analíticas (o esquemático fica só com a nota) |
 
-São gerados por `scripts/generate-calculus-lab-examples.cjs` (depois de `npm run compile` em `extension/`); os subcircuitos, por
+Abrir o `.lsproj` mostra no esquemático as plantas e uma nota com o caminho do laboratório; as atividades aparecem no painel
+(**LasecSimul: Laboratório de Cálculo**). As plantas são subsistemas internos do projeto (tabela `subsystems`): não dependem da paleta nem de arquivos externos.
+
+São gerados por `scripts/generate-calculus-lab-examples.cjs` (depois de `npm run compile` em `extension/`); as plantas-modelo (`.lssubcircuit`), por
 `scripts/generate-hydraulic-tank.py`, `generate-first-order-lab.py` e `generate-sensor-4-20.py` (o caminho de saída é o argumento).
 
 ## 5. Teclado matemático e expressões
@@ -85,4 +88,6 @@ necessários e rode os executáveis de teste um de cada vez: o build completo co
 **Empacotamento.** O VSIX leva `out/`, `out-webview/` e `media/`. Por isso o CSS do laboratório fica em `media/lab/lab.css` (o commit
 da tag v0.0.94 ainda o deixava fora; essa versão não chegou a ser publicada) e o gráfico do PID em `media/pid/miniplot.js`. O diálogo PID é um iframe `srcdoc`
 que não consegue buscar recursos da Webview: o miniplot é injetado inline pelo `PidTuningPanel`. Subcircuitos novos entram em
-`subcircuits/library.json`, e ids de componentes internos não podem repetir ids de pinos do símbolo (o validador recusa a biblioteca).
+`subcircuits/library.json`, exceto plantas: estas não são registradas globalmente, ficam em `subcircuits/plants.json` e entram
+nos projetos incorporadas (ver `extension/src/project/plantTemplates.ts`). Ids de componentes internos não podem repetir ids de
+pinos do símbolo (o validador recusa a biblioteca).

@@ -1,6 +1,41 @@
 {
   "schemaVersion": 2,
-  "components": [],
+  "components": [
+    {
+      "id": "nota-laboratorio",
+      "typeId": "graphics.text",
+      "properties": {
+        "text": "Atividades: Ctrl+Shift+P → LasecSimul: Laboratório de Cálculo",
+        "fontSize": 14,
+        "color": "#1f2937"
+      },
+      "label": "nota-laboratorio",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 40,
+        "y": 20,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "nota-analiticas",
+      "typeId": "graphics.text",
+      "properties": {
+        "text": "Este projeto só tem atividades analíticas: não há planta no esquemático.",
+        "fontSize": 14,
+        "color": "#1f2937"
+      },
+      "label": "nota-analiticas",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 40,
+        "y": 50,
+        "rotation": 0
+      }
+    }
+  ],
   "topology": {
     "revision": 0,
     "nodes": [],

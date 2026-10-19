@@ -24,6 +24,28 @@ import { materializePinGroup, registerPackage } from "./ui/webview/componentSymb
 import { buildGenericSubcircuitPackage, buildGenericSubcircuitSymbol, regenerateGenericSubcircuitState } from "./ui/webview/genericSubcircuitPackage";
 import { absoluteDeviceRefPath, absoluteSubcircuitRefPath, importProjectCommand, insertEmbeddedPlant, openProjectCommand, openProjectFile, openRecentProjectCommand, projectComponentToWebviewComponent, refreshDirtyIndicator, resolveCurrentProjectSubcircuitReferences, saveProjectAsCommand, saveProjectCommand, webviewComponentToProjectComponent } from "./project/projectCommands";
 import { loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./catalog/UnifiedCatalog";
+import {
+  exportSubsystemAsExternal,
+  findSubsystemCycle,
+  hoistEmbeddedSubsystems,
+  importExternalAsSubsystem,
+  importSubsystemDefinitions,
+  isSubsystemTypeId,
+  manifestSubsystems,
+  mapComponentRefPaths,
+  mapTableRefPaths,
+  rewriteComponentTypeIds,
+  slugForSubsystem,
+  subsystemDependsOn,
+  subsystemUsage,
+  SubsystemComponentLike,
+  SubsystemDefinition,
+  typeIdFromSubsystemSourceId,
+  uniqueSubsystemName,
+  uniqueSubsystemTypeId,
+  duplicateSubsystemDefinition,
+} from "./ui/webview/subsystemModel";
+import { currentDocumentDir, manifestWithAbsoluteRefs, registerExternalSystemFile, registerSubsystemsInCore, relativeRefPath, reservedSubsystemTypeIds, syncDocumentSubsystems } from "./project/subsystemRuntime";
 import { attachPropertySchemas, refreshUnifiedCatalogState, registerCatalogFileCommand, removeRegisteredCatalogItemCommand } from "./catalog/catalogCommands";
 import { hasShowOnSymbolProperty, nextIndexedLabel } from "./catalog/catalogMerge";
 import { imageMimeForFile, sanitizeManifestDefaultProperties } from "./catalog/packageSanitizers";
@@ -103,11 +125,13 @@ import { initializeSerialPort, serialPortManager } from "./serialport/manager";
 import { listHostSerialPorts } from "./serialport/hostPorts";
 import {
   gatherInternalComponentSnapshots,
+  readSourceManifest,
   resolveSourceFilePath,
+  writeSourceManifest,
 } from "./catalog/subcircuitInternals";
 import { initSimulationLog, logSimulation, noteSimulationStatusChange, showSimulationLogChannel } from "./diagnostics/simulationLog";
 import { importTdpsSmpCommand } from "./tdps/tdpsCommand";
-import { controlGraphPinIds } from "./catalog/controlGraphCatalog";
+import { ACCUMULATOR_OUTPUT_PORTS, controlGraphPinIds } from "./catalog/controlGraphCatalog";
 import { ProjectCustomEditorProvider } from "./ui/panels/ProjectCustomEditorProvider";
 import { SimulideImportCustomEditorProvider } from "./ui/panels/SimulideImportCustomEditorProvider";
 import { OpenPlcEditorProvider, openOpenPlcProject } from "./plc/openplc/OpenPlcEditorProvider";
@@ -151,6 +175,7 @@ function cloneState(): WebviewProjectState {
 const PROJECT_STATE_KEYS = [
   "locale", "catalog", "components", "topology", "hmiApplication", "viewport", "selectedComponentIds", "selectedWireIds", "pendingConnection",
   "subcircuitEditingContext", "symbolMode", "symbolElements", "iconElements", "exposedComponents", "exportedPropertyComponentIds", "symbolCanvas", "iconCanvas",
+  "subsystems",
 ] as const satisfies readonly (keyof WebviewProjectState)[];
 
 /** Último `state.schematicState` já mandado pra Webview (via `syncState`/`syncStatePatch`) -- `undefined`
@@ -260,9 +285,13 @@ function openSchematicEditor(extensionUri: vscode.Uri): void {
 function setEffectiveCatalog(libraryEntries: WebviewComponentCatalogEntry[]): void {
   // Subcircuitos do projeto aberto (por caminho ou incorporados) não vêm da biblioteca: recarregar o
   // catálogo (ex.: quando o Core termina de subir) não pode apagá-los, senão o bloco vira "?".
+  // Mesmo typeId nos dois lados (ex.: subcircuito incorporado que o usuário também pôs na paleta): no
+  // projeto vale a cópia incorporada -- é ela que o Core recebe a cada reconstrução e que "Abrir
+  // Subcircuito"/salvar usam --, como já faz a abertura do projeto. A paleta continua com o item dela.
+  const projectEntries = state.schematicState.catalog.filter((entry) => entry.projectLocal);
+  const projectTypeIds = new Set(projectEntries.map((entry) => entry.typeId));
   const libraryTypeIds = new Set(libraryEntries.map((entry) => entry.typeId));
-  const projectEntries = state.schematicState.catalog.filter((entry) => entry.projectLocal && !libraryTypeIds.has(entry.typeId));
-  const entries = [...libraryEntries, ...projectEntries];
+  const entries = [...libraryEntries.filter((entry) => !projectTypeIds.has(entry.typeId)), ...projectEntries];
   state.schematicState = { ...state.schematicState, catalog: entries };
   // `componentSymbols.ts` é compilado duas vezes (host via `out/`, Webview via `out-webview/`) --
   // são DUAS instâncias de módulo totalmente separadas, cada uma com seu próprio registro de
@@ -272,7 +301,7 @@ function setEffectiveCatalog(libraryEntries: WebviewComponentCatalogEntry[]): vo
   // diferente da que a Webview mostra, quebrando `wireTopology.ts` (split de fio no ponto errado,
   // clique no meio de um fio não faz nada -- bug real encontrado 2026-07-11).
   for (const entry of entries) registerPackage(entry.typeId, entry.package, entry.logicSymbolPackage);
-  state.paletteViewProvider?.setCatalog(entries);
+  state.paletteViewProvider?.setCatalog([...libraryEntries, ...projectEntries.filter((entry) => !libraryTypeIds.has(entry.typeId))]);
   syncSchematicPanel();
 }
 
@@ -347,7 +376,8 @@ function mcuCommandOptions(): Parameters<typeof chooseMcuFirmwareCommand>[1] {
     syncSchematicPanel,
     reportCoreWarning,
     gatherInternalComponentSnapshots,
-    resolveSourceFilePath,
+    readSourceManifest,
+    writeSourceManifest,
     refreshUnifiedCatalogState: (loadLibrariesInCore) => refreshUnifiedCatalogState(loadLibrariesInCore, catalogCommandOptions()),
   };
 }
@@ -631,8 +661,8 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
   const previousDir = component.subcircuitRef?.path ? path.dirname(absoluteSubcircuitRefPath(component.subcircuitRef.path)) : undefined;
   const picked = await vscode.window.showOpenDialog({
     canSelectMany: false,
-    filters: { "Subcircuito LasecSimul": ["lssubcircuit"] },
-    title: `Selecionar subcircuito para ${component.label}`,
+    filters: { "Sistema LasecSimul": ["lssubcircuit"] },
+    title: `Selecionar sistema externo para ${component.label}`,
     defaultUri: previousDir && fileExists(previousDir) ? vscode.Uri.file(previousDir) : undefined,
   });
   const selected = picked?.[0];
@@ -640,12 +670,12 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
   const absolutePath = selected.fsPath;
 
   if (!state.coreClient) {
-    vscode.window.showErrorMessage("Core indisponivel: nao foi possivel validar o subcircuito selecionado.");
+    vscode.window.showErrorMessage("Core indisponível: não foi possível validar o sistema selecionado.");
     return;
   }
 
   try {
-    await state.coreClient.registerAdhocSubcircuitDefinition(absolutePath, { replace: Boolean(component.subcircuitRef?.lastKnownTypeId) });
+    await registerExternalSystemFile(absolutePath, { replace: Boolean(component.subcircuitRef?.lastKnownTypeId) });
   } catch (err) {
     vscode.window.showErrorMessage(`Não foi possível ler ${absolutePath}: ${err instanceof Error ? err.message : String(err)}`);
     return;
@@ -690,7 +720,7 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
   const ephemeralEntry: WebviewComponentCatalogEntry = {
     typeId: parsed.typeId,
     label,
-    category: "Subcircuitos",
+    category: "Subsistemas",
     workspaceSection: parsed.workspaceSection,
     paletteHidden: true, // nunca aparece na paleta -- só resolve por typeId; `hidden` esconderia a instância ao reabrir
     pinCount: parsed.pinCount,
@@ -744,7 +774,7 @@ async function chooseSubcircuitFileCommand(componentId: string): Promise<void> {
 
   syncSchematicPanel();
   if (droppedWireCount > 0) {
-    vscode.window.showWarningMessage(`${droppedWireCount} fio(s) removido(s): pino(s) não existem mais no novo subcircuito.`);
+    vscode.window.showWarningMessage(`${droppedWireCount} fio(s) removido(s): pino(s) não existem mais no novo sistema.`);
   }
 }
 
@@ -1346,6 +1376,15 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       // pode estar atrasada e nunca é editada lá -- sem preservar a do Host, mover um componente
       // depois de gravar uma atividade apagava a gravação.
       state.schematicState = { ...message.project, calculusLab: previous.calculusLab, topology: { ...message.project.topology, revision } };
+      // Desfazer/refazer de operações com definições (criar, colar, duplicar, excluir...) troca a
+      // tabela inteira: catálogo e Core acompanham ANTES de a reconstrução recriar as instâncias.
+      const subsystemsChanged = previous.subsystems !== message.project.subsystems &&
+        JSON.stringify(previous.subsystems ?? []) !== JSON.stringify(message.project.subsystems ?? []);
+      if (subsystemsChanged) {
+        projectSnapshotSyncQueue = projectSnapshotSyncQueue
+          .catch(() => undefined)
+          .then(async () => { await syncDocumentSubsystems(); syncSchematicPanel(); });
+      }
       // Tudo neste snapshot veio da Webview, então ela já o tem. Marcar como sincronizado impede que
       // o próximo `syncSchematicPanel()` devolva o estado inteiro como "mudança" (toda referência é
       // nova depois do postMessage). Esse eco chegava atrasado e sobrescrevia o que o usuário já
@@ -1419,8 +1458,28 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         return;
       }
 
+      // Definições internas que vieram junto (colar de outro documento, ou do mesmo): entram na tabela
+      // deste documento ANTES das instâncias, com remapeamento quando o destino já tem o mesmo id/nome
+      // com outro conteúdo. Tudo é calculado antes e aplicado numa única troca de estado (um passo de
+      // desfazer, sem definição órfã se algo for recusado).
+      let pastedComponents = message.components;
+      let documentTable = state.schematicState.subsystems ?? [];
+      const tableBefore = documentTable;
+      if (message.subsystems && message.subsystems.length > 0) {
+        const imported = importSubsystemDefinitions(documentTable, message.subsystems, reservedSubsystemTypeIds());
+        pastedComponents = rewriteComponentTypeIds(pastedComponents, imported.typeIdMap);
+        documentTable = imported.table;
+      }
+      const cycleProblem = definitionCycleProblem(pastedComponents.map((component) => component.typeId), documentTable);
+      if (cycleProblem) {
+        void vscode.window.showWarningMessage(cycleProblem);
+        // A Webview já aplicou a colagem localmente: reenvia o estado inteiro para desfazê-la.
+        state.lastSyncedProjectState = undefined;
+        syncSchematicPanel();
+        return;
+      }
       const existingWireIds = new Set(state.schematicState.topology.conductors.map((wire) => wire.id));
-      const inserted = insertElements(state.schematicState, "schematic", message.components);
+      const inserted = insertElements({ ...state.schematicState, subsystems: documentTable }, "schematic", pastedComponents);
       const insertedComponentIds = new Set(inserted.inserted.map((component) => component.id));
       const existingComponentIds = new Set(state.schematicState.components.map((component) => component.id));
       const wires = message.wires.filter((wire) =>
@@ -1436,13 +1495,18 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
         selectedWireIds: wires.map((wire) => wire.id),
       };
       void (async () => {
-        // Colado de OUTRO projeto (ex.: a planta copiada do `.lsproj` independente dela): o subcircuito
-        // incorporado/por caminho ainda não está no catálogo deste projeto -- resolve antes do Core,
-        // como na abertura (registro avulso, entrada `projectLocal` fora da paleta).
+        let catalogChanged = false;
+        if (documentTable !== tableBefore) {
+          await syncDocumentSubsystems();
+          catalogChanged = true;
+        }
+        // Sistema externo colado de outro documento: a referência (caminho absoluto) ainda não está no
+        // catálogo deste -- resolve antes do Core, como na abertura. Continua externo.
         if (inserted.inserted.some((component) => component.subcircuitRef && !state.schematicState.catalog.some((entry) => entry.typeId === component.typeId))) {
           await resolveCurrentProjectSubcircuitReferences();
-          syncSchematicPanel();
+          catalogChanged = true;
         }
+        if (catalogChanged) syncSchematicPanel();
         for (const insertedComponent of inserted.inserted) {
           const component = state.schematicState.components.find((candidate) => candidate.id === insertedComponent.id) ?? insertedComponent;
           await pushComponentToCore(component.id, component.typeId, component.properties, component.pins);
@@ -1947,6 +2011,31 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestOpenSubcircuit":
       void openSubcircuitForEditingCommand(message.sourceId);
       return;
+    case "requestOpenSubsystemPanel":
+      void openSubcircuitForEditingCommand(message.sourceId, "symbol");
+      return;
+    case "requestInsertSubsystemInstance":
+      void insertSubsystemInstance(message.typeId);
+      return;
+    case "requestDuplicateSubsystem":
+      void duplicateSubsystemForInstance(message.componentId);
+      return;
+    case "requestRenameSubsystem":
+      void renameSubsystemDefinition(message.typeId);
+      return;
+    case "requestExportSubsystem":
+      void exportSubsystemDefinition(message.typeId);
+      return;
+    case "requestEmbedExternalSystem":
+      void embedExternalSystemInstance(message.componentId);
+      return;
+    case "requestAddExternalToPalette": {
+      const component = state.schematicState.components.find((c) => c.id === message.componentId);
+      const filePath = component ? externalSystemFileOf(component) : undefined;
+      if (filePath && fileExists(filePath)) void addExternalSystemFileToPalette(filePath);
+      else void vscode.window.showWarningMessage("Arquivo do sistema externo não encontrado.");
+      return;
+    }
     case "requestCloseSubcircuitEditor":
       void closeSubcircuitEditorCommand();
       return;
@@ -1958,17 +2047,48 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
  * Se o painel não estiver aberto ou não houver multi-seleção, não faz nada (a Webview trata isso). */
 function triggerCreateSubcircuitFromSelection(panel: { postMessage: (msg: unknown) => void } | undefined): void {
   if (!panel) {
-    vscode.window.showWarningMessage("Abra o editor de esquemático antes de criar um subcircuito.");
+    vscode.window.showWarningMessage("Abra o editor de esquemático antes de criar um subsistema.");
     return;
   }
   panel.postMessage({ version: 1, type: "triggerCreateSubcircuitFromSelection" });
 }
 
-/** Cria um `.lssubcircuit` a partir dos componentes selecionados no esquemático:
- * 1. Salva o arquivo escolhido pelo usuário.
- * 2. Registra o novo subcircuito na paleta.
- * 3. Substitui os componentes selecionados por uma instância do novo subcircuito no esquemático,
- *    reconectando os fios que cruzavam a fronteira via os pinos gerados automaticamente. */
+/** "Criar Subsistema Interno": a seleção vira UMA instância de uma definição nova na tabela do
+ * documento aberto (projeto, ou o sistema externo em edição) -- nenhum arquivo, nada na paleta. Os
+ * fios que cruzavam a fronteira passam pelos pinos gerados automaticamente. Instâncias de outros
+ * subsistemas dentro da seleção continuam referenciando as definições deles (hierarquia). */
+const SIGNAL_TUNNEL_TYPE_ID = "connectors.signal_tunnel";
+
+/** Domínio de uma porta na fronteira de um subsistema a criar: sinal (com `output` quando a porta
+ * PRODUZ o valor) ou elétrico. Blocos de controle pelo nome da porta; subsistemas internos e sistemas
+ * externos pela interface da definição (já migrada pelo parser). `undefined`: sem informação. */
+function boundaryPortKind(component: WebviewComponentModel | undefined, pinId: string): { signal: boolean; output?: boolean } | undefined {
+  if (!component) return undefined;
+  if (component.typeId.startsWith("control.")) {
+    return { signal: true, output: pinId === "out" || (ACCUMULATOR_OUTPUT_PORTS as readonly string[]).includes(pinId) };
+  }
+  if (component.typeId === SIGNAL_TUNNEL_TYPE_ID) return { signal: true, output: component.properties.direction !== "Output" };
+  let manifest: unknown;
+  let assetDir = currentDocumentDir();
+  if (isSubsystemTypeId(component.typeId)) {
+    manifest = (state.schematicState.subsystems ?? []).find((entry) => entry.typeId === component.typeId);
+  } else {
+    const filePath = externalSystemFileOf(component);
+    if (filePath && fileExists(filePath)) {
+      try {
+        manifest = readJsonFile(filePath);
+        assetDir = path.dirname(filePath);
+      } catch {
+        manifest = undefined;
+      }
+    }
+  }
+  if (!manifest) return { signal: false };
+  const parsed = parseSubcircuitDocument(manifest, assetDir);
+  const entry = parsed.ok ? parsed.document.interface.find((candidate) => candidate.pinId === pinId) : undefined;
+  return entry?.domain === "signal" ? { signal: true, output: entry.direction === "out" } : { signal: false };
+}
+
 async function createSubcircuitFromSelectionHandler(componentIds: string[]): Promise<void> {
   if (!state.extensionContext || componentIds.length < 1) return;
 
@@ -1976,21 +2096,17 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
   const selectedComponents = state.schematicState.components.filter((c) => selectedSet.has(c.id));
   if (selectedComponents.length === 0) return;
 
-  // 1. Salvar arquivo
-  const saveUri = await vscode.window.showSaveDialog({
-    filters: { "Subcircuito LasecSimul": ["lssubcircuit"] },
-    title: "Salvar novo subcircuito",
+  // 1. Nome (apresentação) e identidade estável da definição.
+  const table = state.schematicState.subsystems ?? [];
+  const requestedName = await vscode.window.showInputBox({
+    title: "Criar Subsistema Interno",
+    prompt: "Nome do subsistema (fica dentro deste documento; não cria arquivo nem item na paleta)",
+    value: uniqueSubsystemName("Subsistema", new Set(table.map((entry) => entry.name))),
+    validateInput: (value) => (value.trim() ? undefined : "Informe um nome."),
   });
-  if (!saveUri) return;
-  const rawPath = saveUri.fsPath;
-  const normalizedPath = rawPath.endsWith(".lssubcircuit")
-    ? rawPath
-    : rawPath.replace(/\.[^./\\]+$/, "") + ".lssubcircuit";
-
-  // 2. Gerar typeId a partir do nome do arquivo
-  const baseName = path.basename(normalizedPath, ".lssubcircuit");
-  const safeSlug = baseName.replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase();
-  const typeId = `subcircuits.${safeSlug}`;
+  if (!requestedName?.trim()) return;
+  const baseName = uniqueSubsystemName(requestedName.trim(), new Set(table.map((entry) => entry.name)));
+  const typeId = uniqueSubsystemTypeId(slugForSubsystem(baseName), new Set([...table.map((entry) => entry.typeId), ...reservedSubsystemTypeIds()]));
 
   // 3. Categorizar fios
   const allWires = state.schematicState.topology.conductors;
@@ -2012,6 +2128,10 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
     if (c.y > maxY) maxY = c.y;
   }
 
+  // Modelo interno deslocado para a área visível (os túneis ficam 64 px à esquerda da seleção).
+  const shiftX = Math.max(0, 120 - minX);
+  const shiftY = Math.max(0, 60 - minY);
+
   // 5. Gerar um túnel interno por fio de fronteira
   interface TunnelEntry {
     id: string;
@@ -2023,20 +2143,35 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
     isFromInside: boolean;
     wireId: string;
     lineClass?: WebviewWireModel["lineClass"];
+    /** Presente quando a fronteira é de sinal (vista de dentro do subsistema). */
+    signalDirection?: "in" | "out";
   }
-  const tunnels: TunnelEntry[] = boundaryWires.map((wire, i) => {
-    const pinName = `P${i + 1}`;
+  // Fronteira de sinal (blocos de controle, subsistemas com interface signal) vira túnel de SINAL com
+  // direção; elétrica continua túnel comum. Entradas primeiro: o símbolo genérico as põe à esquerda.
+  const componentById = new Map(state.schematicState.components.map((component) => [component.id, component]));
+  const classifiedWires = boundaryWires.map((wire) => {
     const fromIn = selectedSet.has(endpointId(wire.from));
+    const inside = fromIn ? wire.from : wire.to;
+    const outside = fromIn ? wire.to : wire.from;
+    const insideKind = boundaryPortKind(componentById.get(endpointId(inside)), endpointPinId(inside));
+    const outsideKind = boundaryPortKind(componentById.get(endpointId(outside)), endpointPinId(outside));
+    const signal = Boolean(insideKind?.signal || outsideKind?.signal);
+    const direction: "in" | "out" = insideKind?.signal ? (insideKind.output ? "out" : "in") : outsideKind?.signal && outsideKind.output === false ? "out" : "in";
+    return { wire, fromIn, signal, direction };
+  }).sort((a, b) => Number(a.direction === "out") - Number(b.direction === "out"));
+  const tunnels: TunnelEntry[] = classifiedWires.map(({ wire, fromIn, signal, direction }, i) => {
+    const pinName = `P${i + 1}`;
     return {
       id: `tunnel_${pinName.toLowerCase()}`,
       name: pinName,
-      x: minX - 64,
-      y: minY + i * 16,
+      x: direction === "out" ? maxX + 140 + shiftX : minX - 64 + shiftX,
+      y: minY + i * 16 + shiftY,
       internalComponentId: fromIn ? endpointId(wire.from) : endpointId(wire.to),
       internalPinId: fromIn ? endpointPinId(wire.from) : endpointPinId(wire.to),
       isFromInside: fromIn,
       wireId: wire.id,
       lineClass: wire.lineClass,
+      ...(signal ? { signalDirection: direction } : {}),
     };
   });
 
@@ -2045,31 +2180,40 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
     id: c.id,
     typeId: c.typeId,
     properties: { ...c.properties },
-    visual: { x: c.x, y: c.y, rotation: c.rotation },
+    visual: { x: c.x + shiftX, y: c.y + shiftY, rotation: c.rotation },
     exposed: false,
+    // Subsistema interno na seleção: o `typeId` já aponta para a definição da tabela. Sistema
+    // externo por referência: o caminho vai absoluto (a definição nova pode ser exportada para outra pasta).
+    ...(c.subcircuitRef?.path && !isSubsystemTypeId(c.typeId) ? { subcircuitRef: { ...c.subcircuitRef, path: absoluteSubcircuitRefPath(c.subcircuitRef.path) } } : {}),
   }));
   const tunnelCompObjects = tunnels.map((t) => ({
     id: t.id,
-    typeId: TUNNEL_TYPE_ID,
-    properties: { name: t.name, pinId: t.name },
-    visual: { x: t.x, y: t.y, rotation: 0 },
+    typeId: t.signalDirection ? SIGNAL_TUNNEL_TYPE_ID : TUNNEL_TYPE_ID,
+    properties: t.signalDirection
+      ? { name: t.name, pinId: t.name, direction: t.signalDirection === "out" ? "Output" : "Input", valueType: "Real", ...(t.signalDirection === "in" ? { defaultValue: 0 } : {}) }
+      : { name: t.name, pinId: t.name },
+    visual: { x: t.x, y: t.y, rotation: t.signalDirection === "out" ? 180 : 0 },
     exposed: false,
   }));
   const internalWireObjects = internalWires.map((w) => ({
     from: { componentId: endpointId(w.from), pinId: endpointPinId(w.from) },
     to: { componentId: endpointId(w.to), pinId: endpointPinId(w.to) },
-    ...(w.points ? { points: w.points } : {}),
+    ...(w.points ? { points: w.points.map((point) => ({ x: point.x + shiftX, y: point.y + shiftY })) } : {}),
     ...(w.lineClass ? { lineClass: w.lineClass } : {}),
   }));
-  const stubWireObjects = tunnels.map((t) => ({
-    from: { componentId: t.id, pinId: "pin" },
-    to: { componentId: t.internalComponentId, pinId: t.internalPinId },
-    ...(t.lineClass ? { lineClass: t.lineClass } : {}),
-  }));
+  const stubWireObjects = tunnels.map((t) => {
+    const tunnelEnd = { componentId: t.id, pinId: t.signalDirection ? "value" : "pin" };
+    const innerEnd = { componentId: t.internalComponentId, pinId: t.internalPinId };
+    return {
+      ...(t.signalDirection === "out" ? { from: innerEnd, to: tunnelEnd } : { from: tunnelEnd, to: innerEnd }),
+      ...(t.lineClass ? { lineClass: t.lineClass } : {}),
+    };
+  });
   const interfaceEntries = tunnels.map((t) => ({
     pinId: t.name,
     label: t.name,
     internalTunnel: t.name,
+    ...(t.signalDirection ? { domain: "signal" as const, direction: t.signalDirection, valueType: "Real" as const, width: 1 } : {}),
   }));
 
   const lssubJson = {
@@ -2096,51 +2240,25 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
     exportedPropertyComponentIds: [],
   };
 
-  // 7. Gravar arquivo
-  try {
-    fs.writeFileSync(normalizedPath, `${JSON.stringify(lssubJson, null, 2)}\n`, "utf8");
-  } catch (err) {
-    vscode.window.showErrorMessage(`Não foi possível salvar o subcircuito: ${err instanceof Error ? err.message : String(err)}`);
-    return;
-  }
-  if (state.coreClient) {
-    try {
-      await state.coreClient.registerAdhocSubcircuitDefinition(normalizedPath);
-    } catch (err) {
-      vscode.window.showErrorMessage(`Não foi possível registrar o subcircuito no Core: ${err instanceof Error ? err.message : String(err)}`);
-      return;
-    }
-  }
-
-  // 8. Registrar na paleta
-  const unifiedCatalog = loadUnifiedCatalog(state.extensionContext.extensionPath, currentLasecSimulLanguage());
-  const newSource: RegisteredSource = {
-    id: nextId("registered"),
-    kind: "subcircuit-file",
-    filePath: normalizedPath,
-    folderPath: ["Meus Subcircuitos"],
-  };
-  saveRegisteredSources(state.extensionContext.extensionPath, [...unifiedCatalog.registeredSources, newSource]);
-  await refreshUnifiedCatalogState(false, catalogCommandOptions());
-
-  // 9. Inserir instância do subcircuito no esquemático, no centro da bounding box
+  // 7. Instância da definição nova, no centro da bounding box.
   const newCompId = nextId("component");
   const centerX = Math.round((minX + maxX) / 2);
   const centerY = Math.round((minY + maxY) / 2);
-  const catalogEntry = state.schematicState.catalog.find((e) => e.typeId === typeId);
-  const newPins = pinsForTypeId(typeId, catalogEntry?.defaultProperties);
+  const pinIds = interfaceEntries.map((entry) => entry.pinId);
   const newComponent: WebviewComponentModel = {
     id: newCompId,
     typeId,
-    label: nextIndexedLabel(typeId, catalogEntry?.label ?? baseName, state.schematicState.components),
+    label: nextIndexedLabel(typeId, baseName, state.schematicState.components),
+    hidden: false,
+    showDialValue: false,
     x: centerX,
     y: centerY,
     rotation: 0,
-    pins: newPins,
-    properties: { ...(catalogEntry?.defaultProperties ?? {}) },
+    pins: pinIds.map((id, index) => ({ id, x: 0, y: index * 12 })),
+    properties: {},
   };
 
-  // 10. Reconectar fios de fronteira ao novo subcircuito
+  // 8. Reconectar fios de fronteira à instância
   const newBoundaryWires: WebviewWireModel[] = tunnels.map((t) => {
     const original = boundaryWires.find((w) => w.id === t.wireId)!;
     const externalEndpoint = t.isFromInside ? original.to : original.from;
@@ -2152,58 +2270,379 @@ async function createSubcircuitFromSelectionHandler(componentIds: string[]): Pro
     };
   });
 
-  // 11. Remover componentes e fios selecionados do esquemático
+  // 9. Definição na tabela + seleção substituída pela instância, numa única troca de estado (um passo
+  // de desfazer: a Webview registra a transição ao receber o estado).
   const removedWireIds = new Set(
     allWires.filter((w) => selectedSet.has(endpointId(w.from)) || selectedSet.has(endpointId(w.to))).map((w) => w.id)
   );
+  const definition: SubsystemDefinition = { ...(lssubJson as unknown as SubsystemDefinition), typeId, name: baseName };
   state.schematicState = {
     ...state.schematicState,
+    subsystems: [...table, definition],
     components: [...state.schematicState.components.filter((c) => !selectedSet.has(c.id)), newComponent],
     topology: { ...state.schematicState.topology, conductors: [...state.schematicState.topology.conductors.filter((w) => !removedWireIds.has(w.id)), ...newBoundaryWires] },
     selectedComponentIds: [newCompId],
     selectedWireIds: [],
   };
 
-  // 12. Atualizar Core
-  for (const id of componentIds) {
-    pushRemoveToCore(id);
-    coreInstanceIdByComponentId.delete(id);
-  }
-  await pushComponentToCore(newCompId, typeId, newComponent.properties, newPins);
-  for (const wire of newBoundaryWires) await pushWireToCore(wire);
-
+  // 10. Catálogo/Core: a definição nova fica registrada como as demais do documento.
+  await syncDocumentSubsystems();
   syncSchematicPanel();
-  void queueCoreRebuild();
-  vscode.window.showInformationMessage(`Subcircuito '${baseName}' criado e registrado na paleta em 'Meus Subcircuitos'.`);
+  await queueCoreRebuild();
+  vscode.window.showInformationMessage(`Subsistema interno "${baseName}" criado neste documento. Clique com o botão direito na instância para abrir o Modelo Interno, editar o Painel ou exportar como sistema externo.`);
 }
 
-/** "Abrir Subcircuito" no menu de contexto de uma instância `subcircuit-file` -- troca `state.
- * schematicState` pelo circuito INTERNO do `.lssubcircuit` apontado por `sourceId`, empilhando o
- * circuito atual em `state.subcircuitEditingStack` pra restaurar depois (ver
- * `closeSubcircuitEditorCommand`). Diferente de "Abrir Projeto": nada é perdido/substituído em
- * disco, só trocado NA MEMÓRIA -- o circuito de fora fica intacto até "Voltar ao Circuito Principal".
- * `components`/`wires` do `.lssubcircuit` já usam o mesmo shape de campo (`visual.x/y/rotation/
- * flipH/flipV`) de `ProjectComponent`, então a conversão pra `WebviewComponentModel` espelha
- * `projectToWebviewState` (`projectCommands.ts`). */
-async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> {
-  const filePath = resolveSourceFilePath(sourceId);
-  if (!filePath || !fileExists(filePath)) {
-    vscode.window.showWarningMessage("Arquivo do subcircuito não encontrado.");
+/** Definições internas abertas na pilha de edição do documento atual, de fora para dentro. Cada uma
+ * contém (na cópia de trabalho, ainda não gravada na tabela) a do nível abaixo -- inserir aqui algo
+ * que dependa de QUALQUER uma delas fecharia um ciclo. Um sistema externo na pilha inicia outro
+ * documento (outra tabela). */
+function editingDefinitionChain(): string[] {
+  const chain: string[] = [];
+  for (const session of state.subcircuitEditingStack) {
+    if (session.kind !== "internal") chain.length = 0;
+    else if (session.definitionTypeId) chain.push(session.definitionTypeId);
+  }
+  return chain;
+}
+
+/** Mensagem quando inserir instâncias de `typeIds` aqui criaria um ciclo de definições. */
+function definitionCycleProblem(typeIds: Iterable<string>, table: readonly SubsystemDefinition[] = state.schematicState.subsystems ?? []): string | undefined {
+  const chain = editingDefinitionChain();
+  if (chain.length === 0) return undefined;
+  const name = (id: string) => table.find((entry) => entry.typeId === id)?.name ?? id;
+  for (const typeId of typeIds) {
+    if (!isSubsystemTypeId(typeId)) continue;
+    const container = chain.find((open) => subsystemDependsOn(table, typeId, open));
+    if (container === typeId) return `"${name(typeId)}" está aberto acima deste nível: inseri-lo dentro dele mesmo criaria uma referência recursiva entre definições.`;
+    if (container) return `"${name(typeId)}" contém "${name(container)}" (direta ou indiretamente), que está aberto acima deste nível: inseri-lo aqui criaria uma referência recursiva entre definições.`;
+  }
+  return undefined;
+}
+
+/** Insere uma instância de uma definição interna existente no nível atual. */
+async function insertSubsystemInstance(typeId: string): Promise<string | undefined> {
+  const definition = (state.schematicState.subsystems ?? []).find((entry) => entry.typeId === typeId);
+  if (!definition) return undefined;
+  const problem = definitionCycleProblem([typeId]);
+  if (problem) {
+    vscode.window.showWarningMessage(problem);
+    return undefined;
+  }
+  const entry = state.schematicState.catalog.find((candidate) => candidate.typeId === typeId);
+  const pins = (entry?.pinIds ?? []).map((id, index) => ({ id, x: 0, y: index * 12 }));
+  const component: WebviewComponentModel = {
+    id: nextId("component"),
+    typeId,
+    label: nextIndexedLabel(typeId, definition.name, state.schematicState.components),
+    hidden: false,
+    showDialValue: false,
+    x: 140 + state.schematicState.components.length * 24,
+    y: 140 + state.schematicState.components.length * 24,
+    rotation: 0,
+    pins,
+    properties: { ...(entry?.defaultProperties ?? {}) },
+  };
+  state.schematicState = { ...state.schematicState, components: [...state.schematicState.components, component], selectedComponentIds: [component.id], selectedWireIds: [] };
+  syncSchematicPanel();
+  await queueCoreRebuild();
+  return component.id;
+}
+
+/** "Duplicar como definição independente": a instância passa a usar uma cópia da definição; as
+ * outras instâncias continuam na original. */
+async function duplicateSubsystemForInstance(componentId: string): Promise<void> {
+  const component = state.schematicState.components.find((c) => c.id === componentId);
+  const table = state.schematicState.subsystems ?? [];
+  if (!component || !table.some((entry) => entry.typeId === component.typeId)) return;
+  const source = table.find((entry) => entry.typeId === component.typeId)!;
+  const name = await vscode.window.showInputBox({ title: "Duplicar como definição independente", prompt: "Nome da nova definição", value: uniqueSubsystemName(`${source.name} (cópia)`, new Set(table.map((entry) => entry.name))) });
+  if (!name?.trim()) return;
+  const duplicated = duplicateSubsystemDefinition(table, component.typeId, uniqueSubsystemName(name.trim(), new Set(table.map((entry) => entry.name))));
+  if (!duplicated) return;
+  state.schematicState = {
+    ...state.schematicState,
+    subsystems: duplicated.table,
+    components: state.schematicState.components.map((c) => (c.id === componentId ? { ...c, typeId: duplicated.typeId } : c)),
+  };
+  await syncDocumentSubsystems();
+  syncSchematicPanel();
+  await queueCoreRebuild();
+}
+
+/** Renomeia a definição (só o nome; `typeId`, instâncias e ligações não mudam). */
+async function renameSubsystemDefinition(typeId: string): Promise<void> {
+  const table = state.schematicState.subsystems ?? [];
+  const definition = table.find((entry) => entry.typeId === typeId);
+  if (!definition) return;
+  const others = new Set(table.filter((entry) => entry.typeId !== typeId).map((entry) => entry.name));
+  const name = await vscode.window.showInputBox({
+    title: "Renomear subsistema",
+    value: definition.name,
+    validateInput: (value) => (!value.trim() ? "Informe um nome." : others.has(value.trim()) ? "Já existe um subsistema com este nome neste documento." : undefined),
+  });
+  if (!name?.trim() || name.trim() === definition.name) return;
+  state.schematicState = { ...state.schematicState, subsystems: table.map((entry) => (entry.typeId === typeId ? { ...entry, name: name.trim() } : entry)) };
+  await syncDocumentSubsystems();
+  syncSchematicPanel();
+}
+
+/** Exporta a definição interna como sistema externo `.lssubcircuit` reutilizável (com as definições
+ * internas de que depende); o projeto continua usando a cópia interna. */
+async function exportSubsystemDefinition(typeId: string): Promise<void> {
+  const table = state.schematicState.subsystems ?? [];
+  const definition = table.find((entry) => entry.typeId === typeId);
+  if (!definition) return;
+  const target = await vscode.window.showSaveDialog({
+    title: `Exportar "${definition.name}" como sistema externo`,
+    defaultUri: vscode.Uri.file(path.join(currentDocumentDir(), `${slugForSubsystem(definition.name)}.lssubcircuit`)),
+    filters: { "Sistema LasecSimul": ["lssubcircuit"] },
+  });
+  if (!target) return;
+  const filePath = target.fsPath.endsWith(".lssubcircuit") ? target.fsPath : `${target.fsPath}.lssubcircuit`;
+  const externalTypeId = `subcircuits.${slugForSubsystem(path.basename(filePath, ".lssubcircuit"))}`;
+  const exported = exportSubsystemAsExternal(table, typeId, externalTypeId);
+  if (!exported) return;
+  // Sistemas externos usados por referência lá dentro: caminho relativo ao arquivo exportado.
+  const toExportedFile = (refPath: string) => relativeRefPath(path.dirname(filePath))(path.isAbsolute(refPath) ? refPath : path.resolve(currentDocumentDir(), refPath));
+  const document = {
+    ...exported,
+    components: mapComponentRefPaths(Array.isArray(exported.components) ? exported.components as SubsystemComponentLike[] : [], toExportedFile),
+    ...(Array.isArray(exported.subsystems) ? { subsystems: mapTableRefPaths(manifestSubsystems(exported), toExportedFile) } : {}),
+  };
+  try {
+    fs.writeFileSync(filePath, `${JSON.stringify(document, null, 2)}\n`, "utf8");
+  } catch (err) {
+    vscode.window.showErrorMessage(`Não foi possível exportar: ${err instanceof Error ? err.message : String(err)}`);
     return;
   }
+  const addToPalette = "Adicionar à paleta";
+  const choice = await vscode.window.showInformationMessage(`"${definition.name}" exportado como sistema externo ${path.basename(filePath)} (${externalTypeId}). O projeto continua usando a cópia interna.`, addToPalette);
+  if (choice === addToPalette) await addExternalSystemFileToPalette(filePath);
+}
 
-  let raw: unknown;
+/** Arquivo do sistema EXTERNO de uma instância (referência por caminho, paleta ou biblioteca). */
+function externalSystemFileOf(component: WebviewComponentModel): string | undefined {
+  if (isSubsystemTypeId(component.typeId)) return undefined;
+  if (component.subcircuitRef?.path) return absoluteSubcircuitRefPath(component.subcircuitRef.path);
+  const entry = state.schematicState.catalog.find((candidate) => candidate.typeId === component.typeId);
+  if (entry?.registeredSourceKind !== "subcircuit-file" || !entry.registeredSourceId) return undefined;
+  return resolveSourceFilePath(entry.registeredSourceId);
+}
+
+/** "Incorporar ao projeto": a instância passa a usar uma CÓPIA interna do sistema externo; o arquivo
+ * deixa de ser necessário e mudanças nele não afetam a cópia. */
+async function embedExternalSystemInstance(componentId: string): Promise<void> {
+  const component = state.schematicState.components.find((c) => c.id === componentId);
+  const filePath = component ? externalSystemFileOf(component) : undefined;
+  if (!component || !filePath || !fileExists(filePath)) {
+    vscode.window.showWarningMessage("Arquivo do sistema externo não encontrado: localize o arquivo antes de incorporar.");
+    return;
+  }
+  // Sistemas externos que ELE usa por referência continuam externos (caminho absoluto em memória).
+  const manifest = manifestWithAbsoluteRefs(readJsonFile(filePath) as Record<string, unknown>, filePath);
+  const hoisted = hoistEmbeddedSubsystems(Array.isArray(manifest.components) ? manifest.components as SubsystemComponentLike[] : [], manifestSubsystems(manifest));
+  const imported = importExternalAsSubsystem(state.schematicState.subsystems ?? [], { ...manifest, components: hoisted.components, subsystems: hoisted.table }, { file: filePath, reservedTypeIds: reservedSubsystemTypeIds() });
+  const problem = definitionCycleProblem([imported.typeId], imported.table);
+  if (problem) {
+    vscode.window.showWarningMessage(problem);
+    return;
+  }
+  state.schematicState = {
+    ...state.schematicState,
+    subsystems: imported.table,
+    components: state.schematicState.components.map((c) => (c.id === componentId ? { ...c, typeId: imported.typeId, subcircuitRef: undefined } : c)),
+  };
+  await syncDocumentSubsystems();
+  syncSchematicPanel();
+  await queueCoreRebuild();
+  vscode.window.showInformationMessage(`"${component.label}" agora usa uma cópia interna de ${path.basename(filePath)} (independente do arquivo).`);
+}
+
+/** Registra um arquivo de sistema externo na paleta ("Meus Sistemas"). */
+async function addExternalSystemFileToPalette(filePath: string): Promise<void> {
+  if (!state.extensionContext) return;
+  const unifiedCatalog = loadUnifiedCatalog(state.extensionContext.extensionPath, currentLasecSimulLanguage());
+  const normalized = path.resolve(filePath).toLowerCase();
+  if (!unifiedCatalog.registeredSources.some((source) => source.kind === "subcircuit-file" && path.resolve(source.filePath).toLowerCase() === normalized)) {
+    saveRegisteredSources(state.extensionContext.extensionPath, [...unifiedCatalog.registeredSources, {
+      id: nextId("registered"),
+      kind: "subcircuit-file",
+      filePath,
+      folderPath: ["Meus Sistemas"],
+    }]);
+  }
+  await refreshUnifiedCatalogState(true, catalogCommandOptions());
+  vscode.window.showInformationMessage(`${path.basename(filePath)} adicionado à paleta em "Meus Sistemas".`);
+}
+
+/** Comando: importa um `.lssubcircuit` como cópia INCORPORADA (definição interna) e insere uma instância. */
+async function importExternalSystemAsEmbeddedCommand(): Promise<void> {
+  const picked = await vscode.window.showOpenDialog({ canSelectMany: false, filters: { "Sistema LasecSimul": ["lssubcircuit"] }, title: "Importar sistema externo como cópia incorporada" });
+  const filePath = picked?.[0]?.fsPath;
+  if (!filePath) return;
+  let manifest: Record<string, unknown>;
   try {
-    raw = readJsonFile(filePath);
+    manifest = manifestWithAbsoluteRefs(readJsonFile(filePath) as Record<string, unknown>, filePath);
   } catch (err) {
     vscode.window.showErrorMessage(`Não foi possível ler ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
     return;
+  }
+  const hoisted = hoistEmbeddedSubsystems(Array.isArray(manifest.components) ? manifest.components as SubsystemComponentLike[] : [], manifestSubsystems(manifest));
+  const imported = importExternalAsSubsystem(state.schematicState.subsystems ?? [], { ...manifest, components: hoisted.components, subsystems: hoisted.table }, { file: filePath, reservedTypeIds: reservedSubsystemTypeIds() });
+  state.schematicState = { ...state.schematicState, subsystems: imported.table };
+  await syncDocumentSubsystems();
+  const componentId = await insertSubsystemInstance(imported.typeId);
+  if (!componentId) syncSchematicPanel();
+}
+
+/** Comando: insere uma instância de uma definição interna existente (QuickPick). */
+async function insertSubsystemInstanceCommand(): Promise<void> {
+  const table = state.schematicState.subsystems ?? [];
+  if (table.length === 0) {
+    vscode.window.showInformationMessage("Este documento ainda não tem subsistemas internos. Selecione componentes e use \"Criar Subsistema Interno\".");
+    return;
+  }
+  const picked = await vscode.window.showQuickPick(table.map((entry) => ({
+    label: entry.name,
+    description: entry.typeId,
+    detail: `${subsystemUsage(entry.typeId, state.schematicState.components, table).instanceIds.length} instância(s) neste nível`,
+    typeId: entry.typeId,
+  })), { title: "Inserir subsistema interno" });
+  if (picked) await insertSubsystemInstance(picked.typeId);
+}
+
+/** Exclusão explícita: uma definição em uso por outras definições não é apagada; em uso só por
+ * instâncias deste nível, apaga junto com elas mediante confirmação. */
+async function deleteSubsystemDefinition(typeId: string): Promise<void> {
+  if (state.subcircuitEditingStack.length > 0) {
+    vscode.window.showWarningMessage("Volte ao nível do projeto para excluir definições de subsistemas.");
+    return;
+  }
+  const table = state.schematicState.subsystems ?? [];
+  const definition = table.find((entry) => entry.typeId === typeId);
+  if (!definition) return;
+  const usage = subsystemUsage(typeId, state.schematicState.components, table);
+  if (usage.containingDefinitions.length > 0) {
+    const names = usage.containingDefinitions.map((id) => table.find((entry) => entry.typeId === id)?.name ?? id).join(", ");
+    vscode.window.showWarningMessage(`"${definition.name}" é usado dentro de: ${names}. Remova essas instâncias antes de excluir a definição.`, { modal: true });
+    return;
+  }
+  const confirm = usage.instanceIds.length > 0 ? `Excluir definição e ${usage.instanceIds.length} instância(s)` : "Excluir definição";
+  const choice = await vscode.window.showWarningMessage(
+    usage.instanceIds.length > 0
+      ? `"${definition.name}" tem ${usage.instanceIds.length} instância(s) neste projeto. Excluir a definição remove também essas instâncias e os fios ligados a elas.`
+      : `Excluir a definição "${definition.name}"?`,
+    { modal: true },
+    confirm
+  );
+  if (choice !== confirm) return;
+  const removed = new Set(usage.instanceIds);
+  state.schematicState = {
+    ...state.schematicState,
+    subsystems: table.filter((entry) => entry.typeId !== typeId),
+    components: state.schematicState.components.filter((c) => !removed.has(c.id)),
+    topology: {
+      ...state.schematicState.topology,
+      conductors: state.schematicState.topology.conductors.filter((w) => !removed.has(endpointId(w.from)) && !removed.has(endpointId(w.to))),
+    },
+    selectedComponentIds: [],
+    selectedWireIds: [],
+  };
+  await syncDocumentSubsystems();
+  syncSchematicPanel();
+  await queueCoreRebuild();
+}
+
+/** Comando: lista as definições internas do documento e oferece as ações sobre cada uma. */
+async function manageSubsystemsCommand(): Promise<void> {
+  const table = state.schematicState.subsystems ?? [];
+  if (table.length === 0) {
+    vscode.window.showInformationMessage("Este documento não tem subsistemas internos.");
+    return;
+  }
+  const picked = await vscode.window.showQuickPick(table.map((entry) => {
+    const usage = subsystemUsage(entry.typeId, state.schematicState.components, table);
+    return { label: entry.name, description: entry.typeId, detail: `${usage.instanceIds.length} instância(s) neste nível · usado em ${usage.containingDefinitions.length} definição(ões)${entry.origin?.typeId ? ` · origem ${entry.origin.typeId}` : ""}`, typeId: entry.typeId };
+  }), { title: "Subsistemas internos deste documento" });
+  if (!picked) return;
+  const actions = [
+    { label: "Inserir instância", run: () => insertSubsystemInstance(picked.typeId) },
+    { label: "Abrir Modelo Interno", run: () => openSubcircuitForEditingCommand(`subsystem:${picked.typeId}`) },
+    { label: "Editar Painel", run: () => openSubcircuitForEditingCommand(`subsystem:${picked.typeId}`, "symbol") },
+    { label: "Renomear…", run: () => renameSubsystemDefinition(picked.typeId) },
+    { label: "Exportar como sistema externo…", run: () => exportSubsystemDefinition(picked.typeId) },
+    { label: "Excluir definição…", run: () => deleteSubsystemDefinition(picked.typeId) },
+  ];
+  const action = await vscode.window.showQuickPick(actions.map((item) => ({ label: item.label })), { title: picked.label });
+  await actions.find((item) => item.label === action?.label)?.run();
+}
+
+/** Nome do nível de cima na navegação hierárquica: o projeto aberto. */
+function projectNavigationLabel(): string {
+  const projectFile = state.subcircuitEditingStack[0]?.outerProjectFilePath ?? state.currentProjectFilePath;
+  return projectFile ? path.basename(projectFile, path.extname(projectFile)) : "Projeto";
+}
+
+/**
+ * Abre o Modelo Interno de um sistema para edição, empilhando o nível atual.
+ * - `subsystem:<typeId>`: definição INTERNA da tabela do documento aberto (projeto ou sistema externo
+ *   já em edição) -- nenhum arquivo; ao salvar, a definição volta para a tabela.
+ * - demais `sourceId`: sistema EXTERNO `.lssubcircuit` -- o arquivo passa a ser o documento deste
+ *   nível, com a tabela de subsistemas internos dele; ao salvar, grava o arquivo.
+ * `initialMode: "symbol"` abre direto no Painel.
+ * Nada é trocado em disco ao abrir: o nível de fora fica empilhado em `state.subcircuitEditingStack`
+ * até "Voltar ao nível superior" (`closeSubcircuitEditorCommand`). Os componentes do manifesto usam o
+ * mesmo formato de `ProjectComponent`, então a conversão espelha `projectToWebviewState`.
+ */
+async function openSubcircuitForEditingCommand(sourceId: string, initialMode: "circuit" | "symbol" = "circuit"): Promise<void> {
+  const parentSession = state.subcircuitEditingStack[state.subcircuitEditingStack.length - 1];
+  const internalTypeId = typeIdFromSubsystemSourceId(sourceId);
+  let raw: unknown;
+  let filePath = "";
+  let assetDir: string;
+  let documentFilePath: string | undefined;
+  let documentTable: SubsystemDefinition[];
+  let origin: SubsystemDefinition["origin"];
+  if (internalTypeId) {
+    const definition = (state.schematicState.subsystems ?? []).find((entry) => entry.typeId === internalTypeId);
+    if (!definition) {
+      vscode.window.showWarningMessage("A definição deste subsistema não existe mais neste documento.");
+      return;
+    }
+    raw = structuredClone(definition);
+    origin = definition.origin;
+    assetDir = currentDocumentDir();
+    documentFilePath = parentSession?.documentFilePath;
+    documentTable = state.schematicState.subsystems ?? [];
+  } else {
+    const resolved = resolveSourceFilePath(sourceId);
+    if (!resolved || !fileExists(resolved)) {
+      vscode.window.showWarningMessage("Arquivo do sistema externo não encontrado.");
+      return;
+    }
+    filePath = resolved;
+    try {
+      raw = readJsonFile(filePath);
+    } catch (err) {
+      vscode.window.showErrorMessage(`Não foi possível ler ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
+    assetDir = path.dirname(filePath);
+    documentFilePath = filePath;
+    // Cópias por instância de versões anteriores dentro do arquivo viram definições da tabela dele;
+    // caminhos de sistemas externos usados lá dentro ficam absolutos em memória (copiar daqui para
+    // outro documento não depende da pasta do arquivo) e voltam a relativos ao gravar.
+    const rawRecord = raw as Record<string, unknown>;
+    const hoisted = hoistEmbeddedSubsystems(Array.isArray(rawRecord.components) ? rawRecord.components as SubsystemComponentLike[] : [], manifestSubsystems(rawRecord));
+    const absolute = manifestWithAbsoluteRefs({ ...rawRecord, components: hoisted.components, subsystems: hoisted.table }, filePath);
+    raw = absolute;
+    documentTable = manifestSubsystems(absolute);
   }
 
   // Gate de schemaVersion -- rejeita IMEDIATAMENTE um arquivo de versão antiga, antes de qualquer
   // outra leitura, nunca abre uma sessão parcial (ruptura de compatibilidade autorizada
   // explicitamente pelo pedido original: sem migração automática nesta etapa).
-  const parsed = parseSubcircuitDocument(raw, path.dirname(filePath));
+  const parsed = parseSubcircuitDocument(raw, assetDir);
   if (!parsed.ok) {
     void vscode.window.showErrorMessage(parsed.reason, { modal: true });
     return;
@@ -2252,10 +2691,15 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
     ? { width: document.icon.width, height: document.icon.height, border: document.icon.border, background: document.icon.background }
     : undefined;
 
+  const navigationPath = [...(parentSession?.path ?? [projectNavigationLabel()]), document.name];
   state.subcircuitEditingStack.push({
     sourceId,
     filePath,
-    originalDocument: document,
+    kind: internalTypeId ? "internal" : "external",
+    ...(internalTypeId ? { definitionTypeId: internalTypeId } : {}),
+    documentFilePath,
+    path: navigationPath,
+    originalDocument: origin ? { ...document, origin } as SubcircuitDocument : document,
     outerSchematicState: state.schematicState,
     outerProjectFilePath: state.currentProjectFilePath,
     initialComponents: normalized.components,
@@ -2285,8 +2729,16 @@ async function openSubcircuitForEditingCommand(sourceId: string): Promise<void> 
     selectedComponentIds: [],
     selectedWireIds: [],
     pendingConnection: undefined,
-    subcircuitEditingContext: { sourceId, typeId: document.typeId, name: document.name },
+    subsystems: documentTable,
+    subcircuitEditingContext: { sourceId, typeId: document.typeId, name: document.name, path: navigationPath, internal: Boolean(internalTypeId), initialMode },
   };
+  // Externo: as definições internas do ARQUIVO passam a valer neste nível (catálogo/Core); interno:
+  // mesma tabela do documento de fora.
+  await syncDocumentSubsystems();
+  // Os pinos das instâncias de subsistemas acabaram de ser acertados pela interface das definições:
+  // isso é normalização da abertura, não edição -- a sessão começa limpa a partir daqui.
+  const openedSession = state.subcircuitEditingStack[state.subcircuitEditingStack.length - 1];
+  if (openedSession) openedSession.initialComponents = state.schematicState.components;
   syncSchematicPanel();
   await rebuildCoreFromSchematicState();
 }
@@ -2363,7 +2815,7 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
     assertTopologyInvariants(state.schematicState.topology, new Set(state.schematicState.components.map((component) => component.id)));
   } catch (err) {
     void vscode.window.showErrorMessage(
-      "Não foi possível salvar o subcircuito -- topologia inválida.",
+      "Não foi possível salvar o sistema -- topologia inválida.",
       { modal: true, detail: err instanceof Error ? err.message : String(err) }
     );
     return false;
@@ -2413,7 +2865,7 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
     // "..." sem dar jeito de ler o resto (achado real: usuário só via a mensagem truncada, sem
     // saber qual era o erro de verdade). Modal sempre mostra o texto inteiro, sem limite de altura.
     void vscode.window.showErrorMessage(
-      "Não foi possível salvar o subcircuito -- corrija antes de tentar de novo.",
+      "Não foi possível salvar o sistema -- corrija antes de tentar de novo.",
       { modal: true, detail: allErrors.map((error) => `• ${error}`).join("\n") }
     );
     return false;
@@ -2422,22 +2874,53 @@ async function writeSubcircuitEditingSessionBack(session: SubcircuitEditingSessi
   const allWarnings = [...symbolResult.warnings, ...iconResult.warnings, ...validation.warnings];
   if (allWarnings.length > 0) {
     void vscode.window.showWarningMessage(
-      "Subcircuito salvo com avisos.",
+      "Sistema salvo com avisos.",
       { modal: true, detail: allWarnings.map((warning) => `• ${warning}`).join("\n") }
     );
   }
 
+  if (session.kind === "internal" && session.definitionTypeId) {
+    // Definição interna: volta para a tabela do documento (nenhum arquivo). Nome e origem são da
+    // definição; renomear acontece fora do editor e nunca muda o `typeId`.
+    const typeId = session.definitionTypeId;
+    const table = state.schematicState.subsystems ?? [];
+    const previous = table.find((entry) => entry.typeId === typeId);
+    const serialized = serializeSubcircuitDocument({ ...documentToWrite, typeId, name: previous?.name ?? documentToWrite.name });
+    const definition: SubsystemDefinition = { ...serialized, typeId, name: previous?.name ?? documentToWrite.name, ...(previous?.origin ? { origin: previous.origin } : {}) };
+    const nextTable = table.map((entry) => (entry.typeId === typeId ? definition : entry));
+    // Rede de segurança (a inserção/colagem já recusa): nunca grava um ciclo entre definições.
+    const cycle = findSubsystemCycle(nextTable);
+    if (cycle) {
+      const name = (id: string) => nextTable.find((entry) => entry.typeId === id)?.name ?? id;
+      void vscode.window.showErrorMessage(`Não foi possível salvar: referência recursiva entre subsistemas (${cycle.map(name).join(" → ")}).`, { modal: true });
+      return false;
+    }
+    state.schematicState = { ...state.schematicState, subsystems: nextTable };
+    const failures = await registerSubsystemsInCore(state.schematicState.subsystems ?? [], currentDocumentDir());
+    const failure = failures.get(typeId);
+    if (failure) {
+      vscode.window.showErrorMessage(`O Core recusou o subsistema "${definition.name}": ${failure}`);
+      return false;
+    }
+    return true;
+  }
+
   try {
-    fs.writeFileSync(session.filePath, `${JSON.stringify(serializeSubcircuitDocument(documentToWrite), null, 2)}\n`, "utf8");
+    // Sistema externo: o arquivo leva junto os subsistemas internos dele (reutilizável sozinho), com
+    // os caminhos de sistemas externos relativos à pasta do arquivo.
+    const toRelative = relativeRefPath(path.dirname(session.filePath));
+    const table = mapTableRefPaths(state.schematicState.subsystems ?? [], toRelative);
+    const withTable = { ...documentToWrite, components: mapComponentRefPaths(documentToWrite.components, toRelative), ...(table.length > 0 ? { subsystems: table } : {}) };
+    fs.writeFileSync(session.filePath, `${JSON.stringify(serializeSubcircuitDocument(withTable), null, 2)}\n`, "utf8");
   } catch (err) {
-    vscode.window.showErrorMessage(`Não foi possível salvar o subcircuito: ${err instanceof Error ? err.message : String(err)}`);
+    vscode.window.showErrorMessage(`Não foi possível salvar o sistema: ${err instanceof Error ? err.message : String(err)}`);
     return false;
   }
   if (state.coreClient) {
     try {
-      await state.coreClient.registerAdhocSubcircuitDefinition(session.filePath, { replace: true });
+      await registerExternalSystemFile(session.filePath, { replace: true });
     } catch (err) {
-      vscode.window.showErrorMessage(`Não foi possível reregistrar o subcircuito no Core: ${err instanceof Error ? err.message : String(err)}`);
+      vscode.window.showErrorMessage(`Não foi possível reregistrar o sistema no Core: ${err instanceof Error ? err.message : String(err)}`);
       return false;
     }
   }
@@ -2469,15 +2952,24 @@ async function saveActiveSchematicCommand(): Promise<void> {
   session.initialExportedPropertyComponentIds = state.schematicState.exportedPropertyComponentIds;
   session.initialHmiApplication = state.schematicState.hmiApplication;
   session.savedDuringEditing = true;
-  vscode.window.showInformationMessage(`Subcircuito salvo em ${session.filePath}`);
+  vscode.window.showInformationMessage(session.kind === "internal"
+    ? `Subsistema "${state.schematicState.subcircuitEditingContext?.name ?? ""}" atualizado no documento (salve o projeto para gravar no arquivo).`
+    : `Sistema salvo em ${session.filePath}`);
 }
 
 /** Restaura o circuito empilhado por `openSubcircuitForEditingCommand`, sem tocar no arquivo --
  * usado tanto pelo branch "Descartar Alterações" quanto, após `writeSubcircuitEditingSessionBack`,
  * pelo branch "Salvar". */
 async function restoreOuterCircuitFromSession(session: SubcircuitEditingSession): Promise<void> {
+  const innerTable = state.schematicState.subsystems;
   state.schematicState = session.outerSchematicState;
   state.currentProjectFilePath = session.outerProjectFilePath;
+  // Mesmo documento (definição interna): a tabela é do documento, não do nível -- definições
+  // gravadas ou criadas lá dentro continuam valendo aqui. Sistema externo: a tabela era do arquivo.
+  if (session.kind === "internal") state.schematicState = { ...state.schematicState, subsystems: innerTable };
+  await syncDocumentSubsystems();
+  // Um sistema externo usado por referência pode ter mudado: rele o arquivo para o catálogo do projeto.
+  if (session.kind === "external") await resolveCurrentProjectSubcircuitReferences();
   syncSchematicPanel();
   await rebuildCoreFromSchematicState();
 }
@@ -2498,7 +2990,7 @@ async function closeSubcircuitEditorCommand(): Promise<void> {
     const cancel = "Cancelar";
     const subcircuitName = state.schematicState.subcircuitEditingContext?.name ?? session.sourceId;
     const choice = await vscode.window.showWarningMessage(
-      `O subcircuito "${subcircuitName}" tem alterações não salvas. O que deseja fazer antes de voltar ao circuito principal?`,
+      `${session.kind === "internal" ? "O subsistema" : "O sistema"} "${subcircuitName}" tem alterações não salvas. O que deseja fazer antes de voltar ao nível superior?`,
       { modal: true },
       save,
       discard,
@@ -2728,6 +3220,9 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     vscode.commands.registerCommand("lasecsimul.openDslEditor", () => void openDslCommand()),
     vscode.commands.registerCommand("lasecsimul.applyDsl", () => void commitDslCommand()),
     vscode.commands.registerCommand("lasecsimul.newSubcircuit", () => triggerCreateSubcircuitFromSelection(state.schematicPanel)),
+    vscode.commands.registerCommand("lasecsimul.subsystem.insert", () => insertSubsystemInstanceCommand()),
+    vscode.commands.registerCommand("lasecsimul.subsystem.manage", () => manageSubsystemsCommand()),
+    vscode.commands.registerCommand("lasecsimul.subsystem.importEmbedded", () => importExternalSystemAsEmbeddedCommand()),
     vscode.commands.registerCommand("lasecsimul.openSettings", async () => {
       try {
         await vscode.commands.executeCommand("workbench.action.openSettings", "@ext:josuemoraisgh.lasecsimul");

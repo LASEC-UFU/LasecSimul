@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import * as vscode from "vscode";
 import { currentLasecSimulLanguage } from "../currentLanguage";
 import { fileExists, normalizeAbsolutePath, readJsonFile } from "../pathUtils";
@@ -7,6 +8,8 @@ import { JUNCTION_TYPE_ID, TUNNEL_TYPE_ID } from "../ui/webview/model";
 import { loadUnifiedCatalog } from "./UnifiedCatalog";
 import { findRegisteredSourceById } from "./catalogCommands";
 import { filePathFromSourceId } from "../project/embeddedSubcircuits";
+import { syncDocumentSubsystems } from "../project/subsystemRuntime";
+import { SubsystemDefinition, typeIdFromSubsystemSourceId } from "../ui/webview/subsystemModel";
 
 interface VisualPosition {
   x: number;
@@ -82,6 +85,8 @@ function extractInternalComponents(json: Record<string, unknown>): InternalCompo
 }
 
 export function resolveSourceFilePath(sourceId: string): string | undefined {
+  // Subsistema interno: a definição está na tabela do documento, não há arquivo (ver `readSourceManifest`).
+  if (typeIdFromSubsystemSourceId(sourceId)) return undefined;
   // Subcircuito por caminho ou incorporado ao projeto: o próprio id carrega o arquivo.
   const filePath = filePathFromSourceId(sourceId);
   if (filePath) return filePath;
@@ -95,17 +100,54 @@ export function resolveSourceFilePath(sourceId: string): string | undefined {
   return normalizeAbsolutePath(state.extensionContext.extensionPath, source.filePath);
 }
 
-export function gatherInternalComponentSnapshots(sourceId: string): InternalComponentSnapshot[] | undefined {
+/** Manifesto do sistema de uma instância: definição INTERNA (`subsystem:<typeId>`, tabela do documento
+ * aberto -- nenhum arquivo) ou sistema externo `.lssubcircuit`. Cópia: alterar o retorno não muda nada. */
+export function readSourceManifest(sourceId: string): Record<string, unknown> | undefined {
+  const internalTypeId = typeIdFromSubsystemSourceId(sourceId);
+  if (internalTypeId) {
+    const definition = (state.schematicState.subsystems ?? []).find((entry) => entry.typeId === internalTypeId);
+    return definition ? structuredClone(definition) as Record<string, unknown> : undefined;
+  }
   const absoluteFilePath = resolveSourceFilePath(sourceId);
   if (!absoluteFilePath || !fileExists(absoluteFilePath)) return undefined;
-
-  let json: Record<string, unknown>;
   try {
-    json = readJsonFile(absoluteFilePath) as Record<string, unknown>;
+    return readJsonFile(absoluteFilePath) as Record<string, unknown>;
   } catch (err) {
     vscode.window.showErrorMessage(`Nao foi possivel ler ${absoluteFilePath}: ${err instanceof Error ? err.message : String(err)}`);
     return undefined;
   }
+}
+
+/** Grava o manifesto alterado (ex.: propriedade/posição de componente exposto editada no Painel da
+ * instância). Definição interna: volta para a tabela do documento -- todas as instâncias seguem; o
+ * arquivo do projeto só muda ao salvar --, recadastrada no catálogo/Core. Sistema externo: o arquivo.
+ * `undefined` quando nada foi gravado. */
+export async function writeSourceManifest(sourceId: string, manifest: Record<string, unknown>): Promise<"internal" | "file" | undefined> {
+  const internalTypeId = typeIdFromSubsystemSourceId(sourceId);
+  if (internalTypeId) {
+    const table = state.schematicState.subsystems ?? [];
+    const previous = table.find((entry) => entry.typeId === internalTypeId);
+    if (!previous) return undefined;
+    // Identidade, nome e origem são da definição, nunca do conteúdo editado.
+    const definition: SubsystemDefinition = { ...manifest, typeId: internalTypeId, name: previous.name, ...(previous.origin ? { origin: previous.origin } : {}) };
+    state.schematicState = { ...state.schematicState, subsystems: table.map((entry) => (entry.typeId === internalTypeId ? definition : entry)) };
+    await syncDocumentSubsystems();
+    return "internal";
+  }
+  const absoluteFilePath = resolveSourceFilePath(sourceId);
+  if (!absoluteFilePath || !fileExists(absoluteFilePath)) return undefined;
+  try {
+    fs.writeFileSync(absoluteFilePath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  } catch (err) {
+    vscode.window.showErrorMessage(`Não foi possível salvar ${absoluteFilePath}: ${err instanceof Error ? err.message : String(err)}`);
+    return undefined;
+  }
+  return "file";
+}
+
+export function gatherInternalComponentSnapshots(sourceId: string): InternalComponentSnapshot[] | undefined {
+  const json = readSourceManifest(sourceId);
+  if (!json) return undefined;
 
   return extractInternalComponents(json)
     .filter((component) => component.typeId !== TUNNEL_TYPE_ID && component.typeId !== JUNCTION_TYPE_ID)

@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
-import { fileExists, readJsonFile } from "../pathUtils";
+import { fileExists } from "../pathUtils";
 import {
   coreInstanceIdByComponentId,
   lastLoadedFirmwareByCoreId,
@@ -18,7 +18,9 @@ export interface McuCommandOptions {
   syncSchematicPanel: () => void;
   reportCoreWarning: (action: string, err: unknown) => void;
   gatherInternalComponentSnapshots: (sourceId: string) => InternalComponentSnapshot[] | undefined;
-  resolveSourceFilePath: (sourceId: string) => string | undefined;
+  /** Manifesto pelo `sourceId`: definição interna (tabela do documento) ou arquivo `.lssubcircuit`. */
+  readSourceManifest: (sourceId: string) => Record<string, unknown> | undefined;
+  writeSourceManifest: (sourceId: string, manifest: Record<string, unknown>) => Promise<"internal" | "file" | undefined>;
   refreshUnifiedCatalogState: (loadLibrariesInCore: boolean) => Promise<void>;
 }
 
@@ -538,16 +540,8 @@ export async function updateExposedComponentPropertyCommand(
     return;
   }
 
-  const absoluteFilePath = options.resolveSourceFilePath(sourceId);
-  if (!absoluteFilePath || !fileExists(absoluteFilePath)) return;
-
-  let json: Record<string, unknown>;
-  try {
-    json = readJsonFile(absoluteFilePath) as Record<string, unknown>;
-  } catch (err) {
-    vscode.window.showErrorMessage(`Não foi possível ler ${absoluteFilePath}: ${err instanceof Error ? err.message : String(err)}`);
-    return;
-  }
+  const json = options.readSourceManifest(sourceId);
+  if (!json) return;
 
   if (Array.isArray(json.components)) {
     json.components = json.components.map((entry) => {
@@ -561,12 +555,10 @@ export async function updateExposedComponentPropertyCommand(
     });
   }
 
-  try {
-    fs.writeFileSync(absoluteFilePath, `${JSON.stringify(json, null, 2)}\n`, "utf8");
-  } catch (err) {
-    vscode.window.showErrorMessage(`Não foi possível salvar ${absoluteFilePath}: ${err instanceof Error ? err.message : String(err)}`);
-    return;
-  }
+  // Subsistema interno: a definição muda na tabela do documento (todas as instâncias seguem).
+  const written = await options.writeSourceManifest(sourceId, json);
+  if (!written) return;
+  if (written === "internal") options.syncSchematicPanel();
 
   updateBoardOverlayPropertyCommand(outerComponentId, innerComponentId, name, value, options);
   await requestBoardOverlayDataCommand(outerComponentId, sourceId, options);
@@ -580,16 +572,8 @@ export async function updateBoardOverlayVisualCommand(
   options: McuCommandOptions
 ): Promise<void> {
   if (!state.extensionContext) return;
-  const absoluteFilePath = options.resolveSourceFilePath(sourceId);
-  if (!absoluteFilePath || !fileExists(absoluteFilePath)) return;
-
-  let json: Record<string, unknown>;
-  try {
-    json = readJsonFile(absoluteFilePath) as Record<string, unknown>;
-  } catch (err) {
-    vscode.window.showErrorMessage(`Não foi possível ler ${absoluteFilePath}: ${err instanceof Error ? err.message : String(err)}`);
-    return;
-  }
+  const json = options.readSourceManifest(sourceId);
+  if (!json) return;
 
   // Escreve em `exposedComponents[]` (schemaVersion 3, `catalog/subcircuitDocument.ts`) -- só x/y
   // mudam aqui (este comando só cobre arrasto no overlay do circuito principal, nunca rotação/
@@ -609,11 +593,7 @@ export async function updateBoardOverlayVisualCommand(
     json.exposedComponents = [{ componentId: innerComponentId, x, y, rotation: 0, flipH: false, flipV: false, scale: 1, layer: 0 }];
   }
 
-  try {
-    fs.writeFileSync(absoluteFilePath, `${JSON.stringify(json, null, 2)}\n`, "utf8");
-  } catch (err) {
-    vscode.window.showErrorMessage(`Não foi possível salvar ${absoluteFilePath}: ${err instanceof Error ? err.message : String(err)}`);
-    return;
-  }
-  await options.refreshUnifiedCatalogState(true);
+  const written = await options.writeSourceManifest(sourceId, json);
+  if (written === "internal") options.syncSchematicPanel();
+  else if (written === "file") await options.refreshUnifiedCatalogState(true);
 }

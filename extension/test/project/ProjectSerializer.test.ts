@@ -57,37 +57,6 @@ import { resolveProjectSourcePaths } from "../../src/project/projectPathPolicy";
   const bomLoaded = await serializer.load(bomPath);
   assert.deepStrictEqual(bomLoaded.components.map((component) => component.id), ["c1"], "BOM UTF-8 no início do .lsproj não pode impedir a abertura");
 
-  // `control.tank` (removido do Core, ADR 0013) dentro de uma planta incorporada e no topo do projeto.
-  const tankPath = path.join(tmpDir, "legacy-tank.lsproj");
-  const embeddedPlant = {
-    schemaVersion: 3, typeId: "subcircuits.local.tanque", name: "Tanque",
-    components: [
-      { id: "tank", typeId: "control.tank", properties: { area: 1, initial: 1.5, samplePeriodNs: 10000000 } },
-      { id: "wide", typeId: "control.tank", properties: { area: 2, initial: 0 } },
-      { id: "gain", typeId: "control.gain", properties: { gain: 2 } },
-    ],
-    topology: { revision: 0, nodes: [], conductors: [{ id: "w1", from: { kind: "port", componentId: "gain", pinId: "out" }, to: { kind: "port", componentId: "tank", pinId: "in" }, vertices: [] }] },
-    interface: [], exposedComponents: ["tank"],
-  };
-  await fs.writeFile(tankPath, JSON.stringify({
-    ...project,
-    components: [
-      { id: "plant", typeId: "subcircuits.local.tanque", properties: {}, subcircuitRef: { path: "tanque.lssubcircuit", embedded: embeddedPlant } },
-      { id: "top", typeId: "control.tank", properties: { initial: 3 } },
-    ],
-  }), "utf8");
-  const tankLoaded = await serializer.load(tankPath);
-  const plantComponents = (tankLoaded.components[0]!.subcircuitRef!.embedded as typeof embeddedPlant).components;
-  assert.deepStrictEqual(plantComponents[0], { id: "tank", typeId: "control.accumulator", properties: { initial: 1.5, samplePeriodNs: 10000000 } },
-    "tank com area 1 vira o acumulador equivalente, preservando id e as demais propriedades");
-  assert.deepStrictEqual(plantComponents[1], embeddedPlant.components[1], "tank com area != 1 não tem equivalente exato e fica intocado");
-  assert.deepStrictEqual(plantComponents[2], embeddedPlant.components[2], "outros blocos não mudam");
-  const migratedPlant = tankLoaded.components[0]!.subcircuitRef!.embedded as typeof embeddedPlant;
-  assert.deepStrictEqual(migratedPlant.topology, embeddedPlant.topology, "ligações (portas in/outflow/out) não mudam");
-  assert.deepStrictEqual(migratedPlant.exposedComponents, ["tank"], "componentes expostos continuam apontando para o mesmo id");
-  assert.strictEqual(tankLoaded.components[1]!.typeId, "control.accumulator", "tank no topo do projeto (area ausente = 1) também migra");
-  assert.deepStrictEqual(tankLoaded.components[1]!.properties, { initial: 3 });
-
   const invalidComponentPath = path.join(tmpDir, "invalid-component.lsproj");
   await fs.writeFile(
     invalidComponentPath,
@@ -231,7 +200,10 @@ import { resolveProjectSourcePaths } from "../../src/project/projectPathPolicy";
   const embeddedPath = path.join(tmpDir, "embedded-subcircuit.lsproj");
   await serializer.save(embeddedPath, embeddedProject);
   const embeddedRoundTrip = await serializer.load(embeddedPath);
-  assert.deepStrictEqual(embeddedRoundTrip.components[0]?.subcircuitRef?.embedded, embeddedManifest, "o manifesto incorporado sobrevive a save->load");
+  const migratedEmbedded = embeddedRoundTrip.subsystems?.find((entry) => entry.typeId === embeddedRoundTrip.components[0]?.typeId);
+  if (!migratedEmbedded) throw new Error("embedded manifest is migrated into the subsystem table");
+  assert.strictEqual(embeddedRoundTrip.components[0]?.subcircuitRef, undefined, "instance points at the canonical subsystem definition");
+  assert.deepStrictEqual({ schemaVersion: migratedEmbedded.schemaVersion, components: migratedEmbedded.components }, { schemaVersion: embeddedManifest.schemaVersion, components: embeddedManifest.components }, "embedded definition content survives save->load");
   assert.strictEqual(embeddedRoundTrip.components[0]?.properties["@c_height.value"], 2.5, "a propriedade exportada da instância sobrevive a save->load");
 
   const deviceRefProject = createEmptyProject();

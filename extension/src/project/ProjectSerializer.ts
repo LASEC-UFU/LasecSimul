@@ -21,6 +21,7 @@ import { isIpdLineClass } from "../ui/webview/ipdLineStyle";
 import { defaultHmiNavigationVisual } from "../ui/webview/model";
 import { migrateLegacySignalTunnels } from "../catalog/legacySignalTunnelMigration";
 import { migrateLegacyTankBlocks } from "../catalog/legacyTankMigration";
+import { findSubsystemCycle, hoistEmbeddedSubsystems, isSubsystemTypeId, SubsystemDefinition } from "../ui/webview/subsystemModel";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -285,6 +286,23 @@ export function validateHmiApplication(value: unknown): HmiApplication | undefin
   return { startPageId, pages, ...(staleAfterMs && staleAfterMs > 0 ? { staleAfterMs } : {}), ...(auditExceptions ? { auditExceptions } : {}), ...(auditRuleProfile ? { auditRuleProfile } : {}) };
 }
 
+/** Tabela de definições internas: cada item é um manifesto com `typeId` interno único e `name`.
+ * Itens inválidos são recusados com a posição -- nunca descartados em silêncio. */
+function validateSubsystems(value: unknown): SubsystemDefinition[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new Error("subsystems precisa ser uma lista de definições");
+  const seen = new Set<string>();
+  return value.map((entry, index) => {
+    if (!isObject(entry) || !isSubsystemTypeId(asString(entry.typeId)) || !asString(entry.name)) {
+      throw new Error(`subsystems[${index}] precisa de typeId "subsystem.*" e name`);
+    }
+    const typeId = entry.typeId as string;
+    if (seen.has(typeId)) throw new Error(`subsystems contém definição duplicada: ${typeId}`);
+    seen.add(typeId);
+    return { ...entry, typeId, name: entry.name as string, components: Array.isArray(entry.components) ? entry.components : [] } as SubsystemDefinition;
+  });
+}
+
 function validateWire(wire: unknown, index: number): ProjectWire {
   if (!isObject(wire)) throw new Error(`wires[${index}] inválido`);
   const id = asString(wire.id);
@@ -377,8 +395,16 @@ export class ProjectSerializer {
       throw new Error(`schemaVersion incompatível: esperado ${LS_PROJ_SCHEMA_VERSION}, recebido ${String(parsed.schemaVersion)}`);
     }
     const validated = Array.isArray(parsed.components) ? parsed.components.map(validateComponent) : [];
-    // Bloco `control.tank` (removido do Core) gravado no projeto ou dentro de plantas incorporadas.
-    const components = migrateLegacyTankBlocks(validated).components;
+    // Cópias incorporadas por instância (formato anterior) viram definições internas da tabela.
+    const hoisted = hoistEmbeddedSubsystems(validated, validateSubsystems(parsed.subsystems));
+    // Bloco `control.tank` (removido do Core) gravado no projeto ou dentro das definições internas.
+    const components = migrateLegacyTankBlocks(hoisted.components).components;
+    const subsystems: SubsystemDefinition[] = hoisted.table.map((definition) => ({
+      ...definition,
+      components: migrateLegacyTankBlocks((definition.components ?? []) as unknown as ProjectComponent[]).components,
+    }));
+    const cycle = findSubsystemCycle(subsystems);
+    if (cycle) throw new Error(`Subsistemas com referência recursiva entre definições: ${cycle.join(" → ")}`);
     const componentIds = new Set(components.map((c) => c.id));
     const topology = validateTopology(parsed.topology, componentIds);
     const migrated = migrateLegacySignalTunnels(components, topology);
@@ -425,6 +451,7 @@ export class ProjectSerializer {
         : {},
       hmiApplication: validateHmiApplication(parsed.hmiApplication),
       calculusLab: validateCalculusLab(parsed.calculusLab),
+      ...(subsystems.length > 0 ? { subsystems } : {}),
       mcuFirmware: Array.isArray(parsed.mcuFirmware)
         ? parsed.mcuFirmware.filter(isObject).map((entry) => ({
             chipId: asString(entry.chipId) ?? "",
@@ -444,6 +471,7 @@ export class ProjectSerializer {
       simulationSettings: project.simulationSettings,
       hmiApplication: project.hmiApplication,
       calculusLab: validateCalculusLab(project.calculusLab),
+      subsystems: project.subsystems && project.subsystems.length > 0 ? project.subsystems : undefined,
       mcuFirmware: project.mcuFirmware,
     };
     await fs.mkdir(path.dirname(filePath), { recursive: true });

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { PidTuningPanel } from "../ui/panels/PidTuningPanel";
 import { filePathFromSourceId } from "../project/embeddedSubcircuits";
+import { currentDocumentDir, registerExternalSystemFile, registerSubsystemsInCore } from "../project/subsystemRuntime";
 import { childPropertyOverrides, parseChildPropertyKey, withoutChildPropertyOverrides } from "../ui/webview/childPropertyOverrides";
 import * as path from "path";
 import { IpcError } from "../ipc/protocol";
@@ -1337,15 +1338,22 @@ export function rebuildCoreFromSchematicState(): Promise<void> {
  * cada reconstrução (com `replace`) é idempotente e cobre os dois casos. */
 async function registerProjectSubcircuitsInCore(): Promise<void> {
   if (!state.coreClient) return;
+  // Sistemas externos usados por referência neste documento (com os subsistemas internos deles).
   for (const entry of state.schematicState.catalog) {
-    if (!entry.projectLocal) continue;
+    if (!entry.projectLocal || entry.internalSubsystem) continue;
     const filePath = filePathFromSourceId(entry.registeredSourceId ?? "");
     if (!filePath) continue;
     try {
-      await state.coreClient.registerAdhocSubcircuitDefinition(filePath, { replace: true });
+      await registerExternalSystemFile(filePath, { replace: true });
     } catch (err) {
-      reportCoreWarning(`registrar o subcircuito do projeto "${entry.label}"`, err);
+      reportCoreWarning(`registrar o sistema externo "${entry.label}"`, err);
     }
+  }
+  // Definições internas do documento aberto, dependências primeiro (antes das instâncias).
+  const failures = await registerSubsystemsInCore(state.schematicState.subsystems ?? [], currentDocumentDir());
+  for (const [typeId, reason] of failures) {
+    const name = state.schematicState.subsystems?.find((definition) => definition.typeId === typeId)?.name ?? typeId;
+    reportCoreWarning(`registrar o subsistema interno "${name}"`, new Error(reason));
   }
 }
 
@@ -1357,6 +1365,8 @@ async function rebuildCoreFromSchematicStateNow(options: { alreadyStopped?: bool
   // corrida real encontrada 2026-07-19 (ver comentário em state.ts::catalogReadyPromise). Resolve
   // imediatamente se já tiver terminado (ou nunca foi disparada).
   if (state.catalogReadyPromise) await state.catalogReadyPromise;
+  // Definições (internas ou arquivos) podem ter mudado desde a última corrida: expostos relidos.
+  boardOverlayExposedItemsBySourceId.clear();
   await registerProjectSubcircuitsInCore();
 
   const runningBeforeRebuild = options.resumeAfter ?? state.simulationStatus === "running";

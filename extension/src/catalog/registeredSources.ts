@@ -169,7 +169,7 @@ export function resolveFolderPath(source: RegisteredSource, fallback: string[]):
 export function localizedRegisteredFolder(kind: RegisteredItemKind, language: LasecSimulLanguage): string[] {
   if (kind === "abi-device") return language === "en" ? ["Registered", "ABI"] : ["Registrados", "ABI"];
   if (kind === "mcu-adapter") return language === "en" ? ["Registered", "QEMU"] : ["Registrados", "QEMU"];
-  return language === "en" ? ["Registered", "Subcircuits"] : ["Registrados", "Subcircuitos"];
+  return language === "en" ? ["Registered", "Systems"] : ["Registrados", "Sistemas"];
 }
 
 export function localizedRegisteredRoot(language: LasecSimulLanguage): string {

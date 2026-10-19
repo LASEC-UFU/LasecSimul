@@ -1,3 +1,4 @@
+import { manifestSubsystems, SubsystemDefinition } from "../ui/webview/subsystemModel";
 import { PackageDescriptor } from "../ui/webview/model";
 import { CatalogWorkspaceSection, parseCatalogWorkspaceSection } from "../ui/webview/workspace";
 import { ProjectComponent, ProjectTopology, ProjectTopologyEndpoint } from "../project/ProjectTypes";
@@ -103,6 +104,9 @@ export interface SubcircuitDocument {
   exportedPropertyComponentIds: string[];
   /** HMI opcional do subcircuito; elementos referenciam gráficos internos e guardam geometria por página. */
   hmiApplication?: HmiApplication;
+  /** Subsistemas INTERNOS deste sistema (definições guardadas no próprio arquivo, ver
+   * `ui/webview/subsystemModel.ts`): o arquivo é reutilizável sem dependências perdidas. */
+  subsystems?: SubsystemDefinition[];
 }
 
 export type ParseSubcircuitDocumentResult =
@@ -237,6 +241,7 @@ export function parseSubcircuitDocument(raw: unknown, manifestDir: string): Pars
       ? (obj.exportedPropertyComponentIds as unknown[]).filter((id): id is string => typeof id === "string" && id.trim().length > 0)
       : [],
     hmiApplication,
+    ...(manifestSubsystems(obj).length > 0 ? { subsystems: manifestSubsystems(obj) } : {}),
   };
     const migrated = migrateLegacySignalTunnels(document.components, document.topology, document.interface);
     return { ok: true, document: {
@@ -279,6 +284,7 @@ export function serializeSubcircuitDocument(document: SubcircuitDocument): Recor
     exposedComponents: document.exposedComponents,
     exportedPropertyComponentIds: document.exportedPropertyComponentIds,
     ...(document.hmiApplication ? { hmiApplication: document.hmiApplication } : {}),
+    ...(document.subsystems && document.subsystems.length > 0 ? { subsystems: document.subsystems } : {}),
     ...(document.icon ? { icon: document.icon } : {}),
     ...(document.folderPath ? { folderPath: document.folderPath } : {}),
     ...(document.workspaceSection ? { workspaceSection: document.workspaceSection } : {}),
