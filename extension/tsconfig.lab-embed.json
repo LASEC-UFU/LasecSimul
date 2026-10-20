@@ -1,0 +1,16 @@
+{
+  "//": "Laboratório de Cálculo num único arquivo (AMD) para as atividades embutidas nas Telas HMI: o documento de um <iframe> aninhado numa Webview não consegue carregar recursos pelo service worker do VS Code (ele identifica a Webview pela URL do cliente, que no <iframe> não tem o ?id=), então o código vai inline, com o nonce da página. Ver src/visual/labEmbeds.ts.",
+  "compilerOptions": {
+    "module": "AMD",
+    "moduleResolution": "node10",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "outFile": "out-webview/lab-embed/lab.js",
+    "rootDir": "src/ui/webview/lab",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "files": ["src/ui/webview/lab/ui/main.ts"]
+}

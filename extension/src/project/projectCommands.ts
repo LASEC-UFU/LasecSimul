@@ -17,6 +17,11 @@ import { openSimulideAsLsproj } from "../import/simulide/SimulideOpenWorkflow";
 import { createPlantTemplateLookup, embedLegacyPlantReferences, plantDisplayName, plantPinIds, resolvePlantTemplateDir } from "./plantTemplates";
 import { currentDocumentDir, projectLocalCatalogEntry, reservedSubsystemTypeIds, syncDocumentSubsystems, tryRegisterExternalSystemFile } from "./subsystemRuntime";
 import { hoistEmbeddedSubsystems, importExternalAsSubsystem, importSubsystemDefinitions, isSubsystemTypeId, mapTableRefPaths, rewriteComponentTypeIds } from "../ui/webview/subsystemModel";
+import { faceplatesForSave, reconcileScreenButtons, resetScreens, screensForSave } from "../visual/screenStore";
+import { migrateLegacyHmiApplication } from "../visual/legacyHmiMigration";
+import { LAB_SCREEN_TITLE, createLabScreenDocument, findLabScreen, labScreenButton } from "../visual/labScreens";
+import { uniqueScreenId, type VisualDocument } from "../ui/webview/visualDocument";
+import { adoptRestoredVisualPanels, closeAllVisualPanels } from "../visual/visualPanels";
 
 export function absoluteSubcircuitRefPath(refPath: string): string {
   if (path.isAbsolute(refPath)) return path.normalize(refPath);
@@ -356,9 +361,21 @@ export async function insertEmbeddedPlant(typeId: string, syncSchematicPanel: ()
  * gravar o snapshot "salvo por último" (`markProjectSaved`) quanto pra decidir se há alteração não
  * salva (`isProjectDirty`). Comparação estrutural (`JSON.stringify`) é barata o bastante pro
  * tamanho típico de um esquemático e evita persistir/computar um diff campo a campo à parte. */
+/** Definições como vão para o arquivo: cada uma com o Faceplate dela (`subsystems[].faceplate`), que em
+ * memória vive na loja de documentos visuais (`screenStore.ts`), não na tabela. */
+function subsystemsForSave(): NonNullable<WebviewProjectState["subsystems"]> {
+  const faceplates = faceplatesForSave();
+  return (state.schematicState.subsystems ?? []).map((definition) => {
+    const { faceplate: _stale, ...rest } = definition as typeof definition & { faceplate?: unknown };
+    const faceplate = faceplates.get(definition.typeId);
+    return (faceplate ? { ...rest, faceplate } : rest) as typeof definition;
+  });
+}
+
 function projectContentSnapshot(): {
   components: WebviewProjectState["components"];
   topology: WebviewProjectState["topology"];
+  visualDocuments: ReturnType<typeof screensForSave>;
   hmiApplication: WebviewProjectState["hmiApplication"];
   calculusLab: WebviewProjectState["calculusLab"];
   controlDesignProject: WebviewProjectState["controlDesignProject"];
@@ -367,8 +384,9 @@ function projectContentSnapshot(): {
 } {
   return {
     components: state.schematicState.components,
-    subsystems: state.schematicState.subsystems ?? [],
+    subsystems: structuredClone(subsystemsForSave()),
     topology: state.schematicState.topology,
+    visualDocuments: structuredClone(screensForSave()),
     hmiApplication: state.schematicState.hmiApplication ? structuredClone(state.schematicState.hmiApplication) : undefined,
     calculusLab: state.schematicState.calculusLab ? structuredClone(state.schematicState.calculusLab) : undefined,
     controlDesignProject: state.schematicState.controlDesignProject ? structuredClone(state.schematicState.controlDesignProject) : undefined,
@@ -385,7 +403,7 @@ function markProjectSaved(): void {
  * um esquemático vazio recém-aberto não deve disparar aviso nenhum. */
 export function isProjectDirty(): boolean {
   const current = projectContentSnapshot();
-  if (!state.lastSavedProjectState) return current.components.length > 0 || current.topology.conductors.length > 0 || Boolean(current.hmiApplication) || Boolean(current.calculusLab) || Boolean(current.controlDesignProject) || Boolean(current.identProject) || (current.subsystems?.length ?? 0) > 0;
+  if (!state.lastSavedProjectState) return current.components.length > 0 || current.topology.conductors.length > 0 || current.visualDocuments.length > 0 || Boolean(current.hmiApplication) || Boolean(current.calculusLab) || Boolean(current.controlDesignProject) || Boolean(current.identProject) || (current.subsystems?.length ?? 0) > 0;
   return JSON.stringify(current) !== JSON.stringify(state.lastSavedProjectState);
 }
 
@@ -512,9 +530,9 @@ async function writeProjectToFile(filePath: string): Promise<boolean> {
     components: state.schematicState.components.map(webviewComponentToProjectComponent),
     wires: [],
     topology: canonicalTopology,
-    hmiApplication: state.schematicState.hmiApplication,
+    visualDocuments: screensForSave(),
     calculusLab: state.schematicState.calculusLab,
-    subsystems: state.schematicState.subsystems ?? [],
+    subsystems: subsystemsForSave(),
     controlDesignProject: state.schematicState.controlDesignProject,
     identProject: state.schematicState.identProject,
     visual: {
@@ -641,6 +659,7 @@ export async function openProjectFile(filePath: string, options: {
   // reconstrução (`registerProjectSubcircuitsInCore`) enquanto outro projeto estava aberto.
   state.schematicState = { ...state.schematicState, catalog: state.schematicState.catalog.filter((entry) => !entry.projectLocal) };
   state.schematicState = projectToWebviewState(legacyPlants.project, path.dirname(filePath));
+  const convertedScreens = adoptProjectScreens(legacyPlants.project);
   await syncDocumentSubsystems();
   await resolveProjectSubcircuitReferences(path.dirname(filePath));
   await options.resolveExternalDeviceReferences?.(path.dirname(filePath));
@@ -651,9 +670,63 @@ export async function openProjectFile(filePath: string, options: {
   options.openSchematicEditor(options.extensionUri);
   options.syncSchematicPanel();
   markProjectSaved();
+  // A HMI antiga e/ou o Laboratório antigo viraram Telas HMI só na memória: o arquivo ainda está no
+  // formato anterior.
+  if (convertedScreens.length > 0) {
+    state.lastSavedProjectState = undefined;
+    refreshDirtyIndicator();
+    const names = convertedScreens.map((title) => `"${title}"`).join(" e ");
+    vscode.window.showInformationMessage(`Este projeto agora usa ${convertedScreens.length > 1 ? "as Telas HMI" : "a Tela HMI"} ${names} (botão no esquemático, Controle › Ferramentas). Salve o projeto para gravar no formato novo.`);
+  }
   await addRecentProjectPath(filePath);
   await rebuildCoreFromSchematicState();
   notifyLegacyPlantsEmbedded(legacyPlants.count, filePath);
+}
+
+/** Telas do projeto aberto: as gravadas (`visualDocuments`) e, num arquivo anterior, a HMI única
+ * (`legacyHmiMigration.ts`) e as atividades do Laboratório (`labScreens.ts`) convertidas em tela + botão.
+ * Devolve os títulos das telas convertidas. */
+function adoptProjectScreens(project: ProjectDocument): string[] {
+  const documents = [...(project.visualDocuments ?? [])];
+  const converted: string[] = [];
+  // Faceplates das definições (`subsystems[].faceplate`) vão para a loja de documentos visuais; a tabela
+  // em memória fica só com o que o Core e o esquemático usam.
+  for (const definition of project.subsystems ?? []) {
+    const faceplate = (definition as { faceplate?: unknown }).faceplate;
+    if (faceplate && typeof faceplate === "object") documents.push(faceplate as VisualDocument);
+  }
+  if ((state.schematicState.subsystems ?? []).some((definition) => "faceplate" in definition)) {
+    state.schematicState = {
+      ...state.schematicState,
+      subsystems: (state.schematicState.subsystems ?? []).map((definition) => {
+        const { faceplate: _moved, ...rest } = definition as typeof definition & { faceplate?: unknown };
+        return rest as typeof definition;
+      }),
+    };
+  }
+  if (project.hmiApplication) {
+    const { document, button } = migrateLegacyHmiApplication(project.hmiApplication, state.schematicState.components,
+      new Set(documents.map((doc) => doc.id)), new Set(state.schematicState.components.map((component) => component.id)));
+    documents.push(document);
+    state.schematicState = { ...state.schematicState, components: [...state.schematicState.components, button], hmiApplication: undefined };
+    converted.push(document.title);
+  }
+  const labActivities = project.calculusLab?.activities ?? [];
+  if (labActivities.length > 0 && !findLabScreen(documents)) {
+    // docs/64 §1: as atividades viram páginas de uma Tela HMI do Laboratório (refeitas, não embrulhadas).
+    const id = uniqueScreenId(new Set(documents.map((doc) => doc.id)));
+    documents.push(createLabScreenDocument(id, LAB_SCREEN_TITLE, labActivities));
+    const components = state.schematicState.components;
+    const button = labScreenButton(id, LAB_SCREEN_TITLE, components, new Set(components.map((component) => component.id)));
+    state.schematicState = { ...state.schematicState, components: [...components, button] };
+    converted.push(LAB_SCREEN_TITLE);
+  }
+  if (labActivities.length > 0 || project.calculusLab) state.schematicState = { ...state.schematicState, calculusLab: undefined };
+  closeAllVisualPanels();
+  resetScreens(documents);
+  reconcileScreenButtons();
+  adoptRestoredVisualPanels();
+  return converted;
 }
 
 /** Arquivos anteriores à rota explícita não gravavam os cantos de um fio roteado automaticamente:

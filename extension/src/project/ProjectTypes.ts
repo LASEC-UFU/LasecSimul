@@ -4,6 +4,7 @@ import type { CalculusLab } from "../ui/webview/lab/activity";
 import type { SubsystemDefinition } from "../ui/webview/subsystemModel";
 import type { ControlDesignProject } from "../ui/webview/controlDesigner/types";
 import type { IdentProject } from "../ident/identification";
+import type { VisualDocument } from "../ui/webview/visualDocument";
 export type { HmiApplication, HmiPage, HmiPageElement, HmiPageNavigationItem } from "../ui/webview/model";
 
 export const LS_PROJ_SCHEMA_VERSION = 2 as const;
@@ -159,7 +160,10 @@ export interface ProjectDocument {
   };
   simulationSettings: ProjectSimulationSettings;
   mcuFirmware?: ProjectFirmwareConfig[];
-  /** Campo aditivo opcional para compatibilidade com projetos anteriores ao modelo HMI. */
+  /** Telas HMI do projeto (documentos visuais, docs/62 §4): cada uma é aberta por um botão
+   * `tools.hmi_screen` do esquemático. Substitui `hmiApplication`. */
+  visualDocuments?: VisualDocument[];
+  /** Formato anterior (uma aplicação HMI única por projeto): só lido, convertido em tela na abertura. */
   hmiApplication?: HmiApplication;
   /** Laboratório de Cálculo (ADR 0015): `schemaVersion` próprio; não altera `LS_PROJ_SCHEMA_VERSION`. */
   calculusLab?: CalculusLab;

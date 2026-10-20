@@ -3,6 +3,8 @@ import * as path from "path";
 import { McuSerialPortEntry, PackageDescriptor, PackageProvenance, PropertySchemaEntry, WebviewComponentCatalogEntry } from "../ui/webview/model";
 import { defaultComponentCatalog } from "../ui/webview/catalog";
 import { controlGraphCatalog } from "./controlGraphCatalog";
+import { mathCatalog } from "./mathCatalog";
+import { toolsCatalog } from "./toolsCatalog";
 import { sanitizeMcuSerialPorts } from "./catalogMetadata";
 import { sanitizePackage, simulidePaintHasRelativeImage } from "./packageSanitizers";
 import { CatalogWorkspaceSection } from "../ui/webview/workspace";
@@ -284,7 +286,7 @@ export function loadUnifiedCatalog(extensionPath: string, requestedLanguage?: st
   // SignalEngine primitives internally. They must be in the visual catalog
   // even though they are hidden from the placement palette.
   const known = new Set(loadedCatalog.map((entry) => entry.typeId));
-  const catalog = [...loadedCatalog, ...controlGraphCatalog.filter((entry) => !known.has(entry.typeId))];
+  const catalog = [...loadedCatalog, ...[...controlGraphCatalog, ...toolsCatalog, ...mathCatalog].filter((entry) => !known.has(entry.typeId))];
   const deviceLibraries = Array.isArray(file.deviceLibraries)
     ? file.deviceLibraries.filter((p): p is string => typeof p === "string" && p.trim().length > 0)
     : DEFAULT_DEVICE_LIBRARIES;

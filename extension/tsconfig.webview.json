@@ -18,6 +18,7 @@
   "include": [
     "src/ui/webview/main.ts",
     "src/ui/webview/palette.ts",
+    "src/ui/webview/windowGeometry.ts",
     "src/ui/webview/messages.ts",
     "src/ui/webview/model.ts",
     "src/ui/webview/paletteTree.ts",

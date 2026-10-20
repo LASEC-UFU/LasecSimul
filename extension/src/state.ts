@@ -10,6 +10,7 @@ import { PropertyInspectorViewProvider } from "./ui/views/PropertyInspectorViewP
 import { TrustStore } from "./trust/TrustStore";
 import { ProjectSerializer } from "./project/ProjectSerializer";
 import { SubcircuitDocument } from "./catalog/subcircuitDocument";
+import type { VisualDocument } from "./ui/webview/visualDocument";
 
 /** Estado mutável de nível de módulo de `extension.ts`, extraído (EX-9,
  * .spec/archive/legacy-v2/lasecsimul-native-devices.spec) pra um objeto único importável por outros módulos de
@@ -41,6 +42,14 @@ export const state = {
   catalogReadyPromise: undefined as Promise<void> | undefined,
   schematicPanel: undefined as SchematicPanel | undefined,
   schematicState: createInitialWebviewState() as WebviewProjectState,
+  /** Telas HMI do PROJETO raiz (documentos visuais, docs/62 §4). Ficam fora de `schematicState` de
+   * propósito: abrir um subsistema troca `schematicState` pelo documento interno e o restaura ao
+   * voltar (`restoreOuterCircuitFromSession`); uma tela editada nesse meio-tempo numa janela própria
+   * não pode ser desfeita por essa troca (docs/60 §6). */
+  visualDocuments: [] as VisualDocument[],
+  /** Destinos ADICIONAIS do tique de telemetria além do esquemático (Painéis Visuais, docs/62 §3.3):
+   * a simulação segue publicando com o esquemático fechado se houver uma tela aberta. */
+  runtimeSinks: new Set<{ postRuntime(message: unknown): void }>(),
   currentProjectFilePath: undefined as string | undefined,
   simulationStatus: "stopped" as SimulationStatus,
   paletteViewProvider: undefined as ComponentPaletteViewProvider | undefined,

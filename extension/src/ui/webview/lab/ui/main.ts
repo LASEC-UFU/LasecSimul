@@ -1,4 +1,6 @@
-/** Entrada da Webview do Laboratório de Cálculo (painel próprio; ver `CalculusLabPanel`). */
+/** Entrada do Laboratório de Cálculo. Roda embutido nas Telas HMI (elemento `graphics.math.activity`,
+ * `<iframe>` do Painel Visual, `__LAB_EMBED__`; ver `src/visual/labEmbeds.ts`); sem `__LAB_EMBED__` é a
+ * Webview autônoma de antes (cabeçalho, abas e editor de atividades próprios). */
 import type { CalculusLab, LabActivity } from "../activity.js";
 import { LAB_MESSAGE_VERSION, type HostToLabMessage, type LabAuditFinding, type LabMode, type LabProjectComponent, type LabToHostMessage } from "../messages.js";
 import { ActivityEditor } from "./ActivityEditor.js";
@@ -10,8 +12,21 @@ import { LimitsView } from "./LimitsView.js";
 import { SensorView } from "./SensorView.js";
 import { TankView } from "./TankView.js";
 
-declare function acquireVsCodeApi(): { postMessage(message: unknown): void; getState(): unknown; setState(state: unknown): void };
-const vscodeApi = acquireVsCodeApi();
+interface LabHostApi { postMessage(message: unknown): void; getState(): unknown; setState(state: unknown): void }
+declare const acquireVsCodeApi: undefined | (() => LabHostApi);
+
+/** Atividade embutida numa Tela HMI (elemento `graphics.math.activity`, docs/62 §6): o laboratório roda
+ * num `<iframe>` do Painel Visual, que repassa as mensagens ao Host com o id do elemento. */
+interface LabEmbedConfig { elementId: string; presentation?: boolean }
+const embed = (window as unknown as { __LAB_EMBED__?: LabEmbedConfig }).__LAB_EMBED__;
+let embeddedState: unknown;
+const vscodeApi: LabHostApi = embed
+  ? {
+    postMessage: (message) => window.parent.postMessage({ __labEmbed: embed.elementId, message }, "*"),
+    getState: () => embeddedState,
+    setState: (next) => { embeddedState = next; },
+  }
+  : acquireVsCodeApi!();
 /** Mensagens enviadas ao Host por tipo (testes: inspeção não pode enviar nada; docs/53 §2.6 itens 9 e 14). */
 const sent: Record<string, number> = {};
 const send = (message: LabToHostMessage): void => { sent[message.type] = (sent[message.type] ?? 0) + 1; vscodeApi.postMessage(message); };
@@ -40,9 +55,12 @@ let editor: ActivityEditor | undefined;
 let components: LabProjectComponent[] = [];
 let findings: LabAuditFinding[] = [];
 let history = { canUndo: false, canRedo: false };
+/** Definição recebida no último `labInit` (modo embutido): distingue troca de modo de definição nova. */
+let lastEmbeddedDefinition: string | undefined;
 
 const stored = (vscodeApi.getState() ?? {}) as { presentation?: boolean };
-document.body.classList.toggle("presentation", Boolean(stored.presentation));
+document.body.classList.toggle("lab-embedded", Boolean(embed));
+document.body.classList.toggle("presentation", Boolean(embed ? embed.presentation : stored.presentation));
 
 const teacherButton = iconButton("teacher", "Modo professor (editar e gravar atividades)", { id: "labTeacher", pressed: false });
 teacherButton.addEventListener("click", () => {
@@ -150,17 +168,29 @@ function closeEditor(): void {
 const isProcessView = (v: View | undefined): v is ProcessView => v instanceof TankView || v instanceof FirstOrderView || v instanceof SensorView;
 
 window.addEventListener("message", (event: MessageEvent<HostToLabMessage>) => {
+  const control = (event.data as { __labEmbedControl?: { presentation?: boolean } } | undefined)?.__labEmbedControl;
+  if (embed && control && event.source === window.parent) {
+    // A casca da Tela HMI decide o modo Apresentação de todas as atividades da página.
+    if (typeof control.presentation === "boolean") document.body.classList.toggle("presentation", control.presentation);
+    return;
+  }
   const message = event.data;
   if (!message || message.version !== LAB_MESSAGE_VERSION) return;
   switch (message.type) {
     case "labInit": {
       lab = message.lab;
       saved = message.saved;
-      activities = structuredClone(lab.activities);
+      const incoming = structuredClone(lab.activities);
+      // Embutida numa Tela HMI, o Host reenvia o `labInit` ao trocar edição/operação. Com a MESMA
+      // definição de antes, o que está na tela (ex.: modelo digitado e não gravado) continua -- como a
+      // troca de modo do painel antigo, que nunca descartava a edição do aluno.
+      const onScreen = embed && lastEmbeddedDefinition === JSON.stringify(incoming) ? view?.currentActivity() : undefined;
+      activities = onScreen ? incoming.map((a) => (a.id === onScreen.id ? onScreen : a)) : incoming;
+      lastEmbeddedDefinition = JSON.stringify(incoming);
       activeId = activities.some((a) => a.id === activeId) ? activeId : message.activeId;
       mode = message.mode;
       teacherButton.setAttribute("aria-pressed", String(mode === "teacher"));
-      editorButton.hidden = mode !== "teacher";
+      editorButton.hidden = mode !== "teacher" || Boolean(embed);
       const project = document.getElementById("labProject") as HTMLElement;
       project.textContent = `${message.projectName ? `· ${message.projectName}` : ""}${saved ? "" : " · atividades-modelo (grave no modo professor para guardar no projeto)"}`;
       renderTabs();

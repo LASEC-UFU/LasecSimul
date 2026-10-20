@@ -21,6 +21,7 @@ import {
 } from "./ProjectTypes";
 import { isIpdLineClass } from "../ui/webview/ipdLineStyle";
 import { defaultHmiNavigationVisual } from "../ui/webview/model";
+import { VISUAL_DOCUMENT_SCHEMA_VERSION, faceplateDocumentId, type VisualDocument } from "../ui/webview/visualDocument";
 import { migrateLegacySignalTunnels } from "../catalog/legacySignalTunnelMigration";
 import { migrateLegacyTankBlocks } from "../catalog/legacyTankMigration";
 import { findSubsystemCycle, hoistEmbeddedSubsystems, isSubsystemTypeId, SubsystemDefinition } from "../ui/webview/subsystemModel";
@@ -301,7 +302,13 @@ function validateSubsystems(value: unknown): SubsystemDefinition[] {
     const typeId = entry.typeId as string;
     if (seen.has(typeId)) throw new Error(`subsystems contém definição duplicada: ${typeId}`);
     seen.add(typeId);
-    return { ...entry, typeId, name: entry.name as string, components: Array.isArray(entry.components) ? entry.components : [] } as SubsystemDefinition;
+    // Faceplate da definição (docs/62 §8): documento visual com id derivado do typeId.
+    const faceplate = entry.faceplate === undefined ? undefined
+      : validateVisualDocument(entry.faceplate, `subsystems[${index}].faceplate`, "faceplate", faceplateDocumentId(typeId));
+    return {
+      ...entry, typeId, name: entry.name as string, components: Array.isArray(entry.components) ? entry.components : [],
+      ...(faceplate ? { faceplate } : {}),
+    } as SubsystemDefinition;
   });
 }
 
@@ -386,6 +393,47 @@ function validateTopology(value: unknown, componentIds: ReadonlySet<string>): Pr
   return { revision: asNumber(value.revision) ?? 0, nodes, conductors };
 }
 
+/** Telas HMI (docs/62 §4): cabeçalho próprio + o MESMO validador de páginas/elementos da HMI. */
+/** Um documento visual (tela ou Faceplate): cabeçalho, páginas pelas regras da HMI e apresentação. */
+function validateVisualDocument(entry: unknown, label: string, kind: VisualDocument["kind"], forcedId?: string): VisualDocument {
+  if (!isObject(entry)) throw new Error(`${label} inválido`);
+  const id = forcedId ?? asString(entry.id);
+  const title = asString(entry.title);
+  if (!id || !title) throw new Error(`${label} precisa de id e title`);
+  if (entry.kind !== undefined && entry.kind !== kind) throw new Error(`${label}.kind desconhecido: ${String(entry.kind)}`);
+  if (entry.schemaVersion !== undefined && entry.schemaVersion !== VISUAL_DOCUMENT_SCHEMA_VERSION) {
+    throw new Error(`${label} usa schemaVersion ${String(entry.schemaVersion)}; esperado ${VISUAL_DOCUMENT_SCHEMA_VERSION}`);
+  }
+  let application: HmiApplication;
+  try {
+    application = validateHmiApplication(entry)!;
+  } catch (err) {
+    throw new Error(`${label} (${title}): ${err instanceof Error ? err.message.replace(/^hmiApplication/, kind === "faceplate" ? "faceplate" : "tela") : String(err)}`);
+  }
+  const presentation = isObject(entry.presentation) ? entry.presentation : {};
+  const fallbackContext = kind === "faceplate" ? "hmi" : "lab";
+  const fullscreenContext = presentation.fullscreenContext === "hmi" || presentation.fullscreenContext === "keep" || presentation.fullscreenContext === "lab"
+    ? presentation.fullscreenContext : fallbackContext;
+  const defaultContext = presentation.defaultContext === "lab" || presentation.defaultContext === "hmi" ? presentation.defaultContext : undefined;
+  const startInOperation = presentation.startInOperation === true ? true : undefined;
+  return {
+    ...application, schemaVersion: VISUAL_DOCUMENT_SCHEMA_VERSION, id, kind, title,
+    presentation: { fullscreenContext, ...(defaultContext ? { defaultContext } : {}), ...(startInOperation ? { startInOperation } : {}) },
+  };
+}
+
+export function validateVisualDocuments(value: unknown): VisualDocument[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new Error("visualDocuments precisa ser uma lista de telas");
+  const ids = new Set<string>();
+  return value.map((entry, index) => {
+    const doc = validateVisualDocument(entry, `visualDocuments[${index}]`, "screen");
+    if (ids.has(doc.id)) throw new Error(`visualDocuments contém tela duplicada: ${doc.id}`);
+    ids.add(doc.id);
+    return doc;
+  });
+}
+
 export class ProjectSerializer {
   async load(filePath: string): Promise<ProjectDocument> {
     const raw = await fs.readFile(filePath, "utf8");
@@ -452,6 +500,7 @@ export class ProjectSerializer {
           }
         : {},
       hmiApplication: validateHmiApplication(parsed.hmiApplication),
+      visualDocuments: validateVisualDocuments(parsed.visualDocuments),
       calculusLab: validateCalculusLab(parsed.calculusLab),
       controlDesignProject: validateControlDesignProject(parsed.controlDesignProject),
       identProject: validateIdentProject(parsed.identProject),
@@ -473,6 +522,7 @@ export class ProjectSerializer {
       topology: project.topology,
       visual: { viewport: project.visual.viewport, wireRoutes: "explicit" as const },
       simulationSettings: project.simulationSettings,
+      visualDocuments: project.visualDocuments && project.visualDocuments.length > 0 ? validateVisualDocuments(project.visualDocuments) : undefined,
       hmiApplication: project.hmiApplication,
       calculusLab: validateCalculusLab(project.calculusLab),
       controlDesignProject: validateControlDesignProject(project.controlDesignProject),

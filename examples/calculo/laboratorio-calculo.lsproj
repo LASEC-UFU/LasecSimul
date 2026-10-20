@@ -2,16 +2,17 @@
   "schemaVersion": 2,
   "components": [
     {
-      "id": "nota-laboratorio",
-      "typeId": "graphics.text",
-      "properties": {
-        "text": "Atividades: Ctrl+Shift+P → LasecSimul: Laboratório de Cálculo",
-        "fontSize": 14,
-        "color": "#1f2937"
-      },
-      "label": "nota-laboratorio",
+      "id": "laboratorio-calculo",
+      "typeId": "tools.hmi_screen",
+      "label": "Laboratório de Cálculo",
       "showValue": false,
       "showDialValue": false,
+      "properties": {
+        "title": "Laboratório de Cálculo",
+        "screenId": "laboratorio",
+        "width": 176,
+        "height": 64
+      },
       "visual": {
         "x": 40,
         "y": 20,
@@ -27,7 +28,7 @@
       "showDialValue": false,
       "visual": {
         "x": 40,
-        "y": 80,
+        "y": 120,
         "rotation": 0
       }
     },
@@ -40,7 +41,7 @@
       "showDialValue": false,
       "visual": {
         "x": 40,
-        "y": 450,
+        "y": 490,
         "rotation": 0
       }
     },
@@ -53,7 +54,7 @@
       "showDialValue": false,
       "visual": {
         "x": 40,
-        "y": 690,
+        "y": 730,
         "rotation": 0
       }
     }
@@ -71,297 +72,376 @@
     }
   },
   "simulationSettings": {},
-  "calculusLab": {
-    "schemaVersion": 1,
-    "activities": [
-      {
-        "id": "funcoes-explorador",
-        "title": "Funções — explorador",
-        "question": "Como os parâmetros a, b e c mudam o gráfico de f(x) = a·x² + b·x + c?",
-        "steps": [
-          {
-            "id": "prever",
-            "phase": "predict",
-            "prompt": "Prever: o que acontece com a parábola quando a fica negativo?",
-            "hints": []
-          },
-          {
-            "id": "raizes",
-            "phase": "explore",
-            "prompt": "Encontre valores de c para os quais f não tem raízes reais.",
-            "hints": []
-          },
-          {
-            "id": "intersecao",
-            "phase": "explore",
-            "prompt": "Onde f cruza g(x) = x + 1? Compare com a tabela.",
-            "hints": []
-          },
-          {
-            "id": "derivada",
-            "phase": "formalize",
-            "prompt": "Ligue f′: onde f′(x) = 0, o que acontece com f?",
-            "hints": []
-          }
-        ],
-        "kind": "functions",
-        "variable": "x",
-        "f": "a x^2 + b x + c",
-        "g": "x + 1",
-        "parameters": [
-          {
-            "name": "a",
-            "min": -3,
-            "max": 3,
-            "step": 0.1,
-            "value": 1
-          },
-          {
-            "name": "b",
-            "min": -5,
-            "max": 5,
-            "step": 0.1,
-            "value": 0
-          },
-          {
-            "name": "c",
-            "min": -5,
-            "max": 5,
-            "step": 0.1,
-            "value": -2
-          }
-        ],
-        "domain": [
-          -5,
-          5
-        ],
-        "range": [
-          -6,
-          10
-        ],
-        "show": {
-          "derivative": false,
-          "integral": false,
-          "asymptotes": true,
-          "roots": true,
-          "table": true
+  "visualDocuments": [
+    {
+      "schemaVersion": 1,
+      "id": "laboratorio",
+      "kind": "screen",
+      "title": "Laboratório de Cálculo",
+      "startPageId": "pagina-funcoes-explorador",
+      "pages": [
+        {
+          "id": "pagina-funcoes-explorador",
+          "name": "Funções — explorador",
+          "width": 1920,
+          "height": 1080,
+          "elements": [
+            {
+              "id": "atividade-funcoes-explorador",
+              "typeId": "graphics.math.activity",
+              "label": "Funções — explorador",
+              "properties": {
+                "width": 1920,
+                "height": 1080,
+                "kind": "functions",
+                "fillPage": true,
+                "plantComponentId": "",
+                "activityJson": "{\"id\":\"funcoes-explorador\",\"title\":\"Funções — explorador\",\"question\":\"Como os parâmetros a, b e c mudam o gráfico de f(x) = a·x² + b·x + c?\",\"steps\":[{\"id\":\"prever\",\"phase\":\"predict\",\"prompt\":\"Prever: o que acontece com a parábola quando a fica negativo?\",\"hints\":[]},{\"id\":\"raizes\",\"phase\":\"explore\",\"prompt\":\"Encontre valores de c para os quais f não tem raízes reais.\",\"hints\":[]},{\"id\":\"intersecao\",\"phase\":\"explore\",\"prompt\":\"Onde f cruza g(x) = x + 1? Compare com a tabela.\",\"hints\":[]},{\"id\":\"derivada\",\"phase\":\"formalize\",\"prompt\":\"Ligue f′: onde f′(x) = 0, o que acontece com f?\",\"hints\":[]}],\"kind\":\"functions\",\"variable\":\"x\",\"f\":\"a x^2 + b x + c\",\"g\":\"x + 1\",\"parameters\":[{\"name\":\"a\",\"min\":-3,\"max\":3,\"step\":0.1,\"value\":1},{\"name\":\"b\",\"min\":-5,\"max\":5,\"step\":0.1,\"value\":0},{\"name\":\"c\",\"min\":-5,\"max\":5,\"step\":0.1,\"value\":-2}],\"domain\":[-5,5],\"range\":[-6,10],\"show\":{\"derivative\":false,\"integral\":false,\"asymptotes\":true,\"roots\":true,\"table\":true},\"integralFrom\":0,\"tableStep\":1}"
+              },
+              "visual": {
+                "x": 0,
+                "y": 0,
+                "width": 1920,
+                "height": 1080,
+                "rotation": 0
+              }
+            }
+          ]
         },
-        "integralFrom": 0,
-        "tableStep": 1
-      },
-      {
-        "id": "sensor-4-20",
-        "title": "Sensor 4–20 mA — função afim",
-        "question": "Que pressão produz 12 mA? O que acontece acima de Pmax?",
-        "steps": [
-          {
-            "id": "prever",
-            "phase": "predict",
-            "prompt": "Prever: com faixa 0–200 kPa, quanto vale I em 50 kPa?",
-            "hints": []
-          },
-          {
-            "id": "doze",
-            "phase": "explore",
-            "prompt": "Mova P até 12 mA. Escreva a inversa P(I).",
-            "hints": []
-          },
-          {
-            "id": "saturacao",
-            "phase": "apply",
-            "prompt": "Passe de Pmax: o que a corrente faz? E o valor sem saturação?",
-            "hints": []
-          }
-        ],
-        "plantComponentId": "sensor-lab",
-        "parameters": {
-          "p": 100,
-          "pmin": 0,
-          "pmax": 200
+        {
+          "id": "pagina-sensor-4-20",
+          "name": "Sensor 4–20 mA — função afim",
+          "width": 1920,
+          "height": 1080,
+          "elements": [
+            {
+              "id": "atividade-sensor-4-20",
+              "typeId": "graphics.math.activity",
+              "label": "Sensor 4–20 mA — função afim",
+              "properties": {
+                "width": 1920,
+                "height": 1080,
+                "kind": "sensor",
+                "fillPage": true,
+                "plantComponentId": "sensor-lab",
+                "activityJson": "{\"id\":\"sensor-4-20\",\"title\":\"Sensor 4–20 mA — função afim\",\"question\":\"Que pressão produz 12 mA? O que acontece acima de Pmax?\",\"steps\":[{\"id\":\"prever\",\"phase\":\"predict\",\"prompt\":\"Prever: com faixa 0–200 kPa, quanto vale I em 50 kPa?\",\"hints\":[]},{\"id\":\"doze\",\"phase\":\"explore\",\"prompt\":\"Mova P até 12 mA. Escreva a inversa P(I).\",\"hints\":[]},{\"id\":\"saturacao\",\"phase\":\"apply\",\"prompt\":\"Passe de Pmax: o que a corrente faz? E o valor sem saturação?\",\"hints\":[]}],\"plantComponentId\":\"sensor-lab\",\"parameters\":{\"p\":100,\"pmin\":0,\"pmax\":200},\"kind\":\"sensor\"}"
+              },
+              "visual": {
+                "x": 0,
+                "y": 0,
+                "width": 1920,
+                "height": 1080,
+                "rotation": 0
+              }
+            }
+          ]
         },
-        "kind": "sensor"
-      },
-      {
-        "id": "limites-velocidade-4s",
-        "title": "Limites — velocidade de subida aos 4 s",
-        "question": "Qual é a velocidade de subida da água aos 4 segundos?",
-        "steps": [
-          {
-            "id": "prever",
-            "phase": "predict",
-            "prompt": "Antes de mexer: a velocidade aos 4 s é maior ou menor que a velocidade média entre 0 e 4 s?",
-            "hints": []
-          },
-          {
-            "id": "aproximar",
-            "phase": "explore",
-            "prompt": "Aproxime Q de P pela direita e pela esquerda. O que acontece com a taxa média?",
-            "hints": [
-              "Use a tabela: compare as linhas com Δt = 0,1 e 0,01."
-            ]
-          },
-          {
-            "id": "formalizar",
-            "phase": "formalize",
-            "prompt": "Escreva o limite do quociente incremental e calcule-o com a calculadora.",
-            "hints": [
-              "Teclado › Cálculo › lim"
-            ]
-          },
-          {
-            "id": "epsilon",
-            "phase": "apply",
-            "prompt": "Modo ε–δ: para ε = 0,1, que δ garante |taxa − L| < ε?",
-            "hints": []
-          }
-        ],
-        "kind": "limits",
-        "variable": "t",
-        "units": {
-          "x": "s",
-          "y": "cm"
+        {
+          "id": "pagina-limites-velocidade-4s",
+          "name": "Limites — velocidade de subida aos 4 s",
+          "width": 1920,
+          "height": 1080,
+          "elements": [
+            {
+              "id": "atividade-limites-velocidade-4s",
+              "typeId": "graphics.math.activity",
+              "label": "Limites — velocidade de subida aos 4 s",
+              "properties": {
+                "width": 1920,
+                "height": 1080,
+                "kind": "limits",
+                "fillPage": true,
+                "plantComponentId": "",
+                "activityJson": "{\"id\":\"limites-velocidade-4s\",\"title\":\"Limites — velocidade de subida aos 4 s\",\"question\":\"Qual é a velocidade de subida da água aos 4 segundos?\",\"steps\":[{\"id\":\"prever\",\"phase\":\"predict\",\"prompt\":\"Antes de mexer: a velocidade aos 4 s é maior ou menor que a velocidade média entre 0 e 4 s?\",\"hints\":[]},{\"id\":\"aproximar\",\"phase\":\"explore\",\"prompt\":\"Aproxime Q de P pela direita e pela esquerda. O que acontece com a taxa média?\",\"hints\":[\"Use a tabela: compare as linhas com Δt = 0,1 e 0,01.\"]},{\"id\":\"formalizar\",\"phase\":\"formalize\",\"prompt\":\"Escreva o limite do quociente incremental e calcule-o com a calculadora.\",\"hints\":[\"Teclado › Cálculo › lim\"]},{\"id\":\"epsilon\",\"phase\":\"apply\",\"prompt\":\"Modo ε–δ: para ε = 0,1, que δ garante |taxa − L| < ε?\",\"hints\":[]}],\"kind\":\"limits\",\"variable\":\"t\",\"units\":{\"x\":\"s\",\"y\":\"cm\"},\"model\":\"0.5t^2\",\"a\":4,\"domain\":[0,6],\"rows\":[1,0.1,0.01],\"initialDelta\":0.5,\"epsilon\":0.5}"
+              },
+              "visual": {
+                "x": 0,
+                "y": 0,
+                "width": 1920,
+                "height": 1080,
+                "rotation": 0
+              }
+            }
+          ]
         },
-        "model": "0.5t^2",
-        "a": 4,
-        "domain": [
-          0,
-          6
-        ],
-        "rows": [
-          1,
-          0.1,
-          0.01
-        ],
-        "initialDelta": 0.5,
-        "epsilon": 0.5
-      },
-      {
-        "id": "eixo-trajetoria",
-        "title": "Eixo — posição, velocidade e aceleração",
-        "question": "Quando a velocidade do eixo é zero e onde a aceleração é máxima?",
-        "steps": [
-          {
-            "id": "prever",
-            "phase": "predict",
-            "prompt": "Prever: em que instante o eixo anda mais rápido?",
-            "hints": []
-          },
-          {
-            "id": "tangente",
-            "phase": "explore",
-            "prompt": "Mova t₀: a reta tangente a x(t) aproxima a posição perto de t₀?",
-            "hints": []
-          },
-          {
-            "id": "derivadas",
-            "phase": "formalize",
-            "prompt": "Compare v(t) com a inclinação de x(t) e a(t) com a inclinação de v(t).",
-            "hints": []
-          }
-        ],
-        "kind": "axis",
-        "L": 200,
-        "T": 4,
-        "t0": 1
-      },
-      {
-        "id": "primeira-ordem",
-        "title": "Primeira ordem — exponencial",
-        "question": "Em que instante a resposta alcança 63,2 % do salto?",
-        "steps": [
-          {
-            "id": "prever",
-            "phase": "predict",
-            "prompt": "Prever: qual o valor final de y para K = 2 e u = 1?",
-            "hints": []
-          },
-          {
-            "id": "tau",
-            "phase": "explore",
-            "prompt": "Ache o instante em que y cruza a linha de 63,2 %. Compare com τ.",
-            "hints": []
-          },
-          {
-            "id": "tangente",
-            "phase": "formalize",
-            "prompt": "A tangente em t = 0 cruza o valor final em t = τ? Verifique.",
-            "hints": []
-          },
-          {
-            "id": "degrau",
-            "phase": "apply",
-            "prompt": "Mude u durante a execução: só o futuro muda?",
-            "hints": []
-          }
-        ],
-        "plantComponentId": "primeira-ordem-lab",
-        "parameters": {
-          "u": 1,
-          "K": 2,
-          "tau": 5,
-          "y0": 0
+        {
+          "id": "pagina-eixo-trajetoria",
+          "name": "Eixo — posição, velocidade e aceleração",
+          "width": 1920,
+          "height": 1080,
+          "elements": [
+            {
+              "id": "atividade-eixo-trajetoria",
+              "typeId": "graphics.math.activity",
+              "label": "Eixo — posição, velocidade e aceleração",
+              "properties": {
+                "width": 1920,
+                "height": 1080,
+                "kind": "axis",
+                "fillPage": true,
+                "plantComponentId": "",
+                "activityJson": "{\"id\":\"eixo-trajetoria\",\"title\":\"Eixo — posição, velocidade e aceleração\",\"question\":\"Quando a velocidade do eixo é zero e onde a aceleração é máxima?\",\"steps\":[{\"id\":\"prever\",\"phase\":\"predict\",\"prompt\":\"Prever: em que instante o eixo anda mais rápido?\",\"hints\":[]},{\"id\":\"tangente\",\"phase\":\"explore\",\"prompt\":\"Mova t₀: a reta tangente a x(t) aproxima a posição perto de t₀?\",\"hints\":[]},{\"id\":\"derivadas\",\"phase\":\"formalize\",\"prompt\":\"Compare v(t) com a inclinação de x(t) e a(t) com a inclinação de v(t).\",\"hints\":[]}],\"kind\":\"axis\",\"L\":200,\"T\":4,\"t0\":1}"
+              },
+              "visual": {
+                "x": 0,
+                "y": 0,
+                "width": 1920,
+                "height": 1080,
+                "rotation": 0
+              }
+            }
+          ]
         },
-        "kind": "firstOrder"
-      },
-      {
-        "id": "tanque-vazao-integral",
-        "title": "Tanque — da vazão à integral",
-        "question": "Com 1 L/s entrando e 0,4 L/s saindo, quanto o volume aumenta em 10 s?",
-        "steps": [
-          {
-            "id": "prever",
-            "phase": "predict",
-            "prompt": "Com 1 L/s entrando e 0,4 L/s saindo, quanto o volume aumenta em 10 s?",
-            "hints": []
-          },
-          {
-            "id": "medir",
-            "phase": "explore",
-            "prompt": "Execute e marque a = 0 s e b = 10 s: ΔV e a inclinação da secante batem com q?",
-            "hints": [
-              "Com q constante, qualquer Riemann é exato — por quê?"
-            ]
-          },
-          {
-            "id": "mudar",
-            "phase": "explore",
-            "prompt": "Mude a vazão de entrada durante a execução: o que acontece com V e com q no instante da mudança?",
-            "hints": []
-          },
-          {
-            "id": "valvula",
-            "phase": "formalize",
-            "prompt": "Reinicie com a válvula (q = k·h): compare Riemann à esquerda, à direita e trapézio com V(b) − V(a).",
-            "hints": []
-          },
-          {
-            "id": "area",
-            "phase": "apply",
-            "prompt": "Mude a área A durante a execução: h salta, V não. Explique com h = V/A.",
-            "hints": []
-          }
-        ],
-        "plantComponentId": "tanque-lab",
-        "parameters": {
-          "qIn": 1,
-          "qOut": 0.4,
-          "area": 0.1,
-          "k": 2,
-          "torr": 1.4,
-          "outlet": 0,
-          "hMax": 1,
-          "v0": 20
+        {
+          "id": "pagina-primeira-ordem",
+          "name": "Primeira ordem — exponencial",
+          "width": 1920,
+          "height": 1080,
+          "elements": [
+            {
+              "id": "atividade-primeira-ordem",
+              "typeId": "graphics.math.activity",
+              "label": "Primeira ordem — exponencial",
+              "properties": {
+                "width": 1920,
+                "height": 1080,
+                "kind": "firstOrder",
+                "fillPage": true,
+                "plantComponentId": "primeira-ordem-lab",
+                "activityJson": "{\"id\":\"primeira-ordem\",\"title\":\"Primeira ordem — exponencial\",\"question\":\"Em que instante a resposta alcança 63,2 % do salto?\",\"steps\":[{\"id\":\"prever\",\"phase\":\"predict\",\"prompt\":\"Prever: qual o valor final de y para K = 2 e u = 1?\",\"hints\":[]},{\"id\":\"tau\",\"phase\":\"explore\",\"prompt\":\"Ache o instante em que y cruza a linha de 63,2 %. Compare com τ.\",\"hints\":[]},{\"id\":\"tangente\",\"phase\":\"formalize\",\"prompt\":\"A tangente em t = 0 cruza o valor final em t = τ? Verifique.\",\"hints\":[]},{\"id\":\"degrau\",\"phase\":\"apply\",\"prompt\":\"Mude u durante a execução: só o futuro muda?\",\"hints\":[]}],\"plantComponentId\":\"primeira-ordem-lab\",\"parameters\":{\"u\":1,\"K\":2,\"tau\":5,\"y0\":0},\"kind\":\"firstOrder\"}"
+              },
+              "visual": {
+                "x": 0,
+                "y": 0,
+                "width": 1920,
+                "height": 1080,
+                "rotation": 0
+              }
+            }
+          ]
         },
-        "kind": "tank",
-        "riemann": {
-          "a": 5,
-          "b": 25,
-          "n": 10,
-          "method": "left"
+        {
+          "id": "pagina-tanque-vazao-integral",
+          "name": "Tanque — da vazão à integral",
+          "width": 1920,
+          "height": 1080,
+          "elements": [
+            {
+              "id": "atividade-tanque-vazao-integral",
+              "typeId": "graphics.math.activity",
+              "label": "Tanque — da vazão à integral",
+              "properties": {
+                "width": 1920,
+                "height": 1080,
+                "kind": "tank",
+                "fillPage": true,
+                "plantComponentId": "tanque-lab",
+                "activityJson": "{\"id\":\"tanque-vazao-integral\",\"title\":\"Tanque — da vazão à integral\",\"question\":\"Com 1 L/s entrando e 0,4 L/s saindo, quanto o volume aumenta em 10 s?\",\"steps\":[{\"id\":\"prever\",\"phase\":\"predict\",\"prompt\":\"Com 1 L/s entrando e 0,4 L/s saindo, quanto o volume aumenta em 10 s?\",\"hints\":[]},{\"id\":\"medir\",\"phase\":\"explore\",\"prompt\":\"Execute e marque a = 0 s e b = 10 s: ΔV e a inclinação da secante batem com q?\",\"hints\":[\"Com q constante, qualquer Riemann é exato — por quê?\"]},{\"id\":\"mudar\",\"phase\":\"explore\",\"prompt\":\"Mude a vazão de entrada durante a execução: o que acontece com V e com q no instante da mudança?\",\"hints\":[]},{\"id\":\"valvula\",\"phase\":\"formalize\",\"prompt\":\"Reinicie com a válvula (q = k·h): compare Riemann à esquerda, à direita e trapézio com V(b) − V(a).\",\"hints\":[]},{\"id\":\"area\",\"phase\":\"apply\",\"prompt\":\"Mude a área A durante a execução: h salta, V não. Explique com h = V/A.\",\"hints\":[]}],\"plantComponentId\":\"tanque-lab\",\"parameters\":{\"qIn\":1,\"qOut\":0.4,\"area\":0.1,\"k\":2,\"torr\":1.4,\"outlet\":0,\"hMax\":1,\"v0\":20},\"kind\":\"tank\",\"riemann\":{\"a\":5,\"b\":25,\"n\":10,\"method\":\"left\"}}"
+              },
+              "visual": {
+                "x": 0,
+                "y": 0,
+                "width": 1920,
+                "height": 1080,
+                "rotation": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "pagina-funcoes-elementos",
+          "name": "Funções — elementos da tela",
+          "width": 1920,
+          "height": 1080,
+          "elements": [
+            {
+              "id": "titulo",
+              "typeId": "graphics.label",
+              "label": "titulo",
+              "properties": {
+                "width": 1400,
+                "height": 56,
+                "text": "Como a, b e c mudam f(x) = a·x² + b·x + c? Arraste os parâmetros.",
+                "fontSize": 30,
+                "align": "start",
+                "stroke": "#e2e8f0"
+              },
+              "visual": {
+                "x": 60,
+                "y": 36,
+                "width": 1400,
+                "height": 56,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "param-a",
+              "typeId": "graphics.math.parameter",
+              "label": "param-a",
+              "properties": {
+                "width": 320,
+                "height": 72,
+                "name": "a",
+                "min": -3,
+                "max": 3,
+                "step": 0.1,
+                "value": 1,
+                "decimals": 1
+              },
+              "visual": {
+                "x": 60,
+                "y": 140,
+                "width": 320,
+                "height": 72,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "param-b",
+              "typeId": "graphics.math.parameter",
+              "label": "param-b",
+              "properties": {
+                "width": 320,
+                "height": 72,
+                "name": "b",
+                "min": -5,
+                "max": 5,
+                "step": 0.1,
+                "value": 0,
+                "decimals": 1
+              },
+              "visual": {
+                "x": 60,
+                "y": 232,
+                "width": 320,
+                "height": 72,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "param-c",
+              "typeId": "graphics.math.parameter",
+              "label": "param-c",
+              "properties": {
+                "width": 320,
+                "height": 72,
+                "name": "c",
+                "min": -5,
+                "max": 5,
+                "step": 0.1,
+                "value": -2,
+                "decimals": 1
+              },
+              "visual": {
+                "x": 60,
+                "y": 324,
+                "width": 320,
+                "height": 72,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "grafico",
+              "typeId": "graphics.math.function_plot",
+              "label": "grafico",
+              "properties": {
+                "width": 1000,
+                "height": 600,
+                "title": "Gráfico",
+                "expression": "a x^2 + b x + c",
+                "expression2": "x + 1",
+                "variable": "x",
+                "xMin": -5,
+                "xMax": 5,
+                "yMin": -6,
+                "yMax": 10,
+                "showGrid": true,
+                "showDerivative": false,
+                "showRoots": true
+              },
+              "visual": {
+                "x": 420,
+                "y": 140,
+                "width": 1000,
+                "height": 600,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "equacao-f",
+              "typeId": "graphics.math.equation",
+              "label": "equacao-f",
+              "properties": {
+                "width": 1000,
+                "height": 84,
+                "lhs": "f(x)",
+                "expression": "a x^2 + b x + c",
+                "variable": "x",
+                "substitute": true,
+                "fontSize": 26
+              },
+              "visual": {
+                "x": 420,
+                "y": 768,
+                "width": 1000,
+                "height": 84,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "equacao-df",
+              "typeId": "graphics.math.equation",
+              "label": "equacao-df",
+              "properties": {
+                "width": 1000,
+                "height": 84,
+                "lhs": "f′(x)",
+                "expression": "2 a x + b",
+                "variable": "x",
+                "substitute": true,
+                "fontSize": 26
+              },
+              "visual": {
+                "x": 420,
+                "y": 872,
+                "width": 1000,
+                "height": 84,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "tabela",
+              "typeId": "graphics.math.value_table",
+              "label": "tabela",
+              "properties": {
+                "width": 400,
+                "height": 600,
+                "expression": "a x^2 + b x + c",
+                "variable": "x",
+                "header": "f(x)",
+                "start": -5,
+                "step": 1,
+                "rows": 11,
+                "decimals": 2
+              },
+              "visual": {
+                "x": 1460,
+                "y": 140,
+                "width": 400,
+                "height": 600,
+                "rotation": 0
+              }
+            }
+          ]
         }
+      ],
+      "presentation": {
+        "fullscreenContext": "lab",
+        "defaultContext": "lab",
+        "startInOperation": true
       }
-    ]
-  },
+    }
+  ],
   "subsystems": [
     {
       "schemaVersion": 3,
@@ -1374,6 +1454,300 @@
       ],
       "origin": {
         "typeId": "subcircuits.process.hydraulic_tank"
+      },
+      "faceplate": {
+        "schemaVersion": 1,
+        "id": "faceplate:subsystem.process.hydraulic_tank",
+        "kind": "faceplate",
+        "title": "Tanque hidráulico (vazão → volume)",
+        "presentation": {
+          "fullscreenContext": "hmi",
+          "startInOperation": true
+        },
+        "startPageId": "faceplate-operacao",
+        "pages": [
+          {
+            "id": "faceplate-operacao",
+            "name": "Operação",
+            "width": 960,
+            "height": 540,
+            "elements": [
+              {
+                "id": "fp-titulo",
+                "typeId": "graphics.label",
+                "label": "fp-titulo",
+                "properties": {
+                  "width": 700,
+                  "height": 36,
+                  "text": "Tanque hidráulico (vazão → volume) — operação",
+                  "fontSize": 22,
+                  "align": "start",
+                  "stroke": "#e2e8f0"
+                },
+                "visual": {
+                  "x": 20,
+                  "y": 14,
+                  "width": 700,
+                  "height": 36,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-tanque",
+                "typeId": "graphics.tank_svg",
+                "label": "fp-tanque",
+                "properties": {
+                  "width": 200,
+                  "height": 300,
+                  "bindSource": "level_percent",
+                  "bindMin": 0,
+                  "bindMax": 100,
+                  "bindUnit": "%"
+                },
+                "visual": {
+                  "x": 30,
+                  "y": 70,
+                  "width": 200,
+                  "height": 300,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-volume",
+                "typeId": "graphics.value_display",
+                "label": "fp-volume",
+                "properties": {
+                  "width": 200,
+                  "height": 56,
+                  "label": "Volume",
+                  "bindSource": "acc",
+                  "bindUnit": "L",
+                  "bindDecimals": 2
+                },
+                "visual": {
+                  "x": 260,
+                  "y": 70,
+                  "width": 200,
+                  "height": 56,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-nivel",
+                "typeId": "graphics.value_display",
+                "label": "fp-nivel",
+                "properties": {
+                  "width": 200,
+                  "height": 56,
+                  "label": "Nível h",
+                  "bindSource": "h",
+                  "bindUnit": "m",
+                  "bindDecimals": 3
+                },
+                "visual": {
+                  "x": 260,
+                  "y": 136,
+                  "width": 200,
+                  "height": 56,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-entrada",
+                "typeId": "graphics.value_display",
+                "label": "fp-entrada",
+                "properties": {
+                  "width": 200,
+                  "height": 56,
+                  "label": "Entrada",
+                  "bindSource": "c_qin",
+                  "bindUnit": "L/s",
+                  "bindDecimals": 2
+                },
+                "visual": {
+                  "x": 260,
+                  "y": 202,
+                  "width": 200,
+                  "height": 56,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-saida",
+                "typeId": "graphics.value_display",
+                "label": "fp-saida",
+                "properties": {
+                  "width": 200,
+                  "height": 56,
+                  "label": "Saída demandada",
+                  "bindSource": "q_out",
+                  "bindUnit": "L/s",
+                  "bindDecimals": 2
+                },
+                "visual": {
+                  "x": 260,
+                  "y": 268,
+                  "width": 200,
+                  "height": 56,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-transbordo",
+                "typeId": "graphics.value_display",
+                "label": "fp-transbordo",
+                "properties": {
+                  "width": 200,
+                  "height": 56,
+                  "label": "Transbordo",
+                  "bindSource": "obs_overflow",
+                  "bindUnit": "L/s",
+                  "bindDecimals": 2
+                },
+                "visual": {
+                  "x": 260,
+                  "y": 334,
+                  "width": 200,
+                  "height": 56,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-area",
+                "typeId": "graphics.value_display",
+                "label": "fp-area",
+                "properties": {
+                  "width": 200,
+                  "height": 56,
+                  "label": "Área A",
+                  "bindSource": "c_area",
+                  "bindUnit": "m²",
+                  "bindDecimals": 3
+                },
+                "visual": {
+                  "x": 260,
+                  "y": 400,
+                  "width": 200,
+                  "height": 56,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-rotulo-entrada",
+                "typeId": "graphics.label",
+                "label": "fp-rotulo-entrada",
+                "properties": {
+                  "width": 400,
+                  "height": 22,
+                  "text": "Vazão de entrada (L/s)",
+                  "fontSize": 14,
+                  "align": "start",
+                  "stroke": "#e2e8f0"
+                },
+                "visual": {
+                  "x": 500,
+                  "y": 60,
+                  "width": 400,
+                  "height": 22,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-slider-entrada",
+                "typeId": "graphics.slider",
+                "label": "fp-slider-entrada",
+                "properties": {
+                  "width": 400,
+                  "height": 40,
+                  "actionTarget": "c_qin",
+                  "actionProperty": "value",
+                  "actionMode": "set",
+                  "actionMin": 0,
+                  "actionMax": 5,
+                  "actionStep": 0.1,
+                  "value": 1,
+                  "bindSource": "c_qin",
+                  "bindMin": 0,
+                  "bindMax": 5
+                },
+                "visual": {
+                  "x": 500,
+                  "y": 84,
+                  "width": 400,
+                  "height": 40,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-rotulo-area",
+                "typeId": "graphics.label",
+                "label": "fp-rotulo-area",
+                "properties": {
+                  "width": 400,
+                  "height": 22,
+                  "text": "Área A (m²)",
+                  "fontSize": 14,
+                  "align": "start",
+                  "stroke": "#e2e8f0"
+                },
+                "visual": {
+                  "x": 500,
+                  "y": 140,
+                  "width": 400,
+                  "height": 22,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-slider-area",
+                "typeId": "graphics.slider",
+                "label": "fp-slider-area",
+                "properties": {
+                  "width": 400,
+                  "height": 40,
+                  "actionTarget": "c_area",
+                  "actionProperty": "value",
+                  "actionMode": "set",
+                  "actionMin": 0.02,
+                  "actionMax": 0.5,
+                  "actionStep": 0.01,
+                  "value": 0.1,
+                  "bindSource": "c_area",
+                  "bindMin": 0.02,
+                  "bindMax": 0.5
+                },
+                "visual": {
+                  "x": 500,
+                  "y": 164,
+                  "width": 400,
+                  "height": 40,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-tendencia",
+                "typeId": "graphics.math.trend",
+                "label": "fp-tendencia",
+                "properties": {
+                  "width": 440,
+                  "height": 290,
+                  "title": "Nível h(t)",
+                  "bindSource": "h",
+                  "bindUnit": "m",
+                  "bindDecimals": 3,
+                  "windowSeconds": 60
+                },
+                "visual": {
+                  "x": 500,
+                  "y": 226,
+                  "width": 440,
+                  "height": 290,
+                  "rotation": 0
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -1620,6 +1994,153 @@
       ],
       "origin": {
         "typeId": "subcircuits.process.first_order_lab"
+      },
+      "faceplate": {
+        "schemaVersion": 1,
+        "id": "faceplate:subsystem.process.first_order_lab",
+        "kind": "faceplate",
+        "title": "Resposta de primeira ordem (laboratório)",
+        "presentation": {
+          "fullscreenContext": "hmi",
+          "startInOperation": true
+        },
+        "startPageId": "faceplate-operacao",
+        "pages": [
+          {
+            "id": "faceplate-operacao",
+            "name": "Operação",
+            "width": 960,
+            "height": 540,
+            "elements": [
+              {
+                "id": "fp-titulo",
+                "typeId": "graphics.label",
+                "label": "fp-titulo",
+                "properties": {
+                  "width": 700,
+                  "height": 36,
+                  "text": "Resposta de primeira ordem (laboratório) — operação",
+                  "fontSize": 22,
+                  "align": "start",
+                  "stroke": "#e2e8f0"
+                },
+                "visual": {
+                  "x": 20,
+                  "y": 14,
+                  "width": 700,
+                  "height": 36,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-u",
+                "typeId": "graphics.value_display",
+                "label": "fp-u",
+                "properties": {
+                  "width": 200,
+                  "height": 56,
+                  "label": "Entrada u",
+                  "bindSource": "c_u",
+                  "bindUnit": "",
+                  "bindDecimals": 2
+                },
+                "visual": {
+                  "x": 40,
+                  "y": 70,
+                  "width": 200,
+                  "height": 56,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-y",
+                "typeId": "graphics.value_display",
+                "label": "fp-y",
+                "properties": {
+                  "width": 200,
+                  "height": 56,
+                  "label": "Saída y",
+                  "bindSource": "fo",
+                  "bindUnit": "",
+                  "bindDecimals": 3
+                },
+                "visual": {
+                  "x": 40,
+                  "y": 136,
+                  "width": 200,
+                  "height": 56,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-rotulo-u",
+                "typeId": "graphics.label",
+                "label": "fp-rotulo-u",
+                "properties": {
+                  "width": 400,
+                  "height": 22,
+                  "text": "Entrada u (degrau)",
+                  "fontSize": 14,
+                  "align": "start",
+                  "stroke": "#e2e8f0"
+                },
+                "visual": {
+                  "x": 300,
+                  "y": 60,
+                  "width": 400,
+                  "height": 22,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-slider-u",
+                "typeId": "graphics.slider",
+                "label": "fp-slider-u",
+                "properties": {
+                  "width": 400,
+                  "height": 40,
+                  "actionTarget": "c_u",
+                  "actionProperty": "value",
+                  "actionMode": "set",
+                  "actionMin": -10,
+                  "actionMax": 10,
+                  "actionStep": 0.5,
+                  "value": 1,
+                  "bindSource": "c_u",
+                  "bindMin": -10,
+                  "bindMax": 10
+                },
+                "visual": {
+                  "x": 300,
+                  "y": 84,
+                  "width": 400,
+                  "height": 40,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-tendencia",
+                "typeId": "graphics.math.trend",
+                "label": "fp-tendencia",
+                "properties": {
+                  "width": 880,
+                  "height": 310,
+                  "title": "Resposta y(t)",
+                  "bindSource": "fo",
+                  "bindDecimals": 3,
+                  "windowSeconds": 30
+                },
+                "visual": {
+                  "x": 40,
+                  "y": 210,
+                  "width": 880,
+                  "height": 310,
+                  "rotation": 0
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -2015,6 +2536,154 @@
       ],
       "origin": {
         "typeId": "subcircuits.process.sensor_4_20"
+      },
+      "faceplate": {
+        "schemaVersion": 1,
+        "id": "faceplate:subsystem.process.sensor_4_20",
+        "kind": "faceplate",
+        "title": "Sensor 4–20 mA (laboratório)",
+        "presentation": {
+          "fullscreenContext": "hmi",
+          "startInOperation": true
+        },
+        "startPageId": "faceplate-operacao",
+        "pages": [
+          {
+            "id": "faceplate-operacao",
+            "name": "Operação",
+            "width": 960,
+            "height": 540,
+            "elements": [
+              {
+                "id": "fp-titulo",
+                "typeId": "graphics.label",
+                "label": "fp-titulo",
+                "properties": {
+                  "width": 700,
+                  "height": 36,
+                  "text": "Sensor 4–20 mA (laboratório) — operação",
+                  "fontSize": 22,
+                  "align": "start",
+                  "stroke": "#e2e8f0"
+                },
+                "visual": {
+                  "x": 20,
+                  "y": 14,
+                  "width": 700,
+                  "height": 36,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-p",
+                "typeId": "graphics.value_display",
+                "label": "fp-p",
+                "properties": {
+                  "width": 200,
+                  "height": 56,
+                  "label": "Pressão P",
+                  "bindSource": "c_p",
+                  "bindUnit": "kPa",
+                  "bindDecimals": 1
+                },
+                "visual": {
+                  "x": 40,
+                  "y": 70,
+                  "width": 200,
+                  "height": 56,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-i",
+                "typeId": "graphics.value_display",
+                "label": "fp-i",
+                "properties": {
+                  "width": 200,
+                  "height": 56,
+                  "label": "Corrente I",
+                  "bindSource": "i_loop",
+                  "bindUnit": "mA",
+                  "bindDecimals": 2
+                },
+                "visual": {
+                  "x": 40,
+                  "y": 136,
+                  "width": 200,
+                  "height": 56,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-rotulo-p",
+                "typeId": "graphics.label",
+                "label": "fp-rotulo-p",
+                "properties": {
+                  "width": 400,
+                  "height": 22,
+                  "text": "Pressão P (kPa)",
+                  "fontSize": 14,
+                  "align": "start",
+                  "stroke": "#e2e8f0"
+                },
+                "visual": {
+                  "x": 300,
+                  "y": 60,
+                  "width": 400,
+                  "height": 22,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-slider-p",
+                "typeId": "graphics.slider",
+                "label": "fp-slider-p",
+                "properties": {
+                  "width": 400,
+                  "height": 40,
+                  "actionTarget": "c_p",
+                  "actionProperty": "value",
+                  "actionMode": "set",
+                  "actionMin": 0,
+                  "actionMax": 300,
+                  "actionStep": 5,
+                  "value": 100,
+                  "bindSource": "c_p",
+                  "bindMin": 0,
+                  "bindMax": 300
+                },
+                "visual": {
+                  "x": 300,
+                  "y": 84,
+                  "width": 400,
+                  "height": 40,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-tendencia",
+                "typeId": "graphics.math.trend",
+                "label": "fp-tendencia",
+                "properties": {
+                  "width": 880,
+                  "height": 310,
+                  "title": "Corrente I(t)",
+                  "bindSource": "i_loop",
+                  "bindUnit": "mA",
+                  "bindDecimals": 2,
+                  "windowSeconds": 30
+                },
+                "visual": {
+                  "x": 40,
+                  "y": 210,
+                  "width": 880,
+                  "height": 310,
+                  "rotation": 0
+                }
+              }
+            ]
+          }
+        ]
       }
     }
   ]

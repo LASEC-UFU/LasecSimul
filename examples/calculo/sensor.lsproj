@@ -2,16 +2,17 @@
   "schemaVersion": 2,
   "components": [
     {
-      "id": "nota-laboratorio",
-      "typeId": "graphics.text",
-      "properties": {
-        "text": "Atividades: Ctrl+Shift+P → LasecSimul: Laboratório de Cálculo",
-        "fontSize": 14,
-        "color": "#1f2937"
-      },
-      "label": "nota-laboratorio",
+      "id": "laboratorio-calculo",
+      "typeId": "tools.hmi_screen",
+      "label": "Laboratório de Cálculo",
       "showValue": false,
       "showDialValue": false,
+      "properties": {
+        "title": "Laboratório de Cálculo",
+        "screenId": "laboratorio",
+        "width": 176,
+        "height": 64
+      },
       "visual": {
         "x": 40,
         "y": 20,
@@ -27,7 +28,7 @@
       "showDialValue": false,
       "visual": {
         "x": 40,
-        "y": 80,
+        "y": 120,
         "rotation": 0
       }
     }
@@ -45,43 +46,50 @@
     }
   },
   "simulationSettings": {},
-  "calculusLab": {
-    "schemaVersion": 1,
-    "activities": [
-      {
-        "id": "sensor-4-20",
-        "title": "Sensor 4–20 mA — função afim",
-        "question": "Que pressão produz 12 mA? O que acontece acima de Pmax?",
-        "steps": [
-          {
-            "id": "prever",
-            "phase": "predict",
-            "prompt": "Prever: com faixa 0–200 kPa, quanto vale I em 50 kPa?",
-            "hints": []
-          },
-          {
-            "id": "doze",
-            "phase": "explore",
-            "prompt": "Mova P até 12 mA. Escreva a inversa P(I).",
-            "hints": []
-          },
-          {
-            "id": "saturacao",
-            "phase": "apply",
-            "prompt": "Passe de Pmax: o que a corrente faz? E o valor sem saturação?",
-            "hints": []
-          }
-        ],
-        "plantComponentId": "sensor-lab",
-        "parameters": {
-          "p": 100,
-          "pmin": 0,
-          "pmax": 200
-        },
-        "kind": "sensor"
+  "visualDocuments": [
+    {
+      "schemaVersion": 1,
+      "id": "laboratorio",
+      "kind": "screen",
+      "title": "Laboratório de Cálculo",
+      "startPageId": "pagina-sensor-4-20",
+      "pages": [
+        {
+          "id": "pagina-sensor-4-20",
+          "name": "Sensor 4–20 mA — função afim",
+          "width": 1920,
+          "height": 1080,
+          "elements": [
+            {
+              "id": "atividade-sensor-4-20",
+              "typeId": "graphics.math.activity",
+              "label": "Sensor 4–20 mA — função afim",
+              "properties": {
+                "width": 1920,
+                "height": 1080,
+                "kind": "sensor",
+                "fillPage": true,
+                "plantComponentId": "sensor-lab",
+                "activityJson": "{\"id\":\"sensor-4-20\",\"title\":\"Sensor 4–20 mA — função afim\",\"question\":\"Que pressão produz 12 mA? O que acontece acima de Pmax?\",\"steps\":[{\"id\":\"prever\",\"phase\":\"predict\",\"prompt\":\"Prever: com faixa 0–200 kPa, quanto vale I em 50 kPa?\",\"hints\":[]},{\"id\":\"doze\",\"phase\":\"explore\",\"prompt\":\"Mova P até 12 mA. Escreva a inversa P(I).\",\"hints\":[]},{\"id\":\"saturacao\",\"phase\":\"apply\",\"prompt\":\"Passe de Pmax: o que a corrente faz? E o valor sem saturação?\",\"hints\":[]}],\"plantComponentId\":\"sensor-lab\",\"parameters\":{\"p\":100,\"pmin\":0,\"pmax\":200},\"kind\":\"sensor\"}"
+              },
+              "visual": {
+                "x": 0,
+                "y": 0,
+                "width": 1920,
+                "height": 1080,
+                "rotation": 0
+              }
+            }
+          ]
+        }
+      ],
+      "presentation": {
+        "fullscreenContext": "lab",
+        "defaultContext": "lab",
+        "startInOperation": true
       }
-    ]
-  },
+    }
+  ],
   "subsystems": [
     {
       "schemaVersion": 3,
@@ -476,6 +484,154 @@
       ],
       "origin": {
         "typeId": "subcircuits.process.sensor_4_20"
+      },
+      "faceplate": {
+        "schemaVersion": 1,
+        "id": "faceplate:subsystem.process.sensor_4_20",
+        "kind": "faceplate",
+        "title": "Sensor 4–20 mA (laboratório)",
+        "presentation": {
+          "fullscreenContext": "hmi",
+          "startInOperation": true
+        },
+        "startPageId": "faceplate-operacao",
+        "pages": [
+          {
+            "id": "faceplate-operacao",
+            "name": "Operação",
+            "width": 960,
+            "height": 540,
+            "elements": [
+              {
+                "id": "fp-titulo",
+                "typeId": "graphics.label",
+                "label": "fp-titulo",
+                "properties": {
+                  "width": 700,
+                  "height": 36,
+                  "text": "Sensor 4–20 mA (laboratório) — operação",
+                  "fontSize": 22,
+                  "align": "start",
+                  "stroke": "#e2e8f0"
+                },
+                "visual": {
+                  "x": 20,
+                  "y": 14,
+                  "width": 700,
+                  "height": 36,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-p",
+                "typeId": "graphics.value_display",
+                "label": "fp-p",
+                "properties": {
+                  "width": 200,
+                  "height": 56,
+                  "label": "Pressão P",
+                  "bindSource": "c_p",
+                  "bindUnit": "kPa",
+                  "bindDecimals": 1
+                },
+                "visual": {
+                  "x": 40,
+                  "y": 70,
+                  "width": 200,
+                  "height": 56,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-i",
+                "typeId": "graphics.value_display",
+                "label": "fp-i",
+                "properties": {
+                  "width": 200,
+                  "height": 56,
+                  "label": "Corrente I",
+                  "bindSource": "i_loop",
+                  "bindUnit": "mA",
+                  "bindDecimals": 2
+                },
+                "visual": {
+                  "x": 40,
+                  "y": 136,
+                  "width": 200,
+                  "height": 56,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-rotulo-p",
+                "typeId": "graphics.label",
+                "label": "fp-rotulo-p",
+                "properties": {
+                  "width": 400,
+                  "height": 22,
+                  "text": "Pressão P (kPa)",
+                  "fontSize": 14,
+                  "align": "start",
+                  "stroke": "#e2e8f0"
+                },
+                "visual": {
+                  "x": 300,
+                  "y": 60,
+                  "width": 400,
+                  "height": 22,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-slider-p",
+                "typeId": "graphics.slider",
+                "label": "fp-slider-p",
+                "properties": {
+                  "width": 400,
+                  "height": 40,
+                  "actionTarget": "c_p",
+                  "actionProperty": "value",
+                  "actionMode": "set",
+                  "actionMin": 0,
+                  "actionMax": 300,
+                  "actionStep": 5,
+                  "value": 100,
+                  "bindSource": "c_p",
+                  "bindMin": 0,
+                  "bindMax": 300
+                },
+                "visual": {
+                  "x": 300,
+                  "y": 84,
+                  "width": 400,
+                  "height": 40,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-tendencia",
+                "typeId": "graphics.math.trend",
+                "label": "fp-tendencia",
+                "properties": {
+                  "width": 880,
+                  "height": 310,
+                  "title": "Corrente I(t)",
+                  "bindSource": "i_loop",
+                  "bindUnit": "mA",
+                  "bindDecimals": 2,
+                  "windowSeconds": 30
+                },
+                "visual": {
+                  "x": 40,
+                  "y": 210,
+                  "width": 880,
+                  "height": 310,
+                  "rotation": 0
+                }
+              }
+            ]
+          }
+        ]
       }
     }
   ]

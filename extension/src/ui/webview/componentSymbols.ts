@@ -12,6 +12,7 @@
 
 import { ComponentViewSpec, JUNCTION_TYPE_ID, PackageDescriptor, PackageDynamicPinGroup, PackageNumberValue, PackagePin, PackageShape, SIMULIDE_PACKAGE_GRID_UNIT, SimulidePaintSpec, SimulideQtWidgetSpec, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, ViewSpecHitTest, ViewSpecInteraction, ViewSpecProjection, WebviewComponentModel } from "./model.js";
 import { simulidePaintToPackageShapes } from "./simulidePaint.js";
+import { MATH_DEFAULT_BOX, activityPlaceholderSvg, isMathTypeId, mathWidgetSvg, MATH_ACTIVITY_TYPE_ID } from "./mathWidgets.js";
 import { decodeSegmentLcd, segmentLcdSvg } from "./segmentLcd.js";
 
 export interface ComponentBox {
@@ -1765,6 +1766,7 @@ function packageBodySvg(resolved: ResolvedPackage, componentId?: string, propert
 const DEFAULT_BOX: ComponentBox = { width: 70, height: 40 };
 
 function builtinComponentBox(typeId: string): ComponentBox | undefined {
+  if (isMathTypeId(typeId)) return MATH_DEFAULT_BOX[typeId] ? { ...MATH_DEFAULT_BOX[typeId]! } : undefined;
   switch (typeId) {
     case "plc.instance": return { width: 96, height: 96 };
     case JUNCTION_TYPE_ID: return { width: 0, height: 0 };
@@ -1805,6 +1807,12 @@ function builtinComponentBox(typeId: string): ComponentBox | undefined {
 function propertyDrivenBox(typeId: string, properties: Record<string, unknown> | undefined): ComponentBox | undefined {
   if (!properties) return undefined;
   const numberOf = (key: string): number | undefined => (typeof properties[key] === "number" ? (properties[key] as number) : undefined);
+  if (isMathTypeId(typeId)) {
+    // Elementos matemáticos (`mathWidgets.ts`): caixa = `width`/`height`, como os retângulos.
+    const width = numberOf("width");
+    const height = numberOf("height");
+    return width === undefined || height === undefined ? undefined : { width: Math.max(24, width), height: Math.max(16, height) };
+  }
   switch (typeId) {
     case TUNNEL_TYPE_ID:
       return tunnelBox(properties);
@@ -2178,6 +2186,11 @@ export function componentSymbolSvg(typeId: string, properties?: Record<string, u
   const x1 = compactTwoPin ? 5 : LEAD_MARGIN;
   const x2 = compactTwoPin ? box.width - 5 : box.width - LEAD_MARGIN;
   const midX = box.width / 2;
+
+  if (isMathTypeId(typeId)) {
+    // A atividade é desenhada pelo próprio Laboratório num `<iframe>` por cima desta placa (main.ts).
+    return typeId === MATH_ACTIVITY_TYPE_ID ? activityPlaceholderSvg(properties ?? {}, box) : mathWidgetSvg(typeId, properties ?? {}, box) ?? "";
+  }
 
   switch (typeId) {
     case TUNNEL_TYPE_ID:

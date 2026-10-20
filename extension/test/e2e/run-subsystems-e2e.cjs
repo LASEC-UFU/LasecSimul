@@ -1,6 +1,7 @@
 // E2E (VS Code real): subsistemas internos x sistemas externos (docs/59-subsistemas-internos-e-sistemas-externos.md).
 // Sessão 1: criar 3 subsistemas pela UI (um deles com subsistema aninhado), navegar (caminho/voltar um
-// nível), desfazer/refazer, inserir outra instância, renomear, duplicar, exportar, copiar/colar entre
+// nível), desfazer/refazer, inserir outra instância, renomear, duplicar, exportar, copiar/colar (pelos menus do
+// LasecSimul, nunca pela área de transferência do sistema) entre
 // projetos (regras A/B/C/D), incorporar sistema externo, excluir definição em uso.
 // Sessão 2: reabrir; usar o exportado em outro projeto; projeto copiado para outra pasta sem os arquivos
 // de origem.
@@ -208,10 +209,32 @@ async function modalButton(workbench, label, timeout = 20000) {
   await sleep(800);
 }
 
+/** Item do menu de contexto do LasecSimul aberto no `locator` (botão direito em `position`). */
+async function menuItem(frame, locator, label, position) {
+  await locator.click({ button: "right", ...(position ? { position } : {}) });
+  const item = frame.locator(".context-menu__item", { has: frame.locator(".context-menu__label", { hasText: label }) }).first();
+  await item.waitFor({ state: "visible", timeout: 8000 });
+  await item.click();
+}
+
 async function keys(frame, workbench, combo) {
-  // Copiar precisa da seleção: o foco já está na Webview (último clique foi num componente).
-  if (combo !== "Control+C") await clickEmpty(frame);
+  frame = await liveFrame(frame);
+  // Copiar/Colar pelos MENUS do LasecSimul (mesmas funções do Ctrl+C/Ctrl+V da Webview): o atalho de
+  // teclado passa pela área de transferência do sistema, que nesta máquina é a do usuário.
+  if (combo === "Control+C") {
+    await menuItem(frame, frame.locator(".component.selected").first(), "Copiar", { x: 6, y: 6 });
+    await sleep(1200);
+    return;
+  }
+  await clickEmpty(frame);
   await sleep(200);
+  if (combo === "Control+V") {
+    const canvas = frame.locator(".canvas").first();
+    const box = await canvas.boundingBox();
+    await menuItem(frame, canvas, "Colar", { x: 30, y: Math.max(30, box.height - 30) });
+    await sleep(1200);
+    return;
+  }
   await workbench.keyboard.press(combo);
   await sleep(1200);
 }

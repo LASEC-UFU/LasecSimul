@@ -1,0 +1,70 @@
+   0.0 drv main                         {"url":"vscode-file://vscode-app/c:/SourceCode/LasecSimul/extension/.vscode-test/vscode-win32-x64-archive-1.128.0/fc3def6774/resources/app/out/vs/code/electron-browser/workbench/workbench.html"}
+   3.9 ext start                        {"vscodeVersion":"1.128.0"}
+   3.9 ext commands                     {"present":[["workbench.action.moveEditorToNewWindow",true],["workbench.action.copyEditorToNewWindow",true],["workbench.action.restoreEditorsToMainWindow",true],["workbench.action.toggleFullScreen",true],["workbench.action.enableCompactAuxiliaryWindow",true],[
+   4.4 ext webview:ready                tag= boots=1 pos=352,140 outer=1216x808 inner=852x708 ticks=0 vis=visible
+   4.4 ext docked                       {"viewColumn":1,"active":true,"tabs":[{"viewColumn":1,"isActive":true,"tabs":["Spike HMI"]}]}
+   5.0 ext webview:ready                tag= boots=2 pos=440,160 outer=1040x776 inner=1024x676 ticks=0 vis=visible
+   5.0 ext undocked                     {"reloaded":true,"viewColumn":2,"active":true,"tabs":[{"viewColumn":1,"isActive":true,"tabs":[]},{"viewColumn":2,"isActive":false,"tabs":["Spike HMI"]}]}
+   5.8 ext webview:measure              tag=undocked-normal boots=2 pos=440,160 outer=1040x776 inner=1024x676 ticks=0 vis=visible
+   5.8 ext phase                        {"name":"undocked"}
+   5.8 drv phase                        {"name":"undocked"}
+   5.9 drv pages:undocked               pages=2 [MAIN 1216x808] [aux 1040x776]
+   8.9 ext webview:measure              tag=fullscreen-on boots=2 pos=0,0 outer=1920x1080 inner=1920x988 ticks=0 vis=visible
+   8.9 ext phase                        {"name":"fullscreen-on"}
+   8.9 drv phase                        {"name":"fullscreen-on"}
+   8.9 drv pages:fullscreen-on          pages=2 [MAIN 1216x808] [aux 1920x1080]
+  11.9 ext webview:measure              tag=fullscreen-off boots=2 pos=440,160 outer=1040x776 inner=1024x676 ticks=0 vis=visible
+  11.9 ext phase                        {"name":"click-requestFullscreen"}
+  12.0 drv phase                        {"name":"click-requestFullscreen"}
+  12.0 drv pages:click-requestFullscreen pages=2 [MAIN 1216x808] [aux 1040x776]
+  12.2 ext webview:fsResult             tag= boots=2 pos=440,160 outer=1040x776 inner=1024x676 ticks=0 vis=visible ERR=TypeError: Disallowed by permissions policy
+  12.2 ext requestFullscreenResult      {"result":{"type":"fsResult","ok":false,"error":"TypeError: Disallowed by permissions policy","geo":{"boots":2,"screenX":440,"screenY":160,"outerWidth":1040,"outerHeight":776,"innerWidth":1024,"innerHeight":676,"dpr":1,"screen":{"width":1920,"height":1080,"ava
+  12.2 drv clickedFs                    {"clicked":true}
+  13.9 ext webview:measure              tag=compact boots=2 pos=440,160 outer=1040x776 inner=1024x738 ticks=0 vis=visible
+  13.9 ext phase                        {"name":"compact"}
+  14.0 drv phase                        {"name":"compact"}
+  14.1 drv pages:compact                pages=2 [MAIN 1216x808] [aux 1040x776]
+  17.0 ext webview:measure              tag=compact-fullscreen boots=2 pos=0,0 outer=1920x1080 inner=1920x1050 ticks=0 vis=visible
+  17.0 ext phase                        {"name":"compact-fullscreen"}
+  17.1 drv phase                        {"name":"compact-fullscreen"}
+  17.1 drv pages:compact-fullscreen     pages=2 [MAIN 1216x808] [aux 1920x1080]
+  20.1 ext webview:measure              tag=compact-fullscreen-off boots=2 pos=440,160 outer=1040x776 inner=1024x738 ticks=0 vis=visible
+  20.1 ext phase                        {"name":"maximize"}
+  20.1 drv phase                        {"name":"maximize"}
+  20.1 drv pages:maximize               pages=2 [MAIN 1216x808] [aux 1040x776]
+  20.2 drv maximizeError                {"e":"cdpSession.send: Protocol error (Browser.getWindowForTarget): 'Browser.getWindowForTarget' wasn't found"}
+  21.7 ext webview:measure              tag=maximized boots=2 pos=440,160 outer=1040x776 inner=1024x738 ticks=0 vis=visible
+  24.6 ext webview:measure              tag=maximized-fullscreen boots=2 pos=0,0 outer=1920x1080 inner=1920x1050 ticks=0 vis=visible
+  27.1 ext webview:measure              tag=maximized-fullscreen-off boots=2 pos=440,160 outer=1040x776 inner=1024x738 ticks=0 vis=visible
+  27.1 ext phase                        {"name":"minimize-main"}
+  27.3 drv phase                        {"name":"minimize-main"}
+  27.3 drv pages:minimize-main          pages=2 [MAIN 1216x808] [aux 1040x776]
+  27.3 drv minimizeError                {"e":"cdpSession.send: Protocol error (Browser.getWindowForTarget): 'Browser.getWindowForTarget' wasn't found"}
+  29.5 ext webview:ticks                tag= boots=2 pos=440,160 outer=1040x776 inner=1024x738 ticks=50 vis=visible
+  29.5 ext phase                        {"name":"restore-main"}
+  29.6 drv phase                        {"name":"restore-main"}
+  29.7 drv pages:restore-main           pages=2 [MAIN 1216x808] [aux 1040x776]
+  29.7 drv restoreError                 {"e":"cdpSession.send: Protocol error (Browser.getWindowForTarget): 'Browser.getWindowForTarget' wasn't found"}
+  30.2 ext webview:ready                tag= boots=3 pos=352,140 outer=1216x808 inner=852x708 ticks=0 vis=visible
+  31.7 ext dockedByReveal               {"reloaded":true,"viewColumn":1,"active":true,"tabs":[{"viewColumn":1,"isActive":true,"tabs":["Spike HMI"]}]}
+  31.7 ext phase                        {"name":"docked-by-reveal"}
+  31.8 drv phase                        {"name":"docked-by-reveal"}
+  31.8 drv pages:docked-by-reveal       pages=1 [MAIN 1216x808]
+  32.8 ext webview:ready                tag= boots=4 pos=440,160 outer=1040x776 inner=1024x676 ticks=0 vis=visible
+  33.9 ext webview:ready                tag= boots=5 pos=352,140 outer=1216x808 inner=852x708 ticks=0 vis=visible
+  35.4 ext dockedByRestore              {"reloaded":true,"viewColumn":1,"tabs":[{"viewColumn":1,"isActive":true,"tabs":["Spike HMI"]}]}
+  35.4 ext phase                        {"name":"docked-by-restore"}
+  35.4 drv phase                        {"name":"docked-by-restore"}
+  35.4 drv pages:docked-by-restore      pages=1 [MAIN 1216x808]
+  36.3 ext webview:ready                tag= boots=6 pos=440,160 outer=1040x776 inner=1024x676 ticks=0 vis=visible
+  38.6 ext secondPanelActiveColumn      {"firstViewColumn":2,"secondViewColumn":2,"tabs":[{"viewColumn":1,"isActive":true,"tabs":[]},{"viewColumn":2,"isActive":false,"tabs":["Spike HMI","Spike HMI 2"]}]}
+  38.6 ext phase                        {"name":"second-panel"}
+  38.7 drv phase                        {"name":"second-panel"}
+  38.7 drv pages:second-panel           pages=2 [MAIN 1216x808] [aux 1040x776]
+  39.2 ext panelDisposed                {}
+  40.7 ext phase                        {"name":"disposed"}
+  40.7 drv phase                        {"name":"disposed"}
+  40.7 drv pages:disposed               pages=1 [MAIN 1216x808]
+  41.1 ext done                         {}
+  41.2 drv pages:final                  pages=1 [MAIN 1216x808]
+  41.2 drv finished                     {"done":true}

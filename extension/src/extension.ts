@@ -9,12 +9,10 @@ import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { PidTuningPanel } from "./ui/panels/PidTuningPanel";
-import { CalculusLabPanel } from "./ui/panels/CalculusLabPanel";
 import { ControlDesignerPanel } from "./ui/panels/ControlDesignerPanel";
 import { IdentPanel } from "./ui/panels/IdentPanel";
 import { IdentAcquisition } from "./ident/acquisition";
 import { controllerToBlockProperties, selectedSeriesNetworkToTransfer, signalBlockSignature, signalBlockToTransfer } from "./ui/controlDesignerCircuit";
-import { createCalculusLabHost } from "./lab/calculusLabHost";
 import { PidSeriesFeed } from "./lab/pidSeries";
 import { createInitialWebviewState } from "./ui/webview/catalog";
 import { CanonicalTopologyDocument, JUNCTION_TYPE_ID, PackageDescriptor, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, endpointId, endpointPinId, portEndpoint } from "./ui/webview/model";
@@ -148,6 +146,13 @@ import { maybeOfferMachineNetworkSetup, registerMachineNetworkSetupCommand } fro
 import { resolveNetworkMode } from "./network/networkMode";
 import { startMdnsResponder } from "./network/mdnsResponder";
 import { commitDslCommand, commitOpenDslIfPresent, onDslDraftOpenChanged, openDslCommand, registerDslDraftCloseTracking } from "./dsl/dslCommands";
+import {
+  configureVisualPanels, noteSchematicActive, openDefinitionFaceplate, openInstanceFaceplate, openScreenForButton, registerVisualPanelSerializer, republishScreenStates,
+  routePlacementToVisualPanel, setMainWindowGeometry, syncVisualPanelsWithProject,
+  openCalculusLabScreen,
+} from "./visual/visualPanels";
+import { getScreen, reconcileScreenButtons, uniqueTitleForNewScreen } from "./visual/screenStore";
+import { HMI_SCREEN_TYPE_ID, faceplateDocumentId, screenIdOf } from "./ui/webview/visualDocument";
 
 let propertyInspectorView: PropertyInspectorViewProvider | undefined;
 import {
@@ -255,7 +260,6 @@ function syncSchematicPanel(): void {
   lasecPlotManager?.sync();
   serialTerminalManager?.sync();
   serialPortManager?.sync();
-  CalculusLabPanel.current?.syncFromProject();
   const lastSynced = state.lastSyncedProjectState;
   if (lastSynced &&
       (lastSynced.components !== state.schematicState.components || lastSynced.topology.conductors !== state.schematicState.topology.conductors) &&
@@ -265,6 +269,8 @@ function syncSchematicPanel(): void {
   state.schematicPanel?.setLanguage(state.schematicState.locale ?? currentLasecSimulLanguage());
   const patch = computeProjectStatePatch();
   if (patch) state.schematicPanel?.postMessage({ version: 1, type: "syncStatePatch", patch });
+  reconcileScreenButtons();
+  syncVisualPanelsWithProject();
   ControlDesignerPanel.syncBindings(state.schematicState.controlDesignProject, state.schematicState.components);
   state.schematicPanel?.postMessage({ version: 1, type: "simulationStatus", status: state.simulationStatus });
   refreshDirtyIndicator();
@@ -286,6 +292,7 @@ function openSchematicEditor(extensionUri: vscode.Uri): void {
   state.lastSyncedProjectState = state.schematicState;
   void setSchematicOpenContext(true);
   setSimulationStatus(state.simulationStatus);
+  republishScreenStates();
 }
 
 function setEffectiveCatalog(libraryEntries: WebviewComponentCatalogEntry[]): void {
@@ -1404,7 +1411,12 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       if (topologyChanged) {
         syncSchematicPanel();
         state.schematicPanel?.postMessage({ version: 1, type: "topologyRevision", revision });
-      } else refreshDirtyIndicator();
+      } else {
+        // Ex.: título de um botão de Tela HMI editado no Inspector local (sem mexer em topologia).
+        reconcileScreenButtons();
+        syncVisualPanelsWithProject();
+        refreshDirtyIndicator();
+      }
       return;
     }
     case "requestAddComponent": {
@@ -2024,6 +2036,12 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestOpenSubsystemPanel":
       void openSubcircuitForEditingCommand(message.sourceId, "symbol");
       return;
+    case "requestOpenInstanceFaceplate":
+      void openInstanceFaceplate(message.componentId);
+      return;
+    case "requestOpenDefinitionFaceplate":
+      void openDefinitionFaceplate(message.typeId);
+      return;
     case "requestInsertSubsystemInstance":
       void insertSubsystemInstance(message.typeId);
       return;
@@ -2049,7 +2067,39 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestCloseSubcircuitEditor":
       void closeSubcircuitEditorCommand();
       return;
+    case "requestOpenVisualScreen":
+      void openScreenForButton(message.componentId, message.mode);
+      return;
+    case "requestScreenAction":
+      void screenButtonAction(message.componentId, message.action);
+      return;
   }
+}
+
+/** Menu do botão "Tela HMI" no esquemático: renomear (botão e tela juntos) ou duplicar (cópia
+ * independente do documento, docs/62 §5.2). Excluir é o "Remover" comum do componente. */
+async function screenButtonAction(componentId: string, action: "rename" | "duplicate"): Promise<void> {
+  const button = state.schematicState.components.find((component) => component.id === componentId && component.typeId === HMI_SCREEN_TYPE_ID);
+  const documentId = screenIdOf(button);
+  if (!button || !documentId) return;
+  if (action === "rename") {
+    const current = typeof button.properties.title === "string" ? button.properties.title : "Tela HMI";
+    const title = (await vscode.window.showInputBox({ prompt: "Título da Tela HMI", value: current, validateInput: (value) => (value.trim() ? undefined : "O título não pode ficar vazio") }))?.trim();
+    if (!title || title === current) return;
+    handleWebviewMessage({ version: 1, type: "requestUpdateProperty", componentId, name: "title", value: title });
+    return;
+  }
+  const newScreenId = `tela-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const title = uniqueTitleForNewScreen(typeof button.properties.title === "string" ? button.properties.title : "Tela HMI");
+  const copy = {
+    ...structuredClone(button),
+    id: nextId("component"),
+    x: button.x + 24,
+    y: button.y + 80,
+    label: title,
+    properties: { ...button.properties, title, screenId: newScreenId, screenSource: documentId },
+  };
+  handleWebviewMessage({ version: 1, type: "requestInsertItems", scope: "schematic", components: [copy], wires: [] });
 }
 
 /** Disparado por `lasecsimul.newSubcircuit` (comando VSCode) -- envia `triggerCreateSubcircuitFromSelection`
@@ -2414,10 +2464,13 @@ async function exportSubsystemDefinition(typeId: string): Promise<void> {
   if (!exported) return;
   // Sistemas externos usados por referência lá dentro: caminho relativo ao arquivo exportado.
   const toExportedFile = (refPath: string) => relativeRefPath(path.dirname(filePath))(path.isAbsolute(refPath) ? refPath : path.resolve(currentDocumentDir(), refPath));
+  // O Faceplate da definição viaja junto (`faceplate` no `.lssubcircuit`, docs/62 §8.1).
+  const faceplate = getScreen(faceplateDocumentId(typeId));
   const document = {
     ...exported,
     components: mapComponentRefPaths(Array.isArray(exported.components) ? exported.components as SubsystemComponentLike[] : [], toExportedFile),
     ...(Array.isArray(exported.subsystems) ? { subsystems: mapTableRefPaths(manifestSubsystems(exported), toExportedFile) } : {}),
+    ...(faceplate ? { faceplate } : {}),
   };
   try {
     fs.writeFileSync(filePath, `${JSON.stringify(document, null, 2)}\n`, "utf8");
@@ -3075,7 +3128,8 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   context.subscriptions.push(
     { dispose: disposeDeviceReferenceWatchers },
     vscode.commands.registerCommand("lasecsimul.showSimulationLog", () => showSimulationLogChannel()),
-    vscode.commands.registerCommand("lasecsimul.openCalculusLab", () => { CalculusLabPanel.show(context.extensionUri, createCalculusLabHost((message) => CalculusLabPanel.current?.post(message))); }),
+    // O Laboratório de Cálculo é uma Tela HMI (docs/62 §6.3): as atividades são páginas da tela.
+    vscode.commands.registerCommand("lasecsimul.openCalculusLab", () => openCalculusLabScreen(() => { syncSchematicPanel(); refreshDirtyIndicator(); })),
     vscode.commands.registerCommand("lasecsimul.openControlDesigner", () => {
       ControlDesignerPanel.show(context, state.schematicState.controlDesignProject, (project) => {
       state.schematicState = { ...state.schematicState, controlDesignProject: project };
@@ -3316,6 +3370,8 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   });
 
   const addPaletteComponent = (typeId: string) => {
+    // Uma Tela HMI em edição (acoplada ou numa janela flutuante) recebe os elementos gráficos (docs/61 §8).
+    if (routePlacementToVisualPanel(typeId)) return;
     if (!state.schematicPanel) openSchematicEditor(context.extensionUri);
     state.schematicPanel?.postMessage({ version: 1, type: "beginComponentPlacement", typeId });
   };
@@ -3327,8 +3383,12 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     addPaletteComponent,
     (item) => removeRegisteredCatalogItemCommand(item, catalogCommandOptions()),
     (command) => { void vscode.commands.executeCommand(command); },
+    (geometry) => setMainWindowGeometry(geometry),
   );
   context.subscriptions.push(registerDslDraftCloseTracking());
+  context.subscriptions.push(configureVisualPanels({ extensionUri: context.extensionUri, delegate: handleWebviewMessage }));
+  context.subscriptions.push(registerVisualPanelSerializer());
+  SchematicPanel.onDidBecomeActive = noteSchematicActive;
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("lasecsimul.componentPalette", state.paletteViewProvider, {

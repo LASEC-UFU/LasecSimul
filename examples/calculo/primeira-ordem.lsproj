@@ -2,16 +2,17 @@
   "schemaVersion": 2,
   "components": [
     {
-      "id": "nota-laboratorio",
-      "typeId": "graphics.text",
-      "properties": {
-        "text": "Atividades: Ctrl+Shift+P → LasecSimul: Laboratório de Cálculo",
-        "fontSize": 14,
-        "color": "#1f2937"
-      },
-      "label": "nota-laboratorio",
+      "id": "laboratorio-calculo",
+      "typeId": "tools.hmi_screen",
+      "label": "Laboratório de Cálculo",
       "showValue": false,
       "showDialValue": false,
+      "properties": {
+        "title": "Laboratório de Cálculo",
+        "screenId": "laboratorio",
+        "width": 176,
+        "height": 64
+      },
       "visual": {
         "x": 40,
         "y": 20,
@@ -27,7 +28,7 @@
       "showDialValue": false,
       "visual": {
         "x": 40,
-        "y": 80,
+        "y": 120,
         "rotation": 0
       }
     }
@@ -45,50 +46,50 @@
     }
   },
   "simulationSettings": {},
-  "calculusLab": {
-    "schemaVersion": 1,
-    "activities": [
-      {
-        "id": "primeira-ordem",
-        "title": "Primeira ordem — exponencial",
-        "question": "Em que instante a resposta alcança 63,2 % do salto?",
-        "steps": [
-          {
-            "id": "prever",
-            "phase": "predict",
-            "prompt": "Prever: qual o valor final de y para K = 2 e u = 1?",
-            "hints": []
-          },
-          {
-            "id": "tau",
-            "phase": "explore",
-            "prompt": "Ache o instante em que y cruza a linha de 63,2 %. Compare com τ.",
-            "hints": []
-          },
-          {
-            "id": "tangente",
-            "phase": "formalize",
-            "prompt": "A tangente em t = 0 cruza o valor final em t = τ? Verifique.",
-            "hints": []
-          },
-          {
-            "id": "degrau",
-            "phase": "apply",
-            "prompt": "Mude u durante a execução: só o futuro muda?",
-            "hints": []
-          }
-        ],
-        "plantComponentId": "primeira-ordem-lab",
-        "parameters": {
-          "u": 1,
-          "K": 2,
-          "tau": 5,
-          "y0": 0
-        },
-        "kind": "firstOrder"
+  "visualDocuments": [
+    {
+      "schemaVersion": 1,
+      "id": "laboratorio",
+      "kind": "screen",
+      "title": "Laboratório de Cálculo",
+      "startPageId": "pagina-primeira-ordem",
+      "pages": [
+        {
+          "id": "pagina-primeira-ordem",
+          "name": "Primeira ordem — exponencial",
+          "width": 1920,
+          "height": 1080,
+          "elements": [
+            {
+              "id": "atividade-primeira-ordem",
+              "typeId": "graphics.math.activity",
+              "label": "Primeira ordem — exponencial",
+              "properties": {
+                "width": 1920,
+                "height": 1080,
+                "kind": "firstOrder",
+                "fillPage": true,
+                "plantComponentId": "primeira-ordem-lab",
+                "activityJson": "{\"id\":\"primeira-ordem\",\"title\":\"Primeira ordem — exponencial\",\"question\":\"Em que instante a resposta alcança 63,2 % do salto?\",\"steps\":[{\"id\":\"prever\",\"phase\":\"predict\",\"prompt\":\"Prever: qual o valor final de y para K = 2 e u = 1?\",\"hints\":[]},{\"id\":\"tau\",\"phase\":\"explore\",\"prompt\":\"Ache o instante em que y cruza a linha de 63,2 %. Compare com τ.\",\"hints\":[]},{\"id\":\"tangente\",\"phase\":\"formalize\",\"prompt\":\"A tangente em t = 0 cruza o valor final em t = τ? Verifique.\",\"hints\":[]},{\"id\":\"degrau\",\"phase\":\"apply\",\"prompt\":\"Mude u durante a execução: só o futuro muda?\",\"hints\":[]}],\"plantComponentId\":\"primeira-ordem-lab\",\"parameters\":{\"u\":1,\"K\":2,\"tau\":5,\"y0\":0},\"kind\":\"firstOrder\"}"
+              },
+              "visual": {
+                "x": 0,
+                "y": 0,
+                "width": 1920,
+                "height": 1080,
+                "rotation": 0
+              }
+            }
+          ]
+        }
+      ],
+      "presentation": {
+        "fullscreenContext": "lab",
+        "defaultContext": "lab",
+        "startInOperation": true
       }
-    ]
-  },
+    }
+  ],
   "subsystems": [
     {
       "schemaVersion": 3,
@@ -334,6 +335,153 @@
       ],
       "origin": {
         "typeId": "subcircuits.process.first_order_lab"
+      },
+      "faceplate": {
+        "schemaVersion": 1,
+        "id": "faceplate:subsystem.process.first_order_lab",
+        "kind": "faceplate",
+        "title": "Resposta de primeira ordem (laboratório)",
+        "presentation": {
+          "fullscreenContext": "hmi",
+          "startInOperation": true
+        },
+        "startPageId": "faceplate-operacao",
+        "pages": [
+          {
+            "id": "faceplate-operacao",
+            "name": "Operação",
+            "width": 960,
+            "height": 540,
+            "elements": [
+              {
+                "id": "fp-titulo",
+                "typeId": "graphics.label",
+                "label": "fp-titulo",
+                "properties": {
+                  "width": 700,
+                  "height": 36,
+                  "text": "Resposta de primeira ordem (laboratório) — operação",
+                  "fontSize": 22,
+                  "align": "start",
+                  "stroke": "#e2e8f0"
+                },
+                "visual": {
+                  "x": 20,
+                  "y": 14,
+                  "width": 700,
+                  "height": 36,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-u",
+                "typeId": "graphics.value_display",
+                "label": "fp-u",
+                "properties": {
+                  "width": 200,
+                  "height": 56,
+                  "label": "Entrada u",
+                  "bindSource": "c_u",
+                  "bindUnit": "",
+                  "bindDecimals": 2
+                },
+                "visual": {
+                  "x": 40,
+                  "y": 70,
+                  "width": 200,
+                  "height": 56,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-y",
+                "typeId": "graphics.value_display",
+                "label": "fp-y",
+                "properties": {
+                  "width": 200,
+                  "height": 56,
+                  "label": "Saída y",
+                  "bindSource": "fo",
+                  "bindUnit": "",
+                  "bindDecimals": 3
+                },
+                "visual": {
+                  "x": 40,
+                  "y": 136,
+                  "width": 200,
+                  "height": 56,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-rotulo-u",
+                "typeId": "graphics.label",
+                "label": "fp-rotulo-u",
+                "properties": {
+                  "width": 400,
+                  "height": 22,
+                  "text": "Entrada u (degrau)",
+                  "fontSize": 14,
+                  "align": "start",
+                  "stroke": "#e2e8f0"
+                },
+                "visual": {
+                  "x": 300,
+                  "y": 60,
+                  "width": 400,
+                  "height": 22,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-slider-u",
+                "typeId": "graphics.slider",
+                "label": "fp-slider-u",
+                "properties": {
+                  "width": 400,
+                  "height": 40,
+                  "actionTarget": "c_u",
+                  "actionProperty": "value",
+                  "actionMode": "set",
+                  "actionMin": -10,
+                  "actionMax": 10,
+                  "actionStep": 0.5,
+                  "value": 1,
+                  "bindSource": "c_u",
+                  "bindMin": -10,
+                  "bindMax": 10
+                },
+                "visual": {
+                  "x": 300,
+                  "y": 84,
+                  "width": 400,
+                  "height": 40,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-tendencia",
+                "typeId": "graphics.math.trend",
+                "label": "fp-tendencia",
+                "properties": {
+                  "width": 880,
+                  "height": 310,
+                  "title": "Resposta y(t)",
+                  "bindSource": "fo",
+                  "bindDecimals": 3,
+                  "windowSeconds": 30
+                },
+                "visual": {
+                  "x": 40,
+                  "y": 210,
+                  "width": 880,
+                  "height": 310,
+                  "rotation": 0
+                }
+              }
+            ]
+          }
+        ]
       }
     }
   ]

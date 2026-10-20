@@ -1,0 +1,61 @@
+   0.0 drv main                         {"url":"vscode-file://vscode-app/c:/Program%20Files/Microsoft%20VS%20Code/2a59476c9b/resources/app/out/vs/code/electron-browser/workbench/workbench.html"}
+   5.2 ext start                        {"vscodeVersion":"1.141.0","scenario":"monitor"}
+   5.7 ext webview:ready                tag= boots=1 pos=352,140 outer=1216x808 inner=846x698 ticks=0 vis=visible
+   6.4 ext webview:ready                tag= boots=2 pos=440,160 outer=1040x776 inner=1024x678 ticks=0 vis=visible
+   8.2 ext webview:measure              tag=undocked-default-position boots=2 pos=440,160 outer=1040x776 inner=1024x738 ticks=0 vis=visible
+   8.2 ext phase                        {"name":"list-undocked"}
+   8.2 drv phase                        {"name":"list-undocked"}
+   8.3 drv pages:list-undocked          pages=2 [MAIN 1216x808] [aux 1040x776]
+  10.3 drv auxRect:list-undocked        {"out":"[Extension Development Host] Spike HMI - Visual Studio Code [Administrator]|zoomed=False|iconic=False|rect=440,160 1040x776","main":"[Extension Development Host] Visual Studio Code [Administrator]|zoomed=False|iconic=False|rect=352,140 1216x808"}
+  11.8 ext phase                        {"name":"move-left"}
+  11.9 drv phase                        {"name":"move-left"}
+  11.9 drv pages:move-left              pages=2 [MAIN 1216x808] [aux 1040x776]
+  12.7 drv moveLeft                     {"out":"[Extension Development Host] Spike HMI - Visual Studio Code [Administrator]|zoomed=False|iconic=False|rect=-1266,100 900x65535"}
+  14.2 ext webview:measure              tag=on-left boots=2 pos=-1266,100 outer=900x65535 inner=884x65497 ticks=0 vis=visible
+  17.2 ext webview:measure              tag=left-fullscreen boots=2 pos=-1366,0 outer=1366x768 inner=1366x768 ticks=0 vis=visible
+  17.2 ext phase                        {"name":"list-left-fullscreen"}
+  17.2 drv phase                        {"name":"list-left-fullscreen"}
+  17.2 drv pages:list-left-fullscreen   pages=2 [MAIN 1216x808] [aux 1366x768]
+  18.8 drv auxRect:list-left-fullscreen {"out":"[Extension Development Host] Spike HMI - Visual Studio Code [Administrator]|zoomed=False|iconic=False|rect=-1366,0 1366x768","main":"[Extension Development Host] Visual Studio Code [Administrator]|zoomed=False|iconic=False|rect=352,140 1216x808"}
+  23.4 ext webview:measure              tag=left-fullscreen-off boots=2 pos=-1266,100 outer=900x65535 inner=884x65497 ticks=0 vis=visible
+  23.4 ext phase                        {"name":"list-left-fullscreen-off"}
+  23.5 drv phase                        {"name":"list-left-fullscreen-off"}
+  23.5 drv pages:list-left-fullscreen-off pages=2 [MAIN 1216x808] [aux 900x65535]
+  25.1 drv auxRect:list-left-fullscreen-off {"out":"[Extension Development Host] Spike HMI - Visual Studio Code [Administrator]|zoomed=False|iconic=False|rect=-1266,100 900x65535","main":"[Extension Development Host] Visual Studio Code [Administrator]|zoomed=False|iconic=False|rect=352,140 1216x808"}
+  26.6 ext phase                        {"name":"maximize-left"}
+  26.8 drv phase                        {"name":"maximize-left"}
+  26.8 drv pages:maximize-left          pages=2 [MAIN 1216x808] [aux 900x65535]
+  27.8 drv maximizeLeft                 {"out":"[Extension Development Host] Spike HMI - Visual Studio Code [Administrator]|zoomed=True|iconic=False|rect=-1374,-8 1382x736"}
+  29.3 ext webview:measure              tag=left-maximized boots=2 pos=-1366,0 outer=1366x720 inner=1366x690 ticks=0 vis=visible
+  32.2 ext webview:measure              tag=left-max-fullscreen boots=2 pos=-1358,8 outer=1350x752 inner=1366x768 ticks=0 vis=visible
+  35.2 ext webview:measure              tag=left-max-fullscreen-off boots=2 pos=-1366,0 outer=1366x720 inner=1366x690 ticks=0 vis=visible
+  35.2 ext phase                        {"name":"list-left-max-off"}
+  35.3 drv phase                        {"name":"list-left-max-off"}
+  35.3 drv pages:list-left-max-off      pages=2 [MAIN 1216x808] [aux 1366x720]
+  37.1 drv auxRect:list-left-max-off    {"out":"[Extension Development Host] Spike HMI - Visual Studio Code [Administrator]|zoomed=True|iconic=False|rect=-1374,-8 1382x736","main":"[Extension Development Host] Visual Studio Code [Administrator]|zoomed=False|iconic=False|rect=352,140 1216x808"}
+  38.7 ext phase                        {"name":"restore-left"}
+  38.8 drv phase                        {"name":"restore-left"}
+  38.8 drv pages:restore-left           pages=2 [MAIN 1216x808] [aux 1366x720]
+  39.7 drv restoreLeft                  {"out":"[Extension Development Host] Spike HMI - Visual Studio Code [Administrator]|zoomed=False|iconic=False|rect=-1266,100 900x65535"}
+  41.2 ext phase                        {"name":"straddle"}
+  41.4 drv phase                        {"name":"straddle"}
+  41.4 drv pages:straddle               pages=2 [MAIN 1216x808] [aux 900x65535]
+  42.5 drv straddle                     {"out":"[Extension Development Host] Spike HMI - Visual Studio Code [Administrator]|zoomed=False|iconic=False|rect=-700,100 1000x65535"}
+  44.1 ext webview:measure              tag=straddle boots=2 pos=-700,100 outer=1000x65535 inner=984x65497 ticks=0 vis=visible
+  47.1 ext webview:measure              tag=straddle-fullscreen boots=2 pos=-1366,0 outer=1366x768 inner=1366x768 ticks=0 vis=visible
+  47.1 ext phase                        {"name":"list-straddle-fullscreen"}
+  47.2 drv phase                        {"name":"list-straddle-fullscreen"}
+  47.2 drv pages:list-straddle-fullscreen pages=2 [MAIN 1216x808] [aux 1366x768]
+  48.8 drv auxRect:list-straddle-fullscreen {"out":"[Extension Development Host] Spike HMI - Visual Studio Code [Administrator]|zoomed=False|iconic=False|rect=-1366,0 1366x768","main":"[Extension Development Host] Visual Studio Code [Administrator]|zoomed=False|iconic=False|rect=352,140 1216x808"}
+  53.2 ext webview:measure              tag=straddle-fullscreen-off boots=2 pos=-700,100 outer=1000x65535 inner=984x65497 ticks=0 vis=visible
+  53.4 ext webview:ready                tag= boots=3 pos=352,140 outer=1216x808 inner=846x698 ticks=0 vis=visible
+  54.4 ext webview:measure              tag=docked boots=3 pos=352,140 outer=1216x808 inner=846x698 ticks=0 vis=visible
+  55.1 ext webview:ready                tag= boots=4 pos=440,160 outer=1040x776 inner=1024x678 ticks=0 vis=visible
+  56.7 ext webview:measure              tag=reundocked boots=4 pos=440,160 outer=1040x776 inner=1024x738 ticks=0 vis=visible
+  56.7 ext phase                        {"name":"list-reundocked"}
+  56.8 drv phase                        {"name":"list-reundocked"}
+  56.8 drv pages:list-reundocked        pages=2 [MAIN 1216x808] [aux 1040x776]
+  58.3 drv auxRect:list-reundocked      {"out":"[Extension Development Host] Spike HMI - Visual Studio Code [Administrator]|zoomed=False|iconic=False|rect=440,160 1040x776","main":"[Extension Development Host] Visual Studio Code [Administrator]|zoomed=False|iconic=False|rect=352,140 1216x808"}
+  60.9 ext done                         {}
+  61.0 drv pages:final                  pages=1 [MAIN 1216x808]
+  61.0 drv finished                     {"done":true}

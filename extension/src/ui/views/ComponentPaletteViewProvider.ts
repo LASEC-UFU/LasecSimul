@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
+import type { WebviewGeometry } from "../webview/visualDocument";
 import { LasecSimulLanguage } from "../../language";
 import { WebviewComponentCatalogEntry } from "../webview/model";
 
@@ -18,7 +19,8 @@ type PaletteWebviewMessage =
   | { type: "webviewReady" }
   | { type: "startPlacingComponent"; typeId: string }
   | { type: "runPaletteAction"; command: string }
-  | { type: "removeRegistered"; sourceId: string };
+  | { type: "removeRegistered"; sourceId: string }
+  | { type: "windowGeometry"; geometry: WebviewGeometry };
 
 type IconUriPair = { light: vscode.Uri; dark: vscode.Uri };
 
@@ -33,6 +35,7 @@ export class ComponentPaletteViewProvider implements vscode.WebviewViewProvider 
     private readonly onAddComponent: (typeId: string) => void,
     private readonly onRemoveRegistered: (item: { sourceId?: string }) => void | Promise<void>,
     private readonly onRunAction: (command: string) => void = () => undefined,
+    private readonly onWindowGeometry: (geometry: WebviewGeometry) => void = () => undefined,
   ) {
     this.catalog = [...catalog];
   }
@@ -84,6 +87,10 @@ export class ComponentPaletteViewProvider implements vscode.WebviewViewProvider 
     }
     if (message.type === "runPaletteAction") {
       if (message.command === "lasecsimul.openControlDesigner" || message.command === "lasecsimul.openIdent") this.onRunAction(message.command);
+      return;
+    }
+    if (message.type === "windowGeometry") {
+      this.onWindowGeometry(message.geometry);
       return;
     }
     if (message.type === "removeRegistered") {

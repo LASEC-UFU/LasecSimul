@@ -8,6 +8,9 @@ import { IpcError } from "../ipc/protocol";
 import type { SeriesChunkDto, SeriesDrainRequest } from "../ipc/CoreClient";
 import { ComponentReadoutValue, InstrumentHistoryPayload, InternalComponentSnapshot, SimulationStatus } from "../ui/webview/messages";
 import { gatherInternalComponentSnapshots } from "../catalog/subcircuitInternals";
+import { getScreen, listScreens, onScreenChanged } from "../visual/screenStore";
+import { faceplateDocumentId } from "../ui/webview/visualDocument";
+import { typeIdFromSubsystemSourceId } from "../ui/webview/subsystemModel";
 import { resolveSubcircuitChildCoreId } from "../mcu/mcuCommands";
 import { TopologyNode, TUNNEL_TYPE_ID, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewWireModel, endpointId, endpointPinId } from "../ui/webview/model";
 import { state, coreInstanceIdByComponentId, mcuTargetCoreIdByComponentId, subcircuitBoundaryPinsByComponentId } from "../state";
@@ -25,6 +28,17 @@ import { resolveFpgaToolchainConfig } from "../fpga/fpgaToolchain";
 import { readPlcNativeModule } from "../plc/artifact";
 import { loadedPlcArtifactHashByComponentId, publishIecProjectPlc } from "../plc/plcRuntimeBridge";
 import { SIMULIDE_UNRESOLVED_TYPE_ID } from "../import/simulide/SimulideToLasecConverter";
+
+/** Telemetria vai para o esquemático E para toda vista registrada (`state.runtimeSinks`) -- um único
+ * `getTelemetryFrame` por tique, distribuído (docs/62 §3.3). */
+function postRuntime(message: unknown): void {
+  state.schematicPanel?.postMessage(message);
+  for (const sink of state.runtimeSinks) sink.postRuntime(message);
+}
+
+function hasRuntimeSink(): boolean {
+  return Boolean(state.schematicPanel) || state.runtimeSinks.size > 0;
+}
 
 export { electricalEdgesForProject, diffElectricalEdges, voltageProbesForProject };
 
@@ -670,19 +684,19 @@ export function isReadableInstrument(typeId: string): boolean {
 }
 
 function clearTelemetrySnapshotsForDisconnect(): void {
-  state.schematicPanel?.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId: {}, transportStatus: "disconnected" });
-  state.schematicPanel?.postMessage({ version: 1, type: "componentVisualState", statesByComponentId: {} });
-  state.schematicPanel?.postMessage({ version: 1, type: "boardOverlayReadouts", readoutsByKey: {}, visualStatesByKey: {}, transportStatus: "disconnected" });
-  state.schematicPanel?.postMessage({ version: 1, type: "wireVoltages", voltagesByWireId: {}, clear: true });
-  state.schematicPanel?.postMessage({ version: 1, type: "simulationRate", rate: undefined });
-  state.schematicPanel?.postMessage({ version: 1, type: "mcuRealTimeRatio", rate: undefined });
+  postRuntime({ version: 1, type: "componentReadout", readoutsByComponentId: {}, transportStatus: "disconnected" });
+  postRuntime({ version: 1, type: "componentVisualState", statesByComponentId: {} });
+  postRuntime({ version: 1, type: "boardOverlayReadouts", readoutsByKey: {}, visualStatesByKey: {}, transportStatus: "disconnected" });
+  postRuntime({ version: 1, type: "wireVoltages", voltagesByWireId: {}, clear: true });
+  postRuntime({ version: 1, type: "simulationRate", rate: undefined });
+  postRuntime({ version: 1, type: "mcuRealTimeRatio", rate: undefined });
 }
 
 /** Lê o estado de cada "instruments.voltmeter" no projeto e manda pra Webview — único instrumento
  * com leitura via Webview hoje (ver .spec/archive/legacy-v2/lasecsimul.spec sobre instrumentos como plugin ABI).
  * Generaliza naturalmente pra outros: basta interpretar getComponentState() conforme o typeId. */
 export async function pollInstrumentReadouts(expectedGeneration?: number): Promise<void> {
-  if (!state.coreClient || !state.schematicPanel) return;
+  if (!state.coreClient || !hasRuntimeSink()) return;
   const instruments = state.schematicState.components.filter((component) => isReadableInstrument(component.typeId));
   if (instruments.length === 0) return;
 
@@ -712,7 +726,7 @@ export async function pollInstrumentReadouts(expectedGeneration?: number): Promi
     }
   }
   if (expectedGeneration !== undefined && expectedGeneration !== telemetryGeneration) return;
-  state.schematicPanel.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId, transportStatus: "connected" });
+  postRuntime({ version: 1, type: "componentReadout", readoutsByComponentId, transportStatus: "connected" });
 }
 
 /** Amostras da sintonia PID a partir de UM frame de telemetria: o intervalo entre amostras vem do
@@ -761,7 +775,7 @@ export function publishPidSamples(readoutsByComponentId: Record<string, Componen
  * typeId. O manifesto decide como os bytes serão projetados; o host apenas transporta o blob em
  * base64 e mantém uma única chamada batelada ao Core. */
 export async function pollComponentVisualStates(expectedGeneration?: number): Promise<void> {
-  if (!state.coreClient || !state.schematicPanel) return;
+  if (!state.coreClient || !hasRuntimeSink()) return;
   const components = state.schematicState.components.filter((component) => {
     const entry = findCatalogEntry(component.typeId);
     return Boolean(entry?.package?.runtimeState || entry?.boardPackage?.runtimeState);
@@ -782,7 +796,7 @@ export async function pollComponentVisualStates(expectedGeneration?: number): Pr
   const statesByComponentId = Object.fromEntries(
     Object.entries(states).map(([componentId, bytes]) => [componentId, bytes.toString("base64")])
   );
-  state.schematicPanel.postMessage({ version: 1, type: "componentVisualState", statesByComponentId });
+  postRuntime({ version: 1, type: "componentVisualState", statesByComponentId });
 }
 
 /** Quais componentes internos de um `.lssubcircuit` são expostos e possuem leitura ou estado visual
@@ -818,6 +832,56 @@ function exposedReadableItemsForSource(sourceId: string): InternalComponentSnaps
   return cached;
 }
 
+/** Todos os internos com leitura ou estado visual (sem o filtro de exposição): candidatos a serem lidos
+ * quando um Faceplate ou uma Tela HMI os liga. */
+const readableItemsBySourceId = new Map<string, InternalComponentSnapshot[]>();
+
+function readableItemsForSource(sourceId: string): InternalComponentSnapshot[] {
+  let cached = readableItemsBySourceId.get(sourceId);
+  if (!cached) {
+    cached = (gatherInternalComponentSnapshots(sourceId) ?? []).filter((item) => {
+      const entry = findCatalogEntry(item.typeId);
+      return isReadableInstrument(item.typeId) || Boolean(entry?.package?.runtimeState || entry?.boardPackage?.runtimeState);
+    });
+    readableItemsBySourceId.set(sourceId, cached);
+  }
+  return cached;
+}
+
+/** Internos ligados por id no Faceplate da definição e por caminho `<instância>:<interno>` nas Telas HMI
+ * (docs/62 §9–10): lidos da instância real, nunca copiados. Refeito quando um documento visual muda. */
+const boundChildIdsByOuter = new Map<string, Set<string>>();
+onScreenChanged(() => boundChildIdsByOuter.clear());
+
+function boundChildIds(outerId: string, sourceId: string): Set<string> {
+  const key = `${outerId}|${sourceId}`;
+  let cached = boundChildIdsByOuter.get(key);
+  if (cached) return cached;
+  cached = new Set<string>();
+  const sources = (properties: Record<string, unknown> | undefined): string[] => ["bindSource", "bindSourceB", "bindSourceC"]
+    .map((name) => properties?.[name]).filter((value): value is string => typeof value === "string" && value.length > 0);
+  const subsystemTypeId = typeIdFromSubsystemSourceId(sourceId);
+  const faceplate = subsystemTypeId ? getScreen(faceplateDocumentId(subsystemTypeId)) : undefined;
+  for (const element of faceplate?.pages.flatMap((page) => page.elements) ?? []) {
+    for (const source of sources(element.properties)) if (!source.includes(":")) cached.add(source);
+  }
+  const prefix = `${outerId}:`;
+  for (const element of listScreens().flatMap((doc) => doc.pages.flatMap((page) => page.elements))) {
+    for (const source of sources(element.properties)) if (source.startsWith(prefix)) cached.add(source.slice(prefix.length));
+  }
+  boundChildIdsByOuter.set(key, cached);
+  return cached;
+}
+
+/** O que se lê de UMA instância: os internos expostos (overlay do símbolo) mais os ligados por Faceplate e Telas. */
+function instanceReadableItems(outerId: string, sourceId: string): InternalComponentSnapshot[] {
+  const exposed = exposedReadableItemsForSource(sourceId);
+  const bound = boundChildIds(outerId, sourceId);
+  if (bound.size === 0) return exposed;
+  const seen = new Set(exposed.map((item) => item.id));
+  return [...exposed, ...readableItemsForSource(sourceId).filter((item) => bound.has(item.id) && !seen.has(item.id))];
+}
+
 /** `${outerCoreId}:${innerLocalId}` -> `componentIndex` real do Core, resolvido via
  * `getSubcircuitChildInstanceId` (1 IPC roundtrip) -- cacheado pra sempre DENTRO da mesma corrida de
  * simulação. Chave inclui `outerCoreId` (não só o `componentId` da Webview) de propósito: um novo
@@ -835,7 +899,7 @@ const boardOverlayChildCoreIdCache = new Map<string, string>();
  * `pollInstrumentReadouts`: resolve instanceId (aqui via `getSubcircuitChildInstanceId`, cacheado),
  * batch `getComponentStates`, decodifica com `decodeComponentReadout` (mesmo `readoutFormat` ABI v2). */
 export async function pollBoardOverlayReadouts(expectedGeneration?: number): Promise<void> {
-  if (!state.coreClient || !state.schematicPanel) return;
+  if (!state.coreClient || !hasRuntimeSink()) return;
   // Mesmo gate de `main.ts::renderBoardOverlaysFor`'s chamador (`registeredSourceKind ===
   // "subcircuit-file"`) -- só um `.lssubcircuit` tem `components[]`/`exposedComponents[]`
   // (`abi-device`/`mcu-adapter` são `.lsdevice` opacos, sem esse conceito).
@@ -850,7 +914,7 @@ export async function pollBoardOverlayReadouts(expectedGeneration?: number): Pro
     const sourceId = findCatalogEntry(outer.typeId)?.registeredSourceId;
     const outerCoreId = coreInstanceIdByComponentId.get(outer.id);
     if (!sourceId || !outerCoreId) continue;
-    for (const item of exposedReadableItemsForSource(sourceId)) {
+    for (const item of instanceReadableItems(outer.id, sourceId)) {
       const cacheKey = `${outerCoreId}:${item.id}`;
       let innerInstanceId = boardOverlayChildCoreIdCache.get(cacheKey);
       if (innerInstanceId === undefined) {
@@ -885,14 +949,14 @@ export async function pollBoardOverlayReadouts(expectedGeneration?: number): Pro
     }
   }
   if (expectedGeneration !== undefined && expectedGeneration !== telemetryGeneration) return;
-  state.schematicPanel.postMessage({ version: 1, type: "boardOverlayReadouts", readoutsByKey, transportStatus: "connected" });
+  postRuntime({ version: 1, type: "boardOverlayReadouts", readoutsByKey, transportStatus: "connected" });
 }
 
 /** Tensão de cada fio (lida em uma das duas pontas — são o mesmo nó elétrico por definição) pra
  * colorir/animar na Webview. O limiar visual fica em `wirePresentation.ts` (0,7 V); a telemetria
  * transporta a tensão real e não aplica nenhuma classificação elétrica aqui. */
 export async function pollWireVoltages(expectedGeneration?: number): Promise<void> {
-  if (!state.coreClient || !state.schematicPanel) return;
+  if (!state.coreClient || !hasRuntimeSink()) return;
   if (state.schematicState.topology.conductors.length === 0) return;
 
   const voltagesByWireId: Record<string, number> = {};
@@ -918,7 +982,7 @@ export async function pollWireVoltages(expectedGeneration?: number): Promise<voi
     }
   }
   if (expectedGeneration !== undefined && expectedGeneration !== telemetryGeneration) return;
-  state.schematicPanel.postMessage({ version: 1, type: "wireVoltages", voltagesByWireId });
+  postRuntime({ version: 1, type: "wireVoltages", voltagesByWireId });
 }
 
 /** Achado de auditoria de UI 2026-07-09 (paridade com `InfoWidget::setRate()` real do SimulIDE --
@@ -940,12 +1004,12 @@ async function pollSimulationRate(expectedGeneration?: number): Promise<void> {
 
     const simResult = simulationRateSampler.sample(wallMs, simulatedNs);
     if (simResult.report && canPost) {
-      state.schematicPanel?.postMessage({ version: 1, type: "simulationRate", rate: simResult.rate });
+      postRuntime({ version: 1, type: "simulationRate", rate: simResult.rate });
     }
 
     const mcuResult = mcuRateSampler.sample(wallMs, mcuVirtualNs);
     if (mcuResult.report && canPost) {
-      state.schematicPanel?.postMessage({ version: 1, type: "mcuRealTimeRatio", rate: mcuResult.rate });
+      postRuntime({ version: 1, type: "mcuRealTimeRatio", rate: mcuResult.rate });
     }
   } catch {
     // Core pode ter parado/desconectado entre o tick e a resposta -- sem taxa neste ciclo, não é erro.
@@ -1000,7 +1064,7 @@ export function onCoreRebuilt(listener: () => Promise<void> | void): () => void 
  * Extension (ela conhece catalogo e ids visuais); o Core resolve todos os grupos contra o mesmo
  * snapshot imutavel de stable step. */
 async function pollTelemetryFrame(expectedGeneration: number): Promise<void> {
-  if (!state.coreClient || !state.schematicPanel) return;
+  if (!state.coreClient || !hasRuntimeSink()) return;
 
   const readable = state.schematicState.components.filter((component) => isReadableInstrument(component.typeId));
   const visual = state.schematicState.components.filter((component) => {
@@ -1038,7 +1102,7 @@ async function pollTelemetryFrame(expectedGeneration: number): Promise<void> {
     const sourceId = findCatalogEntry(outer.typeId)?.registeredSourceId;
     const outerCoreId = coreInstanceIdByComponentId.get(outer.id);
     if (!sourceId || !outerCoreId) continue;
-    for (const item of exposedReadableItemsForSource(sourceId)) {
+    for (const item of instanceReadableItems(outer.id, sourceId)) {
       const cacheKey = `${outerCoreId}:${item.id}`;
       let innerInstanceId = boardOverlayChildCoreIdCache.get(cacheKey);
       if (innerInstanceId === undefined) {
@@ -1084,7 +1148,7 @@ async function pollTelemetryFrame(expectedGeneration: number): Promise<void> {
     const readout = decodeComponentReadout(component.typeId, bytes);
     if (readout !== undefined) readoutsByComponentId[component.id] = readout;
   }
-  state.schematicPanel.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId, transportStatus: "connected", sampleTimestampNs: frame.timestampNs });
+  postRuntime({ version: 1, type: "componentReadout", readoutsByComponentId, transportStatus: "connected", sampleTimestampNs: frame.timestampNs });
   publishPidSamples(readoutsByComponentId, frame.timestampNs);
 
   const statesByComponentId: Record<string, string> = {};
@@ -1092,7 +1156,7 @@ async function pollTelemetryFrame(expectedGeneration: number): Promise<void> {
     const bytes = frame.componentStates[visualStateKey.get(component.id) ?? ""];
     if (bytes) statesByComponentId[component.id] = bytes.toString("base64");
   }
-  state.schematicPanel.postMessage({ version: 1, type: "componentVisualState", statesByComponentId });
+  postRuntime({ version: 1, type: "componentVisualState", statesByComponentId });
 
   const readoutsByKey: Record<string, ComponentReadoutValue> = {};
   // Exposed inner components whose symbol projects live state (e.g. the
@@ -1106,14 +1170,14 @@ async function pollTelemetryFrame(expectedGeneration: number): Promise<void> {
     const entry = findCatalogEntry(typeId);
     if (entry?.package?.runtimeState || entry?.boardPackage?.runtimeState) visualStatesByKey[key] = bytes.toString("base64");
   }
-  state.schematicPanel.postMessage({ version: 1, type: "boardOverlayReadouts", readoutsByKey, visualStatesByKey, transportStatus: "connected", sampleTimestampNs: frame.timestampNs });
-  state.schematicPanel.postMessage({ version: 1, type: "wireVoltages", voltagesByWireId: frame.nodeVoltages });
+  postRuntime({ version: 1, type: "boardOverlayReadouts", readoutsByKey, visualStatesByKey, transportStatus: "connected", sampleTimestampNs: frame.timestampNs });
+  postRuntime({ version: 1, type: "wireVoltages", voltagesByWireId: frame.nodeVoltages });
 
   const wallMs = Date.now();
   const simResult = simulationRateSampler.sample(wallMs, frame.runtime.simulatedNs);
-  if (simResult.report) state.schematicPanel.postMessage({ version: 1, type: "simulationRate", rate: simResult.rate });
+  if (simResult.report) postRuntime({ version: 1, type: "simulationRate", rate: simResult.rate });
   const mcuResult = mcuRateSampler.sample(wallMs, frame.runtime.mcuVirtualNs);
-  if (mcuResult.report) state.schematicPanel.postMessage({ version: 1, type: "mcuRealTimeRatio", rate: mcuResult.rate });
+  if (mcuResult.report) postRuntime({ version: 1, type: "mcuRealTimeRatio", rate: mcuResult.rate });
 }
 
 export function startVoltageReadoutPolling(): void {
@@ -1155,12 +1219,12 @@ export function stopVoltageReadoutPolling(clearVisuals = true): void {
   if (!clearVisuals) return;
   // Sem simulação rodando não há tensão "atual" pra mostrar -- volta os fios pra cor neutra em vez
   // de deixar a última cor (vermelho/azul) congelada, o que pareceria que ainda está simulando.
-  state.schematicPanel?.postMessage({ version: 1, type: "wireVoltages", voltagesByWireId: {} });
-  state.schematicPanel?.postMessage({ version: 1, type: "componentReadout", readoutsByComponentId: {} });
-  state.schematicPanel?.postMessage({ version: 1, type: "componentVisualState", statesByComponentId: {} });
-  state.schematicPanel?.postMessage({ version: 1, type: "simulationRate", rate: undefined });
-  state.schematicPanel?.postMessage({ version: 1, type: "mcuRealTimeRatio", rate: undefined });
-  state.schematicPanel?.postMessage({ version: 1, type: "boardOverlayReadouts", readoutsByKey: {} });
+  postRuntime({ version: 1, type: "wireVoltages", voltagesByWireId: {} });
+  postRuntime({ version: 1, type: "componentReadout", readoutsByComponentId: {} });
+  postRuntime({ version: 1, type: "componentVisualState", statesByComponentId: {} });
+  postRuntime({ version: 1, type: "simulationRate", rate: undefined });
+  postRuntime({ version: 1, type: "mcuRealTimeRatio", rate: undefined });
+  postRuntime({ version: 1, type: "boardOverlayReadouts", readoutsByKey: {} });
   boardOverlayChildCoreIdCache.clear();
 }
 
@@ -1179,7 +1243,7 @@ export function setSimulationStatus(status: SimulationStatus): void {
   // add/remove/direction/type controls while RUN is active (see
   // PropertyInspectorViewProvider::setSimulationStatus).
   state.propertyInspectorView?.setSimulationStatus(status);
-  state.schematicPanel?.postMessage({ version: 1, type: "simulationStatus", status });
+  postRuntime({ version: 1, type: "simulationStatus", status });
   for (const listener of simulationStatusListeners) {
     try { listener(status); } catch (err) { reportCoreWarning("notificar estado da simulação", err); }
   }
@@ -1367,6 +1431,8 @@ async function rebuildCoreFromSchematicStateNow(options: { alreadyStopped?: bool
   if (state.catalogReadyPromise) await state.catalogReadyPromise;
   // Definições (internas ou arquivos) podem ter mudado desde a última corrida: expostos relidos.
   boardOverlayExposedItemsBySourceId.clear();
+  readableItemsBySourceId.clear();
+  boundChildIdsByOuter.clear();
   await registerProjectSubcircuitsInCore();
 
   const runningBeforeRebuild = options.resumeAfter ?? state.simulationStatus === "running";

@@ -176,3 +176,5 @@ body.presentation .icon-btn { width: 48px; height: 48px; }
   .lim-grid, .fn-grid, .calc, .tank-layout, .tank-bottom, .editor-body { grid-template-columns: 1fr; }
   .lab-header { flex-direction: column; align-items: flex-start; }
 }
+/* Atividade embutida numa Tela HMI (elemento graphics.math.activity): o cabeçalho e as abas são da casca da tela. */
+body.lab-embedded .lab-header { display: none; }

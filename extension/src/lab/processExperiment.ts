@@ -64,6 +64,22 @@ export class ProcessExperiment {
     void this.unbind();
   }
 
+  /** Vista nova do mesmo experimento (a Webview da Tela HMI renasce ao trocar de janela): estado da
+   * execução, ligação com a planta, parâmetros correntes e a série inteira até aqui -- sem religar nada
+   * no Core nem perder a gravação. */
+  replay(): void {
+    if (this.disposed) return;
+    this.postRunState();
+    if (this.plant) {
+      const label = state.schematicState.components.find((component) => component.id === this.plant!.componentId)?.label ?? this.plant.componentId;
+      this.postPlant({ state: "bound", componentId: this.plant.componentId, label });
+    }
+    for (const [id, value] of Object.entries(this.parameters)) {
+      if (typeof value === "number") this.post({ version: LAB_MESSAGE_VERSION, type: "labParameter", activityId: this.activity.id, id, value });
+    }
+    if (this.store) this.postSeries(this.store.snapshot());
+  }
+
   async run(): Promise<void> {
     if (!this.plant) return;
     await vscode.commands.executeCommand("lasecsimul.run");

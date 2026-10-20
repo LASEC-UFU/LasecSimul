@@ -1,6 +1,14 @@
 import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
 import { CanonicalEndpoint, CanonicalTopologyDocument, HmiApplication, HmiPage, HmiPageElement, InteractionKindEntry, McuSerialPortEntry, PackagePin, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, TopologyNode, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, defaultHmiNavigationVisual, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
 import { isSubsystemTypeId, subsystemClosure, type SubsystemDefinition } from "./subsystemModel.js";
+import { HMI_SCREEN_TYPE_ID, remapBindingPaths, type PresentationContext, type ScreenViewState, type VisualDocument, type VisualSession, type VisualWindowInfo } from "./visualDocument.js";
+import { watchWebviewGeometry } from "./windowGeometry.js";
+import {
+  MATH_ACTIVITY_TYPE_ID, MATH_PARAMETER_TYPE_ID, MATH_TREND_TYPE_ID, activityFromProperties, isMathTypeId, isMathWidgetTypeId, isParameterName, mathScopeOf,
+  parameterTrack, parameterValueAt, type TrendSample,
+} from "./mathWidgets.js";
+import { ACTIVITY_KIND_LABEL, defaultActivity, type LabActivityKind } from "./lab/activity.js";
+import { labActivityPage, uniqueLabPageSuffix } from "./labPages.js";
 import { reorderedZOrder, zOrderModeForKey, type ZOrderMode } from "./zOrder.js";
 import { graphicalRuntimeProperties, isGraphicalTypeId } from "./graphicsBinding.js";
 import { auditHmiApplication, createHmiAuditHtml, createHmiAuditReport, defaultHmiAuditRuleProfile, filterHmiAuditFindings, fingerprintHmiAuditInputs, HMI_AUDIT_RULE_IDS, hmiAuditFindingKey } from "./hmiAudit.js";
@@ -141,6 +149,14 @@ syncPackageRegistry(state.catalog);
 let catalogLookupSource: WebviewProjectState["catalog"] | undefined;
 let catalogEntryByTypeId = new Map<string, WebviewComponentCatalogEntry>();
 
+/** Vista visual: o catálogo dela é só o que ela usa; entradas novas chegam com a colocação ou a colagem. */
+function mergeCatalogEntries(entries: readonly WebviewComponentCatalogEntry[]): void {
+  const missing = entries.filter((entry) => !catalogEntryFor(entry.typeId));
+  if (missing.length === 0) return;
+  state = { ...state, catalog: [...state.catalog, ...missing] };
+  syncPackageRegistry(missing);
+}
+
 function catalogEntryFor(typeId: string): WebviewComponentCatalogEntry | undefined {
   if (catalogLookupSource !== state.catalog) {
     catalogLookupSource = state.catalog;
@@ -175,6 +191,44 @@ let subcircuitEditorMode: SubcircuitEditorMode = "circuit";
 let selectedHmiPageId: string | undefined;
 let hmiPresentationMode = false;
 let hmiSceneCache: { pageId: string; elements: WebviewComponentModel[]; sourceByElementId: Map<string, string> } | undefined;
+
+/** Painel Visual (Tela HMI, docs/61-62): este MESMO bundle, travado na cena "hmi" de UM documento
+ * (`state.hmiApplication` é a tela). O documento, o desfazer e a sessão pertencem ao Host -- o VS
+ * Code recria esta Webview a cada troca de janela (Dock/Undock), então nada disso pode morar só aqui. */
+/** Nonce desta página: os scripts inline do `<iframe>` de cada atividade herdam a CSP dela. */
+interface LabEmbedResources { nonce: string }
+interface VisualRoleConfig {
+  documentId: string;
+  title: string;
+  labEmbed?: LabEmbedResources;
+  /** Faceplate de subsistema aberto no contexto de uma instância: os componentes da cena são os
+   * internos da definição (com os valores da instância) e a telemetria é a da instância. */
+  faceplate?: { instanceId: string; instanceLabel: string };
+  session?: VisualSession;
+  window?: VisualWindowInfo;
+  history?: { canUndo: boolean; canRedo: boolean };
+}
+const visualRole = (window as Window & { __LASECSIMUL_VISUAL_ROLE__?: VisualRoleConfig }).__LASECSIMUL_VISUAL_ROLE__;
+if (visualRole) subcircuitEditorMode = "hmi";
+let visualWindowInfo: VisualWindowInfo = { docking: "docked", window: "normal", canUndock: false, canFullscreen: false };
+let visualContext: PresentationContext = "hmi";
+let visualHistory = { canUndo: false, canRedo: false };
+let visualStateReceived = false;
+/** O documento que o Host tem (o embutido no HTML, depois cada `init`/patch): só o que difere disto é edição. */
+let lastSentVisualDocumentKey: string | undefined = visualRole && state.hmiApplication ? JSON.stringify(state.hmiApplication) : undefined;
+/** Contadores das métricas da unificação visual (docs/63 §3.2), só no papel visual e baratos: o E2E de
+ * desempenho lê `window.__visualStats`. */
+const visualStats = { documentSends: 0, initBytes: 0, mathRepaintMs: [] as number[], boot: { modulesLoaded: performance.now(), ready: 0, init: 0 } };
+if (visualRole) (window as unknown as { __visualStats: typeof visualStats }).__visualStats = visualStats;
+
+/** Elementos matemáticos (`mathWidgets.ts`): valores dos parâmetros na OPERAÇÃO, por página (na edição
+ * vale o valor autorado), e amostras das tendências por elemento. Nada disto é gravado no documento. */
+const mathParameterValuesByPage = new Map<string, Record<string, number>>();
+const trendSamplesByElement = new Map<string, TrendSample[]>();
+/** Modo Apresentação das atividades do Laboratório (casca `lab`), da sessão da vista. */
+let labPresentation = false;
+/** Esquemático: onde está a tela de cada botão `tools.hmi_screen` (indicador no botão). */
+let screenStatesById: Record<string, ScreenViewState> = {};
 
 resetUndoHistory(mainUndoHistory);
 
@@ -606,6 +660,15 @@ let dcMotorLastAnimationMs: number | undefined;
  * chave `${outerComponentId}:${innerComponentId}`, ver `coreLifecycle.ts::pollBoardOverlayReadouts`.
  * Fix "LED onboard não acende quando exposto no símbolo" (2026-07-18). */
 let boardOverlayReadoutsByKey: Record<string, ComponentReadoutValue> = {};
+
+/** Fonte de um binding: id de componente, ou caminho `<instância>:<interno>` para ler um componente
+ * interno de um subsistema (docs/62 §9–10; o Host lê da instância real e manda em `boardOverlayReadouts`). */
+function readoutForBinding(id: string): ComponentReadoutValue | undefined {
+  return readoutsByComponentId[id] ?? (id.includes(":") ? boardOverlayReadoutsByKey[id] : undefined);
+}
+
+const bindsInstancePath = (component: WebviewComponentModel): boolean =>
+  ["", "B", "C"].some((suffix) => String(component.properties[`bindSource${suffix}`] ?? "").includes(":"));
 let boardOverlayTransportStatus: "connected" | "disconnected" = "connected";
 let boardOverlaySampleTimestampNs: number | undefined;
 /** Raw runtime state (base64) of exposed inner components whose package
@@ -734,6 +797,10 @@ let mcuSerialMonitorLayer: HTMLDivElement | undefined;
 /** `subsystems`: definições INTERNAS do documento de origem usadas pelos componentes copiados (com as
  * dependências, cópia profunda) -- a colagem em outro documento as importa sem depender da origem. */
 let clipboardItems: { components: WebviewComponentModel[]; wires: WebviewWireModel[]; hmiSourceByClipboardId?: Map<string, string>; subsystems?: SubsystemDefinition[] } | undefined;
+/** Área de transferência das vistas visuais (docs/62 §13.1): copiar numa Tela/Faceplate e colar em OUTRA
+ * vista passa pelo Host. `localClipboardAt` diz se a cópia local é mais nova que a recebida. */
+let localClipboardAt = 0;
+let sharedVisualClipboard: { at: number; components: WebviewComponentModel[]; faceplateInstanceId?: string } | undefined;
 const activePushShortcutIds = new Set<string>();
 /** `true` durante QUALQUER gesto de arrastar componente em andamento (mouse ainda pressionado) --
  * mesmo com shell persistente, o render de telemetria pode trocar SVG interno e estado visual no
@@ -961,7 +1028,15 @@ function hmiSceneComponents(): WebviewComponentModel[] {
     if (source) sourceByElementId.set(item.id, source.id);
     const catalogEntry = catalogEntryFor(typeId);
     const properties = { ...(source?.properties ?? catalogEntry?.defaultProperties ?? {}), ...(item.properties ?? {}) };
-    const naturalBox = componentBox(typeId, source?.properties ?? catalogEntry?.defaultProperties ?? {});
+    if (typeId === MATH_ACTIVITY_TYPE_ID) {
+      // A definição da atividade manda: o campo "Planta" do Inspector nasce com o que ela já usa.
+      const plant = activityFromProperties(properties)?.plantComponentId;
+      properties.plantComponentId = typeof plant === "string" ? plant : "";
+    }
+    // Caixa natural com as MESMAS propriedades da cena (largura/altura próprias do elemento incluídas):
+    // `commitHmiSceneToPage` mede com elas, e medir aqui com as do catálogo dobrava o tamanho a cada
+    // ida e volta página -> cena -> página (bug visto ao a Webview da Tela HMI renascer no Undock).
+    const naturalBox = componentBox(typeId, properties);
     if (item.visual.width > 0 && naturalBox.width > 0) properties.__simulideSceneScaleX = item.visual.width / naturalBox.width;
     if (item.visual.height > 0 && naturalBox.height > 0) properties.__simulideSceneScaleY = item.visual.height / naturalBox.height;
     return [{
@@ -979,6 +1054,13 @@ function hmiSceneComponents(): WebviewComponentModel[] {
     } as WebviewComponentModel];
   });
   hmiSceneCache = { pageId: page.id, elements, sourceByElementId };
+  if (visualRole && state.hmiApplication && JSON.stringify(state.hmiApplication) === lastSentVisualDocumentKey) {
+    // Cena montada a partir do documento do Host, sem edição local pendente: a forma normalizada
+    // (caixas, propriedades completas) vira a referência -- senão a 1ª gravação depois de cada
+    // `init` (ex.: a Webview renasce ao desacoplar) chegaria ao Host como uma edição fantasma.
+    commitHmiSceneToPage();
+    lastSentVisualDocumentKey = JSON.stringify(state.hmiApplication);
+  }
   return elements;
 }
 
@@ -1025,6 +1107,7 @@ function currentElementScope(): "schematic" | "symbol" | "icon" {
  * conteúdos INDEPENDENTES (túneis/componentes reais vs. formas do símbolo vs. formas do ícone);
  * sem isto, desfazer logo após trocar de modo comparia contra o baseline da cena ANTERIOR. */
 function setSubcircuitEditorMode(mode: SubcircuitEditorMode): void {
+  if (visualRole && mode !== "hmi") return;
   if (mode === "hmi" && !state.hmiApplication?.pages.length) return;
   if (mode !== "hmi" && !state.subcircuitEditingContext && subcircuitEditorMode !== "hmi") return;
   if (mode === subcircuitEditorMode) return;
@@ -2465,7 +2548,8 @@ function resetUndoHistory(history: UndoHistory): void {
  * `state` local nunca muda antes disso, então sem este 2º caminho a remoção nunca viraria uma
  * entrada de undo). */
 function recordUndoTransition(currentKey: string, captureCurrent: () => UndoSnapshot): void {
-  if (isApplyingUndoSnapshot) return;
+  // Painel Visual: o desfazer da tela é do Host (sobrevive à recriação da Webview, ADR 0018).
+  if (isApplyingUndoSnapshot || visualRole) return;
   const history = activeUndoHistory();
   if (history.baselineKey === undefined) {
     // 1ª chamada desta história (ver `resetUndoHistory` -- normalmente já cobre isto, mas cobre
@@ -2568,6 +2652,10 @@ function switchUndoHistoryLevel(previousDepth: number, nextDepth: number): void 
 }
 
 function undo(): void {
+  if (visualRole) {
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestVisualUndo", documentId: visualRole.documentId });
+    return;
+  }
   const history = activeUndoHistory();
   if (history.undoStack.length === 0) return;
   const previous = history.undoStack.pop()!;
@@ -2578,6 +2666,10 @@ function undo(): void {
 }
 
 function redo(): void {
+  if (visualRole) {
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestVisualRedo", documentId: visualRole.documentId });
+    return;
+  }
   const history = activeUndoHistory();
   if (history.redoStack.length === 0) return;
   const next = history.redoStack.pop()!;
@@ -2588,7 +2680,39 @@ function redo(): void {
 }
 // ────────────────────────────────────────────────────────────────────────────────────────────────
 
+/** Painel Visual: a tela inteira vai ao Host só quando o CONTEÚDO mudou (seleção/zoom não). */
+function persistVisualDocument(): void {
+  normalizeMathActivities();
+  commitHmiSceneToPage();
+  storeWebviewState();
+  const doc = state.hmiApplication as VisualDocument | undefined;
+  if (!doc || !visualRole) return;
+  const key = JSON.stringify(doc);
+  if (key === lastSentVisualDocumentKey) return;
+  lastSentVisualDocumentKey = key;
+  visualStats.documentSends += 1;
+  vscode?.postMessage({ version: WEBVIEW_MESSAGE_VERSION, type: "visualDocumentChanged", documentId: visualRole.documentId, document: doc });
+}
+
+/** Painel Visual: página, zoom/pan, edição/operação e contexto -- o Host devolve isto quando a
+ * Webview renasce numa janela nova e quando a tela é reaberta. */
+function sendVisualSession(): void {
+  if (!visualRole) return;
+  const session: VisualSession = { pageId: selectedHmiPageId, viewport: state.viewport, editing: !hmiPresentationMode, context: visualContext, labPresentation };
+  vscode?.postMessage({ version: WEBVIEW_MESSAGE_VERSION, type: "visualSessionChanged", documentId: visualRole.documentId, session });
+}
+
+function requestVisualWindow(action: "dock" | "undock" | "fullscreen" | "exitFullscreen" | "toggleContext"): void {
+  if (!visualRole) return;
+  hideContextMenu();
+  vscode?.postMessage({ version: WEBVIEW_MESSAGE_VERSION, type: "visualWindowRequest", documentId: visualRole.documentId, action });
+}
+
 function persistState(): void {
+  if (visualRole) {
+    persistVisualDocument();
+    return;
+  }
   commitHmiSceneToPage();
   // Qualquer edição geométrica/visual direta sobre o resultado automático passa a ser uma edição
   // personalizada. Operações semânticas de pino regeneram antes de chegar aqui e continuam generic.
@@ -2609,7 +2733,8 @@ function persistState(): void {
 }
 
 function storeWebviewState(): void {
-  vscode?.setState(state);
+  // Faceplate: a instância vai junto, para o VS Code restaurar a vista no contexto certo ao recarregar.
+  vscode?.setState(visualRole?.faceplate ? { ...state, __visualInstanceId: visualRole.faceplate.instanceId } : state);
 }
 
 function send(message: WebviewToHostMessage): void {
@@ -2777,7 +2902,8 @@ async function createHmiPageFromSelection(): Promise<void> {
     navigation: [],
   };
   const pages = [...(state.hmiApplication?.pages ?? []), page];
-  state = { ...state, hmiApplication: { startPageId: state.hmiApplication?.startPageId ?? pageId, pages } };
+  // Espalha o que já existia (STALE, auditoria e, numa Tela HMI, identidade/título/apresentação).
+  state = { ...state, hmiApplication: { ...state.hmiApplication, startPageId: state.hmiApplication?.startPageId ?? pageId, pages } };
   persistState();
   render();
   openHmiDesigner(pageId);
@@ -3172,6 +3298,7 @@ function navigateHmiPage(targetPageId: string): void {
   clearSelection();
   render();
   zoomToFitAllDeferred();
+  sendVisualSession();
 }
 
 function setHmiPresentationMode(enabled: boolean): void {
@@ -3186,8 +3313,10 @@ function setHmiPresentationMode(enabled: boolean): void {
     clearSelection();
   }
   hmiPresentationMode = enabled;
+  if (enabled) { mathParameterValuesByPage.clear(); activityEditingId = undefined; }
   render();
   if (enabled) zoomToFitAllDeferred();
+  sendVisualSession();
 }
 
 function removeHmiPageNavigation(navigationId: string): void {
@@ -3216,7 +3345,7 @@ function deleteHmiPage(): void {
   const startPageId = state.hmiApplication!.startPageId === page.id ? pages[0]!.id : state.hmiApplication!.startPageId;
   selectedHmiPageId = pages[0]!.id;
   hmiSceneCache = undefined;
-  state = { ...state, hmiApplication: { startPageId, pages } };
+  state = { ...state, hmiApplication: { ...state.hmiApplication!, startPageId, pages } };
   clearSelection(); persistState(); render(); zoomToFitAllDeferred();
 }
 
@@ -4261,6 +4390,7 @@ function renderToolbarButton(kind: ToolbarIconKind, title: string, onClick: () =
 }
 
 function renderAppBar(): HTMLElement {
+  if (visualRole) return renderVisualAppBar();
   const bar = document.createElement("div");
   bar.className = "appbar";
 
@@ -4300,7 +4430,9 @@ function renderAppBar(): HTMLElement {
       { value: "circuit", label: t("subcircuitEditorModeCircuit") },
       { value: "symbol", label: t("subcircuitEditorModeSymbol") },
       { value: "icon", label: t("subcircuitEditorModeIcon") },
-      ...(state.hmiApplication?.pages.length ? [{ value: "hmi" as const, label: "HMI" }] : []),
+      // Subsistema INTERNO: o painel de operação é o Faceplate (motor das Telas HMI, docs/62 §8) --
+      // botão "Faceplate" abaixo; as páginas HMI antigas da definição viram o Faceplate na 1ª abertura.
+      ...(state.hmiApplication?.pages.length && state.subcircuitEditingContext.internal !== true ? [{ value: "hmi" as const, label: "HMI" }] : []),
     ];
     for (const modeOption of modeOptions) {
       const option = document.createElement("option");
@@ -4314,6 +4446,12 @@ function renderAppBar(): HTMLElement {
     });
 
     subcircuitGroup.append(label, modeSelect);
+    if (state.subcircuitEditingContext.internal === true) {
+      const typeId = state.subcircuitEditingContext.typeId;
+      subcircuitGroup.appendChild(renderToolbarButton("properties",
+        currentLocale() === "pt-BR" ? "Faceplate: painel de operação do subsistema (abre no contexto de uma instância do projeto)" : "Faceplate: the subsystem's operation panel (opens for a project instance)",
+        () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenDefinitionFaceplate", typeId }), false, "Faceplate"));
+    }
 
     // Todo botão depois do combobox é SÓ ÍCONE (pedido real: "todos os botões seguintes devem
     // exibir apenas ícones... ao passar o mouse, mostre o nome/descrição num tooltip") -- puramente
@@ -4385,7 +4523,9 @@ function renderAppBar(): HTMLElement {
   const hmiNavigationButtons: HTMLButtonElement[] = [];
   const hmiModeButtons: HTMLButtonElement[] = [];
   const createPageButton = renderToolbarButton("createHmiPage", t("createHmiPage"), () => createHmiPageFromSelection());
-  createPageButton.hidden = hmiPresentationMode;
+  // No projeto, a HMI nasce do botão "Tela HMI" (Controle › Ferramentas) e abre no Painel Visual;
+  // esta criação só continua valendo dentro de um subsistema aberto (páginas do próprio subsistema).
+  createPageButton.hidden = hmiPresentationMode || !state.subcircuitEditingContext || state.subcircuitEditingContext.internal === true;
   editGroup.appendChild(createPageButton);
   if (state.hmiApplication?.pages.length) {
     const activeHmiPageId = hmiPageForEditing()?.id ?? state.hmiApplication.startPageId;
@@ -4400,6 +4540,7 @@ function renderAppBar(): HTMLElement {
     pageSelect.addEventListener("change", () => {
       if (subcircuitEditorMode === "hmi") commitHmiSceneToPage();
       selectedHmiPageId = pageSelect.value; hmiSceneCache = undefined; clearSelection(); render(); zoomToFitAllDeferred();
+      sendVisualSession();
     });
     editGroup.appendChild(pageSelect);
     if (subcircuitEditorMode === "hmi") {
@@ -4591,7 +4732,11 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
     if (document.activeElement !== canvas) return;
     if (hmiPresentationMode) {
       event.preventDefault();
-      if (event.key === "Escape") setHmiPresentationMode(false);
+      if (event.key === "Escape") {
+        // Tela HMI: Esc sai da tela cheia (docs/61 §7.3); fora dela, a edição é pelo menu de contexto.
+        if (!visualRole) setHmiPresentationMode(false);
+        else if (visualWindowInfo.window === "fullscreen") requestVisualWindow("exitFullscreen");
+      }
       return;
     }
     if (event.key === "Tab") {
@@ -4659,7 +4804,11 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
     // nunca substitui um menu mais específico pelo genérico "Selecionar tudo".
     if (event.defaultPrevented) return;
     event.preventDefault();
-    if (hmiPresentationMode) return;
+    if (hmiPresentationMode) {
+      // Operação da Tela HMI: o menu existe e mostra só o que se aplica (docs/61 §9).
+      if (visualRole) showContextMenu(event, visualRoleMenuItems());
+      return;
+    }
     if (placingTypeId) {
       // Mesmo padrão de Esc: botão direito cancela a ferramenta ativa, nunca deixa o modo de
       // posicionamento aberto por baixo do menu de contexto genérico.
@@ -4675,17 +4824,20 @@ function installCanvasEventHandlers(canvas: HTMLDivElement, canvasContent: HTMLD
     clearSelection();
     render();
     const history = activeUndoHistory();
+    const canUndo = visualRole ? visualHistory.canUndo : history.undoStack.length > 0;
+    const canRedo = visualRole ? visualHistory.canRedo : history.redoStack.length > 0;
     showContextMenu(event, [
-      { label: t("paste"), onClick: () => pasteClipboardItems(), disabled: !clipboardItems || clipboardItems.components.length === 0, shortcut: "Ctrl+V" },
-      { label: t("undo"), onClick: () => undo(), disabled: history.undoStack.length === 0, shortcut: "Ctrl+Z" },
-      { label: t("redo"), onClick: () => redo(), disabled: history.redoStack.length === 0, shortcut: "Ctrl+Y" },
+      { label: t("paste"), onClick: () => pasteClipboardItems(), disabled: !hasPasteableClipboard(), shortcut: "Ctrl+V" },
+      { label: t("undo"), onClick: () => undo(), disabled: !canUndo, shortcut: "Ctrl+Z" },
+      { label: t("redo"), onClick: () => redo(), disabled: !canRedo, shortcut: "Ctrl+Y" },
       { kind: "separator" },
       { label: t("selectAll"), onClick: () => selectAll() },
       { kind: "separator" },
       { label: t("zoomFitAll"), onClick: () => zoomToFitAll(), disabled: !activeSceneFitBoundingBox() },
       { label: t("zoomReset"), onClick: () => zoomReset() },
-      { kind: "separator" },
-      { label: t("importCircuit"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestImportCircuit" }) },
+      ...(visualRole
+        ? [{ kind: "separator" } as ContextMenuItem, ...visualRoleMenuItems()]
+        : [{ kind: "separator" } as ContextMenuItem, { label: t("importCircuit"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestImportCircuit" }) }]),
     ]);
   });
 
@@ -4818,7 +4970,8 @@ function scheduleViewportPersist(): void {
   if (viewportPersistTimer !== undefined) clearTimeout(viewportPersistTimer);
   viewportPersistTimer = setTimeout(() => {
     viewportPersistTimer = undefined;
-    persistState();
+    if (visualRole) sendVisualSession();
+    else persistState();
   }, 200);
 }
 
@@ -4883,12 +5036,32 @@ function zoomToBoundingBox(box: { minX: number; minY: number; maxX: number; maxY
   const centerY = (box.minY + box.maxY) / 2;
   state.viewport = { zoom, x: viewWidth / 2 - centerX * zoom, y: viewHeight / 2 - centerY * zoom };
   if (canvasContentElement) canvasContentElement.style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${zoom})`;
+  positionMathEmbeds();
   persistState();
 }
 
 function zoomToFitAll(): void {
+  if (visualRole && hmiPresentationMode) {
+    fitHmiPageForPresentation();
+    return;
+  }
   const box = activeSceneFitBoundingBox();
   if (box) zoomToBoundingBox(box);
+}
+
+/** Operação da Tela HMI (docs/62 §7.3): a página inteira cabe na janela com escala UNIFORME e faixas
+ * laterais -- nunca estica, nunca corta, sem a margem de 10% da edição. Refeito a cada mudança de
+ * tamanho (janela normal, maximizada, tela cheia, outro monitor). */
+function fitHmiPageForPresentation(): void {
+  const page = hmiPageForEditing();
+  if (!page || !canvasElement || !canvasContentElement) return;
+  const viewWidth = canvasElement.clientWidth;
+  const viewHeight = canvasElement.clientHeight;
+  if (viewWidth <= 0 || viewHeight <= 0 || page.width <= 0 || page.height <= 0) return;
+  const zoom = Math.min(viewWidth / page.width, viewHeight / page.height);
+  state.viewport = { zoom, x: (viewWidth - page.width * zoom) / 2, y: (viewHeight - page.height * zoom) / 2 };
+  canvasContentElement.style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(${zoom})`;
+  positionMathEmbeds();
 }
 
 /** Chama `zoomToFitAll()` só depois que o navegador de fato mediu o layout do canvas (`requestAnimationFrame`)
@@ -4917,6 +5090,7 @@ function zoomReset(): void {
   const localY = (screenY - state.viewport.y) / oldZoom;
   state.viewport = { zoom: 1, x: screenX - localX, y: screenY - localY };
   if (canvasContentElement) canvasContentElement.style.transform = `translate(${state.viewport.x}px, ${state.viewport.y}px) scale(1)`;
+  positionMathEmbeds();
   persistState();
 }
 
@@ -5212,6 +5386,650 @@ function renderHmiNavigationControls(canvasContent: HTMLElement): void {
   }
 }
 
+// ── Painel Visual (Tela HMI) ─────────────────────────────────────────────────────────────────────
+
+/** Sessão + janela vindas do Host (depois de todo `init`, inclusive quando o VS Code recriou a Webview
+ * ao trocar de janela). As quatro dimensões são independentes (docs/61 §5): edição/operação,
+ * acoplada/flutuante, normal/maximizada/tela cheia e contexto HMI/Laboratório. */
+function applyVisualState(session: VisualSession, windowInfo: VisualWindowInfo, history: { canUndo: boolean; canRedo: boolean }): void {
+  const firstState = !visualStateReceived;
+  visualStateReceived = true;
+  const windowChanged = windowInfo.window !== visualWindowInfo.window || windowInfo.docking !== visualWindowInfo.docking;
+  const contextChanged = session.context !== visualContext;
+  visualWindowInfo = windowInfo;
+  visualHistory = history;
+  visualContext = session.context;
+  if (typeof session.labPresentation === "boolean" && session.labPresentation !== labPresentation) setLabPresentation(session.labPresentation, false);
+  let pageChanged = false;
+  if (session.pageId && session.pageId !== selectedHmiPageId && state.hmiApplication?.pages.some((page) => page.id === session.pageId)) {
+    commitHmiSceneToPage();
+    selectedHmiPageId = session.pageId;
+    hmiSceneCache = undefined;
+    pageChanged = true;
+  }
+  const presentation = !session.editing;
+  const modeChanged = presentation !== hmiPresentationMode;
+  if (modeChanged) {
+    if (presentation) { cancelActiveTool(); clearSelection(); }
+    hmiPresentationMode = presentation;
+  }
+  document.body.classList.toggle("visual-context-lab", visualContext === "lab");
+  document.body.classList.toggle("visual-operate", hmiPresentationMode);
+  document.body.classList.toggle("visual-fullscreen", visualWindowInfo.window === "fullscreen");
+  document.body.classList.toggle("visual-undocked", visualWindowInfo.docking === "undocked");
+  // Estado observável (testes e diagnóstico): o que o Host disse por último sobre esta tela.
+  Object.assign(document.body.dataset, {
+    visualDocking: visualWindowInfo.docking, visualWindow: visualWindowInfo.window, visualContext,
+    visualCanUndock: String(visualWindowInfo.canUndock), visualCanFullscreen: String(visualWindowInfo.canFullscreen),
+    visualCanUndo: String(visualHistory.canUndo), visualCanRedo: String(visualHistory.canRedo),
+  });
+  if (!isInteractiveGestureInProgress()) render();
+  const keepStoredViewport = firstState && !hmiPresentationMode && Boolean(session.viewport);
+  if (!keepStoredViewport && (firstState || pageChanged || windowChanged || contextChanged || modeChanged)) zoomToFitAllDeferred();
+}
+
+function setVisualEditing(editing: boolean): void {
+  if (!visualRole) return;
+  hideContextMenu();
+  if (editing === !hmiPresentationMode) return;
+  if (!editing) commitHmiSceneToPage();
+  setHmiPresentationMode(!editing);
+  document.body.classList.toggle("visual-operate", hmiPresentationMode);
+}
+
+/** Itens de janela/modo do menu de contexto, por estado (docs/61 §9): o que não se aplica não aparece. */
+function visualRoleMenuItems(): ContextMenuItem[] {
+  if (!visualRole) return [];
+  const pt = currentLocale() === "pt-BR";
+  const items: ContextMenuItem[] = [];
+  items.push(hmiPresentationMode
+    ? { label: pt ? "Entrar em modo de edição" : "Enter Edit Mode", onClick: () => setVisualEditing(true) }
+    : { label: pt ? "Sair do modo de edição" : "Exit Edit Mode", onClick: () => setVisualEditing(false) });
+  items.push({ kind: "separator" });
+  if (visualWindowInfo.docking === "docked" && visualWindowInfo.canUndock) {
+    items.push({ label: pt ? "Desacoplar janela" : "Undock Window", onClick: () => requestVisualWindow("undock") });
+  }
+  if (visualWindowInfo.docking === "undocked" && visualWindowInfo.window !== "fullscreen") {
+    items.push({ label: pt ? "Acoplar ao VS Code" : "Dock Window", onClick: () => requestVisualWindow("dock") });
+  }
+  if (visualWindowInfo.canFullscreen) {
+    items.push(visualWindowInfo.window === "fullscreen"
+      ? { label: pt ? "Sair da tela cheia" : "Exit Full Screen", shortcut: "Esc", onClick: () => requestVisualWindow("exitFullscreen") }
+      : { label: pt ? "Tela cheia" : "Enter Full Screen", shortcut: "F11", onClick: () => requestVisualWindow("fullscreen") });
+  }
+  items.push({
+    label: visualContext === "lab"
+      ? (pt ? "Contexto: HMI" : "Context: HMI")
+      : (pt ? "Contexto: Laboratório de Cálculo" : "Context: Calculus Lab"),
+    onClick: () => requestVisualWindow("toggleContext"),
+  });
+  const app = state.hmiApplication;
+  if (hmiPresentationMode && app && app.pages.length > 1) {
+    items.push({ kind: "separator" });
+    for (const page of app.pages) {
+      items.push({ label: `${pt ? "Ir para" : "Go to"} ${page.name}`, checked: page.id === hmiPageForEditing()?.id, onClick: () => navigateHmiPage(page.id) });
+    }
+  }
+  return items;
+}
+
+/** Botão de tela cheia no canto superior direito (docs/61 §7), visível em edição e em operação. */
+let visualCornerControls: HTMLElement | undefined;
+function renderVisualCornerControls(): void {
+  if (!visualRole) return;
+  if (!visualCornerControls) {
+    visualCornerControls = document.createElement("div");
+    visualCornerControls.className = "visual-corner-controls";
+    document.body.appendChild(visualCornerControls);
+  }
+  const pt = currentLocale() === "pt-BR";
+  visualCornerControls.replaceChildren();
+  if (!visualWindowInfo.canFullscreen) return;
+  const fullscreen = visualWindowInfo.window === "fullscreen";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `visual-corner-button visual-corner-button--${fullscreen ? "exit" : "enter"}`;
+  button.title = fullscreen ? (pt ? "Sair da tela cheia (Esc)" : "Exit full screen (Esc)") : (pt ? "Tela cheia" : "Full screen");
+  button.setAttribute("aria-label", button.title);
+  button.innerHTML = fullscreen
+    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>'
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+  button.addEventListener("click", () => requestVisualWindow(fullscreen ? "exitFullscreen" : "fullscreen"));
+  visualCornerControls.appendChild(button);
+}
+
+/** Barra do Painel Visual: arquivo, simulação, edição da tela (só em edição), modo, janela e vista. */
+function renderVisualAppBar(): HTMLElement {
+  if (visualContext === "lab" && hmiPresentationMode) return renderLabShellHeader();
+  const pt = currentLocale() === "pt-BR";
+  const bar = document.createElement("div");
+  bar.className = "appbar appbar--visual";
+  const editing = !hmiPresentationMode;
+
+  const fileGroup = document.createElement("div");
+  fileGroup.className = "appbar__group";
+  fileGroup.append(renderToolbarButton("save", t("saveProject"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestSaveProject" })));
+
+  const simGroup = document.createElement("div");
+  simGroup.className = "appbar__group";
+  const simulationControls = simulationControlModel(simulationStatus);
+  simGroup.append(
+    renderToolbarButton(simulationControls.primaryIcon, t(simulationControls.primaryLabelKey), () => send({
+      version: WEBVIEW_MESSAGE_VERSION,
+      type: simulationControls.primaryAction === "run" ? "requestRunSimulation" : "requestPauseSimulation",
+    })),
+    renderToolbarButton("stop", t("stopSimulation"), () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestStopSimulation" }), simulationControls.stopDisabled),
+  );
+
+  const pageGroup = document.createElement("div");
+  pageGroup.className = "appbar__group";
+  const app = state.hmiApplication;
+  const activePage = hmiPageForEditing();
+  if (app && app.pages.length > 1) {
+    const pageSelect = document.createElement("select");
+    pageSelect.className = "appbar__subcircuit-mode-select";
+    pageSelect.title = pt ? "Página" : "Page";
+    for (const page of app.pages) {
+      const option = document.createElement("option");
+      option.value = page.id;
+      option.textContent = page.name;
+      option.selected = page.id === activePage?.id;
+      pageSelect.appendChild(option);
+    }
+    pageSelect.addEventListener("change", () => navigateHmiPage(pageSelect.value));
+    pageGroup.appendChild(pageSelect);
+  } else if (activePage) {
+    const pageName = document.createElement("span");
+    pageName.className = "appbar__hmi-page-name";
+    pageName.textContent = activePage.name;
+    pageGroup.appendChild(pageName);
+  }
+
+  const editGroup = document.createElement("div");
+  editGroup.className = "appbar__group";
+  if (editing) {
+    editGroup.append(
+      renderToolbarButton("createHmiPage", pt ? "Nova página" : "New page", () => void createHmiPageFromSelection()),
+      renderToolbarButton("properties", pt ? "Renomear página" : "Rename page", () => void renameHmiPage()),
+      renderToolbarButton("save", pt ? "Definir página inicial" : "Set start page", () => setHmiStartPage()),
+      renderToolbarButton("forward", pt ? "Adicionar atalho de navegação" : "Add navigation shortcut", () => void addHmiPageNavigation()),
+      renderToolbarButton("properties", pt ? "Definir dimensões da página" : "Set page dimensions", () => void setHmiPageDimensions()),
+      renderToolbarButton("properties", pt ? "Configurar indicação STALE" : "Configure STALE indication", () => void setHmiStaleTimeout()),
+      renderToolbarButton("properties", pt ? "Verificar HMI" : "Verify HMI", () => verifyHmiDesign()),
+      renderToolbarButton("delete", pt ? "Excluir página" : "Delete page", () => deleteHmiPage(), (app?.pages.length ?? 0) <= 1),
+      renderToolbarButton("properties", t("componentProperties"), () => openSelectedProperties(), !getSelectedComponent()),
+      renderToolbarButton("delete", t("deleteSelectedComponent"), () => deleteSelectedItems(), state.selectedComponentIds.length === 0),
+    );
+    const labPage = document.createElement("select");
+    labPage.className = "appbar__subcircuit-mode-select visual-lab-page-select";
+    labPage.title = pt ? "Inserir uma página com uma atividade do Laboratório de Cálculo" : "Insert a page with a Calculus Lab activity";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = pt ? "+ Página do Laboratório…" : "+ Calculus Lab page…";
+    labPage.appendChild(placeholder);
+    for (const [kind, label] of Object.entries(ACTIVITY_KIND_LABEL)) {
+      const option = document.createElement("option");
+      option.value = kind;
+      option.textContent = label;
+      labPage.appendChild(option);
+    }
+    labPage.addEventListener("change", () => {
+      const kind = labPage.value as LabActivityKind;
+      labPage.value = "";
+      if (kind) addLabActivityPage(kind);
+    });
+    editGroup.appendChild(labPage);
+  }
+
+  const modeGroup = document.createElement("div");
+  modeGroup.className = "appbar__group";
+  modeGroup.appendChild(renderToolbarButton(editing ? "start" : "properties",
+    editing ? (pt ? "Sair do modo de edição (operar)" : "Exit edit mode (operate)") : (pt ? "Entrar em modo de edição" : "Enter edit mode"),
+    () => setVisualEditing(!editing), false, editing ? (pt ? "Operar" : "Operate") : (pt ? "Editar" : "Edit")));
+
+  const windowGroup = document.createElement("div");
+  windowGroup.className = "appbar__group";
+  if (visualWindowInfo.canUndock) {
+    windowGroup.appendChild(visualWindowInfo.docking === "docked"
+      ? renderToolbarButton("forward", pt ? "Desacoplar janela" : "Undock window", () => requestVisualWindow("undock"), false, pt ? "Desacoplar" : "Undock")
+      : renderToolbarButton("back", pt ? "Acoplar ao VS Code" : "Dock window", () => requestVisualWindow("dock"), visualWindowInfo.window === "fullscreen", pt ? "Acoplar" : "Dock"));
+  }
+  const contextLabel = visualContext === "lab" ? (pt ? "Laboratório" : "Lab") : "HMI";
+  windowGroup.appendChild(renderToolbarButton("properties", pt ? "Alternar contexto HMI / Laboratório de Cálculo" : "Toggle HMI / Calculus Lab context", () => requestVisualWindow("toggleContext"), false, contextLabel));
+
+  const viewGroup = document.createElement("div");
+  viewGroup.className = "appbar__group";
+  viewGroup.append(
+    renderToolbarButton("zoomFitAll", t("zoomFitAll"), () => zoomToFitAll()),
+    renderToolbarButton("zoomReset", t("zoomReset"), () => zoomReset(), hmiPresentationMode),
+  );
+
+  const meta = document.createElement("div");
+  meta.className = "appbar__meta";
+  const title = document.createElement("div");
+  title.className = "appbar__selection";
+  title.textContent = activityEditingId
+    ? (pt ? "Editando a atividade (modo professor) — clique fora dela para voltar à página" : "Editing the activity (teacher mode) — click outside it to return to the page")
+    : visualRole?.faceplate
+      ? `Faceplate · ${visualRole.faceplate.instanceLabel}`
+      : (state.hmiApplication as VisualDocument | undefined)?.title ?? visualRole?.title ?? "";
+  const status = document.createElement("div");
+  status.className = `appbar__status appbar__status--${simulationStatus}`;
+  status.textContent = visualWindowInfo.projectSimulationSuspended
+    ? (pt ? "Simulação do projeto suspensa (modelo interno em edição)" : "Project simulation suspended (internal model being edited)")
+    : simulationStatus === "running" ? t("running") : simulationStatus === "paused" ? t("paused") : t("stopped");
+  const rateLabel = document.createElement("span");
+  rateLabel.className = "appbar__status-rate";
+  rateLabel.textContent = simulationRateText();
+  status.appendChild(rateLabel);
+  meta.append(title, status);
+
+  bar.append(fileGroup, simGroup, pageGroup, editGroup, modeGroup, windowGroup, viewGroup, meta);
+  return bar;
+}
+
+
+/** Botão "Tela HMI" no esquemático (docs/62 §5): abrir em cada estado de janela, renomear, duplicar. */
+function hmiScreenButtonMenuItems(component: WebviewComponentModel, isGroup: boolean): ContextMenuItem[] {
+  if (isGroup || visualRole || component.typeId !== HMI_SCREEN_TYPE_ID) return [];
+  const pt = currentLocale() === "pt-BR";
+  const open = (mode: "docked" | "floating" | "fullscreen") => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenVisualScreen", componentId: component.id, mode });
+  return [
+    { label: pt ? "Abrir tela" : "Open screen", onClick: () => open("docked") },
+    { label: pt ? "Abrir em janela flutuante" : "Open in floating window", onClick: () => open("floating") },
+    { label: pt ? "Abrir em tela cheia" : "Open in full screen", onClick: () => open("fullscreen") },
+    { kind: "separator" },
+    { label: pt ? "Renomear tela…" : "Rename screen…", onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestScreenAction", componentId: component.id, action: "rename" }) },
+    { label: pt ? "Duplicar tela" : "Duplicate screen", onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestScreenAction", componentId: component.id, action: "duplicate" }) },
+    { kind: "separator" },
+  ];
+}
+
+let lastScreenButtonTap: { componentId: string; time: number } | undefined;
+
+/** Botão "Tela HMI": duplo clique abre a tela; com a simulação rodando, um clique basta. Detectado no
+ * `pointerup` (não em `click`/`dblclick`): o `render()` do fim do gesto reanexa o elemento e o
+ * Chromium descarta o `click` seguinte quando o alvo do `mousedown` sai do DOM. */
+function noteScreenButtonTap(component: WebviewComponentModel): void {
+  if (visualRole && component.typeId === MATH_ACTIVITY_TYPE_ID && !hmiPresentationMode) {
+    const now = performance.now();
+    if (lastScreenButtonTap?.componentId === component.id && now - lastScreenButtonTap.time <= 500) {
+      lastScreenButtonTap = undefined;
+      enterActivityEditing(component.id);
+    } else {
+      lastScreenButtonTap = { componentId: component.id, time: now };
+    }
+    return;
+  }
+  if (visualRole || component.typeId !== HMI_SCREEN_TYPE_ID) return;
+  const now = performance.now();
+  const second = lastScreenButtonTap?.componentId === component.id && now - lastScreenButtonTap.time <= 500;
+  if (second || simulationStatus === "running") {
+    lastScreenButtonTap = undefined;
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenVisualScreen", componentId: component.id, mode: "auto" });
+    return;
+  }
+  lastScreenButtonTap = { componentId: component.id, time: now };
+}
+
+/** Id opaco e único de uma tela nova (o Host cria o documento ao ver um `screenId` desconhecido). */
+function newScreenUid(): string {
+  return `tela-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+if (visualRole) {
+  // F11 e Esc com o foco na tela: a Webview não depende do repasse de atalhos ao workbench.
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "F11") {
+      event.preventDefault();
+      event.stopPropagation();
+      requestVisualWindow(visualWindowInfo.window === "fullscreen" ? "exitFullscreen" : "fullscreen");
+      return;
+    }
+    // Esc em tela cheia: primeiro cancela a ferramenta armada; sem ferramenta, sai da tela cheia (edição ou operação).
+    if (event.key === "Escape" && visualWindowInfo.window === "fullscreen" && !placingTypeId && !state.pendingConnection) {
+      event.preventDefault();
+      requestVisualWindow("exitFullscreen");
+    }
+  }, { capture: true });
+  let resizeFrame = 0;
+  window.addEventListener("resize", () => {
+    if (!hmiPresentationMode) return;
+    cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(() => fitHmiPageForPresentation());
+  });
+}
+
+// ── Elementos matemáticos de tela (docs/62 §6) ───────────────────────────────────────────────────
+
+/** Parâmetros da página atual: autorados na edição; na operação, os que o operador mexeu. */
+function currentMathScope(): Record<string, number> {
+  const session = hmiPresentationMode ? mathParameterValuesByPage.get(selectedHmiPageId ?? "") ?? {} : {};
+  return mathScopeOf(subcircuitEditorMode === "hmi" ? activeSceneComponents() : state.components, session);
+}
+
+function mathRuntimeProperties(component: WebviewComponentModel): Record<string, unknown> {
+  const properties: Record<string, unknown> = { ...component.properties, __math_scope: currentMathScope() };
+  if (component.typeId === MATH_PARAMETER_TYPE_ID && hmiPresentationMode) {
+    const name = typeof component.properties.name === "string" ? component.properties.name : "";
+    const value = mathParameterValuesByPage.get(selectedHmiPageId ?? "")?.[name];
+    if (typeof value === "number") properties.__math_value = value;
+  }
+  if (component.typeId === MATH_TREND_TYPE_ID) {
+    Object.assign(properties, graphicalRuntimeProperties(component.properties, readoutForBinding, readoutTransportStatus, hmiTelemetryStale, readoutSampleTimestampNs));
+    properties.__math_samples = trendSamplesByElement.get(component.id) ?? [];
+  }
+  return properties;
+}
+
+/** Uma amostra por quadro de telemetria para cada tendência da página, na janela configurada. */
+function recordMathTrendSamples(instancePaths = false): void {
+  if (subcircuitEditorMode !== "hmi") return;
+  const now = performance.now() / 1000;
+  for (const component of activeSceneComponents()) {
+    if (component.typeId !== MATH_TREND_TYPE_ID || bindsInstancePath(component) !== instancePaths) continue;
+    const runtime = graphicalRuntimeProperties(component.properties, readoutForBinding, readoutTransportStatus, hmiTelemetryStale, readoutSampleTimestampNs);
+    if (runtime.__g_bind !== "bound") continue;
+    const samples = trendSamplesByElement.get(component.id) ?? [];
+    samples.push([now, runtime.__g_value]);
+    const windowSeconds = Math.max(1, Number(component.properties.windowSeconds) || 30);
+    while (samples.length > 0 && samples[0]![0] < now - windowSeconds * 1.5) samples.shift();
+    if (samples.length > 20000) samples.splice(0, samples.length - 20000);
+    trendSamplesByElement.set(component.id, samples);
+  }
+}
+
+function repaintMathWidgets(): void {
+  const started = performance.now();
+  for (const component of subcircuitEditorMode === "hmi" ? activeSceneComponents() : state.components) {
+    if (!isMathWidgetTypeId(component.typeId)) continue;
+    const element = componentElementsById.get(component.id);
+    if (element) updateComponentElement(element, component);
+  }
+  if (visualStats.mathRepaintMs.length < 500) visualStats.mathRepaintMs.push(performance.now() - started);
+}
+
+function setMathParameter(name: string, value: number): void {
+  if (!isParameterName(name)) return;
+  const pageId = selectedHmiPageId ?? "";
+  const values = mathParameterValuesByPage.get(pageId) ?? {};
+  if (values[name] === value) return;
+  mathParameterValuesByPage.set(pageId, { ...values, [name]: value });
+  repaintMathWidgets();
+}
+
+/** Slider de parâmetro na operação: clicar/arrastar no trilho muda o valor da página (nada vai ao Host). */
+function attachMathParameterInteraction(el: HTMLElement, liveComponent: () => WebviewComponentModel | undefined): void {
+  if (el.dataset.typeId !== MATH_PARAMETER_TYPE_ID) return;
+  el.addEventListener("pointerdown", (event) => {
+    if (!hmiPresentationMode || event.button !== 0) return;
+    const component = liveComponent();
+    if (!component) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const name = typeof component.properties.name === "string" ? component.properties.name : "";
+    const apply = (clientX: number): void => {
+      const rect = el.getBoundingClientRect();
+      const box = componentBox(component.typeId, component.properties);
+      const track = parameterTrack(box);
+      const localX = ((clientX - rect.left) / Math.max(1, rect.width)) * box.width;
+      setMathParameter(name, parameterValueAt(component.properties, (localX - track.x0) / Math.max(1, track.x1 - track.x0)));
+    };
+    apply(event.clientX);
+    el.setPointerCapture(event.pointerId);
+    const move = (moveEvent: PointerEvent): void => apply(moveEvent.clientX);
+    const finish = (): void => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", finish);
+      el.removeEventListener("pointercancel", finish);
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", finish);
+    el.addEventListener("pointercancel", finish);
+  }, { capture: true });
+}
+
+/** "+ Página do Laboratório" (docs/62 §6.3): página nova com a atividade-modelo do tipo, ocupando a página. */
+function addLabActivityPage(kind: LabActivityKind): void {
+  const app = state.hmiApplication;
+  if (!visualRole || !app) return;
+  commitHmiSceneToPage();
+  const activity = defaultActivity(kind);
+  const page = labActivityPage(activity, uniqueLabPageSuffix(activity, app.pages));
+  state = { ...state, hmiApplication: { ...app, pages: [...app.pages, page] } };
+  selectedHmiPageId = page.id;
+  hmiSceneCache = undefined;
+  persistVisualDocument();
+  sendVisualSession();
+  render();
+  zoomToFitAllDeferred();
+}
+
+/** Inspector -> definição da atividade: trocar "Atividade" troca pela atividade-modelo daquele tipo;
+ * "Planta" liga o experimento a uma instância do projeto (`plantComponentId` da atividade). */
+function normalizeMathActivities(): void {
+  for (const component of hmiSceneCache?.elements ?? []) {
+    if (component.typeId !== MATH_ACTIVITY_TYPE_ID) continue;
+    const kind = component.properties.kind;
+    let activity = activityFromProperties(component.properties);
+    let changed = false;
+    if (typeof kind === "string" && kind in ACTIVITY_KIND_LABEL && activity?.kind !== kind) {
+      activity = defaultActivity(kind as LabActivityKind) as unknown as typeof activity;
+      changed = true;
+    }
+    if (!activity) continue;
+    const plant = typeof component.properties.plantComponentId === "string" ? component.properties.plantComponentId.trim() : "";
+    if (plant !== (typeof activity.plantComponentId === "string" ? activity.plantComponentId : "")) {
+      activity = { ...activity };
+      if (plant) activity.plantComponentId = plant;
+      else delete activity.plantComponentId;
+      changed = true;
+    }
+    if (changed) component.properties.activityJson = JSON.stringify(activity);
+  }
+}
+
+// ── Atividade do Laboratório: o próprio Laboratório num <iframe> ─────────────────────────────────
+//
+// Os `<iframe>` vivem numa camada própria DENTRO do `canvasContent` (mesma transformação da página),
+// criada uma vez e nunca reanexada: um `<iframe>` que sai do DOM, mesmo por um instante, recarrega e
+// perde o estado da atividade -- e o `render()` reanexa os elementos de componente a cada passada.
+
+interface MathEmbed { iframe: HTMLIFrameElement }
+const mathEmbeds = new Map<string, MathEmbed>();
+let mathEmbedLayer: HTMLDivElement | undefined;
+/** Código e tema do Laboratório, pedidos ao Host na primeira atividade (vão inline no `<iframe>`). */
+let labBundle: { script: string; style: string } | undefined;
+let labBundleRequested = false;
+/** Atividade sendo editada POR DENTRO (modo professor interativo): duplo clique na edição da tela;
+ * clicar fora dela volta à edição da página. Nas demais, a edição só seleciona/move o elemento. */
+let activityEditingId: string | undefined;
+
+function enterActivityEditing(elementId: string): void {
+  if (!visualRole || hmiPresentationMode || !mathEmbeds.has(elementId)) return;
+  activityEditingId = elementId;
+  positionMathEmbeds();
+  render();
+}
+
+function exitActivityEditing(): void {
+  if (!activityEditingId) return;
+  activityEditingId = undefined;
+  positionMathEmbeds();
+  // Sai no `pointerdown` de fora; a barra só é refeita no fim do gesto: refazê-la agora trocaria o
+  // botão que foi clicado (ex.: Salvar) antes do `click` dele, e o primeiro clique se perderia.
+  window.addEventListener("pointerup", () => setTimeout(() => render(), 0), { once: true, capture: true });
+}
+
+// Qualquer clique que chega a ESTE documento está fora do `<iframe>` da atividade em edição.
+document.addEventListener("pointerdown", () => { if (activityEditingId) exitActivityEditing(); }, true);
+
+function syncMathEmbeds(): void {
+  const resources = visualRole?.labEmbed;
+  const active = Boolean(resources) && subcircuitEditorMode === "hmi" && Boolean(canvasContentElement);
+  const wanted = active ? activeSceneComponents().filter((component) => component.typeId === MATH_ACTIVITY_TYPE_ID) : [];
+  const wantedIds = new Set(wanted.map((component) => component.id));
+  for (const [elementId, embed] of [...mathEmbeds]) {
+    if (wantedIds.has(elementId)) continue;
+    embed.iframe.remove();
+    mathEmbeds.delete(elementId);
+    if (visualRole) send({ version: WEBVIEW_MESSAGE_VERSION, type: "labEmbedClosed", documentId: visualRole.documentId, elementId });
+  }
+  if (!active || !resources || !canvasContentElement) return;
+  if (wanted.length > 0 && !labBundle) {
+    if (!labBundleRequested && visualRole) {
+      labBundleRequested = true;
+      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestLabEmbedBundle", documentId: visualRole.documentId });
+    }
+    return;
+  }
+  if (!mathEmbedLayer) {
+    mathEmbedLayer = document.createElement("div");
+    mathEmbedLayer.className = "math-embed-layer";
+  }
+  if (mathEmbedLayer.parentElement !== canvasContentElement) canvasContentElement.appendChild(mathEmbedLayer);
+  for (const component of wanted) {
+    if (!mathEmbeds.has(component.id)) {
+      const iframe = createLabIframe(component.id, resources);
+      mathEmbedLayer.appendChild(iframe);
+      mathEmbeds.set(component.id, { iframe });
+    }
+    positionMathEmbedFor(component);
+  }
+}
+
+function positionMathEmbeds(): void {
+  if (mathEmbeds.size === 0) return;
+  for (const component of activeSceneComponents()) {
+    if (component.typeId === MATH_ACTIVITY_TYPE_ID) positionMathEmbedFor(component);
+  }
+}
+
+function positionMathEmbedFor(component: WebviewComponentModel): void {
+  const embed = mathEmbeds.get(component.id);
+  if (!embed) return;
+  const style = embed.iframe.style;
+  const fill = hmiPresentationMode && component.properties.fillPage === true && canvasElement;
+  if (fill && canvasElement) {
+    // "Ocupar a página": a atividade cobre a área visível em pixels de TELA (escala 1, sem a do zoom
+    // da página), então reflui como o Laboratório numa janela desse tamanho.
+    const zoom = state.viewport.zoom || 1;
+    style.left = `${-state.viewport.x / zoom}px`;
+    style.top = `${-state.viewport.y / zoom}px`;
+    style.width = `${canvasElement.clientWidth}px`;
+    style.height = `${canvasElement.clientHeight}px`;
+    style.transform = `scale(${1 / zoom})`;
+  } else {
+    const box = componentBox(component.typeId, component.properties);
+    style.left = `${component.x}px`;
+    style.top = `${component.y}px`;
+    style.width = `${box.width}px`;
+    style.height = `${box.height}px`;
+    style.transform = "";
+  }
+  // Na edição a atividade aparece mas não captura o ponteiro: selecionar/arrastar é do editor.
+  const editingInside = !hmiPresentationMode && activityEditingId === component.id;
+  style.pointerEvents = hmiPresentationMode || editingInside ? "auto" : "none";
+  embed.iframe.classList.toggle("math-embed--selected", !hmiPresentationMode && !editingInside && isComponentSelected(component.id));
+  embed.iframe.classList.toggle("math-embed--editing", editingInside);
+}
+
+/** Carregador AMD mínimo do `lab-embed/lab.js` (`tsconfig.lab-embed.json`: nomes de módulo já resolvidos). */
+const LAB_AMD_LOADER = "(function(){var d=new Map(),c=new Map();self.define=function(n,deps,f){d.set(n,{deps:deps,f:f})};"
+  + "self.__labRequire=function r(n){var m=c.get(n);if(m)return m.exports;var e=d.get(n);if(!e)throw new Error('módulo do Laboratório ausente: '+n);"
+  + "m={exports:{}};c.set(n,m);e.f.apply(null,e.deps.map(function(x){return x==='require'?r:x==='exports'?m.exports:r(x)}));return m.exports}})();";
+
+function createLabIframe(elementId: string, resources: LabEmbedResources): HTMLIFrameElement {
+  const iframe = document.createElement("iframe");
+  iframe.className = "math-embed";
+  iframe.dataset.elementId = elementId;
+  iframe.title = "Atividade do Laboratório de Cálculo";
+  const nonce = resources.nonce.replace(/[^A-Za-z0-9+/=_-]/g, "");
+  const config = JSON.stringify({ elementId, presentation: labPresentation }).replace(/</g, "\\u003c");
+  // Tudo INLINE: o documento de um `<iframe>` aninhado não carrega recursos pelo service worker da
+  // Webview (o VS Code identifica a Webview pela URL do cliente). Os scripts usam o nonce desta página,
+  // cuja CSP o `<iframe>` herda.
+  const script = labBundle!.script.replace(/<\/script/gi, "<\\/script").replace(/<!--/g, "<\\!--");
+  const style = labBundle!.style.replace(/<\/style/gi, "<\\/style");
+  iframe.srcdoc = `<!doctype html><html lang="pt-BR"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />`
+    + `<style>${style}</style></head><body><div id="lab"></div>`
+    + `<script nonce="${nonce}">window.__LAB_EMBED__ = ${config};${LAB_AMD_LOADER}</script>`
+    + `<script nonce="${nonce}">${script}\n__labRequire("ui/main");</script></body></html>`;
+  return iframe;
+}
+
+// Mensagens das atividades (`lab/ui/main.ts` em modo embutido) seguem para o Host com o id do elemento.
+window.addEventListener("message", (event: MessageEvent) => {
+  const data = event.data as { __labEmbed?: unknown; message?: unknown } | undefined;
+  if (!visualRole || !data || typeof data.__labEmbed !== "string") return;
+  const embed = mathEmbeds.get(data.__labEmbed);
+  if (!embed || event.source !== embed.iframe.contentWindow) return;
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "labEmbedMessage", documentId: visualRole.documentId, elementId: data.__labEmbed, message: data.message });
+});
+
+function setLabPresentation(on: boolean, persist = true): void {
+  labPresentation = on;
+  document.body.classList.toggle("visual-lab-presentation", on);
+  for (const embed of mathEmbeds.values()) embed.iframe.contentWindow?.postMessage({ __labEmbedControl: { presentation: on } }, "*");
+  if (persist) {
+    sendVisualSession();
+    render();
+  }
+}
+
+/** Casca `lab` (docs/62 §7.1): o cabeçalho do Laboratório -- marca, páginas como abas e Apresentação. */
+function renderLabShellHeader(): HTMLElement {
+  const pt = currentLocale() === "pt-BR";
+  const bar = document.createElement("header");
+  bar.className = "appbar appbar--visual visual-lab-header";
+  const brand = document.createElement("div");
+  brand.className = "visual-lab-header__brand";
+  const strong = document.createElement("strong");
+  strong.textContent = "LasecSimul";
+  const product = document.createElement("span");
+  product.textContent = pt ? "| Laboratório de Cálculo" : "| Calculus Lab";
+  const title = document.createElement("span");
+  title.className = "visual-lab-header__title";
+  const screenTitle = (state.hmiApplication as VisualDocument | undefined)?.title ?? visualRole?.title ?? "";
+  // A tela padrão já se chama "Laboratório de Cálculo": repetir o nome ao lado da marca não diz nada.
+  title.textContent = screenTitle && !/^(Laboratório de Cálculo|Calculus Lab)$/i.test(screenTitle.trim()) ? `· ${screenTitle}` : "";
+  brand.append(strong, " ", product, " ", title);
+  const tabs = document.createElement("nav");
+  tabs.id = "labTabs";
+  tabs.className = "visual-lab-tabs";
+  tabs.setAttribute("aria-label", pt ? "Páginas" : "Pages");
+  const activePage = hmiPageForEditing();
+  for (const page of state.hmiApplication?.pages ?? []) {
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.textContent = page.name;
+    tab.dataset.pageId = page.id;
+    const kind = page.elements.find((element) => element.typeId === MATH_ACTIVITY_TYPE_ID)?.properties?.kind;
+    if (typeof kind === "string") tab.dataset.kind = kind;
+    tab.setAttribute("aria-current", String(page.id === activePage?.id));
+    tab.addEventListener("click", () => { if (page.id !== activePage?.id) navigateHmiPage(page.id); });
+    tabs.appendChild(tab);
+  }
+  const tools = document.createElement("div");
+  tools.className = "visual-lab-header__tools";
+  const presentation = document.createElement("button");
+  presentation.type = "button";
+  presentation.id = "labPresentation";
+  presentation.className = "visual-lab-header__button";
+  presentation.textContent = pt ? "Apresentação" : "Presentation";
+  presentation.setAttribute("aria-pressed", String(labPresentation));
+  presentation.addEventListener("click", () => setLabPresentation(!labPresentation));
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.className = "visual-lab-header__button";
+  edit.textContent = pt ? "Editar" : "Edit";
+  edit.title = pt ? "Entrar em modo de edição (professor)" : "Enter edit mode (teacher)";
+  edit.addEventListener("click", () => setVisualEditing(true));
+  tools.append(presentation, edit);
+  bar.append(brand, tabs, tools);
+  return bar;
+}
+
 function render(): void {
   if (!app) return;
   normalizeSelectedWireSegment();
@@ -5370,6 +6188,8 @@ function render(): void {
   syncPendingWireDockVisuals();
   renderPropertyDock();
   updateCanvasKeyboardAnnouncement();
+  renderVisualCornerControls();
+  syncMathEmbeds();
 }
 
 /** Componentes/fios cujas caixas (canvas-local, sem zoom) se sobrepõem ao retângulo do marquee --
@@ -5554,7 +6374,34 @@ function copySelectedItems(): boolean {
   const internalTypeIds = [...new Set(components.map((component) => component.typeId).filter((typeId) => isSubsystemTypeId(typeId)))];
   const subsystems = internalTypeIds.length > 0 ? structuredClone(subsystemClosure(internalTypeIds, state.subsystems ?? [])) : undefined;
   clipboardItems = { components, wires, hmiSourceByClipboardId, ...(subsystems && subsystems.length > 0 ? { subsystems } : {}) };
+  localClipboardAt = Date.now();
+  if (visualRole) {
+    // Só elementos independentes viajam entre vistas: projeções (`componentId`) pertencem ao contexto de origem.
+    const shared = components.filter((component) => !hmiSourceByClipboardId?.has(component.id) && isGraphicalTypeId(component.typeId));
+    if (shared.length > 0) {
+      send({ version: WEBVIEW_MESSAGE_VERSION, type: "visualClipboardSet", documentId: visualRole.documentId, at: localClipboardAt, components: shared,
+        ...(visualRole.faceplate ? { faceplateInstanceId: visualRole.faceplate.instanceId } : {}) });
+    }
+  }
   return true;
+}
+
+function hasPasteableClipboard(): boolean {
+  return Boolean(clipboardItems?.components.length) || Boolean(visualRole && sharedVisualClipboard?.components.length);
+}
+
+/** Colar numa vista visual: usa a cópia mais recente entre a local e a compartilhada por outra vista. */
+function adoptSharedVisualClipboard(): void {
+  if (!visualRole || !sharedVisualClipboard || sharedVisualClipboard.at <= localClipboardAt) return;
+  const fromInstance = sharedVisualClipboard.faceplateInstanceId;
+  const toInstance = visualRole.faceplate?.instanceId;
+  const components = sharedVisualClipboard.components.map((source) => {
+    const component = cloneComponent(source);
+    component.properties = remapBindingPaths(component.properties, fromInstance, toInstance);
+    return component;
+  });
+  clipboardItems = { components, wires: [] };
+  localClipboardAt = sharedVisualClipboard.at;
 }
 
 function cutSelectedItems(): void {
@@ -5569,6 +6416,18 @@ function cutSelectedItems(): void {
  * este helper. Mesma lógica de filtro de fio interno de `copySelectedItems`, sem tocar
  * `clipboardItems`/`state` -- quem chama decide quando inserir no estado global (o gesto de arrasto
  * NUNCA chama `render()` no meio, ver comentário sobre `setPointerCapture` em `createComponentElement`). */
+/** Copiar/colar ou duplicar um botão "Tela HMI" cria uma tela INDEPENDENTE (docs/62 §5.2): id novo,
+ * título numerado e `screenSource` apontando a original, que o Host copia. */
+function remintScreenButton(component: WebviewComponentModel, staged: readonly WebviewComponentModel[]): void {
+  if (component.typeId !== HMI_SCREEN_TYPE_ID) return;
+  const source = typeof component.properties.screenId === "string" ? component.properties.screenId : "";
+  const titles = new Set(staged.filter((entry) => entry.typeId === HMI_SCREEN_TYPE_ID).map((entry) => String(entry.properties.title ?? "")));
+  const base = String(component.properties.title ?? "Tela HMI").replace(/ \(\d+\)$/, "") || "Tela HMI";
+  let title = base;
+  for (let index = 2; titles.has(title); index += 1) title = `${base} (${index})`;
+  component.properties = { ...component.properties, screenId: newScreenUid(), title, ...(source ? { screenSource: source } : {}) };
+}
+
 function duplicateComponentsForDrag(originals: WebviewComponentModel[]): { components: WebviewComponentModel[]; wires: WebviewWireModel[] } {
   const originalIds = new Set(originals.map((component) => component.id));
   const idMap = new Map<string, string>();
@@ -5582,6 +6441,7 @@ function duplicateComponentsForDrag(originals: WebviewComponentModel[]): { compo
     component.id = nextId;
     component.label = nextIndexedLabel(component.typeId, baseLabel, stagedComponents);
     if (interactionKindFor(component.typeId) === "momentary") component.properties.closed = false;
+    remintScreenButton(component, stagedComponents);
     stagedComponents.push(component);
     return component;
   });
@@ -5603,6 +6463,7 @@ function duplicateComponentsForDrag(originals: WebviewComponentModel[]): { compo
 }
 
 function pasteClipboardItems(): void {
+  adoptSharedVisualClipboard();
   if (!clipboardItems || clipboardItems.components.length === 0) return;
 
   const idMap = new Map<string, string>();
@@ -5620,6 +6481,7 @@ function pasteClipboardItems(): void {
     component.x += WIRE_GRID_SIZE;
     component.y += WIRE_GRID_SIZE;
     if (interactionKindFor(component.typeId) === "momentary") component.properties.closed = false;
+    remintScreenButton(component, stagedComponents);
     stagedComponents.push(component);
     return component;
   });
@@ -7221,6 +8083,11 @@ function voltmeterReadoutText(component: WebviewComponentModel): string {
 }
 
 function runtimeSymbolProperties(component: WebviewComponentModel): Record<string, unknown> {
+  if (isMathTypeId(component.typeId)) return mathRuntimeProperties(component);
+  if (component.typeId === HMI_SCREEN_TYPE_ID) {
+    const screenId = typeof component.properties.screenId === "string" ? component.properties.screenId : "";
+    return { ...component.properties, __screen_state: screenStatesById[screenId] ?? "closed" };
+  }
   // Biblioteca de supervisório: UM resolvedor genérico (`graphicsBinding.ts`) para todos os
   // símbolos, em vez de um ramo por typeId aqui. Sai cedo porque um elemento gráfico nunca tem
   // leitura própria (`pinCount: 0` o mantém fora do Core): ele só PROJETA a leitura de outro
@@ -7229,7 +8096,7 @@ function runtimeSymbolProperties(component: WebviewComponentModel): Record<strin
     const graphicalProperties = component.typeId === "graphics.slider" && !component.properties.bindSource
       ? { ...component.properties, bindMin: component.properties.actionMin ?? 0, bindMax: component.properties.actionMax ?? 100 }
       : component.properties;
-    return { ...component.properties, ...graphicalRuntimeProperties(graphicalProperties, (id) => readoutsByComponentId[id], readoutTransportStatus, hmiTelemetryStale, readoutSampleTimestampNs) };
+    return { ...component.properties, ...graphicalRuntimeProperties(graphicalProperties, readoutForBinding, readoutTransportStatus, hmiTelemetryStale, readoutSampleTimestampNs) };
   }
   const runtimeComponentId = runtimeComponentIdForSceneItem(component);
   const readout = readoutsByComponentId[runtimeComponentId];
@@ -9061,8 +9928,9 @@ function attachGraphicalOperatorInteraction(
     if (!(event instanceof PointerEvent) || event.button !== 0) return;
     // The first click selects the slider. Only a subsequent drag on its thumb
     // operates it; a click on the track must never jump the process value.
+    // In operation (presentation) nothing is selectable: dragging the thumb is enough.
     if (typeId === "graphics.slider" &&
-        (!el.classList.contains("selected") ||
+        ((!hmiPresentationMode && !el.classList.contains("selected")) ||
          !(event.target instanceof Element) || !event.target.closest(".slider-thumb-hit"))) return;
     const component = consumeInRun(event);
     if (!component) return;
@@ -9185,6 +10053,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
   let suppressNextDialComponentClick = false;
 
   attachGraphicalOperatorInteraction(el, liveComponent);
+  attachMathParameterInteraction(el, liveComponent);
 
   // ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): isPushButton vem de interactionKind (genérico);
   // isToggleClickable é o conceito genérico de "clicar no toggle-hit-zone alterna `closed`" -- cobre
@@ -9281,7 +10150,10 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     // Webview ver `defaultPrevented` e não abrir o menu nativo (Cortar/Copiar/Colar) por cima do
     // nosso; `canvas` (ancestor) já ignora o evento quando `defaultPrevented` (ver seu handler).
     event.preventDefault();
-    if (hmiPresentationMode) return;
+    if (hmiPresentationMode) {
+      if (visualRole) showContextMenu(event, visualRoleMenuItems());
+      return;
+    }
     const component = liveComponent();
     if (!component) {
       hideContextMenu();
@@ -9326,6 +10198,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         ? [
             { label: t("openInternalModel"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenSubcircuit", sourceId: sourceId! }) },
             { label: t("editSubsystemPanel"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenSubsystemPanel", sourceId: sourceId! }) },
+            { label: currentLocale() === "pt-BR" ? "Abrir Faceplate da instância" : "Open instance faceplate", onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenInstanceFaceplate", componentId: component.id }) },
             { label: t("insertAnotherInstance"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestInsertSubsystemInstance", typeId: component.typeId }) },
             { label: t("duplicateSubsystem"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestDuplicateSubsystem", componentId: component.id }) },
             { label: t("renameSubsystem"), onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRenameSubsystem", typeId: component.typeId }) },
@@ -9489,8 +10362,9 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       ...symbolPinMenuItems,
       ...exposeComponentMenuItems,
       ...exportPropertyMenuItems,
+      ...(visualRole ? [{ kind: "separator" } as ContextMenuItem, ...visualRoleMenuItems()] : []),
     ];
-    showContextMenu(event, menuItems);
+    showContextMenu(event, [...hmiScreenButtonMenuItems(component, isGroup), ...menuItems]);
   });
 
   let dragStartX = 0;
@@ -10033,6 +10907,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
           child.el.style.top = `${child.startTop + dy}px`;
         }
         updateWiresTouchingComponent(target.component.id);
+        positionMathEmbedFor(target.component);
       }
       if (groupWireDragTarget) applyGroupWireDelta(groupWireDragTarget, dx, dy);
       if (groupWireMoveTargets) applyGroupMoveWireDelta(groupWireMoveTargets, dx, dy);
@@ -10057,6 +10932,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       groupWireDragTarget = undefined;
       groupWireMoveTargets = undefined;
       carriedTopology = undefined;
+      if (!dragStarted && !isDuplicateDragGesture) noteScreenButtonTap(component);
       if (!dragStarted && canToggle) {
         if (isPushButton) setPushClosed(component, false);
         else if (isToggleClickable) setSwitchClosed(component, component.properties.closed !== true);
@@ -10151,6 +11027,8 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
     ? `component--hmi-operator ${simulationStatus === "running" ? "component--hmi-operator-run" : "component--hmi-operator-edit"} ${graphicalActionTarget(component) ? "" : "component--hmi-operator-unconfigured"}`
     : "";
   el.className = `component ${isComponentSelected(component.id) ? "selected" : ""} ${hasPackageVisual ? "component--package" : ""} ${isVoltmeter ? "component--voltmeter" : ""} ${isPushButton ? "component--push" : ""} ${isSwitchToggle ? "component--switch" : ""} ${isFixedVolt ? "component--fixed-volt" : ""} ${isRail ? "component--rail" : ""} ${isTunnel ? "component--tunnel" : ""} ${meterClass} ${operatorClass} ${isMissingSubcircuitRef || isMissingDeviceRef ? "component--subcircuit-missing" : ""} ${isUnknownComponent ? "component--unknown" : ""}`;
+  // Slider de parâmetro matemático: interativo na operação, como os operadores HMI (pointer-events).
+  if (component.typeId === MATH_PARAMETER_TYPE_ID) el.classList.add("component--math-interactive");
   el.style.left = `${component.x + rotatedBox.x}px`;
   el.style.top = `${component.y + rotatedBox.y}px`;
   el.style.width = `${rotatedBox.width}px`;
@@ -12161,6 +13039,14 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       subcircuitEditorMode = "circuit";
       hmiPresentationMode = false;
     }
+    if (visualRole) {
+      subcircuitEditorMode = "hmi";
+      lastSentVisualDocumentKey = state.hmiApplication ? JSON.stringify(state.hmiApplication) : undefined;
+      if (message.type === "init") {
+        visualStats.initBytes = JSON.stringify(message.project).length;
+        visualStats.boot.init = performance.now();
+      }
+    }
     syncPackageRegistry(state.catalog);
     // O fio em desenho é estado só da Webview (o Host nunca o conhece): uma ressincronização dentro
     // da mesma sessão não o derruba, desde que a origem dele ainda exista.
@@ -12238,6 +13124,10 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
       subcircuitEditorMode = "circuit";
       hmiPresentationMode = false;
     }
+    if (visualRole) {
+      subcircuitEditorMode = "hmi";
+      if ("hmiApplication" in message.patch && state.hmiApplication) lastSentVisualDocumentKey = JSON.stringify(state.hmiApplication);
+    }
     if (enteringOrLeavingSubcircuitSession) switchUndoHistoryLevel(previousSubcircuitDepth, editingDepth(merged.subcircuitEditingContext));
     // Ao SAIR de uma sessão de "Abrir Subcircuito" de volta pro circuito principal, o overlay de
     // Modo Placa (`renderBoardOverlaysFor`) de QUALQUER instância deste subcircuito no circuito de
@@ -12282,7 +13172,40 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     return;
   }
 
+  if (message.type === "visualState") {
+    applyVisualState(message.session, message.window, message.history);
+    return;
+  }
+
+  if (message.type === "visualClipboard") {
+    if (message.catalogEntries) mergeCatalogEntries(message.catalogEntries);
+    sharedVisualClipboard = { at: message.at, components: message.components, ...(message.faceplateInstanceId ? { faceplateInstanceId: message.faceplateInstanceId } : {}) };
+    return;
+  }
+
+  if (message.type === "labEmbedBundle") {
+    labBundle = { script: message.script, style: message.style };
+    render();
+    return;
+  }
+
+  if (message.type === "labEmbedMessage") {
+    mathEmbeds.get(message.elementId)?.iframe.contentWindow?.postMessage(message.message, "*");
+    return;
+  }
+
+  if (message.type === "screenStates") {
+    screenStatesById = message.states;
+    for (const component of state.components) {
+      if (component.typeId !== HMI_SCREEN_TYPE_ID) continue;
+      const element = componentElementsById.get(component.id);
+      if (element) updateComponentElement(element, component);
+    }
+    return;
+  }
+
   if (message.type === "beginComponentPlacement") {
+    if (message.catalogEntries) mergeCatalogEntries(message.catalogEntries);
     enterPlacementMode(message.typeId);
   }
 
@@ -12314,6 +13237,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     const changedReadoutIds = new Set([...previousReadoutIds, ...Object.keys(message.readoutsByComponentId)]);
     const currentReadoutIds = new Set(Object.keys(message.readoutsByComponentId));
     updateReadoutHistories(message.readoutsByComponentId);
+    recordMathTrendSamples();
     // `render()` reconstrói o DOM inteiro -- chamado SEM CONDIÇÃO a cada poll de telemetria (~50 ms com o padrão de 20 Hz
     // durante a simulação) destruiria um arrasto em andamento (ver doc de
     // `isInteractiveGestureInProgress`). Os dados (`readoutsByComponentId`) já ficaram atualizados
@@ -12411,6 +13335,17 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     // `patchBoardOverlayRuntimeVisuals` faz o patch pontual (mesmo princípio de `componentReadout`/
     // `wireVoltages` abaixo, que já evitavam `render()` incondicional por este MESMO motivo).
     if (!isInteractiveGestureInProgress()) patchBoardOverlayRuntimeVisuals();
+    // Elementos de tela ligados por caminho `<instância>:<interno>` leem desta mesma mensagem.
+    if (subcircuitEditorMode === "hmi") {
+      recordMathTrendSamples(true);
+      if (!isInteractiveGestureInProgress()) {
+        for (const component of activeSceneComponents()) {
+          if (!isGraphicalTypeId(component.typeId) || !bindsInstancePath(component)) continue;
+          const element = componentElementsById.get(component.id);
+          if (element) updateComponentElement(element, component);
+        }
+      }
+    }
   }
 
   if (message.type === "wireVoltages") {
@@ -12436,6 +13371,7 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     // DOM e soltava a captura de ponteiro de um arrasto em andamento -- o componente "largava" do
     // mouse logo depois de criar um fio (bug real, medido em `measure-wire-interaction.cjs`).
     const statusChanged = simulationStatus !== message.status;
+    if (simulationStatus === "stopped" && message.status === "running") trendSamplesByElement.clear();
     simulationStatus = message.status;
     updateTelemetryStaleness();
     if (!statusChanged) return;
@@ -12638,6 +13574,14 @@ function makeComponentFromTypeId(typeId: string): WebviewComponentModel {
     : Array.from({ length: pinCount }, (_, index) => ({ id: `pin-${index + 1}`, x: 0, y: index * 12 }));
   const label = nextIndexedLabel(typeId, baseLabel);
   const properties = { ...(descriptor?.defaultProperties ?? {}) };
+  if (typeId === HMI_SCREEN_TYPE_ID) {
+    // Cada botão é uma tela: id opaco e único; o Host cria o documento ao vê-lo (docs/62 §5.2).
+    const titles = new Set(activeSceneComponents().filter((entry) => entry.typeId === HMI_SCREEN_TYPE_ID).map((entry) => String(entry.properties.title ?? "")));
+    let title = "Tela HMI";
+    for (let index = 2; titles.has(title); index += 1) title = `Tela HMI ${index}`;
+    properties.screenId = newScreenUid();
+    properties.title = title;
+  }
   if (typeId === "peripherals.lasecplot") properties.source_name = label;
   return {
     id: `component-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`,
@@ -13113,7 +14057,8 @@ window.addEventListener("keydown", (event) => {
 
 window.addEventListener("keydown", (event) => {
   if (hmiPresentationMode) {
-    if (event.key === "Escape") {
+    // Tela HMI (Painel Visual): Esc sai da tela cheia; entrar em edição é pelo menu de contexto.
+    if (event.key === "Escape" && !visualRole) {
       event.preventDefault();
       setHmiPresentationMode(false);
     }
@@ -13253,4 +14198,12 @@ window.addEventListener("keyup", (event) => {
 
 render();
 requestAnimationFrame(animateDcMotors);
+if (visualRole) {
+  // A geometria da janela que hospeda a tela é o que diz ao Host se ela está acoplada, flutuante,
+  // maximizada ou em tela cheia, e em qual monitor (docs/61 §6.3).
+  watchWebviewGeometry((geometry) => vscode?.postMessage({ version: WEBVIEW_MESSAGE_VERSION, type: "visualGeometry", documentId: visualRole.documentId, geometry }));
+  // 1ª pintura já no estado certo (menu, barra, contexto); o `visualState` do Host confirma depois.
+  if (visualRole.session && visualRole.window) applyVisualState(visualRole.session, visualRole.window, visualRole.history ?? { canUndo: false, canRedo: false });
+}
+visualStats.boot.ready = performance.now();
 send({ version: WEBVIEW_MESSAGE_VERSION, type: "webviewReady" });

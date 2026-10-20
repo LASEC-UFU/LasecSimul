@@ -1,0 +1,74 @@
+   0.0 drv main                         {"url":"vscode-file://vscode-app/c:/Program%20Files/Microsoft%20VS%20Code/2a59476c9b/resources/app/out/vs/code/electron-browser/workbench/workbench.html"}
+   6.4 ext start                        {"vscodeVersion":"1.141.0"}
+   6.4 ext commands                     {"present":[["workbench.action.moveEditorToNewWindow",true],["workbench.action.copyEditorToNewWindow",true],["workbench.action.restoreEditorsToMainWindow",true],["workbench.action.toggleFullScreen",true],["workbench.action.enableCompactAuxiliaryWindow",true],[
+   6.9 ext webview:ready                tag= boots=1 pos=352,140 outer=1216x808 inner=846x698 ticks=0 vis=visible
+   6.9 ext docked                       {"viewColumn":1,"active":true,"tabs":[{"viewColumn":1,"isActive":true,"tabs":["Spike HMI"]}]}
+   7.6 ext webview:ready                tag= boots=2 pos=440,160 outer=1040x776 inner=1024x678 ticks=0 vis=visible
+   7.7 ext undocked                     {"reloaded":true,"viewColumn":2,"active":true,"tabs":[{"viewColumn":1,"isActive":true,"tabs":[]},{"viewColumn":2,"isActive":false,"tabs":["Spike HMI"]}]}
+   8.5 ext webview:measure              tag=undocked-normal boots=2 pos=440,160 outer=1040x776 inner=1024x678 ticks=0 vis=visible
+   8.5 ext phase                        {"name":"undocked"}
+   8.5 drv phase                        {"name":"undocked"}
+   8.5 drv pages:undocked               pages=2 [MAIN 1216x808] [aux 1040x776]
+  11.6 ext webview:measure              tag=fullscreen-on boots=2 pos=0,0 outer=1920x1080 inner=1920x990 ticks=0 vis=visible
+  11.6 ext phase                        {"name":"fullscreen-on"}
+  11.7 drv phase                        {"name":"fullscreen-on"}
+  11.7 drv pages:fullscreen-on          pages=2 [MAIN 1216x808] [aux 1920x1080]
+  14.7 ext webview:measure              tag=fullscreen-off boots=2 pos=440,160 outer=1040x776 inner=1024x678 ticks=0 vis=visible
+  14.7 ext phase                        {"name":"click-requestFullscreen"}
+  14.7 drv phase                        {"name":"click-requestFullscreen"}
+  14.7 drv pages:click-requestFullscreen pages=2 [MAIN 1216x808] [aux 1040x776]
+  14.8 ext webview:fsResult             tag= boots=2 pos=440,160 outer=1040x776 inner=1024x678 ticks=0 vis=visible ERR=TypeError: Disallowed by permissions policy
+  14.8 ext requestFullscreenResult      {"result":{"type":"fsResult","ok":false,"error":"TypeError: Disallowed by permissions policy","geo":{"boots":2,"screenX":440,"screenY":160,"outerWidth":1040,"outerHeight":776,"innerWidth":1024,"innerHeight":678,"dpr":1,"screen":{"width":1920,"height":1080,"ava
+  14.8 drv clickedFs                    {"clicked":true}
+  16.6 ext webview:measure              tag=compact boots=2 pos=440,160 outer=1040x776 inner=1024x738 ticks=0 vis=visible
+  16.6 ext phase                        {"name":"compact"}
+  16.6 drv phase                        {"name":"compact"}
+  16.7 drv pages:compact                pages=2 [MAIN 1216x808] [aux 1040x776]
+  19.6 ext webview:measure              tag=compact-fullscreen boots=2 pos=0,0 outer=1920x1080 inner=1920x1050 ticks=0 vis=visible
+  19.6 ext phase                        {"name":"compact-fullscreen"}
+  19.6 drv phase                        {"name":"compact-fullscreen"}
+  19.6 drv pages:compact-fullscreen     pages=2 [MAIN 1216x808] [aux 1920x1080]
+  22.6 ext webview:measure              tag=compact-fullscreen-off boots=2 pos=440,160 outer=1040x776 inner=1024x738 ticks=0 vis=visible
+  22.6 ext phase                        {"name":"maximize"}
+  22.6 drv phase                        {"name":"maximize"}
+  22.6 drv pages:maximize               pages=2 [MAIN 1216x808] [aux 1040x776]
+  23.5 drv maximizeAux                  {"out":"[Extension Development Host] Spike HMI - Visual Studio Code [Administrator]|zoomed=True|iconic=False"}
+  25.1 ext webview:measure              tag=maximized boots=2 pos=0,0 outer=1920x1032 inner=1920x1002 ticks=0 vis=visible
+  28.0 ext webview:measure              tag=maximized-fullscreen boots=2 pos=8,8 outer=1904x1064 inner=1920x1050 ticks=0 vis=visible
+  30.5 ext webview:measure              tag=maximized-fullscreen-off boots=2 pos=0,0 outer=1920x1032 inner=1920x1002 ticks=0 vis=visible
+  30.5 ext phase                        {"name":"maximized-fullscreen-off"}
+  30.6 drv phase                        {"name":"maximized-fullscreen-off"}
+  30.6 drv pages:maximized-fullscreen-off pages=2 [MAIN 1216x808] [aux 1920x1032]
+  31.5 drv auxStateAfterFullscreenOff   {"out":"[Extension Development Host] Spike HMI - Visual Studio Code [Administrator]|zoomed=True|iconic=False"}
+  31.8 ext phase                        {"name":"minimize-main"}
+  32.0 drv phase                        {"name":"minimize-main"}
+  32.0 drv pages:minimize-main          pages=2 [MAIN 1216x808] [aux 1920x1032]
+  32.9 drv minimizeMain                 {"out":"[Extension Development Host] Visual Studio Code [Administrator]|zoomed=False|iconic=True"}
+  35.1 ext webview:ticks                tag= boots=2 pos=0,0 outer=1920x1032 inner=1920x1002 ticks=50 vis=visible
+  35.1 ext phase                        {"name":"restore-main"}
+  35.2 drv phase                        {"name":"restore-main"}
+  35.2 drv pages:restore-main           pages=2 [MAIN 160x28] [aux 1920x1032]
+  36.0 drv restoreMain                  {"out":"[Extension Development Host] Visual Studio Code [Administrator]|zoomed=False|iconic=False"}
+  36.5 ext webview:ready                tag= boots=3 pos=352,140 outer=1216x808 inner=846x698 ticks=0 vis=visible
+  38.0 ext dockedByReveal               {"reloaded":true,"viewColumn":1,"active":true,"tabs":[{"viewColumn":1,"isActive":true,"tabs":["Spike HMI"]}]}
+  38.0 ext phase                        {"name":"docked-by-reveal"}
+  38.1 drv phase                        {"name":"docked-by-reveal"}
+  38.1 drv pages:docked-by-reveal       pages=1 [MAIN 1216x808]
+  39.2 ext webview:ready                tag= boots=4 pos=440,160 outer=1040x776 inner=1024x0 ticks=0 vis=visible
+  40.3 ext webview:ready                tag= boots=5 pos=352,140 outer=1216x808 inner=846x698 ticks=0 vis=visible
+  41.8 ext dockedByRestore              {"reloaded":true,"viewColumn":1,"tabs":[{"viewColumn":1,"isActive":true,"tabs":["Spike HMI"]}]}
+  41.8 ext phase                        {"name":"docked-by-restore"}
+  41.8 drv phase                        {"name":"docked-by-restore"}
+  41.8 drv pages:docked-by-restore      pages=1 [MAIN 1216x808]
+  42.7 ext webview:ready                tag= boots=6 pos=440,160 outer=1040x776 inner=1024x678 ticks=0 vis=visible
+  45.0 ext secondPanelActiveColumn      {"firstViewColumn":2,"secondViewColumn":2,"tabs":[{"viewColumn":1,"isActive":true,"tabs":[]},{"viewColumn":2,"isActive":false,"tabs":["Spike HMI","Spike HMI 2"]}]}
+  45.0 ext phase                        {"name":"second-panel"}
+  45.2 drv phase                        {"name":"second-panel"}
+  45.2 drv pages:second-panel           pages=2 [MAIN 1216x808] [aux 1040x776]
+  45.6 ext panelDisposed                {}
+  47.1 ext phase                        {"name":"disposed"}
+  47.2 drv phase                        {"name":"disposed"}
+  47.2 drv pages:disposed               pages=1 [MAIN 1216x808]
+  47.5 ext done                         {}
+  47.7 drv pages:final                  pages=1 [MAIN 1216x808]
+  47.7 drv finished                     {"done":true}

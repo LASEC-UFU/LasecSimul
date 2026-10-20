@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as vscode from "vscode";
 import { WebviewProjectState } from "../webview/model";
 import { WEBVIEW_MESSAGE_VERSION, WebviewToHostMessage } from "../webview/messages";
+import { schematicBundleHtml, schematicBundleLocalResourceRoots } from "./schematicBundleHtml";
 
 function localizedPanelTitle(language: "pt-BR" | "en"): string {
   return language === "en" ? "LasecSimul - Schematic" : "LasecSimul - Esquemático";
@@ -9,6 +10,8 @@ function localizedPanelTitle(language: "pt-BR" | "en"): string {
 
 export class SchematicPanel {
   public static current: SchematicPanel | undefined;
+  /** O esquemático virou a superfície ativa (a paleta lateral passa a colocar nele, docs/61 §8). */
+  public static onDidBecomeActive: (() => void) | undefined;
 
   private readonly panel: vscode.WebviewPanel;
   private ready = false;
@@ -30,6 +33,9 @@ export class SchematicPanel {
     this.panel.onDidDispose(() => {
       SchematicPanel.current = undefined;
       this.onDispose();
+    });
+    this.panel.onDidChangeViewState(() => {
+      if (this.panel.active) SchematicPanel.onDidBecomeActive?.();
     });
     this.panel.webview.onDidReceiveMessage((message: WebviewToHostMessage) => {
       if (message.type === "webviewReady") {
@@ -81,11 +87,7 @@ export class SchematicPanel {
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [
-          vscode.Uri.joinPath(extensionUri, "src", "ui", "webview"),
-          vscode.Uri.joinPath(extensionUri, "out-webview"),
-          vscode.Uri.joinPath(extensionUri, "media", "pid"),
-        ],
+        localResourceRoots: schematicBundleLocalResourceRoots(extensionUri),
       }
     );
 
@@ -153,53 +155,16 @@ export class SchematicPanel {
     }
   }
 
-  /** URI do recurso local + query string de cache-busting (`?v=<mtime ou timestamp>`). Achado real
-   * (2026-07-18): `webview.asWebviewUri` devolve sempre a MESMA URL `vscode-webview-resource://...`
-   * pro mesmo caminho de arquivo -- o cache HTTP do Chromium embutido na Webview (persistente em
-   * disco entre janelas do Extension Development Host, não só dentro da mesma sessão) pode servir o
-   * `main.js`/`styles.css` ANTIGO pra essa URL mesmo depois de recompilar e depois de um F5 completo
-   * (processo novo, `SchematicPanel.current` novo, `render()` chamado do zero) -- o `nonce` no CSP
-   * não afeta isso, ele só autoriza QUAL script roda, não força buscar de novo QUAL versão. Anexar
-   * `?v=` muda a URL em si, então o cache nunca serve uma resposta antiga pra ela. */
-  private cacheBustedUri(webview: vscode.Webview, fileUri: vscode.Uri, fallbackVersion: string): string {
-    let version = fallbackVersion;
-    try {
-      version = String(fs.statSync(fileUri.fsPath).mtimeMs);
-    } catch {
-      // Mantém o fallback -- arquivo pode estar sendo escrito no exato instante do stat.
-    }
-    return `${webview.asWebviewUri(fileUri)}?v=${version}`;
-  }
-
   private render(): void {
-    const webview = this.panel.webview;
-    const scriptPath = vscode.Uri.joinPath(this.extensionUri, "out-webview", "main.js");
-    const stylePath = vscode.Uri.joinPath(this.extensionUri, "src", "ui", "webview", "styles.css");
-
     const nonce = String(Date.now());
     this.renderNonce = nonce;
-    const initialStateJson = JSON.stringify(this.initialState);
-    const locale = this.initialState.locale ?? "pt-BR";
-    const scriptUri = this.cacheBustedUri(webview, scriptPath, nonce);
-    const styleUri = this.cacheBustedUri(webview, stylePath, nonce);
-
-    webview.html = `
-      <!doctype html>
-      <html lang="${locale}">
-        <head>
-          <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}'; frame-src ${webview.cspSource} about:;" />
-          <title>${localizedPanelTitle(locale)}</title>
-          <link rel="stylesheet" href="${styleUri}" />
-        </head>
-        <body>
-          <main id="app"></main>
-          <script nonce="${nonce}">window.__LASECSIMUL_INITIAL_STATE__ = ${initialStateJson};</script>
-          <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
-        </body>
-      </html>
-    `;
+    this.panel.webview.html = schematicBundleHtml({
+      webview: this.panel.webview,
+      extensionUri: this.extensionUri,
+      initialState: this.initialState,
+      title: localizedPanelTitle(this.initialState.locale ?? "pt-BR"),
+      nonce,
+    });
     this.lastRenderedScriptMtimeMs = this.currentScriptMtimeMs();
   }
 }

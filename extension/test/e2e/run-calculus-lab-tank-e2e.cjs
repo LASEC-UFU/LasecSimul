@@ -1,7 +1,8 @@
 // E2E da vertical do tanque (docs/53 §2) no VS Code real com o Core real: projeto de exemplo com o
-// subcircuito hydraulic_tank, Laboratório de Cálculo, execução, parâmetros ao vivo (A com derramamento),
-// pausa, Riemann sobre a série gravada, inspeção sem comandos ao Core, Reiniciar, primeira ordem (τ),
-// sensor 4–20 mA (12 mA e saturação) e gravar/reabrir o projeto com a atividade editada.
+// subcircuito hydraulic_tank e a tela "Laboratório de Cálculo" (Tela HMI, docs/62 §6 e docs/64) aberta
+// pelo botão do esquemático, execução, parâmetros ao vivo (A com derramamento), pausa, Riemann sobre a série
+// gravada, inspeção sem comandos ao Core, Reiniciar, primeira ordem (τ), sensor 4–20 mA (12 mA e saturação)
+// e gravar/reabrir o projeto com a atividade editada no modo professor (edição da tela).
 // Uso: npm run test:lab:tank:e2e
 const { chromium } = require("@playwright/test");
 const { downloadAndUnzipVSCode } = require("@vscode/test-electron");
@@ -17,14 +18,27 @@ fs.mkdirSync(artifacts, { recursive: true });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function command(workbench, title) {
-  await workbench.keyboard.press("Control+Shift+P");
-  const input = workbench.locator(".quick-input-widget input, .quick-input-box input").first();
-  await input.waitFor({ state: "visible" });
-  await input.fill(`>${title}`);
-  await workbench.locator(".quick-input-list .monaco-list-row", { hasText: title }).first().waitFor({ state: "visible", timeout: 30000 });
+  // A lista aberta antes de as contribuições chegarem não se refaz sozinha: reabre até o comando aparecer.
+  for (let attempt = 0; ; attempt++) {
+    await workbench.keyboard.press("Control+Shift+P");
+    const input = workbench.locator(".quick-input-widget input, .quick-input-box input").first();
+    await input.waitFor({ state: "visible" });
+    await input.fill(`>${title}`);
+    try {
+      await workbench.locator(".quick-input-list .monaco-list-row", { hasText: title }).first().waitFor({ state: "visible", timeout: 3000 });
+      break;
+    } catch (error) {
+      await workbench.keyboard.press("Escape");
+      if (attempt >= 10) throw error;
+      await sleep(1000);
+    }
+  }
   await sleep(300);
   await workbench.keyboard.press("Enter");
 }
+
+/** Marca de cada atividade montada no <iframe> da página. */
+const MARKER = { tank: "#tkTank", firstOrder: "#foQuestion", sensor: "#snQuestion" };
 
 let failures = 0;
 const check = (cond, label, detail = "") => { console.log(`${cond ? "ok  " : "FAIL"} ${label}${detail ? ` -- ${detail}` : ""}`); if (!cond) failures++; };
@@ -36,7 +50,10 @@ const check = (cond, label, detail = "") => { console.log(`${cond ? "ok  " : "FA
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), "lasecsimul-lab-tank-user-"));
   const extensionsDir = fs.mkdtempSync(path.join(os.tmpdir(), "lasecsimul-lab-tank-ext-"));
   fs.mkdirSync(path.join(userData, "User"), { recursive: true });
-  fs.writeFileSync(path.join(userData, "User", "settings.json"), JSON.stringify({ "lasecsimul.network.mode": "isolated", "workbench.startupEditor": "none" }));
+  fs.writeFileSync(path.join(userData, "User", "settings.json"), JSON.stringify({
+    "lasecsimul.network.mode": "isolated", "workbench.startupEditor": "none", "lasecsimul.language": "pt-BR",
+    "workbench.secondarySideBar.defaultVisibility": "hidden", "chat.disableAIFeatures": true,
+  }));
   const executable = process.env.VSCODE_EXECUTABLE_PATH || await downloadAndUnzipVSCode({ version: process.env.VSCODE_E2E_VERSION || "1.128.0", cachePath: path.resolve(extensionPath, ".vscode-test"), timeout: 120000 });
   const childEnv = { ...process.env };
   delete childEnv.ELECTRON_RUN_AS_NODE;
@@ -62,34 +79,70 @@ const check = (cond, label, detail = "") => { console.log(`${cond ? "ok  " : "FA
     await sleep(5000);
 
     // abre o projeto de exemplo (editor customizado do esquemático)
-    await workbench.keyboard.press("Control+P");
-    const quick = workbench.locator(".quick-input-widget input").first();
-    await quick.waitFor({ state: "visible", timeout: 15000 });
-    await quick.fill("laboratorio-calculo.lsproj");
-    await sleep(1200);
+    // Quick Open até o arquivo aparecer na lista (a indexação do workspace novo pode atrasar).
+    for (let attempt = 0; attempt < 10; attempt++) {
+      await workbench.keyboard.press("Control+P");
+      const quick = workbench.locator(".quick-input-widget input").first();
+      await quick.waitFor({ state: "visible", timeout: 15000 });
+      await quick.fill("laboratorio-calculo.lsproj");
+      try {
+        await workbench.locator(".quick-input-list .monaco-list-row", { hasText: "laboratorio-calculo.lsproj" }).first().waitFor({ state: "visible", timeout: 3000 });
+        break;
+      } catch { await workbench.keyboard.press("Escape"); await sleep(1000); }
+    }
     await workbench.keyboard.press("Enter");
-    let schematic = false;
-    for (let attempt = 0; attempt < 240 && !schematic; attempt++) {
-      for (const frame of workbench.frames()) {
-        if (frame === workbench.mainFrame()) continue;
-        if (await frame.locator('.component[data-component-id="tanque-lab"]').count().catch(() => 0)) { schematic = true; break; }
+    const cspViolations = [];
+    workbench.on("console", (message) => { if (/Content Security Policy/i.test(message.text())) cspViolations.push(message.text().slice(0, 200)); });
+    const findSchematic = async () => {
+      for (let attempt = 0; attempt < 240; attempt++) {
+        for (const frame of workbench.frames()) {
+          if (frame === workbench.mainFrame()) continue;
+          if (await frame.locator('.component[data-component-id="tanque-lab"]').count().catch(() => 0)) return frame;
+        }
+        await sleep(250);
       }
-      if (!schematic) await sleep(250);
-    }
-    check(schematic, "projeto de exemplo abre com o tanque do laboratório no esquemático");
+      return undefined;
+    };
+    let schematic = await findSchematic();
+    check(Boolean(schematic), "projeto de exemplo abre com o tanque do laboratório no esquemático");
+    check(Boolean(schematic && await schematic.locator('.component[data-component-id="laboratorio-calculo"][data-type-id="tools.hmi_screen"]').count()),
+      'o esquemático traz o botão "Laboratório de Cálculo" (Tela HMI)');
 
-    // abre o laboratório
-    await command(workbench, "LasecSimul: Laboratório de Cálculo");
-    let lab;
-    for (let attempt = 0; attempt < 160 && !lab; attempt++) {
-      for (const frame of workbench.frames()) {
-        if (frame === workbench.mainFrame()) continue;
-        try { if (await frame.locator('#labTabs button[data-kind="tank"]').count()) { lab = frame; break; } } catch { /* frame em troca */ }
+    /** Abre a tela pelo botão do esquemático (duplo clique) e devolve a casca (Painel Visual, abas = páginas). */
+    const openLabScreen = async () => {
+      await schematic.locator('.component[data-component-id="laboratorio-calculo"]').first().dblclick();
+      for (let attempt = 0; attempt < 160; attempt++) {
+        for (const frame of workbench.frames()) {
+          try {
+            if (await frame.locator('body.visual-role #labTabs button[data-kind="tank"]').count()) return frame;
+            // A sessão da tela volta como foi deixada (aqui, em edição): passa para a operação.
+            const operate = frame.locator("body.visual-role .appbar--visual .appbar__button", { hasText: "Operar" });
+            if (await operate.count()) await operate.first().click();
+          } catch { /* frame em troca */ }
+        }
+        await sleep(250);
       }
-      if (!lab) await sleep(250);
-    }
-    if (!lab) { await workbench.screenshot({ path: path.join(artifacts, "calculus-lab-tank-fail.png") }); throw new Error("laboratório não abriu"); }
-    await lab.evaluate(() => { window.__csp = []; document.addEventListener("securitypolicyviolation", (e) => window.__csp.push(`${e.violatedDirective} ${e.blockedURI}`)); });
+      await workbench.screenshot({ path: path.join(artifacts, "calculus-lab-tank-fail.png") });
+      throw new Error("tela do laboratório não abriu");
+    };
+    let shell = await openLabScreen();
+    /** O <iframe> da atividade da página (um novo a cada troca de aba). */
+    const activityFrame = async (kind, previous) => {
+      for (let attempt = 0; attempt < 120; attempt++) {
+        for (const frame of workbench.frames()) {
+          if (frame === previous) continue;
+          try { if (await frame.locator(`body.lab-embedded ${MARKER[kind]}`).count()) return frame; } catch { /* frame em troca */ }
+        }
+        await sleep(250);
+      }
+      throw new Error(`atividade ${kind} não montou`);
+    };
+    let lab;
+    const openTab = async (kind) => {
+      const previous = lab;
+      await shell.locator(`#labTabs button[data-kind="${kind}"]`).first().click();
+      lab = await activityFrame(kind, previous);
+    };
     const view = (fn, arg) => lab.evaluate(fn, arg);
     const waitFor = async (fn, arg, timeoutMs, label) => {
       const start = Date.now();
@@ -98,7 +151,7 @@ const check = (cond, label, detail = "") => { console.log(`${cond ? "ok  " : "FA
       return false;
     };
 
-    await lab.locator('#labTabs button[data-kind="tank"]').click();
+    await openTab("tank");
     check(await waitFor(() => document.querySelector("#tkPlant")?.classList.contains("ok"), null, 30000, "planta ligada"),
       "atividade do tanque liga-se à instância do projeto", await lab.locator("#tkPlant").innerText().catch(() => ""));
 
@@ -179,7 +232,7 @@ const check = (cond, label, detail = "") => { console.log(`${cond ? "ok  " : "FA
     check(restored.qIn === 1 && restored.qOut === 0.4 && restored.area === 0.1 && restored.slider === "0.1", "parâmetros voltam aos valores da atividade", JSON.stringify(restored));
 
     // ---------------------------------------------------------------- primeira ordem (Core real)
-    await lab.locator('#labTabs button[data-kind="firstOrder"]').click();
+    await openTab("firstOrder");
     check(await waitFor(() => document.querySelector("#foPlant")?.classList.contains("ok"), null, 30000, "planta de 1ª ordem ligada"),
       "atividade de 1ª ordem liga-se ao bloco do projeto", await lab.locator("#foPlant").innerText().catch(() => ""));
     await lab.locator("#foRun").click();
@@ -193,7 +246,7 @@ const check = (cond, label, detail = "") => { console.log(`${cond ? "ok  " : "FA
     check(await waitFor(() => /Configuração/.test(document.getElementById("foStatus").textContent), null, 30000, "reinício 1ª ordem"), "Reiniciar a 1ª ordem");
 
     // ---------------------------------------------------------------- sensor 4–20 mA (Core real)
-    await lab.locator('#labTabs button[data-kind="sensor"]').click();
+    await openTab("sensor");
     check(await waitFor(() => document.querySelector("#snPlant")?.classList.contains("ok"), null, 30000, "sensor ligado"),
       "atividade do sensor liga-se ao subcircuito do projeto", await lab.locator("#snPlant").innerText().catch(() => ""));
     await lab.locator("#snRun").click();
@@ -206,48 +259,59 @@ const check = (cond, label, detail = "") => { console.log(`${cond ? "ok  " : "FA
     await lab.locator("#snRestart").click();
     check(await waitFor(() => /Configuração/.test(document.getElementById("snStatus").textContent), null, 30000, "reinício sensor"), "Reiniciar o sensor");
 
-    const cspProcess = await view(() => window.__csp);
-    check(cspProcess.length === 0, "nenhuma violação de CSP", cspProcess.join("; "));
+    check(cspViolations.length === 0, "nenhuma violação de CSP", cspViolations.join("; "));
 
     // ---------------------------------------------------------------- gravar e reabrir (item 10)
     const question = "Quanto o volume aumenta em 10 s? (gravada pelo e2e)";
-    await lab.locator('#labTabs button[data-kind="tank"]').click();
-    await lab.locator("#labTeacher").click();
+    await openTab("tank");
+    // Modo professor = edição da tela; a atividade recebe o ponteiro "por dentro" (duplo clique).
+    await shell.locator(".visual-lab-header__button", { hasText: "Editar" }).click();
+    lab = await activityFrame("tank");
+    const activityElement = shell.locator('.component[data-type-id="graphics.math.activity"]').first();
+    await activityElement.waitFor({ timeout: 10000 });
+    const box = await activityElement.boundingBox();
+    await workbench.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.4);
+    await sleep(120);
+    await workbench.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.4);
+    await shell.locator("iframe.math-embed--editing").waitFor({ timeout: 5000 });
     await lab.locator("#tkQuestionInput").waitFor({ state: "visible", timeout: 10000 });
     await lab.locator("#tkQuestionInput").fill(question);
     await lab.locator("#tkSave").click();
     await lab.locator("#tkSaveStatus").filter({ hasText: "gravada" }).waitFor({ timeout: 10000 });
-    await command(workbench, "LasecSimul: Save Project");
+    // Salvar pelo botão da própria tela (o esquemático recebe o pedido).
+    await shell.locator(".appbar--visual .appbar__button--save").first().click();
     const projectFile = path.join(workspace, "laboratorio-calculo.lsproj");
+    const savedTankOf = (doc) => {
+      const element = doc?.visualDocuments?.[0]?.pages?.flatMap((page) => page.elements).find((el) => el.typeId === "graphics.math.activity" && el.properties?.kind === "tank");
+      try { return element ? JSON.parse(element.properties.activityJson) : undefined; } catch { return undefined; }
+    };
     let onDisk;
     for (let attempt = 0; attempt < 60; attempt++) {
       try { onDisk = JSON.parse(fs.readFileSync(projectFile, "utf8")); } catch { onDisk = undefined; }
-      if (onDisk?.calculusLab?.activities?.some((a) => a.kind === "tank" && a.question === question)) break;
+      if (savedTankOf(onDisk)?.question === question) break;
       await sleep(250);
     }
-    const savedTank = onDisk?.calculusLab?.activities?.find((a) => a.kind === "tank");
-    check(savedTank?.question === question && onDisk.calculusLab.activities.length === 6, "o .lsproj gravado traz a atividade editada", savedTank?.question ?? "(sem calculusLab)");
+    check(savedTankOf(onDisk)?.question === question && onDisk.visualDocuments[0].pages.length === 7 && !("calculusLab" in onDisk),
+      "o .lsproj gravado traz a atividade editada na tela (sem calculusLab)", savedTankOf(onDisk)?.question ?? "(sem a atividade)");
 
     await command(workbench, "View: Close All Editors");
     await sleep(1500);
     lab = undefined;
-    await workbench.keyboard.press("Control+P");
-    const reopen = workbench.locator(".quick-input-widget input").first();
-    await reopen.waitFor({ state: "visible", timeout: 15000 });
-    await reopen.fill("laboratorio-calculo.lsproj");
-    await sleep(1200);
-    await workbench.keyboard.press("Enter");
-    await sleep(3000);
-    await command(workbench, "LasecSimul: Laboratório de Cálculo");
-    for (let attempt = 0; attempt < 160 && !lab; attempt++) {
-      for (const frame of workbench.frames()) {
-        if (frame === workbench.mainFrame()) continue;
-        try { if (await frame.locator('#labTabs button[data-kind="tank"]').count()) { lab = frame; break; } } catch { /* frame em troca */ }
-      }
-      if (!lab) await sleep(250);
+    for (let attempt = 0; attempt < 10; attempt++) {
+      await workbench.keyboard.press("Control+P");
+      const reopen = workbench.locator(".quick-input-widget input").first();
+      await reopen.waitFor({ state: "visible", timeout: 15000 });
+      await reopen.fill("laboratorio-calculo.lsproj");
+      try {
+        await workbench.locator(".quick-input-list .monaco-list-row", { hasText: "laboratorio-calculo.lsproj" }).first().waitFor({ state: "visible", timeout: 3000 });
+        break;
+      } catch { await workbench.keyboard.press("Escape"); await sleep(1000); }
     }
-    if (!lab) throw new Error("laboratório não reabriu");
-    await lab.locator('#labTabs button[data-kind="tank"]').click();
+    await workbench.keyboard.press("Enter");
+    schematic = await findSchematic();
+    if (!schematic) throw new Error("projeto não reabriu");
+    shell = await openLabScreen();
+    await openTab("tank");
     check(await waitFor((q) => document.getElementById("tkQuestion")?.textContent === q, question, 15000, "pergunta reaberta"),
       "reabrir o projeto devolve a atividade gravada", await lab.locator("#tkQuestion").innerText().catch(() => ""));
   } catch (error) {

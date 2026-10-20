@@ -27,6 +27,7 @@
     "src/ui/webview/ident/main.ts",
     "src/ui/webview/controlDesigner/main.ts",
     "src/ui/webview/palette.ts",
+    "src/ui/webview/windowGeometry.ts",
     "src/ui/webview/lab/ui/**"
   ]
 }

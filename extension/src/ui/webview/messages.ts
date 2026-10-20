@@ -1,6 +1,7 @@
 import type { SubsystemDefinition } from "./subsystemModel";
-import { WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
+import { WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
 import { ConnectionEndpoint } from "./wireTopology.js";
+import type { ScreenViewState, VisualDocument, VisualSession, VisualWindowInfo, WebviewGeometry } from "./visualDocument.js";
 
 /** Mesma forma de `ConnectionEndpoint` (`wireTopology.ts`) -- eram dois tipos idênticos definidos em
  * paralelo (achado real de duplicação: "regras de conexão repetidas em diferentes arquivos").
@@ -86,7 +87,8 @@ export type HostToWebviewMessage =
   | { version: number; type: "init"; project: WebviewProjectState }
   | { version: number; type: "selectComponent"; componentId: string | null }
   | { version: number; type: "inspectorUpdateProperty"; componentId: string; name: string; value: string | number | boolean }
-  | { version: number; type: "beginComponentPlacement"; typeId: string }
+  /** `catalogEntries`: entradas que a vista ainda não tem (o catálogo de uma vista visual é só o que ela usa). */
+  | { version: number; type: "beginComponentPlacement"; typeId: string; catalogEntries?: WebviewComponentCatalogEntry[] }
   | { version: number; type: "insertIdentifiedModel"; typeId: string; label: string; properties: Record<string, string | number | boolean> }
   | { version: number; type: "syncState"; project: WebviewProjectState }
   /** PC-1/EX-7 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec) -- versão incremental de "syncState": só os
@@ -191,7 +193,21 @@ export type HostToWebviewMessage =
   /** Solicita à Webview que empacote a seleção atual e envie `requestCreateSubcircuitFromSelection`
    * de volta -- disparado pelo comando `lasecsimul.newSubcircuit` quando o painel está aberto, como
    * alternativa ao item do menu de contexto (que só aparece quando já há uma multi-seleção). */
-  | { version: number; type: "triggerCreateSubcircuitFromSelection" };
+  | { version: number; type: "triggerCreateSubcircuitFromSelection" }
+  /** Painel Visual (Tela HMI, docs/61): sessão da vista, estado da janela e do desfazer do documento.
+   * Chega depois de todo `init` -- inclusive quando o VS Code recriou a Webview ao trocar de janela. */
+  | { version: number; type: "visualState"; session: VisualSession; window: VisualWindowInfo; history: { canUndo: boolean; canRedo: boolean } }
+  /** Esquemático: onde cada tela está (fechada/acoplada/flutuante/tela cheia), para o indicador do botão. */
+  | { version: number; type: "screenStates"; states: Record<string, ScreenViewState> }
+  /** Mensagem do Host para a atividade do Laboratório embutida no elemento `elementId` (protocolo `lab/messages.ts`). */
+  | { version: number; type: "labEmbedMessage"; elementId: string; message: unknown }
+  /** Código (AMD, um arquivo) e tema do Laboratório para as atividades embutidas (inline no `<iframe>`). */
+  | { version: number; type: "labEmbedBundle"; script: string; style: string }
+  /** Cópia feita noutra vista visual (Tela/Faceplate), com o contexto de origem para remapear ligações. */
+  | { version: number; type: "visualClipboard"; at: number; components: WebviewComponentModel[]; faceplateInstanceId?: string; catalogEntries?: WebviewComponentCatalogEntry[] };
+
+/** Ação de janela pedida por um Painel Visual (menu de contexto, botão de tela cheia, Esc/F11). */
+export type VisualWindowAction = "dock" | "undock" | "fullscreen" | "exitFullscreen" | "toggleContext";
 
 export type WebviewToHostMessage =
   | { version: number; type: "requestOpenPidTuning"; componentId: string }
@@ -342,6 +358,10 @@ export type WebviewToHostMessage =
   | { version: number; type: "requestOpenSubcircuit"; sourceId: string }
   /** Subsistemas (internos e externos) -- ações explícitas, nunca implícitas na colagem. */
   | { version: number; type: "requestOpenSubsystemPanel"; sourceId: string }
+  /** Faceplate (painel de operação) da definição no contexto desta instância (docs/62 §8). */
+  | { version: number; type: "requestOpenInstanceFaceplate"; componentId: string }
+  /** Sessão de um subsistema interno: o Faceplate da definição, no contexto da 1ª instância do projeto. */
+  | { version: number; type: "requestOpenDefinitionFaceplate"; typeId: string }
   | { version: number; type: "requestInsertSubsystemInstance"; typeId: string }
   | { version: number; type: "requestDuplicateSubsystem"; componentId: string }
   | { version: number; type: "requestRenameSubsystem"; typeId: string }
@@ -351,7 +371,24 @@ export type WebviewToHostMessage =
   /** "Voltar ao Circuito Principal" -- grava `components`/`wires` atuais de volta no `.lssubcircuit`
    * da sessão em andamento (topo da pilha) e restaura o circuito empilhado. No-op se nenhuma sessão
    * estiver ativa. */
-  | { version: number; type: "requestCloseSubcircuitEditor" };
+  | { version: number; type: "requestCloseSubcircuitEditor" }
+  /** Painel Visual: a tela mudou nesta vista (o Host grava, empilha o desfazer e avisa as outras vistas). */
+  | { version: number; type: "visualDocumentChanged"; documentId: string; document: VisualDocument }
+  | { version: number; type: "requestVisualUndo"; documentId: string }
+  | { version: number; type: "requestVisualRedo"; documentId: string }
+  | { version: number; type: "visualSessionChanged"; documentId: string; session: VisualSession }
+  | { version: number; type: "visualGeometry"; documentId: string; geometry: WebviewGeometry }
+  | { version: number; type: "visualWindowRequest"; documentId: string; action: VisualWindowAction }
+  /** Esquemático: abrir a tela de um botão `tools.hmi_screen` (duplo clique, clique em execução, menu). */
+  | { version: number; type: "requestOpenVisualScreen"; componentId: string; mode: "auto" | "docked" | "floating" | "fullscreen" }
+  | { version: number; type: "requestScreenAction"; componentId: string; action: "rename" | "duplicate" }
+  /** Atividade do Laboratório embutida (`graphics.math.activity`): mensagem da atividade para o Host. */
+  | { version: number; type: "labEmbedMessage"; documentId: string; elementId: string; message: unknown }
+  /** O `<iframe>` da atividade saiu da página (troca de página, elemento apagado): o Host desliga o experimento. */
+  | { version: number; type: "labEmbedClosed"; documentId: string; elementId: string }
+  | { version: number; type: "requestLabEmbedBundle"; documentId: string }
+  /** Cópia numa vista visual, para colar em outra (docs/62 §13.1). */
+  | { version: number; type: "visualClipboardSet"; documentId: string; at: number; components: WebviewComponentModel[]; faceplateInstanceId?: string };
 
 export function isHostMessage(value: unknown): value is HostToWebviewMessage {
   return typeof value === "object" && value !== null && "type" in value && "version" in value;

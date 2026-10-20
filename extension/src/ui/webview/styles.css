@@ -2447,3 +2447,66 @@ rect.meter-expand-button:hover {
 .property-dock__exported-row input { width: 100%; }
 .property-dock__exported-button { display: block; width: 100%; margin: 6px 0; text-align: left; }
 .property-dock__exported-row select { width: 100%; }
+
+/* ── Painel Visual (Tela HMI, docs/61-62) ─────────────────────────────────────────────────────── */
+/* A Tela HMI vai de borda a borda (tela cheia sem faixas): sem o `padding: 0 20px` da folha padrão do
+   VS Code para Webviews, que o esquemático herda. */
+body.visual-role { padding: 0; }
+/* Uma linha só (a doca de propriedades começa em 41px): numa vista estreita a barra rola na horizontal. */
+body.visual-role .appbar--visual { padding-right: 52px; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+body.visual-role .appbar--visual .appbar__group { flex: none; }
+body.visual-role .appbar--visual .appbar__button:has(.appbar__button-label) { width: auto; grid-auto-flow: column; gap: 4px; padding: 0 8px; }
+body.visual-role .property-dock { width: min(340px, 45vw); }
+body.visual-role .canvas { background-color: #1f262d; background-image: none; }
+body.visual-role.visual-operate .canvas { cursor: default; }
+/* Operação: o painel de propriedades e a sua aba somem; a tela é só a página. */
+body.visual-role.visual-operate .property-dock,
+body.visual-role.visual-operate .property-dock-toggle { display: none !important; }
+/* Tela cheia em operação: nada além da página (sair: Esc, F11, botão do canto ou menu de contexto). */
+/* Tela cheia em operação: sem barra no contexto HMI; no contexto Laboratório o cabeçalho do Laboratório fica. */
+body.visual-role.visual-fullscreen.visual-operate:not(.visual-context-lab) .appbar { display: none; }
+.visual-corner-controls { position: fixed; top: 5px; right: 8px; z-index: 9000; display: flex; gap: 4px; }
+.visual-corner-button {
+  display: grid; place-items: center; width: 32px; height: 30px; padding: 0;
+  border: 1px solid rgb(148 163 184 / 60%); border-radius: 6px;
+  background: rgb(15 23 42 / 72%); color: #f8fafc; cursor: pointer; opacity: 0.7;
+}
+.visual-corner-button:hover, .visual-corner-button:focus-visible { opacity: 1; outline: none; border-color: #38bdf8; }
+.visual-corner-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+body.visual-role.visual-fullscreen.visual-operate .visual-corner-button { opacity: 0.18; }
+body.visual-role.visual-fullscreen.visual-operate .visual-corner-button:hover { opacity: 1; }
+
+/* ── Elementos matemáticos e atividades do Laboratório (docs/62 §6–7) ─────────────────────────── */
+.math-embed-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 3; pointer-events: none; }
+.math-embed {
+  position: absolute; display: block; border: 0; border-radius: 10px; background: #0b1f3a;
+  transform-origin: 0 0; box-shadow: 0 0 0 1px #1e3a5f;
+}
+.math-embed--selected { box-shadow: 0 0 0 2px #38bdf8; }
+.math-embed--editing { box-shadow: 0 0 0 3px #f59e0b; }
+.canvas.hmi-presentation-mode .component--math-interactive { pointer-events: auto; cursor: ew-resize; }
+body.visual-role.visual-operate .math-embed { border-radius: 0; box-shadow: none; }
+
+/* Casca "lab": o cabeçalho do Laboratório (tokens de media/lab/lab.css) e o fundo azul-escuro. */
+body.visual-role.visual-context-lab .canvas { background-color: #0b1f3a; }
+/* A página (cinza ISA-101 no contexto HMI, estilo inline) fica no azul do Laboratório; sem moldura na operação. */
+body.visual-role.visual-context-lab .hmi-page-canvas-background { background: #0b1f3a !important; border-color: #1e3a5f !important; }
+body.visual-role.visual-context-lab.visual-operate .hmi-page-canvas-background { border-color: transparent !important; }
+.visual-lab-header {
+  /* Como o cabeçalho do Laboratório: quebra em linhas numa janela estreita (o canvas encolhe junto). */
+  display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap;
+  min-height: 44px; padding: 6px 56px 6px 16px; background: #0b1f3a; color: #e2e8f0;
+  border-bottom: 1px solid #1e3a5f; font: 15px/1.4 system-ui, "Segoe UI", sans-serif;
+}
+.visual-lab-header__brand { white-space: nowrap; }
+.visual-lab-header__brand span { color: #cbd5e1; }
+.visual-lab-header__title { font-size: 13px; }
+.visual-lab-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.visual-lab-tabs button, .visual-lab-header__button {
+  background: transparent; color: #e2e8f0; border: 1px solid #1e3a5f; border-radius: 8px;
+  padding: 5px 12px; cursor: pointer; font: inherit; white-space: nowrap;
+}
+.visual-lab-tabs button[aria-current="true"] { background: #1d4ed8; border-color: #1d4ed8; }
+.visual-lab-header__button[aria-pressed="true"] { background: #1e3a5f; border-color: #3b82f6; }
+.visual-lab-header__tools { display: flex; gap: 6px; }
+body.visual-lab-presentation .visual-lab-header { font-size: 18px; }

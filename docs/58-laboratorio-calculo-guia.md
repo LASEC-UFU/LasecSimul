@@ -1,14 +1,18 @@
 # Laboratório de Cálculo — guia de uso e distribuição
 
 Para professores que montam aulas no LasecSimul e para quem mantém ou empacota a extensão. O desenho e as decisões estão em
-[50–57](50-laboratorio-calculo-investigacao.md); o estado da implementação, em [54 §0](54-laboratorio-calculo-validacao-e-riscos.md).
+[50–57](50-laboratorio-calculo-investigacao.md); desde 2026-10-20 o Laboratório é uma **Tela HMI** do projeto
+([doc 65](65-unificacao-visual-implementacao.md)): as atividades são páginas da tela e cada atividade é um elemento.
 
 ## 1. Abrir
 
-1. Abra um projeto `.lsproj` (ou nenhum, para as atividades analíticas).
-2. Paleta de comandos (Ctrl+Shift+P) → **LasecSimul: Laboratório de Cálculo**.
+- No esquemático, duplo clique no botão **Laboratório de Cálculo** (Tela HMI; com a simulação rodando, um clique), ou
+- paleta de comandos (Ctrl+Shift+P) → **LasecSimul: Laboratório de Cálculo** (sem uma tela do Laboratório no projeto, ela é
+  criada com as atividades-modelo e o botão aparece no esquemático, em Controle › Ferramentas).
 
-Sem atividades gravadas no projeto, o painel mostra as **atividades-modelo**, uma por tipo, na ordem pedagógica:
+A tela abre no **contexto Laboratório**: o cabeçalho do Laboratório com as páginas como abas, já em operação (modo aluno).
+Como qualquer Tela HMI, ela pode ficar acoplada ao VS Code, numa janela flutuante (outro monitor) ou em **tela cheia** (botão
+no canto superior direito; Esc ou F11 saem). As atividades-modelo, na ordem pedagógica:
 
 | Aba | O que o aluno faz | Precisa do simulador? |
 |---|---|---|
@@ -32,19 +36,23 @@ As abas de processo ligam-se à instância da planta correspondente no projeto (
 - Os gráficos mostram o que o Core gravou, com o instante exato de cada amostra e de cada mudança de parâmetro. Cursor, marcadores
   a/b, n e método de Riemann são **inspeção**: não mexem no simulador e funcionam com a simulação pausada.
 
-## 3. Modo professor
+## 3. Modo professor = edição da tela
 
-O botão **Modo professor** no cabeçalho liga o modo de autoria:
+**Editar** (cabeçalho) põe a tela em edição; as atividades passam ao modo professor.
 
-- Cada atividade ganha **Gravar atividade no projeto**: o que está na tela (modelo, parâmetros, vista, pergunta) vira a definição.
-- **Editor de atividades**: adicionar por tipo, reordenar, duplicar, remover; editar título, pergunta, expressões, faixas,
-  parâmetros e etapas; escolher a instância do projeto que a atividade usa. Referências quebradas (componente renomeado ou removido)
-  aparecem como aviso, com **religar** ou **desligar** — a atividade continua abrindo.
-- **Desfazer/Refazer** (botões do editor ou Ctrl+Z / Ctrl+Y fora de campos de texto) valem para a definição do laboratório.
-- Gravar no laboratório altera o projeto em memória; **salve o `.lsproj`** (Ctrl+S no esquemático ou *LasecSimul: Save Project*) para
-  guardar no arquivo. Séries gravadas e estado da simulação nunca vão para o arquivo.
+- **Duplo clique numa atividade** edita "por dentro": **Gravar atividade** guarda o que está na tela (modelo, parâmetros, vista,
+  pergunta) no elemento da atividade. Clicar fora da atividade volta à edição da página.
+- **+ Página do Laboratório…** (barra de edição) insere uma página com uma atividade-modelo; páginas se renomeiam, reordenam e
+  excluem como em qualquer Tela HMI. No Inspector da atividade: **Atividade** (troca pelo modelo de outro tipo), **Ocupar a página**
+  e **Planta** (o id da instância do projeto que o experimento usa; vazio = a única do tipo).
+- Na mesma página cabem outros elementos: indicadores e controles da HMI e os **elementos matemáticos** (Miscelâneos › Grafico ›
+  Matemática): gráfico de função, parâmetro, equação, tabela de valores e tendência. Os parâmetros (`a`, `b`…) valem para as
+  expressões dos outros elementos da página.
+- **Desfazer/Refazer** (Ctrl+Z / Ctrl+Y) valem para a tela inteira, também numa janela flutuante.
+- Editar altera o projeto em memória; **salve o `.lsproj`** (botão Salvar da tela, Ctrl+S no esquemático ou *LasecSimul: Save
+  Project*). Séries gravadas e estado da simulação nunca vão para o arquivo.
 
-**Apresentação** (cabeçalho) amplia textos e números para projetar em sala; a escolha fica guardada no painel.
+**Apresentação** (cabeçalho, em operação) amplia textos e números de todas as atividades para projetar em sala.
 
 ## 4. Exemplos prontos
 
@@ -52,12 +60,17 @@ Em `examples/calculo/`:
 
 | Arquivo | Conteúdo |
 |---|---|
-| `laboratorio-calculo.lsproj` | as seis atividades e as três plantas (tanque, primeira ordem, sensor) |
+| `laboratorio-calculo.lsproj` | as seis atividades, a página "Funções — elementos da tela" e as três plantas (tanque, primeira ordem, sensor) |
 | `tanque.lsproj`, `primeira-ordem.lsproj`, `sensor.lsproj` | uma planta e a atividade dela |
-| `funcoes-e-limites.lsproj` | só as atividades analíticas (o esquemático fica só com a nota) |
+| `funcoes-e-limites.lsproj` | as atividades analíticas e a página de elementos (o esquemático fica só com o botão) |
 
-Abrir o `.lsproj` mostra no esquemático as plantas e uma nota com o caminho do laboratório; as atividades aparecem no painel
-(**LasecSimul: Laboratório de Cálculo**). As plantas são subsistemas internos do projeto (tabela `subsystems`): não dependem da paleta nem de arquivos externos.
+Abrir o `.lsproj` mostra no esquemático o botão **Laboratório de Cálculo** e as plantas. As plantas são subsistemas internos do
+projeto (tabela `subsystems`): não dependem da paleta nem de arquivos externos. Cada planta tem um **Faceplate** (painel de
+operação): menu da instância › **Abrir Faceplate da instância** mostra volume/nível/vazões (tanque), u/y (primeira ordem) ou
+P/I (sensor) com sliders e uma tendência, valendo só para aquela instância.
+
+Projetos antigos (com `calculusLab`) abrem normalmente: as atividades viram a tela do Laboratório com o botão, e a próxima
+gravação já sai no formato novo.
 
 São gerados por `scripts/generate-calculus-lab-examples.cjs` (depois de `npm run compile` em `extension/`); as plantas-modelo (`.lssubcircuit`), por
 `scripts/generate-hydraulic-tank.py`, `generate-first-order-lab.py` e `generate-sensor-4-20.py` (o caminho de saída é o argumento).
@@ -77,15 +90,17 @@ São gerados por `scripts/generate-calculus-lab-examples.cjs` (depois de `npm ru
 |---|---|
 | `npm test` | unidades, incluindo `calc`, `analysis`, `EditorModel`, `LabGraph`, `units`, `SeriesBuffer`, `SeriesStore`, `audit` e `noEval` (o laboratório roda sob CSP sem `unsafe-eval`) |
 | `npm run test:lab:core` | Core real: gravador de séries, tanque (aceites de [53 §2.6](53-laboratorio-calculo-experimentos-e-tanque.md)), primeira ordem e sensor, Oscope por deltas |
-| `npm run test:lab:e2e` | VS Code real: atividades analíticas, editor, apresentação, CSP |
-| `npm run test:lab:tank:e2e` | VS Code + Core reais: tanque, primeira ordem, sensor, inspeção sem mensagens, gravar e reabrir |
+| `npm run test:lab:e2e` | VS Code real: a tela do Laboratório, atividades analíticas, professor por dentro, páginas-modelo, apresentação, CSP |
+| `npm run test:lab:tank:e2e` | VS Code + Core reais, aberto pelo botão do exemplo: tanque, primeira ordem, sensor, inspeção sem mensagens, gravar e reabrir |
+| `npm run test:visual:math:e2e` | elementos matemáticos e tela cheia do Laboratório nos dois monitores |
 | `npm run test:pid:e2e` | diálogo de sintonia PID com o miniplot e as séries do Core |
 | `npm run test:telemetry:baseline` | bytes e duração de telemetria e da janela do Oscope ([54 §0.1](54-laboratorio-calculo-validacao-e-riscos.md)) |
 
 Os testes de Core real e os e2e precisam do Core compilado (`npm run build:core -- --config Release` na raiz). Compile só os alvos
 necessários e rode os executáveis de teste um de cada vez: o build completo com paralelismo irrestrito pode travar a máquina.
 
-**Empacotamento.** O VSIX leva `out/`, `out-webview/` e `media/`. Por isso o CSS do laboratório fica em `media/lab/lab.css` (o commit
+**Empacotamento.** O VSIX leva `out/`, `out-webview/` e `media/`. A atividade embutida usa `out-webview/lab-embed/lab.js` (um
+arquivo AMD, `tsconfig.lab-embed.json`, gerado por `npm run compile`) inline num `<iframe>`, pelo mesmo motivo do miniplot abaixo. Por isso o CSS do laboratório fica em `media/lab/lab.css` (o commit
 da tag v0.0.94 ainda o deixava fora; essa versão não chegou a ser publicada) e o gráfico do PID em `media/pid/miniplot.js`. O diálogo PID é um iframe `srcdoc`
 que não consegue buscar recursos da Webview: o miniplot é injetado inline pelo `PidTuningPanel`. Subcircuitos novos entram em
 `subcircuits/library.json`, exceto plantas: estas não são registradas globalmente, ficam em `subcircuits/plants.json` e entram

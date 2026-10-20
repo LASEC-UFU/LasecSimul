@@ -1,5 +1,6 @@
 import { buildPaletteTree, PaletteComponentNode, PaletteRenderableEntry, PaletteTreeNode } from "./paletteTree.js";
 import { normalizeWorkspaceSelection, WORKSPACE_SECTION_ORDER, WorkspaceSection } from "./workspace.js";
+import { watchWebviewGeometry } from "./windowGeometry.js";
 
 interface PaletteState {
   catalog: PaletteRenderableEntry[];
@@ -193,7 +194,8 @@ function renderTreeNode(node: PaletteTreeNode, depth: number): HTMLElement {
     const details = document.createElement("details");
     details.className = `palette-folder${depth === 0 ? " palette-folder--depth-0" : ""}`;
     details.style.setProperty("--palette-indent", indent);
-    details.open = depth === 0;
+    // Com busca ativa, toda pasta com resultado abre: o item achado nunca fica escondido numa subpasta.
+    details.open = depth === 0 || query.trim().length > 0;
 
     const summary = document.createElement("summary");
     summary.className = "palette-folder__summary";
@@ -337,3 +339,7 @@ window.addEventListener("message", (event: MessageEvent<{ type: string; state?: 
 
 render();
 vscode?.postMessage({ type: "webviewReady" });
+
+// A paleta lateral nunca sai da janela PRINCIPAL do VS Code: a geometria dela é a referência para
+// saber se uma Tela HMI está acoplada ou numa janela flutuante (docs/61 §6.3).
+watchWebviewGeometry((geometry) => vscode?.postMessage({ type: "windowGeometry", geometry }));
