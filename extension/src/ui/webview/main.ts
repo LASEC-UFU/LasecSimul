@@ -8,7 +8,14 @@ import {
   parameterTrack, parameterValueAt, type TrendSample,
 } from "./mathWidgets.js";
 import { ACTIVITY_KIND_LABEL, defaultActivity, type LabActivityKind } from "./lab/activity.js";
+import {
+  INTERACTIVE_LAB_WIDGET_TYPE_IDS, LAB_WIDGET_TYPE_IDS, MATH_PROCESS_TANK_TYPE_ID, MATH_SERIES_CHART_TYPE_ID, MATH_SIM_CONTROLS_TYPE_ID,
+  plantParameterSpec, plantParameterValueAt, seriesChartFrame, simControlsLayout, sliderTrack, type ChartState, type SimCommand,
+} from "./labWidgets.js";
+import { SeriesBuffer } from "./lab/series/SeriesBuffer.js";
+import { PLANTS } from "./lab/plants.js";
 import { labActivityPage, uniqueLabPageSuffix } from "./labPages.js";
+import { isComposedPlantKind, labComposedPage } from "./labComposedPages.js";
 import { reorderedZOrder, zOrderModeForKey, type ZOrderMode } from "./zOrder.js";
 import { graphicalRuntimeProperties, isGraphicalTypeId } from "./graphicsBinding.js";
 import { auditHmiApplication, createHmiAuditHtml, createHmiAuditReport, defaultHmiAuditRuleProfile, filterHmiAuditFindings, fingerprintHmiAuditInputs, HMI_AUDIT_RULE_IDS, hmiAuditFindingKey } from "./hmiAudit.js";
@@ -5692,12 +5699,24 @@ if (visualRole) {
       requestVisualWindow("exitFullscreen");
     }
   }, { capture: true });
-  let resizeFrame = 0;
-  window.addEventListener("resize", () => {
-    if (!hmiPresentationMode) return;
-    cancelAnimationFrame(resizeFrame);
-    resizeFrame = requestAnimationFrame(() => fitHmiPageForPresentation());
-  });
+  window.addEventListener("resize", () => scheduleOperationFit());
+}
+
+/** Operação: a página volta a caber quando o CANVAS muda de tamanho -- janela, mas também o cabeçalho do
+ * Laboratório (abas, barra de rolagem) ou a barra do VS Code, que mudam a área sem evento `resize`. */
+let operationFitFrame = 0;
+let observedCanvas: HTMLElement | undefined;
+const canvasResizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(() => scheduleOperationFit()) : undefined;
+function scheduleOperationFit(): void {
+  if (!hmiPresentationMode || !visualRole) return;
+  cancelAnimationFrame(operationFitFrame);
+  operationFitFrame = requestAnimationFrame(() => fitHmiPageForPresentation());
+}
+function observeCanvasForOperationFit(): void {
+  if (!visualRole || !canvasElement || observedCanvas === canvasElement || !canvasResizeObserver) return;
+  if (observedCanvas) canvasResizeObserver.unobserve(observedCanvas);
+  observedCanvas = canvasElement;
+  canvasResizeObserver.observe(canvasElement);
 }
 
 // ── Elementos matemáticos de tela (docs/62 §6) ───────────────────────────────────────────────────
@@ -5719,7 +5738,193 @@ function mathRuntimeProperties(component: WebviewComponentModel): Record<string,
     Object.assign(properties, graphicalRuntimeProperties(component.properties, readoutForBinding, readoutTransportStatus, hmiTelemetryStale, readoutSampleTimestampNs));
     properties.__math_samples = trendSamplesByElement.get(component.id) ?? [];
   }
+  if (LAB_WIDGET_TYPE_IDS.includes(component.typeId) || showsPlant(component)) Object.assign(properties, labWidgetRuntimeProperties(component));
   return properties;
+}
+
+// ── Plantas do Laboratório nos elementos de tela (docs/65 §3.9) ─────────────────────────────────
+
+/** Série gravada e parâmetros correntes de uma planta (a MESMA gravação das atividades, no Host). */
+interface PlantFeed { buffer: SeriesBuffer; parameters: Record<string, number>; error?: string }
+const plantFeeds = new Map<string, PlantFeed>();
+/** Plantas assinadas pela vista (`undefined`: nenhuma ainda -- o primeiro pedido vai com `fresh`). */
+let subscribedPlantFeeds: string | undefined;
+/** Cursor, a e b de cada gráfico de série na operação (não vão para o documento). */
+const chartStateByElement = new Map<string, ChartState>();
+/** Valor do slider de parâmetro da planta enquanto é arrastado (até a planta confirmar). */
+const plantParameterDrag = new Map<string, number>();
+const plantParameterErrors = new Map<string, { reason: string; until: number }>();
+let activePlantDrag: string | undefined;
+let plantRepaintFrame = 0;
+const plantRepaintIds = new Set<string>();
+
+function plantComponentIdOf(component: { properties: Record<string, unknown> }): string {
+  const value = component.properties.plantComponentId;
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/** Elemento matemático ligado a uma planta (o mesmo critério do Host em `labExperiments.ts`; a atividade tem o seu experimento). */
+function showsPlant(component: { typeId: string; properties: Record<string, unknown> }): boolean {
+  return component.typeId.startsWith("graphics.math.") && component.typeId !== MATH_ACTIVITY_TYPE_ID && plantComponentIdOf(component) !== "";
+}
+
+/** Tipo de planta do Laboratório que o componente do projeto é (`typeId` ou origem do subsistema interno). */
+function plantKindOf(componentId: string): string | undefined {
+  const component = state.components.find((candidate) => candidate.id === componentId);
+  if (!component) return undefined;
+  const origin = (state.subsystems ?? []).find((definition) => definition.typeId === component.typeId)?.origin?.typeId;
+  return Object.values(PLANTS).find((spec) => spec.typeId === component.typeId || spec.typeId === origin)?.kind;
+}
+
+function plantFeedFor(componentId: string): PlantFeed {
+  let feed = plantFeeds.get(componentId);
+  if (!feed) {
+    feed = { buffer: new SeriesBuffer(true), parameters: {} };
+    plantFeeds.set(componentId, feed);
+  }
+  return feed;
+}
+
+function labWidgetRuntimeProperties(component: WebviewComponentModel): Record<string, unknown> {
+  const runtime: Record<string, unknown> = { __sim_status: simulationStatus };
+  const plantId = plantComponentIdOf(component);
+  if (plantId) {
+    const feed = plantFeeds.get(plantId);
+    runtime.__plant_buffer = feed?.buffer;
+    runtime.__plant_params = feed?.parameters ?? {};
+    if (feed?.error) runtime.__plant_error = feed.error;
+    runtime.__plant_kind = plantKindOf(plantId);
+  } else if (component.typeId === MATH_PROCESS_TANK_TYPE_ID) {
+    Object.assign(runtime, graphicalRuntimeProperties(component.properties, readoutForBinding, readoutTransportStatus, hmiTelemetryStale, readoutSampleTimestampNs));
+  }
+  const chart = chartStateByElement.get(component.id);
+  if (chart) runtime.__chart_state = chart;
+  const drag = plantParameterDrag.get(component.id);
+  if (drag !== undefined) runtime.__param_drag = drag;
+  const error = plantParameterErrors.get(component.id);
+  if (error && error.until > Date.now()) runtime.__param_error = error.reason;
+  return runtime;
+}
+
+/** Plantas que a página mostra: a vista assina no Host (uma vez por conjunto; ao nascer, tudo de novo). */
+function syncPlantFeeds(): void {
+  if (!visualRole) return;
+  const ids = subcircuitEditorMode === "hmi"
+    ? [...new Set(activeSceneComponents().filter(showsPlant).map(plantComponentIdOf))].sort()
+    : [];
+  const key = ids.join("\n");
+  if (key === subscribedPlantFeeds) return;
+  const fresh = subscribedPlantFeeds === undefined;
+  subscribedPlantFeeds = key;
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "subscribePlantFeeds", documentId: visualRole.documentId, componentIds: ids, fresh });
+}
+
+/** Redesenha (uma vez por quadro) só os elementos que mostram estas plantas. */
+function schedulePlantRepaint(componentId: string): void {
+  plantRepaintIds.add(componentId);
+  if (plantRepaintFrame) return;
+  plantRepaintFrame = requestAnimationFrame(() => {
+    plantRepaintFrame = 0;
+    const ids = new Set(plantRepaintIds);
+    plantRepaintIds.clear();
+    if (subcircuitEditorMode !== "hmi") return;
+    for (const component of activeSceneComponents()) {
+      if (!showsPlant(component) || !ids.has(plantComponentIdOf(component))) continue;
+      const element = componentElementsById.get(component.id);
+      if (element) updateComponentElement(element, component);
+    }
+  });
+}
+
+/** Operação: cursor/a/b do gráfico, slider do parâmetro da planta, botões da simulação. */
+function attachLabWidgetInteraction(el: HTMLElement, liveComponent: () => WebviewComponentModel | undefined): void {
+  if (!INTERACTIVE_LAB_WIDGET_TYPE_IDS.includes(el.dataset.typeId ?? "")) return;
+  el.addEventListener("pointerdown", (event) => {
+    if (!hmiPresentationMode || event.button !== 0) return;
+    const component = liveComponent();
+    if (!component) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const box = componentBox(component.typeId, component.properties);
+    const local = (pointer: PointerEvent): { x: number; y: number } => {
+      const rect = el.getBoundingClientRect();
+      return { x: ((pointer.clientX - rect.left) / Math.max(1, rect.width)) * box.width, y: ((pointer.clientY - rect.top) / Math.max(1, rect.height)) * box.height };
+    };
+    const repaint = (): void => {
+      const live = liveComponent();
+      const element = componentElementsById.get(component.id);
+      if (live && element) updateComponentElement(element, live);
+    };
+    if (component.typeId === MATH_SIM_CONTROLS_TYPE_ID) {
+      const { x, y } = local(event);
+      const hit = (Object.entries(simControlsLayout(box)) as Array<[SimCommand, { x: number; y: number; w: number; h: number }]>)
+        .find(([, rect]) => x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h)?.[0];
+      if (hit === "run") send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestRunSimulation" });
+      else if (hit === "pause") send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestPauseSimulation" });
+      else if (hit === "restart") send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestStopSimulation" });
+      return;
+    }
+    const plantId = plantComponentIdOf(component);
+    let apply: (x: number) => void;
+    let finishGesture = (): void => undefined;
+    if (component.typeId === MATH_SERIES_CHART_TYPE_ID) {
+      const buffer = plantFeeds.get(plantId)?.buffer;
+      if (!buffer || buffer.length < 2) return;
+      const frame = seriesChartFrame(component.properties, box, buffer, chartStateByElement.get(component.id) ?? {});
+      const X = (t: number): number => frame.area.L + ((t - frame.t0) / (frame.t1 - frame.t0)) * frame.area.W;
+      const showsInterval = ["showRiemann", "showSecant", "showArea"].some((key) => component.properties[key] === true);
+      const startX = local(event).x;
+      // Perto de uma alça (a, b) arrasta a alça; senão, o cursor.
+      const target: "cursor" | "a" | "b" = showsInterval && Math.abs(startX - X(frame.a)) < 14 ? "a" : showsInterval && Math.abs(startX - X(frame.b)) < 14 ? "b" : "cursor";
+      apply = (x) => {
+        const now = buffer.now;
+        const t = Math.min(now, Math.max(0, frame.t0 + ((x - frame.area.L) / frame.area.W) * (frame.t1 - frame.t0)));
+        const next: ChartState = { ...(chartStateByElement.get(component.id) ?? {}) };
+        // Cursor encostado no presente volta a acompanhar a execução.
+        if (target === "cursor") next.cursor = now - t < (frame.t1 - frame.t0) * 0.01 ? -1 : t;
+        else next[target] = t;
+        chartStateByElement.set(component.id, next);
+        repaint();
+      };
+    } else {
+      const spec = plantParameterSpec({ ...component.properties, __plant_kind: plantKindOf(plantId) });
+      if (!plantId || !spec || !visualRole) return;
+      if (spec.policy === "stop-required" && simulationStatus !== "stopped") return;
+      const track = sliderTrack(box);
+      let lastSent = 0;
+      const sendValue = (value: number): void => {
+        lastSent = performance.now();
+        send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestPlantParameter", documentId: visualRole!.documentId, componentId: plantId, parameterId: spec.id, value });
+      };
+      activePlantDrag = component.id;
+      plantParameterErrors.delete(component.id);
+      apply = (x) => {
+        const value = plantParameterValueAt(spec, (x - track.x0) / Math.max(1, track.x1 - track.x0));
+        if (plantParameterDrag.get(component.id) === value) return;
+        plantParameterDrag.set(component.id, value);
+        repaint();
+        // Ao vivo, sem inundar o Core: no máximo ~8 por segundo durante o arrasto; o valor final vai ao soltar.
+        if (performance.now() - lastSent > 120) sendValue(value);
+      };
+      finishGesture = () => {
+        activePlantDrag = undefined;
+        const value = plantParameterDrag.get(component.id);
+        if (value !== undefined) sendValue(value);
+      };
+    }
+    apply(local(event).x);
+    el.setPointerCapture(event.pointerId);
+    const move = (moveEvent: PointerEvent): void => apply(local(moveEvent).x);
+    const finish = (): void => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", finish);
+      el.removeEventListener("pointercancel", finish);
+      finishGesture();
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", finish);
+    el.addEventListener("pointercancel", finish);
+  }, { capture: true });
 }
 
 /** Uma amostra por quadro de telemetria para cada tendência da página, na janela configurada. */
@@ -5789,13 +5994,23 @@ function attachMathParameterInteraction(el: HTMLElement, liveComponent: () => We
   }, { capture: true });
 }
 
-/** "+ Página do Laboratório" (docs/62 §6.3): página nova com a atividade-modelo do tipo, ocupando a página. */
+/** "+ Página do Laboratório" (docs/62 §6.3): tanque, primeira ordem e sensor vêm como página COMPOSTA de
+ * elementos (docs/65 §3.9), ligada à planta desse tipo no projeto; os demais, como a atividade-modelo. */
 function addLabActivityPage(kind: LabActivityKind): void {
   const app = state.hmiApplication;
   if (!visualRole || !app) return;
   commitHmiSceneToPage();
-  const activity = defaultActivity(kind);
-  const page = labActivityPage(activity, uniqueLabPageSuffix(activity, app.pages));
+  let page: HmiPage;
+  if (isComposedPlantKind(kind)) {
+    const plant = state.components.find((component) => plantKindOf(component.id) === kind)?.id ?? "";
+    const taken = new Set(app.pages.flatMap((existing) => [existing.id, ...existing.elements.map((element) => element.id)]));
+    let suffix = "";
+    for (let index = 2; labComposedPage(kind, plant, suffix).elements.some((element) => taken.has(element.id)) || taken.has(labComposedPage(kind, plant, suffix).id); index += 1) suffix = `-${index}`;
+    page = labComposedPage(kind, plant, suffix);
+  } else {
+    const activity = defaultActivity(kind);
+    page = labActivityPage(activity, uniqueLabPageSuffix(activity, app.pages));
+  }
   state = { ...state, hmiApplication: { ...app, pages: [...app.pages, page] } };
   selectedHmiPageId = page.id;
   hmiSceneCache = undefined;
@@ -5984,16 +6199,20 @@ function renderLabShellHeader(): HTMLElement {
   bar.className = "appbar appbar--visual visual-lab-header";
   const brand = document.createElement("div");
   brand.className = "visual-lab-header__brand";
-  const strong = document.createElement("strong");
-  strong.textContent = "LasecSimul";
+  const logo = document.createElement("span");
+  logo.className = "visual-lab-header__logo";
+  const accent = document.createElement("b");
+  accent.textContent = "Simul";
+  logo.append("Lasec", accent);
   const product = document.createElement("span");
-  product.textContent = pt ? "| Laboratório de Cálculo" : "| Calculus Lab";
+  product.className = "visual-lab-header__product";
+  product.textContent = pt ? "Laboratório de Cálculo" : "Calculus Lab";
   const title = document.createElement("span");
   title.className = "visual-lab-header__title";
   const screenTitle = (state.hmiApplication as VisualDocument | undefined)?.title ?? visualRole?.title ?? "";
   // A tela padrão já se chama "Laboratório de Cálculo": repetir o nome ao lado da marca não diz nada.
   title.textContent = screenTitle && !/^(Laboratório de Cálculo|Calculus Lab)$/i.test(screenTitle.trim()) ? `· ${screenTitle}` : "";
-  brand.append(strong, " ", product, " ", title);
+  brand.append(logo, product, title);
   const tabs = document.createElement("nav");
   tabs.id = "labTabs";
   tabs.className = "visual-lab-tabs";
@@ -6027,6 +6246,8 @@ function renderLabShellHeader(): HTMLElement {
   edit.addEventListener("click", () => setVisualEditing(true));
   tools.append(presentation, edit);
   bar.append(brand, tabs, tools);
+  // A aba da página atual sempre à vista na faixa (com muitas páginas a faixa rola).
+  requestAnimationFrame(() => tabs.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" }));
   return bar;
 }
 
@@ -6190,6 +6411,8 @@ function render(): void {
   updateCanvasKeyboardAnnouncement();
   renderVisualCornerControls();
   syncMathEmbeds();
+  syncPlantFeeds();
+  observeCanvasForOperationFit();
 }
 
 /** Componentes/fios cujas caixas (canvas-local, sem zoom) se sobrepõem ao retângulo do marquee --
@@ -10054,6 +10277,7 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
 
   attachGraphicalOperatorInteraction(el, liveComponent);
   attachMathParameterInteraction(el, liveComponent);
+  attachLabWidgetInteraction(el, liveComponent);
 
   // ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): isPushButton vem de interactionKind (genérico);
   // isToggleClickable é o conceito genérico de "clicar no toggle-hit-zone alterna `closed`" -- cobre
@@ -11028,7 +11252,7 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
     : "";
   el.className = `component ${isComponentSelected(component.id) ? "selected" : ""} ${hasPackageVisual ? "component--package" : ""} ${isVoltmeter ? "component--voltmeter" : ""} ${isPushButton ? "component--push" : ""} ${isSwitchToggle ? "component--switch" : ""} ${isFixedVolt ? "component--fixed-volt" : ""} ${isRail ? "component--rail" : ""} ${isTunnel ? "component--tunnel" : ""} ${meterClass} ${operatorClass} ${isMissingSubcircuitRef || isMissingDeviceRef ? "component--subcircuit-missing" : ""} ${isUnknownComponent ? "component--unknown" : ""}`;
   // Slider de parâmetro matemático: interativo na operação, como os operadores HMI (pointer-events).
-  if (component.typeId === MATH_PARAMETER_TYPE_ID) el.classList.add("component--math-interactive");
+  if (component.typeId === MATH_PARAMETER_TYPE_ID || INTERACTIVE_LAB_WIDGET_TYPE_IDS.includes(component.typeId)) el.classList.add("component--math-interactive");
   el.style.left = `${component.x + rotatedBox.x}px`;
   el.style.top = `${component.y + rotatedBox.y}px`;
   el.style.width = `${rotatedBox.width}px`;
@@ -13180,6 +13404,35 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   if (message.type === "visualClipboard") {
     if (message.catalogEntries) mergeCatalogEntries(message.catalogEntries);
     sharedVisualClipboard = { at: message.at, components: message.components, ...(message.faceplateInstanceId ? { faceplateInstanceId: message.faceplateInstanceId } : {}) };
+    return;
+  }
+
+  if (message.type === "plantSeries") {
+    plantFeedFor(message.componentId).buffer.ingest(message.delta);
+    schedulePlantRepaint(message.componentId);
+    return;
+  }
+
+  if (message.type === "plantParameters") {
+    const feed = plantFeedFor(message.componentId);
+    feed.parameters = message.values;
+    feed.error = message.error;
+    // A planta confirmou: os sliders soltos voltam a mostrar o valor dela.
+    for (const component of activeSceneComponents()) {
+      if (component.id !== activePlantDrag && plantComponentIdOf(component) === message.componentId) plantParameterDrag.delete(component.id);
+    }
+    schedulePlantRepaint(message.componentId);
+    return;
+  }
+
+  if (message.type === "plantParameterRejected") {
+    for (const component of activeSceneComponents()) {
+      if (plantComponentIdOf(component) !== message.componentId || component.properties.parameterId !== message.parameterId) continue;
+      plantParameterErrors.set(component.id, { reason: message.reason, until: Date.now() + 4000 });
+      plantParameterDrag.delete(component.id);
+    }
+    schedulePlantRepaint(message.componentId);
+    setTimeout(() => schedulePlantRepaint(message.componentId), 4100);
     return;
   }
 

@@ -12,6 +12,24 @@ export function formatNumberPt(v: number): string {
   return String(Number(v.toPrecision(12))).replace("-", "−").replace(".", ",");
 }
 
+const GREEK: Readonly<Record<string, string>> = {
+  alpha: "α", beta: "β", gamma: "γ", delta: "δ", Delta: "Δ", epsilon: "ε", theta: "θ", lambda: "λ", mu: "μ", rho: "ρ",
+  sigma: "σ", Sigma: "Σ", tau: "τ", phi: "φ", omega: "ω", Omega: "Ω",
+};
+
+/** Identificador: `tau` -> τ, `q_e` -> q com índice e, `V_0` -> V₀, `q_entrada` -> q com índice "entrada". */
+export function identifierToMathML(name: string): string {
+  const symbol = (part: string): string => (GREEK[part] ?? part);
+  // Diferencial (dh, dt, dτ): "d" e a variável, ambos em itálico, como no quadro.
+  const differential = /^d([A-Za-z]|alpha|beta|theta|tau|phi|omega)$/.exec(name);
+  if (differential) return `<mrow><mi>d</mi><mi>${escapeXml(symbol(differential[1]!))}</mi></mrow>`;
+  const underscore = name.indexOf("_");
+  if (underscore <= 0 || underscore === name.length - 1) return `<mi>${escapeXml(symbol(name))}</mi>`;
+  const base = symbol(name.slice(0, underscore)), index = symbol(name.slice(underscore + 1));
+  const indexML = /^[0-9]+$/.test(index) ? `<mn>${index}</mn>` : `<mi>${escapeXml(index)}</mi>`;
+  return `<msub><mi>${escapeXml(base)}</mi>${indexML}</msub>`;
+}
+
 /** AST -> marcação MathML Core (texto escapado; renderização nativa do Chromium, sem biblioteca). */
 export function astToMathML(ast: Ast, display: "inline" | "block" = "inline"): string {
   const numML = (v: number): string =>
@@ -22,7 +40,7 @@ export function astToMathML(ast: Ast, display: "inline" | "block" = "inline"): s
   const fn = (name: string, a: Ast): string => `<mrow><mi>${name}</mi><mo>&#x2061;</mo><mrow><mo>(</mo>${go(a)}<mo>)</mo></mrow></mrow>`;
   function go(node: Ast): string {
     if (typeof node === "number") return numML(node);
-    if (typeof node === "string") return `<mi>${escapeXml(node)}</mi>`;
+    if (typeof node === "string") return identifierToMathML(node);
     const head = node[0];
     switch (head) {
       case "Add": return `<mrow>${wrap(arg(node, 1), 1)}<mo>+</mo>${wrap(arg(node, 2), 2)}</mrow>`;
@@ -44,7 +62,7 @@ export function astToMathML(ast: Ast, display: "inline" | "block" = "inline"): s
       case "Call": return fn(escapeXml(argString(node, 1)), arg(node, 2));
       case "Integrate": {
         const L = argNode(node, 2);
-        return `<mrow><msubsup><mo>∫</mo>${go(arg(L, 2))}${go(arg(L, 3))}</msubsup>${wrap(arg(node, 1), 2)}<mspace width="0.17em"></mspace><mi>d</mi><mi>${escapeXml(argString(L, 1))}</mi></mrow>`;
+        return `<mrow><msubsup><mo>∫</mo>${go(arg(L, 2))}${go(arg(L, 3))}</msubsup>${wrap(arg(node, 1), 2)}<mspace width="0.17em"></mspace><mi>d</mi>${identifierToMathML(argString(L, 1))}</mrow>`;
       }
       case "D": return `<mrow><mfrac><mi>d</mi><mrow><mi>d</mi><mi>${escapeXml(argString(node, 2))}</mi></mrow></mfrac>${wrap(arg(node, 1), 5)}</mrow>`;
       case "Limit": {

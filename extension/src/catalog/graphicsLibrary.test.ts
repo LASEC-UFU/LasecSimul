@@ -93,7 +93,7 @@ function filledRectHeight(svg: string, fill: string): number {
       assert(svg.length > 0, `${entry.typeId} nao renderizou nada`);
       assert(!svg.includes("NaN"), `${entry.typeId} gerou NaN em algum atributo`);
       assert(!svg.includes("undefined"), `${entry.typeId} gerou undefined em algum atributo`);
-      if (["graphics.tank_svg", "graphics.valve_globe_svg", "graphics.hmi.tank", "graphics.hmi.pump", "graphics.pid.bagfilter", "graphics.pid.blower", "graphics.pid.pump_centrifugal", "graphics.pid.motor", "graphics.pid.vessel_tank"].includes(entry.typeId)) {
+      if (["graphics.valve_globe_svg", "graphics.hmi.tank", "graphics.hmi.pump", "graphics.pid.bagfilter", "graphics.pid.blower", "graphics.pid.pump_centrifugal", "graphics.pid.motor", "graphics.pid.vessel_tank"].includes(entry.typeId)) {
         assert(/<image\b[^>]*href="data:image\/svg\+xml;base64,/.test(svg), `${entry.typeId} deve usar SVG vetorial empacotado`);
       } else {
         assert(!/<image\b/.test(svg), `${entry.typeId} usa bitmap -- a biblioteca e vetorial`);
@@ -103,7 +103,7 @@ function filledRectHeight(svg: string, fill: string): number {
     }
   });
 
-  await test("o novo tanque SVG aparece em Grafico > Tanques e Vasos e renderiza o arquivo empacotado", () => {
+  await test("o tanque vetorial aparece em Grafico > Tanques e Vasos e e desenho nativo (sem imagem)", () => {
     const tank = byTypeId.get("graphics.tank_svg");
     assert(Boolean(tank), "tanque vetorial ausente do catalogo");
     const tree = buildPaletteTree(graphics, "", "misc");
@@ -113,12 +113,11 @@ function filledRectHeight(svg: string, fill: string): number {
       : undefined;
     assert(vessels?.kind === "folder" && vessels.children.some((node) => node.kind === "component" && node.typeId === tank?.typeId),
       "tanque vetorial fora da pasta Tanques e Vasos");
-    const artwork = fs.readFileSync(path.resolve(process.cwd(), "..", "subcircuits", "tank.svg"));
-    const prefix = "data:image/svg+xml;base64,";
-    const image = tank?.package?.simulidePaint?.primitives.find((primitive) => primitive.kind === "image") as { href?: string } | undefined;
-    assert(Boolean(image?.href?.startsWith(prefix)), "imagem SVG nao foi resolvida no catalogo");
-    assert(Buffer.from(image?.href?.slice(prefix.length) ?? "", "base64").equals(artwork), "imagem diferente do SVG empacotado");
-    assert(tank?.iconFilePath === path.resolve(process.cwd(), "..", "subcircuits", "tank.svg"), "icone da paleta nao usa o SVG");
+    // Desenho do IR (scripts/generate-vector-tank.py): nada de bitmap vetorizado com janela em corte.
+    assert(!tank?.package?.simulidePaint?.primitives.some((primitive) => primitive.kind === "image"), "o tanque nao pode depender de imagem");
+    assert(!/<image\b/.test(render(tank!, { value: 50 })), "o tanque desenha sem <image>");
+    const icon = path.resolve(process.cwd(), "..", "subcircuits", "tank-vector.svg");
+    assert(tank?.iconFilePath === icon && fs.readFileSync(icon, "utf8").startsWith("<svg"), "icone da paleta e o desenho do tanque");
     assert(tank?.pinCount === 0, "elemento grafico nao deve ter terminais");
     const english = loadUnifiedCatalog(process.cwd(), "en").catalog.find((entry) => entry.typeId === "graphics.tank_svg");
     assert(english?.label === "Vector Tank" && JSON.stringify(english.folderPath) === JSON.stringify(["Graphical", "Tanks & Vessels"]),
@@ -151,16 +150,29 @@ function filledRectHeight(svg: string, fill: string): number {
     assert(bigger.width === 240 && bigger.height === 240, "válvula vetorial não pode ser redimensionada");
   });
 
-  await test("tanque vetorial: o líquido sobe recortado na janela conforme o nível (fixo ou ligado)", () => {
+  await test("tanque vetorial: o nível é de verdade -- largura interna inteira, altura proporcional, 0 % vazio", () => {
     const tank = byTypeId.get("graphics.tank_svg")!;
     const liquid = "#1e88e5";
-    const empty = render(tank, { value: 0 }, "tank-0");
-    const half = render(tank, { value: 50 }, "tank-50");
-    const full = render(tank, { value: 100 }, "tank-100");
-    const h0 = filledRectHeight(empty, liquid), h50 = filledRectHeight(half, liquid), h100 = filledRectHeight(full, liquid);
-    assert(h0 === 0 && h50 > 0 && h100 > h50, `alturas do líquido 0/50/100 %: ${h0} ${h50} ${h100}`);
-    assert(/<clipPath id="[^"]+"><path d="M/.test(half) && /<g clip-path="url\(#[^)]+\)">/.test(half), "o líquido deve ficar dentro do recorte da janela");
-    assert(filledRectHeight(render(tank, { value: 50, liquidColor: "#ff0000" }, "tank-red"), "#ff0000") === h50, "cor do líquido configurável");
+    const liquidRect = (svg: string) => {
+      const tag = new RegExp(`<rect[^>]*fill="${liquid}"[^>]*>`).exec(svg)?.[0] ?? "";
+      const attr = (name: string) => Number(new RegExp(`\\b${name}="([-\\d.]+)"`).exec(tag)?.[1] ?? NaN);
+      return { x: attr("x"), y: attr("y"), width: attr("width"), height: attr("height") };
+    };
+    const empty = liquidRect(render(tank, { value: 0 }, "tank-0"));
+    const quarter = liquidRect(render(tank, { value: 25 }, "tank-25"));
+    const half = liquidRect(render(tank, { value: 50 }, "tank-50"));
+    const full = liquidRect(render(tank, { value: 100 }, "tank-100"));
+    assert(empty.height === 0, `0 % deveria estar vazio, veio ${empty.height}`);
+    // Proporcional: 25 % = metade de 50 %, 50 % = metade de 100 %, e o fundo do líquido fica no mesmo lugar.
+    assert(Math.abs(half.height - 2 * quarter.height) < 0.01 && Math.abs(full.height - 2 * half.height) < 0.01, `alturas 25/50/100: ${quarter.height} ${half.height} ${full.height}`);
+    assert(Math.abs((half.y + half.height) - (full.y + full.height)) < 0.01, "o líquido sobe a partir do fundo do vidro");
+    // A largura do líquido é a largura interna do tanque (não uma janela estreita): > 70 % da caixa de 120.
+    assert(half.width > 84 && half.width === full.width, `largura do líquido ${half.width}`);
+    assert(liquidRect(render(tank, { value: 400 }, "tank-over")).height === full.height && liquidRect(render(tank, { value: -50 }, "tank-under")).height === 0,
+      "fora da faixa satura em cheio/vazio");
+    assert(filledRectHeight(render(tank, { value: 50, liquidColor: "#ff0000" }, "tank-red"), "#ff0000") === half.height, "cor do líquido configurável");
+    const shown = render(tank, { value: 62, showValue: true }, "tank-text");
+    assert(shown.includes(">62.0 %<") && !render(tank, { value: 62 }, "tank-quiet").includes(">62.0 %<"), "valor só com Mostrar valor");
   });
 
   await test("válvula vetorial: abertura só aparece com 'Mostrar abertura'", () => {

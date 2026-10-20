@@ -1,6 +1,7 @@
 // E2E da vertical do tanque (docs/53 §2) no VS Code real com o Core real: projeto de exemplo com o
 // subcircuito hydraulic_tank e a tela "Laboratório de Cálculo" (Tela HMI, docs/62 §6 e docs/64) aberta
-// pelo botão do esquemático, execução, parâmetros ao vivo (A com derramamento), pausa, Riemann sobre a série
+// pelo botão do esquemático -- com as páginas de ATIVIDADE do tanque, da primeira ordem e do sensor (o
+// exemplo traz páginas compostas de elementos, testadas em run-visual-lab-composed-e2e.cjs), execução, parâmetros ao vivo (A com derramamento), pausa, Riemann sobre a série
 // gravada, inspeção sem comandos ao Core, Reiniciar, primeira ordem (τ), sensor 4–20 mA (12 mA e saturação)
 // e gravar/reabrir o projeto com a atividade editada no modo professor (edição da tela).
 // Uso: npm run test:lab:tank:e2e
@@ -45,7 +46,16 @@ const check = (cond, label, detail = "") => { console.log(`${cond ? "ok  " : "FA
 
 (async () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "lasecsimul-lab-tank-ws-"));
-  fs.copyFileSync(example, path.join(workspace, "laboratorio-calculo.lsproj"));
+  // As páginas compostas do exemplo viram páginas de atividade (os modelos do produto, `labPages.ts`).
+  const lab = require(path.join(extensionPath, "out", "ui", "webview", "lab", "activity.js"));
+  const { labActivityPage } = require(path.join(extensionPath, "out", "ui", "webview", "labPages.js"));
+  const project = JSON.parse(fs.readFileSync(example, "utf8"));
+  const activityFor = { "pagina-tanque-composta": ["tank", "tanque-lab"], "pagina-primeira-ordem-composta": ["firstOrder", "primeira-ordem-lab"], "pagina-sensor-composta": ["sensor", "sensor-lab"] };
+  project.visualDocuments[0].pages = project.visualDocuments[0].pages.map((page) => {
+    const [kind, plant] = activityFor[page.id] ?? [];
+    return kind ? labActivityPage({ ...lab.defaultActivities().find((activity) => activity.kind === kind), plantComponentId: plant }) : page;
+  });
+  fs.writeFileSync(path.join(workspace, "laboratorio-calculo.lsproj"), JSON.stringify(project, null, 2));
   const port = 9600 + Math.floor(Math.random() * 300);
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), "lasecsimul-lab-tank-user-"));
   const extensionsDir = fs.mkdtempSync(path.join(os.tmpdir(), "lasecsimul-lab-tank-ext-"));
@@ -258,6 +268,52 @@ const check = (cond, label, detail = "") => { console.log(`${cond ? "ok  " : "FA
     check(/sem saturação 24 mA/.test(await lab.locator("#snReadout").innerText()), "mostra o valor sem saturação (24 mA)");
     await lab.locator("#snRestart").click();
     check(await waitFor(() => /Configuração/.test(document.getElementById("snStatus").textContent), null, 30000, "reinício sensor"), "Reiniciar o sensor");
+
+    // ------------------------------------------- gravação por planta (docs/65 §7, M12)
+    // A gravação é da planta e o experimento é da atividade, não da vista: trocar de página ou fechar e
+    // reabrir a tela no meio da execução não zera o gráfico nem desfaz o que o aluno mudou.
+    const tankSnapshot = () => view(() => {
+      const v = window.__lab.view, b = v.buffer;
+      return { first: b.length > 0 ? b.t[0] : NaN, now: b.now, parameterEvents: b.events.filter((e) => e.kind === "parameter").length, qIn: v.graph.get("params").qIn };
+    });
+    await openTab("tank");
+    check(await waitFor(() => document.querySelector("#tkPlant")?.classList.contains("ok"), null, 30000, "planta ligada"), "tanque ligado de novo");
+    await lab.locator("#tkRun").click();
+    check(await waitFor(() => window.__lab.view?.buffer?.now >= 2, null, 40000, "2 s simulados"), "tanque grava de novo depois dos Reiniciar");
+    await setSlider("tk_qIn", 1.5);
+    check(await waitFor(() => window.__lab.view.graph.get("params").qIn === 1.5 && window.__lab.view.buffer.events.some((e) => e.kind === "parameter" && e.value === 1.5), null, 10000, "qIn 1,5"),
+      "qIn = 1,5 aceito ao vivo");
+    const beforeLeave = await tankSnapshot();
+    await openTab("firstOrder");
+    await sleep(2500);
+    await openTab("tank");
+    check(await waitFor((now) => document.querySelector("#tkPlant")?.classList.contains("ok") && window.__lab.view.buffer.now >= now + 2, beforeLeave.now, 30000, "tanque de volta"),
+      "voltar à página do tanque religa a vista");
+    const afterReturn = await tankSnapshot();
+    check(afterReturn.first <= 0.05 && afterReturn.now >= beforeLeave.now + 2, "voltar à página mostra a série inteira desde t = 0 (a gravação não parou)",
+      `antes ${JSON.stringify(beforeLeave)} depois ${JSON.stringify(afterReturn)}`);
+    check(afterReturn.qIn === 1.5, "voltar à página mantém o parâmetro que o aluno mudou", String(afterReturn.qIn));
+    check(afterReturn.parameterEvents === beforeLeave.parameterEvents, "voltar à página não reaplica parâmetros (nenhum evento novo na série)",
+      `${beforeLeave.parameterEvents} → ${afterReturn.parameterEvents}`);
+    // Fechar a tela pelo X da aba (o teclado dentro do <iframe> da atividade não chega ao workbench) e
+    // reabrir pelo botão do esquemático.
+    const screenTab = workbench.locator(".tabs-container .tab", { hasText: /Laboratório de Cálculo/ }).first();
+    await screenTab.hover();
+    await screenTab.locator(".action-label.codicon-close, .codicon-close").first().click();
+    await screenTab.waitFor({ state: "detached", timeout: 10000 });
+    await sleep(2500);
+    shell = await openLabScreen();
+    lab = undefined;
+    await openTab("tank");
+    check(await waitFor((now) => document.querySelector("#tkPlant")?.classList.contains("ok") && window.__lab.view.buffer.now >= now + 2, afterReturn.now, 30000, "tanque reaberto"),
+      "reabrir a tela religa a vista do tanque");
+    const afterReopen = await tankSnapshot();
+    check(afterReopen.first <= 0.05 && afterReopen.qIn === 1.5 && afterReopen.parameterEvents === beforeLeave.parameterEvents,
+      "fechar e reabrir a tela mantém a série desde t = 0, o parâmetro e os eventos", JSON.stringify(afterReopen));
+    await lab.locator("#tkRestart").click();
+    check(await waitFor(() => /Configuração/.test(document.getElementById("tkStatus").textContent) && window.__lab.view.buffer.length === 0, null, 30000, "reinício"),
+      "Reiniciar depois da troca de páginas zera as séries");
+    await openTab("sensor"); // a seção seguinte começa abrindo a aba do tanque (um <iframe> novo)
 
     check(cspViolations.length === 0, "nenhuma violação de CSP", cspViolations.join("; "));
 

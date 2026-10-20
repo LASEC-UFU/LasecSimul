@@ -1182,7 +1182,8 @@ const ownedTypeIds = new Set(SYMBOLS.map((def) => `graphics.${def.id}`));
 // (`catalog/subcircuitSymbolScene.ts`). Só ganham a subpasta nova.
 const LEGACY_FOLDER = { pt: ["Grafico", "Formas Basicas"], en: ["Graphical", "Basic Shapes"] };
 const LEGACY_IDS = ["graphics.rectangle", "graphics.ellipse", "graphics.line", "graphics.text", "graphics.image"];
-// SVGs fornecidos separadamente vivem no catálogo e não são gerados por SYMBOLS.
+// Itens com desenho próprio vivem no catálogo e não são gerados por SYMBOLS: a válvula globo (SVG fornecido)
+// e o tanque vetorial (desenho nativo do IR, `scripts/generate-vector-tank.py`).
 const ASSET_BACKED_IDS = new Set(["graphics.tank_svg", "graphics.valve_globe_svg"]);
 
 /** As 5 legadas estavam com rótulo em INGLÊS na língua-base do arquivo (que é pt-BR) -- a

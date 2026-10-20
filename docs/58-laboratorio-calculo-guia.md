@@ -36,13 +36,35 @@ As abas de processo ligam-se à instância da planta correspondente no projeto (
 - Os gráficos mostram o que o Core gravou, com o instante exato de cada amostra e de cada mudança de parâmetro. Cursor, marcadores
   a/b, n e método de Riemann são **inspeção**: não mexem no simulador e funcionam com a simulação pausada.
 
+## 2a. Páginas compostas: tanque, primeira ordem e sensor
+
+Desde 2026-10-20 as páginas de processo dos exemplos (e as que **+ Página do Laboratório…** cria para tanque, primeira ordem e
+sensor) não são uma atividade fechada: são montadas com **elementos de tela** que o professor move, troca e configura no
+Inspector, no estilo do [doc 55](55-meta-visual-laboratorio-calculo.md). Os elementos ficam em Miscelâneos › Grafico ›
+Matemática:
+
+| Elemento | O que faz |
+|---|---|
+| **Tanque de processo** | tanque vetorial animado (vidro e aço, líquido com superfície e bolhas, régua de nível, jato de entrada, saída por bomba, válvula ou orifício, aviso de transbordo); mostra V, h, A e as vazões da planta |
+| **Gráfico do processo** | uma série gravada da planta (h, V, q, y, u, P, I…) com **reta tangente** no cursor, **reta secante** e **soma de Riemann** entre a e b, área sob a curva, legenda e eventos de parâmetro; na operação o aluno arrasta o cursor e as alças a e b |
+| **Parâmetro da planta** | slider com ícone e cor de um parâmetro da planta (vazões, área, degrau u, K, τ, pressão…); os estruturais travam com a simulação rodando |
+| **Controles da simulação** | Executar, Pausar e Reiniciar, com o estado e o tempo simulado |
+| **Leitura da planta** | valor grande de uma série ou parâmetro: "V = 21,2 L" |
+| **Cartão** | painel do tema com título, ícone e texto ("Processo em tempo real", "Explore:", uma pergunta) |
+| **Equação** | agora com **fórmula exibida** (`dh/dt = q/A`, `V = V_0 + Integrate(tau, 0, t, q)`: índices com `_`, letras gregas por nome) seguida do valor calculado com as séries e parâmetros da planta |
+
+Todos leem a **mesma gravação** da planta que as atividades usam (uma por planta, desde a abertura do projeto): trocar de
+página ou fechar a tela não perde o gráfico. O parâmetro mudado por um slider vale para a execução; **Reiniciar** volta aos
+valores do projeto. Para ligar um elemento a outra planta, mude **Planta** (id do componente) no Inspector.
+
 ## 3. Modo professor = edição da tela
 
 **Editar** (cabeçalho) põe a tela em edição; as atividades passam ao modo professor.
 
 - **Duplo clique numa atividade** edita "por dentro": **Gravar atividade** guarda o que está na tela (modelo, parâmetros, vista,
   pergunta) no elemento da atividade. Clicar fora da atividade volta à edição da página.
-- **+ Página do Laboratório…** (barra de edição) insere uma página com uma atividade-modelo; páginas se renomeiam, reordenam e
+- **+ Página do Laboratório…** (barra de edição) insere uma página com uma atividade-modelo (tanque, primeira ordem e sensor vêm
+  como página composta, §2a, já ligada à planta do tipo no projeto); páginas se renomeiam, reordenam e
   excluem como em qualquer Tela HMI. No Inspector da atividade: **Atividade** (troca pelo modelo de outro tipo), **Ocupar a página**
   e **Planta** (o id da instância do projeto que o experimento usa; vazio = a única do tipo).
 - Na mesma página cabem outros elementos: indicadores e controles da HMI e os **elementos matemáticos** (Miscelâneos › Grafico ›
@@ -60,8 +82,8 @@ Em `examples/calculo/`:
 
 | Arquivo | Conteúdo |
 |---|---|
-| `laboratorio-calculo.lsproj` | as seis atividades, a página "Funções — elementos da tela" e as três plantas (tanque, primeira ordem, sensor) |
-| `tanque.lsproj`, `primeira-ordem.lsproj`, `sensor.lsproj` | uma planta e a atividade dela |
+| `laboratorio-calculo.lsproj` | funções, limites e eixo como atividades; tanque, primeira ordem e sensor como páginas compostas (§2a); a página "Funções — elementos da tela" e as três plantas |
+| `tanque.lsproj`, `primeira-ordem.lsproj`, `sensor.lsproj` | uma planta e a página composta dela |
 | `funcoes-e-limites.lsproj` | as atividades analíticas e a página de elementos (o esquemático fica só com o botão) |
 
 Abrir o `.lsproj` mostra no esquemático o botão **Laboratório de Cálculo** e as plantas. As plantas são subsistemas internos do

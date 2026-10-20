@@ -70,6 +70,221 @@
           ]
         },
         {
+          "id": "pagina-funcoes-elementos",
+          "name": "Funções — elementos da tela",
+          "width": 1920,
+          "height": 1080,
+          "elements": [
+            {
+              "id": "titulo",
+              "typeId": "graphics.math.card",
+              "label": "titulo",
+              "properties": {
+                "width": 1872,
+                "height": 104,
+                "title": "Como a, b e c mudam f(x) = a·x² + b·x + c?",
+                "icon": "chart",
+                "variant": "dark",
+                "titleSize": 24,
+                "textSize": 16,
+                "text": "Arraste os parâmetros: o gráfico, as equações e a tabela mudam juntos."
+              },
+              "visual": {
+                "x": 24,
+                "y": 24,
+                "width": 1872,
+                "height": 104,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "param-a",
+              "typeId": "graphics.math.parameter",
+              "label": "param-a",
+              "properties": {
+                "width": 440,
+                "height": 76,
+                "name": "a",
+                "min": -3,
+                "max": 3,
+                "step": 0.1,
+                "value": 1,
+                "decimals": 1,
+                "color": "#3b82f6"
+              },
+              "visual": {
+                "x": 24,
+                "y": 152,
+                "width": 440,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "param-b",
+              "typeId": "graphics.math.parameter",
+              "label": "param-b",
+              "properties": {
+                "width": 440,
+                "height": 76,
+                "name": "b",
+                "min": -5,
+                "max": 5,
+                "step": 0.1,
+                "value": 0,
+                "decimals": 1,
+                "color": "#f97316"
+              },
+              "visual": {
+                "x": 24,
+                "y": 244,
+                "width": 440,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "param-c",
+              "typeId": "graphics.math.parameter",
+              "label": "param-c",
+              "properties": {
+                "width": 440,
+                "height": 76,
+                "name": "c",
+                "min": -5,
+                "max": 5,
+                "step": 0.1,
+                "value": -2,
+                "decimals": 1,
+                "color": "#14b8a6"
+              },
+              "visual": {
+                "x": 24,
+                "y": 336,
+                "width": 440,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "explore",
+              "typeId": "graphics.math.card",
+              "label": "explore",
+              "properties": {
+                "width": 440,
+                "height": 348,
+                "title": "Explore:",
+                "icon": "bulb",
+                "variant": "dark",
+                "titleStyle": "accent",
+                "accentColor": "#f59e0b",
+                "titleSize": 22,
+                "textSize": 17,
+                "text": "O que acontece com o vértice quando a muda de sinal? Para que valores de c a parábola deixa de cortar o eixo x? Compare com f′(x) = 0."
+              },
+              "visual": {
+                "x": 24,
+                "y": 436,
+                "width": 440,
+                "height": 348,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "grafico",
+              "typeId": "graphics.math.function_plot",
+              "label": "grafico",
+              "properties": {
+                "width": 960,
+                "height": 632,
+                "title": "f(x) e g(x) = x + 1",
+                "expression": "a x^2 + b x + c",
+                "expression2": "x + 1",
+                "variable": "x",
+                "xMin": -5,
+                "xMax": 5,
+                "yMin": -6,
+                "yMax": 10,
+                "showGrid": true,
+                "showDerivative": false,
+                "showRoots": true
+              },
+              "visual": {
+                "x": 488,
+                "y": 152,
+                "width": 960,
+                "height": 632,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "tabela",
+              "typeId": "graphics.math.value_table",
+              "label": "tabela",
+              "properties": {
+                "width": 424,
+                "height": 632,
+                "expression": "a x^2 + b x + c",
+                "variable": "x",
+                "header": "f(x)",
+                "start": -5,
+                "step": 1,
+                "rows": 11,
+                "decimals": 2
+              },
+              "visual": {
+                "x": 1472,
+                "y": 152,
+                "width": 424,
+                "height": 632,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "equacao-f",
+              "typeId": "graphics.math.equation",
+              "label": "equacao-f",
+              "properties": {
+                "width": 924,
+                "height": 248,
+                "lhs": "f(x)",
+                "expression": "a x^2 + b x + c",
+                "variable": "x",
+                "substitute": true,
+                "fontSize": 40
+              },
+              "visual": {
+                "x": 24,
+                "y": 808,
+                "width": 924,
+                "height": 248,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "equacao-df",
+              "typeId": "graphics.math.equation",
+              "label": "equacao-df",
+              "properties": {
+                "width": 924,
+                "height": 248,
+                "lhs": "f′(x)",
+                "expression": "2 a x + b",
+                "variable": "x",
+                "substitute": true,
+                "fontSize": 40
+              },
+              "visual": {
+                "x": 972,
+                "y": 808,
+                "width": 924,
+                "height": 248,
+                "rotation": 0
+              }
+            }
+          ]
+        },
+        {
           "id": "pagina-limites-velocidade-4s",
           "name": "Limites — velocidade de subida aos 4 s",
           "width": 1920,
@@ -120,192 +335,6 @@
                 "y": 0,
                 "width": 1920,
                 "height": 1080,
-                "rotation": 0
-              }
-            }
-          ]
-        },
-        {
-          "id": "pagina-funcoes-elementos",
-          "name": "Funções — elementos da tela",
-          "width": 1920,
-          "height": 1080,
-          "elements": [
-            {
-              "id": "titulo",
-              "typeId": "graphics.label",
-              "label": "titulo",
-              "properties": {
-                "width": 1400,
-                "height": 56,
-                "text": "Como a, b e c mudam f(x) = a·x² + b·x + c? Arraste os parâmetros.",
-                "fontSize": 30,
-                "align": "start",
-                "stroke": "#e2e8f0"
-              },
-              "visual": {
-                "x": 60,
-                "y": 36,
-                "width": 1400,
-                "height": 56,
-                "rotation": 0
-              }
-            },
-            {
-              "id": "param-a",
-              "typeId": "graphics.math.parameter",
-              "label": "param-a",
-              "properties": {
-                "width": 320,
-                "height": 72,
-                "name": "a",
-                "min": -3,
-                "max": 3,
-                "step": 0.1,
-                "value": 1,
-                "decimals": 1
-              },
-              "visual": {
-                "x": 60,
-                "y": 140,
-                "width": 320,
-                "height": 72,
-                "rotation": 0
-              }
-            },
-            {
-              "id": "param-b",
-              "typeId": "graphics.math.parameter",
-              "label": "param-b",
-              "properties": {
-                "width": 320,
-                "height": 72,
-                "name": "b",
-                "min": -5,
-                "max": 5,
-                "step": 0.1,
-                "value": 0,
-                "decimals": 1
-              },
-              "visual": {
-                "x": 60,
-                "y": 232,
-                "width": 320,
-                "height": 72,
-                "rotation": 0
-              }
-            },
-            {
-              "id": "param-c",
-              "typeId": "graphics.math.parameter",
-              "label": "param-c",
-              "properties": {
-                "width": 320,
-                "height": 72,
-                "name": "c",
-                "min": -5,
-                "max": 5,
-                "step": 0.1,
-                "value": -2,
-                "decimals": 1
-              },
-              "visual": {
-                "x": 60,
-                "y": 324,
-                "width": 320,
-                "height": 72,
-                "rotation": 0
-              }
-            },
-            {
-              "id": "grafico",
-              "typeId": "graphics.math.function_plot",
-              "label": "grafico",
-              "properties": {
-                "width": 1000,
-                "height": 600,
-                "title": "Gráfico",
-                "expression": "a x^2 + b x + c",
-                "expression2": "x + 1",
-                "variable": "x",
-                "xMin": -5,
-                "xMax": 5,
-                "yMin": -6,
-                "yMax": 10,
-                "showGrid": true,
-                "showDerivative": false,
-                "showRoots": true
-              },
-              "visual": {
-                "x": 420,
-                "y": 140,
-                "width": 1000,
-                "height": 600,
-                "rotation": 0
-              }
-            },
-            {
-              "id": "equacao-f",
-              "typeId": "graphics.math.equation",
-              "label": "equacao-f",
-              "properties": {
-                "width": 1000,
-                "height": 84,
-                "lhs": "f(x)",
-                "expression": "a x^2 + b x + c",
-                "variable": "x",
-                "substitute": true,
-                "fontSize": 26
-              },
-              "visual": {
-                "x": 420,
-                "y": 768,
-                "width": 1000,
-                "height": 84,
-                "rotation": 0
-              }
-            },
-            {
-              "id": "equacao-df",
-              "typeId": "graphics.math.equation",
-              "label": "equacao-df",
-              "properties": {
-                "width": 1000,
-                "height": 84,
-                "lhs": "f′(x)",
-                "expression": "2 a x + b",
-                "variable": "x",
-                "substitute": true,
-                "fontSize": 26
-              },
-              "visual": {
-                "x": 420,
-                "y": 872,
-                "width": 1000,
-                "height": 84,
-                "rotation": 0
-              }
-            },
-            {
-              "id": "tabela",
-              "typeId": "graphics.math.value_table",
-              "label": "tabela",
-              "properties": {
-                "width": 400,
-                "height": 600,
-                "expression": "a x^2 + b x + c",
-                "variable": "x",
-                "header": "f(x)",
-                "start": -5,
-                "step": 1,
-                "rows": 11,
-                "decimals": 2
-              },
-              "visual": {
-                "x": 1460,
-                "y": 140,
-                "width": 400,
-                "height": 600,
                 "rotation": 0
               }
             }

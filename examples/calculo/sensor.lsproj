@@ -52,31 +52,357 @@
       "id": "laboratorio",
       "kind": "screen",
       "title": "Laboratório de Cálculo",
-      "startPageId": "pagina-sensor-4-20",
+      "startPageId": "pagina-sensor-composta",
       "pages": [
         {
-          "id": "pagina-sensor-4-20",
+          "id": "pagina-sensor-composta",
           "name": "Sensor 4–20 mA — função afim",
           "width": 1920,
           "height": 1080,
           "elements": [
             {
-              "id": "atividade-sensor-4-20",
-              "typeId": "graphics.math.activity",
-              "label": "Sensor 4–20 mA — função afim",
+              "id": "sensor-cartao-processo",
+              "typeId": "graphics.math.card",
+              "label": "sensor-cartao-processo",
               "properties": {
-                "width": 1920,
-                "height": 1080,
-                "kind": "sensor",
-                "fillPage": true,
-                "plantComponentId": "sensor-lab",
-                "activityJson": "{\"id\":\"sensor-4-20\",\"title\":\"Sensor 4–20 mA — função afim\",\"question\":\"Que pressão produz 12 mA? O que acontece acima de Pmax?\",\"steps\":[{\"id\":\"prever\",\"phase\":\"predict\",\"prompt\":\"Prever: com faixa 0–200 kPa, quanto vale I em 50 kPa?\",\"hints\":[]},{\"id\":\"doze\",\"phase\":\"explore\",\"prompt\":\"Mova P até 12 mA. Escreva a inversa P(I).\",\"hints\":[]},{\"id\":\"saturacao\",\"phase\":\"apply\",\"prompt\":\"Passe de Pmax: o que a corrente faz? E o valor sem saturação?\",\"hints\":[]}],\"plantComponentId\":\"sensor-lab\",\"parameters\":{\"p\":100,\"pmin\":0,\"pmax\":200},\"kind\":\"sensor\"}"
+                "width": 936,
+                "height": 760,
+                "title": "Transmissor no laço 4–20 mA",
+                "icon": "gauge",
+                "variant": "dark"
               },
               "visual": {
-                "x": 0,
-                "y": 0,
-                "width": 1920,
-                "height": 1080,
+                "x": 24,
+                "y": 24,
+                "width": 936,
+                "height": 760,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-modelo",
+              "typeId": "graphics.math.equation",
+              "label": "sensor-modelo",
+              "properties": {
+                "width": 896,
+                "height": 140,
+                "formula": "I = 4 + 16 (P - P_min)/(P_max - P_min)",
+                "lhs": "",
+                "variable": "",
+                "showValue": false,
+                "fontSize": 38,
+                "background": "glass"
+              },
+              "visual": {
+                "x": 44,
+                "y": 96,
+                "width": 896,
+                "height": 140,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-leitura-p",
+              "typeId": "graphics.math.readout",
+              "label": "sensor-leitura-p",
+              "properties": {
+                "width": 420,
+                "height": 92,
+                "plantComponentId": "sensor-lab",
+                "quantity": "p",
+                "decimals": 1,
+                "fontSize": 40,
+                "label": "Pressão medida"
+              },
+              "visual": {
+                "x": 60,
+                "y": 262,
+                "width": 420,
+                "height": 92,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-leitura-i",
+              "typeId": "graphics.math.readout",
+              "label": "sensor-leitura-i",
+              "properties": {
+                "width": 420,
+                "height": 92,
+                "plantComponentId": "sensor-lab",
+                "quantity": "i",
+                "decimals": 2,
+                "fontSize": 40,
+                "label": "Corrente no laço",
+                "color": "#86efac"
+              },
+              "visual": {
+                "x": 500,
+                "y": 262,
+                "width": 420,
+                "height": 92,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-pressao",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "sensor-pressao",
+              "properties": {
+                "width": 896,
+                "height": 76,
+                "plantComponentId": "sensor-lab",
+                "parameterId": "p"
+              },
+              "visual": {
+                "x": 44,
+                "y": 384,
+                "width": 896,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-pmin",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "sensor-pmin",
+              "properties": {
+                "width": 430,
+                "height": 76,
+                "plantComponentId": "sensor-lab",
+                "parameterId": "pmin"
+              },
+              "visual": {
+                "x": 44,
+                "y": 476,
+                "width": 430,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-pmax",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "sensor-pmax",
+              "properties": {
+                "width": 430,
+                "height": 76,
+                "plantComponentId": "sensor-lab",
+                "parameterId": "pmax"
+              },
+              "visual": {
+                "x": 500,
+                "y": 476,
+                "width": 430,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-dica",
+              "typeId": "graphics.math.card",
+              "label": "sensor-dica",
+              "properties": {
+                "width": 896,
+                "height": 110,
+                "title": "",
+                "variant": "glass",
+                "textSize": 16,
+                "text": "Fora da faixa o transmissor satura, como num laço real: abaixo de Pmin a corrente fica em 3,8 mA e acima de Pmax em 20,5 mA."
+              },
+              "visual": {
+                "x": 44,
+                "y": 572,
+                "width": 896,
+                "height": 110,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-controles",
+              "typeId": "graphics.math.sim_controls",
+              "label": "sensor-controles",
+              "properties": {
+                "width": 620,
+                "height": 68,
+                "plantComponentId": "sensor-lab"
+              },
+              "visual": {
+                "x": 44,
+                "y": 700,
+                "width": 620,
+                "height": 68,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-grafico-corrente",
+              "typeId": "graphics.math.series_chart",
+              "label": "sensor-grafico-corrente",
+              "properties": {
+                "width": 912,
+                "height": 372,
+                "plantComponentId": "sensor-lab",
+                "channel": "i",
+                "title": "Corrente I(t)",
+                "color": "#16a34a",
+                "minSeconds": 20
+              },
+              "visual": {
+                "x": 984,
+                "y": 24,
+                "width": 912,
+                "height": 372,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-grafico-pressao",
+              "typeId": "graphics.math.series_chart",
+              "label": "sensor-grafico-pressao",
+              "properties": {
+                "width": 912,
+                "height": 372,
+                "plantComponentId": "sensor-lab",
+                "channel": "p",
+                "title": "Pressão P(t)",
+                "color": "#2563eb",
+                "minSeconds": 20
+              },
+              "visual": {
+                "x": 984,
+                "y": 412,
+                "width": 912,
+                "height": 372,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-cartao-equacoes",
+              "typeId": "graphics.math.card",
+              "label": "sensor-cartao-equacoes",
+              "properties": {
+                "width": 1386,
+                "height": 248,
+                "title": "Equações do processo",
+                "icon": "sigma",
+                "variant": "dark",
+                "titleStyle": "plain",
+                "titleSize": 16,
+                "accentColor": "#93c5fd"
+              },
+              "visual": {
+                "x": 24,
+                "y": 808,
+                "width": 1386,
+                "height": 248,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-explore",
+              "typeId": "graphics.math.card",
+              "label": "sensor-explore",
+              "properties": {
+                "width": 462,
+                "height": 248,
+                "title": "Explore:",
+                "icon": "bulb",
+                "variant": "dark",
+                "titleStyle": "accent",
+                "accentColor": "#f59e0b",
+                "titleSize": 22,
+                "textSize": 17,
+                "text": "Em que pressão a corrente chega a 12 mA? E acima de Pmax, o que acontece com a reta?"
+              },
+              "visual": {
+                "x": 1434,
+                "y": 808,
+                "width": 462,
+                "height": 248,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-equacao-1",
+              "typeId": "graphics.math.equation",
+              "label": "sensor-equacao-1",
+              "properties": {
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": true,
+                "decimals": 2,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "sensor-lab",
+                "formula": "I = 4 + 16 x",
+                "expression": "4 + 16 (p - pmin)/(pmax - pmin)",
+                "unit": "mA"
+              },
+              "visual": {
+                "x": 44,
+                "y": 868,
+                "width": 436,
+                "height": 160,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-equacao-2",
+              "typeId": "graphics.math.equation",
+              "label": "sensor-equacao-2",
+              "properties": {
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": true,
+                "decimals": 3,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "sensor-lab",
+                "formula": "x = (P - P_min)/(P_max - P_min)",
+                "expression": "(p - pmin)/(pmax - pmin)"
+              },
+              "visual": {
+                "x": 492,
+                "y": 868,
+                "width": 436,
+                "height": 160,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-equacao-3",
+              "typeId": "graphics.math.equation",
+              "label": "sensor-equacao-3",
+              "properties": {
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": true,
+                "decimals": 4,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "sensor-lab",
+                "formula": "dI/dP = 16/(P_max - P_min)",
+                "expression": "16/(pmax - pmin)",
+                "unit": "mA/kPa"
+              },
+              "visual": {
+                "x": 940,
+                "y": 868,
+                "width": 436,
+                "height": 160,
                 "rotation": 0
               }
             }

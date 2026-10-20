@@ -3,11 +3,12 @@
 
 /**
  * Gera os projetos de exemplo do Laboratório de Cálculo em examples/calculo/ na modalidade das Telas HMI
- * (docs/62 §6, docs/64): cada projeto tem um botão "Laboratório de Cálculo" (Controle › Ferramentas) que
- * abre a tela do Laboratório -- uma página por atividade, montada pelos MESMOS modelos de página que o
- * produto oferece (`extension/src/visual/labScreens.ts` / `+ Página do Laboratório`), então exemplo e
- * produto não divergem. Os projetos sem planta ganham também uma página composta com os elementos
- * matemáticos da tela (parâmetros, gráfico de função, equações, tabela).
+ * (docs/62 §6, docs/64, docs/65 §3.9): cada projeto tem um botão "Laboratório de Cálculo" (Controle ›
+ * Ferramentas) que abre a tela do Laboratório. Tanque, primeira ordem e sensor são páginas COMPOSTAS de
+ * elementos de tela (tanque de processo, gráficos do processo com tangente/secante/Riemann, parâmetros da
+ * planta, controles, leituras, equações e cartões; `labComposedPages.ts`), as mesmas que "+ Página do
+ * Laboratório" cria; funções, limites e eixo continuam como páginas de atividade. Os projetos com funções
+ * ganham também uma página composta com os elementos matemáticos (parâmetros, gráfico, equações, tabela).
  *
  * Rode `npm run compile` em extension/ antes (usa out/). Cada planta vira um subsistema INTERNO do projeto
  * (tabela `subsystems`, a partir de subcircuits/plants.json). Nenhum JSON de exemplo é editado à mão.
@@ -21,6 +22,7 @@ const repo = path.resolve(__dirname, "..");
 const out = (...parts) => require(path.join(repo, "extension", "out", ...parts));
 const lab = out("ui", "webview", "lab", "activity.js");
 const { createLabScreenDocument, LAB_SCREEN_TITLE } = out("visual", "labScreens.js");
+const { labComposedPage, isComposedPlantKind } = out("ui", "webview", "labComposedPages.js");
 const { createPlantTemplateLookup } = out("project", "plantTemplates.js");
 const { importExternalAsSubsystem } = out("ui", "webview", "subsystemModel.js");
 const plantTemplate = createPlantTemplateLookup(path.join(repo, "subcircuits"));
@@ -50,24 +52,30 @@ const element = (id, typeId, x, y, width, height, properties) =>
 
 /** Página composta só com elementos da tela (docs/62 §6.1): o professor muda qualquer um em edição. */
 function functionElementsPage() {
-  const light = "#e2e8f0";
   return {
     id: "pagina-funcoes-elementos",
     name: "Funções — elementos da tela",
     width: 1920,
     height: 1080,
     elements: [
-      element("titulo", "graphics.label", 60, 36, 1400, 56, { text: "Como a, b e c mudam f(x) = a·x² + b·x + c? Arraste os parâmetros.", fontSize: 30, align: "start", stroke: light }),
-      element("param-a", "graphics.math.parameter", 60, 140, 320, 72, { name: "a", min: -3, max: 3, step: 0.1, value: 1, decimals: 1 }),
-      element("param-b", "graphics.math.parameter", 60, 232, 320, 72, { name: "b", min: -5, max: 5, step: 0.1, value: 0, decimals: 1 }),
-      element("param-c", "graphics.math.parameter", 60, 324, 320, 72, { name: "c", min: -5, max: 5, step: 0.1, value: -2, decimals: 1 }),
-      element("grafico", "graphics.math.function_plot", 420, 140, 1000, 600, {
-        title: "Gráfico", expression: "a x^2 + b x + c", expression2: "x + 1", variable: "x", xMin: -5, xMax: 5, yMin: -6, yMax: 10,
+      element("titulo", "graphics.math.card", 24, 24, 1872, 104, {
+        title: "Como a, b e c mudam f(x) = a·x² + b·x + c?", icon: "chart", variant: "dark", titleSize: 24, textSize: 16,
+        text: "Arraste os parâmetros: o gráfico, as equações e a tabela mudam juntos.",
+      }),
+      element("param-a", "graphics.math.parameter", 24, 152, 440, 76, { name: "a", min: -3, max: 3, step: 0.1, value: 1, decimals: 1, color: "#3b82f6" }),
+      element("param-b", "graphics.math.parameter", 24, 244, 440, 76, { name: "b", min: -5, max: 5, step: 0.1, value: 0, decimals: 1, color: "#f97316" }),
+      element("param-c", "graphics.math.parameter", 24, 336, 440, 76, { name: "c", min: -5, max: 5, step: 0.1, value: -2, decimals: 1, color: "#14b8a6" }),
+      element("explore", "graphics.math.card", 24, 436, 440, 348, {
+        title: "Explore:", icon: "bulb", variant: "dark", titleStyle: "accent", accentColor: "#f59e0b", titleSize: 22, textSize: 17,
+        text: "O que acontece com o vértice quando a muda de sinal? Para que valores de c a parábola deixa de cortar o eixo x? Compare com f′(x) = 0.",
+      }),
+      element("grafico", "graphics.math.function_plot", 488, 152, 960, 632, {
+        title: "f(x) e g(x) = x + 1", expression: "a x^2 + b x + c", expression2: "x + 1", variable: "x", xMin: -5, xMax: 5, yMin: -6, yMax: 10,
         showGrid: true, showDerivative: false, showRoots: true,
       }),
-      element("equacao-f", "graphics.math.equation", 420, 768, 1000, 84, { lhs: "f(x)", expression: "a x^2 + b x + c", variable: "x", substitute: true, fontSize: 26 }),
-      element("equacao-df", "graphics.math.equation", 420, 872, 1000, 84, { lhs: "f′(x)", expression: "2 a x + b", variable: "x", substitute: true, fontSize: 26 }),
-      element("tabela", "graphics.math.value_table", 1460, 140, 400, 600, { expression: "a x^2 + b x + c", variable: "x", header: "f(x)", start: -5, step: 1, rows: 11, decimals: 2 }),
+      element("tabela", "graphics.math.value_table", 1472, 152, 424, 632, { expression: "a x^2 + b x + c", variable: "x", header: "f(x)", start: -5, step: 1, rows: 11, decimals: 2 }),
+      element("equacao-f", "graphics.math.equation", 24, 808, 924, 248, { lhs: "f(x)", expression: "a x^2 + b x + c", variable: "x", substitute: true, fontSize: 40 }),
+      element("equacao-df", "graphics.math.equation", 972, 808, 924, 248, { lhs: "f′(x)", expression: "2 a x + b", variable: "x", substitute: true, fontSize: 40 }),
     ],
   };
 }
@@ -147,8 +155,13 @@ function project(kinds) {
   subsystems = subsystems.map((definition) => (kindByTypeId.has(definition.typeId)
     ? { ...definition, faceplate: faceplate(kindByTypeId.get(definition.typeId), definition.typeId, definition.name) }
     : definition));
-  const screen = createLabScreenDocument(SCREEN_ID, LAB_SCREEN_TITLE, lab.validateCalculusLab({ schemaVersion: 1, activities }).activities);
-  if (kinds.includes("functions")) screen.pages.push(functionElementsPage());
+  // Atividades (iframe) só para os conteúdos sem planta; processos viram páginas compostas, na mesma ordem.
+  const mathActivities = lab.validateCalculusLab({ schemaVersion: 1, activities }).activities.filter((activity) => !isComposedPlantKind(activity.kind));
+  const screen = createLabScreenDocument(SCREEN_ID, LAB_SCREEN_TITLE, mathActivities);
+  const activityPages = new Map(mathActivities.map((activity, index) => [activity.kind, screen.pages[index]]));
+  screen.pages = kinds.map((kind) => (isComposedPlantKind(kind) ? labComposedPage(kind, PLANTS[kind].id) : activityPages.get(kind))).filter(Boolean);
+  if (kinds.includes("functions")) screen.pages.splice(1, 0, functionElementsPage());
+  screen.startPageId = screen.pages[0].id;
   return {
     schemaVersion: 2,
     components: [screenButton(), ...components],

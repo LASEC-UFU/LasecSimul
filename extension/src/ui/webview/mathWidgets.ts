@@ -15,6 +15,7 @@ import { compileExpression, type CompiledExpression } from "./lab/calc/compile.j
 import { differentiate, simplify } from "./lab/calc/derivative.js";
 import { astToMathML, escapeXml } from "./lab/calc/mathml.js";
 import { sampleFunction } from "./lab/calc/numeric.js";
+import { LAB_WIDGET_DEFAULT_BOX, LAB_WIDGET_TYPE_IDS, labCardFrameSvg, labWidgetSvg, sliderSvg, sliderTrack } from "./labWidgets.js";
 
 /** Passo "bonito" (1, 2, 5 × 10^k) para ~`count` marcas -- o mesmo de `lab/ui/chart.ts`, que não pode
  * ser importado aqui (este módulo também compila no Host, sem DOM). */
@@ -33,7 +34,7 @@ export const MATH_TABLE_TYPE_ID = "graphics.math.value_table";
 export const MATH_TREND_TYPE_ID = "graphics.math.trend";
 
 /** Elementos desenhados por `mathWidgetSvg` (a atividade é um `<iframe>` do Laboratório, não SVG). */
-export const MATH_WIDGET_TYPE_IDS: readonly string[] = [MATH_PLOT_TYPE_ID, MATH_PARAMETER_TYPE_ID, MATH_EQUATION_TYPE_ID, MATH_TABLE_TYPE_ID, MATH_TREND_TYPE_ID];
+export const MATH_WIDGET_TYPE_IDS: readonly string[] = [MATH_PLOT_TYPE_ID, MATH_PARAMETER_TYPE_ID, MATH_EQUATION_TYPE_ID, MATH_TABLE_TYPE_ID, MATH_TREND_TYPE_ID, ...LAB_WIDGET_TYPE_IDS];
 
 export const isMathTypeId = (typeId: string): boolean => typeId.startsWith("graphics.math.");
 export const isMathWidgetTypeId = (typeId: string): boolean => MATH_WIDGET_TYPE_IDS.includes(typeId);
@@ -46,6 +47,7 @@ export const MATH_DEFAULT_BOX: Readonly<Record<string, { width: number; height: 
   [MATH_EQUATION_TYPE_ID]: { width: 320, height: 64 },
   [MATH_TABLE_TYPE_ID]: { width: 240, height: 220 },
   [MATH_TREND_TYPE_ID]: { width: 520, height: 260 },
+  ...LAB_WIDGET_DEFAULT_BOX,
 };
 
 /** Nome válido de parâmetro: identificador simples (o parser aceita letras, dígitos e `_`). */
@@ -90,7 +92,7 @@ export function parameterValueAt(properties: Record<string, unknown>, fraction: 
 
 /** Trilho do slider dentro da caixa (coordenadas locais): o motor de cena converte o clique por aqui. */
 export function parameterTrack(box: { width: number; height: number }): { x0: number; x1: number; y: number } {
-  return { x0: 14, x1: Math.max(15, box.width - 14), y: Math.max(30, box.height - 18) };
+  return sliderTrack(box);
 }
 
 // ── Expressões ───────────────────────────────────────────────────────────────────────────────────
@@ -191,18 +193,18 @@ function axes(area: PlotArea, xLabel: string, showGrid: boolean, xFormat: (value
   for (let x = Math.ceil(area.x0 / xStep) * xStep; x <= area.x1 + xStep * 1e-9; x += xStep) {
     const X = fixed(px(area, x));
     if (showGrid) parts.push(`<line x1="${X}" y1="${fixed(area.T)}" x2="${X}" y2="${fixed(bottom)}" stroke="${LAB.grid}" stroke-width="1"/>`);
-    parts.push(`<text x="${X}" y="${fixed(bottom + 14)}" text-anchor="middle" font-size="10" fill="${LAB.muted}">${escapeXml(xFormat(Math.abs(x) < xStep * 1e-9 ? 0 : x))}</text>`);
+    parts.push(`<text x="${X}" y="${fixed(bottom + 17)}" text-anchor="middle" font-size="12" fill="${LAB.muted}">${escapeXml(xFormat(Math.abs(x) < xStep * 1e-9 ? 0 : x))}</text>`);
   }
   for (let y = Math.ceil(area.y0 / yStep) * yStep; y <= area.y1 + yStep * 1e-9; y += yStep) {
     const Y = fixed(py(area, y));
     if (showGrid) parts.push(`<line x1="${fixed(area.L)}" y1="${Y}" x2="${fixed(area.L + area.W)}" y2="${Y}" stroke="${LAB.grid}" stroke-width="1"/>`);
-    parts.push(`<text x="${fixed(area.L - 5)}" y="${Y}" text-anchor="end" dominant-baseline="middle" font-size="10" fill="${LAB.muted}">${escapeXml(nf(Math.abs(y) < yStep * 1e-9 ? 0 : y, 3))}</text>`);
+    parts.push(`<text x="${fixed(area.L - 7)}" y="${Y}" text-anchor="end" dominant-baseline="middle" font-size="12" fill="${LAB.muted}">${escapeXml(nf(Math.abs(y) < yStep * 1e-9 ? 0 : y, 3))}</text>`);
   }
   // Eixos x = 0 e y = 0 quando visíveis; senão a moldura da área.
   if (area.y0 <= 0 && area.y1 >= 0) parts.push(`<line x1="${fixed(area.L)}" y1="${fixed(py(area, 0))}" x2="${fixed(area.L + area.W)}" y2="${fixed(py(area, 0))}" stroke="${LAB.muted}" stroke-width="1.2"/>`);
   if (area.x0 <= 0 && area.x1 >= 0) parts.push(`<line x1="${fixed(px(area, 0))}" y1="${fixed(area.T)}" x2="${fixed(px(area, 0))}" y2="${fixed(bottom)}" stroke="${LAB.muted}" stroke-width="1.2"/>`);
   parts.push(`<rect x="${fixed(area.L)}" y="${fixed(area.T)}" width="${fixed(area.W)}" height="${fixed(area.H)}" fill="none" stroke="${LAB.line}" stroke-width="1"/>`);
-  if (xLabel) parts.push(`<text x="${fixed(area.L + area.W)}" y="${fixed(bottom + 26)}" text-anchor="end" font-size="10" fill="${LAB.muted}">${escapeXml(xLabel)}</text>`);
+  if (xLabel) parts.push(`<text x="${fixed(area.L + area.W)}" y="${fixed(bottom + 32)}" text-anchor="end" font-family="'Cambria Math','Times New Roman',serif" font-style="italic" font-size="15" fill="${LAB.ink}">${escapeXml(xLabel)}</text>`);
   return parts.join("");
 }
 
@@ -235,8 +237,8 @@ export function functionPlotSvg(properties: Record<string, unknown>, box: { widt
   const title = text(properties, "title", "");
   const variable = text(properties, "variable", "x").trim() || "x";
   const expressions = [text(properties, "expression", ""), text(properties, "expression2", "")];
-  const parts = [frame(width, height)];
-  if (title) parts.push(`<text x="12" y="18" font-size="13" font-weight="600" fill="${LAB.ink}">${escapeXml(title)}</text>`);
+  const parts = [labCardFrameSvg(box, "light")];
+  if (title) parts.push(`<text x="20" y="34" font-size="20" font-weight="700" fill="${LAB.ink}">${escapeXml(title)}</text>`);
   const compiled: CompiledScopeExpression[] = [];
   for (const [index, source] of expressions.entries()) {
     if (!source.trim()) continue;
@@ -252,14 +254,14 @@ export function functionPlotSvg(properties: Record<string, unknown>, box: { widt
   if (!(x1 > x0)) [x0, x1] = [-5, 5];
   let y0 = num(properties, "yMin", 0), y1 = num(properties, "yMax", 0);
   if (!(y1 > y0)) [y0, y1] = autoRange(compiled, x0, x1);
-  const area: PlotArea = { L: 46, T: title ? 28 : 12, W: Math.max(10, width - 46 - 12), H: Math.max(10, height - (title ? 28 : 12) - 34), x0, x1, y0, y1 };
+  const area: PlotArea = { L: 54, T: title ? 56 : 16, W: Math.max(10, width - 54 - 20), H: Math.max(10, height - (title ? 56 : 16) - 42), x0, x1, y0, y1 };
   parts.push(axes(area, variable, flag(properties, "showGrid", true)));
   const toPx = (x: number, y: number): [number, number] => [px(area, x) - area.L, py(area, y) - area.T];
   const curves: string[] = [];
   const palette = [color(properties, "color", LAB.accent), color(properties, "color2", "#dc2626")];
   compiled.forEach((entry, index) => {
     const one = { value: (env: ArrayLike<number>) => { entry.env[0] = env[0]!; return entry.fn.value(entry.env); }, evaluate: entry.fn.evaluate };
-    curves.push(`<path d="${pathOf(sampleFunction(one, x0, x1, toPx), toPx)}" fill="none" stroke="${palette[index]}" stroke-width="2.2" stroke-linejoin="round"/>`);
+    curves.push(`<path d="${pathOf(sampleFunction(one, x0, x1, toPx), toPx)}" fill="none" stroke="${palette[index]}" stroke-width="2.8" stroke-linejoin="round" stroke-linecap="round"/>`);
   });
   const f = compiled[0]!;
   if (flag(properties, "showDerivative", false)) {
@@ -272,15 +274,16 @@ export function functionPlotSvg(properties: Record<string, unknown>, box: { widt
     const one = { value: (env: ArrayLike<number>) => { f.env[0] = env[0]!; return f.fn.value(f.env); }, evaluate: f.fn.evaluate };
     for (const root of findRoots(one, x0, x1)) {
       const [X, Y] = toPx(root, 0);
-      markers.push(`<circle cx="${fixed(X)}" cy="${fixed(Y)}" r="4" fill="#f59e0b" stroke="${LAB.ink}" stroke-width="1"><title>raiz ≈ ${escapeXml(nf(root, 4))}</title></circle>`);
+      markers.push(`<circle cx="${fixed(X)}" cy="${fixed(Y)}" r="6" fill="#f59e0b" stroke="#ffffff" stroke-width="2.5"><title>raiz ≈ ${escapeXml(nf(root, 4))}</title></circle>`);
     }
   }
   // Área de desenho recortada: curvas que saem da faixa não invadem eixos nem legendas.
   parts.push(`<svg x="${fixed(area.L)}" y="${fixed(area.T)}" width="${fixed(area.W)}" height="${fixed(area.H)}" overflow="hidden">${curves.join("")}${markers.join("")}</svg>`);
   const legend = [`f(${variable}) = ${expressions[0]}`, ...(compiled.length > 1 ? [`g(${variable}) = ${expressions[1]}`] : [])];
-  legend.forEach((entry, index) => {
-    parts.push(`<text x="${fixed(width - 14)}" y="${fixed((title ? 18 : area.T + 14) + index * 14)}" text-anchor="end" font-size="11" fill="${palette[index]}">${escapeXml(entry)}</text>`);
-  });
+  const legendWidth = Math.max(...legend.map((entry) => entry.length)) * 7.4 + 46, legendHeight = legend.length * 22 + 12;
+  const lx = area.L + area.W - legendWidth - 10, ly = area.T + 10;
+  parts.push(`<g transform="translate(${fixed(lx)} ${fixed(ly)})"><rect width="${fixed(legendWidth)}" height="${fixed(legendHeight)}" rx="8" fill="rgba(255,255,255,0.92)" stroke="#d6e0ec"/>${legend.map((entry, index) =>
+    `<g transform="translate(12 ${fixed(17 + index * 22)})"><line x1="0" x2="18" stroke="${palette[index]}" stroke-width="3" stroke-linecap="round"/><text x="28" y="0" dominant-baseline="central" font-size="13" fill="${LAB.ink}">${escapeXml(entry)}</text></g>`).join("")}</g>`);
   return parts.join("");
 }
 
@@ -291,53 +294,102 @@ function compileExpressionAst(ast: Ast, like: CompiledScopeExpression): Compiled
 // ── Parâmetro (slider) ───────────────────────────────────────────────────────────────────────────
 
 export function parameterSvg(properties: Record<string, unknown>, box: { width: number; height: number }, current: number | undefined): string {
-  const { width, height } = box;
   const name = text(properties, "name", "a");
   const label = text(properties, "label", "") || name;
   const unit = text(properties, "unit", "");
   const decimals = Math.max(0, Math.min(8, Math.round(num(properties, "decimals", 2))));
   const min = num(properties, "min", 0), max = num(properties, "max", 10);
   const value = clampParameter(properties, current ?? num(properties, "value", 0));
-  const track = parameterTrack(box);
-  const fraction = max === min ? 0 : (value - Math.min(min, max)) / Math.abs(max - min);
-  const thumb = track.x0 + fraction * (track.x1 - track.x0);
   const valid = isParameterName(name);
-  return [
-    frame(width, height, LAB.dark, "#1e3a5f"),
-    `<text x="14" y="20" font-size="14" fill="${LAB.light}"><tspan font-style="italic" font-weight="600">${escapeXml(label)}</tspan> = <tspan font-weight="700" fill="#fde68a">${escapeXml(value.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: decimals }))}</tspan>${unit ? ` ${escapeXml(unit)}` : ""}</text>`,
-    valid ? "" : `<text x="${fixed(width - 12)}" y="20" text-anchor="end" font-size="10" fill="#fca5a5">nome inválido</text>`,
-    `<line x1="${fixed(track.x0)}" y1="${fixed(track.y)}" x2="${fixed(track.x1)}" y2="${fixed(track.y)}" stroke="#334155" stroke-width="6" stroke-linecap="round"/>`,
-    `<line x1="${fixed(track.x0)}" y1="${fixed(track.y)}" x2="${fixed(thumb)}" y2="${fixed(track.y)}" stroke="#3b82f6" stroke-width="6" stroke-linecap="round"/>`,
-    `<circle class="math-parameter-thumb" cx="${fixed(thumb)}" cy="${fixed(track.y)}" r="8" fill="#f8fafc" stroke="#2563eb" stroke-width="2"/>`,
-    `<text x="${fixed(track.x0)}" y="${fixed(height - 2)}" font-size="9" fill="#94a3b8">${escapeXml(nf(min, decimals))}</text>`,
-    `<text x="${fixed(track.x1)}" y="${fixed(height - 2)}" text-anchor="end" font-size="9" fill="#94a3b8">${escapeXml(nf(max, decimals))}</text>`,
-  ].join("");
+  return sliderSvg({
+    label: label === name ? `${name} =` : label,
+    valueText: `${value.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: decimals })}${unit ? ` ${unit}` : ""}`,
+    fraction: max === min ? 0 : (value - Math.min(min, max)) / Math.abs(max - min),
+    color: color(properties, "color", "#3b82f6"),
+    icon: text(properties, "icon", "none"),
+    note: valid ? undefined : "nome inválido (use letras, dígitos e _)",
+    minText: nf(min, decimals),
+    maxText: nf(max, decimals),
+    background: text(properties, "background", "card") === "none" ? "none" : "card",
+  }, box);
 }
 
 // ── Equação ──────────────────────────────────────────────────────────────────────────────────────
 
-export function equationSvg(properties: Record<string, unknown>, box: { width: number; height: number }, scope: MathScope): string {
+/** Escopo de uma planta ligada ao elemento: o último valor de cada série gravada e os parâmetros correntes. */
+export function plantScopeOf(properties: Record<string, unknown>): Record<string, number> {
+  const scope: Record<string, number> = {};
+  const parameters = properties.__plant_params;
+  if (parameters && typeof parameters === "object") for (const [key, value] of Object.entries(parameters)) if (typeof value === "number") scope[key] = value;
+  const buffer = properties.__plant_buffer as { length: number; has(column: string): boolean; last(column: string): number } | undefined;
+  if (buffer && typeof buffer.length === "number" && buffer.length > 0) {
+    for (const column of ["V", "h", "A", "q", "inActual", "outActual", "overflow", "y", "u", "p", "i", "iRaw"]) {
+      if (buffer.has(column)) scope[column] = buffer.last(column);
+    }
+  }
+  return scope;
+}
+
+/** Fórmula só para exibir ("dh/dt = q/A", "V = V_0 + Integrate(tau, 0, t, q)"): qualquer símbolo vale, cada
+ * lado do "=" vira MathML. `undefined` se algum lado não for uma expressão. */
+export function formulaMathML(formula: string): string | undefined {
+  const sides = formula.split("=").map((side) => side.trim()).filter(Boolean);
+  if (sides.length === 0) return undefined;
+  const parts: string[] = [];
+  for (const side of sides) {
+    const symbols = [...new Set(side.match(/[A-Za-z_\u00C0-\u024F][A-Za-z0-9_\u00C0-\u024F]*/g) ?? [])];
+    try {
+      const ast = parseExpression(side, symbols);
+      parts.push(astToMathML(ast, "inline").replace(/^<math display="inline">|<\/math>$/g, ""));
+    } catch {
+      return undefined;
+    }
+  }
+  return `<math xmlns="http://www.w3.org/1998/Math/MathML" display="inline"><mrow>${parts.join("<mo>=</mo>")}</mrow></math>`;
+}
+
+export function equationSvg(properties: Record<string, unknown>, box: { width: number; height: number }, pageScope: MathScope): string {
   const { width, height } = box;
+  const scope: MathScope = { ...pageScope, ...plantScopeOf(properties) };
   const lhs = text(properties, "lhs", "f(x)");
   const variable = text(properties, "variable", "x").trim();
   const source = text(properties, "expression", "");
   const fontSize = Math.max(8, Math.min(96, num(properties, "fontSize", 20)));
-  const parts = [frame(width, height, LAB.dark, "#1e3a5f")];
-  if (!source.trim()) return parts.join("") + message(width, height, "Defina a expressão nas propriedades.", "#94a3b8");
-  const compiled = compileInScope(source, variable, scope);
-  if (isError(compiled)) return parts.join("") + message(width, height, compiled.error, "#fca5a5");
-  const shown = flag(properties, "substitute", false) ? substituteScope(compiled.ast, scope) : compiled.ast;
-  const mathml = astToMathML(shown, "inline").replace("<math ", '<math xmlns="http://www.w3.org/1998/Math/MathML" ');
+  // Fundo: cartão do tema (padrão), cartão claro, ou nenhum (a equação sobre outro cartão).
+  const background = text(properties, "background", "card");
+  const ink = background === "light" ? "#0f172a" : color(properties, "color", "#e8eef8");
+  const parts = [background === "none" ? "" : labCardFrameSvg(box, background === "light" || background === "glass" ? background : "dark")];
+  const formula = text(properties, "formula", "").trim();
+  const formulaML = formula ? formulaMathML(formula) : undefined;
+  if (formula && !formulaML) return parts.join("") + message(width, height, "Fórmula exibida inválida.", "#fca5a5");
+  if (!source.trim() && !formulaML) return parts.join("") + message(width, height, "Defina a expressão nas propriedades.", "#94a3b8");
+  const waitingPlant = Boolean(text(properties, "plantComponentId", "")) && !properties.__plant_buffer;
+  const compiled = source.trim() ? compileInScope(source, variable, scope) : undefined;
+  if (compiled && isError(compiled) && !formulaML) return parts.join("") + message(width, height, waitingPlant ? "Aguardando a planta…" : compiled.error, waitingPlant ? "#94a3b8" : "#fca5a5");
+  const ready = compiled && !isError(compiled) ? compiled : undefined;
+  // Com fórmula: "fórmula = expressão com os valores = valor"; sem: "lhs = expressão = valor".
+  // Valores substituídos arredondados às casas do elemento (a conta mostrada não leva 12 algarismos).
+  const decimals = Math.round(num(properties, "decimals", 4));
+  const shownScope: MathScope = Object.fromEntries(Object.entries(scope).map(([key, value]) => [key, Number(value.toFixed(Math.max(0, Math.min(8, decimals))))]));
+  const shown = ready ? (flag(properties, "substitute", false) ? substituteScope(ready.ast, shownScope) : ready.ast) : undefined;
+  const expressionML = shown && (!formulaML || flag(properties, "substitute", false)) ? astToMathML(shown, "inline").replace("<math ", '<math xmlns="http://www.w3.org/1998/Math/MathML" ') : "";
+  const mathml = formulaML ? `${formulaML}${expressionML ? `<span style="margin:0 .3em">=</span>${expressionML}` : ""}` : expressionML;
   // Sem variável livre (só parâmetros), mostra também o valor: "= 3,5".
   let valuePart = "";
-  if (flag(properties, "showValue", true) && (!variable || !dependsOn(compiled.ast, variable))) {
-    const value = evaluateAt(compiled, 0);
-    valuePart = `<span style="margin-left:.4em;color:#fde68a">= ${escapeXml(nf(value, Math.round(num(properties, "decimals", 4))))}</span>`;
+  if (ready && flag(properties, "showValue", true) && (!variable || !dependsOn(ready.ast, variable))) {
+    const value = evaluateAt(ready, 0);
+    valuePart = `<span style="margin-left:.4em;color:${background === "light" ? "#1d4ed8" : "#fde68a"};font-family:'Segoe UI',system-ui,sans-serif;font-weight:700">= ${escapeXml(nf(value, Math.round(num(properties, "decimals", 4))))}${text(properties, "unit", "") ? ` ${escapeXml(text(properties, "unit", ""))}` : ""}</span>`;
   }
+  // Não cabe? Reduz a fonte pela largura estimada (MathML não se mede aqui; ~0,5 em por caractere).
+  // Fórmula: sem parênteses, "_" e espaços; com fração, numerador e denominador se empilham (~60 %).
+  const formulaChars = formula.replace(/Integrate\(([^,]+),[^,]+,[^,]+,/g, "∫").replace(/[()_\s*]/g, "").length * (formula.includes("/") ? 0.6 : 1);
+  const estimatedChars = (formula ? formulaChars : lhs.length + 2)
+    + (expressionML ? Math.min(source.length, 18) + 3 : 0) + (valuePart ? 12 : 0);
+  const fitted = Math.max(10, Math.min(fontSize, (width - 30) / Math.max(1, estimatedChars * 0.5)));
   parts.push(
     `<foreignObject x="0" y="0" width="${fixed(width)}" height="${fixed(height)}">` +
-    `<div xmlns="http://www.w3.org/1999/xhtml" style="box-sizing:border-box;width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:6px 12px;color:${LAB.light};font:${fontSize}px system-ui,'Segoe UI',sans-serif;white-space:nowrap;overflow:hidden">` +
-    `${lhs ? `<span style="margin-right:.3em"><i>${escapeXml(lhs)}</i> =</span>` : ""}${mathml}${valuePart}</div></foreignObject>`,
+    `<div xmlns="http://www.w3.org/1999/xhtml" style="box-sizing:border-box;width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:6px 14px;color:${ink};font:${fixed(fitted)}px 'Cambria Math','STIX Two Math','Times New Roman',serif;white-space:nowrap;overflow:hidden">` +
+    `${lhs && !formulaML ? `<span style="margin-right:.3em"><i>${escapeXml(lhs)}</i> =</span>` : ""}${mathml}${valuePart}</div></foreignObject>`,
   );
   return parts.join("");
 }
@@ -349,27 +401,31 @@ export function valueTableSvg(properties: Record<string, unknown>, box: { width:
   const variable = text(properties, "variable", "x").trim() || "x";
   const source = text(properties, "expression", "");
   const header = text(properties, "header", "") || `f(${variable})`;
-  const parts = [frame(width, height)];
+  const parts = [labCardFrameSvg(box, "light")];
   if (!source.trim()) return parts.join("") + message(width, height, "Defina a expressão nas propriedades.", LAB.muted);
   const compiled = compileInScope(source, variable, scope);
   if (isError(compiled)) return parts.join("") + message(width, height, compiled.error);
   const start = num(properties, "start", 0);
   const step = num(properties, "step", 1) || 1;
   const decimals = Math.max(0, Math.min(10, Math.round(num(properties, "decimals", 3))));
-  const rowHeight = 20;
-  const rows = Math.max(1, Math.min(60, Math.round(num(properties, "rows", 8)), Math.floor((height - 30) / rowHeight)));
+  const headerHeight = 46;
+  const rows = Math.max(1, Math.min(60, Math.round(num(properties, "rows", 8))));
+  const rowHeight = Math.max(18, Math.min(40, (height - headerHeight - 16) / rows));
+  const fontSize = Math.max(11, Math.min(18, rowHeight * 0.5));
   const mid = width / 2;
-  parts.push(`<text x="${fixed(mid / 2)}" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="${LAB.ink}">${escapeXml(variable)}</text>`);
-  parts.push(`<text x="${fixed(mid + mid / 2)}" y="20" text-anchor="middle" font-size="12" font-weight="700" fill="${LAB.ink}">${escapeXml(header)}</text>`);
-  parts.push(`<line x1="8" y1="27" x2="${fixed(width - 8)}" y2="27" stroke="${LAB.line}"/>`);
-  parts.push(`<line x1="${fixed(mid)}" y1="8" x2="${fixed(mid)}" y2="${fixed(30 + rows * rowHeight)}" stroke="${LAB.line}"/>`);
+  parts.push(`<rect x="10" y="10" width="${fixed(width - 20)}" height="${fixed(headerHeight - 12)}" rx="8" fill="#e8eef7"/>`);
+  parts.push(`<text x="${fixed(mid / 2 + 5)}" y="${fixed(10 + (headerHeight - 12) / 2)}" text-anchor="middle" dominant-baseline="central" font-family="'Cambria Math','Times New Roman',serif" font-style="italic" font-size="${fixed(fontSize + 3)}" font-weight="700" fill="${LAB.ink}">${escapeXml(variable)}</text>`);
+  parts.push(`<text x="${fixed(mid + mid / 2 - 5)}" y="${fixed(10 + (headerHeight - 12) / 2)}" text-anchor="middle" dominant-baseline="central" font-family="'Cambria Math','Times New Roman',serif" font-style="italic" font-size="${fixed(fontSize + 3)}" font-weight="700" fill="${LAB.ink}">${escapeXml(header)}</text>`);
   for (let row = 0; row < rows; row++) {
     const x = Number((start + row * step).toPrecision(12));
     const y = evaluateAt(compiled, x);
-    const baseline = 30 + row * rowHeight + 14;
-    parts.push(`<text x="${fixed(mid / 2)}" y="${fixed(baseline)}" text-anchor="middle" font-size="12" fill="${LAB.ink}" font-variant-numeric="tabular-nums">${escapeXml(nf(x, decimals))}</text>`);
-    parts.push(`<text x="${fixed(mid + mid / 2)}" y="${fixed(baseline)}" text-anchor="middle" font-size="12" fill="${Number.isFinite(y) ? LAB.ink : "#b91c1c"}" font-variant-numeric="tabular-nums">${escapeXml(Number.isFinite(y) ? nf(y, decimals) : "indef.")}</text>`);
+    const top = headerHeight + row * rowHeight;
+    if (row % 2 === 1) parts.push(`<rect x="10" y="${fixed(top)}" width="${fixed(width - 20)}" height="${fixed(rowHeight)}" rx="4" fill="#f1f5fa"/>`);
+    const baseline = top + rowHeight / 2;
+    parts.push(`<text x="${fixed(mid / 2 + 5)}" y="${fixed(baseline)}" text-anchor="middle" dominant-baseline="central" font-size="${fixed(fontSize)}" fill="${LAB.ink}" font-variant-numeric="tabular-nums">${escapeXml(nf(x, decimals))}</text>`);
+    parts.push(`<text x="${fixed(mid + mid / 2 - 5)}" y="${fixed(baseline)}" text-anchor="middle" dominant-baseline="central" font-size="${fixed(fontSize)}" font-weight="600" fill="${Number.isFinite(y) ? "#1d4ed8" : "#b91c1c"}" font-variant-numeric="tabular-nums">${escapeXml(Number.isFinite(y) ? nf(y, decimals) : "indef.")}</text>`);
   }
+  parts.push(`<line x1="${fixed(mid)}" y1="${fixed(headerHeight + 2)}" x2="${fixed(mid)}" y2="${fixed(headerHeight + rows * rowHeight - 2)}" stroke="${LAB.line}"/>`);
   return parts.join("");
 }
 
@@ -384,8 +440,8 @@ export function trendSvg(properties: Record<string, unknown>, box: { width: numb
   const unit = text(properties, "bindUnit", "");
   const decimals = Math.max(0, Math.min(8, Math.round(num(properties, "bindDecimals", 2))));
   const window = Math.max(1, num(properties, "windowSeconds", 30));
-  const parts = [frame(width, height)];
-  if (title) parts.push(`<text x="12" y="18" font-size="13" font-weight="600" fill="${LAB.ink}">${escapeXml(title)}</text>`);
+  const parts = [labCardFrameSvg(box, "light")];
+  if (title) parts.push(`<text x="20" y="32" font-size="18" font-weight="700" fill="${LAB.ink}">${escapeXml(title)}</text>`);
   const last = samples[samples.length - 1];
   const now = last?.[0] ?? 0;
   const visible = samples.filter(([t]) => t >= now - window);
@@ -397,8 +453,8 @@ export function trendSvg(properties: Record<string, unknown>, box: { width: numb
     const pad = Math.max((high - low) * 0.1, Math.abs(high) * 0.05, 1e-6);
     [y0, y1] = [low - pad, high + pad];
   }
-  const top = title ? 28 : 12;
-  const area: PlotArea = { L: 50, T: top, W: Math.max(10, width - 62), H: Math.max(10, height - top - 34), x0: -window, x1: 0, y0, y1 };
+  const top = title ? 50 : 16;
+  const area: PlotArea = { L: 56, T: top, W: Math.max(10, width - 76), H: Math.max(10, height - top - 42), x0: -window, x1: 0, y0, y1 };
   parts.push(axes(area, "t (s)", flag(properties, "showGrid", true), (v) => nf(v, 1)));
   const lineColor = color(properties, "color", LAB.accent);
   if (visible.length > 1) {
@@ -407,7 +463,7 @@ export function trendSvg(properties: Record<string, unknown>, box: { width: numb
   }
   const status = bind === "missing" ? "sem leitura" : bind === "stale" ? "dado antigo" : bind === "disconnected" ? "desconectado" : "";
   const readout = last ? `${nf(last[1], decimals)}${unit ? ` ${unit}` : ""}` : "—";
-  parts.push(`<text x="${fixed(width - 12)}" y="18" text-anchor="end" font-size="13" font-weight="700" fill="${status ? "#b45309" : lineColor}">${escapeXml(status || readout)}</text>`);
+  parts.push(`<text x="${fixed(width - 20)}" y="32" text-anchor="end" font-size="16" font-weight="700" fill="${status ? "#b45309" : lineColor}">${escapeXml(status || readout)}</text>`);
   if (!text(properties, "bindSource", "")) parts.push(message(width, height, "Ligue a uma fonte (Binding › Fonte).", LAB.muted));
   return parts.join("");
 }
@@ -423,7 +479,7 @@ export function mathWidgetSvg(typeId: string, properties: Record<string, unknown
     case MATH_EQUATION_TYPE_ID: return equationSvg(properties, box, scope);
     case MATH_TABLE_TYPE_ID: return valueTableSvg(properties, box, scope);
     case MATH_TREND_TYPE_ID: return trendSvg(properties, box, Array.isArray(properties.__math_samples) ? properties.__math_samples as TrendSample[] : [], typeof properties.__g_bind === "string" ? properties.__g_bind : undefined);
-    default: return undefined;
+    default: return labWidgetSvg(typeId, properties, box);
   }
 }
 

@@ -14,6 +14,8 @@ import {
   getScreen, listScreens, onScreenChanged, putScreen, redoScreen, rootComponents, rootSchematicState, screenButtonFor, screenHistory, undoScreen,
 } from "./screenStore";
 import { LabEmbedHost, isLabToHostMessage, labEmbedBundle } from "./labEmbeds";
+import { configureLabExperiments } from "./labExperiments";
+import { requestPlantParameter, subscribePlantFeeds, unsubscribePlantFeeds } from "./plantFeeds";
 import { LAB_SCREEN_TITLE, createLabScreenDocument, findLabScreen, labScreenButton } from "./labScreens";
 import { defaultActivities } from "../ui/webview/lab/activity";
 
@@ -64,9 +66,12 @@ const lastSyncedRoot = new WeakMap<VisualPanel, Pick<WebviewProjectState, "compo
 export function configureVisualPanels(config: Options): vscode.Disposable {
   options = config;
   const disposeScreenListener = onScreenChanged((documentId, origin) => screenDocumentChanged(documentId, origin));
+  // Experimentos do Laboratório e gravações por planta: do projeto, vivos com ou sem tela aberta.
+  const disposeLabExperiments = configureLabExperiments();
   void refreshAvailableCommands();
   return new vscode.Disposable(() => {
     disposeScreenListener();
+    disposeLabExperiments();
     for (const panel of [...panels.values()]) panel.dispose();
   });
 }
@@ -262,6 +267,7 @@ const host: VisualPanelHost = {
     if (panel.window.docking === "docked" && panel.panel.viewColumn) panel.dockedColumn = panel.panel.viewColumn;
   },
   disposed(panel) {
+    unsubscribePlantFeeds(panel);
     labHosts.get(panel)?.dispose();
     labHosts.delete(panel);
     state.runtimeSinks.delete(panel);
@@ -439,6 +445,12 @@ function handleVisualMessage(panel: VisualPanel, message: WebviewToHostMessage):
   switch (message.type) {
     case "labEmbedMessage":
       if (message.documentId === panel.documentId && isLabToHostMessage(message.message)) labHostFor(panel).receive(message.elementId, message.message);
+      return;
+    case "subscribePlantFeeds":
+      if (message.documentId === panel.documentId) subscribePlantFeeds(panel, message.componentIds, message.fresh);
+      return;
+    case "requestPlantParameter":
+      if (message.documentId === panel.documentId) void requestPlantParameter(panel, message.componentId, message.parameterId, message.value);
       return;
     case "labEmbedClosed":
       if (message.documentId === panel.documentId) labHosts.get(panel)?.close(message.elementId);

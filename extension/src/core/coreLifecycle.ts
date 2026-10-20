@@ -1064,7 +1064,8 @@ export function onCoreRebuilt(listener: () => Promise<void> | void): () => void 
  * Extension (ela conhece catalogo e ids visuais); o Core resolve todos os grupos contra o mesmo
  * snapshot imutavel de stable step. */
 async function pollTelemetryFrame(expectedGeneration: number): Promise<void> {
-  if (!state.coreClient || !hasRuntimeSink()) return;
+  // As gravações do Laboratório (uma por planta) escoam mesmo sem vista aberta: o anel do Core é finito.
+  if (!state.coreClient || (!hasRuntimeSink() && seriesDrains.size === 0)) return;
 
   const readable = state.schematicState.components.filter((component) => isReadableInstrument(component.typeId));
   const visual = state.schematicState.components.filter((component) => {

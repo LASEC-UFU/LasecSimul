@@ -1,16 +1,15 @@
 import * as vscode from "vscode";
-import { addSeriesDrain, enqueueCoreMutation, flushSeries, onCoreRebuilt, onSimulationStatusChange } from "../core/coreLifecycle";
+import { enqueueCoreMutation, onSimulationStatusChange } from "../core/coreLifecycle";
 import { coreInstanceIdByComponentId, state } from "../state";
 import type { ProcessActivity } from "../ui/webview/lab/activity";
-import { LAB_MESSAGE_VERSION, type HostToLabMessage, type LabRunStatus, type LabSeriesDelta } from "../ui/webview/lab/messages";
+import { LAB_MESSAGE_VERSION, type HostToLabMessage, type LabRunStatus } from "../ui/webview/lab/messages";
 import { PLANTS, checkPlantParameter, type ParameterValues, type PlantSpec } from "../ui/webview/lab/plants";
-import { SeriesStore, type SeriesDelta } from "./SeriesStore";
+import { plantRecording, type PlantRecording } from "./plantRecordings";
+import type { SeriesDelta } from "./SeriesStore";
 
 interface BoundPlant {
   componentId: string;
   outerInstanceId: string;
-  /** id local no `.lssubcircuit` -> instância Core do filho. */
-  children: Map<string, string>;
 }
 
 /** Instância do processo que a atividade usa: a referenciada, ou a única do tipo no projeto. */
@@ -26,58 +25,66 @@ export function resolvePlantComponentId(activity: ProcessActivity): string | und
   return components[0]?.id;
 }
 
+/** Uma vista da atividade (o `<iframe>` dela numa tela): recebe as mensagens do experimento. */
+export type LabView = (message: HostToLabMessage) => void;
+
+type PlantStatus = Extract<HostToLabMessage, { type: "labPlant" }>["status"];
+
 /**
- * Experimento de processo (docs/51 §8): liga a atividade à instância do subcircuito no projeto, assina as
- * séries no Core, repassa deltas à Webview e aplica parâmetros pela política do Host (`plants.ts`). Uma
- * reconstrução do Core (Parar/Reiniciar, edição estrutural) troca os ids das instâncias: a assinatura é
- * refeita e os parâmetros correntes do laboratório são reaplicados.
+ * Experimento de processo (docs/51 §8): liga a atividade à instância do subcircuito no projeto, aplica
+ * parâmetros pela política do Host (`plants.ts`) e repassa às vistas a gravação da planta
+ * (`plantRecordings.ts`, uma por planta). O experimento é da ATIVIDADE do projeto, não da vista
+ * (`visual/labExperiments.ts`): trocar de página ou fechar a tela só tira a vista; ao voltar, ela recebe
+ * o estado inteiro (`addView`) sem reaplicar nada no Core. Quem religa depois de uma reconstrução do Core
+ * (Parar/Reiniciar, edição estrutural) é o registro dos experimentos, chamando `bind`.
  */
 export class ProcessExperiment {
   private readonly plantSpec: PlantSpec;
   private plant: BoundPlant | undefined;
-  private store: SeriesStore | undefined;
-  private removeDrain: (() => void) | undefined;
+  private plantStatus: PlantStatus | undefined;
+  private recording: PlantRecording | undefined;
+  private stopListening: (() => void) | undefined;
   private parameters: ParameterValues;
+  private readonly views = new Set<LabView>();
   private readonly disposers: Array<() => void> = [];
   private disposed = false;
 
-  constructor(private readonly activity: ProcessActivity, private readonly post: (message: HostToLabMessage) => void) {
+  constructor(private readonly activity: ProcessActivity) {
     this.plantSpec = PLANTS[activity.kind];
     this.parameters = { ...activity.parameters };
-    this.disposers.push(
-      // Dentro da reconstrução: `bind` usa o cliente direto, nunca a fila de mutações (que esperaria a si mesma).
-      onCoreRebuilt(() => this.bind()),
-      onSimulationStatusChange((status) => this.statusChanged(status)),
-    );
+    this.disposers.push(onSimulationStatusChange(() => this.postRunState()));
   }
 
   get activityId(): string { return this.activity.id; }
 
-  async start(): Promise<void> {
-    this.postRunState();
-    await enqueueCoreMutation(() => this.bind());
+  /** A planta que a atividade usa no projeto atual (antes mesmo de ligar). */
+  plantComponentId(): string | undefined {
+    return resolvePlantComponentId(this.activity);
+  }
+
+  /** Uma vista passa a mostrar o experimento: estado da execução, ligação com a planta, parâmetros
+   * correntes e a série inteira até aqui -- sem religar nada no Core nem perder a gravação. */
+  addView(view: LabView): void {
+    if (this.disposed) return;
+    this.views.add(view);
+    view(this.runStateMessage());
+    if (this.plantStatus) view(this.plantMessage(this.plantStatus));
+    for (const [id, value] of Object.entries(this.parameters)) {
+      if (typeof value === "number") view({ version: LAB_MESSAGE_VERSION, type: "labParameter", activityId: this.activity.id, id, value });
+    }
+    const snapshot = this.recording?.snapshot();
+    if (snapshot && this.recording) view(this.seriesMessage(this.recording, snapshot));
+  }
+
+  removeView(view: LabView): void {
+    this.views.delete(view);
   }
 
   dispose(): void {
     this.disposed = true;
+    this.views.clear();
     for (const dispose of this.disposers.splice(0)) dispose();
-    void this.unbind();
-  }
-
-  /** Vista nova do mesmo experimento (a Webview da Tela HMI renasce ao trocar de janela): estado da
-   * execução, ligação com a planta, parâmetros correntes e a série inteira até aqui -- sem religar nada
-   * no Core nem perder a gravação. */
-  replay(): void {
-    if (this.disposed) return;
-    this.postRunState();
-    if (this.plant) {
-      const label = state.schematicState.components.find((component) => component.id === this.plant!.componentId)?.label ?? this.plant.componentId;
-      this.postPlant({ state: "bound", componentId: this.plant.componentId, label });
-    }
-    for (const [id, value] of Object.entries(this.parameters)) {
-      if (typeof value === "number") this.post({ version: LAB_MESSAGE_VERSION, type: "labParameter", activityId: this.activity.id, id, value });
-    }
-    if (this.store) this.postSeries(this.store.snapshot());
+    this.unbind();
   }
 
   async run(): Promise<void> {
@@ -129,10 +136,11 @@ export class ProcessExperiment {
     await enqueueCoreMutation(() => this.bind());
   }
 
-  /** Resolve a instância, reaplica os parâmetros e refaz a assinatura. Usa `state.coreClient` direto. */
-  private async bind(): Promise<void> {
+  /** Resolve a instância, aplica os parâmetros correntes e passa a escutar a gravação da planta. Usa
+   * `state.coreClient` direto: só na fila de mutações do Core ou dentro da reconstrução. */
+  async bind(): Promise<void> {
     if (this.disposed) return;
-    await this.unbind();
+    this.unbind();
     const client = state.coreClient;
     const componentId = resolvePlantComponentId(this.activity);
     if (!componentId) {
@@ -143,82 +151,80 @@ export class ProcessExperiment {
     const outerInstanceId = coreInstanceIdByComponentId.get(componentId);
     if (!client || !outerInstanceId) { this.postPlant({ state: "error", message: "O Core ainda não criou o processo deste projeto." }); return; }
     try {
-      const localIds = new Set([...this.plantSpec.series.map((c) => c.localId), ...this.plantSpec.parameters.map((p) => p.localId)]);
-      const children = new Map<string, string>();
-      for (const localId of localIds) children.set(localId, await client.getSubcircuitChildInstanceId(outerInstanceId, localId));
-      this.plant = { componentId, outerInstanceId, children };
+      // A gravação primeiro: os parâmetros aplicados abaixo ficam registrados nela (todas as vistas da planta).
+      const recording = await plantRecording(componentId, this.plantSpec);
+      if (this.disposed) return;
+      this.recording = recording;
+      this.plant = { componentId, outerInstanceId };
       const status = state.simulationStatus;
       for (const spec of this.plantSpec.parameters) {
         if (status !== "stopped" && spec.policy !== "live") continue;
         const value = this.parameters[spec.id];
         if (value !== undefined) await this.applyParameter(spec.id, value);
       }
-      const subscriptionId = await client.subscribeSeries(
-        this.plantSpec.series.map((channel) => ({ instanceId: children.get(channel.localId)!, port: channel.port })),
-        { periodNs: this.plantSpec.periodNs },
-      );
-      const store = new SeriesStore(subscriptionId, this.plantSpec.series.map((channel) => channel.id));
-      this.store = store;
-      this.removeDrain = addSeriesDrain({
-        subscriptionId,
-        request: () => store.request(),
-        deliver: (chunk) => { const delta = store.ingest(chunk); if (delta) this.postSeries(delta); },
-      });
+      if (this.disposed) return;
       const label = state.schematicState.components.find((component) => component.id === componentId)?.label ?? componentId;
       this.postPlant({ state: "bound", componentId, label });
-      this.postSeries(store.snapshot());
+      this.stopListening = recording.listen({
+        series: (delta) => this.postSeries(recording, delta),
+        // Um elemento de tela mudou o parâmetro da mesma planta: a atividade mostra o mesmo valor.
+        parameters: (values) => {
+          for (const [id, value] of Object.entries(values)) {
+            if (this.parameters[id] === value || !(id in this.parameters)) continue;
+            this.parameters[id] = value;
+            this.post({ version: LAB_MESSAGE_VERSION, type: "labParameter", activityId: this.activity.id, id, value });
+          }
+        },
+      });
     } catch (err) {
       this.plant = undefined;
       this.postPlant({ state: "error", message: err instanceof Error ? err.message : String(err) });
     }
   }
 
-  private async unbind(): Promise<void> {
-    this.removeDrain?.();
-    this.removeDrain = undefined;
-    const store = this.store;
-    this.store = undefined;
+  /** Deixa de escutar a gravação; ela continua (é da planta, não deste experimento). */
+  private unbind(): void {
+    this.stopListening?.();
+    this.stopListening = undefined;
+    this.recording = undefined;
     this.plant = undefined;
-    if (store && state.coreClient) await state.coreClient.unsubscribeSeries(store.subscriptionId).catch(() => false);
   }
 
   private async applyParameter(id: string, value: number): Promise<number | undefined> {
     const spec = this.plantSpec.parameters.find((candidate) => candidate.id === id);
     if (!spec || !this.plant || !state.coreClient) return undefined;
     const result = await state.coreClient.setSubcircuitChildProperty(this.plant.outerInstanceId, spec.localId, spec.property, value);
+    this.recording?.noteParameter(id, value);
     return result.appliedAtNs;
   }
 
-  private statusChanged(status: string): void {
-    this.postRunState();
-    // Sem tick de telemetria em pausa: escoa o que o Core gravou até parar.
-    if (status === "paused") void flushSeries().catch(() => undefined);
+  private post(message: HostToLabMessage): void {
+    for (const view of [...this.views]) view(message);
+  }
+
+  private runStateMessage(): HostToLabMessage {
+    return { version: LAB_MESSAGE_VERSION, type: "labRunState", status: state.simulationStatus as LabRunStatus };
   }
 
   private postRunState(): void {
-    this.post({ version: LAB_MESSAGE_VERSION, type: "labRunState", status: state.simulationStatus as LabRunStatus });
+    this.post(this.runStateMessage());
   }
 
-  private postPlant(status: Extract<HostToLabMessage, { type: "labPlant" }>["status"]): void {
-    this.post({ version: LAB_MESSAGE_VERSION, type: "labPlant", activityId: this.activity.id, status });
+  private plantMessage(status: PlantStatus): HostToLabMessage {
+    return { version: LAB_MESSAGE_VERSION, type: "labPlant", activityId: this.activity.id, status };
   }
 
-  /** O Core informa a instância filha e a propriedade; a Webview conhece o parâmetro (`area`, `qIn`...). */
-  private parameterIdOf(instanceId: string | undefined, property: string | undefined): string | undefined {
-    const children = this.plant?.children;
-    if (!children || instanceId === undefined) return undefined;
-    return this.plantSpec.parameters.find((spec) => children.get(spec.localId) === instanceId && spec.property === property)?.id;
+  /** A vista que chegar depois recebe o último estado da ligação (`addView`). */
+  private postPlant(status: PlantStatus): void {
+    this.plantStatus = status;
+    this.post(this.plantMessage(status));
   }
 
-  private postSeries(delta: SeriesDelta): void {
-    const message: LabSeriesDelta = {
-      reset: delta.reset, generation: delta.generation, columns: this.plantSpec.series.map((channel) => channel.id),
-      t: delta.t, values: delta.columns, lost: delta.lost,
-      events: delta.events.map((event) => ({ tS: event.tNs * 1e-9, kind: event.kind,
-        ...(event.kind === "parameter" ? { name: this.parameterIdOf(event.instanceId, event.name) ?? event.name } : {}),
-        ...(event.value !== undefined ? { value: event.value } : {}),
-        ...(event.instanceId !== undefined ? { instanceId: event.instanceId } : {}) })),
-    };
-    this.post({ version: LAB_MESSAGE_VERSION, type: "labSeries", activityId: this.activity.id, delta: message });
+  private postSeries(recording: PlantRecording, delta: SeriesDelta): void {
+    this.post(this.seriesMessage(recording, delta));
+  }
+
+  private seriesMessage(recording: PlantRecording, delta: SeriesDelta): HostToLabMessage {
+    return { version: LAB_MESSAGE_VERSION, type: "labSeries", activityId: this.activity.id, delta: recording.labDelta(delta) };
   }
 }

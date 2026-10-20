@@ -16,6 +16,7 @@ import {
 const HISTORY_LIMIT = 200;
 const histories = new Map<string, { past: VisualDocument[]; future: VisualDocument[] }>();
 const listeners = new Set<(documentId: string, origin: unknown) => void>();
+const resetListeners = new Set<() => void>();
 const revisions = new Map<string, number>();
 
 /** O projeto RAIZ (o que é simulado e salvo), mesmo com um subsistema aberto para edição. */
@@ -49,6 +50,12 @@ export function onScreenChanged(listener: (documentId: string, origin: unknown) 
   return () => { listeners.delete(listener); };
 }
 
+/** O conjunto inteiro foi trocado (outro projeto): chamado antes do aviso de cada tela nova. */
+export function onScreensReset(listener: () => void): () => void {
+  resetListeners.add(listener);
+  return () => { resetListeners.delete(listener); };
+}
+
 function notify(documentId: string, origin: unknown): void {
   revisions.set(documentId, screenRevision(documentId) + 1);
   for (const listener of listeners) listener(documentId, origin);
@@ -59,6 +66,7 @@ export function resetScreens(documents: readonly VisualDocument[]): void {
   state.visualDocuments = documents.map((doc) => structuredClone(doc));
   histories.clear();
   revisions.clear();
+  for (const listener of resetListeners) listener();
   for (const doc of state.visualDocuments) notify(doc.id, undefined);
 }
 

@@ -120,9 +120,12 @@ instância.
 - **Constante** (`control.constant`, Core `SignalConstant.hpp`): saída de sinal
   com valor e unidade. Entra no grafo como o slider de operador. Está na aba
   Controle da paleta.
-- **Tanque vetorial** (`graphics.tank_svg`): o líquido sobe recortado na
-  janela da arte `tank.svg`. Tem nível fixo ou ligado (Binding) e cor do
-  líquido configurável.
+- **Tanque vetorial** (`graphics.tank_svg`): costado de vidro entre cabeças de
+  aço; o líquido ocupa toda a largura interna até o nível, com superfície e
+  régua de 10 em 10 % (desenho do IR, `scripts/generate-vector-tank.py`; até
+  2026-10-20 era a arte `tank.svg` com o líquido recortado numa janela em
+  corte). Tem nível fixo ou ligado (Binding), cor do líquido configurável e
+  "Mostrar valor".
 - **Válvula globo vetorial** (`graphics.valve_globe_svg`): mostra a abertura
   num selo quando "Mostrar abertura" está ligado.
 - **Primitiva `clip`** no IR de pintura: recorta primitivas por um contorno.

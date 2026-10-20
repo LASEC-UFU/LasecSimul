@@ -109,28 +109,569 @@
           ]
         },
         {
-          "id": "pagina-sensor-4-20",
+          "id": "pagina-funcoes-elementos",
+          "name": "Funções — elementos da tela",
+          "width": 1920,
+          "height": 1080,
+          "elements": [
+            {
+              "id": "titulo",
+              "typeId": "graphics.math.card",
+              "label": "titulo",
+              "properties": {
+                "width": 1872,
+                "height": 104,
+                "title": "Como a, b e c mudam f(x) = a·x² + b·x + c?",
+                "icon": "chart",
+                "variant": "dark",
+                "titleSize": 24,
+                "textSize": 16,
+                "text": "Arraste os parâmetros: o gráfico, as equações e a tabela mudam juntos."
+              },
+              "visual": {
+                "x": 24,
+                "y": 24,
+                "width": 1872,
+                "height": 104,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "param-a",
+              "typeId": "graphics.math.parameter",
+              "label": "param-a",
+              "properties": {
+                "width": 440,
+                "height": 76,
+                "name": "a",
+                "min": -3,
+                "max": 3,
+                "step": 0.1,
+                "value": 1,
+                "decimals": 1,
+                "color": "#3b82f6"
+              },
+              "visual": {
+                "x": 24,
+                "y": 152,
+                "width": 440,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "param-b",
+              "typeId": "graphics.math.parameter",
+              "label": "param-b",
+              "properties": {
+                "width": 440,
+                "height": 76,
+                "name": "b",
+                "min": -5,
+                "max": 5,
+                "step": 0.1,
+                "value": 0,
+                "decimals": 1,
+                "color": "#f97316"
+              },
+              "visual": {
+                "x": 24,
+                "y": 244,
+                "width": 440,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "param-c",
+              "typeId": "graphics.math.parameter",
+              "label": "param-c",
+              "properties": {
+                "width": 440,
+                "height": 76,
+                "name": "c",
+                "min": -5,
+                "max": 5,
+                "step": 0.1,
+                "value": -2,
+                "decimals": 1,
+                "color": "#14b8a6"
+              },
+              "visual": {
+                "x": 24,
+                "y": 336,
+                "width": 440,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "explore",
+              "typeId": "graphics.math.card",
+              "label": "explore",
+              "properties": {
+                "width": 440,
+                "height": 348,
+                "title": "Explore:",
+                "icon": "bulb",
+                "variant": "dark",
+                "titleStyle": "accent",
+                "accentColor": "#f59e0b",
+                "titleSize": 22,
+                "textSize": 17,
+                "text": "O que acontece com o vértice quando a muda de sinal? Para que valores de c a parábola deixa de cortar o eixo x? Compare com f′(x) = 0."
+              },
+              "visual": {
+                "x": 24,
+                "y": 436,
+                "width": 440,
+                "height": 348,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "grafico",
+              "typeId": "graphics.math.function_plot",
+              "label": "grafico",
+              "properties": {
+                "width": 960,
+                "height": 632,
+                "title": "f(x) e g(x) = x + 1",
+                "expression": "a x^2 + b x + c",
+                "expression2": "x + 1",
+                "variable": "x",
+                "xMin": -5,
+                "xMax": 5,
+                "yMin": -6,
+                "yMax": 10,
+                "showGrid": true,
+                "showDerivative": false,
+                "showRoots": true
+              },
+              "visual": {
+                "x": 488,
+                "y": 152,
+                "width": 960,
+                "height": 632,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "tabela",
+              "typeId": "graphics.math.value_table",
+              "label": "tabela",
+              "properties": {
+                "width": 424,
+                "height": 632,
+                "expression": "a x^2 + b x + c",
+                "variable": "x",
+                "header": "f(x)",
+                "start": -5,
+                "step": 1,
+                "rows": 11,
+                "decimals": 2
+              },
+              "visual": {
+                "x": 1472,
+                "y": 152,
+                "width": 424,
+                "height": 632,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "equacao-f",
+              "typeId": "graphics.math.equation",
+              "label": "equacao-f",
+              "properties": {
+                "width": 924,
+                "height": 248,
+                "lhs": "f(x)",
+                "expression": "a x^2 + b x + c",
+                "variable": "x",
+                "substitute": true,
+                "fontSize": 40
+              },
+              "visual": {
+                "x": 24,
+                "y": 808,
+                "width": 924,
+                "height": 248,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "equacao-df",
+              "typeId": "graphics.math.equation",
+              "label": "equacao-df",
+              "properties": {
+                "width": 924,
+                "height": 248,
+                "lhs": "f′(x)",
+                "expression": "2 a x + b",
+                "variable": "x",
+                "substitute": true,
+                "fontSize": 40
+              },
+              "visual": {
+                "x": 972,
+                "y": 808,
+                "width": 924,
+                "height": 248,
+                "rotation": 0
+              }
+            }
+          ]
+        },
+        {
+          "id": "pagina-sensor-composta",
           "name": "Sensor 4–20 mA — função afim",
           "width": 1920,
           "height": 1080,
           "elements": [
             {
-              "id": "atividade-sensor-4-20",
-              "typeId": "graphics.math.activity",
-              "label": "Sensor 4–20 mA — função afim",
+              "id": "sensor-cartao-processo",
+              "typeId": "graphics.math.card",
+              "label": "sensor-cartao-processo",
               "properties": {
-                "width": 1920,
-                "height": 1080,
-                "kind": "sensor",
-                "fillPage": true,
-                "plantComponentId": "sensor-lab",
-                "activityJson": "{\"id\":\"sensor-4-20\",\"title\":\"Sensor 4–20 mA — função afim\",\"question\":\"Que pressão produz 12 mA? O que acontece acima de Pmax?\",\"steps\":[{\"id\":\"prever\",\"phase\":\"predict\",\"prompt\":\"Prever: com faixa 0–200 kPa, quanto vale I em 50 kPa?\",\"hints\":[]},{\"id\":\"doze\",\"phase\":\"explore\",\"prompt\":\"Mova P até 12 mA. Escreva a inversa P(I).\",\"hints\":[]},{\"id\":\"saturacao\",\"phase\":\"apply\",\"prompt\":\"Passe de Pmax: o que a corrente faz? E o valor sem saturação?\",\"hints\":[]}],\"plantComponentId\":\"sensor-lab\",\"parameters\":{\"p\":100,\"pmin\":0,\"pmax\":200},\"kind\":\"sensor\"}"
+                "width": 936,
+                "height": 760,
+                "title": "Transmissor no laço 4–20 mA",
+                "icon": "gauge",
+                "variant": "dark"
               },
               "visual": {
-                "x": 0,
-                "y": 0,
-                "width": 1920,
-                "height": 1080,
+                "x": 24,
+                "y": 24,
+                "width": 936,
+                "height": 760,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-modelo",
+              "typeId": "graphics.math.equation",
+              "label": "sensor-modelo",
+              "properties": {
+                "width": 896,
+                "height": 140,
+                "formula": "I = 4 + 16 (P - P_min)/(P_max - P_min)",
+                "lhs": "",
+                "variable": "",
+                "showValue": false,
+                "fontSize": 38,
+                "background": "glass"
+              },
+              "visual": {
+                "x": 44,
+                "y": 96,
+                "width": 896,
+                "height": 140,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-leitura-p",
+              "typeId": "graphics.math.readout",
+              "label": "sensor-leitura-p",
+              "properties": {
+                "width": 420,
+                "height": 92,
+                "plantComponentId": "sensor-lab",
+                "quantity": "p",
+                "decimals": 1,
+                "fontSize": 40,
+                "label": "Pressão medida"
+              },
+              "visual": {
+                "x": 60,
+                "y": 262,
+                "width": 420,
+                "height": 92,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-leitura-i",
+              "typeId": "graphics.math.readout",
+              "label": "sensor-leitura-i",
+              "properties": {
+                "width": 420,
+                "height": 92,
+                "plantComponentId": "sensor-lab",
+                "quantity": "i",
+                "decimals": 2,
+                "fontSize": 40,
+                "label": "Corrente no laço",
+                "color": "#86efac"
+              },
+              "visual": {
+                "x": 500,
+                "y": 262,
+                "width": 420,
+                "height": 92,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-pressao",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "sensor-pressao",
+              "properties": {
+                "width": 896,
+                "height": 76,
+                "plantComponentId": "sensor-lab",
+                "parameterId": "p"
+              },
+              "visual": {
+                "x": 44,
+                "y": 384,
+                "width": 896,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-pmin",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "sensor-pmin",
+              "properties": {
+                "width": 430,
+                "height": 76,
+                "plantComponentId": "sensor-lab",
+                "parameterId": "pmin"
+              },
+              "visual": {
+                "x": 44,
+                "y": 476,
+                "width": 430,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-pmax",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "sensor-pmax",
+              "properties": {
+                "width": 430,
+                "height": 76,
+                "plantComponentId": "sensor-lab",
+                "parameterId": "pmax"
+              },
+              "visual": {
+                "x": 500,
+                "y": 476,
+                "width": 430,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-dica",
+              "typeId": "graphics.math.card",
+              "label": "sensor-dica",
+              "properties": {
+                "width": 896,
+                "height": 110,
+                "title": "",
+                "variant": "glass",
+                "textSize": 16,
+                "text": "Fora da faixa o transmissor satura, como num laço real: abaixo de Pmin a corrente fica em 3,8 mA e acima de Pmax em 20,5 mA."
+              },
+              "visual": {
+                "x": 44,
+                "y": 572,
+                "width": 896,
+                "height": 110,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-controles",
+              "typeId": "graphics.math.sim_controls",
+              "label": "sensor-controles",
+              "properties": {
+                "width": 620,
+                "height": 68,
+                "plantComponentId": "sensor-lab"
+              },
+              "visual": {
+                "x": 44,
+                "y": 700,
+                "width": 620,
+                "height": 68,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-grafico-corrente",
+              "typeId": "graphics.math.series_chart",
+              "label": "sensor-grafico-corrente",
+              "properties": {
+                "width": 912,
+                "height": 372,
+                "plantComponentId": "sensor-lab",
+                "channel": "i",
+                "title": "Corrente I(t)",
+                "color": "#16a34a",
+                "minSeconds": 20
+              },
+              "visual": {
+                "x": 984,
+                "y": 24,
+                "width": 912,
+                "height": 372,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-grafico-pressao",
+              "typeId": "graphics.math.series_chart",
+              "label": "sensor-grafico-pressao",
+              "properties": {
+                "width": 912,
+                "height": 372,
+                "plantComponentId": "sensor-lab",
+                "channel": "p",
+                "title": "Pressão P(t)",
+                "color": "#2563eb",
+                "minSeconds": 20
+              },
+              "visual": {
+                "x": 984,
+                "y": 412,
+                "width": 912,
+                "height": 372,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-cartao-equacoes",
+              "typeId": "graphics.math.card",
+              "label": "sensor-cartao-equacoes",
+              "properties": {
+                "width": 1386,
+                "height": 248,
+                "title": "Equações do processo",
+                "icon": "sigma",
+                "variant": "dark",
+                "titleStyle": "plain",
+                "titleSize": 16,
+                "accentColor": "#93c5fd"
+              },
+              "visual": {
+                "x": 24,
+                "y": 808,
+                "width": 1386,
+                "height": 248,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-explore",
+              "typeId": "graphics.math.card",
+              "label": "sensor-explore",
+              "properties": {
+                "width": 462,
+                "height": 248,
+                "title": "Explore:",
+                "icon": "bulb",
+                "variant": "dark",
+                "titleStyle": "accent",
+                "accentColor": "#f59e0b",
+                "titleSize": 22,
+                "textSize": 17,
+                "text": "Em que pressão a corrente chega a 12 mA? E acima de Pmax, o que acontece com a reta?"
+              },
+              "visual": {
+                "x": 1434,
+                "y": 808,
+                "width": 462,
+                "height": 248,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-equacao-1",
+              "typeId": "graphics.math.equation",
+              "label": "sensor-equacao-1",
+              "properties": {
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": true,
+                "decimals": 2,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "sensor-lab",
+                "formula": "I = 4 + 16 x",
+                "expression": "4 + 16 (p - pmin)/(pmax - pmin)",
+                "unit": "mA"
+              },
+              "visual": {
+                "x": 44,
+                "y": 868,
+                "width": 436,
+                "height": 160,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-equacao-2",
+              "typeId": "graphics.math.equation",
+              "label": "sensor-equacao-2",
+              "properties": {
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": true,
+                "decimals": 3,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "sensor-lab",
+                "formula": "x = (P - P_min)/(P_max - P_min)",
+                "expression": "(p - pmin)/(pmax - pmin)"
+              },
+              "visual": {
+                "x": 492,
+                "y": 868,
+                "width": 436,
+                "height": 160,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-equacao-3",
+              "typeId": "graphics.math.equation",
+              "label": "sensor-equacao-3",
+              "properties": {
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": true,
+                "decimals": 4,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "sensor-lab",
+                "formula": "dI/dP = 16/(P_max - P_min)",
+                "expression": "16/(pmax - pmin)",
+                "unit": "mA/kPa"
+              },
+              "visual": {
+                "x": 940,
+                "y": 868,
+                "width": 436,
+                "height": 160,
                 "rotation": 0
               }
             }
@@ -193,242 +734,710 @@
           ]
         },
         {
-          "id": "pagina-primeira-ordem",
+          "id": "pagina-primeira-ordem-composta",
           "name": "Primeira ordem — exponencial",
           "width": 1920,
           "height": 1080,
           "elements": [
             {
-              "id": "atividade-primeira-ordem",
-              "typeId": "graphics.math.activity",
-              "label": "Primeira ordem — exponencial",
+              "id": "primeira-ordem-cartao-processo",
+              "typeId": "graphics.math.card",
+              "label": "primeira-ordem-cartao-processo",
               "properties": {
-                "width": 1920,
-                "height": 1080,
-                "kind": "firstOrder",
-                "fillPage": true,
-                "plantComponentId": "primeira-ordem-lab",
-                "activityJson": "{\"id\":\"primeira-ordem\",\"title\":\"Primeira ordem — exponencial\",\"question\":\"Em que instante a resposta alcança 63,2 % do salto?\",\"steps\":[{\"id\":\"prever\",\"phase\":\"predict\",\"prompt\":\"Prever: qual o valor final de y para K = 2 e u = 1?\",\"hints\":[]},{\"id\":\"tau\",\"phase\":\"explore\",\"prompt\":\"Ache o instante em que y cruza a linha de 63,2 %. Compare com τ.\",\"hints\":[]},{\"id\":\"tangente\",\"phase\":\"formalize\",\"prompt\":\"A tangente em t = 0 cruza o valor final em t = τ? Verifique.\",\"hints\":[]},{\"id\":\"degrau\",\"phase\":\"apply\",\"prompt\":\"Mude u durante a execução: só o futuro muda?\",\"hints\":[]}],\"plantComponentId\":\"primeira-ordem-lab\",\"parameters\":{\"u\":1,\"K\":2,\"tau\":5,\"y0\":0},\"kind\":\"firstOrder\"}"
+                "width": 936,
+                "height": 760,
+                "title": "Processo em tempo real",
+                "icon": "chart",
+                "variant": "dark"
               },
               "visual": {
-                "x": 0,
-                "y": 0,
-                "width": 1920,
-                "height": 1080,
+                "x": 24,
+                "y": 24,
+                "width": 936,
+                "height": 760,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-modelo",
+              "typeId": "graphics.math.equation",
+              "label": "primeira-ordem-modelo",
+              "properties": {
+                "width": 896,
+                "height": 130,
+                "formula": "Y/U = K/(tau s + 1)",
+                "lhs": "",
+                "variable": "",
+                "showValue": false,
+                "fontSize": 40,
+                "background": "glass"
+              },
+              "visual": {
+                "x": 44,
+                "y": 96,
+                "width": 896,
+                "height": 130,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-leitura-y",
+              "typeId": "graphics.math.readout",
+              "label": "primeira-ordem-leitura-y",
+              "properties": {
+                "width": 420,
+                "height": 84,
+                "plantComponentId": "primeira-ordem-lab",
+                "quantity": "y",
+                "decimals": 3,
+                "fontSize": 36,
+                "label": "Saída"
+              },
+              "visual": {
+                "x": 60,
+                "y": 250,
+                "width": 420,
+                "height": 84,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-leitura-u",
+              "typeId": "graphics.math.readout",
+              "label": "primeira-ordem-leitura-u",
+              "properties": {
+                "width": 420,
+                "height": 84,
+                "plantComponentId": "primeira-ordem-lab",
+                "quantity": "u",
+                "decimals": 2,
+                "fontSize": 36,
+                "label": "Entrada (degrau)"
+              },
+              "visual": {
+                "x": 500,
+                "y": 250,
+                "width": 420,
+                "height": 84,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-degrau",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "primeira-ordem-degrau",
+              "properties": {
+                "width": 430,
+                "height": 76,
+                "plantComponentId": "primeira-ordem-lab",
+                "parameterId": "u"
+              },
+              "visual": {
+                "x": 44,
+                "y": 366,
+                "width": 430,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-ganho",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "primeira-ordem-ganho",
+              "properties": {
+                "width": 430,
+                "height": 76,
+                "plantComponentId": "primeira-ordem-lab",
+                "parameterId": "K"
+              },
+              "visual": {
+                "x": 500,
+                "y": 366,
+                "width": 430,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-tau",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "primeira-ordem-tau",
+              "properties": {
+                "width": 430,
+                "height": 76,
+                "plantComponentId": "primeira-ordem-lab",
+                "parameterId": "tau"
+              },
+              "visual": {
+                "x": 44,
+                "y": 466,
+                "width": 430,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-y0",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "primeira-ordem-y0",
+              "properties": {
+                "width": 430,
+                "height": 76,
+                "plantComponentId": "primeira-ordem-lab",
+                "parameterId": "y0"
+              },
+              "visual": {
+                "x": 500,
+                "y": 466,
+                "width": 430,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-dica",
+              "typeId": "graphics.math.card",
+              "label": "primeira-ordem-dica",
+              "properties": {
+                "width": 896,
+                "height": 110,
+                "title": "",
+                "variant": "glass",
+                "textSize": 16,
+                "text": "u muda com a simulação rodando (é um degrau na entrada); K, τ e y₀ mudam o modelo, por isso só com a simulação parada: use Reiniciar."
+              },
+              "visual": {
+                "x": 44,
+                "y": 570,
+                "width": 896,
+                "height": 110,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-controles",
+              "typeId": "graphics.math.sim_controls",
+              "label": "primeira-ordem-controles",
+              "properties": {
+                "width": 620,
+                "height": 68,
+                "plantComponentId": "primeira-ordem-lab"
+              },
+              "visual": {
+                "x": 44,
+                "y": 700,
+                "width": 620,
+                "height": 68,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-grafico-saida",
+              "typeId": "graphics.math.series_chart",
+              "label": "primeira-ordem-grafico-saida",
+              "properties": {
+                "width": 912,
+                "height": 500,
+                "plantComponentId": "primeira-ordem-lab",
+                "channel": "y",
+                "title": "Resposta y(t)",
+                "color": "#2563eb",
+                "showTangent": true,
+                "cursor": -1,
+                "minSeconds": 20
+              },
+              "visual": {
+                "x": 984,
+                "y": 24,
+                "width": 912,
+                "height": 500,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-grafico-entrada",
+              "typeId": "graphics.math.series_chart",
+              "label": "primeira-ordem-grafico-entrada",
+              "properties": {
+                "width": 912,
+                "height": 244,
+                "plantComponentId": "primeira-ordem-lab",
+                "channel": "u",
+                "title": "Entrada u(t)",
+                "color": "#f97316",
+                "showCursor": false,
+                "minSeconds": 20,
+                "titleSize": 18
+              },
+              "visual": {
+                "x": 984,
+                "y": 540,
+                "width": 912,
+                "height": 244,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-cartao-equacoes",
+              "typeId": "graphics.math.card",
+              "label": "primeira-ordem-cartao-equacoes",
+              "properties": {
+                "width": 1386,
+                "height": 248,
+                "title": "Equações do processo",
+                "icon": "sigma",
+                "variant": "dark",
+                "titleStyle": "plain",
+                "titleSize": 16,
+                "accentColor": "#93c5fd"
+              },
+              "visual": {
+                "x": 24,
+                "y": 808,
+                "width": 1386,
+                "height": 248,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-explore",
+              "typeId": "graphics.math.card",
+              "label": "primeira-ordem-explore",
+              "properties": {
+                "width": 462,
+                "height": 248,
+                "title": "Explore:",
+                "icon": "bulb",
+                "variant": "dark",
+                "titleStyle": "accent",
+                "accentColor": "#f59e0b",
+                "titleSize": 22,
+                "textSize": 17,
+                "text": "Quanto tempo y leva para chegar a 63,2 % do salto? Pare, mude τ, reinicie e compare o tempo com o novo τ."
+              },
+              "visual": {
+                "x": 1434,
+                "y": 808,
+                "width": 462,
+                "height": 248,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-equacao-1",
+              "typeId": "graphics.math.equation",
+              "label": "primeira-ordem-equacao-1",
+              "properties": {
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": true,
+                "decimals": 3,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "primeira-ordem-lab",
+                "formula": "y_tau = 0.632 K u",
+                "expression": "0.632 K u"
+              },
+              "visual": {
+                "x": 44,
+                "y": 868,
+                "width": 436,
+                "height": 160,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-equacao-2",
+              "typeId": "graphics.math.equation",
+              "label": "primeira-ordem-equacao-2",
+              "properties": {
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": true,
+                "decimals": 3,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "primeira-ordem-lab",
+                "formula": "dy/dt = (K u - y)/tau",
+                "expression": "(K u - y)/tau"
+              },
+              "visual": {
+                "x": 492,
+                "y": 868,
+                "width": 436,
+                "height": 160,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-equacao-3",
+              "typeId": "graphics.math.equation",
+              "label": "primeira-ordem-equacao-3",
+              "properties": {
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": false,
+                "decimals": 2,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "primeira-ordem-lab",
+                "formula": "y = K u (1 - e^(-t/tau))"
+              },
+              "visual": {
+                "x": 940,
+                "y": 868,
+                "width": 436,
+                "height": 160,
                 "rotation": 0
               }
             }
           ]
         },
         {
-          "id": "pagina-tanque-vazao-integral",
+          "id": "pagina-tanque-composta",
           "name": "Tanque — da vazão à integral",
           "width": 1920,
           "height": 1080,
           "elements": [
             {
-              "id": "atividade-tanque-vazao-integral",
-              "typeId": "graphics.math.activity",
-              "label": "Tanque — da vazão à integral",
+              "id": "tanque-cartao-processo",
+              "typeId": "graphics.math.card",
+              "label": "tanque-cartao-processo",
               "properties": {
-                "width": 1920,
-                "height": 1080,
-                "kind": "tank",
-                "fillPage": true,
+                "width": 936,
+                "height": 760,
+                "title": "Processo em tempo real",
+                "icon": "process",
+                "variant": "dark"
+              },
+              "visual": {
+                "x": 24,
+                "y": 24,
+                "width": 936,
+                "height": 760,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "tanque-tanque",
+              "typeId": "graphics.math.process_tank",
+              "label": "tanque-tanque",
+              "properties": {
+                "width": 450,
+                "height": 590,
+                "plantComponentId": "tanque-lab"
+              },
+              "visual": {
+                "x": 40,
+                "y": 92,
+                "width": 450,
+                "height": 590,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "tanque-leitura-v",
+              "typeId": "graphics.math.readout",
+              "label": "tanque-leitura-v",
+              "properties": {
+                "width": 410,
+                "height": 84,
                 "plantComponentId": "tanque-lab",
-                "activityJson": "{\"id\":\"tanque-vazao-integral\",\"title\":\"Tanque — da vazão à integral\",\"question\":\"Com 1 L/s entrando e 0,4 L/s saindo, quanto o volume aumenta em 10 s?\",\"steps\":[{\"id\":\"prever\",\"phase\":\"predict\",\"prompt\":\"Com 1 L/s entrando e 0,4 L/s saindo, quanto o volume aumenta em 10 s?\",\"hints\":[]},{\"id\":\"medir\",\"phase\":\"explore\",\"prompt\":\"Execute e marque a = 0 s e b = 10 s: ΔV e a inclinação da secante batem com q?\",\"hints\":[\"Com q constante, qualquer Riemann é exato — por quê?\"]},{\"id\":\"mudar\",\"phase\":\"explore\",\"prompt\":\"Mude a vazão de entrada durante a execução: o que acontece com V e com q no instante da mudança?\",\"hints\":[]},{\"id\":\"valvula\",\"phase\":\"formalize\",\"prompt\":\"Reinicie com a válvula (q = k·h): compare Riemann à esquerda, à direita e trapézio com V(b) − V(a).\",\"hints\":[]},{\"id\":\"area\",\"phase\":\"apply\",\"prompt\":\"Mude a área A durante a execução: h salta, V não. Explique com h = V/A.\",\"hints\":[]}],\"plantComponentId\":\"tanque-lab\",\"parameters\":{\"qIn\":1,\"qOut\":0.4,\"area\":0.1,\"k\":2,\"torr\":1.4,\"outlet\":0,\"hMax\":1,\"v0\":20},\"kind\":\"tank\",\"riemann\":{\"a\":5,\"b\":25,\"n\":10,\"method\":\"left\"}}"
+                "quantity": "V",
+                "decimals": 1,
+                "fontSize": 34,
+                "label": "Volume no tanque"
               },
               "visual": {
-                "x": 0,
-                "y": 0,
-                "width": 1920,
-                "height": 1080,
-                "rotation": 0
-              }
-            }
-          ]
-        },
-        {
-          "id": "pagina-funcoes-elementos",
-          "name": "Funções — elementos da tela",
-          "width": 1920,
-          "height": 1080,
-          "elements": [
-            {
-              "id": "titulo",
-              "typeId": "graphics.label",
-              "label": "titulo",
-              "properties": {
-                "width": 1400,
-                "height": 56,
-                "text": "Como a, b e c mudam f(x) = a·x² + b·x + c? Arraste os parâmetros.",
-                "fontSize": 30,
-                "align": "start",
-                "stroke": "#e2e8f0"
-              },
-              "visual": {
-                "x": 60,
-                "y": 36,
-                "width": 1400,
-                "height": 56,
+                "x": 520,
+                "y": 96,
+                "width": 410,
+                "height": 84,
                 "rotation": 0
               }
             },
             {
-              "id": "param-a",
-              "typeId": "graphics.math.parameter",
-              "label": "param-a",
+              "id": "tanque-leitura-h",
+              "typeId": "graphics.math.readout",
+              "label": "tanque-leitura-h",
               "properties": {
-                "width": 320,
-                "height": 72,
-                "name": "a",
-                "min": -3,
-                "max": 3,
-                "step": 0.1,
-                "value": 1,
-                "decimals": 1
+                "width": 410,
+                "height": 84,
+                "plantComponentId": "tanque-lab",
+                "quantity": "h",
+                "decimals": 3,
+                "fontSize": 34,
+                "label": "Nível"
               },
               "visual": {
-                "x": 60,
-                "y": 140,
-                "width": 320,
-                "height": 72,
+                "x": 520,
+                "y": 184,
+                "width": 410,
+                "height": 84,
                 "rotation": 0
               }
             },
             {
-              "id": "param-b",
-              "typeId": "graphics.math.parameter",
-              "label": "param-b",
+              "id": "tanque-vazao-entrada",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "tanque-vazao-entrada",
               "properties": {
-                "width": 320,
-                "height": 72,
-                "name": "b",
-                "min": -5,
-                "max": 5,
-                "step": 0.1,
-                "value": 0,
-                "decimals": 1
+                "width": 420,
+                "height": 76,
+                "plantComponentId": "tanque-lab",
+                "parameterId": "qIn"
               },
               "visual": {
-                "x": 60,
-                "y": 232,
-                "width": 320,
-                "height": 72,
+                "x": 516,
+                "y": 300,
+                "width": 420,
+                "height": 76,
                 "rotation": 0
               }
             },
             {
-              "id": "param-c",
-              "typeId": "graphics.math.parameter",
-              "label": "param-c",
+              "id": "tanque-vazao-saida",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "tanque-vazao-saida",
               "properties": {
-                "width": 320,
-                "height": 72,
-                "name": "c",
-                "min": -5,
-                "max": 5,
-                "step": 0.1,
-                "value": -2,
-                "decimals": 1
+                "width": 420,
+                "height": 76,
+                "plantComponentId": "tanque-lab",
+                "parameterId": "qOut"
               },
               "visual": {
-                "x": 60,
-                "y": 324,
-                "width": 320,
-                "height": 72,
+                "x": 516,
+                "y": 392,
+                "width": 420,
+                "height": 76,
                 "rotation": 0
               }
             },
             {
-              "id": "grafico",
-              "typeId": "graphics.math.function_plot",
-              "label": "grafico",
+              "id": "tanque-area",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "tanque-area",
               "properties": {
-                "width": 1000,
-                "height": 600,
-                "title": "Gráfico",
-                "expression": "a x^2 + b x + c",
-                "expression2": "x + 1",
-                "variable": "x",
-                "xMin": -5,
-                "xMax": 5,
-                "yMin": -6,
-                "yMax": 10,
-                "showGrid": true,
-                "showDerivative": false,
-                "showRoots": true
+                "width": 420,
+                "height": 76,
+                "plantComponentId": "tanque-lab",
+                "parameterId": "area"
               },
               "visual": {
-                "x": 420,
-                "y": 140,
-                "width": 1000,
-                "height": 600,
+                "x": 516,
+                "y": 484,
+                "width": 420,
+                "height": 76,
                 "rotation": 0
               }
             },
             {
-              "id": "equacao-f",
+              "id": "tanque-controles",
+              "typeId": "graphics.math.sim_controls",
+              "label": "tanque-controles",
+              "properties": {
+                "width": 620,
+                "height": 68,
+                "plantComponentId": "tanque-lab"
+              },
+              "visual": {
+                "x": 44,
+                "y": 700,
+                "width": 620,
+                "height": 68,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "tanque-grafico-nivel",
+              "typeId": "graphics.math.series_chart",
+              "label": "tanque-grafico-nivel",
+              "properties": {
+                "width": 912,
+                "height": 372,
+                "plantComponentId": "tanque-lab",
+                "channel": "h",
+                "title": "Nível × tempo",
+                "color": "#2563eb",
+                "showTangent": true,
+                "showSecant": true,
+                "a": 0,
+                "b": -1,
+                "cursor": -1
+              },
+              "visual": {
+                "x": 984,
+                "y": 24,
+                "width": 912,
+                "height": 372,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "tanque-grafico-vazao",
+              "typeId": "graphics.math.series_chart",
+              "label": "tanque-grafico-vazao",
+              "properties": {
+                "width": 912,
+                "height": 372,
+                "plantComponentId": "tanque-lab",
+                "channel": "q",
+                "title": "Vazão líquida × tempo",
+                "color": "#0891b2",
+                "showRiemann": true,
+                "showArea": true,
+                "riemannN": 12,
+                "a": 0,
+                "b": -1,
+                "cursor": -1
+              },
+              "visual": {
+                "x": 984,
+                "y": 412,
+                "width": 912,
+                "height": 372,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "tanque-cartao-equacoes",
+              "typeId": "graphics.math.card",
+              "label": "tanque-cartao-equacoes",
+              "properties": {
+                "width": 1386,
+                "height": 248,
+                "title": "Equações do processo",
+                "icon": "sigma",
+                "variant": "dark",
+                "titleStyle": "plain",
+                "titleSize": 16,
+                "accentColor": "#93c5fd"
+              },
+              "visual": {
+                "x": 24,
+                "y": 808,
+                "width": 1386,
+                "height": 248,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "tanque-explore",
+              "typeId": "graphics.math.card",
+              "label": "tanque-explore",
+              "properties": {
+                "width": 462,
+                "height": 248,
+                "title": "Explore:",
+                "icon": "bulb",
+                "variant": "dark",
+                "titleStyle": "accent",
+                "accentColor": "#f59e0b",
+                "titleSize": 22,
+                "textSize": 17,
+                "text": "Como a vazão altera a inclinação da curva? Com a simulação rodando, mude a vazão de entrada e compare a tangente dh/dt com q/A."
+              },
+              "visual": {
+                "x": 1434,
+                "y": 808,
+                "width": 462,
+                "height": 248,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "tanque-equacao-1",
               "typeId": "graphics.math.equation",
-              "label": "equacao-f",
+              "label": "tanque-equacao-1",
               "properties": {
-                "width": 1000,
-                "height": 84,
-                "lhs": "f(x)",
-                "expression": "a x^2 + b x + c",
-                "variable": "x",
-                "substitute": true,
-                "fontSize": 26
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": true,
+                "decimals": 2,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "tanque-lab",
+                "formula": "q = q_e - q_s",
+                "expression": "inActual - outActual",
+                "unit": "L/s"
               },
               "visual": {
-                "x": 420,
-                "y": 768,
-                "width": 1000,
-                "height": 84,
+                "x": 44,
+                "y": 868,
+                "width": 436,
+                "height": 160,
                 "rotation": 0
               }
             },
             {
-              "id": "equacao-df",
+              "id": "tanque-equacao-2",
               "typeId": "graphics.math.equation",
-              "label": "equacao-df",
+              "label": "tanque-equacao-2",
               "properties": {
-                "width": 1000,
-                "height": 84,
-                "lhs": "f′(x)",
-                "expression": "2 a x + b",
-                "variable": "x",
-                "substitute": true,
-                "fontSize": 26
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": true,
+                "decimals": 4,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "tanque-lab",
+                "formula": "dh/dt = q/A",
+                "expression": "q/(1000 A)",
+                "unit": "m/s"
               },
               "visual": {
-                "x": 420,
-                "y": 872,
-                "width": 1000,
-                "height": 84,
+                "x": 492,
+                "y": 868,
+                "width": 436,
+                "height": 160,
                 "rotation": 0
               }
             },
             {
-              "id": "tabela",
-              "typeId": "graphics.math.value_table",
-              "label": "tabela",
+              "id": "tanque-equacao-3",
+              "typeId": "graphics.math.equation",
+              "label": "tanque-equacao-3",
               "properties": {
-                "width": 400,
-                "height": 600,
-                "expression": "a x^2 + b x + c",
-                "variable": "x",
-                "header": "f(x)",
-                "start": -5,
-                "step": 1,
-                "rows": 11,
-                "decimals": 2
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": true,
+                "decimals": 1,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "tanque-lab",
+                "formula": "V = V_0 + Integrate(tau, 0, t, q)",
+                "expression": "V",
+                "unit": "L"
               },
               "visual": {
-                "x": 1460,
-                "y": 140,
-                "width": 400,
-                "height": 600,
+                "x": 940,
+                "y": 868,
+                "width": 436,
+                "height": 160,
                 "rotation": 0
               }
             }

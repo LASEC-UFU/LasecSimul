@@ -2,6 +2,7 @@ import type { SubsystemDefinition } from "./subsystemModel";
 import { WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel } from "./model.js";
 import { ConnectionEndpoint } from "./wireTopology.js";
 import type { ScreenViewState, VisualDocument, VisualSession, VisualWindowInfo, WebviewGeometry } from "./visualDocument.js";
+import type { LabSeriesDelta } from "./lab/messages.js";
 
 /** Mesma forma de `ConnectionEndpoint` (`wireTopology.ts`) -- eram dois tipos idênticos definidos em
  * paralelo (achado real de duplicação: "regras de conexão repetidas em diferentes arquivos").
@@ -204,7 +205,12 @@ export type HostToWebviewMessage =
   /** Código (AMD, um arquivo) e tema do Laboratório para as atividades embutidas (inline no `<iframe>`). */
   | { version: number; type: "labEmbedBundle"; script: string; style: string }
   /** Cópia feita noutra vista visual (Tela/Faceplate), com o contexto de origem para remapear ligações. */
-  | { version: number; type: "visualClipboard"; at: number; components: WebviewComponentModel[]; faceplateInstanceId?: string; catalogEntries?: WebviewComponentCatalogEntry[] };
+  | { version: number; type: "visualClipboard"; at: number; components: WebviewComponentModel[]; faceplateInstanceId?: string; catalogEntries?: WebviewComponentCatalogEntry[] }
+  /** Série gravada de uma planta do Laboratório (uma gravação por planta, `lab/plantRecordings.ts`). */
+  | { version: number; type: "plantSeries"; componentId: string; delta: LabSeriesDelta }
+  /** Parâmetros correntes da planta (os do projeto na montagem, depois cada mudança aplicada). */
+  | { version: number; type: "plantParameters"; componentId: string; values: Record<string, number>; error?: string }
+  | { version: number; type: "plantParameterRejected"; componentId: string; parameterId: string; value: number; reason: string };
 
 /** Ação de janela pedida por um Painel Visual (menu de contexto, botão de tela cheia, Esc/F11). */
 export type VisualWindowAction = "dock" | "undock" | "fullscreen" | "exitFullscreen" | "toggleContext";
@@ -388,7 +394,11 @@ export type WebviewToHostMessage =
   | { version: number; type: "labEmbedClosed"; documentId: string; elementId: string }
   | { version: number; type: "requestLabEmbedBundle"; documentId: string }
   /** Cópia numa vista visual, para colar em outra (docs/62 §13.1). */
-  | { version: number; type: "visualClipboardSet"; documentId: string; at: number; components: WebviewComponentModel[]; faceplateInstanceId?: string };
+  | { version: number; type: "visualClipboardSet"; documentId: string; at: number; components: WebviewComponentModel[]; faceplateInstanceId?: string }
+  /** Plantas que a página mostra (gráficos, tanque, parâmetros); `fresh`: a vista acabou de nascer. */
+  | { version: number; type: "subscribePlantFeeds"; documentId: string; componentIds: string[]; fresh: boolean }
+  /** Elemento de tela mudou um parâmetro da planta (só na execução). */
+  | { version: number; type: "requestPlantParameter"; documentId: string; componentId: string; parameterId: string; value: number };
 
 export function isHostMessage(value: unknown): value is HostToWebviewMessage {
   return typeof value === "object" && value !== null && "type" in value && "version" in value;

@@ -1,15 +1,14 @@
 import * as fs from "fs";
 import * as path from "path";
-import { ProcessExperiment } from "../lab/processExperiment";
+import type { LabView, ProcessExperiment } from "../lab/processExperiment";
 import { state } from "../state";
-import {
-  CALCULUS_LAB_SCHEMA_VERSION, defaultActivity, isProcessActivity, validateCalculusLab, type CalculusLab, type LabActivity, type LabActivityKind,
-} from "../ui/webview/lab/activity";
+import { CALCULUS_LAB_SCHEMA_VERSION, isProcessActivity, validateCalculusLab, type CalculusLab, type LabActivity } from "../ui/webview/lab/activity";
 import { labProjectInfo } from "../ui/webview/lab/audit";
 import { LAB_MESSAGE_VERSION, type HostToLabMessage, type LabToHostMessage } from "../ui/webview/lab/messages";
-import { MATH_ACTIVITY_TYPE_ID, activityFromProperties } from "../ui/webview/mathWidgets";
-import type { VisualDocument } from "../ui/webview/visualDocument";
+import { activityOfElement, findActivityElement, labExperiment, noteLabActivitySaved } from "./labExperiments";
 import { getScreen, putScreen, redoScreen, screenHistory, undoScreen } from "./screenStore";
+
+export { activityOfElement } from "./labExperiments";
 
 /** Instâncias de subsistemas internos aparecem para o laboratório com o `typeId` da planta-modelo de
  * origem (`origin.typeId`): o laboratório continua reconhecendo "o tanque", "a primeira ordem"... */
@@ -20,42 +19,16 @@ export function labVisibleComponents(): Array<{ id: string; typeId: string; labe
   return state.schematicState.components.map((component) => ({ id: component.id, typeId: originByTypeId.get(component.typeId) ?? component.typeId, label: component.label }));
 }
 
-/** Elemento "Atividade do Laboratório" de uma tela: onde está e qual atividade ele guarda. */
-function findActivityElement(doc: VisualDocument | undefined, elementId: string): { pageIndex: number; elementIndex: number } | undefined {
-  if (!doc) return undefined;
-  for (const [pageIndex, page] of doc.pages.entries()) {
-    const elementIndex = page.elements.findIndex((element) => element.id === elementId && element.typeId === MATH_ACTIVITY_TYPE_ID);
-    if (elementIndex >= 0) return { pageIndex, elementIndex };
-  }
-  return undefined;
-}
-
-/** A atividade do elemento, validada como o `calculusLab` do `.lsproj`; ilegível vira a atividade-modelo do tipo. */
-export function activityOfElement(properties: Record<string, unknown> | undefined): LabActivity {
-  const raw = activityFromProperties(properties ?? {});
-  const kind = typeof properties?.kind === "string" ? properties.kind as LabActivityKind : "functions";
-  try {
-    const lab = validateCalculusLab({ schemaVersion: CALCULUS_LAB_SCHEMA_VERSION, activities: [raw] });
-    const activity = lab?.activities[0];
-    if (activity) return activity;
-  } catch {
-    // definição ilegível: cai na atividade-modelo do tipo escolhido
-  }
-  try {
-    return defaultActivity(kind);
-  } catch {
-    return defaultActivity("functions");
-  }
-}
-
 /**
  * As atividades do Laboratório embutidas nas páginas de UMA vista (Painel Visual), docs/62 §6: o mesmo
- * protocolo do painel antigo (`lab/messages.ts`), endereçado pelo id do elemento. Cada elemento tem o seu
- * experimento de processo; a definição é a do elemento no documento da tela (gravar = editar o documento,
- * com desfazer/refazer do Host). Edição da tela = modo professor; operação = modo aluno.
+ * protocolo do painel antigo (`lab/messages.ts`), endereçado pelo id do elemento. O experimento de
+ * processo é da atividade do projeto (`labExperiments.ts`), não desta vista: aqui cada `<iframe>` só se
+ * liga a ele enquanto aparece. A definição é a do elemento no documento da tela (gravar = editar o
+ * documento, com desfazer/refazer do Host). Edição da tela = modo professor; operação = modo aluno.
  */
 export class LabEmbedHost {
-  private readonly experiments = new Map<string, ProcessExperiment>();
+  /** Vista de cada `<iframe>` ligada ao experimento da atividade. */
+  private readonly views = new Map<string, { experiment: ProcessExperiment; view: LabView }>();
   /** `activityJson` que cada atividade viva recebeu no último `labInit`: mudou no documento, reinicia. */
   private readonly live = new Map<string, string>();
   private editing: boolean;
@@ -72,11 +45,11 @@ export class LabEmbedHost {
     switch (message.type) {
       case "labReady": this.init(elementId); return;
       case "labActivate": this.activate(elementId, message.activity); return;
-      case "labRun": void this.experiments.get(elementId)?.run(); return;
-      case "labPause": void this.experiments.get(elementId)?.pause(); return;
-      case "labRestart": void this.experiments.get(elementId)?.restart(message.parameters); return;
-      case "labSetParameter": void this.experiments.get(elementId)?.setParameter(message.id, message.value); return;
-      case "labInsertPlant": void this.experiments.get(elementId)?.insertPlant(); return;
+      case "labRun": void this.experimentOf(elementId)?.run(); return;
+      case "labPause": void this.experimentOf(elementId)?.pause(); return;
+      case "labRestart": void this.experimentOf(elementId)?.restart(message.parameters); return;
+      case "labSetParameter": void this.experimentOf(elementId)?.setParameter(message.id, message.value); return;
+      case "labInsertPlant": void this.experimentOf(elementId)?.insertPlant(); return;
       case "labSaveActivity": this.save(elementId, message.activity); return;
       case "labUndo": undoScreen(this.documentId); return;
       case "labRedo": redoScreen(this.documentId); return;
@@ -84,16 +57,14 @@ export class LabEmbedHost {
     }
   }
 
-  /** O `<iframe>` saiu da página: desliga o experimento dele. */
+  /** O `<iframe>` saiu da página: só a vista se desliga; o experimento e a gravação continuam. */
   close(elementId: string): void {
-    this.experiments.get(elementId)?.dispose();
-    this.experiments.delete(elementId);
+    this.detach(elementId);
     this.live.delete(elementId);
   }
 
   dispose(): void {
-    for (const experiment of this.experiments.values()) experiment.dispose();
-    this.experiments.clear();
+    for (const elementId of [...this.views.keys()]) this.detach(elementId);
     this.live.clear();
   }
 
@@ -112,8 +83,8 @@ export class LabEmbedHost {
       if (!where) { this.close(elementId); continue; }
       const json = String(doc!.pages[where.pageIndex]!.elements[where.elementIndex]!.properties?.activityJson ?? "");
       if (json === sent) continue;
-      this.experiments.get(elementId)?.dispose();
-      this.experiments.delete(elementId);
+      // Definição nova: a atividade remonta; o experimento é refeito pelo registro (`labExperiment`).
+      this.detach(elementId);
       this.init(elementId);
     }
     for (const elementId of this.live.keys()) this.post(elementId, { version: LAB_MESSAGE_VERSION, type: "labHistory", ...screenHistory(this.documentId) });
@@ -136,19 +107,26 @@ export class LabEmbedHost {
     this.post(elementId, { version: LAB_MESSAGE_VERSION, type: "labHistory", ...screenHistory(this.documentId) });
   }
 
+  private experimentOf(elementId: string): ProcessExperiment | undefined {
+    return this.views.get(elementId)?.experiment;
+  }
+
+  private detach(elementId: string): void {
+    const attached = this.views.get(elementId);
+    attached?.experiment.removeView(attached.view);
+    this.views.delete(elementId);
+  }
+
+  /** A atividade montou no `<iframe>` (página mostrada, janela trocada, modo trocado): a vista se liga ao
+   * experimento dela, que reenvia estado, parâmetros e a série inteira. */
   private activate(elementId: string, activity: LabActivity): void {
-    const current = this.experiments.get(elementId);
-    if (!isProcessActivity(activity)) {
-      current?.dispose();
-      this.experiments.delete(elementId);
-      return;
-    }
-    // Mesma atividade (a vista renasceu ao trocar de janela): o experimento continua e reenvia tudo.
-    if (current && current.activityId === activity.id) { current.replay(); return; }
-    current?.dispose();
-    const experiment = new ProcessExperiment(activity, (message) => this.post(elementId, message));
-    this.experiments.set(elementId, experiment);
-    void experiment.start();
+    this.detach(elementId);
+    if (!isProcessActivity(activity)) return;
+    const experiment = labExperiment(this.documentId, elementId);
+    if (!experiment || experiment.activityId !== activity.id) return;
+    const view: LabView = (message) => this.post(elementId, message);
+    this.views.set(elementId, { experiment, view });
+    experiment.addView(view);
   }
 
   /** Professor gravou: a definição volta para o elemento, num passo de desfazer da tela. */
@@ -175,6 +153,7 @@ export class LabEmbedHost {
     });
     // A própria atividade já mostra o que gravou: sem remontar (ela perderia cursor e séries).
     this.live.set(elementId, json);
+    noteLabActivitySaved(this.documentId, elementId, json);
     putScreen({ ...doc, pages }, { record: true });
     this.post(elementId, { version: LAB_MESSAGE_VERSION, type: "labSaved", activityId: valid.id });
   }

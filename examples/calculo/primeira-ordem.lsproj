@@ -52,31 +52,375 @@
       "id": "laboratorio",
       "kind": "screen",
       "title": "Laboratório de Cálculo",
-      "startPageId": "pagina-primeira-ordem",
+      "startPageId": "pagina-primeira-ordem-composta",
       "pages": [
         {
-          "id": "pagina-primeira-ordem",
+          "id": "pagina-primeira-ordem-composta",
           "name": "Primeira ordem — exponencial",
           "width": 1920,
           "height": 1080,
           "elements": [
             {
-              "id": "atividade-primeira-ordem",
-              "typeId": "graphics.math.activity",
-              "label": "Primeira ordem — exponencial",
+              "id": "primeira-ordem-cartao-processo",
+              "typeId": "graphics.math.card",
+              "label": "primeira-ordem-cartao-processo",
               "properties": {
-                "width": 1920,
-                "height": 1080,
-                "kind": "firstOrder",
-                "fillPage": true,
-                "plantComponentId": "primeira-ordem-lab",
-                "activityJson": "{\"id\":\"primeira-ordem\",\"title\":\"Primeira ordem — exponencial\",\"question\":\"Em que instante a resposta alcança 63,2 % do salto?\",\"steps\":[{\"id\":\"prever\",\"phase\":\"predict\",\"prompt\":\"Prever: qual o valor final de y para K = 2 e u = 1?\",\"hints\":[]},{\"id\":\"tau\",\"phase\":\"explore\",\"prompt\":\"Ache o instante em que y cruza a linha de 63,2 %. Compare com τ.\",\"hints\":[]},{\"id\":\"tangente\",\"phase\":\"formalize\",\"prompt\":\"A tangente em t = 0 cruza o valor final em t = τ? Verifique.\",\"hints\":[]},{\"id\":\"degrau\",\"phase\":\"apply\",\"prompt\":\"Mude u durante a execução: só o futuro muda?\",\"hints\":[]}],\"plantComponentId\":\"primeira-ordem-lab\",\"parameters\":{\"u\":1,\"K\":2,\"tau\":5,\"y0\":0},\"kind\":\"firstOrder\"}"
+                "width": 936,
+                "height": 760,
+                "title": "Processo em tempo real",
+                "icon": "chart",
+                "variant": "dark"
               },
               "visual": {
-                "x": 0,
-                "y": 0,
-                "width": 1920,
-                "height": 1080,
+                "x": 24,
+                "y": 24,
+                "width": 936,
+                "height": 760,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-modelo",
+              "typeId": "graphics.math.equation",
+              "label": "primeira-ordem-modelo",
+              "properties": {
+                "width": 896,
+                "height": 130,
+                "formula": "Y/U = K/(tau s + 1)",
+                "lhs": "",
+                "variable": "",
+                "showValue": false,
+                "fontSize": 40,
+                "background": "glass"
+              },
+              "visual": {
+                "x": 44,
+                "y": 96,
+                "width": 896,
+                "height": 130,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-leitura-y",
+              "typeId": "graphics.math.readout",
+              "label": "primeira-ordem-leitura-y",
+              "properties": {
+                "width": 420,
+                "height": 84,
+                "plantComponentId": "primeira-ordem-lab",
+                "quantity": "y",
+                "decimals": 3,
+                "fontSize": 36,
+                "label": "Saída"
+              },
+              "visual": {
+                "x": 60,
+                "y": 250,
+                "width": 420,
+                "height": 84,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-leitura-u",
+              "typeId": "graphics.math.readout",
+              "label": "primeira-ordem-leitura-u",
+              "properties": {
+                "width": 420,
+                "height": 84,
+                "plantComponentId": "primeira-ordem-lab",
+                "quantity": "u",
+                "decimals": 2,
+                "fontSize": 36,
+                "label": "Entrada (degrau)"
+              },
+              "visual": {
+                "x": 500,
+                "y": 250,
+                "width": 420,
+                "height": 84,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-degrau",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "primeira-ordem-degrau",
+              "properties": {
+                "width": 430,
+                "height": 76,
+                "plantComponentId": "primeira-ordem-lab",
+                "parameterId": "u"
+              },
+              "visual": {
+                "x": 44,
+                "y": 366,
+                "width": 430,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-ganho",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "primeira-ordem-ganho",
+              "properties": {
+                "width": 430,
+                "height": 76,
+                "plantComponentId": "primeira-ordem-lab",
+                "parameterId": "K"
+              },
+              "visual": {
+                "x": 500,
+                "y": 366,
+                "width": 430,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-tau",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "primeira-ordem-tau",
+              "properties": {
+                "width": 430,
+                "height": 76,
+                "plantComponentId": "primeira-ordem-lab",
+                "parameterId": "tau"
+              },
+              "visual": {
+                "x": 44,
+                "y": 466,
+                "width": 430,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-y0",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "primeira-ordem-y0",
+              "properties": {
+                "width": 430,
+                "height": 76,
+                "plantComponentId": "primeira-ordem-lab",
+                "parameterId": "y0"
+              },
+              "visual": {
+                "x": 500,
+                "y": 466,
+                "width": 430,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-dica",
+              "typeId": "graphics.math.card",
+              "label": "primeira-ordem-dica",
+              "properties": {
+                "width": 896,
+                "height": 110,
+                "title": "",
+                "variant": "glass",
+                "textSize": 16,
+                "text": "u muda com a simulação rodando (é um degrau na entrada); K, τ e y₀ mudam o modelo, por isso só com a simulação parada: use Reiniciar."
+              },
+              "visual": {
+                "x": 44,
+                "y": 570,
+                "width": 896,
+                "height": 110,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-controles",
+              "typeId": "graphics.math.sim_controls",
+              "label": "primeira-ordem-controles",
+              "properties": {
+                "width": 620,
+                "height": 68,
+                "plantComponentId": "primeira-ordem-lab"
+              },
+              "visual": {
+                "x": 44,
+                "y": 700,
+                "width": 620,
+                "height": 68,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-grafico-saida",
+              "typeId": "graphics.math.series_chart",
+              "label": "primeira-ordem-grafico-saida",
+              "properties": {
+                "width": 912,
+                "height": 500,
+                "plantComponentId": "primeira-ordem-lab",
+                "channel": "y",
+                "title": "Resposta y(t)",
+                "color": "#2563eb",
+                "showTangent": true,
+                "cursor": -1,
+                "minSeconds": 20
+              },
+              "visual": {
+                "x": 984,
+                "y": 24,
+                "width": 912,
+                "height": 500,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-grafico-entrada",
+              "typeId": "graphics.math.series_chart",
+              "label": "primeira-ordem-grafico-entrada",
+              "properties": {
+                "width": 912,
+                "height": 244,
+                "plantComponentId": "primeira-ordem-lab",
+                "channel": "u",
+                "title": "Entrada u(t)",
+                "color": "#f97316",
+                "showCursor": false,
+                "minSeconds": 20,
+                "titleSize": 18
+              },
+              "visual": {
+                "x": 984,
+                "y": 540,
+                "width": 912,
+                "height": 244,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-cartao-equacoes",
+              "typeId": "graphics.math.card",
+              "label": "primeira-ordem-cartao-equacoes",
+              "properties": {
+                "width": 1386,
+                "height": 248,
+                "title": "Equações do processo",
+                "icon": "sigma",
+                "variant": "dark",
+                "titleStyle": "plain",
+                "titleSize": 16,
+                "accentColor": "#93c5fd"
+              },
+              "visual": {
+                "x": 24,
+                "y": 808,
+                "width": 1386,
+                "height": 248,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-explore",
+              "typeId": "graphics.math.card",
+              "label": "primeira-ordem-explore",
+              "properties": {
+                "width": 462,
+                "height": 248,
+                "title": "Explore:",
+                "icon": "bulb",
+                "variant": "dark",
+                "titleStyle": "accent",
+                "accentColor": "#f59e0b",
+                "titleSize": 22,
+                "textSize": 17,
+                "text": "Quanto tempo y leva para chegar a 63,2 % do salto? Pare, mude τ, reinicie e compare o tempo com o novo τ."
+              },
+              "visual": {
+                "x": 1434,
+                "y": 808,
+                "width": 462,
+                "height": 248,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-equacao-1",
+              "typeId": "graphics.math.equation",
+              "label": "primeira-ordem-equacao-1",
+              "properties": {
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": true,
+                "decimals": 3,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "primeira-ordem-lab",
+                "formula": "y_tau = 0.632 K u",
+                "expression": "0.632 K u"
+              },
+              "visual": {
+                "x": 44,
+                "y": 868,
+                "width": 436,
+                "height": 160,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-equacao-2",
+              "typeId": "graphics.math.equation",
+              "label": "primeira-ordem-equacao-2",
+              "properties": {
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": true,
+                "decimals": 3,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "primeira-ordem-lab",
+                "formula": "dy/dt = (K u - y)/tau",
+                "expression": "(K u - y)/tau"
+              },
+              "visual": {
+                "x": 492,
+                "y": 868,
+                "width": 436,
+                "height": 160,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "primeira-ordem-equacao-3",
+              "typeId": "graphics.math.equation",
+              "label": "primeira-ordem-equacao-3",
+              "properties": {
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": false,
+                "decimals": 2,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "primeira-ordem-lab",
+                "formula": "y = K u (1 - e^(-t/tau))"
+              },
+              "visual": {
+                "x": 940,
+                "y": 868,
+                "width": 436,
+                "height": 160,
                 "rotation": 0
               }
             }

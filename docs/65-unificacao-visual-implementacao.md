@@ -113,6 +113,46 @@ O catálogo do esquemático tem 36 MB (pacotes, imagens de placas, tabelas HART)
 janela custar ~5,5 s e ~20 MB. A vista recebe só os tipos que usa (os do documento e os componentes que ele projeta, comanda
 ou lê) mais os matemáticos e ferramentas; um tipo novo chega junto com a colocação pela paleta ou com a colagem de outra vista.
 
+### 3.8 Gravação por planta e experimentos do projeto (M12)
+
+Antes, cada atividade de processo aberta assinava as séries da planta e o experimento morria com o
+`<iframe>`: trocar de página ou fechar a tela perdia o gráfico, e ao voltar os parâmetros autorados eram
+reaplicados por cima do que o aluno tinha mudado. Agora:
+
+- `lab/plantRecordings.ts`: uma gravação (assinatura no Core + `SeriesStore`) por planta; quem volta recebe
+  a série inteira. A recolha das séries roda mesmo sem vista aberta (o anel do Core é finito).
+- `visual/labExperiments.ts`: um experimento por atividade de processo das telas e Faceplates gravados,
+  chaveado por documento e elemento. Nasce e religa na reconstrução do Core, com a execução parada (os
+  parâmetros autorados entram sem gerar eventos de parâmetro no meio de uma gravação). As vistas
+  (`LabEmbedHost`) só se ligam e desligam; definição mudada (desfazer, Inspector) refaz o experimento sem
+  perder a gravação da planta; outro projeto descarta tudo.
+- Consequência: a atividade governa os parâmetros da planta desde a abertura do projeto, não só depois de
+  a página ser vista; um Reiniciar volta aos valores autorados só da atividade que o pediu.
+
+### 3.9 Telas do Laboratório compostas de elementos (2026-10-20)
+
+Pedido do usuário: as telas do Laboratório tinham ficado menos chamativas que as antigas (tanque "quadrado", abas empilhadas) e
+deviam ser **melhores** que antes **e** montáveis pelo próprio professor. A atividade continua existindo, mas tanque, primeira
+ordem e sensor passaram a ser páginas **compostas** (`ui/webview/labComposedPages.ts`, usadas pelos exemplos e por "+ Página do
+Laboratório") de elementos novos em `ui/webview/labWidgets.ts`: cartão, gráfico do processo (tangente, secante, Riemann, área,
+cursor e alças arrastáveis, legenda que escolhe o canto livre), tanque de processo (vetorial e animado), parâmetro da planta,
+controles da simulação e leitura; a equação ganhou fórmula exibida e o escopo da planta, e o MathML do Laboratório passou a
+desenhar índices (`q_e`), letras gregas (`tau`) e diferenciais (`dh`).
+
+- **Tanque**: o "Tanque vetorial" da biblioteca (`graphics.tank_svg`) é um bitmap vetorizado (VTracer) com o líquido recortado
+  numa janela em corte -- não mostra um nível de verdade. O tanque de processo é desenhado em código (vidro, aço, superfície,
+  régua, jatos, bomba/válvula/orifício, transbordo).
+- **Dados**: os elementos assinam a planta no Host (`visual/plantFeeds.ts`) e recebem a MESMA gravação das atividades (§3.8); a
+  gravação dos elementos do projeto começa na montagem do Core. Parâmetros mudados por elemento valem só para a execução
+  (`PlantRecording.setParameter`, com a política do Laboratório), e as atividades da mesma planta mostram o valor novo.
+- **Gráfico**: média por passo (q) desenhada pela média ponderada por coluna de pixel (preserva a integral; sem picos nas linhas de
+  evento), valor mantido em degraus, estado em linha com mínimo/máximo por coluna. Eventos de parâmetro filtrados por planta (o
+  Core grava cada evento em todas as assinaturas).
+- **Animações**: CSS com atraso negativo calculado pelo relógio -- o elemento é redesenhado a cada quadro de telemetria e a
+  animação continua da mesma fase; `prefers-reduced-motion` desliga.
+- **Cabeçalho** do Laboratório refeito (marca, abas numa faixa horizontal que rola, aba atual sempre à vista) e a operação
+  reajusta a página quando o canvas muda de tamanho (`ResizeObserver`), não só no `resize` da janela.
+
 ## 4. Como usar
 
 | Para | Faça |
@@ -129,7 +169,7 @@ ou lê) mais os matemáticos e ferramentas; um tipo novo chega junto com a coloc
 
 ## 5. Testes
 
-Unitários (cadeia `npm test`): `visualDocument.test.ts` (7), `mathWidgets.test.ts` (8), `ProjectVisualDocuments.test.ts` (4),
+Unitários (cadeia `npm test`): `visualDocument.test.ts` (7), `mathWidgets.test.ts` (8), `labWidgets.test.ts` (8), `ProjectVisualDocuments.test.ts` (4),
 além dos existentes; 73/73 arquivos passaram em 2026-10-20.
 
 E2E no VS Code real com o Core real: todas as suítes no VS Code 1.128.0 de teste; Telas e Laboratório também no 1.141 instalado.
@@ -145,6 +185,7 @@ pula a verificação de volta ao monitor em vez de acusar falha:
 | Elementos matemáticos | `npm run test:visual:math:e2e` | parâmetros/gráfico/tabela/equação, mudança do professor vista pelo aluno, tela cheia `lab` nos dois monitores |
 | Faceplate | `npm run test:visual:faceplate:e2e` | duas instâncias, valores e comandos isolados, edição da definição sem reconstruir, caminho `instância:interno` numa tela, colar com remapeamento |
 | Desempenho | `npm run test:visual:performance` | M1, M2, M6, M7, M8, M10 (§6) |
+| Laboratório composto | `npm run test:visual:lab:e2e` | página do tanque só com elementos: valores antes de executar, Executar/Pausar pelo elemento, tangente = q/A, Riemann = ∫, slider muda a planta ao vivo (tangente acompanha, evento no gráfico), cursor arrastável; primeira ordem com a série desde o início; sensor 12 mA |
 
 Regressão das suítes existentes na mesma rodada: Sintonia PID, 20 cenários de fios, reabertura de projetos e subsistemas
 (`run-subsystems-e2e.cjs`) passaram. A suíte de subsistemas copiava e colava com Ctrl+C/Ctrl+V, que nesta máquina passa pela
@@ -166,7 +207,7 @@ Medidas por `run-visual-performance-e2e.cjs` (VS Code 1.128, página de 300 elem
 | M9 bytes por edição | o documento inteiro por edição (`visualDocumentChanged`) | elementos tocados | **não atende** |
 | M10 `init` da vista | 89 KB (era 36 MB antes do catálogo por vista) | ≤ 200 KB | atende |
 | M11 restauração após troca de janela | documento, desfazer, página, zoom, modo e contexto voltam (E2E) | 100 % | atende |
-| M12 assinaturas de série | 1 por atividade aberta; duas vistas da mesma planta = 2 | 1 | **não atende** |
+| M12 assinaturas de série | 1 por planta (`lab/plantRecordings.ts`), com ou sem tela aberta; trocar de página ou fechar a tela não reassina (E2E do tanque) | 1 | atende (2026-10-20, §3.8) |
 
 ## 7. Pendências conhecidas
 
@@ -174,7 +215,7 @@ Medidas por `run-visual-performance-e2e.cjs` (VS Code 1.128, página de 300 elem
 |---|---|---|
 | Deriva de memória (M6) | em 20 trocas de janela a inclinação do heap do processo da vista variou de 0,16 a 0,71 MB por troca entre rodadas, com ruído de ±4 MB (ex.: 9,5 → 17,7 MB, sem crescimento monotônico); cada troca é um documento novo e o `init` é constante (89 KB) | heap snapshot para ver se o VS Code/Chromium retém documentos de Webview descartados |
 | M7 numa máquina a 60 Hz | aqui a vista pinta a ~32 Hz mesmo parada | medir de novo num monitor físico a 60 Hz; se passar de 16 ms, repintura incremental por elemento |
-| M9, M12 | ver §6 | patch por elemento; `SeriesStore` compartilhado por assinatura |
+| M9 | ver §6 | patch por elemento |
 | Página `symbol` do Faceplate | continua em "Editar Painel" (sessão) | autoria do símbolo no Painel Visual, com pinos e encapsulamento |
 | Faceplate de sistema externo | não existe | `faceplate` no `.lssubcircuit` lido para externos |
 | Faceplate depois de recarregar o VS Code | restaurado no contexto da instância (o estado da Webview guarda `__visualInstanceId`); sem E2E de recarga | E2E com "Developer: Reload Window" |

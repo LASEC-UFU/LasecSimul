@@ -117,7 +117,7 @@ async function findFrame(browser, selector, attempts = 120) {
     check(Boolean(shell), "duplo clique no botão abre a tela do Laboratório");
     if (!shell) throw new Error("tela não abriu");
     const tabs = await shell.locator("#labTabs button").allInnerTexts();
-    check(tabs.length === 4 && /elementos da tela/.test(tabs[3]), "quatro páginas: três atividades e a página de elementos", tabs.join(" | "));
+    check(tabs.length === 4 && /elementos da tela/.test(tabs[1]), "quatro páginas: três atividades e a página de elementos (logo depois das funções)", tabs.join(" | "));
     check(await shell.evaluate(() => document.body.classList.contains("visual-context-lab") && document.body.classList.contains("visual-operate")), "abre no contexto Laboratório e em operação");
 
     // 2) Página composta só com elementos da tela.
@@ -142,7 +142,7 @@ async function findFrame(browser, selector, attempts = 120) {
     const sliderPage = shell.page();
     await sliderPage.mouse.click(box.x + box.width * (1 - 14 / 320), box.y + box.height * (54 / 72));
     await sleep(300);
-    check(/a = 3/.test(await content("param-a")), "parâmetro a = 3 depois do clique no fim do trilho", await content("param-a"));
+    check(/a =\s*3/.test(await content("param-a")), "parâmetro a = 3 depois do clique no fim do trilho", await content("param-a"));
     check(/73/.test(await content("tabela")), "a tabela acompanha o parâmetro (f(−5) = 73)", (await content("tabela")).slice(0, 80));
     check((await plotPath()) !== pathBefore, "o gráfico acompanha o parâmetro");
     check(/3/.test(await content("equacao-f")), "a equação acompanha o parâmetro", await content("equacao-f"));

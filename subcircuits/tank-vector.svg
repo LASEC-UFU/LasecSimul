@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 180" width="120" height="180">
+  <defs>
+    <linearGradient id="s" x1="14" y1="0" x2="106" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4b5563"/><stop offset="0.16" stop-color="#e5e9ee"/><stop offset="0.42" stop-color="#a3acb8"/><stop offset="0.72" stop-color="#d7dde4"/><stop offset="1" stop-color="#3f4752"/></linearGradient>
+    <linearGradient id="g" x1="17" y1="0" x2="103" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0.32"/><stop offset="0.5" stop-color="#fff" stop-opacity="0.03"/><stop offset="1" stop-color="#fff" stop-opacity="0.12"/></linearGradient>
+  </defs>
+  <rect x="24" y="150" width="7" height="21" fill="url(#s)"/><rect x="89" y="150" width="7" height="21" fill="url(#s)"/>
+  <path d="M 14 144 C 14 162 106 162 106 144 Z" fill="url(#s)" stroke="#374151" stroke-width="0.6"/>
+  <rect x="54" y="8" width="12" height="16" fill="url(#s)"/><rect x="50" y="6" width="20" height="4" rx="1" fill="#6b7280"/>
+  <path d="M 14 36 C 14 18 106 18 106 36 Z" fill="url(#s)" stroke="#374151" stroke-width="0.6"/>
+  <rect x="17" y="36" width="86" height="108" fill="#1b2d48"/>
+  <rect x="17" y="84.6" width="86" height="59.4" fill="#1e88e5" opacity="0.92"/>
+  <ellipse cx="60.0" cy="84.6" rx="43.0" ry="5" fill="#fff" fill-opacity="0.38"/>
+  <rect x="17" y="36" width="86" height="108" fill="url(#g)" stroke="#e2e8f0" stroke-opacity="0.7"/>
+  <rect x="12" y="32" width="96" height="7" rx="2" fill="url(#s)"/><rect x="12" y="141" width="96" height="7" rx="2" fill="url(#s)"/>
+</svg>
