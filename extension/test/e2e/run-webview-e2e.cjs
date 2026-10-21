@@ -1565,6 +1565,13 @@ async function clickSvgAt(locator, x, y) {
     await designerFrame.locator("#reqKind").selectOption("timeLimitUpper");
     await designerFrame.locator("#reqTimeSegments").fill("0, 0, 1, 0, 1, 0.5");
     await designerFrame.locator("#dialogSave").click();
+    const timeBoundMarker=designerFrame.locator('#time [data-req-drag="timeLimit"]').first();
+    await timeBoundMarker.waitFor({ state: "visible" });
+    await timeBoundMarker.evaluate(element => element.dispatchEvent(new MouseEvent("contextmenu", { button: 2, bubbles: true, cancelable: true, clientX: 120, clientY: 100 })));
+    await designerFrame.locator("#rootContextMenu [data-root-context=requirement-edit]").click();
+    await designerFrame.locator("#designerDialog").waitFor({ state: "visible" });
+    if (await designerFrame.locator("#reqKind").inputValue() !== "timeLimitUpper" || !(await designerFrame.locator("#reqTimeSegments").inputValue()).includes("0, 0, 1")) throw new Error("time-bound context edit did not load the selected requirement");
+    await designerFrame.locator('#designerDialog button[value="cancel"]').click();
     const slopeRequirement = designerFrame.locator("#requirements .req").last();
     await slopeRequirement.locator("button[data-edit]").click();
     const slopeRoundTrip = await designerFrame.locator("#reqTimeSegments").inputValue();
