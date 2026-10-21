@@ -1457,7 +1457,8 @@ async function clickSvgAt(locator, x, y) {
     await designerFrame.locator("#dialogSave").click();
     await designerFrame.locator("#designerDialog").waitFor({ state: "hidden" });
     const optimizerRequirementsAfterAdd = designerFrame.locator("#optimizerRequirements [data-opt-req]");
-    if (await optimizerRequirementsAfterAdd.count() <= optimizerRequirementCountBefore || !(await optimizerRequirementsAfterAdd.last().isChecked())) throw new Error("requirement created from optimizer was not added to its selected requirements");
+    const newestOptimizerRequirement = optimizerRequirementsAfterAdd.last();
+    if (await newestOptimizerRequirement.getAttribute("data-opt-req") === "__default" || !(await newestOptimizerRequirement.isChecked())) throw new Error("requirement created from optimizer was not added to its selected requirements");
     await designerFrame.locator('[data-model="F"][data-part="num"]').fill("1, 1");
     await designerFrame.locator('[data-model="F"][data-part="den"]').fill("1, 3");
     await designerFrame.locator("#addReq").click();
