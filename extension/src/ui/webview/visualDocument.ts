@@ -11,6 +11,7 @@
 import type { HmiApplication, HmiPage } from "./model.js";
 
 export const HMI_SCREEN_TYPE_ID = "tools.hmi_screen";
+export const HMI_3D_SCREEN_TYPE_ID = "tools.hmi3d_screen";
 export const VISUAL_DOCUMENT_SCHEMA_VERSION = 1 as const;
 
 /** Casca de apresentação (docs/62 §7): editor/operação da HMI ou a organização do Laboratório de Cálculo. */

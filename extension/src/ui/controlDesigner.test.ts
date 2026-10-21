@@ -78,7 +78,11 @@ const near = (a: number, b: number, tol = 1e-5) => Math.abs(a - b) <= tol * Math
     assert(finite.phaseCrossovers.length===1&&near(finite.phaseCrossovers[0]!,Math.sqrt(10),.002),`FRD phase crossover is wrong: ${JSON.stringify(finite.phaseCrossovers)}`);
     assert(finite.gainMarginsDb.length===1&&near(finite.gainMarginsDb[0]!,20*Math.log10(Math.sqrt(10)*Math.sqrt(11)*Math.sqrt(1.1)),.003),`FRD gain margin is wrong: ${JSON.stringify(finite.gainMarginsDb)}`);
   });
-  await test("project persistence keeps raw FRD measurements with strict frequency validation", () => {
+  await test("project persistence retains hybrid plant domain and dynamic initial states", () => {
+    const base={domain:"discrete",plantDomain:"continuous",sampleTime:.1,F:{num:"1",den:"1"},C:{num:"1",den:"1, 1"},G:{num:"1",den:"1, 1"},H:{num:"1",den:"1, 1"},response:"output",requirements:[],alternatives:[],activeAlternative:"",controllerInitialState:[2],sensorInitialState:[3]};
+    const saved=validateControlDesignProject(base);
+    assert(saved?.plantDomain==="continuous"&&saved.controllerInitialState?.[0]===2&&saved.sensorInitialState?.[0]===3,"hybrid domain or state initial conditions were not persisted");
+  });  await test("project persistence keeps raw FRD measurements with strict frequency validation", () => {
     const base={domain:"continuous",sampleTime:.1,F:{num:"1",den:"1"},C:{num:"2",den:"1"},G:{num:"1",den:"1, 2"},H:{num:"1",den:"1"},response:"output",requirements:[],alternatives:[],activeAlternative:""},plantFrd={frequencyRadPerSecond:[.1,1,10,100],response:[{re:1,im:0},{re:.8,im:-.2},{re:.1,im:-.3},{re:.001,im:-.01}],sourceUnit:"Hz"},saved=validateControlDesignProject({...base,plantFrd});
     assert(saved?.plantFrd?.response.length===4&&saved.plantFrd.sourceUnit==="Hz","raw FRD samples were not persisted");
     assert(!validateControlDesignProject({...base,plantFrd:{...plantFrd,frequencyRadPerSecond:[.1,1,1,100]}}),"non-increasing persisted FRD grid was accepted");
@@ -685,7 +689,20 @@ const near = (a: number, b: number, tol = 1e-5) => Math.abs(a - b) <= tol * Math
     let rejected=false;try{closedLoopInitialStateResponse(plant,[1],{num:[2],den:[1],domain:"continuous"},{num:[1],den:[1],domain:"continuous"})}catch{rejected=true}
     assert(rejected,"vetor inicial com dimensÃ£o incorreta aceito");
   });
-  await test("derivada sobre medição entra no ramo de realimentação sem alterar o caminho de referência", () => {
+  await test("resposta natural aceita estados iniciais dinamicos em C e H", () => {
+    const plant={A:[[-1]],B:[1],C:[1],D:0};
+    const result=closedLoopInitialStateResponse(plant,[1],{num:[1],den:[1,1],domain:"continuous"},{num:[1],den:[1,1],domain:"continuous"},.1,11,[2],[3]);
+    assert(result.samples[0]!.value===1,"saida inicial deve vir do estado da planta");
+    assert(result.samples[1]!.value>1,"estado inicial dinamico de C deve influenciar a resposta");
+    let rejected=false;try{closedLoopInitialStateResponse(plant,[1],{num:[1],den:[1,1],domain:"continuous"},{num:[1],den:[1],domain:"continuous"},.1,11,[1],[2])}catch{rejected=true}
+    assert(rejected,"dimensao incorreta do estado inicial do sensor aceita");
+  });  await test("resposta natural integra planta continua entre amostras de controlador discreto", () => {
+    const plant={A:[[-1]],B:[1],C:[1],D:0,domain:"continuous" as const};
+    const result=closedLoopInitialStateResponse(plant,[1],{num:[.5],den:[1],domain:"discrete",sampleTime:.1},{num:[1],den:[1],domain:"discrete",sampleTime:.1},.2,3);
+    assert(result.samples.length===3,"resposta hibrida deve amostrar nos multiplos de Ts");
+    assert(near(result.samples[1]!.value,1.5*Math.exp(-.1)-.5,2e-7),"planta continua deve evoluir sob controle ZOH no intervalo de amostragem");
+    assert(result.stable&&result.converged,"resposta hibrida estavel deve convergir");
+  });  await test("derivada sobre medição entra no ramo de realimentação sem alterar o caminho de referência", () => {
     const tf=(num:number[],den:number[]):TransferFunction=>({num,den,domain:"continuous"});
     const ordinaryTwoDof=closeLoop(tf([1],[1]),tf([2],[1]),tf([1],[1,1]),tf([1],[1]));
     const splitTwoDof=closeLoop(tf([1],[1]),tf([2],[1]),tf([1],[1,1]),tf([1],[1]),undefined,"forward-controller",undefined,undefined,false,false,tf([1],[1]));

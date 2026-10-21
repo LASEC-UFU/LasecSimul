@@ -70,8 +70,12 @@ export interface ControlDesignProject {
   plantFrd?: ControlDesignFrd;
   /** Optional source realization for the plant; kept intact while G is its analysis view. */
   plantStateSpace?: { A: number[][]; B: number[]; C: number[]; D: number };
+  /** Physical domain of G; may differ from the controller domain for sampled-data design. */
+  plantDomain?: "continuous" | "discrete";
   /** Initial condition for the preserved plant realization, in state order. */
   plantInitialState?: number[];
+  controllerInitialState?: number[];
+  sensorInitialState?: number[];
   plantDelaySeconds?: number;
   padeOrder?: number;
   derivativeOnMeasurement?: boolean;
@@ -147,7 +151,11 @@ export function validateControlDesignProject(value: unknown): ControlDesignProje
     if (!plantStateSpace || x.plantInitialState.length !== plantStateSpace.A.length) return undefined;
     plantInitialState = x.plantInitialState as number[];
   }
+  const finiteState = (value: unknown): number[] | undefined => value === undefined ? undefined : Array.isArray(value) && value.every(item => typeof item === "number" && Number.isFinite(item)) ? value as number[] : undefined;
+  const controllerInitialState = finiteState(x.controllerInitialState), sensorInitialState = finiteState(x.sensorInitialState);
+  if (x.controllerInitialState !== undefined && !controllerInitialState || x.sensorInitialState !== undefined && !sensorInitialState) return undefined;
   if (x.domain === "discrete" && !(typeof x.sampleTime === "number" && Number.isFinite(x.sampleTime) && x.sampleTime > 0)) return undefined;
+  if (x.plantDomain !== undefined && x.plantDomain !== "continuous" && x.plantDomain !== "discrete") return undefined;
   if (x.plantDelaySeconds !== undefined && !(typeof x.plantDelaySeconds === "number" && Number.isFinite(x.plantDelaySeconds) && x.plantDelaySeconds >= 0 && x.plantDelaySeconds <= 1e6)) return undefined;
   if (x.padeOrder !== undefined && !(Number.isInteger(x.padeOrder) && Number(x.padeOrder) >= 1 && Number(x.padeOrder) <= 8)) return undefined;
   if (x.domain === "discrete" && Number(x.plantDelaySeconds ?? 0) > 0 && Math.abs(Number(x.plantDelaySeconds) / Number(x.sampleTime) - Math.round(Number(x.plantDelaySeconds) / Number(x.sampleTime))) > 1e-9 * Math.max(1, Number(x.plantDelaySeconds) / Number(x.sampleTime))) return undefined;
@@ -260,7 +268,7 @@ export function validateControlDesignProject(value: unknown): ControlDesignProje
   return { version: 1, domain: x.domain, sampleTime: typeof x.sampleTime === "number" ? x.sampleTime : .1,
     ...(plantFrd ? { plantFrd } : {}),
     ...(x.architecture === "feedback-controller" || x.architecture === "feedforward-disturbance" || x.architecture === "nested-inner-feedback" || x.architecture === "imc" || x.architecture === "nested-inner-forward" || x.architecture === "forward-controller" ? { architecture: x.architecture as ControlDesignProject["architecture"] } : {}),
-    F: x.F as ControlDesignProject["F"], C: x.C as ControlDesignProject["C"], G: x.G as ControlDesignProject["G"], H: x.H as ControlDesignProject["H"], ...(plantStateSpace ? { plantStateSpace } : {}), ...(plantInitialState ? { plantInitialState } : {}), ...(typeof x.plantDelaySeconds === "number" ? { plantDelaySeconds: x.plantDelaySeconds } : {}), ...(typeof x.padeOrder === "number" ? { padeOrder: x.padeOrder } : {}),
+    F: x.F as ControlDesignProject["F"], C: x.C as ControlDesignProject["C"], G: x.G as ControlDesignProject["G"], H: x.H as ControlDesignProject["H"], ...(x.plantDomain ? { plantDomain: x.plantDomain as ControlDesignProject["plantDomain"] } : {}), ...(plantStateSpace ? { plantStateSpace } : {}), ...(plantInitialState ? { plantInitialState } : {}), ...(controllerInitialState ? { controllerInitialState } : {}), ...(sensorInitialState ? { sensorInitialState } : {}), ...(typeof x.plantDelaySeconds === "number" ? { plantDelaySeconds: x.plantDelaySeconds } : {}), ...(typeof x.padeOrder === "number" ? { padeOrder: x.padeOrder } : {}),
     ...(model((x as any).C2) ? { C2: (x as any).C2 as ControlDesignProject["C2"] } : {}), ...(model((x as any).H2) ? { H2: (x as any).H2 as ControlDesignProject["H2"] } : {}),
     ...(typeof x.derivativeOnMeasurement === "boolean" ? { derivativeOnMeasurement: x.derivativeOnMeasurement } : {}), ...(measurementDerivative ? { measurementDerivative } : {}), ...(measurementDerivativeModel ? { measurementDerivativeModel } : {}),
     ...(["loop", "output", "control", "sensitivity", "complementary", "plantInputDisturbance", "measurementNoiseOutput", "measurementNoiseControl"].includes(String(x.analysisFrequencyTarget)) ? { analysisFrequencyTarget: x.analysisFrequencyTarget as ControlDesignProject["analysisFrequencyTarget"] } : {}),

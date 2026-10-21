@@ -4,7 +4,7 @@ import * as path from "path";
 import { assert, createTestRunner } from "../../ipc/testSupport/MockCoreServer";
 import { convertLegacyBlock } from "./conversions";
 import { convertLegacyExpression, evaluateLegacyAst, parseLegacyExpression } from "./legacyExpression";
-import { LEGACY_CONTROL_TYPE_IDS, legacyInputPorts } from "./legacyBlocks";
+import { LEGACY_CONTROL_TYPE_IDS, LEGACY_WRAPPER_STAGE, legacyInputPorts } from "./legacyBlocks";
 import { LEGACY_LIBRARY_EXPORTS } from "./legacyLibraryExports";
 import { migrateControlDocument, needsControlMigration } from "./migrateDocument";
 import { backupOriginal, persistDocumentMigration, writeMigrationReport } from "./migrationFiles";
@@ -182,6 +182,58 @@ function storedExpressions(): Array<{ file: string; id: string; expression: stri
     assert(JSON.stringify(repeat.document) === JSON.stringify(migrated), "deterministica");
   });
 
+  await test("wrappers antigos subcircuits.control.* migram para blocos sl.* antes de salvar", () => {
+    const document: Json = {
+      schemaVersion: 2,
+      components: [
+        { id: "legacyGain", typeId: "subcircuits.control.gain", properties: { "@stage.gain": 4 } },
+        { id: "sink", typeId: "sl.scope", properties: {} },
+      ],
+      topology: { revision: 0, nodes: [], conductors: [{ id: "w", from: { componentId: "legacyGain", pinId: "out" }, to: { componentId: "sink", pinId: "in1" }, vertices: [] }] },
+    };
+    const { document: migrated, report } = migrateControlDocument(document, { librarySnapshot: LEGACY_LIBRARY_EXPORTS });
+    const gain = (migrated.components as Json[]).find((component) => component.id === "legacyGain")!;
+    assert(report.changed && gain.typeId === "sl.gain", `wrapper removido do projeto: ${String(gain.typeId)}`);
+    assert((gain.properties as Json).Gain === "4", `override preservado: ${JSON.stringify(gain.properties)}`);
+    const wire = ((migrated.topology as Json).conductors as Json[])[0]! as Json;
+    assert((wire.from as Json).pinId === "out1" && (wire.to as Json).pinId === "in1", "portas do wrapper remapeadas para as portas reais Simulink");
+    assert(!needsControlMigration(migrated), "documento migrado nao pede nova migracao");
+  });
+
+  await test("os 24 wrappers antigos migram e deixam de exigir manifestos de biblioteca", () => {
+    const wrappers = Object.keys(LEGACY_WRAPPER_STAGE);
+    assert(wrappers.length === 24, `tabela de migração deve cobrir 24 wrappers: ${wrappers.length}`);
+    const document: Json = { schemaVersion: 2, components: wrappers.map((slug, index) => ({
+      id: `old_${slug}`, typeId: `subcircuits.control.${slug}`, properties: {}, subcircuitRef: { libraryPath: `control_${slug}.lssubcircuit` },
+      visual: { x: index * 20, y: 0, rotation: 0 },
+    })), topology: { revision: 0, nodes: [], conductors: [] } };
+    const { document: migrated, report } = migrateControlDocument(document, { librarySnapshot: LEGACY_LIBRARY_EXPORTS });
+    const components = migrated.components as Json[];
+    assert(report.changed && components.length >= wrappers.length, "todos os wrappers devem ser convertidos sem perder instâncias");
+    assert(!components.some((component) => String(component.typeId).startsWith("subcircuits.control.")), "nenhum wrapper antigo permanece no projeto salvo");
+    assert(components.filter((component) => component.subcircuitRef !== undefined).length === 0, "refs de biblioteca antigas são removidas");
+    assert(!needsControlMigration(migrated), "migração completa e idempotente");
+  });
+
+  await test("overrides de wrappers antigos dentro de subsistemas acompanham a conversao do filho", () => {
+    const document: Json = {
+      schemaVersion: 2,
+      subsystems: [{ schemaVersion: 3, typeId: "subsystem.old_model", name: "Modelo", components: [
+        { id: "g", typeId: "subcircuits.control.gain", properties: { "@stage.gain": 2 } },
+      ], topology: { revision: 0, nodes: [], conductors: [] }, interface: [], exportedPropertyComponentIds: ["g"] }],
+      components: [{ id: "M", typeId: "subsystem.old_model", properties: { "@g.gain": 8 } }],
+      topology: { revision: 0, nodes: [], conductors: [] },
+    };
+    const { document: migrated, report } = migrateControlDocument(document, { librarySnapshot: LEGACY_LIBRARY_EXPORTS });
+    const model = (migrated.subsystems as Json[])[0]!;
+    const child = (model.components as Json[])[0]!;
+    const instance = (migrated.components as Json[])[0]!;
+    assert(child.typeId === "sl.gain", `filho migrado: ${String(child.typeId)}`);
+    assert((instance.properties as Json)["@g.Gain"] === "8" && (instance.properties as Json)["@g.gain"] === undefined,
+      `override acompanha o parâmetro Simulink: ${JSON.stringify(instance.properties)}`);
+    assert(report.overrides.length === 1, "remapeamento relatado");
+  });
+
   await test("overrides por instancia (@filho.prop) remapeados pela definicao legada", () => {
     const document: Json = {
       schemaVersion: 2,
@@ -200,9 +252,11 @@ function storedExpressions(): Array<{ file: string; id: string; expression: stri
     const legacyChild = LEGACY_LIBRARY_EXPORTS[libraryType!]![child]!;
     const libraryDoc: Json = { schemaVersion: 2, components: [{ id: "i", typeId: libraryType, properties: { [`@${child}.gain`]: 7 } }], topology: { revision: 0, nodes: [], conductors: [] } };
     const migratedLibrary = migrateControlDocument(libraryDoc, { librarySnapshot: LEGACY_LIBRARY_EXPORTS });
-    const libraryProps = ((migratedLibrary.document.components as Json[])[0]!.properties) as Json;
+    const migratedComponent = (migratedLibrary.document.components as Json[])[0]!;
+    assert(migratedComponent.typeId === "sl.discrete_transfer_fcn", `wrapper first_order substituido pelo bloco novo: ${String(migratedComponent.typeId)}`);
+    const libraryProps = migratedComponent.properties as Json;
     const expectedLibraryConversion = convertLegacyBlock(child, legacyChild.typeId, { ...legacyChild.properties, gain: 7 });
-    assert(expectedLibraryConversion.kind === "single" && libraryProps[`@${child}.Numerator`] === expectedLibraryConversion.blocks[0]!.properties.Numerator && libraryProps[`@${child}.Denominator`] === expectedLibraryConversion.blocks[0]!.properties.Denominator && libraryProps[`@${child}.SampleTime`] === expectedLibraryConversion.blocks[0]!.properties.SampleTime, JSON.stringify(libraryProps));
+    assert(expectedLibraryConversion.kind === "single" && libraryProps.Numerator === expectedLibraryConversion.blocks[0]!.properties.Numerator && libraryProps.Denominator === expectedLibraryConversion.blocks[0]!.properties.Denominator && libraryProps.SampleTime === expectedLibraryConversion.blocks[0]!.properties.SampleTime, JSON.stringify(libraryProps));
   });
 
   await test("varredura: todos os arquivos de projeto do repositorio migram, deterministicos e idempotentes", () => {

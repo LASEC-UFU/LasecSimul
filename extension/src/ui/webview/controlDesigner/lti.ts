@@ -837,35 +837,61 @@ export function timeResponseForInput(tf: TransferFunction, input: readonly numbe
 
 /** Closed-loop zero-input response for a nonzero initial plant state with static C and H.
  * The original A/B/C/D realization is used directly, preserving hidden internal modes. */
-export function closedLoopInitialStateResponse(plant: { A: number[][]; B: number[]; C: number[]; D: number }, initial: readonly number[], controller: TransferFunction, sensor: TransferFunction, duration?: number, count = 500): TimeResponse {
-  const ctl = validateTf(controller), h = validateTf(sensor);
-  if (ctl.den.length !== 1 || h.den.length !== 1) throw new Error("A resposta por condição inicial da planta exige C e H estáticos; estados iniciais de controladores dinâmicos ainda não são editáveis.");
-  const n = plant.A.length;
+export function closedLoopInitialStateResponse(plant: { A: number[][]; B: number[]; C: number[]; D: number; domain?: "continuous" | "discrete" }, initial: readonly number[], controller: TransferFunction, sensor: TransferFunction, duration?: number, count = 500, controllerInitial: readonly number[] = [], sensorInitial: readonly number[] = []): TimeResponse {
+  const ctl = validateTf(controller), h = validateTf(sensor), c = tfToStateSpace(ctl), hs = tfToStateSpace(h), n = plant.A.length, nc = c.A.length, nh = hs.A.length;
   if (!n || plant.A.some(row => row.length !== n) || plant.B.length !== n || plant.C.length !== n || initial.length !== n || initial.some(v => !Number.isFinite(v))) throw new Error("O vetor x₀ deve ter exatamente uma entrada finita por estado da planta.");
-  const k = (ctl.num[0]! / ctl.den[0]!) * (h.num[0]! / h.den[0]!), den = 1 + k * plant.D;
-  if (Math.abs(den) < 1e-12) throw new Error("A interconexão algébrica de malha fechada é singular (1 + C·H·D = 0).");
-  const closedA = plant.A.map((row, i) => row.map((a, j) => a - plant.B[i]! * k * plant.C[j]! / den));
-  const outputC = plant.C.map(v => v / den); let x = [...initial]; const stabilityModel = stateSpaceToTf({ A: closedA, B: plant.B, C: outputC, D: 0, domain: ctl.domain, sampleTime: ctl.sampleTime }); const stable = classifyStability(stabilityModel) === "stable";
-  const horizon = duration ?? (ctl.domain === "discrete" ? (ctl.sampleTime ?? .1) * 200 : Math.min(100, Math.max(5, ...poles(stateSpaceToTf({ ...plant, domain: "continuous" })).map(p => 8 / Math.max(.04, Math.abs(p.re))))));
+  const controllerX0 = controllerInitial.length === 0 ? new Array(nc).fill(0) : [...controllerInitial], sensorX0 = sensorInitial.length === 0 ? new Array(nh).fill(0) : [...sensorInitial];
+  if (controllerX0.length !== nc || controllerX0.some(v => !Number.isFinite(v))) throw new Error(`O estado inicial de C deve conter ${nc} valores finitos.`);
+  if (sensorX0.length !== nh || sensorX0.some(v => !Number.isFinite(v))) throw new Error(`O estado inicial de H deve conter ${nh} valores finitos.`);
+  if (ctl.domain !== h.domain || ctl.domain === "discrete" && ctl.sampleTime !== h.sampleTime) throw new Error("C e H precisam compartilhar domínio e Ts para resposta por condição inicial.");
+  const dimension = n + nc + nh, algebraicDenominator = 1 + hs.D * plant.D * c.D;
+  if (Math.abs(algebraicDenominator) < 1e-12) throw new Error("A interconexão algébrica de malha fechada é singular (1 + D_H·D_G·D_C = 0).");
+  const derivative = (state: number[]) => {
+    const xg = state.slice(0, n), xc = state.slice(n, n + nc), xh = state.slice(n + nc);
+    const yc = c.C.reduce((sum, value, i) => sum + value * (xc[i] ?? 0), 0), yh = hs.C.reduce((sum, value, i) => sum + value * (xh[i] ?? 0), 0), yg = plant.C.reduce((sum, value, i) => sum + value * xg[i]!, 0);
+    const error = -(yh + hs.D * (yg + plant.D * yc)) / algebraicDenominator, control = yc + c.D * error, output = yg + plant.D * control;
+    const xgd = plant.A.map((row, i) => row.reduce((sum, value, j) => sum + value * xg[j]!, 0) + plant.B[i]! * control);
+    const xcd = c.A.map((row, i) => row.reduce((sum, value, j) => sum + value * xc[j]!, 0) + c.B[i]! * error);
+    const xhd = hs.A.map((row, i) => row.reduce((sum, value, j) => sum + value * (xh[j] ?? 0), 0) + hs.B[i]! * output);
+    return { dx: [...xgd, ...xcd, ...xhd], output };
+  };
+  let x = [...initial, ...controllerX0, ...sensorX0];
+  const plantDomain = plant.domain ?? ctl.domain;
+  if (plantDomain === "continuous" && ctl.domain === "discrete") {
+    const dt = ctl.sampleTime!, steps = Math.min(count, Math.max(1, Math.ceil((duration ?? dt * 200) / dt) + 1)), plantState = [...initial], controllerState = [...controllerX0], sensorState = [...sensorX0], samples: TimeSample[] = [];
+    const sample = () => {
+      const y0 = plant.C.reduce((sum, value, i) => sum + value * plantState[i]!, 0), yc = c.C.reduce((sum, value, i) => sum + value * (controllerState[i] ?? 0), 0), yh = hs.C.reduce((sum, value, i) => sum + value * (sensorState[i] ?? 0), 0);
+      const error = -(yh + hs.D * (y0 + plant.D * yc)) / algebraicDenominator, control = yc + c.D * error, output = y0 + plant.D * control;
+      return { error, control, output };
+    };
+    const stablePlant = convertZoh(stateSpaceToTf({ ...plant, domain: "continuous" }), dt), stableLoop = closeLoop({ num: [1], den: [1], domain: "discrete", sampleTime: dt }, ctl, stablePlant, h);
+    const stable = classifyStability(stableLoop.output) === "stable";
+    const derivative = (state: number[], control: number[]) => plant.A.map((row, i) => row.reduce((sum, value, j) => sum + value * state[j]!, 0) + plant.B[i]! * control[0]!);
+    const advancePlant = (control: number) => {
+      const held = [control], add = (state: number[], delta: number[], scale: number) => state.map((value, i) => value + delta[i]! * scale), a = derivative(plantState, held), b = derivative(add(plantState, a, dt / 2), held), c1 = derivative(add(plantState, b, dt / 2), held), d = derivative(add(plantState, c1, dt), held);
+      for (let i = 0; i < n; i++) plantState[i] = plantState[i]! + dt * (a[i]! + 2 * b[i]! + 2 * c1[i]! + d[i]!) / 6;
+    };
+    for (let step = 0; step < steps; step++) {
+      const current = sample(); samples.push({ time: step * dt, value: current.output });
+      if (step === steps - 1) break;
+      const nextController = c.A.map((row, i) => row.reduce((sum, value, j) => sum + value * controllerState[j]!, 0) + c.B[i]! * current.error), nextSensor = hs.A.map((row, i) => row.reduce((sum, value, j) => sum + value * sensorState[j]!, 0) + hs.B[i]! * current.output);
+      advancePlant(current.control); for (let i = 0; i < nc; i++) controllerState[i] = nextController[i]!; for (let i = 0; i < nh; i++) sensorState[i] = nextSensor[i]!;
+    }
+    return { samples, stable, directFeedthrough: 0, converged: samples.every(item => Number.isFinite(item.value)) };
+  }
+  const matrix = Array.from({ length: dimension }, (_, row) => Array.from({ length: dimension }, (_, column) => { const basis = new Array(dimension).fill(0); basis[column] = 1; return derivative(basis).dx[row]!; }));
+  const outputC = Array.from({ length: dimension }, (_, column) => { const basis = new Array(dimension).fill(0); basis[column] = 1; return derivative(basis).output; });
+  const stabilityModel = stateSpaceToTf({ A: matrix, B: new Array(dimension).fill(0).map((_, i) => i === 0 ? 1 : 0), C: outputC, D: 0, domain: ctl.domain, sampleTime: ctl.sampleTime });
+  const stable = classifyStability(stabilityModel) === "stable";
+  const plantModel = stateSpaceToTf({ ...plant, domain: "continuous" });
+  const horizon = duration ?? (ctl.domain === "discrete" ? (ctl.sampleTime ?? .1) * 200 : Math.min(100, Math.max(5, ...poles(plantModel).map(p => 8 / Math.max(.04, Math.abs(p.re))))));
   const samples: TimeSample[] = [];
   if (ctl.domain === "discrete") {
     const dt = ctl.sampleTime!; const steps = Math.min(count, Math.max(1, Math.ceil(horizon / dt)));
-    for (let step = 0; step < steps; step++) {
-      const y = outputC.reduce((sum, value, i) => sum + value * x[i]!, 0);
-      samples.push({ time: step * dt, value: y });
-      const next = closedA.map(row => row.reduce((sum, value, i) => sum + value * x[i]!, 0));
-      for (let i = 0; i < n; i++) x[i] = next[i]!;
-    }
+    for (let step = 0; step < steps; step++) { samples.push({ time: step * dt, value: derivative(x).output }); x = derivative(x).dx; }
   } else {
-    const dt = horizon / Math.max(1, count - 1);
-    const derivative = (state: number[]) => closedA.map(row => row.reduce((sum, value, i) => sum + value * state[i]!, 0));
-    const addScaled = (state: number[], delta: number[], scale: number) => state.map((value, i) => value + delta[i]! * scale);
-    for (let step = 0; step < count; step++) {
-      const y = outputC.reduce((sum, value, i) => sum + value * x[i]!, 0); samples.push({ time: step * dt, value: y });
-      if (step === count - 1) break;
-      const a = derivative(x), b = derivative(addScaled(x, a, dt / 2)), c = derivative(addScaled(x, b, dt / 2)), d = derivative(addScaled(x, c, dt));
-      x = x.map((value, i) => value + dt * (a[i]! + 2 * b[i]! + 2 * c[i]! + d[i]!) / 6);
-    }
+    const dt = horizon / Math.max(1, count - 1), addScaled = (state: number[], delta: number[], scale: number) => state.map((value, i) => value + delta[i]! * scale);
+    for (let step = 0; step < count; step++) { samples.push({ time: step * dt, value: derivative(x).output }); if (step === count - 1) break; const a = derivative(x).dx, b = derivative(addScaled(x, a, dt / 2)).dx, c1 = derivative(addScaled(x, b, dt / 2)).dx, d = derivative(addScaled(x, c1, dt)).dx; x = x.map((value, i) => value + dt * (a[i]! + 2 * b[i]! + 2 * c1[i]! + d[i]!) / 6); }
   }
   return { samples, stable, directFeedthrough: 0, converged: samples.every(sample => Number.isFinite(sample.value)) };
 }

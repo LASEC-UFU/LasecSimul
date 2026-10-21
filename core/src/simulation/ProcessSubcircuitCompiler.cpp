@@ -306,6 +306,18 @@ CompiledProcessSubcircuit ProcessSubcircuitCompiler::compile(
                     {"in"}, numerator, discretePeriodNs);
                 block.realParameters.insert(block.realParameters.end(), denominator.begin(), denominator.end());
                 block.intParameters = {static_cast<int64_t>(numerator.size()), static_cast<int64_t>(denominator.size())};
+                const size_t stateCount = 2 * (denominator.size() - 1);
+                if (properties.contains("initialState")) {
+                    auto initial = properties["initialState"];
+                    if (initial.is_string()) initial = nlohmann::json::parse(initial.get<std::string>());
+                    if (!initial.is_array() || (!initial.empty() && initial.size() != stateCount))
+                        throw std::invalid_argument("initialState discreto exige 2*(ordem do denominador) valores: " + component.id);
+                    for (const auto& value : initial) {
+                        if (!value.is_number() || !std::isfinite(value.get<double>()))
+                            throw std::invalid_argument("initialState discreto deve conter valores finitos: " + component.id);
+                        block.realParameters.push_back(value.get<double>());
+                    }
+                }
                 result.graph.blocks.push_back(std::move(block));
                 ports[component.id].inputs["in"] = {component.id, "in"};
                 ports[component.id].output = {component.id, "out"};

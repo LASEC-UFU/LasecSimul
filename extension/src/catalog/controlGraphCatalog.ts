@@ -8,7 +8,7 @@ const unary: ControlDefinition[] = [
   ["control.unit_delay", "Atraso unitário", ["in", "out"], { initial: 0 }], ["control.dead_time", "Tempo morto", ["in", "out"], { delay: 0.1, initial: 0 }],
   ["control.first_order", "Primeira ordem", ["in", "out"], { gain: 1, tau: 1, initial: 0 }], ["control.second_order", "Segunda ordem", ["in", "out"], { gain: 1, omega: 1, zeta: 1, initial: 0 }],
   ["control.lead_lag", "Lead-Lag", ["in", "out"], { gain: 1, leadTau: 0, lagTau: 1, initial: 0 }], ["control.fopdt", "FOPDT", ["in", "out"], { gain: 1, tau: 1, delay: 0.1, initial: 0 }],
-  ["control.transfer_function", "Função de transferência", ["in", "out"], { model: "first_order", gain: 1, tau: 1, initial: 0 }], ["control.valve_characteristic", "Característica de válvula", ["in", "out"], { coefficient: 1, exponent: 1 }],
+  ["control.transfer_function", "Função de transferência", ["in", "out"], { model: "first_order", gain: 1, tau: 1, initial: 0, initialState: "[]" }], ["control.valve_characteristic", "Característica de válvula", ["in", "out"], { coefficient: 1, exponent: 1 }],
   ["control.state_space", "Espaço de estados SISO", ["in", "out"], { A: "[[-1]]", B: "[1]", C: "[1]", D: 0, x0: "[0]", domain: "continuous", samplePeriodNs: 100000000 }],
   ["control.saturation", "Saturação", ["in", "out"], { minimum: 0, maximum: 100 }], ["control.limiter", "Limitador", ["in", "out"], { minimum: 0, maximum: 100 }],
   ["control.deadband", "Banda morta", ["in", "out"], { width: 0 }], ["control.hysteresis", "Histerese", ["in", "out"], { low: 0, high: 1 }],
@@ -68,7 +68,7 @@ function observerPackage(label: string): PackageDescriptor {
 }
 
 function pidStationPackage(pins: readonly string[]): PackageDescriptor {
-  const descriptor = packageFor("Sintonia", pins);
+  const descriptor = packageFor("Sintonia FOPDT", pins);
   return { ...descriptor, pins: descriptor.pins.map((pin) => ({
     ...pin,
     label: pin.id === "out" ? "MV" : pin.id === "am" ? "A/M" : pin.id === "lr" ? "L/R" : pin.id.toUpperCase(),
@@ -76,20 +76,20 @@ function pidStationPackage(pins: readonly string[]): PackageDescriptor {
 }
 
 /** Os únicos primitivos que os modelos TDPS instanciam DIRETO e que não têm um bloco
- * `subcircuits.control.*` equivalente (ver `scripts/generate-control-block-library.mjs`): só estes
- * aparecem na paleta, em Controle › Blocos Funcionais junto dos 24 blocos da biblioteca
+ * `subcircuits.control.*` equivalente: só estes
+ * aparecem na paleta, em Controle › Blocos Funcionais
  * (`folderPath: []` + `workspaceSection: "control"`; a subseção vem de
  * `paletteTree.ts::paletteFolderPathForEntry`). Todo o resto de `control.*` é a implementação interna
- * desses 24 blocos (o "stage" de cada `.lssubcircuit`) -- duplicar isso na paleta era justamente a
+ * desses wrappers legados (o "stage" de cada `.lssubcircuit`) -- duplicar isso na paleta era justamente a
  * subseção "Controle" que aparecia dentro da antiga aba Processo. */
-const PALETTE_VISIBLE_TYPE_IDS = new Set(["control.observer", "control.calc_expression", "control.process", "control.constant", "control.pid_station", "control.state_space"]);
+const PALETTE_VISIBLE_TYPE_IDS = new Set(["control.constant", "control.pid_station"]);
 
 function entry(definition: ControlDefinition): WebviewComponentCatalogEntry {
   const [typeId, label, pins, defaults = {}] = definition;
   const isPid = typeId === "control.pid_station";
   // `paletteHidden` (só a paleta), nunca `hidden` (que apagaria a INSTÂNCIA do render): no editor de
   // subcircuito estes blocos são o conteúdo principal e precisam aparecer junto dos túneis.
-  return { typeId, label: isPid ? "Sintonia" : label, category: isPid ? "Ferramentas" : "Controle", folderPath: isPid ? ["Ferramentas"] : [], workspaceSection: "control", icon: "package", hidden: false,
+  return { typeId, label: isPid ? "Sintonia FOPDT" : label, category: isPid ? "Ferramentas" : "Controle", folderPath: isPid ? ["Ferramentas"] : PALETTE_VISIBLE_TYPE_IDS.has(typeId) ? ["TDPS"] : [], workspaceSection: "control", icon: "package", hidden: false,
     paletteHidden: !PALETTE_VISIBLE_TYPE_IDS.has(typeId), graphical: true,
     pinCount: pins.length, pinIds: [...pins], defaultProperties: { ...defaults },
     ...(typeId.startsWith("control.") ? { readoutFormat: { kind: "scalar" as const, unit: "" } } : {}),
@@ -99,8 +99,8 @@ function entry(definition: ControlDefinition): WebviewComponentCatalogEntry {
 export const controlGraphCatalog: WebviewComponentCatalogEntry[] = [
   // Parâmetro de modelo (altura, densidade, pressão...): muda com a simulação rodando (ver
   // core/src/components/control/SignalConstant.hpp).
-  { typeId: "control.constant", label: "Constante", category: "Controle", folderPath: [], workspaceSection: "control", icon: "package", hidden: false, graphical: true, pinCount: 1, pinIds: ["out"], defaultProperties: { value: 0, unit: "" }, readoutFormat: { kind: "scalar", unit: "" }, package: constantPackage() },
-  { typeId: "control.observer", label: "Sonda", category: "Controle", folderPath: [], workspaceSection: "control", icon: "package", hidden: false, graphical: true, pinCount: 1, pinIds: ["in"], defaultProperties: { observerOnly: true }, readoutFormat: { kind: "scalar", unit: "" }, package: observerPackage("Sonda") },
+  { typeId: "control.constant", label: "Constante", category: "Controle", folderPath: ["TDPS"], workspaceSection: "control", icon: "package", hidden: false, graphical: true, pinCount: 1, pinIds: ["out"], defaultProperties: { value: 0, unit: "" }, readoutFormat: { kind: "scalar", unit: "" }, package: constantPackage() },
+  { typeId: "control.observer", label: "Sonda", category: "Controle", folderPath: ["TDPS"], workspaceSection: "control", icon: "package", hidden: false, paletteHidden: true, graphical: true, pinCount: 1, pinIds: ["in"], defaultProperties: { observerOnly: true }, readoutFormat: { kind: "scalar", unit: "" }, package: observerPackage("Sonda") },
   { typeId: "connectors.signal_tunnel", label: "Túnel de sinal", category: "Conectores", folderPath: ["Conectores"], workspaceSection: "misc", icon: "tunel", hidden: false, graphical: true, pinCount: 1, pinIds: ["value"], defaultProperties: { name: "signal", direction: "Input", valueType: "Real" }, package: packageFor("SINAL", ["value"]) },
   ...unary.map(entry), ...multi.map(entry),
   { ...entry(["control.accumulator", "Acumulador", ["in", "outflow", ...ACCUMULATOR_OUTPUT_PORTS], ACCUMULATOR_DEFAULTS]), package: accumulatorPackage() },

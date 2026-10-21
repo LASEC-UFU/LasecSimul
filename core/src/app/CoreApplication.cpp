@@ -303,15 +303,13 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         R"json({"en":{"name":"Signal Tunnel"}})json",
         std::nullopt, std::nullopt, std::vector<std::string>{});
 
-    // Blocos matemáticos do Signal Engine (biblioteca Ctrl/TDPS). Sem estas factories, todo
-    // `.lssubcircuit` que os usa por dentro (`process_fopdt`, `tdps_*`, `control_*`) falhava na
-    // expansão com "Unknown component typeId: control.*" -- a tradução typeId->SignalBlockKind só
-    // existia em `ProcessSubcircuitCompiler`, que nunca foi ligado ao runtime. `pinIds` vazio como
-    // `connectors.signal_tunnel`: um bloco de controle nunca entra no Netlist, só em `signalPorts()`
-    // (ver components/control/SignalMathBlock.hpp). O schema de propriedades de cada instância vem
-    // dos `propertyDescriptors()` dela (derivados da autoria do subcircuito), não de uma segunda
-    // tabela por typeId aqui.
+    // Componentes Signal Engine que ainda fazem parte do runtime: Constante, a ferramenta dedicada
+    // de sintonia PID e o acumulador de processo. Os antigos blocos de controle são convertidos pela
+    // migração de projeto para a biblioteca `sl.*` antes de chegarem ao Core; não registre factories
+    // para typeIds legados. `pinIds` vazio como `connectors.signal_tunnel`: não entram no Netlist.
     for (const std::string_view mathTypeId : components::SignalMathBlock::signalMathTypeIds()) {
+        if (mathTypeId != "control.constant" && mathTypeId != "control.pid_station" &&
+            mathTypeId != components::SignalMathBlock::kProcessAccumulatorTypeId) continue;
         const std::string typeId(mathTypeId);
         reg.registerFactory(typeId, [typeId](const ComponentParams& p) {
             return std::make_unique<components::SignalMathBlock>(typeId, p);

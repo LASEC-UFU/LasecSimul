@@ -591,6 +591,7 @@ export function resolveRegisteredItem(source: RegisteredSource, extensionPath: s
       registeredSourceId: source.id,
       registeredSourceRemovable: source.removable !== false,
       registeredSourceKind: source.kind,
+      ...(typeId.startsWith("subcircuits.control.") ? { paletteHidden: true } : {}),
       mcuHost: parsed.mcuHost,
       ...(parsed.hartDeviceComponentId ? { hartDeviceComponentId: parsed.hartDeviceComponentId } : {}),
       serialPorts: parsed.serialPorts,

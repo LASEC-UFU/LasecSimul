@@ -275,7 +275,9 @@ function render(): void {
   const shouldRestoreSearchFocus = activeElement instanceof HTMLInputElement && activeElement.classList.contains("palette__search-input");
   const selectionStart = shouldRestoreSearchFocus ? activeElement.selectionStart : null;
   const selectionEnd = shouldRestoreSearchFocus ? activeElement.selectionEnd : null;
-  const tree = buildPaletteTree(state.catalog, query, section, state.language);
+  // Com qualquer texto, a busca atravessa todas as abas e subseções; sem texto, a navegação
+  // continua limitada à aba selecionada.
+  const tree = buildPaletteTree(state.catalog, query, query.trim() ? undefined : section, state.language);
   const visibleComponents = collectVisibleComponents(tree).filter((node) => !node.disabled);
   app.innerHTML = "";
 
@@ -322,7 +324,7 @@ function render(): void {
     }
   }
 
-  shell.append(tabs, search, treeRoot);
+  shell.append(search, tabs, treeRoot);
   app.appendChild(shell);
 
   if (shouldRestoreSearchFocus) {

@@ -16,10 +16,10 @@
  */
 import { buildGenericSubcircuitPackage } from "../../ui/webview/genericSubcircuitPackage";
 import { CompositeDefinition, Conversion, convertLegacyBlock, Endpoint } from "./conversions";
-import { LEGACY_CONTROL_TYPE_IDS, LegacyProperties } from "./legacyBlocks";
+import { LEGACY_CONTROL_TYPE_IDS, LEGACY_WRAPPER_DEFAULTS, LEGACY_WRAPPER_STAGE, LegacyProperties } from "./legacyBlocks";
 
 export const CONTROL_MIGRATION_ID = "control-library-simulink";
-export const CONTROL_MIGRATION_VERSION = 1;
+export const CONTROL_MIGRATION_VERSION = 2;
 
 type Json = Record<string, unknown>;
 
@@ -67,6 +67,12 @@ export interface MigrationOptions {
 
 const isRecord = (value: unknown): value is Json => typeof value === "object" && value !== null && !Array.isArray(value);
 const isLegacy = (typeId: unknown): typeId is string => typeof typeId === "string" && LEGACY_CONTROL_TYPE_IDS.has(typeId);
+const legacyWrapperSlug = (typeId: unknown): string | undefined => typeof typeId === "string" && typeId.startsWith("subcircuits.control.")
+  ? typeId.slice("subcircuits.control.".length)
+  : undefined;
+const legacyTypeFor = (typeId: unknown): string | undefined => isLegacy(typeId)
+  ? typeId
+  : legacyWrapperSlug(typeId) ? LEGACY_WRAPPER_STAGE[legacyWrapperSlug(typeId)!] : undefined;
 
 /** O documento (ou algum manifesto aninhado) ainda tem bloco legado conversível? */
 export function needsControlMigration(document: unknown): boolean {
@@ -75,8 +81,9 @@ export function needsControlMigration(document: unknown): boolean {
     if (found) return;
     if (Array.isArray(node)) { node.forEach(visit); return; }
     if (!isRecord(node)) return;
-    if (isLegacy(node.typeId) && (node.id !== undefined || node.properties !== undefined)) {
-      const conversion = convertLegacyBlock(String(node.id ?? ""), node.typeId, isRecord(node.properties) ? node.properties : {});
+    const legacyTypeId = legacyTypeFor(node.typeId);
+    if (legacyTypeId && (node.id !== undefined || node.properties !== undefined)) {
+      const conversion = convertLegacyBlock(String(node.id ?? ""), legacyTypeId, isRecord(node.properties) ? node.properties : {});
       if (conversion.kind !== "keep") { found = true; return; }
     }
     for (const value of Object.values(node)) visit(value);
@@ -183,12 +190,23 @@ function migrateDiagram(diagram: Diagram, location: string, context: MigrationCo
   const newConductors: Json[] = [];
   const replaced = new Set<string>();
   for (const component of diagram.components) {
-    if (!isLegacy(component.typeId) || typeof component.id !== "string") continue;
-    const id = component.id;
     const legacyTypeId = component.typeId;
-    const properties = isRecord(component.properties) ? component.properties : {};
-    const conversion = convertLegacyBlock(id, legacyTypeId, properties);
-    const entry: MigrationEntry = { location, componentId: id, legacyTypeId, kind: conversion.kind, rule: conversion.rule, newTypeIds: [] };
+    const conversionTypeId = legacyTypeFor(legacyTypeId);
+    if (!conversionTypeId || typeof component.id !== "string") continue;
+    const id = component.id;
+    const rawProperties = isRecord(component.properties) ? component.properties : {};
+    const slug = legacyWrapperSlug(legacyTypeId);
+    const stageSnapshot = slug ? context.options.librarySnapshot?.[String(legacyTypeId)]?.stage : undefined;
+    const stageDefaults = slug ? LEGACY_WRAPPER_DEFAULTS[slug] : undefined;
+    const properties: Json = slug ? { ...(stageDefaults ?? {}), ...(stageSnapshot?.properties ?? {}) } : rawProperties;
+    if (slug) {
+      for (const [key, value] of Object.entries(rawProperties)) {
+        if (key.startsWith("@stage.")) properties[key.slice("@stage.".length)] = value;
+        else if (!key.startsWith("@")) properties[key] = value;
+      }
+    }
+    const conversion = convertLegacyBlock(id, conversionTypeId, properties);
+    const entry: MigrationEntry = { location, componentId: id, legacyTypeId: String(legacyTypeId), kind: conversion.kind, rule: conversion.rule, newTypeIds: [] };
     switch (conversion.kind) {
       case "keep":
         entry.reason = conversion.reason;
@@ -235,7 +253,10 @@ function migrateDiagram(diagram: Diagram, location: string, context: MigrationCo
       }
     }
     context.report.entries.push(entry);
-    if (conversion.kind !== "keep" && conversion.kind !== "unsupported") context.report.changed = true;
+    if (conversion.kind !== "keep" && conversion.kind !== "unsupported") {
+      if (slug) delete component.subcircuitRef;
+      context.report.changed = true;
+    }
   }
   if (ports.size > 0) {
     const conductors = isRecord(diagram.topology) && Array.isArray(diagram.topology.conductors) ? (diagram.topology.conductors as Json[]) : [];
@@ -324,11 +345,22 @@ function remapInstanceOverrides(component: Json, children: Readonly<Record<strin
 }
 
 /** Filhos legados (antes da migração) de cada definição interna do arquivo. */
-function legacyChildrenOf(manifest: Json): Record<string, LegacyChildSnapshot> {
+function legacyChildrenOf(manifest: Json, options: MigrationOptions): Record<string, LegacyChildSnapshot> {
   const result: Record<string, LegacyChildSnapshot> = {};
   for (const component of Array.isArray(manifest.components) ? (manifest.components as Json[]) : []) {
-    if (isLegacy(component.typeId) && typeof component.id === "string")
-      result[component.id] = { typeId: component.typeId, properties: structuredClone(isRecord(component.properties) ? component.properties : {}) };
+    if (typeof component.id !== "string") continue;
+    const typeId = legacyTypeFor(component.typeId);
+    if (!typeId) continue;
+    const slug = legacyWrapperSlug(component.typeId);
+    if (slug) {
+      const stage = options.librarySnapshot?.[String(component.typeId)]?.stage;
+      result[component.id] = {
+        typeId,
+        properties: structuredClone({ ...(LEGACY_WRAPPER_DEFAULTS[slug] ?? {}), ...(stage?.properties ?? {}) }),
+      };
+    } else {
+      result[component.id] = { typeId, properties: structuredClone(isRecord(component.properties) ? component.properties : {}) };
+    }
   }
   return result;
 }
@@ -356,11 +388,11 @@ function migrateManifestLike(root: Json, location: string, base: MigrationContex
   const context: MigrationContext = { ...base, table };
   // Filhos legados das definições do arquivo, ANTES de migrá-las (para `@filho.prop` das instâncias).
   const definitionChildren = new Map<string, Record<string, LegacyChildSnapshot>>();
-  for (const definition of table) if (typeof definition.typeId === "string") definitionChildren.set(definition.typeId, legacyChildrenOf(definition));
+  for (const definition of table) if (typeof definition.typeId === "string") definitionChildren.set(definition.typeId, legacyChildrenOf(definition, base.options));
 
   const remapInstances = (diagram: Diagram, where: string) => {
     for (const component of diagram.components) {
-      if (typeof component.typeId !== "string") continue;
+      if (typeof component.typeId !== "string" || legacyWrapperSlug(component.typeId)) continue;
       const children = definitionChildren.get(component.typeId) ?? base.options.librarySnapshot?.[component.typeId];
       if (children && Object.keys(children).length > 0) remapInstanceOverrides(component, children, where, context);
     }

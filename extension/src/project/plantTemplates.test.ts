@@ -58,10 +58,11 @@ const FORMERLY_REGISTERED_PLANTS = [
       assert(!plantTypeIds.has(entry.typeId) && !plantFiles.has(entry.manifest), `${entry.typeId} é planta e não pode estar em library.json`);
       assert(!entry.typeId.startsWith("subcircuits.process.") && !entry.typeId.startsWith("subcircuits.tdps."), `${entry.typeId} não deveria ser registrado globalmente`);
     }
-    // Blocos de controle, instrumentos HART e ESP32 continuam registrados.
-    for (const typeId of ["subcircuits.control.gain", "subcircuits.control.pid", "subcircuits.hart.smar_ld301", "subcircuits.hart.smar_tt301", "subcircuits.hart.smar_fy301", "subcircuits.esp32_devkitc_v4"]) {
+    // Wrappers legados de controle foram removidos; instrumentos e ESP32 continuam registrados.
+    for (const typeId of ["subcircuits.hart.smar_ld301", "subcircuits.hart.smar_tt301", "subcircuits.hart.smar_fy301", "subcircuits.esp32_devkitc_v4"]) {
       assert(library.subcircuits.some((entry) => entry.typeId === typeId), `${typeId} deveria continuar em library.json`);
     }
+    assert(!library.subcircuits.some((entry) => entry.typeId.startsWith("subcircuits.control.")), "wrappers antigos nao podem permanecer na biblioteca integrada");
   });
 
   await test("plants.json não é uma biblioteca: o carregador de library.json não extrai nada dele", () => {

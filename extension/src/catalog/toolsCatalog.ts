@@ -1,9 +1,9 @@
 import type { WebviewComponentCatalogEntry } from "../ui/webview/model";
-import { HMI_SCREEN_TYPE_ID } from "../ui/webview/visualDocument";
+import { HMI_SCREEN_TYPE_ID, HMI_3D_SCREEN_TYPE_ID } from "../ui/webview/visualDocument";
 
 /**
- * Ferramentas COLOCÁVEIS de Controle › Ferramentas que não são blocos do Core (`pinCount: 0`, logo
- * `shouldSyncComponentToCore` é falso por construção). Hoje: o botão "Tela HMI" (docs/62 §5), que
+ * Ferramentas COLOCÁVEIS de Miscelâneos › HMI que não são blocos do Core (`pinCount: 0`, logo
+ * `shouldSyncComponentToCore` é falso por construção). O botão HMI 2D continua com seu ID estável.
  * abre a tela (documento visual) associada pelo `screenId`. As ações de paleta SisoTools/Ident ficam
  * em `ComponentPaletteViewProvider` porque não colocam nada no circuito.
  */
@@ -14,22 +14,22 @@ export const HMI_SCREEN_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" view
 
 export const hmiScreenCatalogEntry: WebviewComponentCatalogEntry = {
   typeId: HMI_SCREEN_TYPE_ID,
-  label: "Tela HMI",
-  category: "Ferramentas",
-  folderPath: ["Ferramentas"],
-  workspaceSection: "control",
+  label: "Tela HMI 2D",
+  category: "HMI",
+  folderPath: ["HMI"],
+  workspaceSection: "misc",
   icon: "package",
   iconSvgInline: HMI_SCREEN_ICON_SVG,
   hidden: false,
   graphical: true,
   pinCount: 0,
   pinIds: [],
-  defaultProperties: { title: "Tela HMI", screenId: "", width: SCREEN_WIDTH, height: SCREEN_HEIGHT },
+  defaultProperties: { title: "Tela HMI 2D", screenId: "", width: SCREEN_WIDTH, height: SCREEN_HEIGHT },
   propertySchema: [
-    { id: "title", label: "Título da tela", group: "Componente", unit: "", editor: "text", default: "Tela HMI" },
+    { id: "title", label: "Título da tela", group: "Componente", unit: "", editor: "text", default: "Tela HMI 2D" },
     { id: "screenId", label: "Documento", group: "Componente", unit: "", editor: "display", default: "" },
   ],
-  help: { description: "Abre uma Tela HMI do projeto: acoplada ao VS Code, numa janela flutuante ou em tela cheia. Duplo clique abre; com a simulação rodando, um clique basta." },
+  help: { description: "Tela HMI 2D do projeto. Duplo clique abre o editor/operação; a tela pode ser acoplada, desacoplada para outro monitor ou maximizada." },
   package: {
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
@@ -55,7 +55,7 @@ export const hmiScreenCatalogEntry: WebviewComponentCatalogEntry = {
           kind: "text", x: 60, y: 30, value: "", fontSize: 14, maxWidth: SCREEN_WIDTH - 82, textAnchor: "start", fill: "#f8fafc", fontWeight: 600,
           stateText: { kind: "property", prop: "title" },
         },
-        { kind: "text", x: 60, y: 48, value: "Tela HMI", fontSize: 10, textAnchor: "start", fill: "#93c5fd" },
+        { kind: "text", x: 60, y: 48, value: "Tela HMI 2D", fontSize: 10, textAnchor: "start", fill: "#93c5fd" },
         {
           kind: "ellipse", cx: SCREEN_WIDTH - 16, cy: 15, rx: 5, ry: 5, strokeWidth: 1, stroke: "#0b1f3a",
           stateFill: { prop: "__screen_state", map: { closed: "#475569", docked: "#22c55e", floating: "#38bdf8", fullscreen: "#f59e0b" }, fallback: "#475569" },
@@ -65,4 +65,43 @@ export const hmiScreenCatalogEntry: WebviewComponentCatalogEntry = {
   },
 };
 
-export const toolsCatalog: WebviewComponentCatalogEntry[] = [hmiScreenCatalogEntry];
+const hmi3dWidth = 176;
+const hmi3dHeight = 64;
+const hmi3dScreenCatalogEntry: WebviewComponentCatalogEntry = {
+  typeId: HMI_3D_SCREEN_TYPE_ID,
+  label: "Tela HMI 3D",
+  category: "HMI",
+  folderPath: ["HMI"],
+  workspaceSection: "misc",
+  icon: "package",
+  iconSvgInline: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m12 2 9 5v10l-9 5-9-5V7z"/><path d="m3 7 9 5 9-5M12 12v10M7.5 4.5l9 5"/></svg>',
+  hidden: false,
+  graphical: true,
+  pinCount: 0,
+  pinIds: [],
+  defaultProperties: { title: "Tela HMI 3D", width: hmi3dWidth, height: hmi3dHeight },
+  propertySchema: [{ id: "title", label: "Título da tela", group: "Componente", unit: "", editor: "text", default: "Tela HMI 3D" }],
+  help: { description: "Tela 3D do projeto. Duplo clique abre a cena 3D associada a este componente." },
+  package: {
+    width: hmi3dWidth, height: hmi3dHeight, border: false,
+    background: { kind: "none" },
+    dynamicLayout: { width: { prop: "width", fallback: hmi3dWidth }, height: { prop: "height", fallback: hmi3dHeight } },
+    pins: [],
+    simulidePaint: {
+      version: 1,
+      bounds: { x: 0, y: 0, w: hmi3dWidth, h: hmi3dHeight },
+      aspect: "fixed", referenceSize: { width: hmi3dWidth, height: hmi3dHeight },
+      defaultStroke: "currentColor", defaultFill: "none", defaultStrokeWidth: 1.5,
+      primitives: [
+        { kind: "roundedRect", x: 2, y: 2, w: hmi3dWidth - 4, h: hmi3dHeight - 4, rx: 8, ry: 8, fill: "#101820", stroke: "#0ea5e9", strokeWidth: 1.5 },
+        { kind: "polygon", points: [{ x: 31, y: 13 }, { x: 45, y: 21 }, { x: 31, y: 29 }, { x: 17, y: 21 }], fill: "#38bdf8", stroke: "#e0f2fe", strokeWidth: 1 },
+        { kind: "polygon", points: [{ x: 17, y: 21 }, { x: 31, y: 29 }, { x: 31, y: 45 }, { x: 17, y: 37 }], fill: "#0369a1", stroke: "#e0f2fe", strokeWidth: 1 },
+        { kind: "polygon", points: [{ x: 45, y: 21 }, { x: 31, y: 29 }, { x: 31, y: 45 }, { x: 45, y: 37 }], fill: "#0c4a6e", stroke: "#e0f2fe", strokeWidth: 1 },
+        { kind: "text", x: 58, y: 30, value: "", fontSize: 14, maxWidth: hmi3dWidth - 78, textAnchor: "start", fill: "#f8fafc", fontWeight: 600, stateText: { kind: "property", prop: "title" } },
+        { kind: "text", x: 58, y: 48, value: "Tela HMI 3D", fontSize: 10, textAnchor: "start", fill: "#7dd3fc" },
+      ],
+    },
+  },
+};
+
+export const toolsCatalog: WebviewComponentCatalogEntry[] = [hmiScreenCatalogEntry, hmi3dScreenCatalogEntry];

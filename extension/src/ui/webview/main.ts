@@ -2,7 +2,7 @@ import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, 
 import { conditionsHold } from "./blockLibrary/spec.js";
 import { CanonicalEndpoint, CanonicalTopologyDocument, HmiApplication, HmiPage, HmiPageElement, InteractionKindEntry, McuSerialPortEntry, PackagePin, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, TopologyNode, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, defaultHmiNavigationVisual, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
 import { isSubsystemTypeId, subsystemClosure, type SubsystemDefinition } from "./subsystemModel.js";
-import { HMI_SCREEN_TYPE_ID, remapBindingPaths, type PresentationContext, type ScreenViewState, type VisualDocument, type VisualSession, type VisualWindowInfo } from "./visualDocument.js";
+import { HMI_SCREEN_TYPE_ID, HMI_3D_SCREEN_TYPE_ID, remapBindingPaths, type PresentationContext, type ScreenViewState, type VisualDocument, type VisualSession, type VisualWindowInfo } from "./visualDocument.js";
 import { watchWebviewGeometry } from "./windowGeometry.js";
 import {
   MATH_ACTIVITY_TYPE_ID, MATH_PARAMETER_TYPE_ID, MATH_TREND_TYPE_ID, activityFromProperties, isMathTypeId, isMathWidgetTypeId, isParameterName, mathScopeOf,
@@ -2774,18 +2774,18 @@ function showPidDialog(componentId: string, html: string): void {
   const dialog = document.createElement("section");
   Object.assign(dialog.style, { position: "fixed", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: "min(1440px, 96vw)", height: "min(940px, 96vh)", background: "#fff", border: "1px solid #697586", borderRadius: "6px", boxShadow: "0 18px 60px rgba(0,0,0,.45)", overflow: "hidden" });
   const titlebar = document.createElement("div");
-  titlebar.textContent = "Sintonia PID";
+  titlebar.textContent = "Sintonia FOPDT";
   Object.assign(titlebar.style, { height: "34px", boxSizing: "border-box", display: "flex", alignItems: "center", padding: "0 44px 0 12px", background: "#263746", color: "#f1f5f9", font: "600 13px/34px sans-serif", cursor: "move", userSelect: "none" });
   const close = document.createElement("button");
   close.type = "button";
   close.textContent = "×";
-  close.title = "Fechar sintonia";
+  close.title = "Fechar Sintonia FOPDT";
   Object.assign(close.style, { position: "absolute", top: "2px", right: "5px", zIndex: "2", width: "28px", height: "28px", border: "1px solid #8a929c", borderRadius: "4px", background: "#fff", color: "#263544", font: "22px/24px sans-serif", cursor: "pointer" });
   close.addEventListener("pointerdown", (event) => event.stopPropagation());
   close.addEventListener("click", () => closePidDialog());
   titlebar.appendChild(close);
   const frame = document.createElement("iframe");
-  frame.title = "Diálogo de sintonia PID";
+  frame.title = "Sintonia FOPDT";
   frame.style.cssText = "display:block;width:100%;height:calc(100% - 34px);border:0;background:#fff";
   frame.srcdoc = html;
   dialog.append(titlebar, frame);
@@ -5642,6 +5642,9 @@ function renderVisualAppBar(): HTMLElement {
 
 /** Botão "Tela HMI" no esquemático (docs/62 §5): abrir em cada estado de janela, renomear, duplicar. */
 function hmiScreenButtonMenuItems(component: WebviewComponentModel, isGroup: boolean): ContextMenuItem[] {
+  if (!isGroup && !visualRole && component.typeId === HMI_3D_SCREEN_TYPE_ID) {
+    return [{ label: currentLocale() === "en" ? "Open 3D screen" : "Abrir tela 3D", onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenHmi3d", componentId: component.id }) }, { kind: "separator" }];
+  }
   if (isGroup || visualRole || component.typeId !== HMI_SCREEN_TYPE_ID) return [];
   const pt = currentLocale() === "pt-BR";
   const open = (mode: "docked" | "floating" | "fullscreen") => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenVisualScreen", componentId: component.id, mode });
@@ -5670,6 +5673,15 @@ function noteScreenButtonTap(component: WebviewComponentModel): void {
     } else {
       lastScreenButtonTap = { componentId: component.id, time: now };
     }
+    return;
+  }
+  if (!visualRole && component.typeId === HMI_3D_SCREEN_TYPE_ID) {
+    const now = performance.now();
+    const second = lastScreenButtonTap?.componentId === component.id && now - lastScreenButtonTap.time <= 500;
+    if (second || simulationStatus === "running") {
+      lastScreenButtonTap = undefined;
+      send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenHmi3d", componentId: component.id });
+    } else lastScreenButtonTap = { componentId: component.id, time: now };
     return;
   }
   if (visualRole || component.typeId !== HMI_SCREEN_TYPE_ID) return;
@@ -8573,6 +8585,10 @@ function requestInstrumentHistoryRefresh(componentId: string): void {
 }
 
 function toggleInstrumentPopup(component: WebviewComponentModel): void {
+  if (component.typeId === "meters.oscope" || component.typeId === "meters.logic_analyzer") {
+    send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenElectricalInstrument", componentId: component.id });
+    return;
+  }
   if (instrumentPopups.has(component.id)) {
     persistInstrumentPopup(instrumentPopups.get(component.id)!);
     instrumentPopups.delete(component.id);
@@ -11482,8 +11498,8 @@ function updateComponentElement(el: HTMLElement, component: WebviewComponentMode
     const trigger = document.createElement("button");
     trigger.type = "button";
     trigger.className = "pid-tuning-trigger";
-    trigger.title = "Abrir diálogo de sintonia PID";
-    trigger.setAttribute("aria-label", "Abrir diálogo de sintonia PID");
+    trigger.title = "Abrir Sintonia FOPDT";
+    trigger.setAttribute("aria-label", "Abrir Sintonia FOPDT");
     trigger.textContent = "↗";
     trigger.addEventListener("pointerdown", (event) => {
       event.preventDefault();
@@ -13851,6 +13867,7 @@ function makeComponentFromTypeId(paletteTypeId: string): WebviewComponentModel {
     properties.screenId = newScreenUid();
     properties.title = title;
   }
+  if (typeId === HMI_3D_SCREEN_TYPE_ID) properties.title = label;
   if (typeId === "peripherals.lasecplot") properties.source_name = label;
   return {
     id: `component-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`,

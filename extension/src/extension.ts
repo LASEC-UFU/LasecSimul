@@ -9,6 +9,8 @@ import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
 import { PidTuningPanel } from "./ui/panels/PidTuningPanel";
+import { ElectricalInstrumentPanel } from "./ui/panels/ElectricalInstrumentPanel";
+import { Hmi3dPanel } from "./ui/panels/Hmi3dPanel";
 import { ControlDesignerPanel } from "./ui/panels/ControlDesignerPanel";
 import { IdentPanel } from "./ui/panels/IdentPanel";
 import { IdentAcquisition } from "./ident/acquisition";
@@ -159,7 +161,7 @@ import {
 } from "./visual/visualPanels";
 import { configureScopePanels, openScope } from "./visual/scopePanels";
 import { getScreen, reconcileScreenButtons, uniqueTitleForNewScreen } from "./visual/screenStore";
-import { HMI_SCREEN_TYPE_ID, faceplateDocumentId, screenIdOf } from "./ui/webview/visualDocument";
+import { HMI_SCREEN_TYPE_ID, HMI_3D_SCREEN_TYPE_ID, faceplateDocumentId, screenIdOf } from "./ui/webview/visualDocument";
 
 let propertyInspectorView: PropertyInspectorViewProvider | undefined;
 import {
@@ -292,10 +294,9 @@ function openSchematicEditor(extensionUri: vscode.Uri): void {
     // LasecPlot) que deve derrubar o LasecPlot -- Pause/Stop nunca fecham (ver `broker.ts::setOnline`).
     lasecPlotManager?.closeAllForSchematicClose();
   });
-  // `createOrShow` acabou de mandar um snapshot COMPLETO (painel novo -> "init", painel já existente
-  // -> "syncState" direto, ver SchematicPanel.ts) -- em qualquer um dos dois casos, o próximo
-  // `syncSchematicPanel()` deve comparar contra ESTE `state.schematicState`, não mandar tudo nem achar
-  // que nenhum snapshot foi enviado ainda.
+  // Painel novo já recebe o snapshot no HTML inicial; painel existente recebe `syncState` em
+  // `createOrShow`. Não envie um segundo snapshot aqui: ele repetia a renderização completa logo
+  // após abrir e congelava a interface em projetos grandes.
   state.lastSyncedProjectState = state.schematicState;
   void setSchematicOpenContext(true);
   setSimulationStatus(state.simulationStatus);
@@ -1318,7 +1319,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestOpenPidTuning": {
       const component = state.schematicState.components.find((item) => item.id === message.componentId && item.typeId === "control.pid_station");
       if (!state.extensionContext || !component) {
-        void vscode.window.showErrorMessage("Não foi possível abrir a Sintonia: componente ou contexto da extensão ausente.");
+        void vscode.window.showErrorMessage("Não foi possível abrir a Sintonia FOPDT: componente ou contexto da extensão ausente.");
         return;
       }
       try {
@@ -1363,9 +1364,9 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
             }
           }
           handleWebviewMessage({ version: 1, type: "requestUpdateProperty", componentId: liveComponent.id, name, value });
-        });
+        }, () => PidSeriesFeed.detach());
       } catch (error) {
-        void vscode.window.showErrorMessage(`Falha ao abrir a Sintonia: ${error instanceof Error ? error.message : String(error)}`);
+        void vscode.window.showErrorMessage(`Falha ao abrir a Sintonia FOPDT: ${error instanceof Error ? error.message : String(error)}`);
       }
       return;
     }
@@ -2031,6 +2032,26 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestInstrumentHistory":
       void sendInstrumentHistory(message.componentId, message.sinceNs);
       return;
+    case "requestOpenElectricalInstrument": {
+      const component = state.schematicState.components.find((item) => item.id === message.componentId);
+      if (!component || (component.typeId !== "meters.oscope" && component.typeId !== "meters.logic_analyzer")) return;
+      ElectricalInstrumentPanel.open(component.id, component.label,
+        component.typeId === "meters.oscope" ? "scope" : "logic",
+        (sinceNs) => { void sendInstrumentHistory(component.id, sinceNs); },
+        (name, content) => { void exportInstrumentDataCommand(name, content); },
+        (name, value) => handleWebviewMessage({ version: 1, type: "requestUpdateProperty", componentId: component.id, name, value }),
+        typeof component.properties.__ui_instrumentView === "string" ? component.properties.__ui_instrumentView : "{}",
+        (value) => handleWebviewMessage({ version: 1, type: "requestUpdateProperty", componentId: component.id, name: "__ui_instrumentView", value }),
+        async (expression) => {
+          try {
+            if (!state.coreClient) return "O Core da simulação ainda não está conectado.";
+            await state.coreClient.setPauseCondition(component.id, expression);
+            return undefined;
+          }
+          catch (error) { return error instanceof Error ? error.message : String(error); }
+        });
+      return;
+    }
     case "requestUpdateBoardOverlayProperty":
       updateBoardOverlayPropertyCommand(message.outerComponentId, message.innerComponentId, message.name, message.value, mcuCommandOptions());
       return;
@@ -2086,6 +2107,11 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestOpenVisualScreen":
       void openScreenForButton(message.componentId, message.mode);
       return;
+    case "requestOpenHmi3d": {
+      const component = state.schematicState.components.find((item) => item.id === message.componentId && item.typeId === HMI_3D_SCREEN_TYPE_ID);
+      if (component && state.extensionContext) Hmi3dPanel.open(state.extensionContext, component.id, String(component.properties.title ?? component.label));
+      return;
+    }
     case "requestOpenScope":
       void openScope(message.componentId);
       return;
@@ -3128,8 +3154,9 @@ async function closeSubcircuitEditorCommand(): Promise<void> {
  * da Webview (main.ts, que tem o histórico/configuração de canais); aqui só o diálogo de salvar +
  * escrita do arquivo, igual a `saveProjectCommand`. */
 async function exportInstrumentDataCommand(suggestedFileName: string, csvContent: string): Promise<void> {
+  const isVcd = path.extname(suggestedFileName).toLowerCase() === ".vcd";
   const uri = await vscode.window.showSaveDialog({
-    filters: { "CSV": ["csv"] },
+    filters: isVcd ? { "VCD": ["vcd"] } : { "CSV": ["csv"] },
     defaultUri: vscode.Uri.file(suggestedFileName),
   });
   if (!uri) return;
@@ -3163,6 +3190,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     })),
     // O Laboratório de Cálculo é uma Tela HMI (docs/62 §6.3): as atividades são páginas da tela.
     vscode.commands.registerCommand("lasecsimul.openCalculusLab", () => openCalculusLabScreen(() => { syncSchematicPanel(); refreshDirtyIndicator(); })),
+    vscode.commands.registerCommand("lasecsimul.openHmi3d", () => Hmi3dPanel.open(context)),
     vscode.commands.registerCommand("lasecsimul.openControlDesigner", () => {
       ControlDesignerPanel.show(context, state.schematicState.controlDesignProject, (project) => {
       state.schematicState = { ...state.schematicState, controlDesignProject: project };

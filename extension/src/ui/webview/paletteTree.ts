@@ -118,8 +118,7 @@ export interface RootFolderName {
   readonly en?: string;
 }
 
-/** Subseção de Controle que recebe tudo o que antes ficava na RAIZ da aba Controle (blocos de
- * diagrama: Constante, Sonda, Expressão, Processo genérico e os 24 `subcircuits.control.*`). */
+/** Subseção principal de Controle para as bibliotecas funcionais Simulink e a pasta TDPS. */
 export const FUNCTION_BLOCKS_FOLDER: RootFolderName = { "pt-BR": "Blocos Funcionais", en: "Function Blocks" };
 
 const ROOT_FOLDER_PRIORITY: Partial<Record<WorkspaceSection, readonly RootFolderName[]>> = {
@@ -131,11 +130,25 @@ const ROOT_FOLDER_PRIORITY: Partial<Record<WorkspaceSection, readonly RootFolder
     { "pt-BR": "Protocolos Industriais", en: "Industrial Protocols" },
     { "pt-BR": "Ferramentas", en: "Tools" },
     FUNCTION_BLOCKS_FOLDER,
+    // Ordem das subseções Simulink e TDPS dentro de Blocos Funcionais.
+    { "pt-BR": "Contínuos", en: "Continuous" },
+    { "pt-BR": "Descontinuidades", en: "Discontinuities" },
+    { "pt-BR": "Discretos", en: "Discrete" },
+    { "pt-BR": "Lógica e operações de bits", en: "Logic and Bit Operations" },
+    { "pt-BR": "Tabelas de consulta", en: "Lookup Tables" },
+    { "pt-BR": "Operações Matemáticas", en: "Math Operations" },
+    { "pt-BR": "Atributos de sinal", en: "Signal Attributes" },
+    { "pt-BR": "Roteamento de Sinais", en: "Signal Routing" },
+    { "pt-BR": "Visualizadores (Sinks)", en: "Sinks" },
+    { "pt-BR": "Fontes", en: "Sources" },
+    { "pt-BR": "Funções Definidas pelo Usuário", en: "User-Defined Functions" },
+    { "pt-BR": "Matemática Adicional e Discreto", en: "Additional Math & Discrete" },
+    { "pt-BR": "TDPS", en: "TDPS" },
   ],
   // Conectores logo depois dos periféricos. Os conectores do catálogo canônico chegam em inglês
   // ("Connectors", tradução) e o túnel de sinal (`controlGraphCatalog.ts`, sem tradução) em
   // português: listar os dois nomes aqui é o que os junta numa pasta só, na língua da paleta.
-  misc: [{ "pt-BR": "peripherals" }, { "pt-BR": "Conectores", en: "Connectors" }],
+  misc: [{ "pt-BR": "peripherals" }, { "pt-BR": "Conectores", en: "Connectors" }, { "pt-BR": "HMI" }],
 };
 
 function rootFolderPriorityIndex(workspaceSection: WorkspaceSection | undefined, label: string): number {
@@ -153,8 +166,18 @@ function rootFolderPriorityIndex(workspaceSection: WorkspaceSection | undefined,
  */
 export function paletteFolderPathForEntry(entry: Pick<PaletteRenderableEntry, "folderPath" | "category" | "subcategory" | "typeId" | "workspaceSection">): string[] {
   const segments = resolvePaletteFolderPath(entry);
+  // Elementos gráficos pertencem à coleção HMI na aba Miscelâneos. Normalize os nomes
+  // antigos/localizados da pasta sem alterar metadados gravados nem a classificação da aba.
+  if (entry.typeId.startsWith("graphics.") && workspaceSectionForCatalogEntry(entry) === "misc") {
+    const graphicFolders = new Set(["Grafico", "Gráfico", "Graficos", "Gráficos", "Graphical", "Graphics"]);
+    return ["HMI", ...(segments.length > 0 && graphicFolders.has(segments[0]!) ? segments.slice(1) : segments)];
+  }
   if (entry.workspaceSection !== "control") return segments;
-  if (segments.length > 0 && rootFolderPriorityIndex("control", segments[0]!) >= 0) return segments;
+  // Bibliotecas Simulink ficam dentro de Blocos Funcionais, cada uma em sua subseção.
+  if (entry.typeId.startsWith("sl.")) {
+    return segments[0] === FUNCTION_BLOCKS_FOLDER["pt-BR"] ? segments : [FUNCTION_BLOCKS_FOLDER["pt-BR"], ...segments];
+  }
+  if (segments.length > 0 && rootFolderPriorityIndex("control", segments[0]!) >= 0 && rootFolderPriorityIndex("control", segments[0]!) < 4) return segments;
   return [FUNCTION_BLOCKS_FOLDER["pt-BR"], ...segments];
 }
 
@@ -235,5 +258,26 @@ export function buildPaletteTree(entries: PaletteRenderableEntry[], rawQuery: st
     });
   }
 
-  return stripMutableNodes(applyRootFolderPriority(roots, workspaceSection));
+  const orderedRoots = applyRootFolderPriority(roots, workspaceSection);
+  if (workspaceSection === "control") {
+    const functionBlocks = orderedRoots.find((node) => node.kind === "folder" && node.label === FUNCTION_BLOCKS_FOLDER["pt-BR"]);
+    if (functionBlocks?.kind === "folder") {
+      functionBlocks.children = applyRootFolderPriority(
+        functionBlocks.children as Array<MutableFolderNode | PaletteComponentNode>,
+        workspaceSection
+      );
+    }
+  }
+  if (workspaceSection === "misc") {
+    const hmi = orderedRoots.find((node) => node.kind === "folder" && node.label === "HMI");
+    if (hmi?.kind === "folder") {
+      const priority = (node: PaletteTreeNode): number => node.kind === "component"
+        ? node.typeId === "tools.hmi_screen" ? 0 : node.typeId === "tools.hmi3d_screen" ? 1 : 2
+        : 3;
+      hmi.children = hmi.children.map((node, index) => ({ node, index }))
+        .sort((a, b) => priority(a.node) - priority(b.node) || a.index - b.index)
+        .map(({ node }) => node);
+    }
+  }
+  return stripMutableNodes(orderedRoots);
 }

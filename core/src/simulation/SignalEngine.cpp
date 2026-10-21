@@ -441,7 +441,8 @@ void validateBlock(const SignalBlockDefinition& block, uint16_t maxWidth) {
             throw std::invalid_argument("funcao discreta exige uma entrada e uma saida Real escalar: " + block.id);
         if (block.intParameters.size() != 2 || block.intParameters[0] < 1 || block.intParameters[1] < 2 ||
             block.intParameters[0] > block.intParameters[1] ||
-            block.realParameters.size() != static_cast<size_t>(block.intParameters[0] + block.intParameters[1]))
+            (block.realParameters.size() != static_cast<size_t>(block.intParameters[0] + block.intParameters[1]) &&
+             block.realParameters.size() != static_cast<size_t>(block.intParameters[0] + block.intParameters[1] + 2 * (block.intParameters[1] - 1))))
             throw std::invalid_argument("coeficientes invalidos na funcao discreta: " + block.id);
         if (block.realParameters[static_cast<size_t>(block.intParameters[0])] == 0.0 ||
             !std::all_of(block.realParameters.begin(), block.realParameters.end(), [](double value) { return std::isfinite(value); }))
@@ -1134,6 +1135,26 @@ void SignalRuntime::bind(std::shared_ptr<const CompiledSignalGraph> graph) {
                     initialOutput += block.realParameters[cOffset + i] * m_dynamicState[block.stateOffset + i];
                 initialOutput += block.realParameters[n * n + 2 * n] * readSlot(m_reals, block.inputs[0], 0);
                 m_reals[block.output.offset] = initialOutput;
+                continue;
+            }
+            if (block.kind == SignalBlockKind::DiscreteTransferFunction) {
+                const size_t numeratorCount = static_cast<size_t>(block.intParameters[0]);
+                const size_t denominatorCount = static_cast<size_t>(block.intParameters[1]);
+                const size_t coefficientCount = numeratorCount + denominatorCount;
+                const size_t order = denominatorCount - 1;
+                if (block.realParameters.size() == coefficientCount + 2 * order) {
+                    std::copy_n(block.realParameters.data() + coefficientCount, 2 * order,
+                                m_dynamicState.data() + block.stateOffset);
+                    const size_t relativeDegree = denominatorCount - numeratorCount;
+                    double initialOutput = relativeDegree == 0 ? block.realParameters[0] * readSlot(m_reals, block.inputs[0], 0) : 0.0;
+                    for (size_t j = 1; j <= order; ++j) {
+                        const size_t numeratorIndex = j >= relativeDegree ? j - relativeDegree : numeratorCount;
+                        if (numeratorIndex < numeratorCount)
+                            initialOutput += block.realParameters[numeratorIndex] * m_dynamicState[block.stateOffset + j - 1];
+                        initialOutput -= block.realParameters[numeratorCount + j] * m_dynamicState[block.stateOffset + order + j - 1];
+                    }
+                    m_reals[block.output.offset] = initialOutput;
+                }
                 continue;
             }
             for (uint16_t element = 0; element < block.output.width; ++element) {

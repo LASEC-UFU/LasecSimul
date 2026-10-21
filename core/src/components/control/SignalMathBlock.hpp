@@ -360,6 +360,15 @@ public:
             block.realParameters = numerator;
             block.realParameters.insert(block.realParameters.end(), denominator.begin(), denominator.end());
             block.intParameters = {static_cast<int64_t>(numerator.size()), static_cast<int64_t>(denominator.size())};
+            const size_t stateCount = 2 * (denominator.size() - 1);
+            const auto initial = nlohmann::json::parse(text("initialState", "[]"));
+            if (!initial.is_array() || (!initial.empty() && initial.size() != stateCount))
+                throw std::invalid_argument("initialState discreto exige 2*(ordem do denominador) valores");
+            for (const auto& value : initial) {
+                if (!value.is_number() || !std::isfinite(value.get<double>()))
+                    throw std::invalid_argument("initialState discreto deve conter valores finitos");
+                block.realParameters.push_back(value.get<double>());
+            }
             graph.blocks.push_back(std::move(block));
             connectInputs(graph, componentIndex, inputs, outId);
             return graph;

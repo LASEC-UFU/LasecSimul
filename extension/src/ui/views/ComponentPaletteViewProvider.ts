@@ -86,7 +86,7 @@ export class ComponentPaletteViewProvider implements vscode.WebviewViewProvider 
       return;
     }
     if (message.type === "runPaletteAction") {
-      if (message.command === "lasecsimul.openControlDesigner" || message.command === "lasecsimul.openIdent") this.onRunAction(message.command);
+      if (["lasecsimul.openControlDesigner", "lasecsimul.openIdent", "lasecsimul.openHmi3d"].includes(message.command)) this.onRunAction(message.command);
       return;
     }
     if (message.type === "windowGeometry") {

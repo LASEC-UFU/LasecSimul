@@ -4,7 +4,7 @@
   "description": "Simulador de circuitos eletrônicos com MCUs emulados via QEMU, inspirado no SimulIDE.",
   "publisher": "josuemoraisgh",
   "license": "GPL-3.0-or-later",
-  "version": "0.0.98",
+  "version": "0.0.99",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -50,6 +50,11 @@
         "command": "lasecsimul.openControlDesigner",
         "title": "%command.openControlDesigner%",
         "icon": "$(graph-line)"
+      },
+      {
+        "command": "lasecsimul.openHmi3d",
+        "title": "LasecSimul: Tela HMI 3D",
+        "icon": "$(symbol-structure)"
       },
       {
         "command": "lasecsimul.openIdent",

@@ -1,6 +1,7 @@
 import { workspaceForCore } from "../project/modelWorkspace";
 import * as vscode from "vscode";
 import { PidTuningPanel } from "../ui/panels/PidTuningPanel";
+import { ElectricalInstrumentPanel } from "../ui/panels/ElectricalInstrumentPanel";
 import { filePathFromSourceId } from "../project/embeddedSubcircuits";
 import { currentDocumentDir, registerExternalSystemFile, registerSubsystemsInCore } from "../project/subsystemRuntime";
 import { childPropertyOverrides, parseChildPropertyKey, withoutChildPropertyOverrides } from "../ui/webview/childPropertyOverrides";
@@ -648,7 +649,11 @@ export async function sendInstrumentHistory(componentId: string, sinceNs?: numbe
       const delta = await state.coreClient.getComponentHistorySince(coreId, readoutFormat.channels, sinceNs);
       if (delta.filtered && (delta.latestNs === undefined || delta.latestNs >= sinceNs)) {
         const channels = decodeInstrumentHistory(component.typeId, delta.state);
-        if (channels) state.schematicPanel.postMessage({ version: 1, type: "instrumentHistory", componentId, append: true, oscope: channels as InstrumentHistoryPayload["oscope"] });
+        if (channels) {
+          const payload: InstrumentHistoryPayload = { componentId, append: true, oscope: channels as InstrumentHistoryPayload["oscope"] };
+          if (ElectricalInstrumentPanel.has(componentId)) ElectricalInstrumentPanel.update(payload);
+          else state.schematicPanel.postMessage({ version: 1, type: "instrumentHistory", ...payload });
+        }
         return;
       }
     }
@@ -663,7 +668,8 @@ export async function sendInstrumentHistory(componentId: string, sinceNs?: numbe
     const payload: InstrumentHistoryPayload = isChannelHistory
       ? { componentId, oscope: decoded as InstrumentHistoryPayload["oscope"] }
       : { componentId, logic: decoded as InstrumentHistoryPayload["logic"] };
-    state.schematicPanel.postMessage({ version: 1, type: "instrumentHistory", ...payload });
+    if (ElectricalInstrumentPanel.has(componentId)) ElectricalInstrumentPanel.update(payload);
+    else state.schematicPanel.postMessage({ version: 1, type: "instrumentHistory", ...payload });
   } catch {
     // instância ainda não assentou ou foi removida -- ignora, a próxima tentativa (popup ainda aberto) cobre
   } finally {

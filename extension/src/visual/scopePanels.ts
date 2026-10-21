@@ -7,6 +7,7 @@ import type { ProjectTopologyEndpoint } from "../project/ProjectTypes";
 import type { WebviewComponentModel } from "../ui/webview/model";
 import { cacheBustedUri } from "../ui/panels/schematicBundleHtml";
 import { findCatalogEntry } from "../core/coreLifecycle";
+import { showInAuxiliaryWindow } from "../ui/panels/standaloneWebview";
 
 interface ScopeChannel { id: string; label: string; instanceId: string; port: string }
 interface ScopePanelRecord {
@@ -59,6 +60,7 @@ export async function openScope(componentId: string): Promise<void> {
   const panel = vscode.window.createWebviewPanel("lasecsimul.scope", `Scope: ${component.label ?? component.id}`,
     vscode.ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: true,
       localResourceRoots: [vscode.Uri.joinPath(extensionUri, "out-webview")] });
+  void showInAuxiliaryWindow(panel);
   const record: ScopePanelRecord = { panel, componentId, channels: resolveChannels(component), disposed: false, bindEpoch: 0 };
   panels.set(componentId, record);
   panel.onDidDispose(() => { record.disposed = true; panels.delete(componentId); void unbind(record); });

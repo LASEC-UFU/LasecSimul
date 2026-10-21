@@ -103,3 +103,17 @@ Verificação desta atualização: `npm run compile`, `npm run test:control-desi
 - Nyquist mantém a contagem exata por Routh racional, com transformação bilinear para modelos discretos, até ordem 8. Casos singulares ou na fronteira retornam inconclusivo.
 - O botão sob demanda exibe progresso e aceita cancelamento. O padrão limita a execução a 10 s e 2.048 subdivisões do lugar das raízes; os gráficos interativos continuam usando os cálculos rápidos existentes.
 - Validação: `npm run compile` e `npm run test:control-designer` passaram (35 testes LTI e 11 testes de integração), incluindo certificados Bode contínuo/discreto e lugar das raízes de segunda ordem nos dois domínios.
+
+## Fechamento das pendências desta rodada (2026-10-21)
+
+As três pendências solicitadas para esta rodada estão implementadas:
+
+- **Planta contínua com controlador discreto:** a resposta temporal do Control Designer integra A/B/C/D da planta contínua entre amostras e atualiza o controlador discreto em Ts, mantendo a saída do controlador entre amostras.
+- **Estados iniciais dinâmicos:** a resposta natural aceita estados iniciais independentes de controlador C e sensor H dinâmicos. `control.transfer_function` expõe e persiste `initialState`; o Core valida e aplica as histórias de entrada/saída no início da simulação.
+- **Biblioteca Simulink na paleta:** os 133 blocos da especificação do projeto e seus 14 presets estão na aba Controle, organizados por biblioteca. Cada um tem desenho vetorial dedicado no diagrama e a paleta agora usa esse mesmo SVG em vez do ícone genérico de pacote.
+
+Validação desta rodada: `npm run compile` passou; `npm run test:control-designer` passou (96 casos LTI, 11 de integração e 4 fixtures); `blockLibrary.test` passou (7 casos, incluindo a cobertura dos 133 blocos/147 entradas da paleta); `signal_dynamics_test` passou. `process_subcircuit_test` foi recompilado e executou o caso novo de estado inicial, mas o binário completo ainda retorna falha por fixtures legadas independentes que usam tipos não suportados (`subsystem.legado_*`, `sl.*` e `process.accumulator`).
+
+Complemento de 2026-10-21: revisão da hierarquia e remoção dos blocos legados. PLC, Protocolos Industriais, Ferramentas e Blocos Funcionais ficam no nível principal de Controle. Todas as bibliotecas Simulink ficam dentro de Blocos Funcionais, seguindo a ordem do Library Browser. TDPS contém apenas Constante; Sonda, Expressão, Processo e Espaço de Estados têm equivalentes `sl.*` e migram automaticamente. Sintonia continua como ferramenta dedicada em Ferramentas. Os 24 wrappers `subcircuits.control.*` e seus manifestos foram removidos de `subcircuits/library.json` e do pacote. A migração v2 converte instâncias antigas, propriedades, portas e referências de biblioteca para blocos novos antes de abrir/salvar o projeto; testes cobrem os 24 IDs. Compilação TypeScript e testes de migração (11), `paletteTree` (18), `blockLibrary` (7), `subcircuitLibraryLoad` (6) e `plantTemplates` (7) passaram.
+
+Validação do Core: `CoreApplication.cpp` compilou, mas a linkedição de `lasecsimul-core.exe` não pôde substituir o executável porque ele está aberto (MSBuild LNK1104). `process_subcircuit_test.exe` ainda falha nos fixtures TDPS convertidos que usam `subsystem.legado_pid_dpv` e `subsystem.legado_processo_tau1_deadtime`, tipos não tratados pelo compilador legado desse teste; a simulação pelo runtime principal não foi validada nesta execução.

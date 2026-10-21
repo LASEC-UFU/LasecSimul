@@ -155,9 +155,7 @@ async function clickSvgAt(locator, x, y) {
       "protocol.hart.modem",
       "control.pid_station",
       "control.constant",
-      "control.observer",
-      "subcircuits.control.gain",
-      "subcircuits.control.pid",
+      "sl.gain",
     ];
     for (const typeId of requiredControlTypeIds) {
       // O título é "typeId\ncaminho\ndica": o `\a ` (quebra de linha em CSS) exige o typeId INTEIRO,
@@ -182,9 +180,10 @@ async function clickSvgAt(locator, x, y) {
       throw new Error(`Modbus e HART deveriam estar na mesma pasta, logo depois do PLC: ${layoutText}`);
     }
     if (folderOf("control.pid_station") !== 2) throw new Error(`Ferramentas deveria vir depois dos protocolos: ${layoutText}`);
-    if (folderOf("control.constant") !== 3 || folderOf("subcircuits.control.gain") !== 3) {
-      throw new Error(`os blocos que estavam na raiz de Controle deveriam estar em Blocos Funcionais, depois de Ferramentas: ${layoutText}`);
+    if (folderOf("control.constant") !== 3 || folderOf("sl.gain") !== 3) {
+      throw new Error(`Constante e blocos Simulink deveriam estar em Blocos Funcionais, depois de Ferramentas: ${layoutText}`);
     }
+    if (await paletteFrame.locator('.palette-item[data-type-id^="subcircuits.control."]').count()) throw new Error("wrappers antigos subcircuits.control.* nao devem aparecer na paleta");
 
     // A paleta é reconstruída quando o catálogo chega de novo (ex.: Core terminando de subir); se
     // isso acontecer no meio da captura, o elemento some e basta tentar outra vez.

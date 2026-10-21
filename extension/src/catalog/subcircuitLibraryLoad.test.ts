@@ -37,6 +37,7 @@ import { validateSubcircuitDocument } from "./subcircuitValidation";
       manifests.add(entry.manifest);
     }
     assert(library.subcircuits.length > 0, "library.json deveria registrar pelo menos um subcircuito");
+    assert(!library.subcircuits.some((entry) => entry.typeId.startsWith("subcircuits.control.")), "wrappers antigos de controle devem ser removidos da biblioteca integrada");
   });
 
   for (const entry of library.subcircuits) {

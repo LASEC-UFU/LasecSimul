@@ -125,8 +125,8 @@ const catalog: PaletteRenderableEntry[] = [
 
   await test("Controle: PLC, Protocolos Industriais, Ferramentas e Blocos Funcionais nesta ordem", () => {
     const entries: PaletteRenderableEntry[] = [
-      { typeId: "control.constant", label: "Constante", category: "Controle", folderPath: [], workspaceSection: "control", pinCount: 1, defaultProperties: {} },
-      { typeId: "subcircuits.control.gain", label: "Ganho", category: "Controle", folderPath: [], workspaceSection: "control", pinCount: 2, defaultProperties: {} },
+      { typeId: "control.constant", label: "Constante", category: "Controle", folderPath: ["TDPS"], workspaceSection: "control", pinCount: 1, defaultProperties: {} },
+      { typeId: "subcircuits.control.gain", label: "Ganho", category: "Controle", folderPath: ["TDPS"], paletteHidden: true, workspaceSection: "control", pinCount: 2, defaultProperties: {} },
       { typeId: "protocol.hart.modem", label: "Modem HART", category: "Protocolos", folderPath: ["Protocolos Industriais", "HART"], workspaceSection: "control", pinCount: 2, defaultProperties: {} },
       { typeId: "protocol.modbus.server", label: "Servidor Modbus", category: "Protocolos", folderPath: ["Protocolos Industriais", "Modbus"], workspaceSection: "control", pinCount: 0, defaultProperties: {} },
       { typeId: "control.pid_station", label: "Sintonia", category: "Ferramentas", folderPath: ["Ferramentas"], workspaceSection: "control", pinCount: 5, defaultProperties: {} },
@@ -140,8 +140,11 @@ const catalog: PaletteRenderableEntry[] = [
       "o primeiro item de Controle deveria ser o PLC");
     const blocks = tree[3];
     const blockTypeIds = blocks?.kind === "folder" ? blocks.children.map((node) => (node.kind === "component" ? node.typeId : `folder:${node.label}`)) : [];
-    assert(JSON.stringify(blockTypeIds) === JSON.stringify(["control.constant", "subcircuits.control.gain"]),
-      `o que estava na raiz de Controle deveria estar em Blocos Funcionais, sem subpasta extra: ${JSON.stringify(blockTypeIds)}`);
+    assert(JSON.stringify(blockTypeIds) === JSON.stringify(["folder:TDPS"]),
+      `Blocos Funcionais deve conter TDPS; antigos ficam fora da paleta: ${JSON.stringify(blockTypeIds)}`);
+    const tdps = blocks?.kind === "folder" ? blocks.children[0] : undefined;
+    assert(tdps?.kind === "folder" && tdps.children.length === 1 && tdps.children[0]?.kind === "component" && tdps.children[0].typeId === "control.constant",
+      "o bloco sem pasta deve estar dentro de Blocos Funcionais/TDPS");
     assert(tree.every((node) => node.kind === "folder"), "nada deveria sobrar na raiz de Controle");
   });
 
@@ -265,7 +268,7 @@ const catalog: PaletteRenderableEntry[] = [
       .every((entry) => workspaceSectionForCatalogEntry(entry) === "control"), "PLC e protocolos deveriam estar em Controle");
   });
 
-  await test("Sintonia em Controle/Ferramentas; os primitivos visiveis de controle em Controle/Blocos Funcionais", () => {
+  await test("Sintonia em Ferramentas; os primitivos visiveis em Blocos Funcionais/TDPS", () => {
     const controlTree = buildPaletteTree(controlGraphCatalog, "", "control", "pt-BR");
     const labels = controlTree.map((node) => node.label);
     assert(JSON.stringify(labels) === JSON.stringify(["Ferramentas", "Blocos Funcionais"]), `subseções de Controle do grafo: ${JSON.stringify(labels)}`);
@@ -280,13 +283,17 @@ const catalog: PaletteRenderableEntry[] = [
     const blocks = controlTree[1];
     const typeIds = blocks?.kind === "folder" ? blocks.children.map((node) => (node.kind === "component" ? node.typeId : `folder:${node.label}`)).sort() : [];
     assert(
-      JSON.stringify(typeIds) === JSON.stringify(["control.calc_expression", "control.constant", "control.observer", "control.process", "control.state_space"]),
-      `Blocos Funcionais deveria expor so Sonda/Expressao/Processo/Constante, sem subpasta -- veio ${JSON.stringify(typeIds)}`
+      JSON.stringify(typeIds) === JSON.stringify(["folder:TDPS"]),
+      `Blocos Funcionais deveria conter a pasta TDPS -- veio ${JSON.stringify(typeIds)}`
     );
+    const tdps = blocks?.kind === "folder" ? blocks.children[0] : undefined;
+    const tdpsTypeIds = tdps?.kind === "folder" ? tdps.children.map((node) => node.kind === "component" ? node.typeId : `folder:${node.label}`).sort() : [];
+    assert(JSON.stringify(tdpsTypeIds) === JSON.stringify(["control.constant"]),
+      `TDPS deveria conter apenas a constante, que nao tem substituto equivalente: ${JSON.stringify(tdpsTypeIds)}`);
     // IDs, pinos e propriedades não mudam com a reorganização: só a apresentação.
-    for (const typeId of ["control.calc_expression", "control.constant", "control.observer", "control.process", "control.state_space"]) {
+    for (const typeId of ["control.constant"]) {
       const entry = controlGraphCatalog.find((item) => item.typeId === typeId);
-      assert(entry?.workspaceSection === "control" && Array.isArray(entry.folderPath) && entry.folderPath.length === 0, `${typeId} continua declarado como antes`);
+      assert(entry?.workspaceSection === "control" && JSON.stringify(entry.folderPath) === JSON.stringify(["TDPS"]), `${typeId} fica em TDPS`);
     }
 
     // `paletteHidden` some SO da paleta: `hidden` apagaria a instancia do render (ver

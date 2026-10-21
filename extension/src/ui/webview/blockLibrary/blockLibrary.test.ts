@@ -3,10 +3,11 @@ import * as path from "path";
 import { assert, createTestRunner } from "../../../ipc/testSupport/MockCoreServer";
 import { loadBlockLibrary } from "../../../catalog/blockLibraryLoader";
 import { blockCatalogEntries } from "./blockCatalog";
-import { blockPackage, polynomialMarkup } from "./blockSymbol";
+import { blockPackage, hasBlockIcon, polynomialMarkup } from "./blockSymbol";
 import { evaluateParam, ParamValue } from "./paramExpr";
 import { resolveBlockPorts } from "./ports";
 import { BlockSpec, blockTypeId } from "./spec";
+import { buildPaletteTree, paletteFolderPathForEntry, PaletteTreeNode } from "../paletteTree";
 
 /**
  * Biblioteca de blocos equivalente ao Simulink (docs/66), lado Extension: o avaliador de parâmetros
@@ -59,8 +60,9 @@ const sameNumber = (actual: number, expected: number) =>
   });
 
   await test("simbolo de cada bloco tem exatamente os pinos das portas resolvidas", () => {
-    assert(specs.size >= 30, `especificacao carregada (${specs.size} blocos)`);
+    assert(specs.size === 133, `especificacao completa carregada (${specs.size} blocos)`);
     for (const [typeId, spec] of specs) {
+      assert(hasBlockIcon(spec.id), `${typeId}: icone dedicado presente`);
       const pkg = blockPackage(spec, {});
       const ports = resolveBlockPorts(spec, {});
       const expected = [...ports.inputs, ...ports.outputs].map((p) => p.id).sort();
@@ -69,6 +71,33 @@ const sameNumber = (actual: number, expected: number) =>
       const shape = pkg.shapes?.[0];
       assert(pkg.shapes?.length === 1 && shape?.kind === "svg" && (shape.value ?? "").length > 0, `${typeId}: desenho vetorial presente`);
       assert(!/<script|javascript:|on[a-z]+=/i.test(shape?.value ?? ""), `${typeId}: svg sem conteudo ativo`);
+    }
+  });
+
+  await test("a paleta Controle expoe todos os blocos Simulink e seus simbolos dedicados", () => {
+    const entries = blockCatalogEntries(library, "pt-BR");
+    const tree = buildPaletteTree(entries, "", "control", "pt-BR");
+    const visibleIds = new Set<string>();
+    const visit = (nodes: PaletteTreeNode[]) => {
+      for (const node of nodes) {
+        if (node.kind === "component") visibleIds.add(node.typeId);
+        else visit(node.children);
+      }
+    };
+    visit(tree);
+    assert(entries.length === 147, `catálogo inclui blocos e presets (${entries.length})`);
+    const expectedSections = ["Contínuos", "Descontinuidades", "Discretos", "Lógica e operações de bits", "Tabelas de consulta", "Operações Matemáticas", "Atributos de sinal", "Roteamento de Sinais", "Visualizadores (Sinks)", "Fontes", "Funções Definidas pelo Usuário", "Matemática Adicional e Discreto"];
+    assert(JSON.stringify(tree.map((node) => node.label)) === JSON.stringify(["Blocos Funcionais"]), `pasta funcional na raiz de Controle: ${JSON.stringify(tree.map((node) => node.label))}`);
+    const functionBlocks = tree[0];
+    assert(functionBlocks?.kind === "folder" && JSON.stringify(functionBlocks.children.map((node) => node.label)) === JSON.stringify(expectedSections),
+      `subseções Simulink dentro de Blocos Funcionais: ${JSON.stringify(functionBlocks?.kind === "folder" ? functionBlocks.children.map((node) => node.label) : [])}`);
+    for (const entry of entries) {
+      assert(JSON.stringify(paletteFolderPathForEntry(entry)) === JSON.stringify(entry.folderPath), `${entry.typeId}: fica em Blocos Funcionais/subseção Simulink`);
+      assert(visibleIds.has(entry.typeId), `${entry.typeId}: aparece na árvore da paleta Controle`);
+      const spec = specs.get(entry.instanceTypeId ?? entry.typeId);
+      assert(spec !== undefined && hasBlockIcon(spec.id), `${entry.typeId}: usa o símbolo Simulink dedicado de ${spec?.id ?? "?"}`);
+      assert(Boolean(entry.iconSvgInline?.startsWith("<svg ") && entry.iconSvgInline.includes("class=\"sl-block\"")),
+        `${entry.typeId}: a paleta recebe o SVG dedicado, não o ícone genérico de pacote`);
     }
   });
 
@@ -96,7 +125,7 @@ const sameNumber = (actual: number, expected: number) =>
     assert(add !== undefined && add.defaultProperties.Inputs === "++" && add.defaultProperties.IconShape === "rectangular", "preset Add");
     const base = entries.findIndex((entry) => entry.typeId === "sl.sum");
     assert(base >= 0 && base < entries.indexOf(add!), "entrada-base antes do preset");
-    assert(entries.every((entry) => entry.workspaceSection === "control" && entry.folderPath?.[0] === "Blocos Funcionais"), "todos em Controle > Blocos Funcionais");
+    assert(entries.every((entry) => entry.workspaceSection === "control" && entry.folderPath?.length === 2 && entry.folderPath[0] === "Blocos Funcionais"), "blocos organizados em subseções dentro de Blocos Funcionais");
     const integrator = entries.find((entry) => entry.typeId === "sl.integrator")!;
     const upper = integrator.propertySchema!.find((schema) => schema.id === "UpperSaturationLimit")!;
     assert(JSON.stringify(upper.visibleWhen) === JSON.stringify({ LimitOutput: [true] }), "campo condicional preserva visibleWhen");

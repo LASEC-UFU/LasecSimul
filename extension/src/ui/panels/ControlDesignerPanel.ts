@@ -4,6 +4,7 @@ import type { WebviewComponentModel } from "../webview/model";
 import { signalBlockSignature, signalBlockToTransfer } from "../controlDesignerCircuit";
 import { certifyAnalyses, type CertificateProgress } from "../webview/controlDesigner/certification";
 import { validateControlDesignProject } from "../webview/controlDesigner/types";
+import { showInAuxiliaryWindow } from "./standaloneWebview";
 type Binding = NonNullable<ControlDesignProject["sourceBindings"]>["G"];
 type PlotPreferenceKey = "frequencyUnit" | "timeUnit" | "phaseUnit" | "phaseWrapAt" | "minimumMagnitudeDb" | "showPlotGrid" | "plotFontSize" | "plotFontBold" | "plotFontItalic" | "plotAxesColor" | "frequencyScale" | "bodeMagnitudeUnit" | "bodeMagnitudeScale" | "riseStartPercent" | "riseEndPercent" | "settlingPercent" | "compensatorDisplayFormat" | "showPlantSensorPolesZeros" | "rootLocusGrid" | "nicholsGrid";
 type GlobalPlotPreferences = { [K in PlotPreferenceKey]: ControlDesignProject[K] | null };
@@ -53,6 +54,7 @@ export class ControlDesignerPanel {
       localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, "out-webview")],
     });
     this.current = panel;
+    void showInAuxiliaryWindow(panel);
     this.webviewReady=false;
     panel.onDidDispose(() => { if (this.current === panel) { this.current = undefined; this.webviewReady=false; } });
     const nonce = String(Date.now());

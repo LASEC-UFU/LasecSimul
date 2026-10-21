@@ -151,6 +151,24 @@ void stateSpaceBlocksPreserveOriginalDynamics() {
     CHECK(std::abs(digital.real(digital.output("sampled")) - 1.5) < 1e-12, "discrete state updates with A x[k]+B u[k]");
     digital.executeUntil(300'000'000ull);
     CHECK(std::abs(digital.real(digital.output("sampled")) - 1.75) < 1e-12, "discrete output follows its sampled state");
+
+    SignalGraphDefinition hybrid;
+    auto hybridInput = source("command", 1.0);
+    auto hybridController = unary("controller", SignalBlockKind::DiscreteTransferFunction, {0.1, 1.0, -0.9});
+    hybridController.rate = {100'000'000ull, 0, 0}; hybridController.intParameters = {1, 2};
+    auto hybridPlant = unary("continuousPlant", SignalBlockKind::StateSpaceContinuous, {-1.0, 1.0, 1.0, 0.0});
+    hybridPlant.intParameters = {1};
+    hybrid.blocks = {hybridInput, hybridController, hybridPlant};
+    connect(hybrid, "command", "controller"); connect(hybrid, "controller", "continuousPlant");
+    SignalRuntime hybridRuntime = runtimeFor(hybrid);
+    uint64_t hybridNow = 0;
+    for (int i = 0; i < 100; ++i) acceptedStep(hybridRuntime, hybridNow, 1'000'000, 1e-10, 1e-5);
+    CHECK(std::abs(hybridRuntime.real(hybridRuntime.output("continuousPlant"))) < 1e-8,
+          "continuous plant integrates while the discrete controller holds its current sample");
+    hybridRuntime.executeUntil(100'000'000ull);
+    for (int i = 0; i < 100; ++i) acceptedStep(hybridRuntime, hybridNow, 1'000'000, 1e-10, 1e-5);
+    CHECK(std::abs(hybridRuntime.real(hybridRuntime.output("continuousPlant")) - 0.0095162582) < 2e-6,
+          "continuous plant responds to the controller output held between sample ticks");
 }
 
 void discreteAndNonlinearPrimitivesAreIsolated() {
@@ -203,6 +221,18 @@ void discreteTransferFunctionRunsOnItsSampleClock() {
     directRuntime.executeUntil(100'000'000ull);
     CHECK(std::abs(directRuntime.real(directRuntime.output("direct")) - 4.0) < 1e-12,
           "estado da recorrencia direta e atualizado uma vez por tick");
+
+    SignalGraphDefinition initialGraph;
+    auto initialInput = source("zero", 0.0); initialInput.rate = {100'000'000ull, 0, 0};
+    auto initialTf = unary("initial", SignalBlockKind::DiscreteTransferFunction, {0.1, 1.0, -0.9, 0.0, 2.0});
+    initialTf.rate = initialInput.rate; initialTf.intParameters = {1, 2};
+    initialGraph.blocks = {initialInput, initialTf}; connect(initialGraph, "zero", "initial");
+    SignalRuntime initialRuntime = runtimeFor(initialGraph);
+    CHECK(std::abs(initialRuntime.real(initialRuntime.output("initial")) - 1.8) < 1e-12,
+          "estado inicial discreto define o historico de saida antes da primeira amostra");
+    initialRuntime.executeUntil(100'000'000ull);
+    CHECK(std::abs(initialRuntime.real(initialRuntime.output("initial")) - 1.62) < 1e-12,
+          "historico de saida configurado propaga pela recorrencia discreta");
 }
 
 void remainingContinuousPrimitivesAndChainExecute() {

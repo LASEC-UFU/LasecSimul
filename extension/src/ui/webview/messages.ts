@@ -333,6 +333,8 @@ export type WebviewToHostMessage =
    * abrir a janela e a cada `componentReadout` enquanto ela continuar aberta (mesmo ritmo de
    * atualização do resto da telemetria, ~50 ms com o padrão de 20 Hz, ver `pollInstrumentReadouts`). */
   | { version: number; type: "requestInstrumentHistory"; componentId: string; sinceNs?: number }
+  /** Move o editor que hospeda a expansão do instrumento para uma janela auxiliar do VS Code. */
+  | { version: number; type: "requestOpenElectricalInstrument"; componentId: string }
   /** Pedido de dados pro overlay de Modo Placa E pro submenu por componente exposto do menu de
    * contexto -- ver `boardOverlayData`. */
   | { version: number; type: "requestBoardOverlayData"; componentId: string; sourceId: string }
@@ -387,6 +389,7 @@ export type WebviewToHostMessage =
   | { version: number; type: "visualWindowRequest"; documentId: string; action: VisualWindowAction }
   /** Esquemático: abrir a tela de um botão `tools.hmi_screen` (duplo clique, clique em execução, menu). */
   | { version: number; type: "requestOpenVisualScreen"; componentId: string; mode: "auto" | "docked" | "floating" | "fullscreen" }
+  | { version: number; type: "requestOpenHmi3d"; componentId: string }
   | { version: number; type: "requestOpenScope"; componentId: string }
   | { version: number; type: "requestScreenAction"; componentId: string; action: "rename" | "duplicate" }
   /** Atividade do Laboratório embutida (`graphics.math.activity`): mensagem da atividade para o Host. */

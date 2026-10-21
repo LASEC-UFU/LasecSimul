@@ -995,10 +995,8 @@ export interface WebviewComponentCatalogEntry {
   /** Some SÓ da paleta (`paletteTree.ts::buildPaletteTree`), sem nada do efeito de `hidden` sobre
    * as INSTÂNCIAS -- `hidden` do catálogo vira `WebviewComponentModel.hidden` (`extension.ts::
    * requestAddComponent`/`projectCommands.ts::projectComponentToWebviewComponent`) e apaga o
-   * componente do render/hit-test onde quer que ele esteja. Os primitivos `control.*` usados
-   * dentro dos modelos TDPS e dos 24 blocos de Controle precisam exatamente da diferença: são o
-   * conteúdo visível do editor de subcircuito, mas não itens colocáveis da paleta (lá quem
-   * aparece é o bloco `subcircuits.control.*` equivalente). */
+   * componente do render/hit-test onde quer que ele esteja. `paletteHidden` permite manter tipos
+   * internos de compatibilidade disponíveis ao renderizador sem oferecê-los como itens da paleta. */
   paletteHidden?: boolean;
   /** Quando true, o item aparece na paleta mas não pode ser inserido no circuito. */
   disabled?: boolean;
