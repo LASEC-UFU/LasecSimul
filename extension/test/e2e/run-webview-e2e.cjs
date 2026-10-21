@@ -1588,7 +1588,7 @@ async function clickSvgAt(locator, x, y) {
     await designerFrame.locator("#dialogSave").click();
     const poleRegionMark = designerFrame.locator('#rl [data-requirement-flip]').first();
     await poleRegionMark.waitFor({ state: "visible" });
-    await poleRegionMark.dispatchEvent("contextmenu", { button: 2, bubbles: true, cancelable: true });
+    await poleRegionMark.evaluate(element => element.dispatchEvent(new MouseEvent("contextmenu", { button: 2, bubbles: true, cancelable: true, clientX: 120, clientY: 100 })));
     await designerFrame.locator("#rootContextMenu [data-root-context=requirement-edit]").click();
     await designerFrame.locator("#designerDialog").waitFor({ state: "visible" });
     await designerFrame.locator("#reqRegionSide").selectOption("left");
@@ -1611,7 +1611,7 @@ async function clickSvgAt(locator, x, y) {
     await designerFrame.locator("#dialogSave").click();
     const gainPhaseRegionMark = designerFrame.locator('#nichols [data-requirement-flip]').first();
     await gainPhaseRegionMark.waitFor({ state: "visible" });
-    await gainPhaseRegionMark.dispatchEvent("contextmenu", { button: 2, bubbles: true, cancelable: true });
+    await gainPhaseRegionMark.evaluate(element => element.dispatchEvent(new MouseEvent("contextmenu", { button: 2, bubbles: true, cancelable: true, clientX: 120, clientY: 100 })));
     await designerFrame.locator("#rootContextMenu [data-root-context=requirement-flip]").click();
     await designerFrame.waitForFunction(() => Array.from(document.querySelectorAll("#requirements .req")).some(row => row.textContent?.includes("gainPhaseLower")));
     await designerFrame.locator('#requirements .req button[data-remove]').last().click();
