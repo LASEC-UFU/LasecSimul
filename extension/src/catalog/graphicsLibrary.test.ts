@@ -39,17 +39,16 @@ function filledRectHeight(svg: string, fill: string): number {
 (async () => {
   const { test, finish } = createTestRunner("graphicsLibrary");
 
-  await test("a biblioteca existe em Miscelaneos > Grafico, com subsecoes", () => {
+  await test("a biblioteca gr?fica existe em Miscelaneos > HMI, com subsecoes", () => {
     const tree = buildPaletteTree(graphics, "", "misc");
-    const root = tree.find((node) => node.kind === "folder" && node.label === "Grafico");
-    assert(Boolean(root), "a pasta Grafico deveria existir na aba Miscelaneos");
-    if (!root || root.kind !== "folder") throw new Error("pasta Grafico ausente");
+    const root = tree.find((node) => node.kind === "folder" && node.label === "HMI");
+    assert(Boolean(root), "a pasta HMI deveria existir na aba Miscelaneos");
+    if (!root || root.kind !== "folder") throw new Error("pasta HMI ausente");
     const folders = root.children.filter((node) => node.kind === "folder").map((node) => node.label).sort();
     for (const expected of ["Tubulacao", "Tanques e Vasos", "Valvulas", "Instrumentos", "Controles/Indicadores", "Controle", "Equipamentos", "Layout", "Supervisório Industrial", "Formas Basicas"]) {
       assert(folders.includes(expected), `subsecao ${expected} deveria existir -- veio ${JSON.stringify(folders)}`);
     }
-    assert(!folders.some((folder) => ["HMI", "P&ID", "Indicadores", "Controles HMI"].includes(folder)),
-      "as antigas pastas HMI, P&ID, Indicadores e Controles HMI não devem permanecer sob Grafico");
+    assert(folders.includes("P&ID"), "a pasta P&ID deve ficar dentro de HMI");
     const controlsIndicators = root.children.find((node) => node.kind === "folder" && node.label === "Controles/Indicadores");
     assert(controlsIndicators?.kind === "folder", "a pasta Controles/Indicadores deveria existir sob Grafico");
     if (controlsIndicators?.kind === "folder") {
@@ -59,17 +58,15 @@ function filledRectHeight(svg: string, fill: string): number {
         && items.some((node) => node.typeId === "graphics.value_display"),
       "os controles e indicadores nativos e HMI devem estar na mesma pasta");
     }
-    const pid = tree.find((node) => node.kind === "folder" && node.label === "P&ID");
+    const pid = root.children.find((node) => node.kind === "folder" && node.label === "P&ID");
     assert(pid?.kind === "folder" && pid.children.some((node) => node.kind === "folder" && node.label === "Válvulas")
       && pid.children.filter((node) => node.kind === "folder").every((node) => !node.label.includes("P&ID")),
       "P&ID e suas subpastas devem ficar diretamente em Miscelaneos");
 
     const english = buildPaletteTree(loadUnifiedCatalog(process.cwd(), "en").catalog.filter((entry) => entry.typeId.startsWith("graphics.")), "", "misc");
-    const englishGraphic = english.find((node) => node.kind === "folder" && node.label === "Graphical");
-    assert(englishGraphic?.kind === "folder" && englishGraphic.children.some((node) => node.kind === "folder" && node.label === "Controls/Indicators")
-      && !englishGraphic.children.some((node) => node.kind === "folder" && ["HMI", "P&ID", "Indicators", "HMI Controls"].includes(node.label))
-      && english.some((node) => node.kind === "folder" && node.label === "P&ID"
-        && node.children.filter((child) => child.kind === "folder").every((child) => !child.label.includes("P&ID"))),
+    const englishHmi = english.find((node) => node.kind === "folder" && node.label === "HMI");
+    assert(englishHmi?.kind === "folder" && englishHmi.children.some((node) => node.kind === "folder" && node.label === "Controls/Indicators")
+      && englishHmi.children.some((node) => node.kind === "folder" && node.label === "P&ID"),
       "a hierarquia em ingles deve seguir a mesma organizacao");
   });
 
@@ -103,11 +100,11 @@ function filledRectHeight(svg: string, fill: string): number {
     }
   });
 
-  await test("o tanque vetorial aparece em Grafico > Tanques e Vasos e e desenho nativo (sem imagem)", () => {
+  await test("o tanque vetorial aparece em HMI > Tanques e Vasos e e desenho nativo (sem imagem)", () => {
     const tank = byTypeId.get("graphics.tank_svg");
     assert(Boolean(tank), "tanque vetorial ausente do catalogo");
     const tree = buildPaletteTree(graphics, "", "misc");
-    const graphic = tree.find((node) => node.kind === "folder" && node.label === "Grafico");
+    const graphic = tree.find((node) => node.kind === "folder" && node.label === "HMI");
     const vessels = graphic?.kind === "folder"
       ? graphic.children.find((node) => node.kind === "folder" && node.label === "Tanques e Vasos")
       : undefined;
@@ -130,7 +127,7 @@ function filledRectHeight(svg: string, fill: string): number {
     const valve = byTypeId.get("graphics.valve_globe_svg");
     assert(Boolean(valve), "válvula globo vetorial ausente do catálogo");
     const tree = buildPaletteTree(graphics, "", "misc");
-    const graphic = tree.find((node) => node.kind === "folder" && node.label === "Grafico");
+    const graphic = tree.find((node) => node.kind === "folder" && node.label === "HMI");
     const valves = graphic?.kind === "folder"
       ? graphic.children.find((node) => node.kind === "folder" && node.label === "Valvulas")
       : undefined;
