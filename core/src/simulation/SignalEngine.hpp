@@ -8,7 +8,13 @@
 #include <string_view>
 #include <vector>
 
+#include "library/Kernel.hpp"
+
 namespace lasecsimul::simulation {
+
+/** Período usado para tempo de amostragem constante (`inf` no Simulink): o grupo ativa uma vez e só
+ * volta a executar quando um parâmetro ajustável de um de seus blocos muda (docs/66 §4.1). */
+inline constexpr uint64_t kConstantSamplePeriodNs = 1ull << 62;
 
 enum class SignalScalarType : uint8_t { Real, Bool, Int64 };
 
@@ -25,9 +31,12 @@ struct SignalPortDefinition {
 };
 
 struct SignalRate {
+    /** 0 = tempo contínuo (só blocos `Kernel`): o bloco entra na partição contínua acoplada e é
+     * avaliado nos estágios do integrador e em todo passo maior (docs/66 §4.2). */
     uint64_t periodNs = 1;
     uint64_t offsetNs = 0;
     uint16_t phase = 0;
+    bool continuous() const noexcept { return periodNs == 0; }
     bool operator==(const SignalRate&) const = default;
 };
 
@@ -68,6 +77,10 @@ enum class SignalBlockKind : uint8_t {
     Pid,
     /** Extrai o elemento `realParameters[0]` de um vetor Real (portas nomeadas do Accumulator). */
     Element,
+    /** Bloco da biblioteca equivalente ao Simulink: comportamento dado pelo kernel `kernel`
+     * (`simulation/library/Kernel.hpp`), com estados contínuos, discretos e direct feedthrough
+     * declarados pelo próprio kernel (docs/66 §4). */
+    Kernel,
 };
 
 /** Posições do vetor de saída/estado do Accumulator (as 12 primeiras têm porta nomeada). */
@@ -114,6 +127,8 @@ struct SignalBlockDefinition {
     std::string expression;
     /** Ring capacity for DeadTime/Fopdt input changes; allocated once by bind(). */
     uint32_t historyCapacity = 1024;
+    /** Id do kernel quando `kind == Kernel`. */
+    std::string kernel;
 };
 
 struct SignalConnectionDefinition {
@@ -188,6 +203,14 @@ public:
     int64_t integer(SignalSlotHandle slot, uint16_t element = 0) const;
     void setExternalReal(std::string_view blockId, double value, uint16_t element = 0);
     void setExternalBool(std::string_view blockId, bool value, uint16_t element = 0);
+    /** Parâmetro ajustável (tunable) de um bloco `Kernel` com a simulação rodando: troca os valores
+     * reais SEM recompilar o plano; a quantidade precisa ser a mesma (mudança de forma exige
+     * recompilação, como no Simulink). Blocos de tempo constante são reavaliados no próximo instante. */
+    void setKernelParameters(std::string_view blockId, std::span<const double> values);
+    /** Valores atuais dos parâmetros reais de um bloco `Kernel` (testes/diagnóstico). */
+    std::span<const double> kernelParameters(std::string_view blockId) const;
+    /** Parâmetros inteiros (forma) do bloco `Kernel` compilado: fixos até a próxima recompilação. */
+    std::span<const int64_t> kernelIntParameters(std::string_view blockId) const;
 
     /** Used by tests/diagnostics to prove storage remains stable during steady-state execution. */
     const void* realStorageAddress() const { return m_reals.data(); }
@@ -204,9 +227,33 @@ private:
         uint16_t width = 1;
     };
 
-    void activateGroup(uint32_t groupIndex, uint64_t timestampNs);
+    void activateBatch(uint64_t timestampNs);
+    library::KernelContext kernelContext(uint32_t blockIndex, uint64_t timestampNs, bool major, std::vector<double>& reals,
+                                         double* states);
+    /** Saída de um bloco Kernel. `reals` é de onde as entradas são lidas e onde a saída é escrita
+     * (`m_reals` nos passos maiores, `m_stageReals` nos estágios do integrador); `states` é o vetor de
+     * estados contínuos do estágio. */
+    void runKernelOutputs(uint32_t blockIndex, uint64_t timestampNs, bool major, std::vector<double>& reals, double* states);
+    void runKernelUpdate(uint32_t blockIndex, uint64_t timestampNs);
+    /** Avalia a partição contínua no instante do estágio (saídas em ordem) e, com `derivatives`,
+     * escreve as derivadas em `derivatives` (mesmo layout do vetor de estados). */
+    void evaluateContinuousPartition(uint64_t timestampNs, double* states, double* derivatives);
+    void integrateContinuousPartition(uint64_t previousNs, uint64_t currentNs);
+    void continuousPartitionMajorStep(uint64_t timestampNs);
 
     std::shared_ptr<const CompiledSignalGraph> m_graph;
+    std::vector<double> m_kernelDiscrete;
+    std::vector<double> m_kernelParams;
+    std::vector<double> m_stageReals;
+    std::vector<double> m_stageState;
+    std::vector<double> m_halfState;
+    std::vector<const double*> m_kernelInputs;
+    std::vector<uint16_t> m_kernelInputWidths;
+    std::vector<double> m_kernelInputScratch;
+    std::vector<uint8_t> m_due;
+    bool m_constantGroupsDirty = false;
+    /** Início do passo contínuo em andamento: `majorNs` dos estágios do integrador. */
+    uint64_t m_stageMajorNs = 0;
     std::vector<double> m_reals;
     std::vector<double> m_realSnapshot;
     std::vector<double> m_realCandidate;

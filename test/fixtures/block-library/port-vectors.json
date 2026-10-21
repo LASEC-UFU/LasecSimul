@@ -1,0 +1,24 @@
+{
+  "description": "Casos compartilhados das regras de porta da biblioteca de blocos (docs/66 §3). O Core (core/src/components/blocks/BlockLibrary.cpp) e a Extension (extension/src/blockLibrary/ports.ts) devem produzir exatamente estas portas.",
+  "cases": [
+    { "typeId": "sl.gain", "properties": {}, "inputs": ["in1"], "outputs": ["out1"] },
+    { "typeId": "sl.sum", "properties": {}, "inputs": ["in1", "in2"], "outputs": ["out1"] },
+    { "typeId": "sl.sum", "properties": { "Inputs": "|+-+" }, "inputs": ["in1", "in2", "in3"], "outputs": ["out1"] },
+    { "typeId": "sl.sum", "properties": { "Inputs": "+" }, "inputs": ["in1"], "outputs": ["out1"] },
+    { "typeId": "sl.sum", "properties": { "Inputs": "4" }, "inputs": ["in1", "in2", "in3", "in4"], "outputs": ["out1"] },
+    { "typeId": "sl.product", "properties": {}, "inputs": ["in1", "in2"], "outputs": ["out1"] },
+    { "typeId": "sl.product", "properties": { "Inputs": "*/*" }, "inputs": ["in1", "in2", "in3"], "outputs": ["out1"] },
+    { "typeId": "sl.mux", "properties": { "Inputs": "[2 3 1]" }, "inputs": ["in1", "in2", "in3"], "outputs": ["out1"] },
+    { "typeId": "sl.demux", "properties": { "Outputs": "3" }, "inputs": ["in1"], "outputs": ["out1", "out2", "out3"] },
+    { "typeId": "sl.integrator", "properties": {}, "inputs": ["in1"], "outputs": ["out1"] },
+    { "typeId": "sl.integrator", "properties": { "ExternalReset": "rising", "InitialConditionSource": "external", "LimitOutput": true, "ShowSaturationPort": true, "ShowStatePort": true }, "inputs": ["in1", "reset", "x0"], "outputs": ["out1", "sat", "state"] },
+    { "typeId": "sl.integrator", "properties": { "LimitOutput": false, "ShowSaturationPort": true }, "inputs": ["in1"], "outputs": ["out1"] },
+    { "typeId": "sl.integrator", "properties": { "LimitOutput": "on", "ShowSaturationPort": "on" }, "inputs": ["in1"], "outputs": ["out1", "sat"] },
+    { "typeId": "sl.math_function", "properties": { "Operator": "pow" }, "inputs": ["in1", "in2"], "outputs": ["out1"] },
+    { "typeId": "sl.trigonometric_function", "properties": { "Operator": "sincos" }, "inputs": ["in1"], "outputs": ["out1", "out2"] },
+    { "typeId": "sl.sine_wave", "properties": { "TimeSource": "Use external signal" }, "inputs": ["in1"], "outputs": ["out1"] },
+    { "typeId": "sl.scope", "properties": { "NumInputPorts": "2" }, "inputs": ["in1", "in2"], "outputs": [] },
+    { "typeId": "sl.minmax", "properties": { "Inputs": "3" }, "inputs": ["in1", "in2", "in3"], "outputs": ["out1"] },
+    { "typeId": "sl.constant", "properties": {}, "inputs": [], "outputs": ["out1"] }
+  ]
+}

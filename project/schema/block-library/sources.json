@@ -1,0 +1,319 @@
+{
+  "library": "sources",
+  "name": "Sources",
+  "title": { "pt-BR": "Fontes" },
+  "order": 10,
+  "blocks": [
+    {
+      "id": "constant",
+      "name": "Constant",
+      "title": { "pt-BR": "Constante" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/constant.html",
+      "simulink": { "blockType": "Constant" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "Value", "type": "expr", "default": "1", "tunable": true, "title": { "en": "Constant value", "pt-BR": "Valor da constante" } },
+        { "name": "VectorParams1D", "type": "bool", "default": true, "title": { "en": "Interpret vector parameters as 1-D", "pt-BR": "Interpretar vetores como 1-D" } },
+        { "name": "SampleTime", "type": "expr", "default": "inf", "title": { "en": "Sample time", "pt-BR": "Tempo de amostragem" } },
+        { "name": "OutMin", "type": "expr", "default": "[]", "group": "Signal Attributes", "title": { "en": "Output minimum", "pt-BR": "Mínimo da saída" } },
+        { "name": "OutMax", "type": "expr", "default": "[]", "group": "Signal Attributes", "title": { "en": "Output maximum", "pt-BR": "Máximo da saída" } },
+        { "name": "Unit", "type": "string", "default": "", "group": "LasecSimul", "title": { "en": "Unit (label)", "pt-BR": "Unidade (rótulo)" } },
+        { "name": "Options", "type": "string", "default": "", "group": "LasecSimul", "title": { "en": "Choices (value=name;...)", "pt-BR": "Opções (valor=nome;...)" } }
+      ],
+      "inputs": [],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "step",
+      "name": "Step",
+      "title": { "pt-BR": "Degrau" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/step.html",
+      "simulink": { "blockType": "Step" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "Time", "type": "expr", "default": "1", "title": { "en": "Step time", "pt-BR": "Instante do degrau" } },
+        { "name": "InitialValue", "type": "expr", "default": "0", "title": { "en": "Initial value", "pt-BR": "Valor inicial" } },
+        { "name": "FinalValue", "type": "expr", "default": "1", "title": { "en": "Final value", "pt-BR": "Valor final" } },
+        { "name": "SampleTime", "type": "expr", "default": "0", "title": { "en": "Sample time", "pt-BR": "Tempo de amostragem" } },
+        { "name": "VectorParams1D", "type": "bool", "default": true, "title": { "en": "Interpret vector parameters as 1-D", "pt-BR": "Interpretar vetores como 1-D" } },
+        { "name": "ZeroCross", "type": "bool", "default": true, "title": { "en": "Enable zero-crossing detection", "pt-BR": "Detecção de cruzamento por zero" } }
+      ],
+      "inputs": [],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "ramp",
+      "name": "Ramp",
+      "title": { "pt-BR": "Rampa" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/ramp.html",
+      "simulink": { "sourceBlock": "simulink/Sources/Ramp" },
+      "sampleTime": { "fixed": "continuous" },
+      "size": [30, 30],
+      "params": [
+        { "name": "slope", "type": "expr", "default": "1", "title": { "en": "Slope", "pt-BR": "Inclinação" } },
+        { "name": "start", "type": "expr", "default": "0", "title": { "en": "Start time", "pt-BR": "Instante inicial" } },
+        { "name": "InitialOutput", "type": "expr", "default": "0", "title": { "en": "Initial output", "pt-BR": "Saída inicial" } },
+        { "name": "VectorParams1D", "type": "bool", "default": true, "title": { "en": "Interpret vector parameters as 1-D", "pt-BR": "Interpretar vetores como 1-D" } }
+      ],
+      "inputs": [],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "sine_wave",
+      "name": "Sine Wave",
+      "title": { "pt-BR": "Onda senoidal" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/sinewave.html",
+      "simulink": { "blockType": "Sin", "match": { "TimeSource": "Use simulation time" } },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "SineType", "type": "enum", "default": "Time based", "options": ["Time based", "Sample based"], "title": { "en": "Sine type", "pt-BR": "Tipo de seno" } },
+        { "name": "TimeSource", "type": "enum", "default": "Use simulation time", "options": ["Use simulation time", "Use external signal"], "visibleWhen": { "SineType": ["Time based"] }, "title": { "en": "Time (t)", "pt-BR": "Tempo (t)" } },
+        { "name": "Amplitude", "type": "expr", "default": "1", "tunable": true, "title": { "en": "Amplitude", "pt-BR": "Amplitude" } },
+        { "name": "Bias", "type": "expr", "default": "0", "tunable": true, "title": { "en": "Bias", "pt-BR": "Bias" } },
+        { "name": "Frequency", "type": "expr", "default": "1", "tunable": true, "visibleWhen": { "SineType": ["Time based"] }, "title": { "en": "Frequency (rad/sec)", "pt-BR": "Frequência (rad/s)" } },
+        { "name": "Phase", "type": "expr", "default": "0", "tunable": true, "visibleWhen": { "SineType": ["Time based"] }, "title": { "en": "Phase (rad)", "pt-BR": "Fase (rad)" } },
+        { "name": "Samples", "type": "expr", "default": "10", "visibleWhen": { "SineType": ["Sample based"] }, "title": { "en": "Samples per period", "pt-BR": "Amostras por período" } },
+        { "name": "Offset", "type": "expr", "default": "0", "visibleWhen": { "SineType": ["Sample based"] }, "title": { "en": "Number of offset samples", "pt-BR": "Amostras de deslocamento" } },
+        { "name": "SampleTime", "type": "expr", "default": "0", "title": { "en": "Sample time", "pt-BR": "Tempo de amostragem" } },
+        { "name": "VectorParams1D", "type": "bool", "default": true, "title": { "en": "Interpret vector parameters as 1-D", "pt-BR": "Interpretar vetores como 1-D" } }
+      ],
+      "inputs": [{ "id": "in1", "when": { "SineType": ["Time based"], "TimeSource": ["Use external signal"] } }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "clock",
+      "name": "Clock",
+      "title": { "pt-BR": "Relógio" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/clock.html",
+      "simulink": { "blockType": "Clock" },
+      "sampleTime": { "fixed": "continuous" },
+      "size": [30, 30],
+      "params": [
+        { "name": "DisplayTime", "type": "bool", "default": false, "title": { "en": "Display time", "pt-BR": "Mostrar o tempo" } },
+        { "name": "Decimation", "type": "expr", "default": "10", "visibleWhen": { "DisplayTime": [true] }, "title": { "en": "Decimation", "pt-BR": "Decimação" } }
+      ],
+      "inputs": [],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "digital_clock",
+      "name": "Digital Clock",
+      "title": { "pt-BR": "Relógio digital" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/digitalclock.html",
+      "simulink": { "blockType": "DigitalClock" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [60, 30],
+      "params": [
+        { "name": "SampleTime", "type": "expr", "default": "1", "title": { "en": "Sample time", "pt-BR": "Tempo de amostragem" } }
+      ],
+      "inputs": [],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "ground",
+      "name": "Ground",
+      "title": { "pt-BR": "Terra (sinal zero)" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/ground.html",
+      "simulink": { "blockType": "Ground" },
+      "sampleTime": { "fixed": "constant" },
+      "size": [20, 20],
+      "params": [],
+      "inputs": [],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "pulse_generator",
+      "name": "Pulse Generator",
+      "title": { "pt-BR": "Gerador de pulsos" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/pulsegenerator.html",
+      "simulink": { "blockType": "DiscretePulseGenerator" },
+      "sampleTime": { "fixed": "continuous" },
+      "size": [30, 30],
+      "params": [
+        { "name": "PulseType", "type": "enum", "default": "Time based", "options": ["Time based", "Sample based"], "title": { "en": "Pulse type", "pt-BR": "Tipo de pulso" } },
+        { "name": "TimeSource", "type": "enum", "default": "Use simulation time", "options": ["Use simulation time", "Use external signal"], "visibleWhen": { "PulseType": ["Time based"] }, "title": { "en": "Time (t)", "pt-BR": "Tempo (t)" } },
+        { "name": "Amplitude", "type": "expr", "default": "1", "tunable": true, "title": { "en": "Amplitude", "pt-BR": "Amplitude" } },
+        { "name": "Period", "type": "expr", "default": "10", "title": { "en": "Period (secs; samples if sample based)", "pt-BR": "Período (s; amostras se baseado em amostras)" } },
+        { "name": "PulseWidth", "type": "expr", "default": "5", "title": { "en": "Pulse width (% of period; samples if sample based)", "pt-BR": "Largura do pulso (% do período; amostras se baseado em amostras)" } },
+        { "name": "PhaseDelay", "type": "expr", "default": "0", "title": { "en": "Phase delay (secs; samples if sample based)", "pt-BR": "Atraso de fase (s; amostras se baseado em amostras)" } },
+        { "name": "SampleTime", "type": "expr", "default": "1", "visibleWhen": { "PulseType": ["Sample based"] }, "title": { "en": "Sample time", "pt-BR": "Tempo de amostragem" } },
+        { "name": "VectorParams1D", "type": "bool", "default": true, "title": { "en": "Interpret vector parameters as 1-D", "pt-BR": "Interpretar vetores como 1-D" } }
+      ],
+      "inputs": [{ "id": "in1", "when": { "PulseType": ["Time based"], "TimeSource": ["Use external signal"] } }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "signal_generator",
+      "name": "Signal Generator",
+      "title": { "pt-BR": "Gerador de sinais" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/signalgenerator.html",
+      "simulink": { "blockType": "SignalGenerator" },
+      "sampleTime": { "fixed": "continuous" },
+      "size": [30, 30],
+      "params": [
+        { "name": "WaveForm", "type": "enum", "default": "sine", "options": ["sine", "square", "sawtooth", "random"], "title": { "en": "Wave form", "pt-BR": "Forma de onda" } },
+        { "name": "TimeSource", "type": "enum", "default": "Use simulation time", "options": ["Use simulation time", "Use external signal"], "title": { "en": "Time (t)", "pt-BR": "Tempo (t)" } },
+        { "name": "Amplitude", "type": "expr", "default": "1", "tunable": true, "title": { "en": "Amplitude", "pt-BR": "Amplitude" } },
+        { "name": "Frequency", "type": "expr", "default": "1", "tunable": true, "title": { "en": "Frequency", "pt-BR": "Frequência" } },
+        { "name": "Units", "type": "enum", "default": "rad/sec", "options": ["rad/sec", "Hertz"], "title": { "en": "Units", "pt-BR": "Unidade" } },
+        { "name": "VectorParams1D", "type": "bool", "default": true, "title": { "en": "Interpret vector parameters as 1-D", "pt-BR": "Interpretar vetores como 1-D" } }
+      ],
+      "inputs": [{ "id": "in1", "when": { "TimeSource": ["Use external signal"] } }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "repeating_sequence",
+      "name": "Repeating Sequence",
+      "title": { "pt-BR": "Sequência repetitiva" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/repeatingsequence.html",
+      "simulink": { "sourceBlock": "simulink/Sources/Repeating Sequence" },
+      "sampleTime": { "fixed": "continuous" },
+      "size": [30, 30],
+      "params": [
+        { "name": "rep_seq_t", "type": "expr", "default": "[0 2]", "title": { "en": "Time values", "pt-BR": "Valores de tempo" } },
+        { "name": "rep_seq_y", "type": "expr", "default": "[0 2]", "title": { "en": "Output values", "pt-BR": "Valores de saída" } }
+      ],
+      "inputs": [],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "repeating_sequence_interpolated",
+      "name": "Repeating Sequence Interpolated",
+      "title": { "pt-BR": "Sequência repetitiva interpolada" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/repeatingsequenceinterpolated.html",
+      "simulink": { "sourceBlock": "simulink/Sources/Repeating Sequence Interpolated" },
+      "sampleTime": { "param": "tsamp" },
+      "size": [30, 30],
+      "params": [
+        { "name": "OutValues", "type": "expr", "default": "[3 1 4 2 1].'", "title": { "en": "Vector of output values", "pt-BR": "Vetor de valores de saída" } },
+        { "name": "TimeValues", "type": "expr", "default": "[0 0.1 0.5 0.6 1].'", "title": { "en": "Vector of time values", "pt-BR": "Vetor de valores de tempo" } },
+        { "name": "LookUpMeth", "type": "enum", "default": "Interpolation-Use End Values", "options": ["Interpolation-Use End Values", "Use Input Nearest", "Use Input Below", "Use Input Above"], "title": { "en": "Lookup Method", "pt-BR": "Método de busca" } },
+        { "name": "tsamp", "type": "expr", "default": "0.01", "title": { "en": "Sample time", "pt-BR": "Tempo de amostragem" } },
+        { "name": "OutMin", "type": "expr", "default": "[]", "group": "Signal Attributes", "title": { "en": "Output minimum", "pt-BR": "Mínimo da saída" } },
+        { "name": "OutMax", "type": "expr", "default": "[]", "group": "Signal Attributes", "title": { "en": "Output maximum", "pt-BR": "Máximo da saída" } }
+      ],
+      "inputs": [],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "repeating_sequence_stair",
+      "name": "Repeating Sequence Stair",
+      "title": { "pt-BR": "Sequência repetitiva em escada" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/repeatingsequencestair.html",
+      "simulink": { "sourceBlock": "simulink/Sources/Repeating Sequence Stair" },
+      "sampleTime": { "param": "tsamp" },
+      "size": [30, 30],
+      "params": [
+        { "name": "OutValues", "type": "expr", "default": "[3 1 4 2 1].'", "title": { "en": "Vector of output values", "pt-BR": "Vetor de valores de saída" } },
+        { "name": "tsamp", "type": "expr", "default": "-1", "title": { "en": "Sample time", "pt-BR": "Tempo de amostragem" } },
+        { "name": "OutMin", "type": "expr", "default": "[]", "group": "Signal Attributes", "title": { "en": "Output minimum", "pt-BR": "Mínimo da saída" } },
+        { "name": "OutMax", "type": "expr", "default": "[]", "group": "Signal Attributes", "title": { "en": "Output maximum", "pt-BR": "Máximo da saída" } }
+      ],
+      "inputs": [],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "chirp_signal",
+      "name": "Chirp Signal",
+      "title": { "pt-BR": "Sinal chirp (varredura em frequência)" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/chirpsignal.html",
+      "simulink": { "sourceBlock": "simulink/Sources/Chirp Signal" },
+      "sampleTime": { "fixed": "continuous" },
+      "size": [30, 30],
+      "params": [
+        { "name": "f1", "type": "expr", "default": "0.1", "title": { "en": "Initial frequency (Hz)", "pt-BR": "Frequência inicial (Hz)" } },
+        { "name": "T", "type": "expr", "default": "100", "title": { "en": "Target time (secs)", "pt-BR": "Instante alvo (s)" } },
+        { "name": "f2", "type": "expr", "default": "1", "title": { "en": "Frequency at target time (Hz)", "pt-BR": "Frequência no instante alvo (Hz)" } },
+        { "name": "VectorParams1D", "type": "bool", "default": true, "title": { "en": "Interpret vector parameters as 1-D", "pt-BR": "Interpretar vetores como 1-D" } }
+      ],
+      "inputs": [],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "random_number",
+      "name": "Random Number",
+      "title": { "pt-BR": "Número aleatório (normal)" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/randomnumber.html",
+      "simulink": { "blockType": "RandomNumber" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "Mean", "type": "expr", "default": "0", "title": { "en": "Mean", "pt-BR": "Média" } },
+        { "name": "Variance", "type": "expr", "default": "1", "title": { "en": "Variance", "pt-BR": "Variância" } },
+        { "name": "Seed", "type": "expr", "default": "0", "title": { "en": "Seed", "pt-BR": "Semente" } },
+        { "name": "SampleTime", "type": "expr", "default": "0.1", "title": { "en": "Sample time", "pt-BR": "Tempo de amostragem" } },
+        { "name": "VectorParams1D", "type": "bool", "default": true, "title": { "en": "Interpret vector parameters as 1-D", "pt-BR": "Interpretar vetores como 1-D" } }
+      ],
+      "inputs": [],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "uniform_random_number",
+      "name": "Uniform Random Number",
+      "title": { "pt-BR": "Número aleatório uniforme" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/uniformrandomnumber.html",
+      "simulink": { "blockType": "UniformRandomNumber" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "Minimum", "type": "expr", "default": "-1", "title": { "en": "Minimum", "pt-BR": "Mínimo" } },
+        { "name": "Maximum", "type": "expr", "default": "1", "title": { "en": "Maximum", "pt-BR": "Máximo" } },
+        { "name": "Seed", "type": "expr", "default": "0", "title": { "en": "Seed", "pt-BR": "Semente" } },
+        { "name": "SampleTime", "type": "expr", "default": "0.1", "title": { "en": "Sample time", "pt-BR": "Tempo de amostragem" } },
+        { "name": "VectorParams1D", "type": "bool", "default": true, "title": { "en": "Interpret vector parameters as 1-D", "pt-BR": "Interpretar vetores como 1-D" } }
+      ],
+      "inputs": [],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "band_limited_white_noise",
+      "name": "Band-Limited White Noise",
+      "title": { "pt-BR": "Ruído branco de banda limitada" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/bandlimitedwhitenoise.html",
+      "simulink": { "sourceBlock": "simulink/Sources/Band-Limited White Noise" },
+      "sampleTime": { "param": "Ts" },
+      "size": [30, 30],
+      "params": [
+        { "name": "Cov", "type": "expr", "default": "[0.1]", "title": { "en": "Noise power", "pt-BR": "Potência do ruído (altura da PSD)" } },
+        { "name": "Ts", "type": "expr", "default": "0.1", "title": { "en": "Sample time", "pt-BR": "Tempo de amostragem (tempo de correlação)" } },
+        { "name": "seed", "type": "expr", "default": "[23341]", "title": { "en": "Seed", "pt-BR": "Semente" } },
+        { "name": "VectorParams1D", "type": "bool", "default": true, "title": { "en": "Interpret vector parameters as 1-D", "pt-BR": "Interpretar vetores como 1-D" } }
+      ],
+      "inputs": [],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "counter_free_running",
+      "name": "Counter Free-Running",
+      "title": { "pt-BR": "Contador livre" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/counterfreerunning.html",
+      "simulink": { "sourceBlock": "simulink/Sources/Counter Free-Running" },
+      "sampleTime": { "param": "tsamp" },
+      "size": [30, 30],
+      "params": [
+        { "name": "NumBits", "type": "expr", "default": "16", "title": { "en": "Number of Bits", "pt-BR": "Número de bits" } },
+        { "name": "tsamp", "type": "expr", "default": "-1", "title": { "en": "Sample time", "pt-BR": "Tempo de amostragem" } }
+      ],
+      "inputs": [],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "counter_limited",
+      "name": "Counter Limited",
+      "title": { "pt-BR": "Contador limitado" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/counterlimited.html",
+      "simulink": { "sourceBlock": "simulink/Sources/Counter Limited" },
+      "sampleTime": { "param": "tsamp" },
+      "size": [30, 30],
+      "params": [
+        { "name": "uplimit", "type": "expr", "default": "7", "title": { "en": "Upper limit", "pt-BR": "Limite superior" } },
+        { "name": "tsamp", "type": "expr", "default": "-1", "title": { "en": "Sample time", "pt-BR": "Tempo de amostragem" } }
+      ],
+      "inputs": [],
+      "outputs": [{ "id": "out1" }]
+    }
+  ]
+}

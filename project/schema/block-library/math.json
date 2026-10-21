@@ -1,0 +1,395 @@
+{
+  "library": "math",
+  "name": "Math Operations",
+  "title": { "pt-BR": "Operações Matemáticas" },
+  "order": 40,
+  "blocks": [
+    {
+      "id": "gain",
+      "name": "Gain",
+      "title": { "pt-BR": "Ganho" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/gain.html",
+      "simulink": { "blockType": "Gain" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "Gain", "type": "expr", "default": "1", "tunable": true, "title": { "en": "Gain", "pt-BR": "Ganho" } },
+        { "name": "Multiplication", "type": "enum", "default": "Element-wise(K.*u)", "options": ["Element-wise(K.*u)", "Matrix(K*u)", "Matrix(u*K)", "Matrix(K*u) (u vector)"], "title": { "en": "Multiplication", "pt-BR": "Multiplicação" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } },
+        { "name": "ParamMin", "type": "expr", "default": "[]", "group": "Parameter Attributes", "title": { "en": "Parameter minimum", "pt-BR": "Mínimo do parâmetro" } },
+        { "name": "ParamMax", "type": "expr", "default": "[]", "group": "Parameter Attributes", "title": { "en": "Parameter maximum", "pt-BR": "Máximo do parâmetro" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "slider_gain",
+      "name": "Slider Gain",
+      "title": { "pt-BR": "Ganho deslizante" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/slidergain.html",
+      "simulink": { "sourceBlock": "simulink/Math Operations/Slider Gain" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [30, 30],
+      "params": [
+        { "name": "gain", "type": "expr", "default": "1", "tunable": true, "title": { "en": "Slider gain", "pt-BR": "Ganho" } },
+        { "name": "low", "type": "expr", "default": "0", "tunable": true, "title": { "en": "Low", "pt-BR": "Mínimo" } },
+        { "name": "high", "type": "expr", "default": "2", "tunable": true, "title": { "en": "High", "pt-BR": "Máximo" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "sum",
+      "name": "Sum",
+      "title": { "pt-BR": "Soma" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/sum.html",
+      "simulink": { "blockType": "Sum" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [20, 20],
+      "presets": [
+        { "name": "Add", "title": { "pt-BR": "Adição" }, "doc": "https://www.mathworks.com/help/simulink/slref/sum.html", "defaults": { "IconShape": "rectangular", "Inputs": "++" }, "size": [30, 30] },
+        { "name": "Subtract", "title": { "pt-BR": "Subtração" }, "doc": "https://www.mathworks.com/help/simulink/slref/sum.html", "defaults": { "IconShape": "rectangular", "Inputs": "+-" }, "size": [30, 30] },
+        { "name": "Sum of Elements", "title": { "pt-BR": "Soma dos elementos" }, "doc": "https://www.mathworks.com/help/simulink/slref/sum.html", "defaults": { "IconShape": "rectangular", "Inputs": "+" }, "size": [30, 30] }
+      ],
+      "params": [
+        { "name": "IconShape", "type": "enum", "default": "round", "options": ["round", "rectangular"], "title": { "en": "Icon shape", "pt-BR": "Formato do ícone" } },
+        { "name": "Inputs", "type": "string", "default": "|++", "title": { "en": "List of signs", "pt-BR": "Lista de sinais" } },
+        { "name": "CollapseMode", "type": "enum", "default": "All dimensions", "options": ["All dimensions", "Specified dimension"], "title": { "en": "Apply over", "pt-BR": "Aplicar sobre" } },
+        { "name": "CollapseDim", "type": "expr", "default": "1", "visibleWhen": { "CollapseMode": ["Specified dimension"] }, "title": { "en": "Dimension", "pt-BR": "Dimensão" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } }
+      ],
+      "inputs": [{ "repeat": { "param": "Inputs", "rule": "signs" }, "prefix": "in", "start": 1 }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "product",
+      "name": "Product",
+      "title": { "pt-BR": "Produto" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/product.html",
+      "simulink": { "blockType": "Product" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "presets": [
+        { "name": "Divide", "title": { "pt-BR": "Divisão" }, "doc": "https://www.mathworks.com/help/simulink/slref/divide.html", "defaults": { "Inputs": "*/" } },
+        { "name": "Product of Elements", "title": { "pt-BR": "Produto dos elementos" }, "doc": "https://www.mathworks.com/help/simulink/slref/productofelements.html", "defaults": { "Inputs": "*" } }
+      ],
+      "params": [
+        { "name": "Inputs", "type": "string", "default": "2", "title": { "en": "Number of inputs", "pt-BR": "Número de entradas" } },
+        { "name": "Multiplication", "type": "enum", "default": "Element-wise(.*)", "options": ["Element-wise(.*)", "Matrix(*)"], "title": { "en": "Multiplication", "pt-BR": "Multiplicação" } },
+        { "name": "CollapseMode", "type": "enum", "default": "All dimensions", "options": ["All dimensions", "Specified dimension"], "title": { "en": "Apply over", "pt-BR": "Aplicar sobre" } },
+        { "name": "CollapseDim", "type": "expr", "default": "1", "visibleWhen": { "CollapseMode": ["Specified dimension"] }, "title": { "en": "Dimension", "pt-BR": "Dimensão" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } }
+      ],
+      "inputs": [{ "repeat": { "param": "Inputs", "rule": "ops" }, "prefix": "in", "start": 1 }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "dot_product",
+      "name": "Dot Product",
+      "title": { "pt-BR": "Produto escalar" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/dotproduct.html",
+      "simulink": { "blockType": "DotProduct" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [30, 30],
+      "params": [],
+      "inputs": [{ "id": "in1" }, { "id": "in2" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "bias",
+      "name": "Bias",
+      "title": { "pt-BR": "Bias" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/bias.html",
+      "simulink": { "blockType": "Bias" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [30, 30],
+      "params": [
+        { "name": "Bias", "type": "expr", "default": "0.0", "tunable": true, "title": { "en": "Bias", "pt-BR": "Bias" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "weighted_sample_time_math",
+      "name": "Weighted Sample Time Math",
+      "title": { "pt-BR": "Matemática com tempo de amostragem ponderado" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/weightedsampletimemath.html",
+      "simulink": { "blockType": "SampleTimeMath" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [60, 30],
+      "params": [
+        { "name": "TsampMathOp", "type": "enum", "default": "+", "options": ["+", "-", "*", "/", "Ts Only", "1/Ts Only"], "title": { "en": "Operation", "pt-BR": "Operação" } },
+        { "name": "weightValue", "type": "expr", "default": "1.0", "title": { "en": "Weight value", "pt-BR": "Peso" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "abs",
+      "name": "Abs",
+      "title": { "pt-BR": "Valor absoluto" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/abs.html",
+      "simulink": { "blockType": "Abs" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "ZeroCross", "type": "bool", "default": true, "title": { "en": "Enable zero-crossing detection", "pt-BR": "Detecção de cruzamento por zero" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "sign",
+      "name": "Sign",
+      "title": { "pt-BR": "Sinal" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/sign.html",
+      "simulink": { "blockType": "Signum" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "ZeroCross", "type": "bool", "default": true, "title": { "en": "Enable zero-crossing detection", "pt-BR": "Detecção de cruzamento por zero" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "unary_minus",
+      "name": "Unary Minus",
+      "title": { "pt-BR": "Menos unário" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/unaryminus.html",
+      "simulink": { "blockType": "UnaryMinus" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "sqrt",
+      "name": "Sqrt",
+      "title": { "pt-BR": "Raiz quadrada" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/sqrt.html",
+      "simulink": { "blockType": "Sqrt" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "presets": [
+        { "name": "Signed Sqrt", "title": { "pt-BR": "Raiz quadrada com sinal" }, "doc": "https://www.mathworks.com/help/simulink/slref/sqrt.html", "defaults": { "Operator": "signedSqrt" } },
+        { "name": "Reciprocal Sqrt", "title": { "pt-BR": "Inverso da raiz quadrada" }, "doc": "https://www.mathworks.com/help/simulink/slref/sqrt.html", "defaults": { "Operator": "rSqrt" } }
+      ],
+      "params": [
+        { "name": "Operator", "type": "enum", "default": "sqrt", "options": ["sqrt", "signedSqrt", "rSqrt"], "title": { "en": "Function", "pt-BR": "Função" } },
+        { "name": "OutputSignalType", "type": "enum", "default": "auto", "options": ["auto", "real", "complex"], "title": { "en": "Output signal type", "pt-BR": "Tipo do sinal de saída" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "math_function",
+      "name": "Math Function",
+      "title": { "pt-BR": "Função matemática" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/mathfunction.html",
+      "simulink": { "blockType": "Math" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "Operator", "type": "enum", "default": "exp", "options": ["exp", "log", "2^u", "10^u", "log10", "magnitude^2", "square", "pow", "conj", "reciprocal", "hypot", "rem", "mod", "transpose", "hermitian"], "title": { "en": "Function", "pt-BR": "Função" } },
+        { "name": "SignedPower", "type": "bool", "default": true, "visibleWhen": { "Operator": ["pow"] }, "title": { "en": "Signed power", "pt-BR": "Potência com sinal" } },
+        { "name": "OutputSignalType", "type": "enum", "default": "auto", "options": ["auto", "real", "complex"], "title": { "en": "Output signal type", "pt-BR": "Tipo do sinal de saída" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } }
+      ],
+      "inputs": [{ "id": "in1" }, { "id": "in2", "when": { "Operator": ["pow", "hypot", "rem", "mod"] } }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "trigonometric_function",
+      "name": "Trigonometric Function",
+      "title": { "pt-BR": "Função trigonométrica" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/trigonometricfunction.html",
+      "simulink": { "blockType": "Trigonometry" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "Operator", "type": "enum", "default": "sin", "options": ["sin", "cos", "tan", "asin", "acos", "atan", "atan2", "sinh", "cosh", "tanh", "asinh", "acosh", "atanh", "sincos", "cos + jsin"], "title": { "en": "Function", "pt-BR": "Função" } },
+        { "name": "ApproximationMethod", "type": "enum", "default": "None", "options": ["None", "CORDIC", "Lookup"], "visibleWhen": { "Operator": ["sin", "cos", "sincos", "cos + jsin", "atan2"] }, "title": { "en": "Approximation method", "pt-BR": "Método de aproximação" } },
+        { "name": "AngleUnit", "type": "enum", "default": "radian", "options": ["radian", "revolution"], "visibleWhen": { "Operator": ["sin", "cos", "sincos", "cos + jsin", "atan2"], "ApproximationMethod": ["Lookup"] }, "title": { "en": "Angle unit", "pt-BR": "Unidade de ângulo" } },
+        { "name": "RemoveProtectionAgainstOutOfRangeInput", "type": "bool", "default": false, "visibleWhen": { "Operator": ["asin", "acos"] }, "title": { "en": "Remove protection against out-of-range input", "pt-BR": "Remover proteção contra entrada fora da faixa" } },
+        { "name": "OutputSignalType", "type": "enum", "default": "auto", "options": ["auto", "real", "complex"], "title": { "en": "Output signal type", "pt-BR": "Tipo do sinal de saída" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } }
+      ],
+      "inputs": [{ "id": "in1" }, { "id": "in2", "when": { "Operator": ["atan2"] } }],
+      "outputs": [
+        { "id": "out1", "when": { "Operator": ["sin", "cos", "tan", "asin", "acos", "atan", "atan2", "sinh", "cosh", "tanh", "asinh", "acosh", "atanh", "cos + jsin"] } },
+        { "id": "out1", "label": "sin", "when": { "Operator": ["sincos"] } },
+        { "id": "out2", "label": "cos", "when": { "Operator": ["sincos"] } }
+      ]
+    },
+    {
+      "id": "rounding_function",
+      "name": "Rounding Function",
+      "title": { "pt-BR": "Função de arredondamento" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/roundingfunction.html",
+      "simulink": { "blockType": "Rounding" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "Operator", "type": "enum", "default": "floor", "options": ["floor", "ceil", "round", "fix"], "title": { "en": "Function", "pt-BR": "Função" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "minmax",
+      "name": "MinMax",
+      "title": { "pt-BR": "Mínimo/Máximo" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/minmax.html",
+      "simulink": { "blockType": "MinMax" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "Function", "type": "enum", "default": "min", "options": ["min", "max"], "title": { "en": "Function", "pt-BR": "Função" } },
+        { "name": "Inputs", "type": "expr", "default": "1", "title": { "en": "Number of input ports", "pt-BR": "Número de entradas" } },
+        { "name": "CollapseMode", "type": "enum", "default": "All dimensions", "options": ["All dimensions", "Specified dimension"], "visibleWhen": { "Inputs": ["1"] }, "title": { "en": "Apply over", "pt-BR": "Aplicar sobre" } },
+        { "name": "CollapseDim", "type": "expr", "default": "1", "visibleWhen": { "Inputs": ["1"], "CollapseMode": ["Specified dimension"] }, "title": { "en": "Dimension", "pt-BR": "Dimensão" } },
+        { "name": "ZeroCross", "type": "bool", "default": true, "title": { "en": "Enable zero-crossing detection", "pt-BR": "Detecção de cruzamento por zero" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } }
+      ],
+      "inputs": [{ "repeat": { "param": "Inputs", "rule": "count" }, "prefix": "in", "start": 1 }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "minmax_running_resettable",
+      "name": "MinMax Running Resettable",
+      "title": { "pt-BR": "Mínimo/Máximo acumulado com reset" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/minmaxrunningresettable.html",
+      "simulink": { "sourceBlock": "simulink/Math Operations/MinMax Running Resettable" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [50, 40],
+      "params": [
+        { "name": "Function", "type": "enum", "default": "min", "options": ["min", "max"], "title": { "en": "Function", "pt-BR": "Função" } },
+        { "name": "vinit", "type": "expr", "default": "0.0", "title": { "en": "Initial condition", "pt-BR": "Condição inicial" } }
+      ],
+      "inputs": [{ "id": "in1", "label": "u" }, { "id": "in2", "label": "R" }],
+      "outputs": [{ "id": "out1", "label": "y" }]
+    },
+    {
+      "id": "polynomial",
+      "name": "Polynomial",
+      "title": { "pt-BR": "Polinômio" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/polynomial.html",
+      "simulink": { "blockType": "Polyval" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [30, 30],
+      "params": [
+        { "name": "coefs", "type": "expr", "default": "[+2.081618890e-019, -1.441693666e-014, +4.719686976e-010, -8.536869453e-006, +1.621573104e-001, -8.087801117e+001]", "tunable": true, "title": { "en": "Polynomial coefficients", "pt-BR": "Coeficientes do polinômio" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "sine_wave_function",
+      "name": "Sine Wave Function",
+      "title": { "pt-BR": "Função onda senoidal" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/sinewavefunction.html",
+      "simulink": { "blockType": "Sin", "match": { "TimeSource": "Use external signal" } },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "SineType", "type": "enum", "default": "Time based", "options": ["Time based", "Sample based"], "title": { "en": "Sine type", "pt-BR": "Tipo de seno" } },
+        { "name": "TimeSource", "type": "enum", "default": "Use external signal", "options": ["Use simulation time", "Use external signal"], "visibleWhen": { "SineType": ["Time based"] }, "title": { "en": "Time (t)", "pt-BR": "Tempo (t)" } },
+        { "name": "Amplitude", "type": "expr", "default": "1", "tunable": true, "title": { "en": "Amplitude", "pt-BR": "Amplitude" } },
+        { "name": "Bias", "type": "expr", "default": "0", "tunable": true, "title": { "en": "Bias", "pt-BR": "Bias" } },
+        { "name": "Frequency", "type": "expr", "default": "1", "tunable": true, "visibleWhen": { "SineType": ["Time based"] }, "title": { "en": "Frequency (rad/sec)", "pt-BR": "Frequência (rad/s)" } },
+        { "name": "Phase", "type": "expr", "default": "0", "tunable": true, "visibleWhen": { "SineType": ["Time based"] }, "title": { "en": "Phase (rad)", "pt-BR": "Fase (rad)" } },
+        { "name": "Samples", "type": "expr", "default": "10", "visibleWhen": { "SineType": ["Sample based"] }, "title": { "en": "Samples per period", "pt-BR": "Amostras por período" } },
+        { "name": "Offset", "type": "expr", "default": "0", "visibleWhen": { "SineType": ["Sample based"] }, "title": { "en": "Number of offset samples", "pt-BR": "Amostras de deslocamento" } },
+        { "name": "SampleTime", "type": "expr", "default": "0", "title": { "en": "Sample time", "pt-BR": "Tempo de amostragem" } },
+        { "name": "VectorParams1D", "type": "bool", "default": true, "title": { "en": "Interpret vector parameters as 1-D", "pt-BR": "Interpretar vetores como 1-D" } }
+      ],
+      "inputs": [{ "id": "in1", "when": { "SineType": ["Time based"], "TimeSource": ["Use external signal"] } }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "vector_concatenate",
+      "name": "Vector Concatenate",
+      "title": { "pt-BR": "Concatenação de vetores" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/vectorconcatenate.html",
+      "simulink": { "blockType": "Concatenate", "match": { "Mode": "Vector" } },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [5, 40],
+      "params": [
+        { "name": "NumInputs", "type": "expr", "default": "2", "title": { "en": "Number of inputs", "pt-BR": "Número de entradas" } },
+        { "name": "Mode", "type": "enum", "default": "Vector", "options": ["Vector", "Multidimensional array"], "title": { "en": "Mode", "pt-BR": "Modo" } },
+        { "name": "ConcatenateDimension", "type": "expr", "default": "1", "visibleWhen": { "Mode": ["Multidimensional array"] }, "title": { "en": "Concatenate dimension", "pt-BR": "Dimensão de concatenação" } }
+      ],
+      "inputs": [{ "repeat": { "param": "NumInputs", "rule": "count" }, "prefix": "in", "start": 1 }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "matrix_concatenate",
+      "name": "Matrix Concatenate",
+      "title": { "pt-BR": "Concatenação de matrizes" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/matrixconcatenate.html",
+      "simulink": { "blockType": "Concatenate", "match": { "Mode": "Multidimensional array" } },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [30, 40],
+      "params": [
+        { "name": "NumInputs", "type": "expr", "default": "2", "title": { "en": "Number of inputs", "pt-BR": "Número de entradas" } },
+        { "name": "Mode", "type": "enum", "default": "Multidimensional array", "options": ["Vector", "Multidimensional array"], "title": { "en": "Mode", "pt-BR": "Modo" } },
+        { "name": "ConcatenateDimension", "type": "expr", "default": "2", "visibleWhen": { "Mode": ["Multidimensional array"] }, "title": { "en": "Concatenate dimension", "pt-BR": "Dimensão de concatenação" } }
+      ],
+      "inputs": [{ "repeat": { "param": "NumInputs", "rule": "count" }, "prefix": "in", "start": 1 }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "assignment",
+      "name": "Assignment",
+      "title": { "pt-BR": "Atribuição" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/assignment.html",
+      "simulink": { "blockType": "Assignment" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [50, 50],
+      "params": [
+        { "name": "NumberOfDimensions", "type": "expr", "default": "1", "title": { "en": "Number of output dimensions", "pt-BR": "Número de dimensões da saída" } },
+        { "name": "IndexMode", "type": "enum", "default": "One-based", "options": ["Zero-based", "One-based"], "title": { "en": "Index mode", "pt-BR": "Modo de índice" } },
+        { "name": "IndexOptionArray", "type": "enum", "default": "Index vector (dialog)", "options": ["Assign all", "Index vector (dialog)", "Index vector (port)", "Starting index (dialog)", "Starting index (port)"], "title": { "en": "Index option", "pt-BR": "Opção de índice" } },
+        { "name": "IndexParamArray", "type": "expr", "default": "1", "visibleWhen": { "IndexOptionArray": ["Index vector (dialog)", "Starting index (dialog)"] }, "title": { "en": "Index", "pt-BR": "Índice" } },
+        { "name": "OutputSizeArray", "type": "expr", "default": "1", "visibleWhen": { "IndexOptionArray": ["Index vector (port)", "Starting index (port)"], "OutputInitialize": ["Specify size for each dimension in table"] }, "title": { "en": "Output size", "pt-BR": "Tamanho da saída" } },
+        { "name": "OutputInitialize", "type": "enum", "default": "Initialize using input port <Y0>", "options": ["Initialize using input port <Y0>", "Specify size for each dimension in table"], "visibleWhen": { "IndexOptionArray": ["Index vector (port)", "Starting index (port)"] }, "title": { "en": "Initialize output (Y)", "pt-BR": "Inicializar a saída (Y)" } },
+        { "name": "DiagnosticForDimensions", "type": "enum", "default": "Warning", "options": ["Error", "Warning", "None"], "visibleWhen": { "IndexOptionArray": ["Index vector (port)", "Starting index (port)"], "OutputInitialize": ["Specify size for each dimension in table"] }, "title": { "en": "Action if any output element is not assigned", "pt-BR": "Ação se algum elemento da saída não for atribuído" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } }
+      ],
+      "inputs": [
+        { "id": "in1", "label": "Y0", "when": { "IndexOptionArray": ["Assign all", "Index vector (dialog)", "Starting index (dialog)"] } },
+        { "id": "in1", "label": "Y0", "when": { "IndexOptionArray": ["Index vector (port)", "Starting index (port)"], "OutputInitialize": ["Initialize using input port <Y0>"] } },
+        { "id": "in2", "label": "U" },
+        { "id": "in3", "label": "Idx1", "when": { "IndexOptionArray": ["Index vector (port)", "Starting index (port)"] } }
+      ],
+      "outputs": [{ "id": "out1", "label": "Y" }]
+    },
+    {
+      "id": "reshape",
+      "name": "Reshape",
+      "title": { "pt-BR": "Redimensionar (Reshape)" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/reshape.html",
+      "simulink": { "blockType": "Reshape" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [30, 30],
+      "params": [
+        { "name": "OutputDimensionality", "type": "enum", "default": "1-D array", "options": ["1-D array", "Column vector (2-D)", "Row vector (2-D)", "Customize", "Derive from reference input port"], "title": { "en": "Output dimensionality", "pt-BR": "Dimensionalidade da saída" } },
+        { "name": "OutputDimensions", "type": "expr", "default": "[1,1]", "visibleWhen": { "OutputDimensionality": ["Customize"] }, "title": { "en": "Output dimensions", "pt-BR": "Dimensões da saída" } }
+      ],
+      "inputs": [
+        { "id": "in1", "when": { "OutputDimensionality": ["1-D array", "Column vector (2-D)", "Row vector (2-D)", "Customize"] } },
+        { "id": "in1", "label": "U", "when": { "OutputDimensionality": ["Derive from reference input port"] } },
+        { "id": "in2", "label": "Ref", "when": { "OutputDimensionality": ["Derive from reference input port"] } }
+      ],
+      "outputs": [{ "id": "out1" }]
+    }
+  ]
+}

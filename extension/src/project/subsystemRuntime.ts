@@ -3,7 +3,7 @@ import { parseSubcircuitManifest } from "../catalog/registeredSources";
 import { currentLasecSimulLanguage } from "../currentLanguage";
 import { readJsonFile } from "../pathUtils";
 import { state } from "../state";
-import { registerPackage } from "../ui/webview/componentSymbols";
+import { registerPackage, registerBlockSpec } from "../ui/webview/componentSymbols";
 import type { WebviewComponentCatalogEntry } from "../ui/webview/model";
 import {
   flattenExternalSystem,
@@ -192,7 +192,10 @@ export function currentDocumentDir(): string {
 export async function syncDocumentSubsystems(): Promise<Map<string, string>> {
   const table = state.schematicState.subsystems ?? [];
   const entries = subsystemCatalogEntries(table, currentDocumentDir());
-  for (const entry of entries) registerPackage(entry.typeId, entry.package, entry.logicSymbolPackage);
+  for (const entry of entries) {
+    registerPackage(entry.typeId, entry.package, entry.logicSymbolPackage);
+    registerBlockSpec(entry.typeId, entry.blockSpec);
+  }
   // Pinos das instâncias seguem a interface da definição (ao abrir/importar/colar a instância pode ter
   // sido montada antes de a entrada existir; após editar a interface, ela muda).
   const pinIdsByTypeId = new Map(entries.map((entry) => [entry.typeId, entry.pinIds ?? []]));

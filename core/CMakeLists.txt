@@ -54,6 +54,47 @@ set(JSON_BuildTests OFF CACHE BOOL "" FORCE)
 set(JSON_Install OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(nlohmann_json)
 
+# Biblioteca de blocos equivalente ao Simulink (docs/66): avaliador de parametros e kernels.
+# Tudo que liga o SignalEngine liga tambem esta lista (o engine resolve kernels por id).
+set(SIGNAL_LIBRARY_SOURCES
+    src/simulation/library/ParamExpr.cpp
+    src/simulation/library/KernelRegistry.cpp
+    src/simulation/library/kernels/SourceKernels.cpp
+    src/simulation/library/kernels/MathKernels.cpp
+    src/simulation/library/kernels/ContinuousKernels.cpp
+    src/simulation/library/kernels/DiscreteKernels.cpp
+    src/simulation/library/kernels/DiscontinuityKernels.cpp
+    src/simulation/library/kernels/RoutingKernels.cpp
+    src/simulation/library/kernels/UserDefinedKernels.cpp
+    src/simulation/library/kernels/PidKernels.cpp
+    src/simulation/library/kernels/LogicKernels.cpp
+    src/simulation/library/kernels/LookupKernels.cpp
+    src/simulation/library/kernels/AttributeKernels.cpp
+)
+
+# Componente `sl.*` (LibraryBlock) + builders + especificacao embutida (docs/66 §3). Ligado em
+# tudo que liga a sessao (CORE_SOURCES e lasecsimul_test_common).
+include(cmake/EmbedBlockLibrary.cmake)
+lasecsimul_embed_block_library("${CMAKE_CURRENT_SOURCE_DIR}/../project/schema/block-library" "${CMAKE_CURRENT_BINARY_DIR}/generated/BlockLibrarySpecData.cpp")
+set(BLOCK_LIBRARY_SOURCES
+    src/components/blocks/BlockLibrary.cpp
+    src/components/blocks/LibraryBlock.cpp
+    src/components/blocks/builders/BuilderRegistry.cpp
+    src/components/blocks/builders/SourceBuilders.cpp
+    src/components/blocks/builders/MathBuilders.cpp
+    src/components/blocks/builders/ContinuousBuilders.cpp
+    src/components/blocks/builders/DiscreteBuilders.cpp
+    src/components/blocks/builders/DiscontinuityBuilders.cpp
+    src/components/blocks/builders/RoutingBuilders.cpp
+    src/components/blocks/builders/SinkBuilders.cpp
+    src/components/blocks/builders/UserDefinedBuilders.cpp
+    src/components/blocks/builders/PidBuilders.cpp
+    src/components/blocks/builders/LogicBuilders.cpp
+    src/components/blocks/builders/LookupBuilders.cpp
+    src/components/blocks/builders/AttributeBuilders.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/BlockLibrarySpecData.cpp
+)
+
 set(CORE_SOURCES
     src/main.cpp
     src/app/CoreApplication.cpp
@@ -104,9 +145,11 @@ set(CORE_SOURCES
     src/fpga/GhdlArenaBridge.cpp
     src/simulation/Scheduler.cpp
     src/simulation/SignalEngine.cpp
+    ${SIGNAL_LIBRARY_SOURCES}
     src/simulation/ProcessSubcircuitCompiler.cpp
     src/simulation/SimulationPlan.cpp
     src/session/SimulationSession.cpp
+    ${BLOCK_LIBRARY_SOURCES}
     src/session/PauseExpression.cpp
     src/trace/CausalTrace.cpp
 )
@@ -201,9 +244,11 @@ set(TEST_COMMON_SOURCE_FILES
     src/fpga/GhdlArenaBridge.cpp
     src/simulation/Scheduler.cpp
     src/simulation/SignalEngine.cpp
+    ${SIGNAL_LIBRARY_SOURCES}
     src/simulation/ProcessSubcircuitCompiler.cpp
     src/simulation/SimulationPlan.cpp
     src/session/SimulationSession.cpp
+    ${BLOCK_LIBRARY_SOURCES}
     src/session/PauseExpression.cpp
     src/trace/CausalTrace.cpp
 )
@@ -234,6 +279,7 @@ add_test(NAME resource_queues COMMAND resource_queues_test)
 add_executable(simulation_plan_test
     test/core/simulation/SimulationPlanTest.cpp
     src/simulation/SignalEngine.cpp
+    ${SIGNAL_LIBRARY_SOURCES}
     src/simulation/SimulationPlan.cpp
 )
 target_include_directories(simulation_plan_test PRIVATE include src)
@@ -243,13 +289,25 @@ add_test(NAME simulation_plan COMMAND simulation_plan_test)
 add_executable(signal_engine_test
     test/core/simulation/SignalEngineTest.cpp
     src/simulation/SignalEngine.cpp
+    ${SIGNAL_LIBRARY_SOURCES}
 )
 target_include_directories(signal_engine_test PRIVATE include src)
 add_test(NAME signal_engine COMMAND signal_engine_test)
 
+add_executable(param_expr_test test/core/simulation/ParamExprTest.cpp ${SIGNAL_LIBRARY_SOURCES})
+target_include_directories(param_expr_test PRIVATE include src)
+target_link_libraries(param_expr_test PRIVATE nlohmann_json::nlohmann_json)
+target_compile_definitions(param_expr_test PRIVATE PARAM_EXPR_VECTORS="${CMAKE_CURRENT_SOURCE_DIR}/../test/fixtures/block-library/param-expr-vectors.json")
+add_test(NAME param_expr COMMAND param_expr_test)
+
+add_executable(kernel_engine_test test/core/simulation/KernelEngineTest.cpp src/simulation/SignalEngine.cpp ${SIGNAL_LIBRARY_SOURCES})
+target_include_directories(kernel_engine_test PRIVATE include src)
+add_test(NAME kernel_engine COMMAND kernel_engine_test)
+
 add_executable(signal_dynamics_test
     test/core/simulation/SignalDynamicsTest.cpp
     src/simulation/SignalEngine.cpp
+    ${SIGNAL_LIBRARY_SOURCES}
 )
 target_include_directories(signal_dynamics_test PRIVATE include src)
 add_test(NAME signal_dynamics COMMAND signal_dynamics_test)
@@ -257,6 +315,7 @@ add_test(NAME signal_dynamics COMMAND signal_dynamics_test)
 add_executable(signal_recorder_test
     test/core/simulation/SignalRecorderTest.cpp
     src/simulation/SignalEngine.cpp
+    ${SIGNAL_LIBRARY_SOURCES}
 )
 target_include_directories(signal_recorder_test PRIVATE include src)
 add_test(NAME signal_recorder COMMAND signal_recorder_test)
@@ -477,6 +536,7 @@ add_executable(hart_engine_test
     src/protocols/HostSerialPort.cpp
     src/protocols/HostUdpSocket.cpp
     src/simulation/SignalEngine.cpp
+    ${SIGNAL_LIBRARY_SOURCES}
     src/simulation/Scheduler.cpp
 )
 target_include_directories(hart_engine_test PRIVATE include src)
@@ -502,6 +562,7 @@ add_executable(hart_ld301_test
     src/protocols/HostSerialPort.cpp
     src/protocols/HostUdpSocket.cpp
     src/simulation/SignalEngine.cpp
+    ${SIGNAL_LIBRARY_SOURCES}
     src/simulation/Scheduler.cpp
 )
 target_include_directories(hart_ld301_test PRIVATE include src)
@@ -552,6 +613,7 @@ add_executable(hart_tt301_test
     src/protocols/HostSerialPort.cpp
     src/protocols/HostUdpSocket.cpp
     src/simulation/SignalEngine.cpp
+    ${SIGNAL_LIBRARY_SOURCES}
     src/simulation/Scheduler.cpp
 )
 target_include_directories(hart_tt301_test PRIVATE include src)
@@ -601,6 +663,7 @@ add_test(NAME signal_bridge COMMAND signal_bridge_test)
 add_executable(process_subcircuit_test
     test/core/simulation/ProcessSubcircuitTest.cpp
     src/simulation/SignalEngine.cpp
+    ${SIGNAL_LIBRARY_SOURCES}
     src/simulation/ProcessSubcircuitCompiler.cpp
     src/registry/SubcircuitRegistry.cpp
 )
@@ -754,6 +817,76 @@ if(NOT WIN32)
     target_link_libraries(control_block_subcircuit_test PRIVATE dl)
 endif()
 add_test(NAME control_block_subcircuit COMMAND control_block_subcircuit_test)
+
+# Blocos `sl.*` (biblioteca equivalente ao Simulink, docs/66) pela API real da sessao.
+add_executable(library_block_session_test
+    test/core/session/LibraryBlockSessionTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(library_block_session_test PRIVATE include src)
+target_link_libraries(library_block_session_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(library_block_session_test PRIVATE PORT_VECTORS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../test/fixtures/block-library")
+if(NOT WIN32)
+    target_link_libraries(library_block_session_test PRIVATE dl)
+endif()
+add_test(NAME library_block_session COMMAND library_block_session_test)
+
+# Biblioteca de blocos equivalente ao Simulink (docs/66), um teste por familia (dono unico).
+# Continuous e Discrete (exceto PID).
+add_executable(library_continuous_discrete_test
+    test/core/library/ContinuousDiscreteBlocksTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(library_continuous_discrete_test PRIVATE include src test/core)
+target_link_libraries(library_continuous_discrete_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(library_continuous_discrete_test PRIVATE dl)
+endif()
+add_test(NAME library_continuous_discrete COMMAND library_continuous_discrete_test)
+# PID Controller, PID Controller (2DOF) e variantes discretas.
+add_executable(library_pid_test
+    test/core/library/PidBlocksTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(library_pid_test PRIVATE include src test/core)
+target_link_libraries(library_pid_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(library_pid_test PRIVATE dl)
+endif()
+add_test(NAME library_pid COMMAND library_pid_test)
+# Discontinuities, Logic and Bit Operations, Lookup Tables.
+add_executable(library_discontinuity_logic_lookup_test
+    test/core/library/DiscontinuityLogicLookupBlocksTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(library_discontinuity_logic_lookup_test PRIVATE include src test/core)
+target_link_libraries(library_discontinuity_logic_lookup_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(library_discontinuity_logic_lookup_test PRIVATE dl)
+endif()
+add_test(NAME library_discontinuity_logic_lookup COMMAND library_discontinuity_logic_lookup_test)
+# Sources, Sinks e Math Operations.
+add_executable(library_sources_math_test
+    test/core/library/SourcesMathBlocksTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(library_sources_math_test PRIVATE include src test/core)
+target_link_libraries(library_sources_math_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(library_sources_math_test PRIVATE dl)
+endif()
+add_test(NAME library_sources_math COMMAND library_sources_math_test)
+# Signal Routing e Signal Attributes.
+add_executable(library_routing_attributes_test
+    test/core/library/RoutingAttributesBlocksTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(library_routing_attributes_test PRIVATE include src test/core)
+target_link_libraries(library_routing_attributes_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(NOT WIN32)
+    target_link_libraries(library_routing_attributes_test PRIVATE dl)
+endif()
+add_test(NAME library_routing_attributes COMMAND library_routing_attributes_test)
 
 # Túnel de domínio duplo (connectors.tunnel serve elétrico E Signal Graph pela mesma instância).
 add_executable(dual_domain_tunnel_test
@@ -1022,7 +1155,7 @@ add_test(NAME simulation_performance_smoke
                  $<$<CONFIG:Release>:--require-realtime>)
 # Debug valida o pipeline e os contadores, mas instrumentacao/sem otimizacao nao e um gate de
 # tempo real reproduzivel. O limiar >=1x pertence ao build Release usado por baseline/CI de perf.
-add_executable(signal_engine_benchmark benchmark/signal_engine_benchmark.cpp src/simulation/SignalEngine.cpp)
+add_executable(signal_engine_benchmark benchmark/signal_engine_benchmark.cpp src/simulation/SignalEngine.cpp ${SIGNAL_LIBRARY_SOURCES})
 target_include_directories(signal_engine_benchmark PRIVATE include src)
 
 # PropertyDefinition/validatePropertyValue/propertyOrDefault (auditoria arquitetural 2026-07-09,
@@ -1576,8 +1709,10 @@ add_executable(session_restart_stress_test
     src/fpga/GhdlArenaBridge.cpp
     src/simulation/Scheduler.cpp
     src/simulation/SignalEngine.cpp
+    ${SIGNAL_LIBRARY_SOURCES}
     src/simulation/SimulationPlan.cpp
     src/session/SimulationSession.cpp
+    ${BLOCK_LIBRARY_SOURCES}
     src/resources/ResourceGovernor.cpp
     src/python/PythonRuntime.cpp
     src/plc/PlcRuntime.cpp
@@ -1955,7 +2090,7 @@ add_test(NAME plugin_watchdog COMMAND plugin_watchdog_test)
 # Mantenha todos os testes em exatamente um grupo: o runner descobre os nomes via CTest e usa
 # estes labels, sem duplicar listas de testes em JavaScript ou no workflow de CI.
 set(LASECSIMUL_HERMETIC_TESTS
-    pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues shared_host_capacity simulation_plan signal_engine signal_dynamics signal_recorder instrument_history_filter signal_bridge signal_graph_wiring signal_graph_subcircuit_boundary process_subcircuit simulation_plan_session dense_hot_path voltage_divider circuit_group_reuse diode zener_led
+    pause_expression logic_analyzer_vector resource_governor resource_worker_pool resource_queues shared_host_capacity simulation_plan signal_engine param_expr kernel_engine library_block_session library_continuous_discrete library_pid library_discontinuity_logic_lookup library_sources_math library_routing_attributes signal_dynamics signal_recorder instrument_history_filter signal_bridge signal_graph_wiring signal_graph_subcircuit_boundary process_subcircuit simulation_plan_session dense_hot_path voltage_divider circuit_group_reuse diode zener_led
     inert_components_fix probe_pause_on_change subcircuit simulide_sources_meters voltmeter
     component_removal netlist union_find scheduler sparse_set core_bootstrap circuit_group circuit_gauge_equivalence logic_value
     session_execution_identity vnext_b_arbiter vnext_b_wait_dispatcher drain_cutoff_gate dynamic_component_dispatch i2c_fast_path_dispatch mcu_pin_transition_observers hart_engine hart_ld301 hart_tt301 hart_physical_layer hart_wire_loop

@@ -1,0 +1,283 @@
+{
+  "library": "logic",
+  "name": "Logic and Bit Operations",
+  "title": {"pt-BR": "Lógica e operações de bits"},
+  "order": 45,
+  "blocks": [
+    {
+      "id": "logical_operator",
+      "name": "Logical Operator",
+      "title": {"pt-BR": "Operador lógico"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/logicaloperator.html",
+      "simulink": {"blockType": "Logic"},
+      "sampleTime": {"param": "SampleTime"},
+      "size": [30, 30],
+      "params": [
+        {"name": "Operator", "type": "enum", "default": "AND", "options": ["AND", "OR", "NAND", "NOR", "XOR", "NXOR", "NOT"], "title": {"en": "Operator", "pt-BR": "Operador"}},
+        {"name": "Inputs", "type": "expr", "default": "2", "visibleWhen": {"Operator": ["AND", "OR", "NAND", "NOR", "XOR", "NXOR"]}, "title": {"en": "Number of input ports", "pt-BR": "Número de entradas"}},
+        {"name": "IconShape", "type": "enum", "default": "rectangular", "options": ["rectangular", "distinctive"], "title": {"en": "Icon shape", "pt-BR": "Formato do ícone"}},
+        {"name": "SampleTime", "type": "expr", "default": "-1", "title": {"en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)"}}
+      ],
+      "inputs": [
+        {"repeat": {"param": "Inputs", "rule": "count"}, "prefix": "in", "start": 1, "when": {"Operator": ["AND", "OR", "NAND", "NOR", "XOR", "NXOR"]}},
+        {"id": "in1", "when": {"Operator": ["NOT"]}}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "relational_operator",
+      "name": "Relational Operator",
+      "title": {"pt-BR": "Operador relacional"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/relationaloperator.html",
+      "simulink": {"blockType": "RelationalOperator"},
+      "sampleTime": {"param": "SampleTime"},
+      "size": [30, 30],
+      "params": [
+        {"name": "Operator", "type": "enum", "default": "<=", "options": ["==", "~=", "<", "<=", ">=", ">", "isInf", "isNaN", "isFinite"], "title": {"en": "Relational operator", "pt-BR": "Operador relacional"}},
+        {"name": "ZeroCross", "type": "bool", "default": true, "title": {"en": "Enable zero-crossing detection", "pt-BR": "Detecção de cruzamento por zero"}},
+        {"name": "SampleTime", "type": "expr", "default": "-1", "title": {"en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)"}}
+      ],
+      "inputs": [
+        {"id": "in1"},
+        {"id": "in2", "when": {"Operator": ["==", "~=", "<", "<=", ">=", ">"]}}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "compare_to_constant",
+      "name": "Compare To Constant",
+      "title": {"pt-BR": "Comparar com constante"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/comparetoconstant.html",
+      "simulink": {"sourceBlock": "simulink/Logic and Bit Operations/Compare To Constant"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [40, 30],
+      "params": [
+        {"name": "relop", "type": "enum", "default": "<=", "options": ["==", "~=", "<", "<=", ">=", ">"], "title": {"en": "Operator", "pt-BR": "Operador"}},
+        {"name": "const", "type": "expr", "default": "3.0", "tunable": true, "title": {"en": "Constant value", "pt-BR": "Valor da constante"}},
+        {"name": "ZeroCross", "type": "bool", "default": true, "title": {"en": "Enable zero-crossing detection", "pt-BR": "Detecção de cruzamento por zero"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "compare_to_zero",
+      "name": "Compare To Zero",
+      "title": {"pt-BR": "Comparar com zero"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/comparetozero.html",
+      "simulink": {"sourceBlock": "simulink/Logic and Bit Operations/Compare To Zero"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [40, 30],
+      "params": [
+        {"name": "relop", "type": "enum", "default": "<=", "options": ["==", "~=", "<", "<=", ">=", ">"], "title": {"en": "Operator", "pt-BR": "Operador"}},
+        {"name": "ZeroCross", "type": "bool", "default": true, "title": {"en": "Enable zero-crossing detection", "pt-BR": "Detecção de cruzamento por zero"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "detect_change",
+      "name": "Detect Change",
+      "title": {"pt-BR": "Detectar mudança"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/detectchange.html",
+      "simulink": {"sourceBlock": "simulink/Logic and Bit Operations/Detect Change"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [60, 30],
+      "params": [
+        {"name": "vinit", "type": "expr", "default": "0", "title": {"en": "Initial condition", "pt-BR": "Condição inicial"}},
+        {"name": "InputProcessing", "type": "enum", "default": "Elements as channels (sample based)", "options": ["Columns as channels (frame based)", "Elements as channels (sample based)"], "title": {"en": "Input processing", "pt-BR": "Processamento da entrada"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "detect_decrease",
+      "name": "Detect Decrease",
+      "title": {"pt-BR": "Detectar decréscimo"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/detectdecrease.html",
+      "simulink": {"sourceBlock": "simulink/Logic and Bit Operations/Detect Decrease"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [60, 30],
+      "params": [
+        {"name": "vinit", "type": "expr", "default": "0", "title": {"en": "Initial condition", "pt-BR": "Condição inicial"}},
+        {"name": "InputProcessing", "type": "enum", "default": "Elements as channels (sample based)", "options": ["Columns as channels (frame based)", "Elements as channels (sample based)"], "title": {"en": "Input processing", "pt-BR": "Processamento da entrada"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "detect_increase",
+      "name": "Detect Increase",
+      "title": {"pt-BR": "Detectar acréscimo"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/detectincrease.html",
+      "simulink": {"sourceBlock": "simulink/Logic and Bit Operations/Detect Increase"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [60, 30],
+      "params": [
+        {"name": "vinit", "type": "expr", "default": "0.0", "title": {"en": "Initial condition", "pt-BR": "Condição inicial"}},
+        {"name": "InputProcessing", "type": "enum", "default": "Elements as channels (sample based)", "options": ["Columns as channels (frame based)", "Elements as channels (sample based)"], "title": {"en": "Input processing", "pt-BR": "Processamento da entrada"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "detect_fall_negative",
+      "name": "Detect Fall Negative",
+      "title": {"pt-BR": "Detectar descida a negativo"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/detectfallnegative.html",
+      "simulink": {"sourceBlock": "simulink/Logic and Bit Operations/Detect Fall Negative"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [60, 50],
+      "params": [
+        {"name": "vinit", "type": "expr", "default": "0", "title": {"en": "Initial condition", "pt-BR": "Condição inicial"}},
+        {"name": "InputProcessing", "type": "enum", "default": "Elements as channels (sample based)", "options": ["Columns as channels (frame based)", "Elements as channels (sample based)"], "title": {"en": "Input processing", "pt-BR": "Processamento da entrada"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "detect_fall_nonpositive",
+      "name": "Detect Fall Nonpositive",
+      "title": {"pt-BR": "Detectar descida a não positivo"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/detectfallnonpositive.html",
+      "simulink": {"sourceBlock": "simulink/Logic and Bit Operations/Detect Fall Nonpositive"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [60, 50],
+      "params": [
+        {"name": "vinit", "type": "expr", "default": "0", "title": {"en": "Initial condition", "pt-BR": "Condição inicial"}},
+        {"name": "InputProcessing", "type": "enum", "default": "Elements as channels (sample based)", "options": ["Columns as channels (frame based)", "Elements as channels (sample based)"], "title": {"en": "Input processing", "pt-BR": "Processamento da entrada"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "detect_rise_nonnegative",
+      "name": "Detect Rise Nonnegative",
+      "title": {"pt-BR": "Detectar subida a não negativo"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/detectrisenonnegative.html",
+      "simulink": {"sourceBlock": "simulink/Logic and Bit Operations/Detect Rise Nonnegative"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [60, 50],
+      "params": [
+        {"name": "vinit", "type": "expr", "default": "0", "title": {"en": "Initial condition", "pt-BR": "Condição inicial"}},
+        {"name": "InputProcessing", "type": "enum", "default": "Elements as channels (sample based)", "options": ["Columns as channels (frame based)", "Elements as channels (sample based)"], "title": {"en": "Input processing", "pt-BR": "Processamento da entrada"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "detect_rise_positive",
+      "name": "Detect Rise Positive",
+      "title": {"pt-BR": "Detectar subida a positivo"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/detectrisepositive.html",
+      "simulink": {"sourceBlock": "simulink/Logic and Bit Operations/Detect Rise Positive"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [60, 50],
+      "params": [
+        {"name": "vinit", "type": "expr", "default": "0", "title": {"en": "Initial condition", "pt-BR": "Condição inicial"}},
+        {"name": "InputProcessing", "type": "enum", "default": "Elements as channels (sample based)", "options": ["Columns as channels (frame based)", "Elements as channels (sample based)"], "title": {"en": "Input processing", "pt-BR": "Processamento da entrada"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "interval_test",
+      "name": "Interval Test",
+      "title": {"pt-BR": "Teste de intervalo"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/intervaltest.html",
+      "simulink": {"sourceBlock": "simulink/Logic and Bit Operations/Interval Test"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [40, 30],
+      "params": [
+        {"name": "IntervalClosedRight", "type": "bool", "default": true, "title": {"en": "Interval closed on right", "pt-BR": "Intervalo fechado à direita"}},
+        {"name": "uplimit", "type": "expr", "default": "0.5", "tunable": true, "title": {"en": "Upper limit", "pt-BR": "Limite superior"}},
+        {"name": "IntervalClosedLeft", "type": "bool", "default": true, "title": {"en": "Interval closed on left", "pt-BR": "Intervalo fechado à esquerda"}},
+        {"name": "lowlimit", "type": "expr", "default": "-0.5", "tunable": true, "title": {"en": "Lower limit", "pt-BR": "Limite inferior"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "interval_test_dynamic",
+      "name": "Interval Test Dynamic",
+      "title": {"pt-BR": "Teste de intervalo dinâmico"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/intervaltestdynamic.html",
+      "simulink": {"sourceBlock": "simulink/Logic and Bit Operations/Interval Test Dynamic"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [45, 40],
+      "params": [
+        {"name": "IntervalClosedRight", "type": "bool", "default": true, "title": {"en": "Interval closed on right", "pt-BR": "Intervalo fechado à direita"}},
+        {"name": "IntervalClosedLeft", "type": "bool", "default": true, "title": {"en": "Interval closed on left", "pt-BR": "Intervalo fechado à esquerda"}}
+      ],
+      "inputs": [
+        {"id": "up", "label": "up"},
+        {"id": "in1", "label": "u"},
+        {"id": "lo", "label": "lo"}
+      ],
+      "outputs": [
+        {"id": "out1", "label": "y"}
+      ]
+    },
+    {
+      "id": "combinatorial_logic",
+      "name": "Combinatorial Logic",
+      "title": {"pt-BR": "Lógica combinacional"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/combinatoriallogic.html",
+      "simulink": {"blockType": "CombinatorialLogic"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [30, 30],
+      "params": [
+        {"name": "TruthTable", "type": "expr", "default": "[0 0;0 1;0 1;1 0;0 1;1 0;1 0;1 1]", "tunable": true, "title": {"en": "Truth table", "pt-BR": "Tabela verdade"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    }
+  ]
+}

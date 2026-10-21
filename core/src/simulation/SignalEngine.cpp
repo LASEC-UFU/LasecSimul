@@ -1,4 +1,5 @@
 #include "SignalEngine.hpp"
+#include "library/Kernel.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -202,10 +203,24 @@ struct CompiledBlock {
     uint32_t delayIndex = UINT32_MAX;
     uint64_t delayNs = 0;
     uint32_t historyCapacity = 0;
+    // Kernel (biblioteca equivalente ao Simulink, docs/66 §4)
+    const library::KernelSpec* kernel = nullptr;
+    std::vector<uint8_t> feedthrough;
+    std::vector<uint16_t> inputWidths;
+    uint32_t discreteOffset = 0;
+    uint32_t discreteCount = 0;
+    uint32_t paramOffset = 0;
+    uint32_t paramCount = 0;
+    /** Índice do RateGroup; `kContinuousGroup` para a partição contínua. */
+    uint32_t group = UINT32_MAX;
+    double samplePeriod = 0.0;
 };
+
+constexpr uint32_t kContinuousGroup = UINT32_MAX - 1;
 
 struct ExecutionItem {
     std::vector<uint32_t> blocks;
+    uint32_t group = 0;
     bool fixedPoint = false;
     uint32_t maxIterations = 1;
     double tolerance = 0.0;
@@ -233,6 +248,18 @@ public:
     std::vector<uint32_t> continuousBlocks;
     std::vector<uint32_t> discreteStateBlocks;
     std::vector<uint32_t> delayBlocks;
+    /** Ordem topológica GLOBAL (todas as taxas): no mesmo instante, os grupos devidos executam
+     * nesta ordem, como a execução single-tasking do Simulink (docs/66 §4.3). */
+    std::vector<ExecutionItem> items;
+    /** Itens da partição contínua (Kernel de tempo contínuo), na ordem global. */
+    std::vector<uint32_t> continuousItems;
+    std::vector<uint32_t> continuousPartition;
+    std::vector<uint32_t> kernelBlocks;
+    std::vector<double> kernelParamInit;
+    uint32_t kernelDiscreteCount = 0;
+    uint16_t maxKernelInputs = 0;
+    uint32_t maxKernelInputElements = 0;
+    std::unordered_map<std::string, uint32_t> blockIndexById;
 };
 
 namespace {
@@ -343,7 +370,15 @@ void validateBlock(const SignalBlockDefinition& block, uint16_t maxWidth) {
     if (block.output.id.empty()) throw std::invalid_argument("saida de sinal exige id: " + block.id);
     if (block.output.type.width == 0 || block.output.type.width > maxWidth)
         throw std::invalid_argument("largura de vetor invalida no bloco: " + block.id);
-    if (block.rate.periodNs == 0) throw std::invalid_argument("periodo de RateGroup deve ser positivo: " + block.id);
+    if (block.rate.periodNs == 0 && block.kind != SignalBlockKind::Kernel)
+        throw std::invalid_argument("periodo de RateGroup deve ser positivo: " + block.id);
+    if (block.kind == SignalBlockKind::Kernel) {
+        if (!library::findKernel(block.kernel)) throw std::invalid_argument("kernel desconhecido '" + block.kernel + "' no bloco: " + block.id);
+        if (block.output.type.scalar != SignalScalarType::Real) throw std::invalid_argument("bloco Kernel exige saida Real: " + block.id);
+        for (const auto& input : block.inputs)
+            if (input.type.scalar != SignalScalarType::Real) throw std::invalid_argument("bloco Kernel exige entradas Real: " + block.id);
+        if (block.rate.continuous() && block.rate.offsetNs != 0) throw std::invalid_argument("bloco continuo nao tem deslocamento: " + block.id);
+    }
     unitInfo(block.output.unit);
     std::unordered_map<std::string, bool> ports;
     for (const auto& input : block.inputs) {
@@ -526,6 +561,37 @@ std::shared_ptr<const CompiledSignalGraph> SignalCompiler::compile(const SignalG
         target.boolParameters = source.boolParameters;
         target.inputs.resize(source.inputs.size());
         target.stateWidth = stateWidthFor(source);
+        if (source.kind == SignalBlockKind::Kernel) {
+            target.kernel = library::findKernel(source.kernel);
+            for (const auto& input : source.inputs) target.inputWidths.push_back(input.type.width);
+            target.samplePeriod = source.rate.continuous() ? 0.0 : static_cast<double>(source.rate.periodNs) * 1e-9;
+            const library::KernelConfig config{source.realParameters, source.intParameters, target.inputWidths,
+                                               source.output.type.width, target.samplePeriod};
+            library::KernelShape shape;
+            try {
+                shape = target.kernel->configure(config);
+            } catch (const std::invalid_argument& error) {
+                throw std::invalid_argument(std::string(error.what()) + " [" + source.id + "]");
+            }
+            if (shape.feedthrough.size() != source.inputs.size())
+                throw std::logic_error("kernel '" + source.kernel + "' declarou feedthrough para um numero errado de entradas");
+            if (shape.continuousStates > 0 && !source.rate.continuous())
+                throw std::invalid_argument("bloco com estados continuos exige tempo de amostragem continuo: " + source.id);
+            if (shape.continuousStates > std::numeric_limits<uint16_t>::max())
+                throw std::invalid_argument("estados continuos demais no bloco: " + source.id);
+            target.feedthrough = std::move(shape.feedthrough);
+            target.stateWidth = static_cast<uint16_t>(shape.continuousStates);
+            target.discreteOffset = graph->kernelDiscreteCount;
+            target.discreteCount = shape.discreteStates;
+            graph->kernelDiscreteCount += shape.discreteStates;
+            target.paramOffset = static_cast<uint32_t>(graph->kernelParamInit.size());
+            target.paramCount = static_cast<uint32_t>(source.realParameters.size());
+            graph->kernelParamInit.insert(graph->kernelParamInit.end(), source.realParameters.begin(), source.realParameters.end());
+            graph->maxKernelInputs = std::max<uint16_t>(graph->maxKernelInputs, static_cast<uint16_t>(source.inputs.size()));
+            uint32_t elements = 0;
+            for (uint16_t width : target.inputWidths) elements += width;
+            graph->maxKernelInputElements = std::max(graph->maxKernelInputElements, elements);
+        }
         if (target.stateWidth > 0) {
             target.stateOffset = graph->dynamicStateCount;
             graph->dynamicStateCount += target.stateWidth;
@@ -573,6 +639,7 @@ std::shared_ptr<const CompiledSignalGraph> SignalCompiler::compile(const SignalG
         // (`projectedAccumulator`), então quem as calcula precisa rodar antes.
         const bool accumulatorBound = target.kind == SignalBlockKind::Accumulator && port >= 2;
         bool delayedInput = target.kind == SignalBlockKind::UnitDelay;
+        if (target.kind == SignalBlockKind::Kernel) delayedInput = graph->blocks[targetIndex].feedthrough[port] == 0;
         if (target.kind == SignalBlockKind::DiscreteTransferFunction) {
             const size_t numeratorCount = static_cast<size_t>(target.intParameters.at(0));
             const size_t denominatorCount = static_cast<size_t>(target.intParameters.at(1));
@@ -636,52 +703,79 @@ std::shared_ptr<const CompiledSignalGraph> SignalCompiler::compile(const SignalG
         }
     }
 
+    // Grupos de taxa: só blocos discretos/externos. Blocos Kernel de tempo contínuo formam a partição
+    // contínua acoplada (docs/66 §4.2) e não pertencem a nenhum RateGroup.
     std::vector<SignalRate> rates;
-    for (const auto& block : definition.blocks) if (std::find(rates.begin(), rates.end(), block.rate) == rates.end()) rates.push_back(block.rate);
+    for (const auto& block : definition.blocks)
+        if (!block.rate.continuous() && std::find(rates.begin(), rates.end(), block.rate) == rates.end()) rates.push_back(block.rate);
     std::sort(rates.begin(), rates.end(), [](const auto& a, const auto& b) {
         if (a.periodNs != b.periodNs) return a.periodNs < b.periodNs;
         if (a.offsetNs != b.offsetNs) return a.offsetNs < b.offsetNs;
         return a.phase < b.phase;
     });
-    for (const SignalRate& rate : rates) {
-        RateGroup group; group.rate = rate;
-        std::vector<uint8_t> belongs(components.size(), 0);
-        for (uint32_t component = 0; component < components.size(); ++component)
-            belongs[component] = sameRate(definition.blocks[components[component].front()].rate, rate);
-        std::vector<uint32_t> indegree(components.size(), 0), level(components.size(), 0);
-        for (uint32_t from = 0; from < count; ++from) for (uint32_t to : edges[from]) {
-            const uint32_t a = componentOf[from], b = componentOf[to];
-            if (a != b && belongs[a] && belongs[b]) ++indegree[b];
-        }
-        auto later = [&](uint32_t a, uint32_t b) { return components[a].front() > components[b].front(); };
-        std::priority_queue<uint32_t, std::vector<uint32_t>, decltype(later)> ready(later);
-        for (uint32_t component = 0; component < components.size(); ++component) if (belongs[component] && indegree[component] == 0) ready.push(component);
-        while (!ready.empty()) {
-            const uint32_t component = ready.top(); ready.pop();
-            ExecutionItem item;
-            item.blocks = components[component]; item.fixedPoint = cyclic[component] != 0; item.microstep = level[component];
-            if (item.microstep >= definition.maxMicrosteps) throw std::invalid_argument("limite de microsteps excedido");
-            if (item.fixedPoint) {
-                item.maxIterations = std::numeric_limits<uint32_t>::max(); item.tolerance = 0.0;
-                for (uint32_t block : item.blocks) {
-                    item.maxIterations = std::min(item.maxIterations, definition.blocks[block].maxIterations);
-                    item.tolerance = std::max(item.tolerance, definition.blocks[block].tolerance);
-                }
-                if (item.maxIterations == 0) throw std::invalid_argument("FixedPoint exige maxIterations positivo");
-            }
-            group.items.push_back(std::move(item));
-            for (uint32_t from : components[component]) for (uint32_t to : edges[from]) {
-                const uint32_t next = componentOf[to];
-                if (next == component || !belongs[next]) continue;
-                level[next] = std::max(level[next], level[component] + 1);
-                if (--indegree[next] == 0) ready.push(next);
-            }
-        }
-        size_t expected = 0; for (uint8_t value : belongs) expected += value;
-        if (group.items.size() != expected) throw std::logic_error("falha ao ordenar plano de sinais");
-        std::stable_sort(group.items.begin(), group.items.end(), [](const auto& a, const auto& b) { return a.microstep < b.microstep; });
-        graph->rateGroups.push_back(std::move(group));
+    for (const SignalRate& rate : rates) { RateGroup group; group.rate = rate; graph->rateGroups.push_back(std::move(group)); }
+    const auto groupOf = [&](uint32_t blockIndex) -> uint32_t {
+        const SignalRate& rate = definition.blocks[blockIndex].rate;
+        if (rate.continuous()) return kContinuousGroup;
+        return static_cast<uint32_t>(std::find(rates.begin(), rates.end(), rate) - rates.begin());
+    };
+    for (uint32_t index = 0; index < count; ++index) graph->blocks[index].group = groupOf(index);
+
+    // Ordem topológica GLOBAL (todas as taxas). No mesmo instante, os grupos devidos executam nesta
+    // ordem -- execução single-tasking do Simulink: um bloco lento que alimenta um rápido é visto no
+    // mesmo instante (docs/66 §4.3). Empate entre componentes independentes: fase da taxa e depois
+    // ordem de autoria (determinístico).
+    std::vector<uint32_t> indegree(components.size(), 0), level(components.size(), 0);
+    for (uint32_t from = 0; from < count; ++from) for (uint32_t to : edges[from]) {
+        const uint32_t a = componentOf[from], b = componentOf[to];
+        if (a != b) ++indegree[b];
     }
+    const auto phaseOf = [&](uint32_t component) -> uint32_t {
+        const SignalRate& rate = definition.blocks[components[component].front()].rate;
+        return rate.continuous() ? 0u : rate.phase;
+    };
+    auto later = [&](uint32_t a, uint32_t b) {
+        if (phaseOf(a) != phaseOf(b)) return phaseOf(a) > phaseOf(b);
+        return components[a].front() > components[b].front();
+    };
+    std::priority_queue<uint32_t, std::vector<uint32_t>, decltype(later)> ready(later);
+    for (uint32_t component = 0; component < components.size(); ++component) if (indegree[component] == 0) ready.push(component);
+    std::vector<ExecutionItem> items;
+    while (!ready.empty()) {
+        const uint32_t component = ready.top(); ready.pop();
+        ExecutionItem item;
+        item.blocks = components[component]; item.fixedPoint = cyclic[component] != 0; item.microstep = level[component];
+        item.group = groupOf(components[component].front());
+        if (item.microstep >= definition.maxMicrosteps) throw std::invalid_argument("limite de microsteps excedido");
+        if (item.fixedPoint) {
+            item.maxIterations = std::numeric_limits<uint32_t>::max(); item.tolerance = 0.0;
+            for (uint32_t block : item.blocks) {
+                item.maxIterations = std::min(item.maxIterations, definition.blocks[block].maxIterations);
+                item.tolerance = std::max(item.tolerance, definition.blocks[block].tolerance);
+            }
+            if (item.maxIterations == 0) throw std::invalid_argument("FixedPoint exige maxIterations positivo");
+        }
+        items.push_back(std::move(item));
+        for (uint32_t from : components[component]) for (uint32_t to : edges[from]) {
+            const uint32_t next = componentOf[to];
+            if (next == component) continue;
+            level[next] = std::max(level[next], level[component] + 1);
+            if (--indegree[next] == 0) ready.push(next);
+        }
+    }
+    if (items.size() != components.size()) throw std::logic_error("falha ao ordenar plano de sinais");
+    std::stable_sort(items.begin(), items.end(), [](const auto& a, const auto& b) { return a.microstep < b.microstep; });
+    graph->items = std::move(items);
+    for (uint32_t itemIndex = 0; itemIndex < graph->items.size(); ++itemIndex) {
+        const ExecutionItem& item = graph->items[itemIndex];
+        if (item.group == kContinuousGroup) {
+            graph->continuousItems.push_back(itemIndex);
+            graph->continuousPartition.insert(graph->continuousPartition.end(), item.blocks.begin(), item.blocks.end());
+        }
+        for (uint32_t block : item.blocks)
+            if (graph->blocks[block].kind == SignalBlockKind::Kernel) graph->kernelBlocks.push_back(block);
+    }
+    graph->blockIndexById = blockById;
     return graph;
 }
 
@@ -992,14 +1086,23 @@ void SignalRuntime::bind(std::shared_ptr<const CompiledSignalGraph> graph) {
     m_dynamicScratch.assign(static_cast<size_t>(stateCount) * 5, 0.0);
     m_dynamicOutputCandidate.assign(reals, 0.0);
     m_delayBuffers.clear();
-    m_passiveGroup.assign(m_graph ? m_graph->rateGroups.size() : 0, 0);
-    for (size_t group = 0; m_graph && group < m_graph->rateGroups.size(); ++group) {
-        bool passive = true;
-        for (const ExecutionItem& item : m_graph->rateGroups[group].items)
-            for (uint32_t block : item.blocks)
-                if (m_graph->blocks[block].kind != SignalBlockKind::ExternalInput) passive = false;
-        m_passiveGroup[group] = passive ? 1 : 0;
+    m_passiveGroup.assign(m_graph ? m_graph->rateGroups.size() : 0, 1);
+    for (size_t item = 0; m_graph && item < m_graph->items.size(); ++item) {
+        const ExecutionItem& execution = m_graph->items[item];
+        if (execution.group == kContinuousGroup) continue;
+        for (uint32_t block : execution.blocks)
+            if (m_graph->blocks[block].kind != SignalBlockKind::ExternalInput) m_passiveGroup[execution.group] = 0;
     }
+    m_kernelDiscrete.assign(m_graph ? m_graph->kernelDiscreteCount : 0, 0.0);
+    m_kernelParams = m_graph ? m_graph->kernelParamInit : std::vector<double>{};
+    m_stageReals.assign(reals, 0.0);
+    m_stageState.assign(stateCount, 0.0);
+    m_halfState.assign(stateCount, 0.0);
+    m_kernelInputs.assign(m_graph ? std::max<uint16_t>(1, m_graph->maxKernelInputs) : 1, nullptr);
+    m_kernelInputWidths.assign(m_kernelInputs.size(), 1);
+    m_kernelInputScratch.assign(m_graph ? std::max<uint32_t>(1, m_graph->maxKernelInputElements) : 1, 0.0);
+    m_due.assign(m_graph ? m_graph->rateGroups.size() : 0, 0);
+    m_constantGroupsDirty = false;
     if (m_graph) {
         m_delayBuffers.resize(m_graph->delayBlocks.size());
         for (uint32_t blockIndex = 0; blockIndex < m_graph->blocks.size(); ++blockIndex) {
@@ -1018,7 +1121,7 @@ void SignalRuntime::bind(std::shared_ptr<const CompiledSignalGraph> graph) {
                     }
                 }
             }
-            if (block.stateOffset == UINT32_MAX) continue;
+            if (block.stateOffset == UINT32_MAX || block.kind == SignalBlockKind::Kernel) continue;
             if (block.kind == SignalBlockKind::StateSpaceContinuous || block.kind == SignalBlockKind::StateSpaceDiscrete) {
                 const size_t n = static_cast<size_t>(block.intParameters[0]);
                 const size_t x0Offset = n * n + 2 * n + 1;
@@ -1087,10 +1190,22 @@ void SignalRuntime::bind(std::shared_ptr<const CompiledSignalGraph> graph) {
             }
         }
     }
+    // Kernels: estados iniciais e uma passada de saídas em t = 0 sem efeito colateral (major = false),
+    // para que quem lê o plano antes da primeira ativação veja os valores iniciais reais.
+    if (m_graph) {
+        for (uint32_t blockIndex : m_graph->kernelBlocks) {
+            const CompiledBlock& block = m_graph->blocks[blockIndex];
+            if (!block.kernel->init) continue;
+            library::KernelContext context = kernelContext(blockIndex, 0, true, m_reals, m_dynamicState.data());
+            block.kernel->init(context);
+        }
+        for (uint32_t blockIndex : m_graph->kernelBlocks) runKernelOutputs(blockIndex, 0, false, m_reals, m_dynamicState.data());
+    }
     m_dynamicCandidate = m_dynamicState;
     m_dynamicFullStep = m_dynamicState;
     m_dynamicOutputCandidate = m_reals;
     m_dynamicTimeNs = 0;
+    m_stageMajorNs = 0;
     m_lastExecutionNs = 0;
     m_pendingDynamicTimeNs = 0;
     m_pendingDynamicStepNs = 0;
@@ -1108,6 +1223,10 @@ void SignalRuntime::setTimeBase(uint64_t timestampNs) {
     m_lastExecutionNs = timestampNs;
     for (uint32_t index = 0; m_graph && index < m_graph->rateGroups.size(); ++index) {
         const SignalRate& rate = m_graph->rateGroups[index].rate;
+        // Tempo constante: avalia uma vez na base nova. Arredondar para o próximo "acerto" (2^62 ns)
+        // deixava um plano religado no meio da sessão (pausa -> mudança de forma -> continua) com a
+        // saída de toda Constant em zero.
+        if (rate.periodNs >= kConstantSamplePeriodNs) { m_nextActivationNs[index] = timestampNs; continue; }
         if (timestampNs <= rate.offsetNs) m_nextActivationNs[index] = rate.offsetNs;
         else {
             const uint64_t elapsed = timestampNs - rate.offsetNs;
@@ -1121,36 +1240,96 @@ void SignalRuntime::setTimeBase(uint64_t timestampNs) {
 
 void SignalRuntime::executeUntil(uint64_t timestampNs) {
     if (!m_graph) return;
+    if (m_constantGroupsDirty) {
+        // Parâmetro ajustável mudou num bloco de tempo constante: reavalia no próximo instante.
+        for (uint32_t index = 0; index < m_graph->rateGroups.size(); ++index)
+            if (m_graph->rateGroups[index].rate.periodNs >= kConstantSamplePeriodNs)
+                m_nextActivationNs[index] = std::min(m_nextActivationNs[index], m_lastExecutionNs);
+        m_constantGroupsDirty = false;
+    }
     while (true) {
-        uint32_t selected = UINT32_MAX;
         uint64_t next = std::numeric_limits<uint64_t>::max();
         for (uint32_t index = 0; index < m_nextActivationNs.size(); ++index) {
             if (index < m_passiveGroup.size() && m_passiveGroup[index]) continue;
-            const bool earlierPhase = selected != UINT32_MAX && m_nextActivationNs[index] == next &&
-                                      m_graph->rateGroups[index].rate.phase <
-                                          m_graph->rateGroups[selected].rate.phase;
-            const bool earlierSequence = selected != UINT32_MAX && m_nextActivationNs[index] == next &&
-                                         m_graph->rateGroups[index].rate.phase ==
-                                             m_graph->rateGroups[selected].rate.phase && index < selected;
-            if (m_nextActivationNs[index] <= timestampNs &&
-                (m_nextActivationNs[index] < next || earlierPhase || earlierSequence)) {
-                selected = index; next = m_nextActivationNs[index];
-            }
+            if (m_nextActivationNs[index] <= timestampNs) next = std::min(next, m_nextActivationNs[index]);
         }
-        if (selected == UINT32_MAX) break;
-        activateGroup(selected, next);
-        const uint64_t period = m_graph->rateGroups[selected].rate.periodNs;
-        m_nextActivationNs[selected] = next > std::numeric_limits<uint64_t>::max() - period
-                                          ? std::numeric_limits<uint64_t>::max() : next + period;
+        if (next == std::numeric_limits<uint64_t>::max()) break;
+        for (uint32_t index = 0; index < m_nextActivationNs.size(); ++index) {
+            const bool passive = index < m_passiveGroup.size() && m_passiveGroup[index];
+            m_due[index] = !passive && m_nextActivationNs[index] == next ? 1 : 0;
+            if (m_due[index]) ++m_metrics.rateGroupActivations;
+        }
+        activateBatch(next);
+        for (uint32_t index = 0; index < m_nextActivationNs.size(); ++index) {
+            if (!m_due[index]) continue;
+            const uint64_t period = m_graph->rateGroups[index].rate.periodNs;
+            m_nextActivationNs[index] = next > std::numeric_limits<uint64_t>::max() - period
+                                            ? std::numeric_limits<uint64_t>::max() : next + period;
+        }
     }
     m_lastExecutionNs = std::max(m_lastExecutionNs, timestampNs);
 }
 
-void SignalRuntime::activateGroup(uint32_t groupIndex, uint64_t timestampNs) {
-    const RateGroup& group = m_graph->rateGroups[groupIndex];
-    ++m_metrics.rateGroupActivations;
+library::KernelContext SignalRuntime::kernelContext(uint32_t blockIndex, uint64_t timestampNs, bool major,
+                                                    std::vector<double>& reals, double* states) {
+    const CompiledBlock& block = m_graph->blocks[blockIndex];
+    library::KernelContext context;
+    uint32_t scratch = 0;
+    for (size_t port = 0; port < block.inputs.size(); ++port) {
+        const InputBinding& binding = block.inputs[port];
+        const double* source = reals.data() + binding.source.offset;
+        const uint16_t width = block.inputWidths[port];
+        if (binding.conversion.scale == 1.0 && binding.conversion.offset == 0.0) {
+            m_kernelInputs[port] = source;
+        } else {
+            double* converted = m_kernelInputScratch.data() + scratch;
+            for (uint16_t element = 0; element < width; ++element)
+                converted[element] = source[element] * binding.conversion.scale + binding.conversion.offset;
+            m_kernelInputs[port] = converted;
+            scratch += width;
+        }
+        m_kernelInputWidths[port] = width;
+    }
+    context.tNs = timestampNs;
+    context.t = static_cast<double>(timestampNs) * 1e-9;
+    context.majorNs = major ? timestampNs : std::min(timestampNs, m_stageMajorNs);
+    context.ts = block.samplePeriod;
+    context.major = major;
+    context.in = m_kernelInputs.data();
+    context.inWidth = m_kernelInputWidths.data();
+    context.inputCount = static_cast<uint16_t>(block.inputs.size());
+    context.out = reals.data() + block.output.offset;
+    context.outWidth = block.output.width;
+    context.x = block.stateWidth > 0 ? states + block.stateOffset : nullptr;
+    context.d = block.discreteCount > 0 ? m_kernelDiscrete.data() + block.discreteOffset : nullptr;
+    context.rp = m_kernelParams.data() + block.paramOffset;
+    context.rpCount = block.paramCount;
+    context.ip = block.intParameters.data();
+    context.ipCount = static_cast<uint32_t>(block.intParameters.size());
+    return context;
+}
+
+void SignalRuntime::runKernelOutputs(uint32_t blockIndex, uint64_t timestampNs, bool major, std::vector<double>& reals,
+                                     double* states) {
+    library::KernelContext context = kernelContext(blockIndex, timestampNs, major, reals, states);
+    m_graph->blocks[blockIndex].kernel->outputs(context);
+}
+
+void SignalRuntime::runKernelUpdate(uint32_t blockIndex, uint64_t timestampNs) {
+    const CompiledBlock& block = m_graph->blocks[blockIndex];
+    if (!block.kernel->update) return;
+    library::KernelContext context = kernelContext(blockIndex, timestampNs, true, m_reals, m_dynamicState.data());
+    block.kernel->update(context);
+}
+
+void SignalRuntime::activateBatch(uint64_t timestampNs) {
+    const bool hasContinuous = !m_graph->continuousPartition.empty();
     uint32_t currentMicrostep = UINT32_MAX;
-    for (const ExecutionItem& item : group.items) {
+    for (const ExecutionItem& item : m_graph->items) {
+        // A partição contínua é "devida" em todo passo maior: suas saídas com direct feedthrough
+        // precisam refletir as saídas discretas novas deste instante.
+        const bool run = item.group == kContinuousGroup ? hasContinuous : m_due[item.group] != 0;
+        if (!run) continue;
         if (item.microstep != currentMicrostep) {
             currentMicrostep = item.microstep;
             m_realSnapshot = m_reals; m_intSnapshot = m_ints; m_boolSnapshot = m_bools;
@@ -1159,6 +1338,11 @@ void SignalRuntime::activateGroup(uint32_t groupIndex, uint64_t timestampNs) {
         if (!item.fixedPoint) {
             for (uint32_t blockIndex : item.blocks) {
                 const CompiledBlock& block = m_graph->blocks[blockIndex];
+                if (block.kind == SignalBlockKind::Kernel) {
+                    runKernelOutputs(blockIndex, timestampNs, true, m_reals, m_dynamicState.data());
+                    ++m_metrics.blockEvaluations;
+                    continue;
+                }
                 if (isDiscreteState(block.kind)) {
                     for (uint16_t element = 0; element < block.output.width; ++element) {
                         if (block.kind == SignalBlockKind::DiscreteTransferFunction) {
@@ -1217,7 +1401,7 @@ void SignalRuntime::activateGroup(uint32_t groupIndex, uint64_t timestampNs) {
                             const double basis = derivativeOnPv ? pv : error;
                             double integralCandidate = integral;
                             if (initialized != 0.0) {
-                                const double dt = static_cast<double>(group.rate.periodNs) * 1e-9;
+                                const double dt = static_cast<double>(m_graph->rateGroups[block.group].rate.periodNs) * 1e-9;
                                 const double integralDelta = ti > 0.0 ? kc * error * dt / ti : 0.0;
                                 integralCandidate += integralDelta;
                                 if (td > 0.0) {
@@ -1261,7 +1445,9 @@ void SignalRuntime::activateGroup(uint32_t groupIndex, uint64_t timestampNs) {
                 ++m_metrics.blockEvaluations;
             }
             for (uint32_t blockIndex : item.blocks) {
-                const SignalSlotHandle slot = m_graph->blocks[blockIndex].output;
+                const CompiledBlock& block = m_graph->blocks[blockIndex];
+                if (block.kind == SignalBlockKind::Kernel) continue;
+                const SignalSlotHandle slot = block.output;
                 if (slot.scalar == SignalScalarType::Real) commitSlot(slot, m_reals, m_realCandidate);
                 else if (slot.scalar == SignalScalarType::Bool) commitSlot(slot, m_bools, m_boolCandidate);
                 else commitSlot(slot, m_ints, m_intCandidate);
@@ -1272,12 +1458,16 @@ void SignalRuntime::activateGroup(uint32_t groupIndex, uint64_t timestampNs) {
         for (uint32_t iteration = 0; iteration < item.maxIterations; ++iteration) {
             m_realSnapshot = m_reals; m_intSnapshot = m_ints; m_boolSnapshot = m_bools;
             for (uint32_t blockIndex : item.blocks) {
-                evaluate(m_graph->blocks[blockIndex], m_realSnapshot, m_dynamicState, m_intSnapshot, m_boolSnapshot,
-                         m_realCandidate, m_intCandidate, m_boolCandidate, m_expressionStack);
+                const CompiledBlock& block = m_graph->blocks[blockIndex];
+                if (block.kind == SignalBlockKind::Kernel) runKernelOutputs(blockIndex, timestampNs, true, m_reals, m_dynamicState.data());
+                else evaluate(block, m_realSnapshot, m_dynamicState, m_intSnapshot, m_boolSnapshot,
+                              m_realCandidate, m_intCandidate, m_boolCandidate, m_expressionStack);
                 ++m_metrics.blockEvaluations;
             }
             for (uint32_t blockIndex : item.blocks) {
-                const SignalSlotHandle slot = m_graph->blocks[blockIndex].output;
+                const CompiledBlock& block = m_graph->blocks[blockIndex];
+                if (block.kind == SignalBlockKind::Kernel) continue;
+                const SignalSlotHandle slot = block.output;
                 if (slot.scalar == SignalScalarType::Real) commitSlot(slot, m_reals, m_realCandidate);
                 else if (slot.scalar == SignalScalarType::Bool) commitSlot(slot, m_bools, m_boolCandidate);
                 else commitSlot(slot, m_ints, m_intCandidate);
@@ -1293,7 +1483,9 @@ void SignalRuntime::activateGroup(uint32_t groupIndex, uint64_t timestampNs) {
 
     // UnitDelay publishes the state captured on the previous activation and latches only after
     // every item has committed, so its input edge is a true discrete-time delay.
-    for (const ExecutionItem& item : group.items) for (uint32_t blockIndex : item.blocks) {
+    for (const ExecutionItem& item : m_graph->items) {
+        if (item.group == kContinuousGroup || !m_due[item.group]) continue;
+        for (uint32_t blockIndex : item.blocks) {
         const CompiledBlock& block = m_graph->blocks[blockIndex];
         if (block.kind == SignalBlockKind::UnitDelay) for (uint16_t element = 0; element < block.output.width; ++element)
             m_dynamicState[block.stateOffset + element] = readSlot(m_reals, block.inputs[0], element);
@@ -1331,6 +1523,14 @@ void SignalRuntime::activateGroup(uint32_t groupIndex, uint64_t timestampNs) {
             state[AccumulatorCumSpill] = m_reals[block.output.offset + AccumulatorCumSpill];
         }
     }
+    }
+
+    // Kernels: `update` (estado discreto) depois de todas as saídas do instante, na ordem global. A
+    // partição contínua também registra o passo maior (históricos de atraso, borda de reset).
+    for (uint32_t blockIndex : m_graph->kernelBlocks) {
+        const uint32_t group = m_graph->blocks[blockIndex].group;
+        if (group == kContinuousGroup ? hasContinuous : m_due[group] != 0) runKernelUpdate(blockIndex, timestampNs);
+    }
 
     // Record only input changes. Ring storage was allocated by bind(); no push_back occurs here.
     for (uint32_t blockIndex : m_graph->delayBlocks) {
@@ -1363,7 +1563,7 @@ void SignalRuntime::activateGroup(uint32_t groupIndex, uint64_t timestampNs) {
 }
 
 void SignalRuntime::beginContinuousStep(uint64_t previousNs, uint64_t currentNs) {
-    if (!m_graph || m_graph->continuousBlocks.empty() || currentNs <= previousNs) return;
+    if (!m_graph || (m_graph->continuousBlocks.empty() && m_graph->continuousPartition.empty()) || currentNs <= previousNs) return;
     if (m_dynamicStepPending) throw std::logic_error("passo dinamico anterior ainda pendente");
     if (previousNs != m_dynamicTimeNs)
         throw std::logic_error("tempo do SignalRuntime divergiu do Scheduler");
@@ -1520,10 +1720,92 @@ void SignalRuntime::beginContinuousStep(uint64_t previousNs, uint64_t currentNs)
             m_dynamicOutputCandidate[block.output.offset + element] = output;
         }
     }
+    if (!m_graph->continuousPartition.empty()) integrateContinuousPartition(previousNs, currentNs);
     m_pendingDynamicTimeNs = currentNs;
     m_pendingDynamicStepNs = currentNs - previousNs;
     m_pendingDynamicErrorRatio = 0.0;
     m_dynamicStepPending = true;
+}
+
+void SignalRuntime::evaluateContinuousPartition(uint64_t timestampNs, double* states, double* derivatives) {
+    for (uint32_t itemIndex : m_graph->continuousItems) {
+        const ExecutionItem& item = m_graph->items[itemIndex];
+        if (!item.fixedPoint) {
+            for (uint32_t blockIndex : item.blocks) runKernelOutputs(blockIndex, timestampNs, false, m_stageReals, states);
+            continue;
+        }
+        // Laço algébrico dentro da partição contínua: Gauss-Seidel limitado, mesma tolerância do item.
+        for (uint32_t iteration = 0; iteration < item.maxIterations; ++iteration) {
+            double delta = 0.0;
+            for (uint32_t blockIndex : item.blocks) {
+                const SignalSlotHandle slot = m_graph->blocks[blockIndex].output;
+                std::copy_n(m_stageReals.begin() + slot.offset, slot.width, m_realSnapshot.begin() + slot.offset);
+                runKernelOutputs(blockIndex, timestampNs, false, m_stageReals, states);
+                for (uint16_t element = 0; element < slot.width; ++element)
+                    delta = std::max(delta, std::abs(m_stageReals[slot.offset + element] - m_realSnapshot[slot.offset + element]));
+            }
+            if (delta <= item.tolerance) break;
+        }
+    }
+    if (!derivatives) return;
+    for (uint32_t blockIndex : m_graph->continuousPartition) {
+        const CompiledBlock& block = m_graph->blocks[blockIndex];
+        if (block.stateWidth == 0 || !block.kernel->derivatives) continue;
+        library::KernelContext context = kernelContext(blockIndex, timestampNs, false, m_stageReals, states);
+        context.dx = derivatives + block.stateOffset;
+        block.kernel->derivatives(context);
+    }
+}
+
+void SignalRuntime::integrateContinuousPartition(uint64_t previousNs, uint64_t currentNs) {
+    const size_t stateCount = m_dynamicState.size();
+    double* k1 = m_dynamicScratch.data();
+    double* k2 = k1 + stateCount;
+    double* k3 = k2 + stateCount;
+    double* k4 = k3 + stateCount;
+    m_stageReals = m_reals;
+    const auto forEachState = [&](auto&& fn) {
+        for (uint32_t blockIndex : m_graph->continuousPartition) {
+            const CompiledBlock& block = m_graph->blocks[blockIndex];
+            for (uint32_t i = block.stateOffset; block.stateWidth > 0 && i < block.stateOffset + block.stateWidth; ++i) fn(i);
+        }
+    };
+    // RK4 clássico sobre TODOS os estados da partição, reavaliando as saídas acopladas em cada
+    // estágio (o que um solver do Simulink faz nos passos menores). Entradas de fora da partição
+    // (blocos discretos, pontes) ficam seguradas no valor do início do passo.
+    const auto rk4 = [&](const double* base, double* result, uint64_t startNs, uint64_t lengthNs) {
+        const double h = static_cast<double>(lengthNs) * 1e-9;
+        const uint64_t midNs = startNs + lengthNs / 2;
+        std::copy_n(base, stateCount, m_stageState.data());
+        evaluateContinuousPartition(startNs, m_stageState.data(), k1);
+        forEachState([&](uint32_t i) { m_stageState[i] = base[i] + 0.5 * h * k1[i]; });
+        evaluateContinuousPartition(midNs, m_stageState.data(), k2);
+        forEachState([&](uint32_t i) { m_stageState[i] = base[i] + 0.5 * h * k2[i]; });
+        evaluateContinuousPartition(midNs, m_stageState.data(), k3);
+        forEachState([&](uint32_t i) { m_stageState[i] = base[i] + h * k3[i]; });
+        evaluateContinuousPartition(startNs + lengthNs, m_stageState.data(), k4);
+        forEachState([&](uint32_t i) { result[i] = base[i] + h * (k1[i] + 2.0 * k2[i] + 2.0 * k3[i] + k4[i]) / 6.0; });
+    };
+    const uint64_t stepNs = currentNs - previousNs;
+    const uint64_t halfNs = stepNs / 2;
+    m_stageMajorNs = previousNs;
+    rk4(m_dynamicState.data(), m_dynamicFullStep.data(), previousNs, stepNs);
+    rk4(m_dynamicState.data(), m_halfState.data(), previousNs, halfNs);
+    rk4(m_halfState.data(), m_dynamicCandidate.data(), previousNs + halfNs, stepNs - halfNs);
+    // Saídas candidatas no fim do passo, com o estado de duas meias-etapas (o que será aceito).
+    std::copy_n(m_dynamicCandidate.data(), stateCount, m_stageState.data());
+    evaluateContinuousPartition(currentNs, m_stageState.data(), nullptr);
+    for (uint32_t blockIndex : m_graph->continuousPartition) {
+        const SignalSlotHandle slot = m_graph->blocks[blockIndex].output;
+        std::copy_n(m_stageReals.begin() + slot.offset, slot.width, m_dynamicOutputCandidate.begin() + slot.offset);
+    }
+}
+
+void SignalRuntime::continuousPartitionMajorStep(uint64_t timestampNs) {
+    for (uint32_t itemIndex : m_graph->continuousItems)
+        for (uint32_t blockIndex : m_graph->items[itemIndex].blocks)
+            runKernelOutputs(blockIndex, timestampNs, true, m_reals, m_dynamicState.data());
+    for (uint32_t blockIndex : m_graph->continuousPartition) runKernelUpdate(blockIndex, timestampNs);
 }
 
 double SignalRuntime::continuousErrorRatio(double absoluteTolerance, double relativeTolerance) {
@@ -1545,6 +1827,12 @@ void SignalRuntime::commitContinuousStep() {
         const SignalSlotHandle output = m_graph->blocks[blockIndex].output;
         std::copy_n(m_dynamicOutputCandidate.begin() + output.offset, output.width, m_reals.begin() + output.offset);
     }
+    for (uint32_t blockIndex : m_graph->continuousPartition) {
+        const SignalSlotHandle output = m_graph->blocks[blockIndex].output;
+        std::copy_n(m_dynamicOutputCandidate.begin() + output.offset, output.width, m_reals.begin() + output.offset);
+    }
+    // Passo maior da partição contínua: reset/limite com efeito no estado e registro de históricos.
+    if (!m_graph->continuousPartition.empty()) continuousPartitionMajorStep(m_pendingDynamicTimeNs);
     m_dynamicTimeNs = m_pendingDynamicTimeNs;
     ++m_metrics.acceptedDynamicSteps;
     m_metrics.lastAcceptedDynamicStepNs = m_pendingDynamicStepNs;
@@ -1575,6 +1863,24 @@ std::optional<uint64_t> SignalRuntime::nextEventNs() const {
             const uint64_t due = buffer.times[slot] + block.delayNs;
             if (due > m_lastExecutionNs) next = std::min(next, due);
         }
+    }
+    // Instantes que a partição contínua precisa acertar exatamente (degrau, borda de pulso, atraso).
+    const uint64_t reference = std::max(m_lastExecutionNs, m_dynamicTimeNs);
+    for (uint32_t blockIndex : m_graph->continuousPartition) {
+        const CompiledBlock& block = m_graph->blocks[blockIndex];
+        if (!block.kernel->nextBreakpoint) continue;
+        library::KernelContext context;
+        context.tNs = reference;
+        context.majorNs = reference;
+        context.t = static_cast<double>(reference) * 1e-9;
+        context.outWidth = block.output.width;
+        context.d = block.discreteCount > 0 ? const_cast<double*>(m_kernelDiscrete.data()) + block.discreteOffset : nullptr;
+        context.rp = m_kernelParams.data() + block.paramOffset;
+        context.rpCount = block.paramCount;
+        context.ip = block.intParameters.data();
+        context.ipCount = static_cast<uint32_t>(block.intParameters.size());
+        const uint64_t due = block.kernel->nextBreakpoint(context);
+        if (due != library::kNoBreakpoint && due > m_lastExecutionNs) next = std::min(next, due);
     }
     return next == std::numeric_limits<uint64_t>::max() ? std::nullopt : std::optional<uint64_t>(next);
 }
@@ -1694,6 +2000,34 @@ void SignalRuntime::setExternalReal(std::string_view blockId, double value, uint
     m_realSnapshot.at(offset) = value;
     m_realCandidate.at(offset) = value;
     if (offset < m_dynamicOutputCandidate.size()) m_dynamicOutputCandidate[offset] = value;
+}
+
+void SignalRuntime::setKernelParameters(std::string_view blockId, std::span<const double> values) {
+    if (!m_graph) throw std::logic_error("SignalGraph ausente");
+    const auto it = m_graph->blockIndexById.find(std::string(blockId));
+    if (it == m_graph->blockIndexById.end()) throw std::out_of_range("bloco de sinal inexistente: " + std::string(blockId));
+    const CompiledBlock& block = m_graph->blocks[it->second];
+    if (block.kind != SignalBlockKind::Kernel) throw std::invalid_argument("bloco nao e Kernel: " + std::string(blockId));
+    if (values.size() != block.paramCount)
+        throw std::invalid_argument("parametro ajustavel mudou de tamanho (exige recompilar): " + std::string(blockId));
+    std::copy(values.begin(), values.end(), m_kernelParams.begin() + block.paramOffset);
+    if (block.group != kContinuousGroup && m_graph->rateGroups[block.group].rate.periodNs >= kConstantSamplePeriodNs)
+        m_constantGroupsDirty = true;
+}
+
+std::span<const double> SignalRuntime::kernelParameters(std::string_view blockId) const {
+    if (!m_graph) throw std::logic_error("SignalGraph ausente");
+    const auto it = m_graph->blockIndexById.find(std::string(blockId));
+    if (it == m_graph->blockIndexById.end()) throw std::out_of_range("bloco de sinal inexistente: " + std::string(blockId));
+    const CompiledBlock& block = m_graph->blocks[it->second];
+    return {m_kernelParams.data() + block.paramOffset, block.paramCount};
+}
+
+std::span<const int64_t> SignalRuntime::kernelIntParameters(std::string_view blockId) const {
+    if (!m_graph) throw std::logic_error("SignalGraph ausente");
+    const auto it = m_graph->blockIndexById.find(std::string(blockId));
+    if (it == m_graph->blockIndexById.end()) throw std::out_of_range("bloco de sinal inexistente: " + std::string(blockId));
+    return m_graph->blocks[it->second].intParameters;
 }
 
 void SignalRuntime::setExternalBool(std::string_view blockId, bool value, uint16_t element) {

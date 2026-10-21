@@ -1,4 +1,5 @@
 import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
+import { conditionsHold } from "./blockLibrary/spec.js";
 import { CanonicalEndpoint, CanonicalTopologyDocument, HmiApplication, HmiPage, HmiPageElement, InteractionKindEntry, McuSerialPortEntry, PackagePin, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, TopologyNode, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, defaultHmiNavigationVisual, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
 import { isSubsystemTypeId, subsystemClosure, type SubsystemDefinition } from "./subsystemModel.js";
 import { HMI_SCREEN_TYPE_ID, remapBindingPaths, type PresentationContext, type ScreenViewState, type VisualDocument, type VisualSession, type VisualWindowInfo } from "./visualDocument.js";
@@ -21,7 +22,7 @@ import { graphicalRuntimeProperties, isGraphicalTypeId } from "./graphicsBinding
 import { auditHmiApplication, createHmiAuditHtml, createHmiAuditReport, defaultHmiAuditRuleProfile, filterHmiAuditFindings, fingerprintHmiAuditInputs, HMI_AUDIT_RULE_IDS, hmiAuditFindingKey } from "./hmiAudit.js";
 import { GraphicalActionPhase, GraphicalActionValue, graphicalActionConfig, graphicalActionDisplayValue, isGraphicalActionTypeId, resolveGraphicalActionValue } from "./graphicsAction.js";
 import { childPropertyKey, effectiveChildProperties, isChildPropertyKey } from "./childPropertyOverrides.js";
-import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, instancePinPlacements, isDifferentialOscope, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage, resolvedPackageFor, runtimeSurfaceImageHref } from "./componentSymbols.js";
+import { ComponentBox, PIN_RADIUS, componentBox, componentLocalOrigin, componentSymbolSvg, dialKnobSvg, hasRealPinPosition, instancePinPlacements, isDifferentialOscope, livePackagePreviewSymbolSvg, missingSubcircuitPlaceholderSvg, packageLayoutTransform, packageSymbolSvg, pinLocalPosition, registerPackage, registerBlockSpec, resolvedPackageFor, runtimeSurfaceImageHref } from "./componentSymbols.js";
 import { ExternalLabelKind, SYMBOL_PIN_LABEL_ALIGN_KEY, formatProbeVoltage, genericExternalLabelFontSize, isExternalProbeReadout, labelPropertyKey, nextLabelRotation, resolveDefaultExternalLabelOffset, resolveExternalLabelColor, symbolPinLabelPackageFields } from "./componentLabels.js";
 import { resizedComponentSize, sceneToLocal, svgLocalTransform, transformLocalPoint, transformedLocalBounds } from "./componentGeometry.js";
 import { detectChannelTrigger, digitalStepPath, findTriggerAnchorIndex, triggerAlignedWindowEndNs, visibleSampleWindowByTime } from "./instrumentTrigger.js";
@@ -145,7 +146,10 @@ function normalizeProjectState(raw: unknown): WebviewProjectState {
  * catálogo chega de novo (Épico G: cada item registrado pode trazer um `package` real). */
 function syncPackageRegistry(catalog: WebviewProjectState["catalog"]): void {
   if (!Array.isArray(catalog)) return;
-  for (const entry of catalog) registerPackage(entry.typeId, entry.package, entry.logicSymbolPackage, entry.boardPackage);
+  for (const entry of catalog) {
+    registerPackage(entry.typeId, entry.package, entry.logicSymbolPackage, entry.boardPackage);
+    registerBlockSpec(entry.typeId, entry.blockSpec);
+  }
 }
 
 const initialWindowState = (window as WindowWithInitialState).__LASECSIMUL_INITIAL_STATE__;
@@ -12073,8 +12077,12 @@ function resolvePropertyFields(component: WebviewComponentModel): PropertyField[
     hostSerialPortsRequestedAt = Date.now();
     send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestHostSerialPorts" });
   }
+  // Campos condicionais (diálogo do Simulink: limites só com "Limit output" marcado...): vale o
+  // valor atual da instância, completado pelos padrões do catálogo.
+  const effectiveProperties = { ...(catalogEntry?.defaultProperties ?? {}), ...component.properties };
   for (const propSchema of schema) {
     if (propSchema.hidden && !propertyDialogShowAll) continue;
+    if (propSchema.visibleWhen && !propertyDialogShowAll && !conditionsHold(propSchema.visibleWhen, effectiveProperties)) continue;
     if (hartModem && (modemOverUdp ? propSchema.id === "port_name" : propSchema.id === "udp_address" || propSchema.id === "udp_port")) continue;
     if (hartModem && propSchema.id === "port_name") {
       const current = String(component.properties.port_name ?? propSchema.default ?? "");
@@ -13813,8 +13821,11 @@ function componentsToAddForTypeId(typeId: string): WebviewComponentModel[] {
   return [makeComponentFromTypeId(typeId)];
 }
 
-function makeComponentFromTypeId(typeId: string): WebviewComponentModel {
-  const descriptor = catalogEntryFor(typeId);
+function makeComponentFromTypeId(paletteTypeId: string): WebviewComponentModel {
+  const descriptor = catalogEntryFor(paletteTypeId);
+  // Preset de paleta (Add/Subtract são o bloco Sum com outros padrões): o componente nasce com o
+  // typeId REAL e os padrões do preset.
+  const typeId = descriptor?.instanceTypeId ?? paletteTypeId;
   const componentIndex = activeSceneComponents().length;
   const pinCount = descriptor?.pinCount ?? 2;
   const baseLabel = descriptor?.label ?? typeId;

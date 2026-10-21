@@ -142,12 +142,15 @@ void stateSpaceBlocksPreserveOriginalDynamics() {
     connect(discrete, "input", "sampled");
     SignalRuntime digital = runtimeFor(discrete);
     CHECK(std::abs(digital.real(digital.output("sampled"))) < 1e-12, "discrete realization starts at x[0]=0");
+    // Ordem global no instante (docs/66 §4.3): a fonte lenta que alimenta o bloco de 100 ms executa
+    // ANTES dele em t = 0, então u[0] = 1 e x[1] = A x[0] + B u[0] = 1 -- a sequência exata do
+    // Simulink. A ordenação antiga por grupo rodava o grupo rápido primeiro e atrasava tudo uma amostra.
     digital.executeUntil(100'000'000ull);
-    CHECK(std::abs(digital.real(digital.output("sampled"))) < 1e-12, "discrete output uses Cx[k]+Du[k]");
+    CHECK(std::abs(digital.real(digital.output("sampled")) - 1.0) < 1e-12, "discrete output uses Cx[k]+Du[k]");
     digital.executeUntil(200'000'000ull);
-    CHECK(std::abs(digital.real(digital.output("sampled")) - 1.0) < 1e-12, "discrete state updates with A x[k]+B u[k]");
+    CHECK(std::abs(digital.real(digital.output("sampled")) - 1.5) < 1e-12, "discrete state updates with A x[k]+B u[k]");
     digital.executeUntil(300'000'000ull);
-    CHECK(std::abs(digital.real(digital.output("sampled")) - 1.5) < 1e-12, "discrete output follows its sampled state");
+    CHECK(std::abs(digital.real(digital.output("sampled")) - 1.75) < 1e-12, "discrete output follows its sampled state");
 }
 
 void discreteAndNonlinearPrimitivesAreIsolated() {

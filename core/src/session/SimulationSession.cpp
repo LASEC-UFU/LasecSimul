@@ -6,6 +6,7 @@
 #include "../components/control/SignalMathBlock.hpp"
 #include "../components/control/ManualSignalSlider.hpp"
 #include "../components/control/SignalConstant.hpp"
+#include "../components/blocks/LibraryBlock.hpp"
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -1900,17 +1901,188 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
         }
     }
 
+    // ---- Biblioteca de blocos equivalente ao Simulink (`sl.*`, docs/66 §4.1/§4.4) ----------------
+    // Larguras de sinal e tempos de amostragem HERDADOS são resolvidos aqui, antes dos relays: cada
+    // bloco recebe as larguras/taxas dos produtores a montante (atravessando túneis de sinal, inclusive
+    // redes de túneis de mesmo nome) até um ponto fixo. Relays que tocam um bloco da biblioteca usam a
+    // largura/taxa resolvida; relay de tempo contínuo vira kernel de passagem dentro da partição
+    // contínua acoplada (um Probe discreto seguraria o valor entre os estágios do integrador).
+    using components::blocks::DeclaredRate;
+    struct LibraryInfo {
+        const components::blocks::LibraryBlock* block = nullptr;
+        components::blocks::BlockResolution resolution;
+        std::vector<std::string> inputs;
+        std::vector<std::string> outputs;
+        std::vector<uint16_t> outputWidths;
+        DeclaredRate declared;
+        DeclaredRate rate;
+    };
+    std::unordered_map<uint32_t, LibraryInfo> libraryInfo;
+    m_libraryResolutions.clear();
+    for (uint32_t index : m_activeComponentIndices) {
+        const auto* block = dynamic_cast<const components::blocks::LibraryBlock*>(m_componentInstances[index].get());
+        if (!block) continue;
+        LibraryInfo info;
+        info.block = block;
+        info.inputs = block->inputPortIds();
+        info.outputs = block->outputPortIds();
+        info.declared = block->declaredRate(&m_modelWorkspace);
+        info.rate = info.declared;
+        if (info.rate.kind == DeclaredRate::Kind::Inherited) info.rate.kind = DeclaredRate::Kind::Constant;
+        info.resolution.workspace = &m_modelWorkspace;
+        info.resolution.maxStepNs = std::max<uint64_t>(1, m_transientSettings.maximumStepNs);
+        info.resolution.inputWidths.assign(info.inputs.size(), 1);
+        info.outputWidths.assign(info.outputs.size(), 1);
+        libraryInfo.emplace(index, std::move(info));
+    }
+    const auto toSignalRate = [](const DeclaredRate& rate) -> simulation::SignalRate {
+        switch (rate.kind) {
+        case DeclaredRate::Kind::Continuous: return {0, 0, 0};
+        case DeclaredRate::Kind::Discrete: return {rate.periodNs, rate.offsetNs, 0};
+        default: return {simulation::kConstantSamplePeriodNs, 0, 0};
+        }
+    };
+    struct Endpoint { uint32_t component; std::string port; };
+    std::map<std::pair<uint32_t, std::string>, Endpoint> sourceOf;
+    std::map<uint32_t, std::vector<Endpoint>> targetsOf;
+    for (const SignalWireDefinition& wire : m_signalWires) {
+        if (!findSignalPortUnlocked(wire.sourceComponent, wire.sourcePort) || !findSignalPortUnlocked(wire.targetComponent, wire.targetPort)) continue;
+        sourceOf[{wire.targetComponent, wire.targetPort}] = {wire.sourceComponent, wire.sourcePort};
+        targetsOf[wire.sourceComponent].push_back({wire.targetComponent, wire.targetPort});
+    }
+    const auto isTunnelComponent = [&](uint32_t component) {
+        return component < m_componentInstances.size() && m_componentInstances[component] &&
+               isRelayTunnelTypeId(m_componentInstances[component]->typeId());
+    };
+    // Produtor real de uma entrada, atravessando túneis (fio direto no túnel ou rede de mesmo nome).
+    std::function<std::optional<Endpoint>(uint32_t, const std::string&, int)> producerOf =
+        [&](uint32_t component, const std::string& port, int depth) -> std::optional<Endpoint> {
+        if (depth > 32) return std::nullopt;
+        const auto it = sourceOf.find({component, port});
+        if (it == sourceOf.end()) {
+            if (!isTunnelComponent(component)) return std::nullopt;
+            if (const auto peers = tunnelNetPeers.find(component); peers != tunnelNetPeers.end())
+                for (uint32_t peer : peers->second) {
+                    const auto peerPorts = m_componentInstances[peer]->signalPorts();
+                    if (peerPorts.empty()) continue;
+                    if (sourceOf.count({peer, peerPorts.front().id}))
+                        if (auto found = producerOf(peer, peerPorts.front().id, depth + 1)) return found;
+                }
+            return std::nullopt;
+        }
+        const Endpoint source = it->second;
+        if (!isTunnelComponent(source.component)) return source;
+        return producerOf(source.component, source.port, depth + 1);
+    };
+    const auto producerRate = [&](const Endpoint& producer) -> std::optional<DeclaredRate> {
+        if (const auto it = libraryInfo.find(producer.component); it != libraryInfo.end()) return it->second.rate;
+        const IComponentModel* other = m_componentInstances[producer.component].get();
+        DeclaredRate rate;
+        if (const auto* math = dynamic_cast<const components::SignalMathBlock*>(other)) {
+            rate.kind = DeclaredRate::Kind::Discrete;
+            rate.periodNs = math->samplePeriodNs();
+            return rate;
+        }
+        if (isElectricalBridge(other)) { rate.kind = DeclaredRate::Kind::Continuous; return rate; }
+        rate.kind = DeclaredRate::Kind::Discrete;
+        rate.periodNs = 1'000'000ull;
+        return rate;
+    };
+    const auto producerWidth = [&](const Endpoint& producer) -> uint16_t {
+        const auto it = libraryInfo.find(producer.component);
+        if (it == libraryInfo.end()) return 1;
+        const auto& outputs = it->second.outputs;
+        const auto position = std::find(outputs.begin(), outputs.end(), producer.port);
+        if (position == outputs.end()) return 1;
+        const size_t port = static_cast<size_t>(position - outputs.begin());
+        return port < it->second.outputWidths.size() ? it->second.outputWidths[port] : 1;
+    };
+    const auto combineInherited = [&](const LibraryInfo& info, uint32_t index) {
+        DeclaredRate result;
+        result.kind = DeclaredRate::Kind::Constant;
+        for (const std::string& input : info.inputs) {
+            const auto producer = producerOf(index, input, 0);
+            if (!producer) continue;
+            const auto rate = producerRate(*producer);
+            if (!rate || rate->kind == DeclaredRate::Kind::Constant || rate->kind == DeclaredRate::Kind::Inherited) continue;
+            if (rate->kind == DeclaredRate::Kind::Continuous) { result = *rate; break; }
+            if (result.kind != DeclaredRate::Kind::Discrete || rate->periodNs < result.periodNs) result = *rate;
+        }
+        return result;
+    };
+    // Ponto fixo de larguras e taxas; erros de largura só valem na passada final (antes da
+    // propagação terminar uma largura provisória pode não fechar).
+    for (int pass = 0; pass <= 32; ++pass) {
+        const bool final = pass == 32;
+        bool changed = false;
+        for (auto& [index, info] : libraryInfo) {
+            for (size_t i = 0; i < info.inputs.size(); ++i) {
+                const auto producer = producerOf(index, info.inputs[i], 0);
+                const uint16_t width = producer ? producerWidth(*producer) : 1;
+                if (info.resolution.inputWidths[i] != width) { info.resolution.inputWidths[i] = width; changed = true; }
+            }
+            if (info.declared.kind == DeclaredRate::Kind::Inherited) {
+                const DeclaredRate rate = combineInherited(info, index);
+                if (rate.kind != info.rate.kind || rate.periodNs != info.rate.periodNs || rate.offsetNs != info.rate.offsetNs) {
+                    info.rate = rate;
+                    changed = true;
+                }
+            }
+            info.resolution.rate = toSignalRate(info.rate);
+            try {
+                std::vector<uint16_t> widths = info.block->outputWidths(info.resolution, index);
+                if (widths != info.outputWidths) { info.outputWidths = std::move(widths); changed = true; }
+            } catch (const std::invalid_argument&) {
+                if (final) throw;
+            }
+        }
+        if (!changed && !final) pass = 31;
+    }
+    struct RelayOverride { uint16_t width; simulation::SignalRate rate; };
+    std::unordered_map<std::string, RelayOverride> libraryRelays;
+    for (const auto& [index, info] : libraryInfo)
+        for (size_t i = 0; i < info.inputs.size(); ++i)
+            libraryRelays[signalPortBlockId(index, info.inputs[i])] = {info.resolution.inputWidths[i], info.resolution.rate};
+    for (uint32_t index : m_activeComponentIndices) {
+        if (libraryInfo.count(index) || !m_componentInstances[index]) continue;
+        const bool tunnel = isTunnelComponent(index);
+        for (const SignalPortDescriptor& port : m_componentInstances[index]->signalPorts()) {
+            if (!tunnel && port.direction != SignalPortDirection::Input) continue;
+            const std::string relay = signalPortBlockId(index, port.id);
+            if (const auto producer = producerOf(index, port.id, 0); producer && libraryInfo.count(producer->component)) {
+                libraryRelays[relay] = {producerWidth(*producer), toSignalRate(libraryInfo.at(producer->component).rate)};
+                continue;
+            }
+            if (!tunnel) continue;
+            // Túnel alimentado por quem não é da biblioteca, lido por bloco da biblioteca: taxa do leitor.
+            std::vector<uint32_t> net{index};
+            if (const auto peers = tunnelNetPeers.find(index); peers != tunnelNetPeers.end()) net.insert(net.end(), peers->second.begin(), peers->second.end());
+            std::optional<DeclaredRate> consumerRate;
+            for (uint32_t member : net)
+                for (const Endpoint& target : targetsOf[member]) {
+                    const auto it = libraryInfo.find(target.component);
+                    if (it == libraryInfo.end()) continue;
+                    const DeclaredRate& rate = it->second.rate;
+                    if (!consumerRate || rate.kind == DeclaredRate::Kind::Continuous ||
+                        (consumerRate->kind == DeclaredRate::Kind::Discrete && rate.kind == DeclaredRate::Kind::Discrete && rate.periodNs < consumerRate->periodNs))
+                        consumerRate = rate;
+                }
+            if (consumerRate) libraryRelays[relay] = {1, toSignalRate(*consumerRate)};
+        }
+    }
+
     for (uint32_t index : m_activeComponentIndices) {
         IComponentModel* component = m_componentInstances[index].get();
         if (isRelayTunnelTypeId(component->typeId()) && activeSignalTunnels.count(index) == 0)
             continue;
         const auto* mathBlock = dynamic_cast<const components::SignalMathBlock*>(component);
+        const auto* libraryBlock = dynamic_cast<const components::blocks::LibraryBlock*>(component);
         const auto bridgeRate = bridgeRateByComponent.find(index);
         for (const SignalPortDescriptor& port : component->signalPorts()) {
             // A porta de SAÍDA de um bloco de controle não vira relay: quem publica
             // `signalPortBlockId(index, "out")` é o próprio bloco de cálculo (ver `computeGraph`),
             // então o consumidor externo lê o resultado, não uma cópia com um passo de atraso.
-            if (mathBlock && port.direction == SignalPortDirection::Output) continue;
+            if ((mathBlock || libraryBlock) && port.direction == SignalPortDirection::Output) continue;
             const std::string blockId = signalPortBlockId(index, port.id);
             if (!ids.insert(blockId).second)
                 throw std::invalid_argument("Signal Graph: id de bloco colide com porta genérica: " + blockId);
@@ -1959,7 +2131,37 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
                 block.loopPolicy = simulation::AlgebraicLoopPolicy::FixedPoint;
                 block.maxIterations = 16;
             }
+            if (const auto library = libraryRelays.find(blockId); library != libraryRelays.end() && scalar == simulation::SignalScalarType::Real) {
+                const uint16_t width = library->second.width;
+                block.output.type.width = width;
+                block.loopPolicy = simulation::AlgebraicLoopPolicy::FixedPoint;
+                block.maxIterations = 50;
+                block.tolerance = 1e-12;
+                if (block.kind == simulation::SignalBlockKind::Probe) {
+                    block.inputs.front().type.width = width;
+                    block.rate = library->second.rate;
+                    if (block.rate.continuous()) {
+                        block.kind = simulation::SignalBlockKind::Kernel;
+                        block.kernel = "passthrough";
+                    }
+                } else {
+                    // ExternalInput (entrada solta): passivo, valor fixo; a taxa só precisa ser válida.
+                    block.rate = {simulation::kConstantSamplePeriodNs, 0, 0};
+                    if (block.realParameters.size() == 1 && width > 1) block.realParameters.assign(width, block.realParameters.front());
+                }
+            }
             result.blocks.push_back(std::move(block));
+        }
+        if (libraryBlock) {
+            m_libraryResolutions[index] = libraryInfo.at(index).resolution;
+            simulation::SignalGraphDefinition compute = libraryBlock->computeGraph(index, libraryInfo.at(index).resolution);
+            for (simulation::SignalBlockDefinition& block : compute.blocks) {
+                if (!ids.insert(block.id).second)
+                    throw std::invalid_argument("Signal Graph: id de bloco da biblioteca duplicado: " + block.id);
+                result.blocks.push_back(std::move(block));
+            }
+            for (simulation::SignalConnectionDefinition& connection : compute.connections) result.connections.push_back(std::move(connection));
+            continue;
         }
         if (!mathBlock) continue;
         // Os blocos de cálculo da instância entram no MESMO grafo de todo o resto -- é isso que faz
@@ -2011,6 +2213,14 @@ std::optional<std::vector<uint8_t>> SimulationSession::hartTransact(uint32_t com
 void SimulationSession::sampleSignalMathOutputsUnlocked(const std::vector<uint32_t>& componentIndices) {
     for (uint32_t index : componentIndices) {
         if (index >= m_componentInstances.size() || !m_componentInstances[index]) continue;
+        if (auto* library = dynamic_cast<components::blocks::LibraryBlock*>(m_componentInstances[index].get())) {
+            try {
+                const std::string port = library->readoutPort();
+                if (!port.empty()) library->setLastOutput(m_runtimeState.signals.real(m_runtimeState.signals.output(signalPortBlockId(index, port))));
+            } catch (...) {
+            }
+            continue;
+        }
         auto* block = dynamic_cast<components::SignalMathBlock*>(m_componentInstances[index].get());
         if (!block) continue;
         try {
@@ -2218,7 +2428,15 @@ std::optional<std::string> SimulationSession::setPropertyUnlocked(uint32_t compo
             }
         }
 
+        const PropertyValue previous = descriptor.get ? descriptor.get() : value;
         descriptor.set(value);
+        if (auto* library = dynamic_cast<components::blocks::LibraryBlock*>(instance);
+            library && (schema.flags & (PropertySchemaAffectsTopology | PropertySchemaAffectsPinCount)) == 0) {
+            if (std::optional<std::string> error = retuneLibraryBlockUnlocked(component, *library)) {
+                descriptor.set(previous);
+                return error;
+            }
+        }
         if (auto* slider = dynamic_cast<components::ManualSignalSlider*>(instance);
             slider && (propertyName == "value" || propertyName == "actionMin" || propertyName == "actionMax")) {
             try {
@@ -2272,6 +2490,45 @@ std::optional<std::string> SimulationSession::setPropertyUnlocked(uint32_t compo
     }
 
     return validationError("unknown_property", "propriedade desconhecida: " + propertyName);
+}
+
+std::optional<std::string> SimulationSession::retuneLibraryBlockUnlocked(uint32_t component,
+                                                                        const components::blocks::LibraryBlock& block) {
+    const auto resolution = m_libraryResolutions.find(component);
+    // Plano ainda não materializado com este bloco: a próxima compilação já usa o valor novo.
+    if (resolution == m_libraryResolutions.end() || !m_runtimeState.signals.graph()) return std::nullopt;
+    simulation::SignalGraphDefinition graph;
+    try {
+        graph = block.computeGraph(component, resolution->second);
+    } catch (const std::exception& error) {
+        return validationError("invalid_value", error.what());
+    }
+    std::vector<std::pair<std::string, std::vector<double>>> updates;
+    bool reshaped = false;
+    for (const simulation::SignalBlockDefinition& definition : graph.blocks) {
+        if (definition.kind != simulation::SignalBlockKind::Kernel) continue;
+        try {
+            const std::span<const double> current = m_runtimeState.signals.kernelParameters(definition.id);
+            const std::span<const int64_t> shape = m_runtimeState.signals.kernelIntParameters(definition.id);
+            if (current.size() != definition.realParameters.size() ||
+                !std::equal(shape.begin(), shape.end(), definition.intParameters.begin(), definition.intParameters.end())) {
+                reshaped = true;
+                break;
+            }
+            updates.emplace_back(definition.id, definition.realParameters);
+        } catch (const std::exception&) {
+            reshaped = true;
+            break;
+        }
+    }
+    if (reshaped) {
+        if (m_scheduler.isRunning())
+            return validationError("requires_stop", "parametro ajustavel mudou a forma do bloco; pare a simulacao para aplicar");
+        invalidatePlan(simulation::PlanDomain::Signal);
+        return std::nullopt;
+    }
+    for (const auto& [id, values] : updates) m_runtimeState.signals.setKernelParameters(id, values);
+    return std::nullopt;
 }
 
 std::optional<PropertySchema> SimulationSession::propertySchemaOf(uint32_t component,
@@ -2580,7 +2837,8 @@ SubcircuitExpansionResult SimulationSession::addSubcircuitInstance(const std::st
 }
 
 SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string& typeId,
-                                                                std::vector<std::string>& expansionStack) {
+                                                                std::vector<std::string>& expansionStack,
+                                                                const std::string& instancePropertiesJson) {
     if (m_scheduler.isRunning()) {
         throw std::runtime_error("addSubcircuitInstance requer simulacao parada para publicar SimulationPlan");
     }
@@ -2600,10 +2858,33 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
     std::vector<uint32_t> childSubcircuitIds; // subcircuitos aninhados, pra cascata de remoção
     std::optional<uint32_t> primaryMcuInstanceId;
 
+    // Propriedades por instância de um subsistema aninhado (`@<filho>.<propriedade>`): a instância de
+    // nível superior recebe as suas por `setSubcircuitChildProperty` (Extension); uma instância DENTRO
+    // de um manifesto só tem este caminho. Sem ele, duas instâncias da mesma definição (ex.: as
+    // conversões compostas da biblioteca de blocos, docs/68) ficavam com os parâmetros do modelo.
+    std::unordered_map<std::string, registry::ComponentParams> childOverrides;
+    for (const auto& [key, value] : paramsFromPropertiesJson(instancePropertiesJson).properties) {
+        const size_t dot = key.size() > 1 && key[0] == '@' ? key.find('.', 1) : std::string::npos;
+        if (dot == std::string::npos || dot == 1 || dot + 1 == key.size()) continue;
+        childOverrides[key.substr(1, dot - 1)].properties[key.substr(dot + 1)] = value;
+    }
+
     try {
     for (const registry::SubcircuitComponentDef& compDef : def->components) {
         if (isSubcircuitType(compDef.typeId)) {
-            const SubcircuitExpansionResult nested = expandSubcircuit(compDef.typeId, expansionStack);
+            // `@filho.@neto.prop` na instância de cima chega ao subsistema aninhado como `@neto.prop`.
+            std::string nestedProperties = compDef.propertiesJson;
+            if (const auto overrides = childOverrides.find(compDef.id); overrides != childOverrides.end()) {
+                nlohmann::json merged = nlohmann::json::parse(nestedProperties.empty() ? "{}" : nestedProperties, nullptr, false);
+                if (!merged.is_object()) merged = nlohmann::json::object();
+                for (const auto& [name, value] : overrides->second.properties) {
+                    if (const double* number = std::get_if<double>(&value)) merged[name] = *number;
+                    else if (const std::string* text = std::get_if<std::string>(&value)) merged[name] = *text;
+                    else if (const bool* flag = std::get_if<bool>(&value)) merged[name] = *flag;
+                }
+                nestedProperties = merged.dump();
+            }
+            const SubcircuitExpansionResult nested = expandSubcircuit(compDef.typeId, expansionStack, nestedProperties);
             childSubcircuitIds.push_back(nested.subcircuitInstanceId);
             if (!primaryMcuInstanceId && nested.primaryMcuInstanceId) primaryMcuInstanceId = nested.primaryMcuInstanceId;
             componentIndexByLocalId[compDef.id] = nested.subcircuitInstanceId;
@@ -2611,6 +2892,8 @@ SubcircuitExpansionResult SimulationSession::expandSubcircuit(const std::string&
             continue;
         }
         registry::ComponentParams params = paramsFromPropertiesJson(compDef.propertiesJson);
+        if (const auto overrides = childOverrides.find(compDef.id); overrides != childOverrides.end())
+            for (const auto& [name, value] : overrides->second.properties) params.properties[name] = value;
         // Subcircuitos armazenam endpoints nos wires, não uma cópia redundante de `pinList` em
         // cada componente. Reconstitui primeiro pelos metadados e completa com todo ID realmente
         // referenciado. Isso preserva IDs semânticos (pin-P1, GPIO23...) sem fallback hardcoded.
@@ -2816,10 +3099,21 @@ std::optional<std::string> SimulationSession::setSubcircuitChildProperty(uint32_
                                                                          const std::string& propertyName, const PropertyValue& value,
                                                                          uint64_t* appliedAtNs) {
     return runViaCommandQueue([subcircuitInstanceId, localId, propertyName, value, appliedAtNs](SimulationSession& self) -> std::optional<std::string> {
-        const std::optional<uint32_t> child = self.findSubcircuitChildByLocalIdUnlocked(subcircuitInstanceId, localId);
+        std::optional<uint32_t> child = self.findSubcircuitChildByLocalIdUnlocked(subcircuitInstanceId, localId);
         if (!child) return "child_not_found|" + localId;
-        std::optional<std::string> error = self.setPropertyUnlocked(*child, propertyName, value);
-        if (!error) self.notePropertyAppliedUnlocked(*child, propertyName, value, appliedAtNs);
+        // `@neto.prop` sobre um filho que é subsistema aninhado desce um nível por prefixo (mesmo
+        // contrato das propriedades por instância de `expandSubcircuit`).
+        std::string name = propertyName;
+        while ((*child & kSubcircuitInstanceFlag) != 0 && name.size() > 1 && name[0] == '@') {
+            const size_t dot = name.find('.', 1);
+            if (dot == std::string::npos || dot == 1 || dot + 1 == name.size()) break;
+            const std::string innerId = name.substr(1, dot - 1);
+            child = self.findSubcircuitChildByLocalIdUnlocked(*child, innerId);
+            if (!child) return "child_not_found|" + localId + "/" + innerId;
+            name = name.substr(dot + 1);
+        }
+        std::optional<std::string> error = self.setPropertyUnlocked(*child, name, value);
+        if (!error) self.notePropertyAppliedUnlocked(*child, name, value, appliedAtNs);
         return error;
     });
 }

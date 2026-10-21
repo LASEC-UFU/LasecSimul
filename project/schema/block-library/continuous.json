@@ -1,0 +1,280 @@
+{
+  "library": "continuous",
+  "name": "Continuous",
+  "title": { "pt-BR": "Contínuos" },
+  "order": 20,
+  "blocks": [
+    {
+      "id": "integrator",
+      "name": "Integrator",
+      "title": { "pt-BR": "Integrador" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/integrator.html",
+      "simulink": { "blockType": "Integrator" },
+      "sampleTime": { "fixed": "continuous" },
+      "size": [30, 30],
+      "presets": [
+        { "name": "Integrator Limited", "title": { "pt-BR": "Integrador limitado" }, "doc": "https://www.mathworks.com/help/simulink/slref/integrator.html", "defaults": { "LimitOutput": true, "UpperSaturationLimit": "1", "LowerSaturationLimit": "0" } }
+      ],
+      "params": [
+        { "name": "ExternalReset", "type": "enum", "default": "none", "options": ["none", "rising", "falling", "either", "level", "level hold"], "title": { "en": "External reset", "pt-BR": "Reset externo" } },
+        { "name": "InitialConditionSource", "type": "enum", "default": "internal", "options": ["internal", "external"], "title": { "en": "Initial condition source", "pt-BR": "Origem da condição inicial" } },
+        { "name": "InitialCondition", "type": "expr", "default": "0", "visibleWhen": { "InitialConditionSource": ["internal"] }, "title": { "en": "Initial condition", "pt-BR": "Condição inicial" } },
+        { "name": "LimitOutput", "type": "bool", "default": false, "title": { "en": "Limit output", "pt-BR": "Limitar saída" } },
+        { "name": "UpperSaturationLimit", "type": "expr", "default": "inf", "tunable": true, "visibleWhen": { "LimitOutput": [true] }, "title": { "en": "Upper saturation limit", "pt-BR": "Limite superior" } },
+        { "name": "LowerSaturationLimit", "type": "expr", "default": "-inf", "tunable": true, "visibleWhen": { "LimitOutput": [true] }, "title": { "en": "Lower saturation limit", "pt-BR": "Limite inferior" } },
+        { "name": "WrapState", "type": "bool", "default": false, "title": { "en": "Wrap state", "pt-BR": "Estado circular (wrap)" } },
+        { "name": "WrappedStateUpperValue", "type": "expr", "default": "pi", "visibleWhen": { "WrapState": [true] }, "title": { "en": "Wrapped state upper value", "pt-BR": "Limite superior do wrap" } },
+        { "name": "WrappedStateLowerValue", "type": "expr", "default": "-pi", "visibleWhen": { "WrapState": [true] }, "title": { "en": "Wrapped state lower value", "pt-BR": "Limite inferior do wrap" } },
+        { "name": "ShowSaturationPort", "type": "bool", "default": false, "visibleWhen": { "LimitOutput": [true] }, "title": { "en": "Show saturation port", "pt-BR": "Mostrar porta de saturação" } },
+        { "name": "ShowStatePort", "type": "bool", "default": false, "title": { "en": "Show state port", "pt-BR": "Mostrar porta de estado" } },
+        { "name": "AbsoluteTolerance", "type": "string", "default": "auto", "title": { "en": "Absolute tolerance", "pt-BR": "Tolerância absoluta" } },
+        { "name": "IgnoreLimit", "type": "bool", "default": false, "title": { "en": "Ignore limit and reset when linearizing", "pt-BR": "Ignorar limite e reset na linearização" } },
+        { "name": "ZeroCross", "type": "bool", "default": true, "title": { "en": "Enable zero-crossing detection", "pt-BR": "Detecção de cruzamento por zero" } },
+        { "name": "ContinuousStateAttributes", "type": "string", "default": "", "title": { "en": "State Name (e.g., 'position')", "pt-BR": "Nome do estado" } }
+      ],
+      "inputs": [
+        { "id": "in1" },
+        { "id": "reset", "when": { "ExternalReset": ["rising", "falling", "either", "level", "level hold"] } },
+        { "id": "x0", "label": "x0", "when": { "InitialConditionSource": ["external"] } }
+      ],
+      "outputs": [
+        { "id": "out1" },
+        { "id": "sat", "when": { "LimitOutput": [true], "ShowSaturationPort": [true] } },
+        { "id": "state", "when": { "ShowStatePort": [true] } }
+      ]
+    },
+    {
+      "id": "second_order_integrator",
+      "name": "Second-Order Integrator",
+      "title": { "pt-BR": "Integrador de segunda ordem" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/secondorderintegrator.html",
+      "simulink": { "blockType": "SecondOrderIntegrator" },
+      "sampleTime": { "fixed": "continuous" },
+      "size": [50, 40],
+      "presets": [
+        { "name": "Second-Order Integrator Limited", "title": { "pt-BR": "Integrador de segunda ordem limitado" }, "doc": "https://www.mathworks.com/help/simulink/slref/secondorderintegrator.html", "defaults": { "LimitX": true, "UpperLimitX": "1", "LowerLimitX": "0", "LimitDXDT": true } }
+      ],
+      "params": [
+        { "name": "ICSourceX", "type": "enum", "default": "internal", "options": ["internal", "external"], "group": "x", "title": { "en": "Initial condition source x", "pt-BR": "Origem da condição inicial de x" } },
+        { "name": "ICX", "type": "expr", "default": "0.0", "group": "x", "visibleWhen": { "ICSourceX": ["internal"] }, "title": { "en": "Initial condition x", "pt-BR": "Condição inicial de x" } },
+        { "name": "LimitX", "type": "bool", "default": false, "group": "x", "title": { "en": "Limit x", "pt-BR": "Limitar x" } },
+        { "name": "UpperLimitX", "type": "expr", "default": "inf", "tunable": true, "group": "x", "visibleWhen": { "LimitX": [true] }, "title": { "en": "Upper limit x", "pt-BR": "Limite superior de x" } },
+        { "name": "LowerLimitX", "type": "expr", "default": "-inf", "tunable": true, "group": "x", "visibleWhen": { "LimitX": [true] }, "title": { "en": "Lower limit x", "pt-BR": "Limite inferior de x" } },
+        { "name": "WrapX", "type": "bool", "default": false, "group": "x", "title": { "en": "Wrap x", "pt-BR": "x circular (wrap)" } },
+        { "name": "WrappedUpperValueX", "type": "expr", "default": "pi", "group": "x", "visibleWhen": { "WrapX": [true] }, "title": { "en": "Wrapped upper value x", "pt-BR": "Limite superior do wrap de x" } },
+        { "name": "WrappedLowerValueX", "type": "expr", "default": "-pi", "group": "x", "visibleWhen": { "WrapX": [true] }, "title": { "en": "Wrapped lower value x", "pt-BR": "Limite inferior do wrap de x" } },
+        { "name": "AbsoluteToleranceX", "type": "string", "default": "auto", "group": "x", "title": { "en": "Absolute tolerance x", "pt-BR": "Tolerância absoluta de x" } },
+        { "name": "StateNameX", "type": "string", "default": "", "group": "x", "title": { "en": "State name x", "pt-BR": "Nome do estado x" } },
+        { "name": "ICSourceDXDT", "type": "enum", "default": "internal", "options": ["internal", "external"], "group": "dx/dt", "title": { "en": "Initial condition source dx/dt", "pt-BR": "Origem da condição inicial de dx/dt" } },
+        { "name": "ICDXDT", "type": "expr", "default": "0.0", "group": "dx/dt", "visibleWhen": { "ICSourceDXDT": ["internal"] }, "title": { "en": "Initial condition dx/dt", "pt-BR": "Condição inicial de dx/dt" } },
+        { "name": "LimitDXDT", "type": "bool", "default": false, "group": "dx/dt", "title": { "en": "Limit dx/dt", "pt-BR": "Limitar dx/dt" } },
+        { "name": "UpperLimitDXDT", "type": "expr", "default": "inf", "tunable": true, "group": "dx/dt", "visibleWhen": { "LimitDXDT": [true] }, "title": { "en": "Upper limit dx/dt", "pt-BR": "Limite superior de dx/dt" } },
+        { "name": "LowerLimitDXDT", "type": "expr", "default": "-inf", "tunable": true, "group": "dx/dt", "visibleWhen": { "LimitDXDT": [true] }, "title": { "en": "Lower limit dx/dt", "pt-BR": "Limite inferior de dx/dt" } },
+        { "name": "AbsoluteToleranceDXDT", "type": "string", "default": "auto", "group": "dx/dt", "title": { "en": "Absolute tolerance dx/dt", "pt-BR": "Tolerância absoluta de dx/dt" } },
+        { "name": "StateNameDXDT", "type": "string", "default": "", "group": "dx/dt", "title": { "en": "State name dx/dt", "pt-BR": "Nome do estado dx/dt" } },
+        { "name": "ExternalReset", "type": "enum", "default": "none", "options": ["none", "rising", "falling", "either"], "group": "Attributes", "title": { "en": "External reset", "pt-BR": "Reset externo" } },
+        { "name": "ZeroCross", "type": "bool", "default": true, "group": "Attributes", "title": { "en": "Enable zero-crossing detection", "pt-BR": "Detecção de cruzamento por zero" } },
+        { "name": "ReinitDXDTwhenXreachesSaturation", "type": "bool", "default": false, "group": "Attributes", "title": { "en": "Reinitialize dx/dt when x reaches saturation", "pt-BR": "Reinicializar dx/dt quando x satura" } },
+        { "name": "IgnoreStateLimitsAndResetForLinearization", "type": "bool", "default": false, "group": "Attributes", "title": { "en": "Ignore state limits and the reset for linearization", "pt-BR": "Ignorar limites e reset na linearização" } },
+        { "name": "ShowOutput", "type": "enum", "default": "both", "options": ["both", "x", "dxdt"], "group": "Attributes", "title": { "en": "Show output", "pt-BR": "Saídas mostradas" } }
+      ],
+      "inputs": [
+        { "id": "in1", "label": "u" },
+        { "id": "x0", "label": "x0", "when": { "ICSourceX": ["external"] } },
+        { "id": "dx0", "label": "dx0", "when": { "ICSourceDXDT": ["external"] } },
+        { "id": "reset", "when": { "ExternalReset": ["rising", "falling", "either"] } }
+      ],
+      "outputs": [
+        { "id": "out1", "label": "x", "when": { "ShowOutput": ["both", "x"] } },
+        { "id": "dx", "label": "dx", "when": { "ShowOutput": ["both", "dxdt"] } }
+      ]
+    },
+    {
+      "id": "state_space",
+      "name": "State-Space",
+      "title": { "pt-BR": "Espaço de estados" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/statespace.html",
+      "simulink": { "blockType": "StateSpace" },
+      "sampleTime": { "fixed": "continuous" },
+      "size": [55, 30],
+      "params": [
+        { "name": "A", "type": "expr", "default": "1", "title": { "en": "A", "pt-BR": "A" } },
+        { "name": "B", "type": "expr", "default": "1", "title": { "en": "B", "pt-BR": "B" } },
+        { "name": "C", "type": "expr", "default": "1", "title": { "en": "C", "pt-BR": "C" } },
+        { "name": "D", "type": "expr", "default": "1", "title": { "en": "D", "pt-BR": "D" } },
+        { "name": "InitialCondition", "type": "expr", "default": "0", "title": { "en": "Initial conditions", "pt-BR": "Condições iniciais" } },
+        { "name": "ParameterTunability", "type": "enum", "default": "Auto", "options": ["Auto", "Optimized", "Unconstrained"], "title": { "en": "Parameter tunability", "pt-BR": "Ajuste dos parâmetros" } },
+        { "name": "AllowTunableDMatrix", "type": "bool", "default": false, "title": { "en": "Allow non-zero values for D matrix initially specified as zero", "pt-BR": "Permitir D não nula ajustável (D inicial nula)" } },
+        { "name": "AbsoluteTolerance", "type": "string", "default": "auto", "title": { "en": "Absolute tolerance", "pt-BR": "Tolerância absoluta" } },
+        { "name": "ContinuousStateAttributes", "type": "string", "default": "", "title": { "en": "State Name (e.g., 'position')", "pt-BR": "Nome do estado" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "descriptor_state_space",
+      "name": "Descriptor State-Space",
+      "title": { "pt-BR": "Espaço de estados descritor" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/descriptorstatespace.html",
+      "simulink": { "blockType": "DescriptorStateSpace" },
+      "sampleTime": { "fixed": "continuous" },
+      "size": [60, 30],
+      "params": [
+        { "name": "E", "type": "expr", "default": "1", "title": { "en": "Mass matrix (E)", "pt-BR": "Matriz de massa (E)" } },
+        { "name": "A", "type": "expr", "default": "1", "title": { "en": "System A matrix", "pt-BR": "Matriz A" } },
+        { "name": "B", "type": "expr", "default": "1", "title": { "en": "Input-to-state matrix (B)", "pt-BR": "Matriz entrada-estado (B)" } },
+        { "name": "C", "type": "expr", "default": "1", "title": { "en": "State-to-output matrix (C)", "pt-BR": "Matriz estado-saída (C)" } },
+        { "name": "D", "type": "expr", "default": "1", "title": { "en": "Feedthrough matrix (D)", "pt-BR": "Matriz de transmissão direta (D)" } },
+        { "name": "InitialCondition", "type": "expr", "default": "0", "title": { "en": "Initial conditions", "pt-BR": "Condições iniciais" } },
+        { "name": "DirectFeedthrough", "type": "enum", "default": "True", "options": ["True", "False", "Auto"], "title": { "en": "Direct feedthrough", "pt-BR": "Transmissão direta" } },
+        { "name": "LinearizeToSparse", "type": "bool", "default": false, "title": { "en": "Linearize to sparse model", "pt-BR": "Linearizar para modelo esparso" } },
+        { "name": "ParameterTunability", "type": "enum", "default": "Auto", "options": ["Auto", "Optimized", "Unconstrained"], "title": { "en": "Parameter tunability", "pt-BR": "Ajuste dos parâmetros" } },
+        { "name": "AbsoluteTolerance", "type": "string", "default": "auto", "title": { "en": "Absolute tolerance", "pt-BR": "Tolerância absoluta" } },
+        { "name": "ContinuousStateAttributes", "type": "string", "default": "", "title": { "en": "State Name (e.g., 'position')", "pt-BR": "Nome do estado" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "transfer_fcn",
+      "name": "Transfer Fcn",
+      "title": { "pt-BR": "Função de transferência" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/transferfcn.html",
+      "simulink": { "blockType": "TransferFcn" },
+      "sampleTime": { "fixed": "continuous" },
+      "size": [50, 30],
+      "params": [
+        { "name": "Numerator", "type": "expr", "default": "[1]", "title": { "en": "Numerator coefficients", "pt-BR": "Coeficientes do numerador" } },
+        { "name": "Denominator", "type": "expr", "default": "[1 1]", "title": { "en": "Denominator coefficients", "pt-BR": "Coeficientes do denominador" } },
+        { "name": "ParameterTunability", "type": "enum", "default": "Auto", "options": ["Auto", "Optimized", "Unconstrained"], "title": { "en": "Parameter tunability", "pt-BR": "Ajuste dos parâmetros" } },
+        { "name": "AbsoluteTolerance", "type": "string", "default": "auto", "title": { "en": "Absolute tolerance", "pt-BR": "Tolerância absoluta" } },
+        { "name": "ContinuousStateAttributes", "type": "string", "default": "", "title": { "en": "State Name (e.g., 'position')", "pt-BR": "Nome do estado" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "zero_pole",
+      "name": "Zero-Pole",
+      "title": { "pt-BR": "Zero-polo" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/zeropole.html",
+      "simulink": { "blockType": "ZeroPole" },
+      "sampleTime": { "fixed": "continuous" },
+      "size": [60, 30],
+      "params": [
+        { "name": "Zeros", "type": "expr", "default": "[1]", "title": { "en": "Zeros", "pt-BR": "Zeros" } },
+        { "name": "Poles", "type": "expr", "default": "[0 -1]", "title": { "en": "Poles", "pt-BR": "Polos" } },
+        { "name": "Gain", "type": "expr", "default": "[1]", "title": { "en": "Gain", "pt-BR": "Ganho" } },
+        { "name": "ParameterTunability", "type": "enum", "default": "Auto", "options": ["Auto", "Optimized", "Unconstrained"], "title": { "en": "Parameter tunability", "pt-BR": "Ajuste dos parâmetros" } },
+        { "name": "AbsoluteTolerance", "type": "string", "default": "auto", "title": { "en": "Absolute tolerance", "pt-BR": "Tolerância absoluta" } },
+        { "name": "ContinuousStateAttributes", "type": "string", "default": "", "title": { "en": "State Name (e.g., 'position')", "pt-BR": "Nome do estado" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "derivative",
+      "name": "Derivative",
+      "title": { "pt-BR": "Derivada" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/derivative.html",
+      "simulink": { "blockType": "Derivative" },
+      "sampleTime": { "fixed": "continuous" },
+      "size": [30, 30],
+      "params": [
+        { "name": "CoefficientInTFapproximation", "type": "expr", "default": "inf", "title": { "en": "Coefficient c in the transfer function approximation s/(1/c*s+1) used for linearization", "pt-BR": "Coeficiente c da aproximação s/(s/c+1) (linearização)" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "transport_delay",
+      "name": "Transport Delay",
+      "title": { "pt-BR": "Atraso de transporte" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/transportdelay.html",
+      "simulink": { "blockType": "TransportDelay" },
+      "sampleTime": { "fixed": "continuous" },
+      "size": [30, 30],
+      "params": [
+        { "name": "DelayTime", "type": "expr", "default": "1", "title": { "en": "Time delay", "pt-BR": "Tempo de atraso" } },
+        { "name": "InitialOutput", "type": "expr", "default": "0", "title": { "en": "Initial output", "pt-BR": "Saída inicial" } },
+        { "name": "BufferSize", "type": "expr", "default": "1024", "title": { "en": "Initial buffer size", "pt-BR": "Tamanho inicial do buffer" } },
+        { "name": "FixedBuffer", "type": "bool", "default": false, "title": { "en": "Use fixed buffer size", "pt-BR": "Buffer de tamanho fixo" } },
+        { "name": "TransDelayFeedthrough", "type": "bool", "default": false, "title": { "en": "Direct feedthrough of input during linearization", "pt-BR": "Passagem direta na linearização" } },
+        { "name": "PadeOrder", "type": "expr", "default": "0", "title": { "en": "Pade order (for linearization)", "pt-BR": "Ordem de Padé (linearização)" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "variable_time_delay",
+      "name": "Variable Time Delay",
+      "title": { "pt-BR": "Atraso de tempo variável" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/variabletimedelay.html",
+      "simulink": { "blockType": "VariableTransportDelay", "match": { "VariableDelayType": "Variable time delay" } },
+      "sampleTime": { "fixed": "continuous" },
+      "size": [30, 30],
+      "params": [
+        { "name": "VariableDelayType", "type": "enum", "default": "Variable time delay", "options": ["Variable time delay", "Variable transport delay"], "title": { "en": "Select delay type", "pt-BR": "Tipo de atraso" } },
+        { "name": "MaximumDelay", "type": "expr", "default": "10", "title": { "en": "Maximum delay", "pt-BR": "Atraso máximo" } },
+        { "name": "InitialOutput", "type": "expr", "default": "0", "title": { "en": "Initial output", "pt-BR": "Saída inicial" } },
+        { "name": "MaximumPoints", "type": "expr", "default": "1024", "title": { "en": "Initial buffer size", "pt-BR": "Tamanho inicial do buffer" } },
+        { "name": "FixedBuffer", "type": "bool", "default": false, "title": { "en": "Use fixed buffer size", "pt-BR": "Buffer de tamanho fixo" } },
+        { "name": "ZeroDelay", "type": "bool", "default": false, "visibleWhen": { "VariableDelayType": ["Variable time delay"] }, "title": { "en": "Handle zero delay", "pt-BR": "Tratar atraso nulo" } },
+        { "name": "TransDelayFeedthrough", "type": "bool", "default": false, "title": { "en": "Direct feedthrough of input during linearization", "pt-BR": "Passagem direta na linearização" } },
+        { "name": "PadeOrder", "type": "expr", "default": "0", "title": { "en": "Pade order (for linearization)", "pt-BR": "Ordem de Padé (linearização)" } },
+        { "name": "AbsoluteTolerance", "type": "string", "default": "auto", "visibleWhen": { "VariableDelayType": ["Variable transport delay"] }, "title": { "en": "Absolute tolerance", "pt-BR": "Tolerância absoluta" } },
+        { "name": "ContinuousStateAttributes", "type": "string", "default": "", "visibleWhen": { "VariableDelayType": ["Variable transport delay"] }, "title": { "en": "State Name (e.g., 'position')", "pt-BR": "Nome do estado" } }
+      ],
+      "inputs": [
+        { "id": "in1" },
+        { "id": "in2", "label": "t0", "when": { "VariableDelayType": ["Variable time delay"] } },
+        { "id": "in2", "label": "ti", "when": { "VariableDelayType": ["Variable transport delay"] } }
+      ],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "variable_transport_delay",
+      "name": "Variable Transport Delay",
+      "title": { "pt-BR": "Atraso de transporte variável" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/variabletransportdelay.html",
+      "simulink": { "blockType": "VariableTransportDelay", "match": { "VariableDelayType": "Variable transport delay" } },
+      "sampleTime": { "fixed": "continuous" },
+      "size": [30, 30],
+      "params": [
+        { "name": "VariableDelayType", "type": "enum", "default": "Variable transport delay", "options": ["Variable time delay", "Variable transport delay"], "title": { "en": "Select delay type", "pt-BR": "Tipo de atraso" } },
+        { "name": "MaximumDelay", "type": "expr", "default": "10", "title": { "en": "Maximum delay", "pt-BR": "Atraso máximo" } },
+        { "name": "InitialOutput", "type": "expr", "default": "0", "title": { "en": "Initial output", "pt-BR": "Saída inicial" } },
+        { "name": "MaximumPoints", "type": "expr", "default": "1024", "title": { "en": "Initial buffer size", "pt-BR": "Tamanho inicial do buffer" } },
+        { "name": "FixedBuffer", "type": "bool", "default": false, "title": { "en": "Use fixed buffer size", "pt-BR": "Buffer de tamanho fixo" } },
+        { "name": "ZeroDelay", "type": "bool", "default": false, "visibleWhen": { "VariableDelayType": ["Variable time delay"] }, "title": { "en": "Handle zero delay", "pt-BR": "Tratar atraso nulo" } },
+        { "name": "TransDelayFeedthrough", "type": "bool", "default": false, "title": { "en": "Direct feedthrough of input during linearization", "pt-BR": "Passagem direta na linearização" } },
+        { "name": "PadeOrder", "type": "expr", "default": "0", "title": { "en": "Pade order (for linearization)", "pt-BR": "Ordem de Padé (linearização)" } },
+        { "name": "AbsoluteTolerance", "type": "string", "default": "auto", "visibleWhen": { "VariableDelayType": ["Variable transport delay"] }, "title": { "en": "Absolute tolerance", "pt-BR": "Tolerância absoluta" } },
+        { "name": "ContinuousStateAttributes", "type": "string", "default": "", "visibleWhen": { "VariableDelayType": ["Variable transport delay"] }, "title": { "en": "State Name (e.g., 'position')", "pt-BR": "Nome do estado" } }
+      ],
+      "inputs": [
+        { "id": "in1" },
+        { "id": "in2", "label": "t0", "when": { "VariableDelayType": ["Variable time delay"] } },
+        { "id": "in2", "label": "ti", "when": { "VariableDelayType": ["Variable transport delay"] } }
+      ],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "first_order_hold",
+      "name": "First Order Hold",
+      "title": { "pt-BR": "Segurador de primeira ordem" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/firstorderhold.html",
+      "simulink": { "blockType": "FirstOrderHold" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [30, 30],
+      "params": [
+        { "name": "InitialOutput", "type": "expr", "default": "0", "title": { "en": "Initial output", "pt-BR": "Saída inicial" } },
+        { "name": "OutputAlgorithm", "type": "enum", "default": "Slow (Avoid Overshoot)", "options": ["Slow (Avoid Overshoot)", "Fast (Minimize Error)"], "title": { "en": "Output algorithm", "pt-BR": "Algoritmo de saída" } },
+        { "name": "ErrorTolerance", "type": "expr", "default": "inf", "title": { "en": "Reset if relative extrapolation error exceeds", "pt-BR": "Reiniciar o solver se o erro relativo de extrapolação exceder" } },
+        { "name": "AllowContinuousInput", "type": "bool", "default": false, "title": { "en": "Allow continuous input", "pt-BR": "Permitir entrada contínua" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    }
+  ]
+}

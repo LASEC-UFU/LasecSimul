@@ -694,6 +694,115 @@ static void testRegisterAdhocSubcircuitOverIpc() {
     std::filesystem::remove(duplicateManifestPath);
 }
 
+// Teste 4b5: um .lssubcircuit com tabela `subsystems` (subsistemas internos, docs/59) registra as
+// definicoes internas no espaco de nomes do arquivo antes do principal -- contrato de
+// `subsystemModel.ts::flattenExternalSystem`. As conversoes compostas da biblioteca de blocos
+// (docs/68) gravam exatamente esta forma nos `.lssubcircuit` da biblioteca.
+static nlohmann::json signalTunnel(const std::string& name, bool input) {
+    nlohmann::json properties = {{"name", name}, {"pinId", name}, {"direction", input ? "Input" : "Output"}, {"valueType", "Real"}};
+    if (input) properties["defaultValue"] = 0;
+    return {{"id", name + "-tunnel"}, {"typeId", "connectors.signal_tunnel"}, {"properties", properties}};
+}
+static nlohmann::json signalWire(const std::string& id, const std::string& fromComponent, const std::string& fromPin,
+                                 const std::string& toComponent, const std::string& toPin) {
+    return {{"id", id}, {"from", {{"kind", "port"}, {"componentId", fromComponent}, {"pinId", fromPin}}},
+            {"to", {{"kind", "port"}, {"componentId", toComponent}, {"pinId", toPin}}}, {"points", nlohmann::json::array()}};
+}
+static nlohmann::json signalInterface() {
+    return nlohmann::json::array({
+        {{"pinId", "in"}, {"label", "IN"}, {"internalTunnel", "in"}, {"domain", "signal"}, {"direction", "in"}, {"valueType", "Real"}, {"width", 1}},
+        {{"pinId", "out"}, {"label", "OUT"}, {"internalTunnel", "out"}, {"domain", "signal"}, {"direction", "out"}, {"valueType", "Real"}, {"width", 1}},
+    });
+}
+
+static void testRegisterAdhocSubcircuitWithInternalSubsystemsOverIpc() {
+    std::fprintf(stderr, "\n[T4b5] .lssubcircuit com subsistemas internos registra definicoes no espaco do arquivo\n");
+    const std::filesystem::path manifestPath = uniqueTempPath("lasecsimul-adhoc-internal-subsystems");
+    {
+        const nlohmann::json inner = {
+            {"typeId", "subsystem.dobro"},
+            {"name", "Dobro"},
+            {"components", {signalTunnel("in", true), {{"id", "k"}, {"typeId", "sl.gain"}, {"properties", {{"Gain", "2"}}}}, signalTunnel("out", false)}},
+            {"topology", {{"revision", 0}, {"nodes", nlohmann::json::array()}, {"conductors", {
+                signalWire("w1", "in-tunnel", "value", "k", "in1"), signalWire("w2", "k", "out1", "out-tunnel", "value")}}}},
+            {"interface", signalInterface()},
+        };
+        // `subsystem.quadruplo` usa `subsystem.dobro` (dependencia interna antes do dependente).
+        const nlohmann::json outer = {
+            {"typeId", "subsystem.quadruplo"},
+            {"name", "Quadruplo"},
+            {"components", {signalTunnel("in", true),
+                            {{"id", "a"}, {"typeId", "subsystem.dobro"}, {"properties", {{"@k.Gain", "2"}}}},
+                            {{"id", "b"}, {"typeId", "subsystem.dobro"}, {"properties", nlohmann::json::object()}},
+                            signalTunnel("out", false)}},
+            {"topology", {{"revision", 0}, {"nodes", nlohmann::json::array()}, {"conductors", {
+                signalWire("w1", "in-tunnel", "value", "a", "in"), signalWire("w2", "a", "out", "b", "in"),
+                signalWire("w3", "b", "out", "out-tunnel", "value")}}}},
+            {"interface", signalInterface()},
+        };
+        std::ofstream manifestFile(manifestPath);
+        manifestFile << nlohmann::json{
+            {"schemaVersion", 3},
+            {"typeId", "subcircuits.internal_subsystems_adhoc"},
+            {"name", "Subsistemas internos (teste IPC)"},
+            // Ordem invertida de proposito: o registro ordena por dependencia.
+            {"subsystems", {outer, inner}},
+            {"components", {signalTunnel("in", true), {{"id", "x4"}, {"typeId", "subsystem.quadruplo"}, {"properties", nlohmann::json::object()}},
+                            signalTunnel("out", false)}},
+            {"topology", {{"revision", 0}, {"nodes", nlohmann::json::array()}, {"conductors", {
+                signalWire("w1", "in-tunnel", "value", "x4", "in"), signalWire("w2", "x4", "out", "out-tunnel", "value")}}}},
+            {"interface", signalInterface()},
+        }.dump(2);
+    }
+
+    const std::string pipeName = "lasecsimul-bootstrap-test-internal-subsystems";
+    int serverResult = -1;
+    std::thread serverThread([&] {
+        lasecsimul::app::CoreApplication app({pipeName});
+        serverResult = app.run();
+    });
+#ifdef _WIN32
+    void* conn = clientConnect(pipeName);
+    const bool connected = conn != INVALID_HANDLE_VALUE;
+#else
+    int conn = clientConnect(pipeName);
+    const bool connected = conn >= 0;
+#endif
+    TEST_ASSERT(connected, "cliente conectou");
+    if (connected) {
+        int nextId = 1;
+        auto send = [&](const std::string& type, const nlohmann::json& payload) -> nlohmann::json {
+            const nlohmann::json req = {{"id", std::to_string(nextId++)}, {"type", type}, {"payload", payload},
+                                        {"protocolVersion", lasecsimul::ipc::PROTOCOL_VERSION}};
+            clientWriteLine(conn, req.dump());
+            return nlohmann::json::parse(clientReadLine(conn));
+        };
+        send("hello", {{"clientVersion", "0.1.0"}});
+        const nlohmann::json registerResp = send("registerAdhocSubcircuit", {{"path", manifestPath.string()}});
+        TEST_ASSERT(registerResp.value("ok", false), "registerAdhocSubcircuit aceita manifesto com subsistemas internos");
+        if (!registerResp.value("ok", false)) std::fprintf(stderr, "  [info] %s\n", registerResp.dump().c_str());
+        TEST_ASSERT(registerResp["payload"].value("pinCount", 0) == 2, "interface do principal (in/out) preservada");
+        const nlohmann::json reloadResp = send("registerAdhocSubcircuit", {{"path", manifestPath.string()}});
+        TEST_ASSERT(reloadResp.value("ok", false), "recarregar o mesmo arquivo re-registra as definicoes internas");
+
+        const nlohmann::json addResp = send("addComponent", {{"typeId", "subcircuits.internal_subsystems_adhoc"}, {"properties", nlohmann::json::object()}});
+        TEST_ASSERT(addResp.value("ok", false), "addComponent expande principal -> quadruplo -> dobro (tres niveis)");
+        if (!addResp.value("ok", false)) std::fprintf(stderr, "  [info] %s\n", addResp.dump().c_str());
+
+        // As definicoes internas nao vazam com o nome curto: so existem como `subsystem.x@<arquivo>`.
+        const nlohmann::json leaked = send("addComponent", {{"typeId", "subsystem.dobro"}, {"properties", nlohmann::json::object()}});
+        TEST_ASSERT(!leaked.value("ok", true), "subsystem.dobro sem o espaco do arquivo nao e registrado globalmente");
+        const nlohmann::json scoped = send("addComponent", {{"typeId", "subsystem.dobro@subcircuits.internal_subsystems_adhoc"}, {"properties", nlohmann::json::object()}});
+        TEST_ASSERT(scoped.value("ok", false), "definicao interna registrada como subsystem.dobro@<typeId do arquivo>");
+
+        send("shutdown", nlohmann::json::object());
+        clientClose(conn);
+    }
+    serverThread.join();
+    TEST_ASSERT(serverResult == 0, "servidor encerrou com codigo 0 apos shutdown");
+    std::filesystem::remove(manifestPath);
+}
+
 // Teste 4c.2: componentes complexos refeitos via ABI recebem comandos bit a bit pelo on_event.
 static void testSimulideComplexAbiEventsOverIpc() {
     std::fprintf(stderr, "\n[T4c.2] componente complexo SimulIDE via ABI interpreta pinos bit a bit\n");
@@ -1632,6 +1741,7 @@ int main() {
     testGetNodeVoltageOverIpc();
     testGetComponentCurrentOverIpc();
     testRegisterAdhocSubcircuitOverIpc();
+    testRegisterAdhocSubcircuitWithInternalSubsystemsOverIpc();
     testSimulideComplexAbiEventsOverIpc();
     testGetPropertySchemasOverIpc();
     testSetPropertyValidationOverIpc();

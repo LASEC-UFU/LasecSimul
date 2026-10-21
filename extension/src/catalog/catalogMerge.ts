@@ -74,7 +74,9 @@ export function mergePropertySchemas(
 ): WebviewComponentCatalogEntry[] {
   const safeSerialPortsByTypeId = sanitizeMcuSerialPortsByTypeId(serialPortsByTypeId);
   return catalog.map((entry) => {
-    const schemas = schemasByTypeId[entry.typeId];
+    // Bloco da biblioteca (`sl.*`): o schema já vem da MESMA especificação que o Core usa, com a
+    // visibilidade condicional dos campos (`visibleWhen`) que o schema do Core não carrega.
+    const schemas = entry.blockSpec ? undefined : schemasByTypeId[entry.typeId];
     const readoutFormat = readoutFormatByTypeId[entry.typeId];
     const interactionKind = interactionKindByTypeId[entry.typeId];
     const pinIds = entry.pinIds === undefined ? pinIdsByTypeId[entry.typeId] : undefined;

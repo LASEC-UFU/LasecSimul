@@ -23,11 +23,13 @@ import { resolveProjectSourcePaths } from "../../src/project/projectPathPolicy";
 
   const controlProject = createEmptyProject();
   controlProject.controlDesignProject = {
-    version: 1, domain: "continuous", sampleTime: 0.1, discretizationMethod: "tustin", frequencyUnit: "rad/s", coefficientConvention: "z-descending",
+    version: 1, domain: "continuous", sampleTime: 0.1, architecture: "nested-inner-feedback", discretizationMethod: "tustin", frequencyUnit: "rad/s", coefficientConvention: "z-descending",
     F: { num: "1", den: "1" }, C: { num: "4", den: "1" },
     G: { num: "1", den: "1, 2, 0" }, plantStateSpace: { A: [[0, 1], [-2, -3]], B: [0, 1], C: [1, 0], D: 0 }, H: { num: "1", den: "1" },
-    response: "output", requirements: [{ id: "os", kind: "overshoot", value: 20 }],
+    response: "output", riseStartPercent: 15, riseEndPercent: 85, settlingPercent: 5, nicholsGrid: false, requirements: [{ id: "os", kind: "overshoot", value: 20 }],
     alternatives: [{ name: "PI", color: "#4daafc", controller: { num: "1, 1", den: "1, 0" } }],
+    analysisPlots: [{ id: "disturbance-y", name: "Disturbance to output", path: "output", type: "step", visible: false, inputSignal: "plantInputDisturbance", outputSignal: "output" }, { id: "reference-error", name: "Reference to error", path: "error", type: "step", inputSignal: "reference", outputSignal: "error", loopOpening: "feedbackSensor" }, { id: "nested-open", name: "Nested inner opening", path: "output", type: "bode", inputSignal: "reference", outputSignal: "output", loopOpening: "allFeedbackSensors" }, { id: "nested-error", name: "Nested error", path: "innerError", type: "step", inputSignal: "reference", outputSignal: "innerError" }, { id: "disturbance-input", name: "Disturbance to plant input", path: "plantInput", type: "bode", inputSignal: "plantInputDisturbance", outputSignal: "plantInput" }],
+    plotOrder: ["time", "bode"], plotVisibility: { time: false }, plotLegendPositions: { "main:rl": [0.75, 0.2], "analysis:reference-error": [0.1, 0.7] }, bodeMagnitudeScale: "linear", bodeMagnitudeUnit: "dB", compensatorDisplayFormat: "coefficients", frequencyScale: "log", rootLocusGrid: true,
     activeAlternative: "",
     sourceBindings: { G: { componentId: "plant-1", typeId: "control.first_order", label: "P1", signature: '["control.first_order",{"gain":2,"tau":3}]', modelSignature: '["2","3, 1"]' } },
   };
@@ -41,7 +43,7 @@ import { resolveProjectSourcePaths } from "../../src/project/projectPathPolicy";
     version: 1, domain: "discrete", sampleTime: 0.1, discretizationMethod: "zoh", frequencyUnit: "rad/s", coefficientConvention: "z-inverse",
     F: { num: "1", den: "1" }, C: { num: "0.1", den: "1, -0.9" },
     G: { num: "0.1", den: "1, -0.9" }, H: { num: "1", den: "1" }, response: "output",
-    requirements: [{ id: "rho", kind: "poleRadius", value: 0.98, unit: "|z|" }, { id: "upeak", kind: "controlPeak", value: 3, unit: "amplitude", path: "control" }], alternatives: [], activeAlternative: "", plotViewBoxes: { rl: "0 0 640 330" },
+    requirements: [{ id: "rho", kind: "poleRadius", value: 0.98, unit: "|z|" }, { id: "upeak", kind: "controlPeak", value: 3, unit: "amplitude", path: "control" }], alternatives: [], activeAlternative: "", plotViewBoxes: { rl: "0 0 640 330" }, bodeMagnitudeScale: "linear", bodeMagnitudeUnit: "dB", compensatorDisplayFormat: "coefficients", frequencyScale: "log", rootLocusGrid: true,
   };
   const discreteControlPath = path.join(tmpDir, "discrete-control-design.lsproj");
   await serializer.save(discreteControlPath, discreteControlProject);

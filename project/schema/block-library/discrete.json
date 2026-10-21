@@ -1,0 +1,444 @@
+{
+  "library": "discrete",
+  "name": "Discrete",
+  "title": { "pt-BR": "Discretos" },
+  "order": 30,
+  "blocks": [
+    {
+      "id": "unit_delay",
+      "name": "Unit Delay",
+      "title": { "pt-BR": "Atraso unitário" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/unitdelay.html",
+      "simulink": { "blockType": "UnitDelay" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "InitialCondition", "type": "expr", "default": "0", "title": { "en": "Initial condition", "pt-BR": "Condição inicial" } },
+        { "name": "InputProcessing", "type": "enum", "default": "Elements as channels (sample based)", "options": ["Elements as channels (sample based)", "Columns as channels (frame based)"], "title": { "en": "Input processing", "pt-BR": "Processamento da entrada" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } },
+        { "name": "StateName", "type": "string", "default": "", "group": "State Attributes", "title": { "en": "State name", "pt-BR": "Nome do estado" } },
+        { "name": "StateMustResolveToSignalObject", "type": "bool", "default": false, "group": "State Attributes", "title": { "en": "State name must resolve to Simulink signal object", "pt-BR": "Nome do estado deve resolver para objeto de sinal" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "delay",
+      "name": "Delay",
+      "title": { "pt-BR": "Atraso" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/delay.html",
+      "simulink": { "blockType": "Delay" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "presets": [
+        { "name": "Resettable Delay", "title": { "pt-BR": "Atraso com reset" }, "doc": "https://www.mathworks.com/help/simulink/slref/resettabledelay.html", "defaults": { "InitialConditionSource": "Input port", "InitialCondition": "", "ExternalReset": "Rising" }, "size": [50, 35] },
+        { "name": "Variable Integer Delay", "title": { "pt-BR": "Atraso inteiro variável" }, "doc": "https://www.mathworks.com/help/simulink/slref/variableintegerdelay.html", "defaults": { "DelayLengthSource": "Input port" }, "size": [50, 30] }
+      ],
+      "params": [
+        { "name": "DelayLengthSource", "type": "enum", "default": "Dialog", "options": ["Dialog", "Input port"], "title": { "en": "Delay length: Source", "pt-BR": "Comprimento do atraso: origem" } },
+        { "name": "DelayLength", "type": "expr", "default": "2", "visibleWhen": { "DelayLengthSource": ["Dialog"] }, "title": { "en": "Delay length: Value", "pt-BR": "Comprimento do atraso: valor" } },
+        { "name": "DelayLengthUpperLimit", "type": "expr", "default": "100", "visibleWhen": { "DelayLengthSource": ["Input port"] }, "title": { "en": "Delay length: Upper limit", "pt-BR": "Comprimento do atraso: limite superior" } },
+        { "name": "InitialConditionSource", "type": "enum", "default": "Dialog", "options": ["Dialog", "Input port"], "title": { "en": "Initial condition: Source", "pt-BR": "Condição inicial: origem" } },
+        { "name": "InitialCondition", "type": "expr", "default": "0.0", "visibleWhen": { "InitialConditionSource": ["Dialog"] }, "title": { "en": "Initial condition: Value", "pt-BR": "Condição inicial: valor" } },
+        { "name": "InputProcessing", "type": "enum", "default": "Elements as channels (sample based)", "options": ["Elements as channels (sample based)", "Columns as channels (frame based)"], "title": { "en": "Input processing", "pt-BR": "Processamento da entrada" } },
+        { "name": "UseCircularBuffer", "type": "bool", "default": false, "title": { "en": "Use circular buffer for state", "pt-BR": "Buffer circular para o estado" } },
+        { "name": "PreventDirectFeedthrough", "type": "bool", "default": false, "visibleWhen": { "DelayLengthSource": ["Input port"] }, "title": { "en": "Prevent direct feedthrough", "pt-BR": "Impedir passagem direta" } },
+        { "name": "RemoveDelayLengthCheckInGeneratedCode", "type": "bool", "default": false, "visibleWhen": { "DelayLengthSource": ["Input port"] }, "title": { "en": "Remove delay length check in generated code", "pt-BR": "Remover checagem do comprimento no código gerado" } },
+        { "name": "DiagnosticForDelayLength", "type": "enum", "default": "None", "options": ["None", "Warning", "Error"], "visibleWhen": { "DelayLengthSource": ["Input port"] }, "title": { "en": "Diagnostic for delay length", "pt-BR": "Diagnóstico do comprimento do atraso" } },
+        { "name": "ShowEnablePort", "type": "bool", "default": false, "title": { "en": "Show enable port", "pt-BR": "Mostrar porta de habilitação" } },
+        { "name": "ExternalReset", "type": "enum", "default": "None", "options": ["None", "Rising", "Falling", "Either", "Level", "Level hold"], "title": { "en": "External reset", "pt-BR": "Reset externo" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } },
+        { "name": "StateName", "type": "string", "default": "", "group": "State Attributes", "title": { "en": "State name", "pt-BR": "Nome do estado" } },
+        { "name": "StateMustResolveToSignalObject", "type": "bool", "default": false, "group": "State Attributes", "title": { "en": "State name must resolve to Simulink signal object", "pt-BR": "Nome do estado deve resolver para objeto de sinal" } }
+      ],
+      "inputs": [
+        { "id": "in1" },
+        { "id": "d", "label": "d", "when": { "DelayLengthSource": ["Input port"] } },
+        { "id": "enable", "label": "Enable", "when": { "ShowEnablePort": [true] } },
+        { "id": "reset", "when": { "ExternalReset": ["Rising", "Falling", "Either", "Level", "Level hold"] } },
+        { "id": "x0", "label": "x0", "when": { "InitialConditionSource": ["Input port"] } }
+      ],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "memory",
+      "name": "Memory",
+      "title": { "pt-BR": "Memória" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/memory.html",
+      "simulink": { "blockType": "Memory" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [30, 30],
+      "params": [
+        { "name": "InitialCondition", "type": "expr", "default": "0", "title": { "en": "Initial condition", "pt-BR": "Condição inicial" } },
+        { "name": "InheritSampleTime", "type": "bool", "default": false, "title": { "en": "Inherit sample time", "pt-BR": "Herdar tempo de amostragem" } },
+        { "name": "LinearizeMemory", "type": "bool", "default": false, "title": { "en": "Direct feedthrough of input during linearization", "pt-BR": "Passagem direta na linearização" } },
+        { "name": "LinearizeAsDelay", "type": "bool", "default": false, "visibleWhen": { "LinearizeMemory": [true] }, "title": { "en": "Treat as a unit delay when linearizing with discrete sample time", "pt-BR": "Tratar como atraso unitário na linearização discreta" } },
+        { "name": "StateName", "type": "string", "default": "", "group": "State Attributes", "title": { "en": "State name", "pt-BR": "Nome do estado" } },
+        { "name": "StateMustResolveToSignalObject", "type": "bool", "default": false, "group": "State Attributes", "title": { "en": "State name must resolve to Simulink signal object", "pt-BR": "Nome do estado deve resolver para objeto de sinal" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "zero_order_hold",
+      "name": "Zero-Order Hold",
+      "title": { "pt-BR": "Segurador de ordem zero" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/zeroorderhold.html",
+      "simulink": { "blockType": "ZeroOrderHold" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "discrete_time_integrator",
+      "name": "Discrete-Time Integrator",
+      "title": { "pt-BR": "Integrador de tempo discreto" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/discretetimeintegrator.html",
+      "simulink": { "blockType": "DiscreteIntegrator" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [35, 30],
+      "params": [
+        { "name": "IntegratorMethod", "type": "enum", "default": "Integration: Forward Euler", "options": ["Integration: Forward Euler", "Integration: Backward Euler", "Integration: Trapezoidal", "Accumulation: Forward Euler", "Accumulation: Backward Euler", "Accumulation: Trapezoidal"], "title": { "en": "Integrator method", "pt-BR": "Método do integrador" } },
+        { "name": "gainval", "type": "expr", "default": "1.0", "title": { "en": "Gain value", "pt-BR": "Valor do ganho" } },
+        { "name": "ExternalReset", "type": "enum", "default": "none", "options": ["none", "rising", "falling", "either", "level", "sampled level"], "title": { "en": "External reset", "pt-BR": "Reset externo" } },
+        { "name": "InitialConditionSource", "type": "enum", "default": "internal", "options": ["internal", "external"], "title": { "en": "Initial condition source", "pt-BR": "Origem da condição inicial" } },
+        { "name": "InitialCondition", "type": "expr", "default": "0", "visibleWhen": { "InitialConditionSource": ["internal"] }, "title": { "en": "Initial condition", "pt-BR": "Condição inicial" } },
+        { "name": "InitialConditionSetting", "type": "enum", "default": "Auto", "options": ["Auto", "Output", "Compatibility"], "title": { "en": "Initial condition setting", "pt-BR": "Aplicação da condição inicial" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } },
+        { "name": "LimitOutput", "type": "bool", "default": false, "title": { "en": "Limit output", "pt-BR": "Limitar saída" } },
+        { "name": "UpperSaturationLimit", "type": "expr", "default": "inf", "tunable": true, "visibleWhen": { "LimitOutput": [true] }, "title": { "en": "Upper saturation limit", "pt-BR": "Limite superior" } },
+        { "name": "LowerSaturationLimit", "type": "expr", "default": "-inf", "tunable": true, "visibleWhen": { "LimitOutput": [true] }, "title": { "en": "Lower saturation limit", "pt-BR": "Limite inferior" } },
+        { "name": "ShowSaturationPort", "type": "bool", "default": false, "visibleWhen": { "LimitOutput": [true] }, "title": { "en": "Show saturation port", "pt-BR": "Mostrar porta de saturação" } },
+        { "name": "ShowStatePort", "type": "bool", "default": false, "title": { "en": "Show state port", "pt-BR": "Mostrar porta de estado" } },
+        { "name": "IgnoreLimit", "type": "bool", "default": false, "title": { "en": "Ignore limit and reset when linearizing", "pt-BR": "Ignorar limite e reset na linearização" } },
+        { "name": "OutMin", "type": "expr", "default": "[]", "group": "Signal Attributes", "title": { "en": "Output minimum", "pt-BR": "Saída mínima" } },
+        { "name": "OutMax", "type": "expr", "default": "[]", "group": "Signal Attributes", "title": { "en": "Output maximum", "pt-BR": "Saída máxima" } },
+        { "name": "StateName", "type": "string", "default": "", "group": "State Attributes", "title": { "en": "State name", "pt-BR": "Nome do estado" } },
+        { "name": "StateMustResolveToSignalObject", "type": "bool", "default": false, "group": "State Attributes", "title": { "en": "State name must resolve to Simulink signal object", "pt-BR": "Nome do estado deve resolver para objeto de sinal" } }
+      ],
+      "inputs": [
+        { "id": "in1" },
+        { "id": "reset", "when": { "ExternalReset": ["rising", "falling", "either", "level", "sampled level"] } },
+        { "id": "x0", "label": "x0", "when": { "InitialConditionSource": ["external"] } }
+      ],
+      "outputs": [
+        { "id": "out1" },
+        { "id": "sat", "when": { "LimitOutput": [true], "ShowSaturationPort": [true] } },
+        { "id": "state", "when": { "ShowStatePort": [true] } }
+      ]
+    },
+    {
+      "id": "discrete_transfer_fcn",
+      "name": "Discrete Transfer Fcn",
+      "title": { "pt-BR": "Função de transferência discreta" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/discretetransferfcn.html",
+      "simulink": { "blockType": "DiscreteTransferFcn" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [50, 30],
+      "params": [
+        { "name": "NumeratorSource", "type": "enum", "default": "Dialog", "options": ["Dialog", "Input port"], "title": { "en": "Numerator: Source", "pt-BR": "Numerador: origem" } },
+        { "name": "Numerator", "type": "expr", "default": "[1]", "visibleWhen": { "NumeratorSource": ["Dialog"] }, "title": { "en": "Numerator: Value", "pt-BR": "Numerador: valor" } },
+        { "name": "DenominatorSource", "type": "enum", "default": "Dialog", "options": ["Dialog", "Input port"], "title": { "en": "Denominator: Source", "pt-BR": "Denominador: origem" } },
+        { "name": "Denominator", "type": "expr", "default": "[1 0.5]", "visibleWhen": { "DenominatorSource": ["Dialog"] }, "title": { "en": "Denominator: Value", "pt-BR": "Denominador: valor" } },
+        { "name": "InitialStatesSource", "type": "enum", "default": "Dialog", "options": ["Dialog", "Input port"], "title": { "en": "Initial states: Source", "pt-BR": "Estados iniciais: origem" } },
+        { "name": "InitialStates", "type": "expr", "default": "0", "visibleWhen": { "InitialStatesSource": ["Dialog"] }, "title": { "en": "Initial states: Value", "pt-BR": "Estados iniciais: valor" } },
+        { "name": "ExternalReset", "type": "enum", "default": "None", "options": ["None", "Rising", "Falling", "Either", "Level", "Level hold"], "title": { "en": "External reset", "pt-BR": "Reset externo" } },
+        { "name": "InputProcessing", "type": "enum", "default": "Elements as channels (sample based)", "options": ["Elements as channels (sample based)", "Columns as channels (frame based)"], "title": { "en": "Input processing", "pt-BR": "Processamento da entrada" } },
+        { "name": "a0EqualsOne", "type": "bool", "default": false, "title": { "en": "Optimize by skipping divide by leading denominator coefficient (a0)", "pt-BR": "Pular divisão por a0 (a0 = 1)" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } },
+        { "name": "StateName", "type": "string", "default": "", "group": "State Attributes", "title": { "en": "State name", "pt-BR": "Nome do estado" } },
+        { "name": "StateMustResolveToSignalObject", "type": "bool", "default": false, "group": "State Attributes", "title": { "en": "State name must resolve to Simulink signal object", "pt-BR": "Nome do estado deve resolver para objeto de sinal" } }
+      ],
+      "inputs": [
+        { "id": "in1" },
+        { "id": "num", "label": "Num", "when": { "NumeratorSource": ["Input port"] } },
+        { "id": "den", "label": "Den", "when": { "DenominatorSource": ["Input port"] } },
+        { "id": "reset", "when": { "ExternalReset": ["Rising", "Falling", "Either", "Level", "Level hold"] } },
+        { "id": "x0", "label": "x0", "when": { "InitialStatesSource": ["Input port"] } }
+      ],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "discrete_filter",
+      "name": "Discrete Filter",
+      "title": { "pt-BR": "Filtro discreto" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/discretefilter.html",
+      "simulink": { "blockType": "DiscreteFilter" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [50, 30],
+      "params": [
+        { "name": "FilterStructure", "type": "enum", "default": "Direct form II", "options": ["Direct form I", "Direct form I transposed", "Direct form II", "Direct form II transposed"], "title": { "en": "Filter structure", "pt-BR": "Estrutura do filtro" } },
+        { "name": "NumeratorSource", "type": "enum", "default": "Dialog", "options": ["Dialog", "Input port"], "title": { "en": "Numerator: Source", "pt-BR": "Numerador: origem" } },
+        { "name": "Numerator", "type": "expr", "default": "[1]", "visibleWhen": { "NumeratorSource": ["Dialog"] }, "title": { "en": "Numerator: Value", "pt-BR": "Numerador: valor" } },
+        { "name": "DenominatorSource", "type": "enum", "default": "Dialog", "options": ["Dialog", "Input port"], "title": { "en": "Denominator: Source", "pt-BR": "Denominador: origem" } },
+        { "name": "Denominator", "type": "expr", "default": "[1 0.5]", "visibleWhen": { "DenominatorSource": ["Dialog"] }, "title": { "en": "Denominator: Value", "pt-BR": "Denominador: valor" } },
+        { "name": "InitialStatesSource", "type": "enum", "default": "Dialog", "options": ["Dialog", "Input port"], "visibleWhen": { "FilterStructure": ["Direct form II", "Direct form II transposed"] }, "title": { "en": "Initial states: Source", "pt-BR": "Estados iniciais: origem" } },
+        { "name": "InitialStates", "type": "expr", "default": "0", "title": { "en": "Initial states (numerator side for Direct form I)", "pt-BR": "Estados iniciais (lado do numerador na forma direta I)" } },
+        { "name": "InitialDenominatorStates", "type": "expr", "default": "0", "visibleWhen": { "FilterStructure": ["Direct form I", "Direct form I transposed"] }, "title": { "en": "Initial states on denominator side", "pt-BR": "Estados iniciais do lado do denominador" } },
+        { "name": "ExternalReset", "type": "enum", "default": "None", "options": ["None", "Rising", "Falling", "Either", "Level", "Level hold"], "title": { "en": "External reset", "pt-BR": "Reset externo" } },
+        { "name": "InputProcessing", "type": "enum", "default": "Elements as channels (sample based)", "options": ["Elements as channels (sample based)", "Columns as channels (frame based)"], "title": { "en": "Input processing", "pt-BR": "Processamento da entrada" } },
+        { "name": "a0EqualsOne", "type": "bool", "default": false, "title": { "en": "Optimize by skipping divide by leading denominator coefficient (a0)", "pt-BR": "Pular divisão por a0 (a0 = 1)" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } },
+        { "name": "StateName", "type": "string", "default": "", "group": "State Attributes", "title": { "en": "State name", "pt-BR": "Nome do estado" } },
+        { "name": "StateMustResolveToSignalObject", "type": "bool", "default": false, "group": "State Attributes", "title": { "en": "State name must resolve to Simulink signal object", "pt-BR": "Nome do estado deve resolver para objeto de sinal" } }
+      ],
+      "inputs": [
+        { "id": "in1" },
+        { "id": "num", "label": "Num", "when": { "NumeratorSource": ["Input port"] } },
+        { "id": "den", "label": "Den", "when": { "DenominatorSource": ["Input port"] } },
+        { "id": "reset", "when": { "ExternalReset": ["Rising", "Falling", "Either", "Level", "Level hold"] } },
+        { "id": "x0", "label": "x0", "when": { "FilterStructure": ["Direct form II", "Direct form II transposed"], "InitialStatesSource": ["Input port"] } }
+      ],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "discrete_fir_filter",
+      "name": "Discrete FIR Filter",
+      "title": { "pt-BR": "Filtro FIR discreto" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/discretefirfilter.html",
+      "simulink": { "blockType": "DiscreteFir" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [50, 30],
+      "params": [
+        { "name": "CoefSource", "type": "enum", "default": "Dialog parameters", "options": ["Dialog parameters", "Input port"], "title": { "en": "Coefficient source", "pt-BR": "Origem dos coeficientes" } },
+        { "name": "FilterStructure", "type": "enum", "default": "Direct form", "options": ["Direct form", "Direct form symmetric", "Direct form antisymmetric", "Direct form transposed", "Lattice MA"], "title": { "en": "Filter structure", "pt-BR": "Estrutura do filtro" } },
+        { "name": "Coefficients", "type": "expr", "default": "[0.5 0.5]", "visibleWhen": { "CoefSource": ["Dialog parameters"] }, "title": { "en": "Coefficients", "pt-BR": "Coeficientes" } },
+        { "name": "InputProcessing", "type": "enum", "default": "Elements as channels (sample based)", "options": ["Elements as channels (sample based)", "Columns as channels (frame based)"], "title": { "en": "Input processing", "pt-BR": "Processamento da entrada" } },
+        { "name": "InitialStates", "type": "expr", "default": "0", "title": { "en": "Initial states", "pt-BR": "Estados iniciais" } },
+        { "name": "ShowEnablePort", "type": "bool", "default": false, "title": { "en": "Show enable port", "pt-BR": "Mostrar porta de habilitação" } },
+        { "name": "ExternalReset", "type": "enum", "default": "None", "options": ["None", "Rising", "Falling", "Either", "Level", "Level hold"], "title": { "en": "External reset", "pt-BR": "Reset externo" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } }
+      ],
+      "inputs": [
+        { "id": "in1" },
+        { "id": "num", "label": "Num", "when": { "CoefSource": ["Input port"] } },
+        { "id": "reset", "when": { "ExternalReset": ["Rising", "Falling", "Either", "Level", "Level hold"] } },
+        { "id": "enable", "label": "Enable", "when": { "ShowEnablePort": [true] } }
+      ],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "discrete_state_space",
+      "name": "Discrete State-Space",
+      "title": { "pt-BR": "Espaço de estados discreto" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/discretestatespace.html",
+      "simulink": { "blockType": "DiscreteStateSpace" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [75, 30],
+      "params": [
+        { "name": "A", "type": "expr", "default": "1", "title": { "en": "A", "pt-BR": "A" } },
+        { "name": "B", "type": "expr", "default": "1", "title": { "en": "B", "pt-BR": "B" } },
+        { "name": "C", "type": "expr", "default": "1", "title": { "en": "C", "pt-BR": "C" } },
+        { "name": "D", "type": "expr", "default": "1", "title": { "en": "D", "pt-BR": "D" } },
+        { "name": "InitialCondition", "type": "expr", "default": "0", "title": { "en": "Initial conditions", "pt-BR": "Condições iniciais" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } },
+        { "name": "StateName", "type": "string", "default": "", "group": "State Attributes", "title": { "en": "State name", "pt-BR": "Nome do estado" } },
+        { "name": "StateMustResolveToSignalObject", "type": "bool", "default": false, "group": "State Attributes", "title": { "en": "State name must resolve to Simulink signal object", "pt-BR": "Nome do estado deve resolver para objeto de sinal" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "discrete_zero_pole",
+      "name": "Discrete Zero-Pole",
+      "title": { "pt-BR": "Zero-polo discreto" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/discretezeropole.html",
+      "simulink": { "blockType": "DiscreteZeroPole" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [70, 30],
+      "params": [
+        { "name": "Zeros", "type": "expr", "default": "[1]", "title": { "en": "Zeros", "pt-BR": "Zeros" } },
+        { "name": "Poles", "type": "expr", "default": "[0 0.5]", "title": { "en": "Poles", "pt-BR": "Polos" } },
+        { "name": "Gain", "type": "expr", "default": "1", "title": { "en": "Gain", "pt-BR": "Ganho" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } },
+        { "name": "StateName", "type": "string", "default": "", "group": "State Attributes", "title": { "en": "State name", "pt-BR": "Nome do estado" } },
+        { "name": "StateMustResolveToSignalObject", "type": "bool", "default": false, "group": "State Attributes", "title": { "en": "State name must resolve to Simulink signal object", "pt-BR": "Nome do estado deve resolver para objeto de sinal" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "discrete_derivative",
+      "name": "Discrete Derivative",
+      "title": { "pt-BR": "Derivada discreta" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/discretederivative.html",
+      "simulink": { "sourceBlock": "simulink/Discrete/Discrete Derivative" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [50, 30],
+      "params": [
+        { "name": "gainval", "type": "expr", "default": "1.0", "title": { "en": "Gain value", "pt-BR": "Valor do ganho" } },
+        { "name": "ICPrevScaledInput", "type": "expr", "default": "0.0", "title": { "en": "Initial condition for previous weighted input K*u/Ts", "pt-BR": "Condição inicial da entrada ponderada anterior K*u/Ts" } },
+        { "name": "InputProcessing", "type": "enum", "default": "Elements as channels (sample based)", "options": ["Elements as channels (sample based)", "Columns as channels (frame based)"], "title": { "en": "Input processing", "pt-BR": "Processamento da entrada" } },
+        { "name": "OutMin", "type": "expr", "default": "[]", "group": "Signal Attributes", "title": { "en": "Output minimum", "pt-BR": "Saída mínima" } },
+        { "name": "OutMax", "type": "expr", "default": "[]", "group": "Signal Attributes", "title": { "en": "Output maximum", "pt-BR": "Saída máxima" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "difference",
+      "name": "Difference",
+      "title": { "pt-BR": "Diferença" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/difference.html",
+      "simulink": { "sourceBlock": "simulink/Discrete/Difference" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [45, 30],
+      "params": [
+        { "name": "ICPrevInput", "type": "expr", "default": "0.0", "title": { "en": "Initial condition for previous input", "pt-BR": "Condição inicial da entrada anterior" } },
+        { "name": "InputProcessing", "type": "enum", "default": "Elements as channels (sample based)", "options": ["Elements as channels (sample based)", "Columns as channels (frame based)"], "title": { "en": "Input processing", "pt-BR": "Processamento da entrada" } },
+        { "name": "OutMin", "type": "expr", "default": "[]", "group": "Signal Attributes", "title": { "en": "Output minimum", "pt-BR": "Saída mínima" } },
+        { "name": "OutMax", "type": "expr", "default": "[]", "group": "Signal Attributes", "title": { "en": "Output maximum", "pt-BR": "Saída máxima" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "transfer_fcn_first_order",
+      "name": "Transfer Fcn First Order",
+      "title": { "pt-BR": "Função de transferência de primeira ordem" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/transferfcnfirstorder.html",
+      "simulink": { "sourceBlock": "simulink/Discrete/Transfer Fcn First Order" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [50, 30],
+      "params": [
+        { "name": "PoleZ", "type": "expr", "default": "0.95", "title": { "en": "Pole (in Z plane)", "pt-BR": "Polo (plano Z)" } },
+        { "name": "ICPrevOutput", "type": "expr", "default": "0.0", "title": { "en": "Initial condition for previous output", "pt-BR": "Condição inicial da saída anterior" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "transfer_fcn_lead_or_lag",
+      "name": "Transfer Fcn Lead or Lag",
+      "title": { "pt-BR": "Função de transferência avanço ou atraso" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/transferfcnleadorlag.html",
+      "simulink": { "sourceBlock": "simulink/Discrete/Transfer Fcn Lead or Lag" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [50, 30],
+      "params": [
+        { "name": "PoleZ", "type": "expr", "default": "0.95", "title": { "en": "Pole of compensator (in Z plane)", "pt-BR": "Polo do compensador (plano Z)" } },
+        { "name": "ZeroZ", "type": "expr", "default": "0.75", "title": { "en": "Zero of compensator (in Z plane)", "pt-BR": "Zero do compensador (plano Z)" } },
+        { "name": "ICPrevInput", "type": "expr", "default": "0.0", "title": { "en": "Initial condition for previous input", "pt-BR": "Condição inicial da entrada anterior" } },
+        { "name": "ICPrevOutput", "type": "expr", "default": "0.0", "title": { "en": "Initial condition for previous output", "pt-BR": "Condição inicial da saída anterior" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "transfer_fcn_real_zero",
+      "name": "Transfer Fcn Real Zero",
+      "title": { "pt-BR": "Função de transferência com zero real" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/transferfcnrealzero.html",
+      "simulink": { "sourceBlock": "simulink/Discrete/Transfer Fcn Real Zero" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [50, 30],
+      "params": [
+        { "name": "ZeroZ", "type": "expr", "default": "0.75", "title": { "en": "Zero (in Z plane)", "pt-BR": "Zero (plano Z)" } },
+        { "name": "ICPrevInput", "type": "expr", "default": "0.0", "title": { "en": "Initial condition for previous input", "pt-BR": "Condição inicial da entrada anterior" } },
+        { "name": "InputProcessing", "type": "enum", "default": "Elements as channels (sample based)", "options": ["Elements as channels (sample based)", "Columns as channels (frame based)"], "title": { "en": "Input processing", "pt-BR": "Processamento da entrada" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "tapped_delay",
+      "name": "Tapped Delay",
+      "title": { "pt-BR": "Linha de atrasos" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/tappeddelay.html",
+      "simulink": { "sourceBlock": "simulink/Discrete/Tapped Delay" },
+      "sampleTime": { "param": "samptime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "vinit", "type": "expr", "default": "0.0", "title": { "en": "Initial condition", "pt-BR": "Condição inicial" } },
+        { "name": "samptime", "type": "expr", "default": "-1", "title": { "en": "Sample time", "pt-BR": "Tempo de amostragem" } },
+        { "name": "NumDelays", "type": "expr", "default": "4", "title": { "en": "Number of delays", "pt-BR": "Número de atrasos" } },
+        { "name": "DelayOrder", "type": "enum", "default": "Oldest", "options": ["Oldest", "Newest"], "title": { "en": "Order output vector starting with", "pt-BR": "Vetor de saída começa pelo" } },
+        { "name": "includeCurrent", "type": "bool", "default": false, "title": { "en": "Include current input in output vector", "pt-BR": "Incluir a entrada atual no vetor de saída" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "conditional_hold",
+      "name": "Conditional Hold",
+      "title": { "pt-BR": "Retenção condicional" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/conditionalhold.html",
+      "simulink": { "blockType": "ConditionalHold" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [80, 35],
+      "params": [
+        { "name": "InitialCondition", "type": "expr", "default": "0", "title": { "en": "Initial condition", "pt-BR": "Condição inicial" } }
+      ],
+      "inputs": [{ "id": "in1", "label": "u" }, { "id": "h", "label": "h" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "propagation_delay",
+      "name": "Propagation Delay",
+      "title": { "pt-BR": "Atraso de propagação" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/propagationdelay.html",
+      "simulink": { "blockType": "PropagationDelay" },
+      "sampleTime": { "fixed": "continuous" },
+      "size": [60, 50],
+      "params": [
+        { "name": "InitialOutput", "type": "expr", "default": "0", "title": { "en": "Initial output", "pt-BR": "Saída inicial" } },
+        { "name": "RunAtFixedTimeIntervals", "type": "bool", "default": false, "title": { "en": "Run at fixed time intervals", "pt-BR": "Executar em intervalos fixos" } },
+        { "name": "SampleTime", "type": "expr", "default": "0.1", "visibleWhen": { "RunAtFixedTimeIntervals": [true] }, "title": { "en": "Sample time", "pt-BR": "Tempo de amostragem" } }
+      ],
+      "inputs": [{ "id": "in1", "label": "u" }, { "id": "dt", "label": "dt" }],
+      "outputs": [{ "id": "out1", "label": "y" }]
+    },
+    {
+      "id": "transfer_fcn_direct_form_ii",
+      "name": "Transfer Fcn Direct Form II",
+      "title": { "pt-BR": "Função de transferência forma direta II" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/transferfcndirectformii.html",
+      "simulink": { "sourceBlock": "simulink/Additional Math & Discrete/Additional Discrete/Transfer Fcn Direct Form II" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [90, 30],
+      "params": [
+        { "name": "NumCoefVec", "type": "expr", "default": "[0.2 0.3 0.2]", "title": { "en": "Numerator coefficients", "pt-BR": "Coeficientes do numerador" } },
+        { "name": "DenCoefVec", "type": "expr", "default": "[-0.9 0.6]", "title": { "en": "Denominator coefficients excluding lead (which must be 1.0)", "pt-BR": "Coeficientes do denominador sem o primeiro (que deve ser 1,0)" } },
+        { "name": "vinit", "type": "expr", "default": "0.0", "title": { "en": "Initial condition", "pt-BR": "Condição inicial" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "transfer_fcn_direct_form_ii_time_varying",
+      "name": "Transfer Fcn Direct Form II Time Varying",
+      "title": { "pt-BR": "Função de transferência forma direta II variante no tempo" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/transferfcndirectformiitimevarying.html",
+      "simulink": { "sourceBlock": "simulink/Additional Math & Discrete/Additional Discrete/Transfer Fcn Direct Form II Time Varying" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [90, 30],
+      "params": [
+        { "name": "vinit", "type": "expr", "default": "0.0", "title": { "en": "Initial condition", "pt-BR": "Condição inicial" } }
+      ],
+      "inputs": [{ "id": "in1", "label": "u" }, { "id": "num", "label": "Num" }, { "id": "den", "label": "Den No Lead" }],
+      "outputs": [{ "id": "out1", "label": "y" }]
+    },
+    {
+      "id": "fixed_point_state_space",
+      "name": "Fixed-Point State-Space",
+      "title": { "pt-BR": "Espaço de estados de ponto fixo" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/fixedpointstatespace.html",
+      "simulink": { "sourceBlock": "simulink/Additional Math & Discrete/Additional Discrete/Fixed-Point State-Space" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [75, 30],
+      "params": [
+        { "name": "A", "type": "expr", "default": "[2.6020 -2.2793 0.6708; 1 0 0; 0 1 0]", "title": { "en": "State Matrix A", "pt-BR": "Matriz de estado A" } },
+        { "name": "B", "type": "expr", "default": "[ 1; 0; 0]", "title": { "en": "Input Matrix B", "pt-BR": "Matriz de entrada B" } },
+        { "name": "C", "type": "expr", "default": "[0.0184 0.0024 0.0055]", "title": { "en": "Output Matrix C", "pt-BR": "Matriz de saída C" } },
+        { "name": "D", "type": "expr", "default": "[0.0033]", "title": { "en": "Direct Feedthrough Matrix D", "pt-BR": "Matriz de transmissão direta D" } },
+        { "name": "InitialCondition", "type": "expr", "default": "0.0", "title": { "en": "Initial condition for state", "pt-BR": "Condição inicial do estado" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    }
+  ]
+}

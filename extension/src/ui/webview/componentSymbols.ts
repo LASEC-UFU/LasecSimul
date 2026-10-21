@@ -14,6 +14,8 @@ import { ComponentViewSpec, JUNCTION_TYPE_ID, PackageDescriptor, PackageDynamicP
 import { simulidePaintToPackageShapes } from "./simulidePaint.js";
 import { MATH_DEFAULT_BOX, activityPlaceholderSvg, isMathTypeId, mathWidgetSvg, MATH_ACTIVITY_TYPE_ID } from "./mathWidgets.js";
 import { decodeSegmentLcd, segmentLcdSvg } from "./segmentLcd.js";
+import { blockPackage } from "./blockLibrary/blockSymbol.js";
+import type { BlockSpec } from "./blockLibrary/spec.js";
 
 export interface ComponentBox {
   width: number;
@@ -415,6 +417,19 @@ function packageIsRegistrable(pkg: PackageDescriptor): boolean {
   return pkg.pins.length > 0 || Boolean(pkg.dynamicLayout?.pinGroups?.length) || packageHasDrawableContent(pkg);
 }
 
+/** Blocos da biblioteca equivalente ao Simulink (docs/66): o símbolo é GERADO por instância a
+ * partir da especificação (portas do Sum, valor do Gain, polinômios da Transfer Fcn...). */
+const BLOCK_SPEC_BY_TYPE_ID = new Map<string, BlockSpec>();
+
+export function registerBlockSpec(typeId: string, spec: BlockSpec | undefined): void {
+  if (spec) BLOCK_SPEC_BY_TYPE_ID.set(typeId, spec);
+  else BLOCK_SPEC_BY_TYPE_ID.delete(typeId);
+}
+
+export function blockSpecFor(typeId: string): BlockSpec | undefined {
+  return BLOCK_SPEC_BY_TYPE_ID.get(typeId);
+}
+
 export function registerPackage(typeId: string, pkg: PackageDescriptor | undefined, logicSymbolPkg?: PackageDescriptor, boardPkg?: PackageDescriptor): void {
   if (pkg && packageIsRegistrable(pkg)) PACKAGE_BY_TYPE_ID.set(typeId, pkg);
   else PACKAGE_BY_TYPE_ID.delete(typeId);
@@ -457,6 +472,8 @@ export function resolvedPackageFor(typeId: string, properties?: Record<string, u
     const boardPackage = BOARD_PACKAGE_BY_TYPE_ID.get(typeId);
     if (boardPackage) return withInstancePins(boardPackage);
   }
+  const blockSpec = BLOCK_SPEC_BY_TYPE_ID.get(typeId);
+  if (blockSpec) return withInstancePins(blockPackage(blockSpec, (properties ?? {}) as Record<string, string | number | boolean>));
   if (properties?.logicSymbol === true) {
     const logicSymbolPackage = LOGIC_SYMBOL_PACKAGE_BY_TYPE_ID.get(typeId);
     if (logicSymbolPackage) return withInstancePins(logicSymbolPackage);

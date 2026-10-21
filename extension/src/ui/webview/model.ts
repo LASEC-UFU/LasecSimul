@@ -232,6 +232,9 @@ export interface PropertySchemaEntry {
    * remover fios que apontavam pra um pino que deixou de existir. Ausente == `false` (a maioria das
    * propriedades). */
   affectsPinCount?: boolean;
+  /** Campo visível só quando as propriedades indicadas têm um dos valores (diálogo condicional do
+   * Simulink: limites só com "Limit output" marcado etc.). Ausente == sempre visível. */
+  visibleWhen?: Record<string, Array<string | number | boolean>>;
 }
 
 /** Pino declarado em `package.pins[]` (`.lsdevice`/`.lssubcircuit`, ver
@@ -1036,6 +1039,13 @@ export interface WebviewComponentCatalogEntry {
    * `file` é caminho relativo ao manifesto para um arquivo .md de ajuda local.
    * Ausente: botão "Ajuda" no diálogo de propriedades permanece desabilitado. */
   help?: { description?: string; url?: string; file?: string };
+  /** Entrada só de paleta que cria um componente de OUTRO typeId com padrões próprios (presets da
+   * biblioteca de blocos: Add/Subtract são o bloco Sum com outros padrões, como no Simulink). A
+   * entrada-base desse typeId vem antes na lista, então quem procura por typeId acha a base. */
+  instanceTypeId?: string;
+  /** Especificação do bloco (`project/schema/block-library`, docs/66) -- o símbolo, os pinos e a
+   * visibilidade dos campos dependem das propriedades da instância e são gerados a partir dela. */
+  blockSpec?: import("./blockLibrary/spec.js").BlockSpec;
 }
 
 export interface WebviewProjectState {

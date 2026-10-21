@@ -1,0 +1,77 @@
+{
+  "library": "sinks",
+  "name": "Sinks",
+  "title": { "pt-BR": "Visualizadores (Sinks)" },
+  "order": 50,
+  "blocks": [
+    {
+      "id": "display",
+      "name": "Display",
+      "title": { "pt-BR": "Mostrador" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/display.html",
+      "simulink": { "blockType": "Display" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [90, 30],
+      "params": [
+        { "name": "Format", "type": "enum", "default": "short", "options": ["short", "long", "short_e", "long_e", "bank", "hex (Stored Integer)", "binary (Stored Integer)", "decimal (Stored Integer)", "octal (Stored Integer)"], "tunable": true, "title": { "en": "Numeric display format", "pt-BR": "Formato numérico" } },
+        { "name": "Decimation", "type": "expr", "default": "1", "title": { "en": "Decimation", "pt-BR": "Decimação" } },
+        { "name": "Floating", "type": "bool", "default": false, "title": { "en": "Floating display", "pt-BR": "Mostrador flutuante" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (programmatic; -1 for inherited)", "pt-BR": "Tempo de amostragem (programático; -1 herdado)" } },
+        { "name": "Unit", "type": "string", "default": "", "group": "LasecSimul", "title": { "en": "Unit (label)", "pt-BR": "Unidade (rótulo)" } }
+      ],
+      "inputs": [{ "id": "in1", "when": { "Floating": [false] } }],
+      "outputs": []
+    },
+    {
+      "id": "scope",
+      "name": "Scope",
+      "title": { "pt-BR": "Osciloscópio (Scope)" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/scope.html",
+      "simulink": { "blockType": "Scope" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 32],
+      "params": [
+        { "name": "OpenAtSimulationStart", "type": "bool", "default": false, "group": "Main", "tunable": true, "title": { "en": "Open at simulation start", "pt-BR": "Abrir ao iniciar a simulação" } },
+        { "name": "DisplayFullPath", "type": "bool", "default": false, "group": "Main", "tunable": true, "title": { "en": "Display the full path", "pt-BR": "Mostrar o caminho completo" } },
+        { "name": "NumInputPorts", "type": "expr", "default": "1", "group": "Main", "title": { "en": "Number of input ports", "pt-BR": "Número de entradas" } },
+        { "name": "LayoutDimensions", "type": "expr", "default": "[1 1]", "group": "Main", "title": { "en": "Layout (rows, columns)", "pt-BR": "Grade de displays (linhas, colunas)" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "group": "Main", "title": { "en": "Sample time", "pt-BR": "Tempo de amostragem" } },
+        { "name": "FrameBasedProcessing", "type": "bool", "default": true, "group": "Main", "title": { "en": "Input processing: columns as channels (frame based)", "pt-BR": "Processamento: colunas como canais (quadros)" } },
+        { "name": "MaximizeAxes", "type": "enum", "default": "Off", "options": ["Auto", "On", "Off"], "group": "Main", "tunable": true, "title": { "en": "Maximize axes", "pt-BR": "Maximizar eixos" } },
+        { "name": "AxesScaling", "type": "enum", "default": "Manual", "options": ["Manual", "Auto", "Updates"], "group": "Main", "tunable": true, "title": { "en": "Axes scaling", "pt-BR": "Escala dos eixos" } },
+        { "name": "AxesScalingNumUpdates", "type": "expr", "default": "10", "group": "Main", "tunable": true, "visibleWhen": { "AxesScaling": ["Updates"] }, "title": { "en": "Number of updates", "pt-BR": "Número de atualizações" } },
+        { "name": "TimeSpan", "type": "string", "default": "Auto", "group": "Time", "tunable": true, "title": { "en": "Time span", "pt-BR": "Janela de tempo" } },
+        { "name": "TimeSpanOverrunAction", "type": "enum", "default": "Wrap", "options": ["Wrap", "Scroll"], "group": "Time", "tunable": true, "title": { "en": "Time span overrun action", "pt-BR": "Ação ao exceder a janela" } },
+        { "name": "TimeUnits", "type": "enum", "default": "None", "options": ["Metric", "None", "Seconds"], "group": "Time", "tunable": true, "title": { "en": "Time units", "pt-BR": "Unidade de tempo" } },
+        { "name": "TimeDisplayOffset", "type": "expr", "default": "0", "group": "Time", "tunable": true, "title": { "en": "Time display offset", "pt-BR": "Deslocamento do eixo do tempo" } },
+        { "name": "TimeAxisLabels", "type": "enum", "default": "Bottom", "options": ["All", "Bottom", "None"], "group": "Time", "tunable": true, "title": { "en": "Time-axis labels", "pt-BR": "Rótulos do eixo do tempo" } },
+        { "name": "ShowTimeAxisLabel", "type": "bool", "default": false, "group": "Time", "tunable": true, "title": { "en": "Show time-axis label", "pt-BR": "Mostrar rótulo do eixo do tempo" } },
+        { "name": "ActiveDisplay", "type": "expr", "default": "1", "group": "Display", "tunable": true, "title": { "en": "Active display", "pt-BR": "Display ativo" } },
+        { "name": "Title", "type": "string", "default": "%<SignalLabel>", "group": "Display", "tunable": true, "title": { "en": "Title", "pt-BR": "Título" } },
+        { "name": "ShowLegend", "type": "bool", "default": false, "group": "Display", "tunable": true, "title": { "en": "Show legend", "pt-BR": "Mostrar legenda" } },
+        { "name": "ShowGrid", "type": "bool", "default": true, "group": "Display", "tunable": true, "title": { "en": "Show grid", "pt-BR": "Mostrar grade" } },
+        { "name": "PlotAsMagnitudePhase", "type": "bool", "default": false, "group": "Display", "tunable": true, "title": { "en": "Plot signals as magnitude and phase", "pt-BR": "Plotar como módulo e fase" } },
+        { "name": "YLimits", "type": "expr", "default": "[-10 10]", "group": "Display", "tunable": true, "title": { "en": "Y-limits (Minimum, Maximum)", "pt-BR": "Limites do eixo Y" } },
+        { "name": "YLabel", "type": "string", "default": "", "group": "Display", "tunable": true, "title": { "en": "Y-label", "pt-BR": "Rótulo do eixo Y" } },
+        { "name": "DataLoggingLimitDataPoints", "type": "bool", "default": false, "group": "Logging", "title": { "en": "Limit data points to last", "pt-BR": "Limitar aos últimos pontos" } },
+        { "name": "DataLoggingMaxPoints", "type": "expr", "default": "5000", "group": "Logging", "visibleWhen": { "DataLoggingLimitDataPoints": [true] }, "title": { "en": "Maximum number of data points", "pt-BR": "Número máximo de pontos" } },
+        { "name": "DataLoggingDecimateData", "type": "bool", "default": false, "group": "Logging", "title": { "en": "Decimation", "pt-BR": "Decimação" } },
+        { "name": "DataLoggingDecimation", "type": "expr", "default": "2", "group": "Logging", "visibleWhen": { "DataLoggingDecimateData": [true] }, "title": { "en": "Decimation value", "pt-BR": "Fator de decimação" } }
+      ],
+      "inputs": [{ "repeat": { "param": "NumInputPorts", "rule": "count" }, "prefix": "in", "start": 1 }],
+      "outputs": []
+    },
+    {
+      "id": "terminator",
+      "name": "Terminator",
+      "title": { "pt-BR": "Terminador" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/terminator.html",
+      "simulink": { "blockType": "Terminator" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [20, 20],
+      "params": [],
+      "inputs": [{ "id": "in1" }],
+      "outputs": []
+    }
+  ]
+}

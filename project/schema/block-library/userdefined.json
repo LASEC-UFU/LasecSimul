@@ -1,0 +1,23 @@
+{
+  "library": "userdefined",
+  "name": "User-Defined Functions",
+  "title": { "pt-BR": "Funções Definidas pelo Usuário" },
+  "order": 90,
+  "blocks": [
+    {
+      "id": "fcn",
+      "name": "Fcn",
+      "title": { "pt-BR": "Função (Fcn)" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/fcn.html",
+      "simulink": { "blockType": "Fcn" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [90, 30],
+      "params": [
+        { "name": "Expr", "type": "string", "default": "sin(u(1)*exp(2.3*(-u(2))))", "title": { "en": "Expression", "pt-BR": "Expressão" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    }
+  ]
+}

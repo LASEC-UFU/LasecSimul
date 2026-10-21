@@ -22,7 +22,7 @@ import { WebviewToHostMessage } from "./ui/webview/messages";
 import { ComponentPaletteViewProvider } from "./ui/views/ComponentPaletteViewProvider";
 import { PropertyInspectorViewProvider } from "./ui/views/PropertyInspectorViewProvider";
 import { hartSignalGraphPinIds } from "./ui/views/hartInspectorSections";
-import { materializePinGroup, registerPackage } from "./ui/webview/componentSymbols";
+import { materializePinGroup, registerPackage, registerBlockSpec } from "./ui/webview/componentSymbols";
 import { buildGenericSubcircuitPackage, buildGenericSubcircuitSymbol, regenerateGenericSubcircuitState } from "./ui/webview/genericSubcircuitPackage";
 import { absoluteDeviceRefPath, absoluteSubcircuitRefPath, importProjectCommand, insertEmbeddedPlant, openProjectCommand, openProjectFile, openRecentProjectCommand, projectComponentToWebviewComponent, refreshDirtyIndicator, resolveCurrentProjectSubcircuitReferences, saveProjectAsCommand, saveProjectCommand, webviewComponentToProjectComponent } from "./project/projectCommands";
 import { loadUnifiedCatalog, RegisteredSource, saveRegisteredSources } from "./catalog/UnifiedCatalog";
@@ -135,6 +135,7 @@ import {
 import { initSimulationLog, logSimulation, noteSimulationStatusChange, showSimulationLogChannel } from "./diagnostics/simulationLog";
 import { importTdpsSmpCommand } from "./tdps/tdpsCommand";
 import { ACCUMULATOR_OUTPUT_PORTS, controlGraphPinIds } from "./catalog/controlGraphCatalog";
+import { resolveBlockPorts } from "./ui/webview/blockLibrary/ports";
 import { ProjectCustomEditorProvider } from "./ui/panels/ProjectCustomEditorProvider";
 import { SimulideImportCustomEditorProvider } from "./ui/panels/SimulideImportCustomEditorProvider";
 import { OpenPlcEditorProvider, openOpenPlcProject } from "./plc/openplc/OpenPlcEditorProvider";
@@ -313,7 +314,10 @@ function setEffectiveCatalog(libraryEntries: WebviewComponentCatalogEntry[]): vo
   // silenciosamente no algoritmo genérico pra QUALQUER typeId com package real -- geometria de pino
   // diferente da que a Webview mostra, quebrando `wireTopology.ts` (split de fio no ponto errado,
   // clique no meio de um fio não faz nada -- bug real encontrado 2026-07-11).
-  for (const entry of entries) registerPackage(entry.typeId, entry.package, entry.logicSymbolPackage);
+  for (const entry of entries) {
+    registerPackage(entry.typeId, entry.package, entry.logicSymbolPackage);
+    registerBlockSpec(entry.typeId, entry.blockSpec);
+  }
   state.paletteViewProvider?.setCatalog([...libraryEntries, ...projectEntries.filter((entry) => !libraryTypeIds.has(entry.typeId))]);
   syncSchematicPanel();
 }
@@ -1128,6 +1132,12 @@ async function openPlcProgramCommand(componentId: string): Promise<void> {
  * `pinIds` estáticos já cadastrados no catálogo pro caso default, sem regressão pros chamadores que
  * não foram atualizados pra passar a instância real. */
 export function pinsForTypeId(typeId: string, properties?: Record<string, unknown>): Array<{ id: string; x: number; y: number }> {
+  // Bloco da biblioteca (`sl.*`): portas pelas MESMAS regras da especificação que o Core aplica.
+  const blockSpec = state.schematicState.catalog.find((item) => item.typeId === typeId)?.blockSpec;
+  if (blockSpec) {
+    const ports = resolveBlockPorts(blockSpec, (properties ?? {}) as Record<string, string | number | boolean>);
+    return [...ports.inputs, ...ports.outputs].map((port, index) => ({ id: port.id, x: 0, y: index * 12 }));
+  }
   const controlPins = controlGraphPinIds(typeId, properties ?? {});
   if (controlPins) return controlPins.map((id, index) => ({ id, x: 0, y: index * 12 }));
   // `peripherals.udp` tem `pinCount: 0` fixo no catálogo -- sem pino

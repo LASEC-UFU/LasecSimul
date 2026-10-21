@@ -1,0 +1,23 @@
+{
+  "description": "Casos de porta da familia PID Controller / PID Controller (2DOF) e variantes discretas (docs/66 §3). Core (BlockLibrary.cpp::resolvePorts) e Extension (ports.ts) devem produzir exatamente estas portas.",
+  "cases": [
+    { "typeId": "sl.pid_controller", "properties": {}, "inputs": ["in1"], "outputs": ["out1"] },
+    { "typeId": "sl.pid_controller", "properties": { "ControllerParametersSource": "external" }, "inputs": ["in1", "p", "i", "d", "n"], "outputs": ["out1"] },
+    { "typeId": "sl.pid_controller", "properties": { "ControllerParametersSource": "external", "Controller": "PI" }, "inputs": ["in1", "p", "i"], "outputs": ["out1"] },
+    { "typeId": "sl.pid_controller", "properties": { "ControllerParametersSource": "external", "Controller": "I" }, "inputs": ["in1", "i"], "outputs": ["out1"] },
+    { "typeId": "sl.pid_controller", "properties": { "ControllerParametersSource": "external", "Controller": "PD" }, "inputs": ["in1", "p", "d", "n"], "outputs": ["out1"] },
+    { "typeId": "sl.discrete_pid_controller", "properties": { "ControllerParametersSource": "external", "UseFilter": false }, "inputs": ["in1", "p", "i", "d"], "outputs": ["out1"] },
+    { "typeId": "sl.discrete_pid_controller", "properties": { "ControllerParametersSource": "external", "UseKiTs": true }, "inputs": ["in1", "p", "i", "d", "n"], "outputs": ["out1"] },
+    { "typeId": "sl.discrete_pid_controller", "properties": { "TimeDomain": "Continuous-time", "ControllerParametersSource": "external", "UseFilter": false }, "inputs": ["in1", "p", "i", "d", "n"], "outputs": ["out1"] },
+    { "typeId": "sl.pid_controller", "properties": { "ExternalReset": "rising", "InitialConditionSource": "external", "LimitOutput": true, "SatLimitsSource": "external", "TrackingMode": true }, "inputs": ["in1", "reset", "i0", "d0", "up", "lo", "tr"], "outputs": ["out1"] },
+    { "typeId": "sl.pid_controller", "properties": { "Controller": "PD", "TrackingMode": true, "InitialConditionSource": "external" }, "inputs": ["in1", "d0"], "outputs": ["out1"] },
+    { "typeId": "sl.pid_controller", "properties": { "Controller": "PI", "InitialConditionSource": "external", "SatLimitsSource": "external" }, "inputs": ["in1", "i0"], "outputs": ["out1"] },
+    { "typeId": "sl.pid_controller", "properties": { "LimitOutput": true, "AntiWindupMode": "external" }, "inputs": ["in1", "extaw"], "outputs": ["out1", "preint"] },
+    { "typeId": "sl.pid_controller", "properties": { "LimitOutput": false, "AntiWindupMode": "external" }, "inputs": ["in1"], "outputs": ["out1"] },
+    { "typeId": "sl.pid_controller", "properties": { "LimitOutput": "on", "AntiWindupMode": "external", "Controller": "PD" }, "inputs": ["in1"], "outputs": ["out1"] },
+    { "typeId": "sl.pid_controller_2dof", "properties": {}, "inputs": ["in1", "in2"], "outputs": ["out1"] },
+    { "typeId": "sl.pid_controller_2dof", "properties": { "ControllerParametersSource": "external" }, "inputs": ["in1", "in2", "p", "i", "d", "n", "b", "c"], "outputs": ["out1"] },
+    { "typeId": "sl.discrete_pid_controller_2dof", "properties": { "ControllerParametersSource": "external", "Controller": "PI", "ExternalReset": "level" }, "inputs": ["in1", "in2", "p", "i", "b", "reset"], "outputs": ["out1"] },
+    { "typeId": "sl.discrete_pid_controller_2dof", "properties": { "TrackingMode": true, "LimitOutput": true, "AntiWindupMode": "external" }, "inputs": ["in1", "in2", "tr", "extaw"], "outputs": ["out1", "preint"] }
+  ]
+}

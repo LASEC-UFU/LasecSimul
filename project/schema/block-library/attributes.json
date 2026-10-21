@@ -1,0 +1,252 @@
+{
+  "library": "attributes",
+  "name": "Signal Attributes",
+  "title": {
+    "pt-BR": "Atributos de sinal"
+  },
+  "order": 65,
+  "blocks": [
+    {
+      "id": "ic",
+      "name": "IC",
+      "title": { "pt-BR": "Condição inicial (IC)" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/ic.html",
+      "simulink": { "blockType": "InitialCondition" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "Value", "type": "expr", "default": "1", "title": { "en": "Initial value", "pt-BR": "Valor inicial" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "signal_conversion",
+      "name": "Signal Conversion",
+      "title": { "pt-BR": "Conversão de sinal" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/signalconversion.html",
+      "simulink": { "blockType": "SignalConversion" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [30, 30],
+      "params": [
+        { "name": "ConversionOutput", "type": "enum", "default": "Signal copy", "options": ["Signal copy", "Virtual bus", "Nonvirtual bus"], "title": { "en": "Output", "pt-BR": "Saída" } },
+        { "name": "OutDataTypeStr", "type": "string", "default": "Inherit: auto", "visibleWhen": { "ConversionOutput": ["Nonvirtual bus"] }, "title": { "en": "Data type", "pt-BR": "Tipo de dado" } },
+        { "name": "OverrideOpt", "type": "bool", "default": false, "visibleWhen": { "ConversionOutput": ["Signal copy"] }, "title": { "en": "Exclude this block from 'Block reduction' optimization", "pt-BR": "Excluir da otimização 'Block reduction'" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "data_type_conversion",
+      "name": "Data Type Conversion",
+      "title": { "pt-BR": "Conversão de tipo de dado" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/datatypeconversion.html",
+      "simulink": { "blockType": "DataTypeConversion" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [70, 30],
+      "params": [
+        { "name": "OutMin", "type": "expr", "default": "[]", "title": { "en": "Output minimum", "pt-BR": "Mínimo da saída" } },
+        { "name": "OutMax", "type": "expr", "default": "[]", "title": { "en": "Output maximum", "pt-BR": "Máximo da saída" } },
+        { "name": "OutDataTypeStr", "type": "string", "default": "Inherit: Inherit via back propagation", "title": { "en": "Output data type", "pt-BR": "Tipo de dado da saída" } },
+        { "name": "LockScale", "type": "bool", "default": false, "title": { "en": "Lock output data type setting against changes by the fixed-point tools", "pt-BR": "Travar o tipo de dado contra as ferramentas de ponto fixo" } },
+        { "name": "ConvertRealWorld", "type": "enum", "default": "Real World Value (RWV)", "options": ["Real World Value (RWV)", "Stored Integer (SI)"], "title": { "en": "Input and output to have equal", "pt-BR": "Entrada e saída com o mesmo" } },
+        { "name": "RndMeth", "type": "enum", "default": "Floor", "options": ["Ceiling", "Convergent", "Floor", "Nearest", "Round", "Simplest", "Zero"], "title": { "en": "Integer rounding mode", "pt-BR": "Arredondamento inteiro" } },
+        { "name": "SaturateOnIntegerOverflow", "type": "bool", "default": false, "title": { "en": "Saturate on integer overflow", "pt-BR": "Saturar no estouro inteiro" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "data_type_conversion_inherited",
+      "name": "Data Type Conversion Inherited",
+      "title": { "pt-BR": "Conversão de tipo herdada" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/datatypeconversioninherited.html",
+      "simulink": { "sourceBlock": "simulink/Signal Attributes/Data Type Conversion Inherited" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [70, 40],
+      "params": [
+        { "name": "ConvertRealWorld", "type": "enum", "default": "Real World Value", "options": ["Real World Value", "Stored Integer"], "title": { "en": "Input and Output to have equal", "pt-BR": "Entrada e saída com o mesmo" } },
+        { "name": "RndMeth", "type": "enum", "default": "Floor", "options": ["Ceiling", "Convergent", "Floor", "Nearest", "Round", "Simplest", "Zero"], "title": { "en": "Integer rounding mode", "pt-BR": "Arredondamento inteiro" } },
+        { "name": "DoSatur", "type": "bool", "default": false, "title": { "en": "Saturate to max or min when overflows occur", "pt-BR": "Saturar no máximo/mínimo em estouro" } }
+      ],
+      "inputs": [{ "id": "in1" }, { "id": "in2", "label": "u" }],
+      "outputs": [{ "id": "out1", "label": "y" }]
+    },
+    {
+      "id": "data_type_duplicate",
+      "name": "Data Type Duplicate",
+      "title": { "pt-BR": "Duplicação de tipo de dado" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/datatypeduplicate.html",
+      "simulink": { "blockType": "DataTypeDuplicate" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [50, 50],
+      "params": [
+        { "name": "NumInputPorts", "type": "expr", "default": "2", "title": { "en": "Number of input ports", "pt-BR": "Número de entradas" } }
+      ],
+      "inputs": [{ "repeat": { "param": "NumInputPorts", "rule": "count" }, "prefix": "in", "start": 1 }],
+      "outputs": []
+    },
+    {
+      "id": "data_type_propagation",
+      "name": "Data Type Propagation",
+      "title": { "pt-BR": "Propagação de tipo de dado" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/datatypepropagation.html",
+      "simulink": { "sourceBlock": "simulink/Signal Attributes/Data Type Propagation" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [40, 50],
+      "params": [
+        { "name": "PropDataTypeMode", "type": "enum", "default": "Inherit via propagation rule", "options": ["Specify via dialog", "Inherit via propagation rule"], "group": "Propagated Type", "title": { "en": "1. Propagated data type", "pt-BR": "1. Tipo propagado" } },
+        { "name": "PropDataType", "type": "string", "default": "fixdt(1, 16)", "group": "Propagated Type", "visibleWhen": { "PropDataTypeMode": ["Specify via dialog"] }, "title": { "en": "1.1. Propagated data type", "pt-BR": "1.1. Tipo propagado" } },
+        { "name": "IfRefDouble", "type": "enum", "default": "double", "options": ["double", "single"], "group": "Propagated Type", "visibleWhen": { "PropDataTypeMode": ["Inherit via propagation rule"] }, "title": { "en": "1.1 If any reference input is double, output is", "pt-BR": "1.1 Se alguma referência é double, a saída é" } },
+        { "name": "IfRefSingle", "type": "enum", "default": "single", "options": ["double", "single"], "group": "Propagated Type", "visibleWhen": { "PropDataTypeMode": ["Inherit via propagation rule"] }, "title": { "en": "1.2 If any reference input is single, output is", "pt-BR": "1.2 Se alguma referência é single, a saída é" } },
+        { "name": "IsSigned", "type": "enum", "default": "IsSigned1 or IsSigned2", "options": ["IsSigned1", "IsSigned2", "IsSigned1 or IsSigned2", "TRUE", "FALSE"], "group": "Propagated Type", "visibleWhen": { "PropDataTypeMode": ["Inherit via propagation rule"] }, "title": { "en": "1.3 Is-Signed", "pt-BR": "1.3 Com sinal" } },
+        { "name": "NumBitsBase", "type": "enum", "default": "max([NumBits1 NumBits2])", "options": ["NumBits1", "NumBits2", "max([NumBits1 NumBits2])", "min([NumBits1 NumBits2])", "NumBits1+NumBits2"], "group": "Propagated Type", "visibleWhen": { "PropDataTypeMode": ["Inherit via propagation rule"] }, "title": { "en": "1.4.1 Number-of-bits: Base", "pt-BR": "1.4.1 Número de bits: base" } },
+        { "name": "NumBitsMult", "type": "expr", "default": "1", "group": "Propagated Type", "visibleWhen": { "PropDataTypeMode": ["Inherit via propagation rule"] }, "title": { "en": "1.4.2 Number-of-bits: Multiplicative adjustment", "pt-BR": "1.4.2 Número de bits: ajuste multiplicativo" } },
+        { "name": "NumBitsAdd", "type": "expr", "default": "0", "group": "Propagated Type", "visibleWhen": { "PropDataTypeMode": ["Inherit via propagation rule"] }, "title": { "en": "1.4.3 Number-of-bits: Additive adjustment", "pt-BR": "1.4.3 Número de bits: ajuste aditivo" } },
+        { "name": "NumBitsAllowFinal", "type": "expr", "default": "-1", "group": "Propagated Type", "visibleWhen": { "PropDataTypeMode": ["Inherit via propagation rule"] }, "title": { "en": "1.4.4 Number-of-bits: Allowable final values", "pt-BR": "1.4.4 Número de bits: valores finais permitidos" } },
+        { "name": "PropScalingMode", "type": "enum", "default": "Inherit via propagation rule", "options": ["Inherit via propagation rule", "Specify via dialog", "Obtain via best precision"], "group": "Propagated Scaling", "title": { "en": "2. Propagated scaling", "pt-BR": "2. Escala propagada" } },
+        { "name": "PropScaling", "type": "expr", "default": "2^-10", "group": "Propagated Scaling", "visibleWhen": { "PropScalingMode": ["Specify via dialog"] }, "title": { "en": "2.1. Propagated scaling (Slope or [Slope Bias])", "pt-BR": "2.1. Escala propagada (inclinação ou [inclinação viés])" } },
+        { "name": "ValuesUsedBestPrec", "type": "expr", "default": "[5 -7]", "group": "Propagated Scaling", "visibleWhen": { "PropScalingMode": ["Obtain via best precision"] }, "title": { "en": "2.1. Values used to determine best precision scaling", "pt-BR": "2.1. Valores para a escala de melhor precisão" } },
+        { "name": "SlopeBase", "type": "enum", "default": "min([Slope1 Slope2])", "options": ["Slope1", "Slope2", "max([Slope1 Slope2])", "min([Slope1 Slope2])", "Slope1*Slope2", "Slope1/Slope2", "PosRange1", "PosRange2", "max([PosRange1 PosRange2])", "min([PosRange1 PosRange2])", "PosRange1*PosRange2", "PosRange1/PosRange2"], "group": "Propagated Scaling", "visibleWhen": { "PropScalingMode": ["Inherit via propagation rule"] }, "title": { "en": "2.1.1. Slope: Base", "pt-BR": "2.1.1. Inclinação: base" } },
+        { "name": "SlopeMult", "type": "expr", "default": "1", "group": "Propagated Scaling", "visibleWhen": { "PropScalingMode": ["Inherit via propagation rule"] }, "title": { "en": "2.1.2. Slope: Multiplicative adjustment", "pt-BR": "2.1.2. Inclinação: ajuste multiplicativo" } },
+        { "name": "SlopeAdd", "type": "expr", "default": "0", "group": "Propagated Scaling", "visibleWhen": { "PropScalingMode": ["Inherit via propagation rule"] }, "title": { "en": "2.1.3. Slope: Additive adjustment", "pt-BR": "2.1.3. Inclinação: ajuste aditivo" } },
+        { "name": "BiasBase", "type": "enum", "default": "Bias1", "options": ["Bias1", "Bias2", "max([Bias1 Bias2])", "min([Bias1 Bias2])", "Bias1*Bias2", "Bias1/Bias2", "Bias1+Bias2", "Bias1-Bias2"], "group": "Propagated Scaling", "visibleWhen": { "PropScalingMode": ["Inherit via propagation rule"] }, "title": { "en": "2.2.1. Bias: Base", "pt-BR": "2.2.1. Viés: base" } },
+        { "name": "BiasMult", "type": "expr", "default": "1", "group": "Propagated Scaling", "visibleWhen": { "PropScalingMode": ["Inherit via propagation rule"] }, "title": { "en": "2.2.2. Bias: Multiplicative adjustment", "pt-BR": "2.2.2. Viés: ajuste multiplicativo" } },
+        { "name": "BiasAdd", "type": "expr", "default": "0", "group": "Propagated Scaling", "visibleWhen": { "PropScalingMode": ["Inherit via propagation rule"] }, "title": { "en": "2.2.3. Bias: Additive adjustment", "pt-BR": "2.2.3. Viés: ajuste aditivo" } }
+      ],
+      "inputs": [{ "id": "in1", "label": "Ref1" }, { "id": "in2", "label": "Ref2" }, { "id": "in3", "label": "Prop" }],
+      "outputs": []
+    },
+    {
+      "id": "data_type_scaling_strip",
+      "name": "Data Type Scaling Strip",
+      "title": { "pt-BR": "Remoção de escala do tipo de dado" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/datatypescalingstrip.html",
+      "simulink": { "sourceBlock": "simulink/Signal Attributes/Data Type Scaling Strip" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [40, 40],
+      "params": [],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "probe",
+      "name": "Probe",
+      "title": { "pt-BR": "Sonda de atributos" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/probe.html",
+      "simulink": { "blockType": "Probe" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [100, 40],
+      "params": [
+        { "name": "ProbeWidth", "type": "bool", "default": true, "group": "Main", "title": { "en": "Probe width", "pt-BR": "Sondar largura" } },
+        { "name": "ProbeSampleTime", "type": "bool", "default": true, "group": "Main", "title": { "en": "Probe sample time", "pt-BR": "Sondar tempo de amostragem" } },
+        { "name": "ProbeComplexSignal", "type": "bool", "default": true, "group": "Main", "title": { "en": "Detect complex signal", "pt-BR": "Detectar sinal complexo" } },
+        { "name": "ProbeSignalDimensions", "type": "bool", "default": true, "group": "Main", "title": { "en": "Probe signal dimensions", "pt-BR": "Sondar dimensões" } },
+        { "name": "ProbeWidthDataType", "type": "enum", "default": "double", "options": ["double", "single", "int8", "uint8", "int16", "uint16", "int32", "uint32", "Same as input"], "group": "Signal Attributes", "title": { "en": "Data type for width", "pt-BR": "Tipo de dado da largura" } },
+        { "name": "ProbeSampleTimeDataType", "type": "enum", "default": "double", "options": ["double", "single", "int8", "uint8", "int16", "uint16", "int32", "uint32", "Same as input"], "group": "Signal Attributes", "title": { "en": "Data type for sample time", "pt-BR": "Tipo de dado do tempo de amostragem" } },
+        { "name": "ProbeComplexityDataType", "type": "enum", "default": "double", "options": ["double", "single", "int8", "uint8", "int16", "uint16", "int32", "uint32", "Same as input"], "group": "Signal Attributes", "title": { "en": "Data type for signal complexity", "pt-BR": "Tipo de dado da complexidade" } },
+        { "name": "ProbeDimensionsDataType", "type": "enum", "default": "double", "options": ["double", "single", "int8", "uint8", "int16", "uint16", "int32", "uint32", "Same as input"], "group": "Signal Attributes", "title": { "en": "Data type for signal dimensions", "pt-BR": "Tipo de dado das dimensões" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [
+        { "id": "W", "when": { "ProbeWidth": [true] } },
+        { "id": "Ts", "when": { "ProbeSampleTime": [true] } },
+        { "id": "C", "when": { "ProbeComplexSignal": [true] } },
+        { "id": "D", "when": { "ProbeSignalDimensions": [true] } }
+      ]
+    },
+    {
+      "id": "rate_transition",
+      "name": "Rate Transition",
+      "title": { "pt-BR": "Transição de taxa" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/ratetransition.html",
+      "simulink": { "blockType": "RateTransition" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [40, 40],
+      "params": [
+        { "name": "Integrity", "type": "bool", "default": true, "title": { "en": "Ensure data integrity during data transfer", "pt-BR": "Garantir integridade na transferência" } },
+        { "name": "Deterministic", "type": "bool", "default": true, "title": { "en": "Ensure deterministic data transfer (maximum delay)", "pt-BR": "Garantir transferência determinística (atraso máximo)" } },
+        { "name": "InitialCondition", "type": "expr", "default": "0", "title": { "en": "Initial conditions", "pt-BR": "Condições iniciais" } },
+        { "name": "OutPortSampleTimeOpt", "type": "enum", "default": "Specify", "options": ["Specify", "Inherit", "Multiple of input port sample time"], "title": { "en": "Output port sample time options", "pt-BR": "Opção do tempo de amostragem da saída" } },
+        { "name": "OutPortSampleTime", "type": "expr", "default": "-1", "visibleWhen": { "OutPortSampleTimeOpt": ["Specify"] }, "title": { "en": "Output port sample time", "pt-BR": "Tempo de amostragem da saída" } },
+        { "name": "OutPortSampleTimeMultiple", "type": "expr", "default": "1", "visibleWhen": { "OutPortSampleTimeOpt": ["Multiple of input port sample time"] }, "title": { "en": "Sample time multiple (>0)", "pt-BR": "Múltiplo do tempo de amostragem (>0)" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "signal_specification",
+      "name": "Signal Specification",
+      "title": { "pt-BR": "Especificação de sinal" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/signalspecification.html",
+      "simulink": { "blockType": "SignalSpecification" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [80, 30],
+      "params": [
+        { "name": "OutMin", "type": "expr", "default": "[]", "title": { "en": "Minimum", "pt-BR": "Mínimo" } },
+        { "name": "OutMax", "type": "expr", "default": "[]", "title": { "en": "Maximum", "pt-BR": "Máximo" } },
+        { "name": "OutDataTypeStr", "type": "string", "default": "Inherit: auto", "title": { "en": "Data type", "pt-BR": "Tipo de dado" } },
+        { "name": "LockScale", "type": "bool", "default": false, "title": { "en": "Lock output data type setting against changes by the fixed-point tools", "pt-BR": "Travar o tipo de dado contra as ferramentas de ponto fixo" } },
+        { "name": "BusOutputAsStruct", "type": "bool", "default": false, "title": { "en": "Require nonvirtual bus", "pt-BR": "Exigir barramento não virtual" } },
+        { "name": "Unit", "type": "string", "default": "inherit", "title": { "en": "Unit (e.g., m, m/s^2, N*m)", "pt-BR": "Unidade (ex.: m, m/s^2, N*m)" } },
+        { "name": "Dimensions", "type": "expr", "default": "-1", "title": { "en": "Dimensions (-1 for inherited)", "pt-BR": "Dimensões (-1 herdado)" } },
+        { "name": "VarSizeSig", "type": "enum", "default": "Inherit", "options": ["Inherit", "No", "Yes"], "title": { "en": "Variable-size signal", "pt-BR": "Sinal de tamanho variável" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } },
+        { "name": "SignalType", "type": "enum", "default": "auto", "options": ["auto", "real", "complex"], "title": { "en": "Signal type", "pt-BR": "Tipo do sinal" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "unit_conversion",
+      "name": "Unit Conversion",
+      "title": { "pt-BR": "Conversão de unidade" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/unitconversion.html",
+      "simulink": { "blockType": "UnitConversion" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [40, 30],
+      "params": [
+        { "name": "OutputType", "type": "enum", "default": "Inherit via internal rule", "options": ["Inherit via internal rule", "Inherit via back propagation"], "title": { "en": "Output data type", "pt-BR": "Tipo de dado da saída" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "weighted_sample_time",
+      "name": "Weighted Sample Time",
+      "title": { "pt-BR": "Tempo de amostragem ponderado" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/weightedsampletime.html",
+      "simulink": { "blockType": "SampleTimeMath", "match": { "TsampMathOp": "Ts Only" }, "sourceBlock": "simulink/Signal Attributes/Weighted Sample Time" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [50, 45],
+      "params": [
+        { "name": "TsampMathOp", "type": "enum", "default": "Ts Only", "options": ["+", "-", "*", "/", "Ts Only", "1/Ts Only"], "group": "Main", "title": { "en": "Operation", "pt-BR": "Operação" } },
+        { "name": "weightValue", "type": "expr", "default": "1.0", "group": "Main", "title": { "en": "Weight value", "pt-BR": "Peso" } },
+        { "name": "TsampMathImp", "type": "enum", "default": "Online Calculations", "options": ["Online Calculations", "Offline Scaling Adjustment"], "group": "Main", "visibleWhen": { "TsampMathOp": ["*", "/"] }, "title": { "en": "Implement using", "pt-BR": "Implementar com" } },
+        { "name": "OutDataTypeStr", "type": "string", "default": "Inherit: Inherit via internal rule", "group": "Signal Attributes", "title": { "en": "Output data type", "pt-BR": "Tipo de dado da saída" } },
+        { "name": "RndMeth", "type": "enum", "default": "Floor", "options": ["Ceiling", "Convergent", "Floor", "Nearest", "Round", "Simplest", "Zero"], "group": "Signal Attributes", "visibleWhen": { "TsampMathOp": ["+", "-", "*", "/"] }, "title": { "en": "Integer rounding mode", "pt-BR": "Arredondamento inteiro" } },
+        { "name": "SaturateOnIntegerOverflow", "type": "bool", "default": false, "group": "Signal Attributes", "visibleWhen": { "TsampMathOp": ["+", "-", "*", "/"] }, "title": { "en": "Saturate on integer overflow", "pt-BR": "Saturar no estouro inteiro" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "width",
+      "name": "Width",
+      "title": { "pt-BR": "Largura do sinal" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/width.html",
+      "simulink": { "blockType": "Width" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [30, 25],
+      "params": [
+        { "name": "OutputDataTypeScalingMode", "type": "enum", "default": "Choose intrinsic data type", "options": ["Choose intrinsic data type", "Inherit via back propagation", "All ports same datatype"], "title": { "en": "Output data type mode", "pt-BR": "Modo do tipo de dado da saída" } },
+        { "name": "DataType", "type": "enum", "default": "double", "options": ["double", "single", "int8", "uint8", "int16", "uint16", "int32", "uint32"], "visibleWhen": { "OutputDataTypeScalingMode": ["Choose intrinsic data type"] }, "title": { "en": "Output data type", "pt-BR": "Tipo de dado da saída" } },
+        { "name": "AlwaysUseConstantSampleTime", "type": "bool", "default": true, "title": { "en": "Always use constant sample time", "pt-BR": "Sempre usar tempo de amostragem constante" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "id": "out1" }]
+    }
+  ]
+}

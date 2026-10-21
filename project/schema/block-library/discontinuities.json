@@ -1,0 +1,278 @@
+{
+  "library": "discontinuities",
+  "name": "Discontinuities",
+  "title": {"pt-BR": "Descontinuidades"},
+  "order": 35,
+  "blocks": [
+    {
+      "id": "backlash",
+      "name": "Backlash",
+      "title": {"pt-BR": "Folga (backlash)"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/backlash.html",
+      "simulink": {"blockType": "Backlash"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [30, 30],
+      "params": [
+        {"name": "BacklashWidth", "type": "expr", "default": "1", "tunable": true, "title": {"en": "Deadband width", "pt-BR": "Largura da zona morta (folga)"}},
+        {"name": "InitialOutput", "type": "expr", "default": "0", "title": {"en": "Initial output", "pt-BR": "Saída inicial"}},
+        {"name": "InputProcessing", "type": "enum", "default": "Elements as channels (sample based)", "options": ["Columns as channels (frame based)", "Elements as channels (sample based)"], "title": {"en": "Input processing", "pt-BR": "Processamento da entrada"}},
+        {"name": "ZeroCross", "type": "bool", "default": true, "title": {"en": "Enable zero-crossing detection", "pt-BR": "Detecção de cruzamento por zero"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "coulomb_viscous_friction",
+      "name": "Coulomb and Viscous Friction",
+      "title": {"pt-BR": "Atrito de Coulomb e viscoso"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/coulombandviscousfriction.html",
+      "simulink": {"sourceBlock": "simulink/Discontinuities/Coulomb & Viscous Friction"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [30, 30],
+      "params": [
+        {"name": "offset", "type": "expr", "default": "[1 3 2 0]", "tunable": true, "title": {"en": "Coulomb friction value", "pt-BR": "Atrito de Coulomb (offset)"}},
+        {"name": "gain", "type": "expr", "default": "1", "tunable": true, "title": {"en": "Coefficient of viscous friction", "pt-BR": "Coeficiente de atrito viscoso"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "dead_zone",
+      "name": "Dead Zone",
+      "title": {"pt-BR": "Zona morta"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/deadzone.html",
+      "simulink": {"blockType": "DeadZone"},
+      "sampleTime": {"param": "SampleTime"},
+      "size": [30, 30],
+      "params": [
+        {"name": "LowerValue", "type": "expr", "default": "-0.5", "tunable": true, "title": {"en": "Start of dead zone", "pt-BR": "Início da zona morta"}},
+        {"name": "UpperValue", "type": "expr", "default": "0.5", "tunable": true, "title": {"en": "End of dead zone", "pt-BR": "Fim da zona morta"}},
+        {"name": "SaturateOnIntegerOverflow", "type": "bool", "default": true, "title": {"en": "Saturate on integer overflow", "pt-BR": "Saturar em estouro de inteiro"}},
+        {"name": "LinearizeAsGain", "type": "bool", "default": true, "title": {"en": "Treat as gain when linearizing", "pt-BR": "Tratar como ganho na linearização"}},
+        {"name": "ZeroCross", "type": "bool", "default": true, "title": {"en": "Enable zero-crossing detection", "pt-BR": "Detecção de cruzamento por zero"}},
+        {"name": "SampleTime", "type": "expr", "default": "-1", "title": {"en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "dead_zone_dynamic",
+      "name": "Dead Zone Dynamic",
+      "title": {"pt-BR": "Zona morta dinâmica"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/deadzonedynamic.html",
+      "simulink": {"sourceBlock": "simulink/Discontinuities/Dead Zone Dynamic"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [70, 40],
+      "params": [],
+      "inputs": [
+        {"id": "up", "label": "up"},
+        {"id": "in1", "label": "u"},
+        {"id": "lo", "label": "lo"}
+      ],
+      "outputs": [
+        {"id": "out1", "label": "y"}
+      ]
+    },
+    {
+      "id": "hit_crossing",
+      "name": "Hit Crossing",
+      "title": {"pt-BR": "Detecção de cruzamento"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/hitcrossing.html",
+      "simulink": {"blockType": "HitCross"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [30, 30],
+      "params": [
+        {"name": "HitCrossingOffset", "type": "expr", "default": "0", "tunable": true, "title": {"en": "Hit crossing offset", "pt-BR": "Valor de cruzamento"}},
+        {"name": "HitCrossingDirection", "type": "enum", "default": "either", "options": ["rising", "falling", "either"], "title": {"en": "Hit crossing direction", "pt-BR": "Direção do cruzamento"}},
+        {"name": "ShowOutputPort", "type": "bool", "default": true, "title": {"en": "Show output port", "pt-BR": "Mostrar porta de saída"}},
+        {"name": "HitCrossingOutputType", "type": "enum", "default": "Signal", "options": ["Signal", "Message", "Function-Call"], "visibleWhen": {"ShowOutputPort": [true]}, "title": {"en": "Output type", "pt-BR": "Tipo de saída"}},
+        {"name": "ZeroCross", "type": "bool", "default": true, "title": {"en": "Enable zero-crossing detection", "pt-BR": "Detecção de cruzamento por zero"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1", "when": {"ShowOutputPort": [true]}}
+      ]
+    },
+    {
+      "id": "pwm",
+      "name": "PWM",
+      "title": {"pt-BR": "PWM"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/pwm.html",
+      "simulink": {"sourceBlock": "simulink/Discontinuities/PWM"},
+      "sampleTime": {"fixed": "continuous"},
+      "size": [45, 30],
+      "params": [
+        {"name": "Period", "type": "expr", "default": "1", "title": {"en": "Period (s)", "pt-BR": "Período (s)"}},
+        {"name": "InitialDelay", "type": "expr", "default": "0", "title": {"en": "Initial Delay", "pt-BR": "Atraso inicial (s)"}},
+        {"name": "DisallowZeroDutyCycle", "type": "bool", "default": false, "title": {"en": "Disallow zero duty cycle", "pt-BR": "Proibir ciclo de trabalho nulo"}},
+        {"name": "RunAtFixedTimeIntervals", "type": "bool", "default": false, "title": {"en": "Run at fixed time intervals", "pt-BR": "Executar em intervalos fixos"}},
+        {"name": "SampleTime", "type": "expr", "default": "0.1", "visibleWhen": {"RunAtFixedTimeIntervals": [true]}, "title": {"en": "Sample Time", "pt-BR": "Tempo de amostragem"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "quantizer",
+      "name": "Quantizer",
+      "title": {"pt-BR": "Quantizador"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/quantizer.html",
+      "simulink": {"blockType": "Quantizer"},
+      "sampleTime": {"param": "SampleTime"},
+      "size": [30, 30],
+      "params": [
+        {"name": "QuantizationInterval", "type": "expr", "default": "0.5", "tunable": true, "title": {"en": "Quantization interval", "pt-BR": "Intervalo de quantização"}},
+        {"name": "LinearizeAsGain", "type": "bool", "default": true, "title": {"en": "Treat as gain when linearizing", "pt-BR": "Tratar como ganho na linearização"}},
+        {"name": "SampleTime", "type": "expr", "default": "-1", "title": {"en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "rate_limiter",
+      "name": "Rate Limiter",
+      "title": {"pt-BR": "Limitador de taxa"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/ratelimiter.html",
+      "simulink": {"blockType": "RateLimiter"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [30, 30],
+      "params": [
+        {"name": "RisingSlewLimit", "type": "expr", "default": "1", "tunable": true, "title": {"en": "Rising slew rate", "pt-BR": "Taxa máxima de subida"}},
+        {"name": "FallingSlewLimit", "type": "expr", "default": "-1", "tunable": true, "title": {"en": "Falling slew rate", "pt-BR": "Taxa máxima de descida"}},
+        {"name": "SampleTimeMode", "type": "enum", "default": "inherited", "options": ["inherited", "continuous"], "title": {"en": "Sample time mode", "pt-BR": "Modo do tempo de amostragem"}},
+        {"name": "InitialCondition", "type": "expr", "default": "0", "title": {"en": "Initial condition", "pt-BR": "Condição inicial"}},
+        {"name": "LinearizeAsGain", "type": "bool", "default": true, "title": {"en": "Treat as gain when linearizing", "pt-BR": "Tratar como ganho na linearização"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "rate_limiter_dynamic",
+      "name": "Rate Limiter Dynamic",
+      "title": {"pt-BR": "Limitador de taxa dinâmico"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/ratelimiterdynamic.html",
+      "simulink": {"sourceBlock": "simulink/Discontinuities/Rate Limiter Dynamic"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [70, 40],
+      "params": [],
+      "inputs": [
+        {"id": "up", "label": "up"},
+        {"id": "in1", "label": "u"},
+        {"id": "lo", "label": "lo"}
+      ],
+      "outputs": [
+        {"id": "out1", "label": "Y"}
+      ]
+    },
+    {
+      "id": "relay",
+      "name": "Relay",
+      "title": {"pt-BR": "Relé"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/relay.html",
+      "simulink": {"blockType": "Relay"},
+      "sampleTime": {"param": "SampleTime"},
+      "size": [30, 30],
+      "params": [
+        {"name": "OnSwitchValue", "type": "expr", "default": "eps", "tunable": true, "title": {"en": "Switch on point", "pt-BR": "Ponto de ligar"}},
+        {"name": "OffSwitchValue", "type": "expr", "default": "eps", "tunable": true, "title": {"en": "Switch off point", "pt-BR": "Ponto de desligar"}},
+        {"name": "OnOutputValue", "type": "expr", "default": "1", "tunable": true, "title": {"en": "Output when on", "pt-BR": "Saída ligado"}},
+        {"name": "OffOutputValue", "type": "expr", "default": "0", "tunable": true, "title": {"en": "Output when off", "pt-BR": "Saída desligado"}},
+        {"name": "InputProcessing", "type": "enum", "default": "Elements as channels (sample based)", "options": ["Columns as channels (frame based)", "Elements as channels (sample based)"], "title": {"en": "Input processing", "pt-BR": "Processamento da entrada"}},
+        {"name": "ZeroCross", "type": "bool", "default": true, "title": {"en": "Enable zero-crossing detection", "pt-BR": "Detecção de cruzamento por zero"}},
+        {"name": "SampleTime", "type": "expr", "default": "-1", "title": {"en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    },
+    {
+      "id": "saturation",
+      "name": "Saturation",
+      "title": {"pt-BR": "Saturação"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/saturation.html",
+      "simulink": {"blockType": "Saturate"},
+      "sampleTime": {"param": "SampleTime"},
+      "size": [30, 30],
+      "params": [
+        {"name": "UpperLimit", "type": "expr", "default": "0.5", "tunable": true, "title": {"en": "Upper limit", "pt-BR": "Limite superior"}},
+        {"name": "LowerLimit", "type": "expr", "default": "-0.5", "tunable": true, "title": {"en": "Lower limit", "pt-BR": "Limite inferior"}},
+        {"name": "LinearizeAsGain", "type": "bool", "default": true, "title": {"en": "Treat as gain when linearizing", "pt-BR": "Tratar como ganho na linearização"}},
+        {"name": "ZeroCross", "type": "bool", "default": true, "title": {"en": "Enable zero-crossing detection", "pt-BR": "Detecção de cruzamento por zero"}},
+        {"name": "OutputSaturationStatus", "type": "bool", "default": false, "title": {"en": "Output saturation status", "pt-BR": "Saídas de estado de saturação"}},
+        {"name": "SampleTime", "type": "expr", "default": "-1", "title": {"en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"},
+        {"id": "satup", "label": "satup", "when": {"OutputSaturationStatus": [true]}},
+        {"id": "satlo", "label": "satlo", "when": {"OutputSaturationStatus": [true]}}
+      ]
+    },
+    {
+      "id": "saturation_dynamic",
+      "name": "Saturation Dynamic",
+      "title": {"pt-BR": "Saturação dinâmica"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/saturationdynamic.html",
+      "simulink": {"sourceBlock": "simulink/Discontinuities/Saturation Dynamic"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [70, 40],
+      "params": [],
+      "inputs": [
+        {"id": "up", "label": "up"},
+        {"id": "in1", "label": "u"},
+        {"id": "lo", "label": "lo"}
+      ],
+      "outputs": [
+        {"id": "out1", "label": "y"}
+      ]
+    },
+    {
+      "id": "wrap_to_zero",
+      "name": "Wrap To Zero",
+      "title": {"pt-BR": "Zerar acima do limiar"},
+      "doc": "https://www.mathworks.com/help/simulink/slref/wraptozero.html",
+      "simulink": {"sourceBlock": "simulink/Discontinuities/Wrap To Zero"},
+      "sampleTime": {"fixed": "inherited"},
+      "size": [30, 30],
+      "params": [
+        {"name": "Threshold", "type": "expr", "default": "255", "tunable": true, "title": {"en": "Threshold for outputting zero", "pt-BR": "Limiar para saída zero"}}
+      ],
+      "inputs": [
+        {"id": "in1"}
+      ],
+      "outputs": [
+        {"id": "out1"}
+      ]
+    }
+  ]
+}

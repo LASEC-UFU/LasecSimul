@@ -1,0 +1,166 @@
+{
+  "library": "routing",
+  "name": "Signal Routing",
+  "title": { "pt-BR": "Roteamento de Sinais" },
+  "order": 60,
+  "blocks": [
+    {
+      "id": "mux",
+      "name": "Mux",
+      "title": { "pt-BR": "Multiplexador" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/mux.html",
+      "simulink": { "blockType": "Mux" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [5, 40],
+      "params": [
+        { "name": "Inputs", "type": "string", "default": "2", "title": { "en": "Number of inputs", "pt-BR": "Número de entradas" } },
+        { "name": "DisplayOption", "type": "enum", "default": "bar", "options": ["bar", "signals", "none"], "title": { "en": "Display option", "pt-BR": "Exibição" } }
+      ],
+      "inputs": [{ "repeat": { "param": "Inputs", "rule": "vectorLength" }, "prefix": "in", "start": 1 }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "demux",
+      "name": "Demux",
+      "title": { "pt-BR": "Demultiplexador" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/demux.html",
+      "simulink": { "blockType": "Demux" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [5, 40],
+      "params": [
+        { "name": "Outputs", "type": "expr", "default": "2", "title": { "en": "Number of outputs", "pt-BR": "Número de saídas" } },
+        { "name": "DisplayOption", "type": "enum", "default": "bar", "options": ["bar", "none"], "title": { "en": "Display option", "pt-BR": "Exibição" } }
+      ],
+      "inputs": [{ "id": "in1" }],
+      "outputs": [{ "repeat": { "param": "Outputs", "rule": "vectorLength" }, "prefix": "out", "start": 1 }]
+    },
+    {
+      "id": "switch",
+      "name": "Switch",
+      "title": { "pt-BR": "Chave (Switch)" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/switch.html",
+      "simulink": { "blockType": "Switch" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [50, 40],
+      "params": [
+        { "name": "Criteria", "type": "enum", "default": "u2 > Threshold", "options": ["u2 >= Threshold", "u2 > Threshold", "u2 ~= 0"], "group": "Main", "title": { "en": "Criteria for passing first input", "pt-BR": "Critério para passar a primeira entrada" } },
+        { "name": "Threshold", "type": "expr", "default": "0", "group": "Main", "tunable": true, "visibleWhen": { "Criteria": ["u2 >= Threshold", "u2 > Threshold"] }, "title": { "en": "Threshold", "pt-BR": "Limiar" } },
+        { "name": "ZeroCross", "type": "bool", "default": true, "group": "Main", "title": { "en": "Enable zero-crossing detection", "pt-BR": "Detecção de cruzamento por zero" } },
+        { "name": "InputSameDT", "type": "bool", "default": false, "group": "Signal Attributes", "title": { "en": "Require all data port inputs to have the same data type", "pt-BR": "Exigir o mesmo tipo de dado nas entradas de dados" } },
+        { "name": "OutMin", "type": "expr", "default": "[]", "group": "Signal Attributes", "title": { "en": "Output minimum", "pt-BR": "Mínimo da saída" } },
+        { "name": "OutMax", "type": "expr", "default": "[]", "group": "Signal Attributes", "title": { "en": "Output maximum", "pt-BR": "Máximo da saída" } },
+        { "name": "OutDataTypeStr", "type": "string", "default": "Inherit: Inherit via internal rule", "group": "Signal Attributes", "title": { "en": "Output data type", "pt-BR": "Tipo de dado da saída" } },
+        { "name": "LockScale", "type": "bool", "default": false, "group": "Signal Attributes", "title": { "en": "Lock data type settings against changes by the fixed-point tools", "pt-BR": "Travar o tipo de dado contra as ferramentas de ponto fixo" } },
+        { "name": "RndMeth", "type": "enum", "default": "Floor", "options": ["Ceiling", "Convergent", "Floor", "Nearest", "Round", "Simplest", "Zero"], "group": "Signal Attributes", "title": { "en": "Integer rounding mode", "pt-BR": "Arredondamento inteiro" } },
+        { "name": "SaturateOnIntegerOverflow", "type": "bool", "default": false, "group": "Signal Attributes", "title": { "en": "Saturate on integer overflow", "pt-BR": "Saturar no estouro inteiro" } },
+        { "name": "AllowDiffInputSizes", "type": "bool", "default": false, "group": "Signal Attributes", "title": { "en": "Allow different data input sizes", "pt-BR": "Permitir entradas de dados de tamanhos diferentes" } }
+      ],
+      "inputs": [{ "id": "in1" }, { "id": "in2" }, { "id": "in3" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "multiport_switch",
+      "name": "Multiport Switch",
+      "title": { "pt-BR": "Chave multiportas" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/multiportswitch.html",
+      "simulink": { "blockType": "MultiPortSwitch" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [40, 70],
+      "presets": [
+        { "name": "Index Vector", "title": { "pt-BR": "Vetor de índices" }, "doc": "https://www.mathworks.com/help/simulink/slref/indexvector.html", "defaults": { "DataPortOrder": "Zero-based contiguous", "Inputs": "1" }, "size": [40, 40] }
+      ],
+      "params": [
+        { "name": "DataPortOrder", "type": "enum", "default": "One-based contiguous", "options": ["Zero-based contiguous", "One-based contiguous", "Specify indices"], "group": "Main", "title": { "en": "Data port order", "pt-BR": "Ordem das portas de dados" } },
+        { "name": "Inputs", "type": "expr", "default": "3", "group": "Main", "visibleWhen": { "DataPortOrder": ["Zero-based contiguous", "One-based contiguous"] }, "title": { "en": "Number of data ports", "pt-BR": "Número de portas de dados" } },
+        { "name": "DataPortIndices", "type": "string", "default": "{1,2,3}", "group": "Main", "visibleWhen": { "DataPortOrder": ["Specify indices"] }, "title": { "en": "Data port indices", "pt-BR": "Índices das portas de dados" } },
+        { "name": "DataPortForDefault", "type": "enum", "default": "Last data port", "options": ["Last data port", "Additional data port"], "group": "Main", "title": { "en": "Data port for default case", "pt-BR": "Porta de dados do caso padrão" } },
+        { "name": "DiagnosticForDefault", "type": "enum", "default": "Error", "options": ["None", "Warning", "Error"], "group": "Main", "title": { "en": "Diagnostic for default case", "pt-BR": "Diagnóstico do caso padrão" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "group": "Main", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } },
+        { "name": "InputSameDT", "type": "bool", "default": false, "group": "Signal Attributes", "title": { "en": "Require all data port inputs to have the same data type", "pt-BR": "Exigir o mesmo tipo de dado nas entradas de dados" } },
+        { "name": "OutMin", "type": "expr", "default": "[]", "group": "Signal Attributes", "title": { "en": "Output minimum", "pt-BR": "Mínimo da saída" } },
+        { "name": "OutMax", "type": "expr", "default": "[]", "group": "Signal Attributes", "title": { "en": "Output maximum", "pt-BR": "Máximo da saída" } },
+        { "name": "OutDataTypeStr", "type": "string", "default": "Inherit: Inherit via internal rule", "group": "Signal Attributes", "title": { "en": "Output data type", "pt-BR": "Tipo de dado da saída" } },
+        { "name": "LockScale", "type": "bool", "default": false, "group": "Signal Attributes", "title": { "en": "Lock output data type setting against changes by the fixed-point tools", "pt-BR": "Travar o tipo de dado contra as ferramentas de ponto fixo" } },
+        { "name": "RndMeth", "type": "enum", "default": "Floor", "options": ["Ceiling", "Convergent", "Floor", "Nearest", "Round", "Simplest", "Zero"], "group": "Signal Attributes", "title": { "en": "Integer rounding mode", "pt-BR": "Arredondamento inteiro" } },
+        { "name": "SaturateOnIntegerOverflow", "type": "bool", "default": false, "group": "Signal Attributes", "title": { "en": "Saturate on integer overflow", "pt-BR": "Saturar no estouro inteiro" } },
+        { "name": "AllowDiffInputSizes", "type": "bool", "default": false, "group": "Signal Attributes", "title": { "en": "Allow different data input sizes", "pt-BR": "Permitir entradas de dados de tamanhos diferentes" } }
+      ],
+      "inputs": [
+        { "id": "in1" },
+        { "repeat": { "param": "Inputs", "rule": "count" }, "prefix": "in", "start": 2, "when": { "DataPortOrder": ["Zero-based contiguous", "One-based contiguous"] } },
+        { "repeat": { "param": "DataPortIndices", "rule": "vectorLength" }, "prefix": "in", "start": 2, "when": { "DataPortOrder": ["Specify indices"] } },
+        { "id": "default", "label": "*", "when": { "DataPortForDefault": ["Additional data port"] } }
+      ],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "manual_switch",
+      "name": "Manual Switch",
+      "title": { "pt-BR": "Chave manual" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/manualswitch.html",
+      "simulink": { "blockType": "ManualSwitch", "sourceBlock": "simulink/Signal Routing/Manual Switch" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [30, 30],
+      "params": [
+        { "name": "sw", "type": "enum", "default": "1", "options": ["1", "0"], "tunable": true, "title": { "en": "Switch position (1 = first input, 0 = second input)", "pt-BR": "Posição da chave (1 = entrada de cima, 0 = de baixo)" } },
+        { "name": "varsize", "type": "bool", "default": false, "title": { "en": "Allow the two inputs to differ in size", "pt-BR": "Permitir entradas de tamanhos diferentes" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } }
+      ],
+      "inputs": [{ "id": "in1" }, { "id": "in2" }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "selector",
+      "name": "Selector",
+      "title": { "pt-BR": "Seletor" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/selector.html",
+      "simulink": { "blockType": "Selector" },
+      "sampleTime": { "param": "SampleTime" },
+      "size": [40, 40],
+      "params": [
+        { "name": "NumberOfDimensions", "type": "expr", "default": "1", "title": { "en": "Number of input dimensions", "pt-BR": "Número de dimensões da entrada" } },
+        { "name": "IndexMode", "type": "enum", "default": "One-based", "options": ["One-based", "Zero-based"], "title": { "en": "Index mode", "pt-BR": "Base dos índices" } },
+        { "name": "IndexOptions", "type": "enum", "default": "Index vector (dialog)", "options": ["Select all", "Index vector (dialog)", "Index vector (port)", "Starting index (dialog)", "Starting index (port)", "Starting and ending indices (port)"], "title": { "en": "Index Option", "pt-BR": "Opção de índice" } },
+        { "name": "Indices", "type": "expr", "default": "[1 3]", "visibleWhen": { "IndexOptions": ["Index vector (dialog)", "Starting index (dialog)"] }, "title": { "en": "Index", "pt-BR": "Índice" } },
+        { "name": "OutputSizes", "type": "expr", "default": "1", "visibleWhen": { "IndexOptions": ["Starting index (dialog)", "Starting index (port)"] }, "title": { "en": "Output Size", "pt-BR": "Tamanho da saída" } },
+        { "name": "InputPortWidth", "type": "expr", "default": "3", "title": { "en": "Input port size", "pt-BR": "Largura da entrada" } },
+        { "name": "SampleTime", "type": "expr", "default": "-1", "title": { "en": "Sample time (-1 for inherited)", "pt-BR": "Tempo de amostragem (-1 herdado)" } },
+        { "name": "RuntimeRangeChecks", "type": "enum", "default": "Off", "options": ["Off", "On"], "title": { "en": "Check for out-of-range index in accelerated simulation", "pt-BR": "Verificar índice fora da faixa em simulação acelerada" } }
+      ],
+      "inputs": [
+        { "id": "in1" },
+        { "id": "idx1", "label": "Idx1", "when": { "IndexOptions": ["Index vector (port)", "Starting index (port)", "Starting and ending indices (port)"] } }
+      ],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "merge",
+      "name": "Merge",
+      "title": { "pt-BR": "Junção (Merge)" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/merge.html",
+      "simulink": { "blockType": "Merge" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [50, 40],
+      "params": [
+        { "name": "Inputs", "type": "expr", "default": "2", "title": { "en": "Number of inputs", "pt-BR": "Número de entradas" } },
+        { "name": "InitialOutput", "type": "expr", "default": "[]", "title": { "en": "Initial output", "pt-BR": "Saída inicial" } },
+        { "name": "AllowUnequalInputPortWidths", "type": "bool", "default": false, "title": { "en": "Allow unequal port widths", "pt-BR": "Permitir larguras diferentes" } },
+        { "name": "InputPortOffsets", "type": "expr", "default": "[]", "visibleWhen": { "AllowUnequalInputPortWidths": [true] }, "title": { "en": "Input port offsets", "pt-BR": "Deslocamento de cada entrada" } }
+      ],
+      "inputs": [{ "repeat": { "param": "Inputs", "rule": "count" }, "prefix": "in", "start": 1 }],
+      "outputs": [{ "id": "out1" }]
+    },
+    {
+      "id": "environment_controller",
+      "name": "Environment Controller",
+      "title": { "pt-BR": "Controlador de ambiente (removido)" },
+      "doc": "https://www.mathworks.com/help/simulink/slref/environmentcontroller.html",
+      "simulink": { "sourceBlock": "simulink/Signal Routing/Environment Controller" },
+      "sampleTime": { "fixed": "inherited" },
+      "size": [50, 40],
+      "params": [],
+      "inputs": [{ "id": "in1", "label": "Sim" }, { "id": "in2", "label": "Coder" }],
+      "outputs": [{ "id": "out1", "label": "Out" }]
+    }
+  ]
+}

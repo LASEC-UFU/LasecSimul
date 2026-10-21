@@ -1,4 +1,7 @@
 #pragma once
+
+#include "components/blocks/LibraryBlock.hpp"
+#include "simulation/library/ParamExpr.hpp"
 #include <atomic>
 
 #include <chrono>
@@ -620,6 +623,11 @@ private:
     void removeSubcircuitInstanceUnlocked(uint32_t subcircuitInstanceId);
     void sendComponentEventUnlocked(uint32_t componentIndex, const ComponentEvent& event);
 
+    /** Parâmetro ajustável (`tunable`) de um bloco `sl.*` com o plano já compilado: reavalia o builder
+     * com a resolução vigente e troca os parâmetros reais dos kernels sem recompilar (Simulink: parâmetro
+     * ajustável muda durante a simulação, mas não a forma). Mudança de forma recompila com a simulação
+     * parada e é recusada com ela rodando. */
+    std::optional<std::string> retuneLibraryBlockUnlocked(uint32_t component, const components::blocks::LibraryBlock& block);
     std::optional<std::string> setPropertyUnlocked(uint32_t component, const std::string& propertyName,
                                                    const PropertyValue& value);
     std::optional<uint32_t> findSubcircuitChildByLocalIdUnlocked(uint32_t subcircuitInstanceId, const std::string& localId) const;
@@ -706,7 +714,11 @@ private:
      * re-stamp de todo componente vivo do projeto inteiro, não só da ilha tocada. Só marca dirty os
      * componentes de grupos que NÃO puderam ser reaproveitados. */
     void reuseUnaffectedCircuitGroups(simulation::Topology& previous, const std::vector<double>& previousNodeVoltages);
-    SubcircuitExpansionResult expandSubcircuit(const std::string& typeId, std::vector<std::string>& expansionStack);
+    /** `instancePropertiesJson`: propriedades da INSTÂNCIA quando ela é um subsistema aninhado dentro de
+     * outro manifesto -- as chaves `@<filho>.<propriedade>` (mesmo contrato de
+     * `extension/src/ui/webview/childPropertyOverrides.ts`) valem por cima das do modelo no filho. */
+    SubcircuitExpansionResult expandSubcircuit(const std::string& typeId, std::vector<std::string>& expansionStack,
+                                               const std::string& instancePropertiesJson = {});
     /** Relê `instance->pins()` (já com a contagem nova, resolvida por quem implementa
      * `IComponentModel` -- `SimulidePassiveState`/`NativeDeviceProxy`, nunca aqui) e reregistra no
      * `Netlist` só se o conjunto de ids mudou de verdade -- evita `reregisterComponentPins` (que
@@ -810,6 +822,9 @@ private:
 
     std::vector<std::unique_ptr<IComponentModel>> m_componentInstances;
     simulation::RuntimeState m_runtimeState;
+    /** Resolução (larguras/taxa herdadas) de cada bloco `sl.*` na última materialização do Signal
+     * Graph -- base de `retuneLibraryBlockUnlocked`. */
+    mutable std::unordered_map<uint32_t, components::blocks::BlockResolution> m_libraryResolutions;
     simulation::SignalRecorder m_signalRecorder;
     /** Porta de sinal -> slot no plano em execução (montado uma vez; `record()` não aloca). */
     simulation::SignalRecorder::Resolver m_seriesResolver;
@@ -904,6 +919,8 @@ private:
     std::shared_ptr<const simulation::SimulationPlan> m_publishedPlan;
     uint32_t m_nonlinearIterations = 0; // ver kMaxNonlinearIterations em SimulationSession.cpp
     TransientSettings m_transientSettings;
+    /** Model Workspace do projeto: variáveis visíveis nos parâmetros dos blocos `sl.*` (docs/66 §5). */
+    simulation::library::ParamWorkspace m_modelWorkspace;
     std::atomic<uint64_t> m_acceptedTransientSteps{0};
     std::atomic<uint64_t> m_rejectedTransientSteps{0};
     std::atomic<bool> m_performanceProfilingEnabled{false};

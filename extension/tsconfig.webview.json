@@ -34,12 +34,14 @@
     "src/ui/webview/contextMenuPosition.ts",
     "src/ui/webview/hartCommonTables.ts",
     "src/ui/webview/hartCommonTablesData.ts",
+    "src/ui/webview/blockLibrary/**/*.ts",
     "src/ui/webview/lab/**/*.ts",
     "src/ui/webview/controlDesigner/**/*.ts",
     "src/ui/webview/ident/**/*.ts"
   ],
   "exclude": [
     "src/ui/webview/lab/**/*.test.ts",
-    "src/ui/webview/controlDesigner/**/*.test.ts"
+    "src/ui/webview/controlDesigner/**/*.test.ts",
+    "src/ui/webview/blockLibrary/**/*.test.ts"
   ]
 }

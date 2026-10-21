@@ -37,6 +37,7 @@
 #include "../components/control/SignalMathBlock.hpp"
 #include "../components/control/ManualSignalSlider.hpp"
 #include "../components/control/SignalConstant.hpp"
+#include "../components/blocks/LibraryBlock.hpp"
 #include "../components/connectors/Tunnel.hpp"
 #include "../components/connectors/Bus.hpp"
 #include "../components/logic/Button.hpp"
@@ -59,6 +60,7 @@
 #include <cstring>
 #include <type_traits>
 #include <filesystem>
+#include <functional>
 #include <fstream>
 #include <memory>
 #include <string>
@@ -320,6 +322,22 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
         registerBuiltinMetadata(typeId, controlBlockDisplayName(mathTypeId), std::vector<PropertySchema>{},
                                 controlBlockTranslationsJson(mathTypeId),
                                 components::SignalMathBlock::readoutFormat(), std::nullopt,
+                                std::vector<std::string>{});
+    }
+
+    // Biblioteca de blocos equivalente ao Simulink (`sl.*`, docs/66): uma factory por bloco da
+    // especificação embutida (`project/schema/block-library/*.json`). O schema de propriedades vem da
+    // mesma especificação (nomes programáticos oficiais, rótulos pt-BR, tradução en).
+    for (const components::blocks::BlockSpec& spec : components::blocks::blockLibrary()) {
+        reg.registerFactory(spec.typeId, [&spec](const ComponentParams& p) {
+            return std::make_unique<components::blocks::LibraryBlock>(spec, p);
+        });
+        nlohmann::json properties = nlohmann::json::object();
+        for (const components::blocks::ParamSpec& param : spec.params)
+            properties[param.name] = {{"label", param.titleEn}, {"group", param.group.empty() ? "Parameters" : param.group}};
+        const nlohmann::json translations{{"en", {{"name", spec.name}, {"properties", properties}}}};
+        registerBuiltinMetadata(spec.typeId, spec.titlePt, components::blocks::LibraryBlock::propertySchema(spec),
+                                translations.dump(), components::blocks::LibraryBlock::readoutFormat(), std::nullopt,
                                 std::vector<std::string>{});
     }
 
@@ -1341,6 +1359,67 @@ WireEndpointsJson parseWireEndpoints(const nlohmann::json& wireJson, const std::
     return endpoints;
 }
 
+/**
+ * Subsistemas internos (docs/59): a tabela `subsystems` de um manifesto vira definições registradas no
+ * espaço de nomes do arquivo (`subsystem.x@<typeId do arquivo>`), dependências antes, e os typeIds dos
+ * componentes que as usam são reescritos -- o MESMO contrato de
+ * `extension/src/ui/webview/subsystemModel.ts::flattenExternalSystem`. Sem isto, um `.lssubcircuit`
+ * carregado direto pelo Core (`library.json`) com subsistema interno falhava com "Unknown component
+ * typeId: subsystem.*" -- caso das conversões compostas da biblioteca de blocos (docs/68).
+ */
+std::vector<nlohmann::json> flattenInternalSubsystems(nlohmann::json& manifest, const std::string& mainTypeId) {
+    std::vector<nlohmann::json> ordered;
+    if (!manifest.contains("subsystems")) return ordered;
+    const nlohmann::json table = manifest["subsystems"];
+    manifest.erase("subsystems");
+    if (!table.is_array()) throw std::runtime_error("subsystems do manifesto deve ser array: " + mainTypeId);
+    std::unordered_map<std::string, std::string> renamed;
+    std::unordered_map<std::string, const nlohmann::json*> byTypeId;
+    for (const auto& entry : table) {
+        if (!entry.is_object()) throw std::runtime_error("subsystems[] deve conter objetos: " + mainTypeId);
+        const std::string id = requiredString(entry, "typeId", "subsystems[]");
+        renamed[id] = id + "@" + mainTypeId;
+        byTypeId[id] = &entry;
+    }
+    const auto rewrite = [&](nlohmann::json& components) {
+        if (!components.is_array()) return;
+        for (auto& component : components) {
+            if (!component.is_object() || !component.contains("typeId") || !component["typeId"].is_string()) continue;
+            const auto it = renamed.find(component["typeId"].get<std::string>());
+            if (it != renamed.end()) component["typeId"] = it->second;
+        }
+    };
+    std::unordered_set<std::string> done, visiting;
+    std::function<void(const std::string&)> visit = [&](const std::string& id) {
+        if (done.count(id)) return;
+        if (!visiting.insert(id).second) throw std::runtime_error("subsistemas internos com referencia recursiva: " + id);
+        const nlohmann::json& entry = *byTypeId.at(id);
+        if (entry.contains("components") && entry["components"].is_array())
+            for (const auto& component : entry["components"])
+                if (component.is_object() && component.contains("typeId") && component["typeId"].is_string() &&
+                    byTypeId.count(component["typeId"].get<std::string>()))
+                    visit(component["typeId"].get<std::string>());
+        nlohmann::json copy = entry;
+        copy.erase("subsystems");
+        copy["typeId"] = renamed.at(id);
+        if (!copy.contains("schemaVersion")) copy["schemaVersion"] = 3;
+        if (copy.contains("components")) rewrite(copy["components"]);
+        ordered.push_back(std::move(copy));
+        visiting.erase(id);
+        done.insert(id);
+    };
+    for (const auto& entry : table) visit(entry["typeId"].get<std::string>());
+    if (manifest.contains("components")) rewrite(manifest["components"]);
+    return ordered;
+}
+
+RegisteredSubcircuitInfo registerSubcircuitFromManifestJson(nlohmann::json manifest,
+                                                            const std::filesystem::path& manifestPath,
+                                                            registry::SubcircuitRegistry& subcircuits,
+                                                            const std::string& typeIdOverride,
+                                                            bool allowReplace,
+                                                            bool returnPayload);
+
 RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesystem::path& manifestPath,
                                                             registry::SubcircuitRegistry& subcircuits,
                                                             const std::string& typeIdOverride = {},
@@ -1351,7 +1430,15 @@ RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesyste
     nlohmann::json manifest;
     manifestFile >> manifest;
     if (!manifest.is_object()) throw std::runtime_error("manifesto de subcircuito deve ser um objeto JSON: " + manifestPath.string());
+    return registerSubcircuitFromManifestJson(std::move(manifest), manifestPath, subcircuits, typeIdOverride, allowReplace, returnPayload);
+}
 
+RegisteredSubcircuitInfo registerSubcircuitFromManifestJson(nlohmann::json manifest,
+                                                            const std::filesystem::path& manifestPath,
+                                                            registry::SubcircuitRegistry& subcircuits,
+                                                            const std::string& typeIdOverride,
+                                                            bool allowReplace,
+                                                            bool returnPayload) {
     if (!manifest.contains("schemaVersion") || !manifest["schemaVersion"].is_number_integer()) {
         throw std::runtime_error("manifesto de subcircuito sem schemaVersion inteiro: " + manifestPath.string());
     }
@@ -1365,6 +1452,8 @@ RegisteredSubcircuitInfo registerSubcircuitFromManifestRich(const std::filesyste
     }
 
     const std::string typeId = !typeIdOverride.empty() ? typeIdOverride : requiredString(manifest, "typeId", "manifesto de subcircuito");
+    for (nlohmann::json& internal : flattenInternalSubsystems(manifest, typeId))
+        (void)registerSubcircuitFromManifestJson(std::move(internal), manifestPath, subcircuits, {}, true, false);
     const std::string sourcePath = canonicalPathString(manifestPath);
     const registry::SubcircuitDefinition* existing = subcircuits.find(typeId);
     const bool sameSourceReload = existing && !existing->sourcePath.empty() && existing->sourcePath == sourcePath;
