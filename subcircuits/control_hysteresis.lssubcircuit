@@ -27,15 +27,14 @@
     },
     {
       "id": "stage",
-      "typeId": "control.hysteresis",
+      "typeId": "sl.relay",
       "label": "Histerese",
       "properties": {
-        "low": 0,
-        "high": 1,
-        "lowOutput": 0,
-        "highOutput": 1,
-        "initial": 0,
-        "samplePeriodNs": 10000000
+        "OnSwitchValue": "1",
+        "OffSwitchValue": "0",
+        "OnOutputValue": "1",
+        "OffOutputValue": "0",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 170,
@@ -73,7 +72,7 @@
         "to": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -82,7 +81,7 @@
         "from": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",

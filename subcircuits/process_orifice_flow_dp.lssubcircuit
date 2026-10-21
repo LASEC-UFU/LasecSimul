@@ -244,11 +244,9 @@
     },
     {
       "id": "u",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "properties": {
-        "unit": "%",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       },
       "visual": {
         "x": 40,
@@ -259,18 +257,10 @@
     },
     {
       "id": "q_set",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "Qmax*((u>0)*u)/100",
-        "inputs": [
-          "u",
-          "Qmax"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(2)*((u(1) > 0)*u(1))/100",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -281,12 +271,12 @@
     },
     {
       "id": "q",
-      "typeId": "control.first_order",
+      "typeId": "sl.discrete_transfer_fcn",
       "properties": {
-        "gain": 1,
-        "tau": 1,
-        "initial": 0,
-        "samplePeriodNs": 10000000
+        "Numerator": "[0.009950166250831893]",
+        "Denominator": "[1 -0.9900498337491681]",
+        "InitialStates": "0",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 40,
@@ -297,17 +287,10 @@
     },
     {
       "id": "alpha_pipe",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(m>0.5)*(m<1.5)*11.2+(m>1.5)*(m<2.5)*16.0+(m>2.5)*(m<3.5)*10.4+(m>3.5)*(m<4.5)*11.2+(m>4.5)*(m<5.5)*16.8+(m>5.5)*(m<6.5)*54.0",
-        "inputs": [
-          "m"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(1) > 0.5)*(u(1) < 1.5)*11.2 + (u(1) > 1.5)*(u(1) < 2.5)*16 + (u(1) > 2.5)*(u(1) < 3.5)*10.4 + (u(1) > 3.5)*(u(1) < 4.5)*11.2 + (u(1) > 4.5)*(u(1) < 5.5)*16.8 + (u(1) > 5.5)*(u(1) < 6.5)*54",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -318,17 +301,10 @@
     },
     {
       "id": "alpha_plate",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(m>0.5)*(m<1.5)*11.2+(m>1.5)*(m<2.5)*16.0+(m>2.5)*(m<3.5)*10.4+(m>3.5)*(m<4.5)*11.2+(m>4.5)*(m<5.5)*16.8+(m>5.5)*(m<6.5)*54.0",
-        "inputs": [
-          "m"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(1) > 0.5)*(u(1) < 1.5)*11.2 + (u(1) > 1.5)*(u(1) < 2.5)*16 + (u(1) > 2.5)*(u(1) < 3.5)*10.4 + (u(1) > 3.5)*(u(1) < 4.5)*11.2 + (u(1) > 4.5)*(u(1) < 5.5)*16.8 + (u(1) > 5.5)*(u(1) < 6.5)*54",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -339,17 +315,10 @@
     },
     {
       "id": "ra_pipe",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(m>0.5)*(m<1.5)*0.015+(m>1.5)*(m<2.5)*0.005+(m>2.5)*(m<3.5)*0.08+(m>3.5)*(m<4.5)*0.05+(m>4.5)*(m<5.5)*0.0005+(m>5.5)*(m<6.5)*0.0005",
-        "inputs": [
-          "m"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(1) > 0.5)*(u(1) < 1.5)*0.015 + (u(1) > 1.5)*(u(1) < 2.5)*0.005 + (u(1) > 2.5)*(u(1) < 3.5)*0.08 + (u(1) > 3.5)*(u(1) < 4.5)*0.05 + (u(1) > 4.5)*(u(1) < 5.5)*0.0005 + (u(1) > 5.5)*(u(1) < 6.5)*0.0005",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -360,19 +329,10 @@
     },
     {
       "id": "D_T",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "D*(1+a*0.000001*(T-20))",
-        "inputs": [
-          "D",
-          "a",
-          "T"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)*(1 + u(2)*0.000001*(u(3) - 20))",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -383,19 +343,10 @@
     },
     {
       "id": "d_T",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "d*(1+a*0.000001*(T-20))",
-        "inputs": [
-          "d",
-          "a",
-          "T"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)*(1 + u(2)*0.000001*(u(3) - 20))",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -406,18 +357,10 @@
     },
     {
       "id": "beta",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "d/D",
-        "inputs": [
-          "d",
-          "D"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)/u(2)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -428,18 +371,10 @@
     },
     {
       "id": "velocity",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "q/3600/(0.785398163*(D/1000)^2)",
-        "inputs": [
-          "q",
-          "D"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)/3600/(0.785398163*(u(2)/1000)^2)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -450,20 +385,10 @@
     },
     {
       "id": "reynolds",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "1111.111111*rho*q/(3.14159265*mu*D)",
-        "inputs": [
-          "q",
-          "rho",
-          "mu",
-          "D"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "1111.111111*u(2)*u(1)/(3.14159265*u(3)*u(4))",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -474,18 +399,10 @@
     },
     {
       "id": "tap_L1",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(t>0.5)*(t<1.5)*25.4/D+(t>1.5)*(t<2.5)*1",
-        "inputs": [
-          "t",
-          "D"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(1) > 0.5)*(u(1) < 1.5)*25.4/u(2) + (u(1) > 1.5)*(u(1) < 2.5)*1",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -496,18 +413,10 @@
     },
     {
       "id": "tap_L2",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(t>0.5)*(t<1.5)*25.4/D+(t>1.5)*(t<2.5)*0.47",
-        "inputs": [
-          "t",
-          "D"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(1) > 0.5)*(u(1) < 1.5)*25.4/u(2) + (u(1) > 1.5)*(u(1) < 2.5)*0.47",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -518,18 +427,10 @@
     },
     {
       "id": "rhg_A",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(19000*b/(Re+(Re<1)))^0.8",
-        "inputs": [
-          "b",
-          "Re"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(19000*u(1)/(u(2) + (u(2) < 1)))^0.8",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -540,22 +441,10 @@
     },
     {
       "id": "c_iso",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "0.5961+0.0261*b^2-0.216*b^8+0.000521*(1000000*b/(Re+(Re<1)))^0.7+(0.0188+0.0063*A)*b^3.5*(1000000/(Re+(Re<1)))^0.3+(0.043+0.080*2.718281828^(-10*L1)-0.123*2.718281828^(-7*L1))*(1-0.11*A)*b^4/(1-b^4)-0.031*(2*L2/(1-b)-0.8*(2*L2/(1-b))^1.1)*b^1.3+(D<71.12)*0.011*(0.75-b)*(2.8-D/25.4)",
-        "inputs": [
-          "b",
-          "Re",
-          "L1",
-          "L2",
-          "A",
-          "D"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "0.5961 + 0.0261*u(1)^2 - 0.216*u(1)^8 + 0.000521*(1000000*u(1)/(u(2) + (u(2) < 1)))^0.7 + (0.0188 + 0.0063*u(5))*u(1)^3.5*(1000000/(u(2) + (u(2) < 1)))^0.3 + (0.043 + 0.08*2.718281828^(-10*u(3)) - 0.123*2.718281828^(-7*u(3)))*(1 - 0.11*u(5))*u(1)^4/(1 - u(1)^4) - 0.031*(2*u(4)/(1 - u(1)) - 0.8*(2*u(4)/(1 - u(1)))^1.1)*u(1)^1.3 + (u(6) < 71.12)*0.011*(0.75 - u(1))*(2.8 - u(6)/25.4)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -566,17 +455,10 @@
     },
     {
       "id": "req_up_a",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(b<0.2001)*6+(b>0.2001)*(b<0.4001)*16+(b>0.4001)*(b<0.5001)*22+(b>0.5001)*(b<0.6001)*42+(b>0.6001)*44",
-        "inputs": [
-          "b"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(1) < 0.2001)*6 + (u(1) > 0.2001)*(u(1) < 0.4001)*16 + (u(1) > 0.4001)*(u(1) < 0.5001)*22 + (u(1) > 0.5001)*(u(1) < 0.6001)*42 + (u(1) > 0.6001)*44",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -587,17 +469,10 @@
     },
     {
       "id": "req_up_b",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(b<0.4001)*3+(b>0.4001)*(b<0.5001)*9+(b>0.5001)*(b<0.6001)*13+(b>0.6001)*20",
-        "inputs": [
-          "b"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(1) < 0.4001)*3 + (u(1) > 0.4001)*(u(1) < 0.5001)*9 + (u(1) > 0.5001)*(u(1) < 0.6001)*13 + (u(1) > 0.6001)*20",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -608,17 +483,10 @@
     },
     {
       "id": "req_dn_a",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(b<0.2001)*4+(b>0.2001)*(b<0.5001)*6+(b>0.5001)*(b<0.6701)*7+(b>0.6701)*8",
-        "inputs": [
-          "b"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(1) < 0.2001)*4 + (u(1) > 0.2001)*(u(1) < 0.5001)*6 + (u(1) > 0.5001)*(u(1) < 0.6701)*7 + (u(1) > 0.6701)*8",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 840,
@@ -629,19 +497,10 @@
     },
     {
       "id": "dev_up",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(L<A)*(L>B)*0.5*(A-L)/(A-B)+(L<B+0.000001)*(0.5+1.5*(B-L)/B)",
-        "inputs": [
-          "L",
-          "A",
-          "B"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(1) < u(2))*(u(1) > u(3))*0.5*(u(2) - u(1))/(u(2) - u(3)) + (u(1) < u(3) + 0.000001)*(0.5 + 1.5*(u(3) - u(1))/u(3))",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 840,
@@ -652,18 +511,10 @@
     },
     {
       "id": "dev_dn",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(L<A)*(L>A/2)*0.25*(A-L)/(A/2)+(L<A/2+0.000001)*(0.25+0.25*(A/2-L)/(A/2))",
-        "inputs": [
-          "L",
-          "A"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(1) < u(2))*(u(1) > u(2)/2)*0.25*(u(2) - u(1))/(u(2)/2) + (u(1) < u(2)/2 + 0.000001)*(0.25 + 0.25*(u(2)/2 - u(1))/(u(2)/2))",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 840,
@@ -674,18 +525,10 @@
     },
     {
       "id": "rough_rel",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "10000*Ra/D",
-        "inputs": [
-          "Ra",
-          "D"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "10000*u(1)/u(2)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 840,
@@ -696,17 +539,10 @@
     },
     {
       "id": "rough_limit",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(b<0.3)*25+(b>0.3)*(4+21*2.718281828^(-19.1*(b-0.3)))",
-        "inputs": [
-          "b"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(1) < 0.3)*25 + (u(1) > 0.3)*(4 + 21*2.718281828^(-19.1*(u(1) - 0.3)))",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 840,
@@ -717,18 +553,10 @@
     },
     {
       "id": "dev_rough",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(r>lim)*(0.5*(r/lim-1)*(r/lim<5)+2*(r/lim>5))",
-        "inputs": [
-          "r",
-          "lim"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(1) > u(2))*(0.5*(u(1)/u(2) - 1)*(u(1)/u(2) < 5) + 2*(u(1)/u(2) > 5))",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 840,
@@ -739,20 +567,10 @@
     },
     {
       "id": "dev_total",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(on>0.5)*(u+d+r)",
-        "inputs": [
-          "on",
-          "u",
-          "d",
-          "r"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(1) > 0.5)*(u(2) + u(3) + u(4))",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 840,
@@ -763,18 +581,10 @@
     },
     {
       "id": "c_real",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "C*(1+dev/100)",
-        "inputs": [
-          "C",
-          "dev"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)*(1 + u(2)/100)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 840,
@@ -785,21 +595,10 @@
     },
     {
       "id": "dp0",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "8*rho*(1-b^4)*(q/3600)^2/(C^2*9.8696044*(d/1000)^4)",
-        "inputs": [
-          "q",
-          "rho",
-          "b",
-          "C",
-          "d"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "8*u(2)*(1 - u(3)^4)*(u(1)/3600)^2/(u(4)^2*9.8696044*(u(5)/1000)^4)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 840,
@@ -810,21 +609,10 @@
     },
     {
       "id": "eps1",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "1-(gas>0.5)*(0.351+0.256*b^4+0.93*b^8)*(1-(((p1+101.325-dp/1000)/(p1+101.325)>0.01)*(p1+101.325-dp/1000)/(p1+101.325)+((p1+101.325-dp/1000)/(p1+101.325)<0.01)*0.01)^(1/k))",
-        "inputs": [
-          "gas",
-          "b",
-          "p1",
-          "k",
-          "dp"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "1 - (u(1) > 0.5)*(0.351 + 0.256*u(2)^4 + 0.93*u(2)^8)*(1 - (((u(3) + 101.325 - u(5)/1000)/(u(3) + 101.325) > 0.01)*(u(3) + 101.325 - u(5)/1000)/(u(3) + 101.325) + ((u(3) + 101.325 - u(5)/1000)/(u(3) + 101.325) < 0.01)*0.01)^(1/u(4)))",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 840,
@@ -835,18 +623,10 @@
     },
     {
       "id": "dp1",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "dp0/e^2",
-        "inputs": [
-          "dp0",
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)/u(2)^2",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 840,
@@ -857,21 +637,10 @@
     },
     {
       "id": "epsilon",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "1-(gas>0.5)*(0.351+0.256*b^4+0.93*b^8)*(1-(((p1+101.325-dp/1000)/(p1+101.325)>0.01)*(p1+101.325-dp/1000)/(p1+101.325)+((p1+101.325-dp/1000)/(p1+101.325)<0.01)*0.01)^(1/k))",
-        "inputs": [
-          "gas",
-          "b",
-          "p1",
-          "k",
-          "dp"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "1 - (u(1) > 0.5)*(0.351 + 0.256*u(2)^4 + 0.93*u(2)^8)*(1 - (((u(3) + 101.325 - u(5)/1000)/(u(3) + 101.325) > 0.01)*(u(3) + 101.325 - u(5)/1000)/(u(3) + 101.325) + ((u(3) + 101.325 - u(5)/1000)/(u(3) + 101.325) < 0.01)*0.01)^(1/u(4)))",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 840,
@@ -882,18 +651,10 @@
     },
     {
       "id": "dp_pa",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "dp0/e^2",
-        "inputs": [
-          "dp0",
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)/u(2)^2",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 840,
@@ -904,17 +665,10 @@
     },
     {
       "id": "dp_kpa",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "dp/1000",
-        "inputs": [
-          "dp"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)/1000",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 840,
@@ -925,17 +679,10 @@
     },
     {
       "id": "dp_mm",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "dp/9.80665",
-        "inputs": [
-          "dp"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)/9.80665",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 840,
@@ -946,19 +693,10 @@
     },
     {
       "id": "loss",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "((1-b^4*(1-C^2))^0.5-C*b^2)/((1-b^4*(1-C^2))^0.5+C*b^2)*dp",
-        "inputs": [
-          "dp",
-          "b",
-          "C"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "((1 - u(2)^4*(1 - u(3)^2))^0.5 - u(3)*u(2)^2)/((1 - u(2)^4*(1 - u(3)^2))^0.5 + u(3)*u(2)^2)*u(1)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 1060,
@@ -969,18 +707,10 @@
     },
     {
       "id": "p_ratio",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(p1+101.325-dp/1000)/(p1+101.325)",
-        "inputs": [
-          "p1",
-          "dp"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(1) + 101.325 - u(2)/1000)/(u(1) + 101.325)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 1060,
@@ -991,17 +721,10 @@
     },
     {
       "id": "p_high",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "101.97162*p1",
-        "inputs": [
-          "p1"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "101.97162*u(1)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 1060,
@@ -1012,18 +735,10 @@
     },
     {
       "id": "p_low",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "h-dp",
-        "inputs": [
-          "h",
-          "dp"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1) - u(2)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 1060,
@@ -1034,17 +749,10 @@
     },
     {
       "id": "is_flange",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(t<1.5)",
-        "inputs": [
-          "t"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1) < 1.5",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 1060,
@@ -1055,17 +763,10 @@
     },
     {
       "id": "is_dd2",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(t>1.5)*(t<2.5)",
-        "inputs": [
-          "t"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(1) > 1.5)*(u(1) < 2.5)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 1060,
@@ -1076,17 +777,10 @@
     },
     {
       "id": "is_corner",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(t>2.5)",
-        "inputs": [
-          "t"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1) > 2.5",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 1060,
@@ -1097,18 +791,10 @@
     },
     {
       "id": "ok_up",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(L>A-0.0001)",
-        "inputs": [
-          "L",
-          "A"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1) > u(2) - 0.0001",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 1060,
@@ -1119,18 +805,10 @@
     },
     {
       "id": "ok_dn",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(L>A-0.0001)",
-        "inputs": [
-          "L",
-          "A"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1) > u(2) - 0.0001",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 1060,
@@ -1141,18 +819,10 @@
     },
     {
       "id": "ok_rough",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(r<lim)",
-        "inputs": [
-          "r",
-          "lim"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1) < u(2)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 1060,
@@ -1163,23 +833,10 @@
     },
     {
       "id": "ok_iso",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(b>0.0999)*(b<0.7501)*(D>49.999)*(D<1000.001)*(d>12.499)*(Re>5000)*((t<1.5)*(Re>170*b^2*D)+(t>1.5)*((b<0.56)+(b>0.56)*(Re>16000*b^2))>0.5)*((gas<0.5)+(r>0.75)>0.5)",
-        "inputs": [
-          "b",
-          "D",
-          "d",
-          "Re",
-          "t",
-          "gas",
-          "r"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(1) > 0.0999)*(u(1) < 0.7501)*(u(2) > 49.999)*(u(2) < 1000.001)*(u(3) > 12.499)*(u(4) > 5000)*((u(5) < 1.5)*(u(4) > 170*u(1)^2*u(2)) + (u(5) > 1.5)*((u(1) < 0.56) + (u(1) > 0.56)*(u(4) > 16000*u(1)^2)) > 0.5)*((u(6) < 0.5) + (u(7) > 0.75) > 0.5)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 1060,
@@ -1637,8 +1294,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "m³/h",
         "bindDecimals": 2,
         "bindThreshold": 50,
@@ -1667,8 +1324,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "m/s",
         "bindDecimals": 2,
         "bindThreshold": 50,
@@ -1697,8 +1354,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "",
         "bindDecimals": 0,
         "bindThreshold": 50,
@@ -1727,8 +1384,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "",
         "bindDecimals": 4,
         "bindThreshold": 50,
@@ -1757,8 +1414,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "",
         "bindDecimals": 4,
         "bindThreshold": 50,
@@ -1787,8 +1444,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "",
         "bindDecimals": 4,
         "bindThreshold": 50,
@@ -1817,8 +1474,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "",
         "bindDecimals": 4,
         "bindThreshold": 50,
@@ -1847,8 +1504,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "%",
         "bindDecimals": 2,
         "bindThreshold": 50,
@@ -1877,8 +1534,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "kPa",
         "bindDecimals": 2,
         "bindThreshold": 50,
@@ -1907,8 +1564,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "mmH2O",
         "bindDecimals": 0,
         "bindThreshold": 50,
@@ -1937,8 +1594,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "kPa",
         "bindDecimals": 2,
         "bindThreshold": 50,
@@ -1967,8 +1624,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "",
         "bindDecimals": 2,
         "bindThreshold": 50,
@@ -1997,8 +1654,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "mm",
         "bindDecimals": 2,
         "bindThreshold": 50,
@@ -2027,8 +1684,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "mm",
         "bindDecimals": 3,
         "bindThreshold": 50,
@@ -2057,8 +1714,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "D",
         "bindDecimals": 1,
         "bindThreshold": 50,
@@ -2087,8 +1744,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "D",
         "bindDecimals": 0,
         "bindThreshold": 50,
@@ -2117,8 +1774,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "D",
         "bindDecimals": 1,
         "bindThreshold": 50,
@@ -2147,8 +1804,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "D",
         "bindDecimals": 0,
         "bindThreshold": 50,
@@ -2177,8 +1834,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "°C",
         "bindDecimals": 1,
         "bindThreshold": 50,
@@ -2207,8 +1864,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "kPa",
         "bindDecimals": 1,
         "bindThreshold": 50,
@@ -2237,8 +1894,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "kg/m³",
         "bindDecimals": 1,
         "bindThreshold": 50,
@@ -2267,8 +1924,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "cP",
         "bindDecimals": 3,
         "bindThreshold": 50,
@@ -2297,8 +1954,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "mm",
         "bindDecimals": 4,
         "bindThreshold": 50,
@@ -2327,8 +1984,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "",
         "bindDecimals": 2,
         "bindThreshold": 50,
@@ -2337,6 +1994,342 @@
       "visual": {
         "x": 818,
         "y": 540,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "q_set__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 540,
+        "y": 40,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "D_T__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 540,
+        "y": 280,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "d_T__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 540,
+        "y": 340,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "beta__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 540,
+        "y": 400,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "velocity__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 540,
+        "y": 460,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "reynolds__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "4"
+      },
+      "visual": {
+        "x": 540,
+        "y": 520,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tap_L1__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 540,
+        "y": 580,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tap_L2__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 540,
+        "y": 640,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "rhg_A__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 540,
+        "y": 700,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "c_iso__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "6"
+      },
+      "visual": {
+        "x": 540,
+        "y": 760,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "dev_up__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 760,
+        "y": 100,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "dev_dn__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 760,
+        "y": 160,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "rough_rel__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 760,
+        "y": 220,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "dev_rough__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 760,
+        "y": 340,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "dev_total__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "4"
+      },
+      "visual": {
+        "x": 760,
+        "y": 400,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "c_real__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 760,
+        "y": 460,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "dp0__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "5"
+      },
+      "visual": {
+        "x": 760,
+        "y": 520,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "eps1__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "5"
+      },
+      "visual": {
+        "x": 760,
+        "y": 580,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "dp1__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 760,
+        "y": 640,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "epsilon__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "5"
+      },
+      "visual": {
+        "x": 760,
+        "y": 700,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "dp_pa__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 760,
+        "y": 760,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "loss__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 980,
+        "y": 40,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "p_ratio__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 980,
+        "y": 100,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "p_low__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 980,
+        "y": 220,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "ok_up__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 980,
+        "y": 460,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "ok_dn__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 980,
+        "y": 520,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "ok_rough__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 980,
+        "y": 580,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "ok_iso__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "7"
+      },
+      "visual": {
+        "x": 980,
+        "y": 640,
         "rotation": 0
       }
     }
@@ -2355,7 +2348,7 @@
         "to": {
           "kind": "port",
           "componentId": "u",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2364,12 +2357,12 @@
         "from": {
           "kind": "port",
           "componentId": "u",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "q_set",
-          "pinId": "u"
+          "componentId": "q_set__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2382,8 +2375,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "q_set",
-          "pinId": "Qmax"
+          "componentId": "q_set__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2392,12 +2385,12 @@
         "from": {
           "kind": "port",
           "componentId": "q_set",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "q",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2411,7 +2404,7 @@
         "to": {
           "kind": "port",
           "componentId": "alpha_pipe",
-          "pinId": "m"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2425,7 +2418,7 @@
         "to": {
           "kind": "port",
           "componentId": "alpha_plate",
-          "pinId": "m"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2439,7 +2432,7 @@
         "to": {
           "kind": "port",
           "componentId": "ra_pipe",
-          "pinId": "m"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2452,8 +2445,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "D_T",
-          "pinId": "D"
+          "componentId": "D_T__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2462,12 +2455,12 @@
         "from": {
           "kind": "port",
           "componentId": "alpha_pipe",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "D_T",
-          "pinId": "a"
+          "componentId": "D_T__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2480,8 +2473,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "D_T",
-          "pinId": "T"
+          "componentId": "D_T__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -2494,8 +2487,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "d_T",
-          "pinId": "d"
+          "componentId": "d_T__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2504,12 +2497,12 @@
         "from": {
           "kind": "port",
           "componentId": "alpha_plate",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "d_T",
-          "pinId": "a"
+          "componentId": "d_T__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2522,8 +2515,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "d_T",
-          "pinId": "T"
+          "componentId": "d_T__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -2532,12 +2525,12 @@
         "from": {
           "kind": "port",
           "componentId": "d_T",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "beta",
-          "pinId": "d"
+          "componentId": "beta__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2546,12 +2539,12 @@
         "from": {
           "kind": "port",
           "componentId": "D_T",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "beta",
-          "pinId": "D"
+          "componentId": "beta__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2560,12 +2553,12 @@
         "from": {
           "kind": "port",
           "componentId": "q",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "velocity",
-          "pinId": "q"
+          "componentId": "velocity__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2574,12 +2567,12 @@
         "from": {
           "kind": "port",
           "componentId": "D_T",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "velocity",
-          "pinId": "D"
+          "componentId": "velocity__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2588,12 +2581,12 @@
         "from": {
           "kind": "port",
           "componentId": "q",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "reynolds",
-          "pinId": "q"
+          "componentId": "reynolds__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2606,8 +2599,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "reynolds",
-          "pinId": "rho"
+          "componentId": "reynolds__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2620,8 +2613,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "reynolds",
-          "pinId": "mu"
+          "componentId": "reynolds__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -2630,12 +2623,12 @@
         "from": {
           "kind": "port",
           "componentId": "D_T",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "reynolds",
-          "pinId": "D"
+          "componentId": "reynolds__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -2648,8 +2641,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "tap_L1",
-          "pinId": "t"
+          "componentId": "tap_L1__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2658,12 +2651,12 @@
         "from": {
           "kind": "port",
           "componentId": "D_T",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tap_L1",
-          "pinId": "D"
+          "componentId": "tap_L1__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2676,8 +2669,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "tap_L2",
-          "pinId": "t"
+          "componentId": "tap_L2__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2686,12 +2679,12 @@
         "from": {
           "kind": "port",
           "componentId": "D_T",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tap_L2",
-          "pinId": "D"
+          "componentId": "tap_L2__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2700,12 +2693,12 @@
         "from": {
           "kind": "port",
           "componentId": "beta",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "rhg_A",
-          "pinId": "b"
+          "componentId": "rhg_A__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2714,12 +2707,12 @@
         "from": {
           "kind": "port",
           "componentId": "reynolds",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "rhg_A",
-          "pinId": "Re"
+          "componentId": "rhg_A__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2728,12 +2721,12 @@
         "from": {
           "kind": "port",
           "componentId": "beta",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "c_iso",
-          "pinId": "b"
+          "componentId": "c_iso__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2742,12 +2735,12 @@
         "from": {
           "kind": "port",
           "componentId": "reynolds",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "c_iso",
-          "pinId": "Re"
+          "componentId": "c_iso__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2756,12 +2749,12 @@
         "from": {
           "kind": "port",
           "componentId": "tap_L1",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "c_iso",
-          "pinId": "L1"
+          "componentId": "c_iso__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -2770,12 +2763,12 @@
         "from": {
           "kind": "port",
           "componentId": "tap_L2",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "c_iso",
-          "pinId": "L2"
+          "componentId": "c_iso__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -2784,12 +2777,12 @@
         "from": {
           "kind": "port",
           "componentId": "rhg_A",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "c_iso",
-          "pinId": "A"
+          "componentId": "c_iso__mux",
+          "pinId": "in5"
         },
         "points": []
       },
@@ -2798,12 +2791,12 @@
         "from": {
           "kind": "port",
           "componentId": "D_T",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "c_iso",
-          "pinId": "D"
+          "componentId": "c_iso__mux",
+          "pinId": "in6"
         },
         "points": []
       },
@@ -2812,12 +2805,12 @@
         "from": {
           "kind": "port",
           "componentId": "beta",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "req_up_a",
-          "pinId": "b"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2826,12 +2819,12 @@
         "from": {
           "kind": "port",
           "componentId": "beta",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "req_up_b",
-          "pinId": "b"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2840,12 +2833,12 @@
         "from": {
           "kind": "port",
           "componentId": "beta",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "req_dn_a",
-          "pinId": "b"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2858,8 +2851,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "dev_up",
-          "pinId": "L"
+          "componentId": "dev_up__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2868,12 +2861,12 @@
         "from": {
           "kind": "port",
           "componentId": "req_up_a",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dev_up",
-          "pinId": "A"
+          "componentId": "dev_up__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2882,12 +2875,12 @@
         "from": {
           "kind": "port",
           "componentId": "req_up_b",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dev_up",
-          "pinId": "B"
+          "componentId": "dev_up__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -2900,8 +2893,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "dev_dn",
-          "pinId": "L"
+          "componentId": "dev_dn__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2910,12 +2903,12 @@
         "from": {
           "kind": "port",
           "componentId": "req_dn_a",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dev_dn",
-          "pinId": "A"
+          "componentId": "dev_dn__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2924,12 +2917,12 @@
         "from": {
           "kind": "port",
           "componentId": "ra_pipe",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "rough_rel",
-          "pinId": "Ra"
+          "componentId": "rough_rel__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2938,12 +2931,12 @@
         "from": {
           "kind": "port",
           "componentId": "D_T",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "rough_rel",
-          "pinId": "D"
+          "componentId": "rough_rel__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2952,12 +2945,12 @@
         "from": {
           "kind": "port",
           "componentId": "beta",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "rough_limit",
-          "pinId": "b"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2966,12 +2959,12 @@
         "from": {
           "kind": "port",
           "componentId": "rough_rel",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dev_rough",
-          "pinId": "r"
+          "componentId": "dev_rough__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2980,12 +2973,12 @@
         "from": {
           "kind": "port",
           "componentId": "rough_limit",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dev_rough",
-          "pinId": "lim"
+          "componentId": "dev_rough__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2998,8 +2991,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "dev_total",
-          "pinId": "on"
+          "componentId": "dev_total__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3008,12 +3001,12 @@
         "from": {
           "kind": "port",
           "componentId": "dev_up",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dev_total",
-          "pinId": "u"
+          "componentId": "dev_total__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -3022,12 +3015,12 @@
         "from": {
           "kind": "port",
           "componentId": "dev_dn",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dev_total",
-          "pinId": "d"
+          "componentId": "dev_total__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -3036,12 +3029,12 @@
         "from": {
           "kind": "port",
           "componentId": "dev_rough",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dev_total",
-          "pinId": "r"
+          "componentId": "dev_total__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -3050,12 +3043,12 @@
         "from": {
           "kind": "port",
           "componentId": "c_iso",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "c_real",
-          "pinId": "C"
+          "componentId": "c_real__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3064,12 +3057,12 @@
         "from": {
           "kind": "port",
           "componentId": "dev_total",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "c_real",
-          "pinId": "dev"
+          "componentId": "c_real__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -3078,12 +3071,12 @@
         "from": {
           "kind": "port",
           "componentId": "q",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dp0",
-          "pinId": "q"
+          "componentId": "dp0__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3096,8 +3089,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "dp0",
-          "pinId": "rho"
+          "componentId": "dp0__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -3106,12 +3099,12 @@
         "from": {
           "kind": "port",
           "componentId": "beta",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dp0",
-          "pinId": "b"
+          "componentId": "dp0__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -3120,12 +3113,12 @@
         "from": {
           "kind": "port",
           "componentId": "c_real",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dp0",
-          "pinId": "C"
+          "componentId": "dp0__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -3134,12 +3127,12 @@
         "from": {
           "kind": "port",
           "componentId": "d_T",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dp0",
-          "pinId": "d"
+          "componentId": "dp0__mux",
+          "pinId": "in5"
         },
         "points": []
       },
@@ -3152,8 +3145,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "eps1",
-          "pinId": "gas"
+          "componentId": "eps1__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3162,12 +3155,12 @@
         "from": {
           "kind": "port",
           "componentId": "beta",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "eps1",
-          "pinId": "b"
+          "componentId": "eps1__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -3180,8 +3173,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "eps1",
-          "pinId": "p1"
+          "componentId": "eps1__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -3194,8 +3187,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "eps1",
-          "pinId": "k"
+          "componentId": "eps1__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -3204,12 +3197,12 @@
         "from": {
           "kind": "port",
           "componentId": "dp0",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "eps1",
-          "pinId": "dp"
+          "componentId": "eps1__mux",
+          "pinId": "in5"
         },
         "points": []
       },
@@ -3218,12 +3211,12 @@
         "from": {
           "kind": "port",
           "componentId": "dp0",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dp1",
-          "pinId": "dp0"
+          "componentId": "dp1__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3232,12 +3225,12 @@
         "from": {
           "kind": "port",
           "componentId": "eps1",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dp1",
-          "pinId": "e"
+          "componentId": "dp1__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -3250,8 +3243,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "epsilon",
-          "pinId": "gas"
+          "componentId": "epsilon__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3260,12 +3253,12 @@
         "from": {
           "kind": "port",
           "componentId": "beta",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "epsilon",
-          "pinId": "b"
+          "componentId": "epsilon__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -3278,8 +3271,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "epsilon",
-          "pinId": "p1"
+          "componentId": "epsilon__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -3292,8 +3285,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "epsilon",
-          "pinId": "k"
+          "componentId": "epsilon__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -3302,12 +3295,12 @@
         "from": {
           "kind": "port",
           "componentId": "dp1",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "epsilon",
-          "pinId": "dp"
+          "componentId": "epsilon__mux",
+          "pinId": "in5"
         },
         "points": []
       },
@@ -3316,12 +3309,12 @@
         "from": {
           "kind": "port",
           "componentId": "dp0",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dp_pa",
-          "pinId": "dp0"
+          "componentId": "dp_pa__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3330,12 +3323,12 @@
         "from": {
           "kind": "port",
           "componentId": "epsilon",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dp_pa",
-          "pinId": "e"
+          "componentId": "dp_pa__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -3344,12 +3337,12 @@
         "from": {
           "kind": "port",
           "componentId": "dp_pa",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "dp_kpa",
-          "pinId": "dp"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3358,12 +3351,12 @@
         "from": {
           "kind": "port",
           "componentId": "dp_pa",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "dp_mm",
-          "pinId": "dp"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3372,12 +3365,12 @@
         "from": {
           "kind": "port",
           "componentId": "dp_kpa",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "loss",
-          "pinId": "dp"
+          "componentId": "loss__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3386,12 +3379,12 @@
         "from": {
           "kind": "port",
           "componentId": "beta",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "loss",
-          "pinId": "b"
+          "componentId": "loss__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -3400,12 +3393,12 @@
         "from": {
           "kind": "port",
           "componentId": "c_real",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "loss",
-          "pinId": "C"
+          "componentId": "loss__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -3418,8 +3411,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "p_ratio",
-          "pinId": "p1"
+          "componentId": "p_ratio__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3428,12 +3421,12 @@
         "from": {
           "kind": "port",
           "componentId": "dp_pa",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "p_ratio",
-          "pinId": "dp"
+          "componentId": "p_ratio__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -3447,7 +3440,7 @@
         "to": {
           "kind": "port",
           "componentId": "p_high",
-          "pinId": "p1"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3456,12 +3449,12 @@
         "from": {
           "kind": "port",
           "componentId": "p_high",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "p_low",
-          "pinId": "h"
+          "componentId": "p_low__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3470,12 +3463,12 @@
         "from": {
           "kind": "port",
           "componentId": "dp_mm",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "p_low",
-          "pinId": "dp"
+          "componentId": "p_low__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -3489,7 +3482,7 @@
         "to": {
           "kind": "port",
           "componentId": "is_flange",
-          "pinId": "t"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3503,7 +3496,7 @@
         "to": {
           "kind": "port",
           "componentId": "is_dd2",
-          "pinId": "t"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3517,7 +3510,7 @@
         "to": {
           "kind": "port",
           "componentId": "is_corner",
-          "pinId": "t"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3530,8 +3523,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "ok_up",
-          "pinId": "L"
+          "componentId": "ok_up__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3540,12 +3533,12 @@
         "from": {
           "kind": "port",
           "componentId": "req_up_a",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "ok_up",
-          "pinId": "A"
+          "componentId": "ok_up__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -3558,8 +3551,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "ok_dn",
-          "pinId": "L"
+          "componentId": "ok_dn__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3568,12 +3561,12 @@
         "from": {
           "kind": "port",
           "componentId": "req_dn_a",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "ok_dn",
-          "pinId": "A"
+          "componentId": "ok_dn__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -3582,12 +3575,12 @@
         "from": {
           "kind": "port",
           "componentId": "rough_rel",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "ok_rough",
-          "pinId": "r"
+          "componentId": "ok_rough__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3596,12 +3589,12 @@
         "from": {
           "kind": "port",
           "componentId": "rough_limit",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "ok_rough",
-          "pinId": "lim"
+          "componentId": "ok_rough__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -3610,12 +3603,12 @@
         "from": {
           "kind": "port",
           "componentId": "beta",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "ok_iso",
-          "pinId": "b"
+          "componentId": "ok_iso__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -3624,12 +3617,12 @@
         "from": {
           "kind": "port",
           "componentId": "D_T",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "ok_iso",
-          "pinId": "D"
+          "componentId": "ok_iso__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -3638,12 +3631,12 @@
         "from": {
           "kind": "port",
           "componentId": "d_T",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "ok_iso",
-          "pinId": "d"
+          "componentId": "ok_iso__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -3652,12 +3645,12 @@
         "from": {
           "kind": "port",
           "componentId": "reynolds",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "ok_iso",
-          "pinId": "Re"
+          "componentId": "ok_iso__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -3670,8 +3663,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "ok_iso",
-          "pinId": "t"
+          "componentId": "ok_iso__mux",
+          "pinId": "in5"
         },
         "points": []
       },
@@ -3684,8 +3677,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "ok_iso",
-          "pinId": "gas"
+          "componentId": "ok_iso__mux",
+          "pinId": "in6"
         },
         "points": []
       },
@@ -3694,12 +3687,12 @@
         "from": {
           "kind": "port",
           "componentId": "p_ratio",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "ok_iso",
-          "pinId": "r"
+          "componentId": "ok_iso__mux",
+          "pinId": "in7"
         },
         "points": []
       },
@@ -3708,7 +3701,7 @@
         "from": {
           "kind": "port",
           "componentId": "p_high",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -3722,7 +3715,7 @@
         "from": {
           "kind": "port",
           "componentId": "p_low",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -3736,7 +3729,7 @@
         "from": {
           "kind": "port",
           "componentId": "q",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -3750,7 +3743,7 @@
         "from": {
           "kind": "port",
           "componentId": "dp_mm",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -3758,6 +3751,398 @@
           "pinId": "value"
         },
         "points": []
+      },
+      {
+        "id": "q_set__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "q_set__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_set",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "D_T__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "D_T__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "D_T",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "d_T__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "d_T__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "d_T",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "beta__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "beta__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "beta",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "velocity__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "velocity__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "velocity",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "reynolds__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "reynolds__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "reynolds",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "tap_L1__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "tap_L1__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tap_L1",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "tap_L2__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "tap_L2__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tap_L2",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "rhg_A__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "rhg_A__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "rhg_A",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "c_iso__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "c_iso__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "c_iso",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "dev_up__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "dev_up__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dev_up",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "dev_dn__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "dev_dn__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dev_dn",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "rough_rel__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "rough_rel__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "rough_rel",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "dev_rough__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "dev_rough__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dev_rough",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "dev_total__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "dev_total__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dev_total",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "c_real__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "c_real__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "c_real",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "dp0__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "dp0__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dp0",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "eps1__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "eps1__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "eps1",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "dp1__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "dp1__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dp1",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "epsilon__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "epsilon__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "epsilon",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "dp_pa__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "dp_pa__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dp_pa",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "loss__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "loss__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "loss",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "p_ratio__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "p_ratio__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "p_ratio",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "p_low__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "p_low__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "p_low",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "ok_up__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "ok_up__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "ok_up",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "ok_dn__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "ok_dn__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "ok_dn",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "ok_rough__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "ok_rough__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "ok_rough",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "ok_iso__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "ok_iso__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "ok_iso",
+          "pinId": "in1"
+        },
+        "vertices": []
       }
     ]
   },
@@ -3888,7 +4273,7 @@
       },
       {
         "kind": "text",
-        "x": 825.0,
+        "x": 825,
         "y": 121.55,
         "value": "FV (válvula)",
         "fontSize": 10,
@@ -3933,7 +4318,7 @@
       },
       {
         "kind": "text",
-        "x": 278.0,
+        "x": 278,
         "y": 256,
         "value": "trecho reto a montante (L montante · D)",
         "fontSize": 10,

@@ -255,17 +255,10 @@
             },
             {
               "id": "out1_bar",
-              "typeId": "control.calc_expression",
+              "typeId": "sl.fcn",
               "properties": {
-                "expression": "o",
-                "inputs": [
-                  "o"
-                ],
-                "upperLimit": 0,
-                "lowerLimit": 0,
-                "upperLimitEnabled": false,
-                "lowerLimitEnabled": false,
-                "samplePeriodNs": 1000000
+                "Expr": "u(1)",
+                "SampleTime": "0.001"
               },
               "visual": {
                 "x": 620,
@@ -276,17 +269,10 @@
             },
             {
               "id": "supply_bar",
-              "typeId": "control.calc_expression",
+              "typeId": "sl.fcn",
               "properties": {
-                "expression": "(s>0)*s",
-                "inputs": [
-                  "s"
-                ],
-                "upperLimit": 0,
-                "lowerLimit": 0,
-                "upperLimitEnabled": false,
-                "lowerLimitEnabled": false,
-                "samplePeriodNs": 1000000
+                "Expr": "(u(1) > 0)*u(1)",
+                "SampleTime": "0.001"
               },
               "visual": {
                 "x": 620,
@@ -297,19 +283,10 @@
             },
             {
               "id": "p_in",
-              "typeId": "control.calc_expression",
+              "typeId": "sl.fcn",
               "properties": {
-                "expression": "((o-p)>0)*(o-p)/((tau>0.01)*tau+(tau<0.0101)*0.01)",
-                "inputs": [
-                  "o",
-                  "p",
-                  "tau"
-                ],
-                "upperLimit": 0,
-                "lowerLimit": 0,
-                "upperLimitEnabled": false,
-                "lowerLimitEnabled": false,
-                "samplePeriodNs": 1000000
+                "Expr": "(u(1) - u(2) > 0)*(u(1) - u(2))/((u(3) > 0.01)*u(3) + (u(3) < 0.0101)*0.01)",
+                "SampleTime": "0.001"
               },
               "visual": {
                 "x": 620,
@@ -320,19 +297,10 @@
             },
             {
               "id": "p_out",
-              "typeId": "control.calc_expression",
+              "typeId": "sl.fcn",
               "properties": {
-                "expression": "((p-o)>0)*(p-o)/((tau>0.01)*tau+(tau<0.0101)*0.01)",
-                "inputs": [
-                  "o",
-                  "p",
-                  "tau"
-                ],
-                "upperLimit": 0,
-                "lowerLimit": 0,
-                "upperLimitEnabled": false,
-                "lowerLimitEnabled": false,
-                "samplePeriodNs": 1000000
+                "Expr": "(u(2) - u(1) > 0)*(u(2) - u(1))/((u(3) > 0.01)*u(3) + (u(3) < 0.0101)*0.01)",
+                "SampleTime": "0.001"
               },
               "visual": {
                 "x": 620,
@@ -343,7 +311,7 @@
             },
             {
               "id": "p_act",
-              "typeId": "control.accumulator",
+              "typeId": "process.accumulator",
               "properties": {
                 "initial": 0,
                 "samplePeriodNs": 1000000
@@ -357,21 +325,10 @@
             },
             {
               "id": "x_eq",
-              "typeId": "control.calc_expression",
+              "typeId": "sl.fcn",
               "properties": {
-                "expression": "s*((a<0.5)*((p-lo)/(((hi-lo)>0.01)*(hi-lo)+((hi-lo)<0.0101)*0.01))+(a>0.5)*(1-(p-lo)/(((hi-lo)>0.01)*(hi-lo)+((hi-lo)<0.0101)*0.01)))",
-                "inputs": [
-                  "p",
-                  "lo",
-                  "hi",
-                  "a",
-                  "s"
-                ],
-                "upperLimit": 0,
-                "lowerLimit": 0,
-                "upperLimitEnabled": false,
-                "lowerLimitEnabled": false,
-                "samplePeriodNs": 1000000
+                "Expr": "u(5)*((u(4) < 0.5)*((u(1) - u(2))/((u(3) - u(2) > 0.01)*(u(3) - u(2)) + (u(3) - u(2) < 0.0101)*0.01)) + (u(4) > 0.5)*(1 - (u(1) - u(2))/((u(3) - u(2) > 0.01)*(u(3) - u(2)) + (u(3) - u(2) < 0.0101)*0.01)))",
+                "SampleTime": "0.001"
               },
               "visual": {
                 "x": 620,
@@ -382,20 +339,10 @@
             },
             {
               "id": "gap",
-              "typeId": "control.calc_expression",
+              "typeId": "sl.fcn",
               "properties": {
-                "expression": "((e-x)>f*s/200)*((e-x)-f*s/200)+((e-x)<(0-f*s/200))*((e-x)+f*s/200)",
-                "inputs": [
-                  "e",
-                  "x",
-                  "f",
-                  "s"
-                ],
-                "upperLimit": 0,
-                "lowerLimit": 0,
-                "upperLimitEnabled": false,
-                "lowerLimitEnabled": false,
-                "samplePeriodNs": 1000000
+                "Expr": "(u(1) - u(2) > u(3)*u(4)/200)*(u(1) - u(2) - u(3)*u(4)/200) + (u(1) - u(2) < 0 - u(3)*u(4)/200)*(u(1) - u(2) + u(3)*u(4)/200)",
+                "SampleTime": "0.001"
               },
               "visual": {
                 "x": 620,
@@ -406,19 +353,10 @@
             },
             {
               "id": "stem_in",
-              "typeId": "control.calc_expression",
+              "typeId": "sl.fcn",
               "properties": {
-                "expression": "(g>0)*g/0.15*(x<s)",
-                "inputs": [
-                  "g",
-                  "x",
-                  "s"
-                ],
-                "upperLimit": 0,
-                "lowerLimit": 0,
-                "upperLimitEnabled": false,
-                "lowerLimitEnabled": false,
-                "samplePeriodNs": 1000000
+                "Expr": "(u(1) > 0)*u(1)/0.15*(u(2) < u(3))",
+                "SampleTime": "0.001"
               },
               "visual": {
                 "x": 620,
@@ -429,17 +367,10 @@
             },
             {
               "id": "stem_out",
-              "typeId": "control.calc_expression",
+              "typeId": "sl.fcn",
               "properties": {
-                "expression": "(g<0)*(0-g)/0.15",
-                "inputs": [
-                  "g"
-                ],
-                "upperLimit": 0,
-                "lowerLimit": 0,
-                "upperLimitEnabled": false,
-                "lowerLimitEnabled": false,
-                "samplePeriodNs": 1000000
+                "Expr": "(u(1) < 0)*(0 - u(1))/0.15",
+                "SampleTime": "0.001"
               },
               "visual": {
                 "x": 620,
@@ -450,7 +381,7 @@
             },
             {
               "id": "stem",
-              "typeId": "control.accumulator",
+              "typeId": "process.accumulator",
               "properties": {
                 "initial": 0,
                 "samplePeriodNs": 1000000
@@ -464,18 +395,10 @@
             },
             {
               "id": "opening",
-              "typeId": "control.calc_expression",
+              "typeId": "sl.fcn",
               "properties": {
-                "expression": "x/((s>0.1)*s+(s<0.1001)*0.1)*100",
-                "inputs": [
-                  "x",
-                  "s"
-                ],
-                "upperLimit": 0,
-                "lowerLimit": 0,
-                "upperLimitEnabled": false,
-                "lowerLimitEnabled": false,
-                "samplePeriodNs": 1000000
+                "Expr": "u(1)/((u(2) > 0.1)*u(2) + (u(2) < 0.1001)*0.1)*100",
+                "SampleTime": "0.001"
               },
               "visual": {
                 "x": 620,
@@ -486,20 +409,10 @@
             },
             {
               "id": "flow_m3h",
-              "typeId": "control.calc_expression",
+              "typeId": "sl.fcn",
               "properties": {
-                "expression": "k*((c<0.5)*(l/100)+(c>0.5)*(c<1.5)*(50^(l/100)-1)/49+(c>1.5)*((l/100)>0)*(l/100)^0.5)*((dp>0)*dp)^0.5",
-                "inputs": [
-                  "l",
-                  "c",
-                  "k",
-                  "dp"
-                ],
-                "upperLimit": 0,
-                "lowerLimit": 0,
-                "upperLimitEnabled": false,
-                "lowerLimitEnabled": false,
-                "samplePeriodNs": 1000000
+                "Expr": "u(3)*((u(2) < 0.5)*(u(1)/100) + (u(2) > 0.5)*(u(2) < 1.5)*(50^(u(1)/100) - 1)/49 + (u(2) > 1.5)*(u(1)/100 > 0)*(u(1)/100)^0.5)*((u(4) > 0)*u(4))^0.5",
+                "SampleTime": "0.001"
               },
               "visual": {
                 "x": 620,
@@ -962,6 +875,90 @@
                 "y": 476,
                 "rotation": 0
               }
+            },
+            {
+              "id": "p_in__mux",
+              "typeId": "sl.mux",
+              "properties": {
+                "Inputs": "3"
+              },
+              "visual": {
+                "x": 540,
+                "y": 160,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "p_out__mux",
+              "typeId": "sl.mux",
+              "properties": {
+                "Inputs": "3"
+              },
+              "visual": {
+                "x": 540,
+                "y": 220,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "x_eq__mux",
+              "typeId": "sl.mux",
+              "properties": {
+                "Inputs": "5"
+              },
+              "visual": {
+                "x": 540,
+                "y": 280,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "gap__mux",
+              "typeId": "sl.mux",
+              "properties": {
+                "Inputs": "4"
+              },
+              "visual": {
+                "x": 540,
+                "y": 340,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "stem_in__mux",
+              "typeId": "sl.mux",
+              "properties": {
+                "Inputs": "3"
+              },
+              "visual": {
+                "x": 540,
+                "y": 400,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "opening__mux",
+              "typeId": "sl.mux",
+              "properties": {
+                "Inputs": "2"
+              },
+              "visual": {
+                "x": 540,
+                "y": 520,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "flow_m3h__mux",
+              "typeId": "sl.mux",
+              "properties": {
+                "Inputs": "4"
+              },
+              "visual": {
+                "x": 540,
+                "y": 580,
+                "rotation": 0
+              }
             }
           ],
           "topology": {
@@ -978,7 +975,7 @@
                 "to": {
                   "kind": "port",
                   "componentId": "out1_bar",
-                  "pinId": "o"
+                  "pinId": "in1"
                 },
                 "points": []
               },
@@ -992,7 +989,7 @@
                 "to": {
                   "kind": "port",
                   "componentId": "supply_bar",
-                  "pinId": "s"
+                  "pinId": "in1"
                 },
                 "points": []
               },
@@ -1001,7 +998,7 @@
                 "from": {
                   "kind": "port",
                   "componentId": "supply_bar",
-                  "pinId": "out"
+                  "pinId": "out1"
                 },
                 "to": {
                   "kind": "port",
@@ -1019,8 +1016,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "p_in",
-                  "pinId": "o"
+                  "componentId": "p_in__mux",
+                  "pinId": "in1"
                 },
                 "points": []
               },
@@ -1033,8 +1030,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "p_in",
-                  "pinId": "p"
+                  "componentId": "p_in__mux",
+                  "pinId": "in2"
                 },
                 "points": []
               },
@@ -1047,8 +1044,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "p_in",
-                  "pinId": "tau"
+                  "componentId": "p_in__mux",
+                  "pinId": "in3"
                 },
                 "points": []
               },
@@ -1061,8 +1058,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "p_out",
-                  "pinId": "o"
+                  "componentId": "p_out__mux",
+                  "pinId": "in1"
                 },
                 "points": []
               },
@@ -1075,8 +1072,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "p_out",
-                  "pinId": "p"
+                  "componentId": "p_out__mux",
+                  "pinId": "in2"
                 },
                 "points": []
               },
@@ -1089,8 +1086,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "p_out",
-                  "pinId": "tau"
+                  "componentId": "p_out__mux",
+                  "pinId": "in3"
                 },
                 "points": []
               },
@@ -1099,7 +1096,7 @@
                 "from": {
                   "kind": "port",
                   "componentId": "p_in",
-                  "pinId": "out"
+                  "pinId": "out1"
                 },
                 "to": {
                   "kind": "port",
@@ -1113,7 +1110,7 @@
                 "from": {
                   "kind": "port",
                   "componentId": "p_out",
-                  "pinId": "out"
+                  "pinId": "out1"
                 },
                 "to": {
                   "kind": "port",
@@ -1131,8 +1128,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "x_eq",
-                  "pinId": "p"
+                  "componentId": "x_eq__mux",
+                  "pinId": "in1"
                 },
                 "points": []
               },
@@ -1145,8 +1142,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "x_eq",
-                  "pinId": "lo"
+                  "componentId": "x_eq__mux",
+                  "pinId": "in2"
                 },
                 "points": []
               },
@@ -1159,8 +1156,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "x_eq",
-                  "pinId": "hi"
+                  "componentId": "x_eq__mux",
+                  "pinId": "in3"
                 },
                 "points": []
               },
@@ -1173,8 +1170,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "x_eq",
-                  "pinId": "a"
+                  "componentId": "x_eq__mux",
+                  "pinId": "in4"
                 },
                 "points": []
               },
@@ -1187,8 +1184,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "x_eq",
-                  "pinId": "s"
+                  "componentId": "x_eq__mux",
+                  "pinId": "in5"
                 },
                 "points": []
               },
@@ -1197,12 +1194,12 @@
                 "from": {
                   "kind": "port",
                   "componentId": "x_eq",
-                  "pinId": "out"
+                  "pinId": "out1"
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "gap",
-                  "pinId": "e"
+                  "componentId": "gap__mux",
+                  "pinId": "in1"
                 },
                 "points": []
               },
@@ -1215,8 +1212,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "gap",
-                  "pinId": "x"
+                  "componentId": "gap__mux",
+                  "pinId": "in2"
                 },
                 "points": []
               },
@@ -1229,8 +1226,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "gap",
-                  "pinId": "f"
+                  "componentId": "gap__mux",
+                  "pinId": "in3"
                 },
                 "points": []
               },
@@ -1243,8 +1240,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "gap",
-                  "pinId": "s"
+                  "componentId": "gap__mux",
+                  "pinId": "in4"
                 },
                 "points": []
               },
@@ -1253,12 +1250,12 @@
                 "from": {
                   "kind": "port",
                   "componentId": "gap",
-                  "pinId": "out"
+                  "pinId": "out1"
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "stem_in",
-                  "pinId": "g"
+                  "componentId": "stem_in__mux",
+                  "pinId": "in1"
                 },
                 "points": []
               },
@@ -1271,8 +1268,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "stem_in",
-                  "pinId": "x"
+                  "componentId": "stem_in__mux",
+                  "pinId": "in2"
                 },
                 "points": []
               },
@@ -1285,8 +1282,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "stem_in",
-                  "pinId": "s"
+                  "componentId": "stem_in__mux",
+                  "pinId": "in3"
                 },
                 "points": []
               },
@@ -1295,12 +1292,12 @@
                 "from": {
                   "kind": "port",
                   "componentId": "gap",
-                  "pinId": "out"
+                  "pinId": "out1"
                 },
                 "to": {
                   "kind": "port",
                   "componentId": "stem_out",
-                  "pinId": "g"
+                  "pinId": "in1"
                 },
                 "points": []
               },
@@ -1309,7 +1306,7 @@
                 "from": {
                   "kind": "port",
                   "componentId": "stem_in",
-                  "pinId": "out"
+                  "pinId": "out1"
                 },
                 "to": {
                   "kind": "port",
@@ -1323,7 +1320,7 @@
                 "from": {
                   "kind": "port",
                   "componentId": "stem_out",
-                  "pinId": "out"
+                  "pinId": "out1"
                 },
                 "to": {
                   "kind": "port",
@@ -1355,8 +1352,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "opening",
-                  "pinId": "x"
+                  "componentId": "opening__mux",
+                  "pinId": "in1"
                 },
                 "points": []
               },
@@ -1369,8 +1366,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "opening",
-                  "pinId": "s"
+                  "componentId": "opening__mux",
+                  "pinId": "in2"
                 },
                 "points": []
               },
@@ -1379,12 +1376,12 @@
                 "from": {
                   "kind": "port",
                   "componentId": "opening",
-                  "pinId": "out"
+                  "pinId": "out1"
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "flow_m3h",
-                  "pinId": "l"
+                  "componentId": "flow_m3h__mux",
+                  "pinId": "in1"
                 },
                 "points": []
               },
@@ -1397,8 +1394,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "flow_m3h",
-                  "pinId": "c"
+                  "componentId": "flow_m3h__mux",
+                  "pinId": "in2"
                 },
                 "points": []
               },
@@ -1411,8 +1408,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "flow_m3h",
-                  "pinId": "k"
+                  "componentId": "flow_m3h__mux",
+                  "pinId": "in3"
                 },
                 "points": []
               },
@@ -1425,8 +1422,8 @@
                 },
                 "to": {
                   "kind": "port",
-                  "componentId": "flow_m3h",
-                  "pinId": "dp"
+                  "componentId": "flow_m3h__mux",
+                  "pinId": "in4"
                 },
                 "points": []
               },
@@ -1435,7 +1432,7 @@
                 "from": {
                   "kind": "port",
                   "componentId": "flow_m3h",
-                  "pinId": "out"
+                  "pinId": "out1"
                 },
                 "to": {
                   "kind": "port",
@@ -1443,6 +1440,104 @@
                   "pinId": "value"
                 },
                 "points": []
+              },
+              {
+                "id": "p_in__w1",
+                "from": {
+                  "kind": "port",
+                  "componentId": "p_in__mux",
+                  "pinId": "out1"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "p_in",
+                  "pinId": "in1"
+                },
+                "vertices": []
+              },
+              {
+                "id": "p_out__w1",
+                "from": {
+                  "kind": "port",
+                  "componentId": "p_out__mux",
+                  "pinId": "out1"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "p_out",
+                  "pinId": "in1"
+                },
+                "vertices": []
+              },
+              {
+                "id": "x_eq__w1",
+                "from": {
+                  "kind": "port",
+                  "componentId": "x_eq__mux",
+                  "pinId": "out1"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "x_eq",
+                  "pinId": "in1"
+                },
+                "vertices": []
+              },
+              {
+                "id": "gap__w1",
+                "from": {
+                  "kind": "port",
+                  "componentId": "gap__mux",
+                  "pinId": "out1"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "gap",
+                  "pinId": "in1"
+                },
+                "vertices": []
+              },
+              {
+                "id": "stem_in__w1",
+                "from": {
+                  "kind": "port",
+                  "componentId": "stem_in__mux",
+                  "pinId": "out1"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "stem_in",
+                  "pinId": "in1"
+                },
+                "vertices": []
+              },
+              {
+                "id": "opening__w1",
+                "from": {
+                  "kind": "port",
+                  "componentId": "opening__mux",
+                  "pinId": "out1"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "opening",
+                  "pinId": "in1"
+                },
+                "vertices": []
+              },
+              {
+                "id": "flow_m3h__w1",
+                "from": {
+                  "kind": "port",
+                  "componentId": "flow_m3h__mux",
+                  "pinId": "out1"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "flow_m3h",
+                  "pinId": "in1"
+                },
+                "vertices": []
               }
             ]
           },
@@ -2008,7 +2103,7 @@
     },
     {
       "id": "component-1791649688358-ctrl02",
-      "typeId": "control.gain",
+      "typeId": "sl.gain",
       "label": "mA → A",
       "showValue": false,
       "showDialValue": false,
@@ -2018,7 +2113,8 @@
         "rotation": 0
       },
       "properties": {
-        "gain": 0.001
+        "Gain": "0.001",
+        "SampleTime": "0.1"
       },
       "flipH": true
     },
@@ -2242,7 +2338,7 @@
         "from": {
           "kind": "port",
           "componentId": "component-1791649688358-ctrl02",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -2261,7 +2357,7 @@
         "to": {
           "kind": "port",
           "componentId": "component-1791649688358-ctrl02",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "vertices": [
           {

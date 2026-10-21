@@ -27,11 +27,11 @@
     },
     {
       "id": "stage",
-      "typeId": "control.gain",
+      "typeId": "sl.gain",
       "label": "Ganho",
       "properties": {
-        "gain": 1,
-        "samplePeriodNs": 10000000
+        "Gain": "1",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 170,
@@ -69,7 +69,7 @@
         "to": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -78,7 +78,7 @@
         "from": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",

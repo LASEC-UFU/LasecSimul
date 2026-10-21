@@ -13,7 +13,7 @@
   "components": [
     {
       "id": "pid-01",
-      "typeId": "control.pid",
+      "typeId": "subsystem.legado_pid_dpv",
       "label": "LIC2401",
       "visual": {
         "x": 220,
@@ -21,24 +21,20 @@
         "rotation": 0
       },
       "properties": {
-        "kc": 3.6782,
-        "ti": 47.2,
-        "td": 0,
-        "bias": 50,
-        "derivativeFilter": 0.1,
-        "outputMin": 0,
-        "outputMax": 100,
-        "action": -1,
-        "derivativeOnPv": true,
-        "remoteSpEnabled": false,
-        "feedForwardEnabled": false,
-        "autoMode": true,
-        "samplePeriodNs": 10000000
+        "@pid.P": "-3.6782",
+        "@pid.I": "-0.0779279661016949",
+        "@pid.D": "0",
+        "@pid.N": "10",
+        "@pid.SampleTime": "0.01",
+        "@pid.UpperSaturationLimit": "100",
+        "@pid.LowerSaturationLimit": "0",
+        "@i0.Value": "50",
+        "@d0.Gain": "0"
       }
     },
     {
       "id": "pid-02",
-      "typeId": "control.pid",
+      "typeId": "subsystem.legado_pid_dpv",
       "label": "TIC2402",
       "visual": {
         "x": 220,
@@ -46,24 +42,20 @@
         "rotation": 0
       },
       "properties": {
-        "kc": 2.5204,
-        "ti": 18.2397,
-        "td": 0,
-        "bias": 50,
-        "derivativeFilter": 0.1,
-        "outputMin": 0,
-        "outputMax": 100,
-        "action": 1,
-        "derivativeOnPv": true,
-        "remoteSpEnabled": true,
-        "feedForwardEnabled": false,
-        "autoMode": true,
-        "samplePeriodNs": 10000000
+        "@pid.P": "2.5204",
+        "@pid.I": "0.1381820972932669",
+        "@pid.D": "0",
+        "@pid.N": "10",
+        "@pid.SampleTime": "0.01",
+        "@pid.UpperSaturationLimit": "100",
+        "@pid.LowerSaturationLimit": "0",
+        "@i0.Value": "50",
+        "@d0.Gain": "0"
       }
     },
     {
       "id": "pid-03",
-      "typeId": "control.pid",
+      "typeId": "subsystem.legado_pid_dpv",
       "label": "FIC2403",
       "visual": {
         "x": 500,
@@ -71,24 +63,20 @@
         "rotation": 0
       },
       "properties": {
-        "kc": 0.8921,
-        "ti": 1.646,
-        "td": 0,
-        "bias": 50,
-        "derivativeFilter": 0.1,
-        "outputMin": 0,
-        "outputMax": 100,
-        "action": 1,
-        "derivativeOnPv": true,
-        "remoteSpEnabled": true,
-        "feedForwardEnabled": false,
-        "autoMode": true,
-        "samplePeriodNs": 10000000
+        "@pid.P": "0.8921",
+        "@pid.I": "0.5419805589307413",
+        "@pid.D": "0",
+        "@pid.N": "10",
+        "@pid.SampleTime": "0.01",
+        "@pid.UpperSaturationLimit": "100",
+        "@pid.LowerSaturationLimit": "0",
+        "@i0.Value": "50",
+        "@d0.Gain": "0"
       }
     },
     {
       "id": "pid-04",
-      "typeId": "control.pid",
+      "typeId": "subsystem.legado_pid_dpv",
       "label": "PIC2404",
       "visual": {
         "x": 220,
@@ -96,24 +84,20 @@
         "rotation": 0
       },
       "properties": {
-        "kc": 0.7757,
-        "ti": 0.4111,
-        "td": 0,
-        "bias": 50,
-        "derivativeFilter": 0.1,
-        "outputMin": 0,
-        "outputMax": 100,
-        "action": -1,
-        "derivativeOnPv": true,
-        "remoteSpEnabled": false,
-        "feedForwardEnabled": false,
-        "autoMode": true,
-        "samplePeriodNs": 10000000
+        "@pid.P": "-0.7757",
+        "@pid.I": "-1.8868888348333737",
+        "@pid.D": "0",
+        "@pid.N": "10",
+        "@pid.SampleTime": "0.01",
+        "@pid.UpperSaturationLimit": "100",
+        "@pid.LowerSaturationLimit": "0",
+        "@i0.Value": "50",
+        "@d0.Gain": "0"
       }
     },
     {
       "id": "pid-05",
-      "typeId": "control.pid",
+      "typeId": "subsystem.legado_pid_dpv",
       "label": "LIC2301",
       "visual": {
         "x": 220,
@@ -121,24 +105,20 @@
         "rotation": 0
       },
       "properties": {
-        "kc": 0.3588,
-        "ti": 384.4,
-        "td": 0,
-        "bias": 50,
-        "derivativeFilter": 0.1,
-        "outputMin": 0,
-        "outputMax": 100,
-        "action": -1,
-        "derivativeOnPv": true,
-        "remoteSpEnabled": false,
-        "feedForwardEnabled": false,
-        "autoMode": true,
-        "samplePeriodNs": 10000000
+        "@pid.P": "-0.3588",
+        "@pid.I": "-0.0009334027055150886",
+        "@pid.D": "0",
+        "@pid.N": "10",
+        "@pid.SampleTime": "0.01",
+        "@pid.UpperSaturationLimit": "100",
+        "@pid.LowerSaturationLimit": "0",
+        "@i0.Value": "50",
+        "@d0.Gain": "0"
       }
     },
     {
       "id": "pid-06",
-      "typeId": "control.pid",
+      "typeId": "subsystem.legado_pid_dpv",
       "label": "FIC2302",
       "visual": {
         "x": 500,
@@ -146,24 +126,20 @@
         "rotation": 0
       },
       "properties": {
-        "kc": 1.3864,
-        "ti": 3.0274,
-        "td": 0,
-        "bias": 50,
-        "derivativeFilter": 0.1,
-        "outputMin": 0,
-        "outputMax": 100,
-        "action": 1,
-        "derivativeOnPv": true,
-        "remoteSpEnabled": true,
-        "feedForwardEnabled": false,
-        "autoMode": true,
-        "samplePeriodNs": 10000000
+        "@pid.P": "1.3864",
+        "@pid.I": "0.45795071678668164",
+        "@pid.D": "0",
+        "@pid.N": "10",
+        "@pid.SampleTime": "0.01",
+        "@pid.UpperSaturationLimit": "100",
+        "@pid.LowerSaturationLimit": "0",
+        "@i0.Value": "50",
+        "@d0.Gain": "0"
       }
     },
     {
       "id": "process-21",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_deadtime",
       "label": "TT2415a",
       "visual": {
         "x": 780,
@@ -171,25 +147,14 @@
         "rotation": 0
       },
       "properties": {
-        "tau1": 0,
-        "tau2": 0,
-        "saturationEnabled": false,
-        "hysteresis": 0,
-        "deadTime": 7,
-        "gain": 1,
-        "valveType": 0,
-        "stiction": 0,
-        "rateLimiter": 0,
-        "actuatorTau": 0,
-        "transferFunctionType": 0,
-        "lead": 0,
-        "lag": 0,
-        "samplePeriodNs": 10000000
+        "@gain.Gain": "1",
+        "@gain.SampleTime": "0.01",
+        "@dead_time.DelayTime": "7"
       }
     },
     {
       "id": "process-22",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_deadzone_actuator_tau1_tau2_deadtime",
       "label": "FT2403",
       "visual": {
         "x": 780,
@@ -197,25 +162,20 @@
         "rotation": 0
       },
       "properties": {
-        "tau1": 1.2,
-        "tau2": 0.5,
-        "saturationEnabled": false,
-        "hysteresis": 1,
-        "deadTime": 0.3,
-        "gain": 1,
-        "valveType": 0,
-        "stiction": 0,
-        "rateLimiter": 0,
-        "actuatorTau": 0.5,
-        "transferFunctionType": 0,
-        "lead": 0,
-        "lag": 0,
-        "samplePeriodNs": 10000000
+        "@actuator_deadband.LowerValue": "-0.5",
+        "@actuator_deadband.UpperValue": "0.5",
+        "@actuator_deadband.SampleTime": "0.01",
+        "@actuator.Denominator": "[0.5 1]",
+        "@gain.Gain": "1",
+        "@gain.SampleTime": "0.01",
+        "@tau1.Denominator": "[1.2 1]",
+        "@tau2.Denominator": "[0.5 1]",
+        "@dead_time.DelayTime": "0.3"
       }
     },
     {
       "id": "process-23",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_deadzone_stiction_actuator_tau1_tau2_deadtime",
       "label": "FT2412b",
       "visual": {
         "x": 500,
@@ -223,25 +183,23 @@
         "rotation": 0
       },
       "properties": {
-        "tau1": 2,
-        "tau2": 5,
-        "saturationEnabled": false,
-        "hysteresis": 0.7,
-        "deadTime": 2,
-        "gain": 1,
-        "valveType": 0,
-        "stiction": 0.5,
-        "rateLimiter": 0,
-        "actuatorTau": 5,
-        "transferFunctionType": 0,
-        "lead": 0,
-        "lag": 0,
-        "samplePeriodNs": 10000000
+        "@actuator_deadband.LowerValue": "-0.35",
+        "@actuator_deadband.UpperValue": "0.35",
+        "@actuator_deadband.SampleTime": "0.01",
+        "@stiction.Expr": "(abs(u(1)-u(2))>=0.5)*u(1) + (abs(u(1)-u(2))<0.5)*u(2)",
+        "@stiction.SampleTime": "0.01",
+        "@stiction_memory.SampleTime": "0.01",
+        "@actuator.Denominator": "[5 1]",
+        "@gain.Gain": "1",
+        "@gain.SampleTime": "0.01",
+        "@tau1.Denominator": "[2 1]",
+        "@tau2.Denominator": "[5 1]",
+        "@dead_time.DelayTime": "2"
       }
     },
     {
       "id": "process-24",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_tau1",
       "label": "TT2415b",
       "visual": {
         "x": 220,
@@ -249,25 +207,14 @@
         "rotation": 0
       },
       "properties": {
-        "tau1": 8,
-        "tau2": 0,
-        "saturationEnabled": false,
-        "hysteresis": 0,
-        "deadTime": 0,
-        "gain": 1,
-        "valveType": 0,
-        "stiction": 0,
-        "rateLimiter": 0,
-        "actuatorTau": 0,
-        "transferFunctionType": 0,
-        "lead": 0,
-        "lag": 0,
-        "samplePeriodNs": 10000000
+        "@gain.Gain": "1",
+        "@gain.SampleTime": "0.01",
+        "@tau1.Denominator": "[8 1]"
       }
     },
     {
       "id": "process-25",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_tau1_tau2_leadlag_deadtime_saturation",
       "label": "PI2404c",
       "visual": {
         "x": 500,
@@ -275,25 +222,21 @@
         "rotation": 0
       },
       "properties": {
-        "tau1": 3,
-        "tau2": 3,
-        "saturationEnabled": true,
-        "hysteresis": 0,
-        "deadTime": 1,
-        "gain": 1,
-        "valveType": 0,
-        "stiction": 0,
-        "rateLimiter": 0,
-        "actuatorTau": 0,
-        "transferFunctionType": 2,
-        "lead": 4,
-        "lag": 2,
-        "samplePeriodNs": 10000000
+        "@gain.Gain": "1",
+        "@gain.SampleTime": "0.01",
+        "@tau1.Denominator": "[3 1]",
+        "@tau2.Denominator": "[3 1]",
+        "@lead_lag.Numerator": "[4 1]",
+        "@lead_lag.Denominator": "[2 1]",
+        "@dead_time.DelayTime": "1",
+        "@saturation.UpperLimit": "100",
+        "@saturation.LowerLimit": "0",
+        "@saturation.SampleTime": "0.01"
       }
     },
     {
       "id": "process-26",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_deadzone_stiction_actuator_tau1_deadtime",
       "label": "FT2407",
       "visual": {
         "x": 780,
@@ -301,25 +244,22 @@
         "rotation": 0
       },
       "properties": {
-        "tau1": 1.3,
-        "tau2": 0,
-        "saturationEnabled": false,
-        "hysteresis": 0.4,
-        "deadTime": 0.4,
-        "gain": 1.1,
-        "valveType": 0,
-        "stiction": 10,
-        "rateLimiter": 0,
-        "actuatorTau": 0.2,
-        "transferFunctionType": 0,
-        "lead": 0,
-        "lag": 0,
-        "samplePeriodNs": 10000000
+        "@actuator_deadband.LowerValue": "-0.2",
+        "@actuator_deadband.UpperValue": "0.2",
+        "@actuator_deadband.SampleTime": "0.01",
+        "@stiction.Expr": "(abs(u(1)-u(2))>=10)*u(1) + (abs(u(1)-u(2))<10)*u(2)",
+        "@stiction.SampleTime": "0.01",
+        "@stiction_memory.SampleTime": "0.01",
+        "@actuator.Denominator": "[0.2 1]",
+        "@gain.Gain": "1.1",
+        "@gain.SampleTime": "0.01",
+        "@tau1.Denominator": "[1.3 1]",
+        "@dead_time.DelayTime": "0.4"
       }
     },
     {
       "id": "process-27",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_tau1_tau2",
       "label": "LT2401",
       "visual": {
         "x": 220,
@@ -327,25 +267,15 @@
         "rotation": 0
       },
       "properties": {
-        "tau1": 3,
-        "tau2": 3,
-        "saturationEnabled": false,
-        "hysteresis": 0,
-        "deadTime": 0,
-        "gain": 0.02,
-        "valveType": 0,
-        "stiction": 0,
-        "rateLimiter": 0,
-        "actuatorTau": 0,
-        "transferFunctionType": 3,
-        "lead": 0,
-        "lag": 0,
-        "samplePeriodNs": 10000000
+        "@gain.Gain": "0.02",
+        "@gain.SampleTime": "0.01",
+        "@tau1.Denominator": "[3 1]",
+        "@tau2.Denominator": "[3 1]"
       }
     },
     {
       "id": "process-28",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_tau1_tau2_deadtime",
       "label": "PT2404",
       "visual": {
         "x": 780,
@@ -353,25 +283,16 @@
         "rotation": 0
       },
       "properties": {
-        "tau1": 0.3,
-        "tau2": 0.2,
-        "saturationEnabled": false,
-        "hysteresis": 0,
-        "deadTime": 0.1,
-        "gain": 0.8,
-        "valveType": 0,
-        "stiction": 0,
-        "rateLimiter": 0,
-        "actuatorTau": 0,
-        "transferFunctionType": 0,
-        "lead": 0,
-        "lag": 0,
-        "samplePeriodNs": 10000000
+        "@gain.Gain": "0.8",
+        "@gain.SampleTime": "0.01",
+        "@tau1.Denominator": "[0.3 1]",
+        "@tau2.Denominator": "[0.2 1]",
+        "@dead_time.DelayTime": "0.1"
       }
     },
     {
       "id": "process-29",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_stiction_tau1_tau2_deadtime",
       "label": "FT2302",
       "visual": {
         "x": 780,
@@ -379,25 +300,19 @@
         "rotation": 0
       },
       "properties": {
-        "tau1": 2.5,
-        "tau2": 1,
-        "saturationEnabled": false,
-        "hysteresis": 0,
-        "deadTime": 0.3,
-        "gain": 1.1,
-        "valveType": 0,
-        "stiction": 1.3,
-        "rateLimiter": 0,
-        "actuatorTau": 0,
-        "transferFunctionType": 0,
-        "lead": 0,
-        "lag": 0,
-        "samplePeriodNs": 10000000
+        "@stiction.Expr": "(abs(u(1)-u(2))>=1.3)*u(1) + (abs(u(1)-u(2))<1.3)*u(2)",
+        "@stiction.SampleTime": "0.01",
+        "@stiction_memory.SampleTime": "0.01",
+        "@gain.Gain": "1.1",
+        "@gain.SampleTime": "0.01",
+        "@tau1.Denominator": "[2.5 1]",
+        "@tau2.Denominator": "[1 1]",
+        "@dead_time.DelayTime": "0.3"
       }
     },
     {
       "id": "process-30",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_actuator_tau1_tau2_deadtime",
       "label": "LT2301",
       "visual": {
         "x": 780,
@@ -405,25 +320,17 @@
         "rotation": 0
       },
       "properties": {
-        "tau1": 3,
-        "tau2": 3,
-        "saturationEnabled": false,
-        "hysteresis": 0,
-        "deadTime": 0.5,
-        "gain": 0.03,
-        "valveType": 0,
-        "stiction": 0,
-        "rateLimiter": 0,
-        "actuatorTau": 2,
-        "transferFunctionType": 3,
-        "lead": 0,
-        "lag": 0,
-        "samplePeriodNs": 10000000
+        "@actuator.Denominator": "[2 1]",
+        "@gain.Gain": "0.03",
+        "@gain.SampleTime": "0.01",
+        "@tau1.Denominator": "[3 1]",
+        "@tau2.Denominator": "[3 1]",
+        "@dead_time.DelayTime": "0.5"
       }
     },
     {
       "id": "process-31",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_deadtime",
       "label": "LT2401DT1",
       "visual": {
         "x": 1060,
@@ -431,25 +338,14 @@
         "rotation": 0
       },
       "properties": {
-        "tau1": 0,
-        "tau2": 0,
-        "saturationEnabled": false,
-        "hysteresis": 0,
-        "deadTime": 5,
-        "gain": 1,
-        "valveType": 0,
-        "stiction": 0,
-        "rateLimiter": 0,
-        "actuatorTau": 0,
-        "transferFunctionType": 0,
-        "lead": 0,
-        "lag": 0,
-        "samplePeriodNs": 10000000
+        "@gain.Gain": "1",
+        "@gain.SampleTime": "0.01",
+        "@dead_time.DelayTime": "5"
       }
     },
     {
       "id": "process-32",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_deadtime",
       "label": "TT2410%",
       "visual": {
         "x": 220,
@@ -457,25 +353,14 @@
         "rotation": 0
       },
       "properties": {
-        "tau1": 0,
-        "tau2": 0,
-        "saturationEnabled": false,
-        "hysteresis": 0,
-        "deadTime": 4,
-        "gain": 1,
-        "valveType": 0,
-        "stiction": 0,
-        "rateLimiter": 0,
-        "actuatorTau": 0,
-        "transferFunctionType": 0,
-        "lead": 0,
-        "lag": 0,
-        "samplePeriodNs": 10000000
+        "@gain.Gain": "1",
+        "@gain.SampleTime": "0.01",
+        "@dead_time.DelayTime": "4"
       }
     },
     {
       "id": "process-33",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_actuator_tau1_deadtime",
       "label": "TT2402",
       "visual": {
         "x": 220,
@@ -483,25 +368,16 @@
         "rotation": 0
       },
       "properties": {
-        "tau1": 10,
-        "tau2": 0,
-        "saturationEnabled": false,
-        "hysteresis": 0,
-        "deadTime": 0.8,
-        "gain": 1,
-        "valveType": 0,
-        "stiction": 0,
-        "rateLimiter": 0,
-        "actuatorTau": 2.2,
-        "transferFunctionType": 3,
-        "lead": 0,
-        "lag": 0,
-        "samplePeriodNs": 10000000
+        "@actuator.Denominator": "[2.2 1]",
+        "@gain.Gain": "1",
+        "@gain.SampleTime": "0.01",
+        "@tau1.Denominator": "[10 1]",
+        "@dead_time.DelayTime": "0.8"
       }
     },
     {
       "id": "process-34",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_tau1_deadtime",
       "label": "Erro_pond",
       "visual": {
         "x": 500,
@@ -509,25 +385,15 @@
         "rotation": 0
       },
       "properties": {
-        "tau1": 8,
-        "tau2": 0,
-        "saturationEnabled": false,
-        "hysteresis": 0,
-        "deadTime": 4,
-        "gain": 1,
-        "valveType": 0,
-        "stiction": 0,
-        "rateLimiter": 0,
-        "actuatorTau": 0,
-        "transferFunctionType": 0,
-        "lead": 0,
-        "lag": 0,
-        "samplePeriodNs": 10000000
+        "@gain.Gain": "1",
+        "@gain.SampleTime": "0.01",
+        "@tau1.Denominator": "[8 1]",
+        "@dead_time.DelayTime": "4"
       }
     },
     {
       "id": "process-37",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_tau1_tau2_deadtime",
       "label": "FY2302",
       "visual": {
         "x": 1060,
@@ -535,25 +401,16 @@
         "rotation": 0
       },
       "properties": {
-        "tau1": 3,
-        "tau2": 3,
-        "saturationEnabled": false,
-        "hysteresis": 0,
-        "deadTime": 0.6,
-        "gain": 1,
-        "valveType": 0,
-        "stiction": 0,
-        "rateLimiter": 0,
-        "actuatorTau": 0,
-        "transferFunctionType": 2,
-        "lead": 0,
-        "lag": 0,
-        "samplePeriodNs": 10000000
+        "@gain.Gain": "1",
+        "@gain.SampleTime": "0.01",
+        "@tau1.Denominator": "[3 1]",
+        "@tau2.Denominator": "[3 1]",
+        "@dead_time.DelayTime": "0.6"
       }
     },
     {
       "id": "process-38",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_tau1_tau2_leadlag_deadtime_saturation",
       "label": "TY2415",
       "visual": {
         "x": 780,
@@ -561,25 +418,21 @@
         "rotation": 0
       },
       "properties": {
-        "tau1": 3,
-        "tau2": 3,
-        "saturationEnabled": true,
-        "hysteresis": 0,
-        "deadTime": 3,
-        "gain": -1.8,
-        "valveType": 0,
-        "stiction": 0,
-        "rateLimiter": 0,
-        "actuatorTau": 0,
-        "transferFunctionType": 2,
-        "lead": 13.5,
-        "lag": 7,
-        "samplePeriodNs": 10000000
+        "@gain.Gain": "-1.8",
+        "@gain.SampleTime": "0.01",
+        "@tau1.Denominator": "[3 1]",
+        "@tau2.Denominator": "[3 1]",
+        "@lead_lag.Numerator": "[13.5 1]",
+        "@lead_lag.Denominator": "[7 1]",
+        "@dead_time.DelayTime": "3",
+        "@saturation.UpperLimit": "100",
+        "@saturation.LowerLimit": "0",
+        "@saturation.SampleTime": "0.01"
       }
     },
     {
       "id": "process-39",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_tau1_tau2_leadlag_deadtime",
       "label": "TY2410",
       "visual": {
         "x": 220,
@@ -587,25 +440,18 @@
         "rotation": 0
       },
       "properties": {
-        "tau1": 3,
-        "tau2": 3,
-        "saturationEnabled": false,
-        "hysteresis": 0,
-        "deadTime": 2.9,
-        "gain": -1,
-        "valveType": 0,
-        "stiction": 0,
-        "rateLimiter": 0,
-        "actuatorTau": 0,
-        "transferFunctionType": 2,
-        "lead": 13.5,
-        "lag": 19.16,
-        "samplePeriodNs": 10000000
+        "@gain.Gain": "-1",
+        "@gain.SampleTime": "0.01",
+        "@tau1.Denominator": "[3 1]",
+        "@tau2.Denominator": "[3 1]",
+        "@lead_lag.Numerator": "[13.5 1]",
+        "@lead_lag.Denominator": "[19.16 1]",
+        "@dead_time.DelayTime": "2.9"
       }
     },
     {
       "id": "calc-41",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "label": "TT2402c",
       "visual": {
         "x": 500,
@@ -613,22 +459,13 @@
         "rotation": 0
       },
       "properties": {
-        "expression": "x0*x1/100+25-x2",
-        "inputs": [
-          "x0",
-          "x1",
-          "x2"
-        ],
-        "upperLimit": 105,
-        "lowerLimit": -5,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)*u(2)/100 + 25 - u(3)",
+        "SampleTime": "0.01"
       }
     },
     {
       "id": "calc-42",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.saturation",
       "label": "TT2402b",
       "visual": {
         "x": 780,
@@ -636,20 +473,14 @@
         "rotation": 0
       },
       "properties": {
-        "expression": "(x0-1)*1000000",
-        "inputs": [
-          "x0"
-        ],
-        "upperLimit": 1,
-        "lowerLimit": 0,
-        "upperLimitEnabled": true,
-        "lowerLimitEnabled": true,
-        "samplePeriodNs": 10000000
+        "UpperLimit": "1",
+        "LowerLimit": "0",
+        "SampleTime": "0.01"
       }
     },
     {
       "id": "calc-43",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.saturation",
       "label": "LT2401b",
       "visual": {
         "x": 220,
@@ -657,21 +488,14 @@
         "rotation": 0
       },
       "properties": {
-        "expression": "x0+0.4*x1",
-        "inputs": [
-          "x0",
-          "x1"
-        ],
-        "upperLimit": 100,
-        "lowerLimit": 0,
-        "upperLimitEnabled": true,
-        "lowerLimitEnabled": true,
-        "samplePeriodNs": 10000000
+        "UpperLimit": "100",
+        "LowerLimit": "0",
+        "SampleTime": "0.01"
       }
     },
     {
       "id": "calc-45",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "label": "Erro_Nivel",
       "visual": {
         "x": 220,
@@ -679,21 +503,13 @@
         "rotation": 0
       },
       "properties": {
-        "expression": "(x0-x1)>(x1-x0)",
-        "inputs": [
-          "x0",
-          "x1"
-        ],
-        "upperLimit": 105,
-        "lowerLimit": -5,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1) - u(2) > u(2) - u(1)",
+        "SampleTime": "0.01"
       }
     },
     {
       "id": "calc-48",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "label": "LT2401_BM",
       "visual": {
         "x": 500,
@@ -701,22 +517,13 @@
         "rotation": 0
       },
       "properties": {
-        "expression": "x0-x1-x2",
-        "inputs": [
-          "x0",
-          "x1",
-          "x2"
-        ],
-        "upperLimit": 105,
-        "lowerLimit": -5,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1) - u(2) - u(3)",
+        "SampleTime": "0.01"
       }
     },
     {
       "id": "calc-49",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "label": "PI2404a",
       "visual": {
         "x": 500,
@@ -724,20 +531,13 @@
         "rotation": 0
       },
       "properties": {
-        "expression": "(100-x0)",
-        "inputs": [
-          "x0"
-        ],
-        "upperLimit": 105,
-        "lowerLimit": -5,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "100 - u(1)",
+        "SampleTime": "0.01"
       }
     },
     {
       "id": "calc-50",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "label": "LT2301_BM",
       "visual": {
         "x": 220,
@@ -745,21 +545,13 @@
         "rotation": 0
       },
       "properties": {
-        "expression": "x0-x1",
-        "inputs": [
-          "x0",
-          "x1"
-        ],
-        "upperLimit": 105,
-        "lowerLimit": -5,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1) - u(2)",
+        "SampleTime": "0.01"
       }
     },
     {
       "id": "calc-51",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.saturation",
       "label": "Erro_Pond",
       "visual": {
         "x": 500,
@@ -767,21 +559,14 @@
         "rotation": 0
       },
       "properties": {
-        "expression": "x0^2+x1^2",
-        "inputs": [
-          "x0",
-          "x1"
-        ],
-        "upperLimit": 100,
-        "lowerLimit": 0,
-        "upperLimitEnabled": true,
-        "lowerLimitEnabled": true,
-        "samplePeriodNs": 10000000
+        "UpperLimit": "100",
+        "LowerLimit": "0",
+        "SampleTime": "0.01"
       }
     },
     {
       "id": "calc-52",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "label": "Erro_Temp",
       "visual": {
         "x": 220,
@@ -789,21 +574,13 @@
         "rotation": 0
       },
       "properties": {
-        "expression": "(x0-x1)>(x1-x0)",
-        "inputs": [
-          "x0",
-          "x1"
-        ],
-        "upperLimit": 105,
-        "lowerLimit": -5,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1) - u(2) > u(2) - u(1)",
+        "SampleTime": "0.01"
       }
     },
     {
       "id": "calc-53",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "label": "TY2402a",
       "visual": {
         "x": 220,
@@ -811,24 +588,13 @@
         "rotation": 0
       },
       "properties": {
-        "expression": "(1-x0)*(2*x1-100+x2+x3)+x4",
-        "inputs": [
-          "x0",
-          "x1",
-          "x2",
-          "x3",
-          "x4"
-        ],
-        "upperLimit": 105,
-        "lowerLimit": -5,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(1 - u(1))*(2*u(2) - 100 + u(3) + u(4)) + u(5)",
+        "SampleTime": "0.01"
       }
     },
     {
       "id": "calc-54",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "label": "FT2412a",
       "visual": {
         "x": 220,
@@ -836,22 +602,13 @@
         "rotation": 0
       },
       "properties": {
-        "expression": "(60+x0*x1)+x2/5",
-        "inputs": [
-          "x0",
-          "x1",
-          "x2"
-        ],
-        "upperLimit": 100,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "60 + u(1)*u(2) + u(3)/5",
+        "SampleTime": "0.01"
       }
     },
     {
       "id": "calc-55",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "label": "Produto",
       "visual": {
         "x": 220,
@@ -859,21 +616,13 @@
         "rotation": 0
       },
       "properties": {
-        "expression": "30-(x0/5)+x1/3",
-        "inputs": [
-          "x0",
-          "x1"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "30 - u(1)/5 + u(2)/3",
+        "SampleTime": "0.01"
       }
     },
     {
       "id": "calc-56",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "label": "TT2402%",
       "visual": {
         "x": 500,
@@ -881,21 +630,13 @@
         "rotation": 0
       },
       "properties": {
-        "expression": "x0+x1-20",
-        "inputs": [
-          "x0",
-          "x1"
-        ],
-        "upperLimit": 2,
-        "lowerLimit": -7,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1) + u(2) - 20",
+        "SampleTime": "0.01"
       }
     },
     {
       "id": "calc-57",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "label": "LY2401a",
       "visual": {
         "x": 220,
@@ -903,23 +644,13 @@
         "rotation": 0
       },
       "properties": {
-        "expression": "x0*(x1*10-500+x2)+x3",
-        "inputs": [
-          "x0",
-          "x1",
-          "x2",
-          "x3"
-        ],
-        "upperLimit": 105,
-        "lowerLimit": -5,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)*(u(2)*10 - 500 + u(3)) + u(4)",
+        "SampleTime": "0.01"
       }
     },
     {
       "id": "calc-58",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "label": "PT2404",
       "visual": {
         "x": 780,
@@ -927,16 +658,8 @@
         "rotation": 0
       },
       "properties": {
-        "expression": "x0+(x1+20)",
-        "inputs": [
-          "x0",
-          "x1"
-        ],
-        "upperLimit": 105,
-        "lowerLimit": -5,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1) + (u(2) + 20)",
+        "SampleTime": "0.01"
       }
     },
     {
@@ -1211,7 +934,7 @@
     },
     {
       "id": "recorder-204-3",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "TT2401",
       "visual": {
         "x": 500,
@@ -1219,14 +942,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "recorder-204-5",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "",
       "visual": {
         "x": 220,
@@ -1234,9 +955,7 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
@@ -1259,7 +978,7 @@
     },
     {
       "id": "recorder-204-7",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "TT2410",
       "visual": {
         "x": 220,
@@ -1267,14 +986,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "recorder-209-3",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "LT2401",
       "visual": {
         "x": 1060,
@@ -1282,14 +999,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "recorder-209-7",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "FT2302",
       "visual": {
         "x": 1060,
@@ -1297,14 +1012,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "recorder-210-3",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "TT2402",
       "visual": {
         "x": 500,
@@ -1312,14 +1025,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "recorder-210-7",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "TT2415",
       "visual": {
         "x": 220,
@@ -1327,14 +1038,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-101",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "",
       "visual": {
         "x": 500,
@@ -1342,14 +1051,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "oC",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-102",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "Vazão Óleo",
       "visual": {
         "x": 1060,
@@ -1357,14 +1064,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "L/min",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-103",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "Temp. Cond.",
       "visual": {
         "x": 500,
@@ -1372,14 +1077,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "oC",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-104",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "Temp. Alimentação",
       "visual": {
         "x": 500,
@@ -1387,14 +1090,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "oC",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-105",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "Vazão GN",
       "visual": {
         "x": 220,
@@ -1402,9 +1103,7 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "L/min",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
@@ -1427,7 +1126,7 @@
     },
     {
       "id": "readout-106",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "Vazão Saída VS23",
       "visual": {
         "x": 1060,
@@ -1435,14 +1134,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "L/min",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-107",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "Veloc. BO2407",
       "visual": {
         "x": 780,
@@ -1450,14 +1147,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "%",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-108",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "Nível",
       "visual": {
         "x": 1060,
@@ -1465,14 +1160,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "%",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-109",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "Nível VS23",
       "visual": {
         "x": 500,
@@ -1480,14 +1173,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "%",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-110",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "Abert. FCV2302",
       "visual": {
         "x": 780,
@@ -1495,14 +1186,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "%",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-111",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "",
       "visual": {
         "x": 780,
@@ -1510,14 +1199,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "L/min",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-112",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "",
       "visual": {
         "x": 500,
@@ -1525,14 +1212,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "%",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-113",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "Pressão Topo",
       "visual": {
         "x": 500,
@@ -1540,14 +1225,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "Bar",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-114",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "Vazão Refluxo",
       "visual": {
         "x": 500,
@@ -1555,14 +1238,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "L/min",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-115",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "Vazão Produto B",
       "visual": {
         "x": 500,
@@ -1570,14 +1251,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "L/min",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-116",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "Abert. PCV2404",
       "visual": {
         "x": 500,
@@ -1585,14 +1264,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "%",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-117",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "SP",
       "visual": {
         "x": 500,
@@ -1600,14 +1277,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "L/min",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-118",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "",
       "visual": {
         "x": 500,
@@ -1615,14 +1290,12 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
       "id": "readout-120",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "label": "",
       "visual": {
         "x": 500,
@@ -1630,9 +1303,7 @@
         "rotation": 0
       },
       "properties": {
-        "unit": "%",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       }
     },
     {
@@ -4885,6 +4556,201 @@
         "y": 1538,
         "rotation": 0
       }
+    },
+    {
+      "id": "calc-41__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 420,
+        "y": 696,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "calc-42__fcn",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "(u(1) - 1)*1000000",
+        "SampleTime": "0.01"
+      },
+      "visual": {
+        "x": 780,
+        "y": 456,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "calc-43__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 140,
+        "y": 1592,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "calc-43__fcn",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "u(1) + 0.4*u(2)",
+        "SampleTime": "0.01"
+      },
+      "visual": {
+        "x": 220,
+        "y": 1592,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "calc-45__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 140,
+        "y": 1728,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "calc-48__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 420,
+        "y": 984,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "calc-50__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 140,
+        "y": 368,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "calc-51__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 420,
+        "y": 1256,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "calc-51__fcn",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "u(1)^2 + u(2)^2",
+        "SampleTime": "0.01"
+      },
+      "visual": {
+        "x": 500,
+        "y": 1256,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "calc-52__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 140,
+        "y": 1864,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "calc-53__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "5"
+      },
+      "visual": {
+        "x": 140,
+        "y": 1136,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "calc-54__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 140,
+        "y": 216,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "calc-55__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 140,
+        "y": 504,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "calc-56__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 420,
+        "y": 848,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "calc-57__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "4"
+      },
+      "visual": {
+        "x": 140,
+        "y": 2120,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "calc-58__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 700,
+        "y": 80,
+        "rotation": 0
+      }
     }
   ],
   "topology": {
@@ -4896,7 +4762,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-42",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -4938,7 +4804,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-55",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -5008,7 +4874,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-52",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -5036,7 +4902,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-57",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -5232,7 +5098,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-53",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -5274,7 +5140,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-50",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -5302,7 +5168,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-56",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -5344,7 +5210,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-48",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -5400,7 +5266,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-49",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -5544,8 +5410,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-41",
-          "pinId": "x0"
+          "componentId": "calc-41__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -5572,8 +5438,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-41",
-          "pinId": "x1"
+          "componentId": "calc-41__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -5600,8 +5466,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-41",
-          "pinId": "x2"
+          "componentId": "calc-41__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -5610,7 +5476,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-41",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -5628,8 +5494,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-42",
-          "pinId": "x0"
+          "componentId": "calc-42__fcn",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -5656,8 +5522,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-43",
-          "pinId": "x0"
+          "componentId": "calc-43__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -5670,8 +5536,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-43",
-          "pinId": "x1"
+          "componentId": "calc-43__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -5684,8 +5550,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-45",
-          "pinId": "x0"
+          "componentId": "calc-45__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -5698,8 +5564,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-45",
-          "pinId": "x1"
+          "componentId": "calc-45__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -5726,8 +5592,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-48",
-          "pinId": "x0"
+          "componentId": "calc-48__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -5754,8 +5620,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-48",
-          "pinId": "x1"
+          "componentId": "calc-48__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -5768,8 +5634,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-48",
-          "pinId": "x2"
+          "componentId": "calc-48__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -5783,7 +5649,7 @@
         "to": {
           "kind": "port",
           "componentId": "calc-49",
-          "pinId": "x0"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -5796,8 +5662,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-50",
-          "pinId": "x0"
+          "componentId": "calc-50__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -5810,8 +5676,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-50",
-          "pinId": "x1"
+          "componentId": "calc-50__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -5824,8 +5690,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-51",
-          "pinId": "x0"
+          "componentId": "calc-51__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -5834,7 +5700,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-45",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -5852,8 +5718,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-51",
-          "pinId": "x1"
+          "componentId": "calc-51__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -5866,8 +5732,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-52",
-          "pinId": "x0"
+          "componentId": "calc-52__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -5880,8 +5746,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-52",
-          "pinId": "x1"
+          "componentId": "calc-52__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -5894,8 +5760,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-53",
-          "pinId": "x0"
+          "componentId": "calc-53__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -5908,8 +5774,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-53",
-          "pinId": "x1"
+          "componentId": "calc-53__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -5936,8 +5802,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-53",
-          "pinId": "x2"
+          "componentId": "calc-53__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -5964,8 +5830,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-53",
-          "pinId": "x3"
+          "componentId": "calc-53__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -5978,8 +5844,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-53",
-          "pinId": "x4"
+          "componentId": "calc-53__mux",
+          "pinId": "in5"
         },
         "points": []
       },
@@ -5992,8 +5858,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-54",
-          "pinId": "x0"
+          "componentId": "calc-54__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6006,8 +5872,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-54",
-          "pinId": "x1"
+          "componentId": "calc-54__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -6016,7 +5882,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-51",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -6034,8 +5900,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-54",
-          "pinId": "x2"
+          "componentId": "calc-54__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -6048,8 +5914,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-55",
-          "pinId": "x0"
+          "componentId": "calc-55__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6062,8 +5928,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-55",
-          "pinId": "x1"
+          "componentId": "calc-55__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -6076,8 +5942,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-56",
-          "pinId": "x0"
+          "componentId": "calc-56__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6090,8 +5956,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-56",
-          "pinId": "x1"
+          "componentId": "calc-56__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -6104,8 +5970,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-57",
-          "pinId": "x0"
+          "componentId": "calc-57__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6118,8 +5984,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-57",
-          "pinId": "x1"
+          "componentId": "calc-57__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -6146,8 +6012,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-57",
-          "pinId": "x2"
+          "componentId": "calc-57__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -6174,8 +6040,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-57",
-          "pinId": "x3"
+          "componentId": "calc-57__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -6188,8 +6054,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-58",
-          "pinId": "x0"
+          "componentId": "calc-58__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6216,8 +6082,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "calc-58",
-          "pinId": "x1"
+          "componentId": "calc-58__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -6231,7 +6097,7 @@
         "to": {
           "kind": "port",
           "componentId": "recorder-204-3",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6245,7 +6111,7 @@
         "to": {
           "kind": "port",
           "componentId": "recorder-204-5",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6259,7 +6125,7 @@
         "to": {
           "kind": "port",
           "componentId": "recorder-204-7",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6273,7 +6139,7 @@
         "to": {
           "kind": "port",
           "componentId": "recorder-209-3",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6287,7 +6153,7 @@
         "to": {
           "kind": "port",
           "componentId": "recorder-209-7",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6301,7 +6167,7 @@
         "to": {
           "kind": "port",
           "componentId": "recorder-210-3",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6315,7 +6181,7 @@
         "to": {
           "kind": "port",
           "componentId": "recorder-210-7",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6343,7 +6209,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-101",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6357,7 +6223,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-102",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6371,7 +6237,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-103",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6385,7 +6251,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-104",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6399,7 +6265,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-105",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6413,7 +6279,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-106",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6427,7 +6293,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-107",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6441,7 +6307,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-108",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6455,7 +6321,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-109",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6469,7 +6335,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-110",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6483,7 +6349,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-111",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6497,7 +6363,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-112",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6511,7 +6377,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-113",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6525,7 +6391,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-114",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6539,7 +6405,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-115",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6553,7 +6419,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-116",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6567,7 +6433,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-117",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6581,7 +6447,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-118",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6595,7 +6461,7 @@
         "to": {
           "kind": "port",
           "componentId": "readout-120",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -6926,7 +6792,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-41",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -6940,7 +6806,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-42",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -6954,7 +6820,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-43",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -6968,7 +6834,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-45",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -6982,7 +6848,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-48",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -6996,7 +6862,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-49",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -7010,7 +6876,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-50",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -7024,7 +6890,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-51",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -7038,7 +6904,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-52",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -7052,7 +6918,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-53",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -7066,7 +6932,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-54",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -7080,7 +6946,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-55",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -7094,7 +6960,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-56",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -7108,7 +6974,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-57",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -7122,7 +6988,7 @@
         "from": {
           "kind": "port",
           "componentId": "calc-58",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -7130,6 +6996,230 @@
           "pinId": "value"
         },
         "points": []
+      },
+      {
+        "id": "calc-41__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-41__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-41",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "calc-42__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-42__fcn",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-42",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "calc-43__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-43__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-43__fcn",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "calc-43__w2",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-43__fcn",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-43",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "calc-45__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-45__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-45",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "calc-48__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-48__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-48",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "calc-50__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-50__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-50",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "calc-51__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-51__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-51__fcn",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "calc-51__w2",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-51__fcn",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-51",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "calc-52__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-52__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-52",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "calc-53__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-53__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-53",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "calc-54__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-54__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-54",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "calc-55__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-55__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-55",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "calc-56__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-56__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-56",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "calc-57__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-57__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-57",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "calc-58__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-58__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-58",
+          "pinId": "in1"
+        },
+        "vertices": []
       }
     ]
   },
@@ -8603,5 +8693,3833 @@
     "process-37",
     "process-38",
     "process-39"
+  ],
+  "subsystems": [
+    {
+      "schemaVersion": 3,
+      "typeId": "subsystem.legado_pid_dpv",
+      "name": "PID (convertido)",
+      "language": "pt-BR",
+      "folderPath": [
+        "Convertidos"
+      ],
+      "workspaceSection": "control",
+      "help": {
+        "description": "PID (convertido): composição de blocos da biblioteca equivalente ao Simulink gerada pela migração dos blocos legados (docs/68)."
+      },
+      "components": [
+        {
+          "id": "tunnel_in_sp",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "sp",
+            "pinId": "sp",
+            "direction": "Input",
+            "valueType": "Real",
+            "defaultValue": 0
+          },
+          "visual": {
+            "x": 20,
+            "y": 60,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tunnel_in_pv",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "pv",
+            "pinId": "pv",
+            "direction": "Input",
+            "valueType": "Real",
+            "defaultValue": 0
+          },
+          "visual": {
+            "x": 20,
+            "y": 120,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "pid",
+          "typeId": "sl.discrete_pid_controller_2dof",
+          "properties": {
+            "Controller": "PID",
+            "Form": "Parallel",
+            "P": "-3.6782",
+            "I": "-0.0779279661016949",
+            "D": "0",
+            "N": "10",
+            "b": "1",
+            "c": "0",
+            "SampleTime": "0.01",
+            "IntegratorMethod": "Backward Euler",
+            "FilterMethod": "Backward Euler",
+            "InitialConditionSource": "external",
+            "InitialConditionSetting": "Output",
+            "LimitOutput": true,
+            "UpperSaturationLimit": "100",
+            "LowerSaturationLimit": "0",
+            "AntiWindupMode": "clamping"
+          },
+          "visual": {
+            "x": 260,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "i0",
+          "typeId": "sl.constant",
+          "properties": {
+            "Value": "50",
+            "SampleTime": "inf"
+          },
+          "visual": {
+            "x": 140,
+            "y": 160,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "d0",
+          "typeId": "sl.gain",
+          "properties": {
+            "Gain": "0"
+          },
+          "visual": {
+            "x": 160,
+            "y": 220,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tunnel_out_out",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "out",
+            "pinId": "out",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 370,
+            "y": 60,
+            "rotation": 180
+          }
+        }
+      ],
+      "topology": {
+        "revision": 0,
+        "nodes": [],
+        "conductors": [
+          {
+            "id": "wire-1",
+            "from": {
+              "kind": "port",
+              "componentId": "tunnel_in_sp",
+              "pinId": "value"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "pid",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-2",
+            "from": {
+              "kind": "port",
+              "componentId": "tunnel_in_pv",
+              "pinId": "value"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "pid",
+              "pinId": "in2"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-3",
+            "from": {
+              "kind": "port",
+              "componentId": "i0",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "pid",
+              "pinId": "i0"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-4",
+            "from": {
+              "kind": "port",
+              "componentId": "d0",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "pid",
+              "pinId": "d0"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-5",
+            "from": {
+              "kind": "port",
+              "componentId": "pid",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tunnel_out_out",
+              "pinId": "value"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-6",
+            "from": {
+              "kind": "port",
+              "componentId": "tunnel_in_pv",
+              "pinId": "value"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "d0",
+              "pinId": "in1"
+            },
+            "vertices": []
+          }
+        ]
+      },
+      "interface": [
+        {
+          "pinId": "sp",
+          "label": "SP",
+          "internalTunnel": "sp",
+          "domain": "signal",
+          "direction": "in",
+          "valueType": "Real",
+          "width": 1
+        },
+        {
+          "pinId": "pv",
+          "label": "PV",
+          "internalTunnel": "pv",
+          "domain": "signal",
+          "direction": "in",
+          "valueType": "Real",
+          "width": 1
+        },
+        {
+          "pinId": "out",
+          "label": "OUT",
+          "internalTunnel": "out",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        }
+      ],
+      "symbolMode": "generic",
+      "symbol": {
+        "width": 128,
+        "height": 48,
+        "border": true,
+        "pins": [
+          {
+            "id": "sp",
+            "label": "SP",
+            "labelFontSize": 7,
+            "x": -8,
+            "y": 24,
+            "angle": 180,
+            "length": 8
+          },
+          {
+            "id": "pv",
+            "label": "PV",
+            "labelFontSize": 7,
+            "x": 136,
+            "y": 24,
+            "angle": 0,
+            "length": 8
+          },
+          {
+            "id": "out",
+            "label": "OUT",
+            "labelFontSize": 7,
+            "x": -8,
+            "y": 40,
+            "angle": 180,
+            "length": 8
+          }
+        ],
+        "shapes": [
+          {
+            "kind": "text",
+            "x": 64,
+            "y": 10,
+            "value": "PID (convertido)",
+            "fontSize": 11,
+            "textAnchor": "middle",
+            "dominantBaseline": "middle"
+          }
+        ]
+      },
+      "exposedComponents": [],
+      "exportedPropertyComponentIds": [
+        "pid",
+        "i0",
+        "d0"
+      ],
+      "origin": {
+        "kind": "migration",
+        "migrationId": "control-library-simulink",
+        "version": 1
+      }
+    },
+    {
+      "schemaVersion": 3,
+      "typeId": "subsystem.legado_processo_deadtime",
+      "name": "Processo (convertido: ganho, deadtime)",
+      "language": "pt-BR",
+      "folderPath": [
+        "Convertidos"
+      ],
+      "workspaceSection": "control",
+      "help": {
+        "description": "Processo (convertido: ganho, deadtime): composição de blocos da biblioteca equivalente ao Simulink gerada pela migração dos blocos legados (docs/68)."
+      },
+      "components": [
+        {
+          "id": "tunnel_in_in",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "in",
+            "pinId": "in",
+            "direction": "Input",
+            "valueType": "Real",
+            "defaultValue": 0
+          },
+          "visual": {
+            "x": 20,
+            "y": 60,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "gain",
+          "typeId": "sl.gain",
+          "properties": {
+            "Gain": "1",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 100,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "dead_time",
+          "typeId": "sl.transport_delay",
+          "properties": {
+            "DelayTime": "7",
+            "InitialOutput": "0"
+          },
+          "visual": {
+            "x": 210,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tunnel_out_out",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "out",
+            "pinId": "out",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 320,
+            "y": 60,
+            "rotation": 180
+          }
+        }
+      ],
+      "topology": {
+        "revision": 0,
+        "nodes": [],
+        "conductors": [
+          {
+            "id": "wire-1",
+            "from": {
+              "kind": "port",
+              "componentId": "tunnel_in_in",
+              "pinId": "value"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-2",
+            "from": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-3",
+            "from": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tunnel_out_out",
+              "pinId": "value"
+            },
+            "vertices": []
+          }
+        ]
+      },
+      "interface": [
+        {
+          "pinId": "in",
+          "label": "IN",
+          "internalTunnel": "in",
+          "domain": "signal",
+          "direction": "in",
+          "valueType": "Real",
+          "width": 1
+        },
+        {
+          "pinId": "out",
+          "label": "OUT",
+          "internalTunnel": "out",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        }
+      ],
+      "symbolMode": "generic",
+      "symbol": {
+        "width": 280,
+        "height": 40,
+        "border": true,
+        "pins": [
+          {
+            "id": "in",
+            "label": "IN",
+            "labelFontSize": 7,
+            "x": -8,
+            "y": 24,
+            "angle": 180,
+            "length": 8
+          },
+          {
+            "id": "out",
+            "label": "OUT",
+            "labelFontSize": 7,
+            "x": 288,
+            "y": 24,
+            "angle": 0,
+            "length": 8
+          }
+        ],
+        "shapes": [
+          {
+            "kind": "text",
+            "x": 140,
+            "y": 10,
+            "value": "Processo (convertido: ganho, deadtime)",
+            "fontSize": 11,
+            "textAnchor": "middle",
+            "dominantBaseline": "middle"
+          }
+        ]
+      },
+      "exposedComponents": [],
+      "exportedPropertyComponentIds": [
+        "gain",
+        "dead_time"
+      ],
+      "origin": {
+        "kind": "migration",
+        "migrationId": "control-library-simulink",
+        "version": 1
+      }
+    },
+    {
+      "schemaVersion": 3,
+      "typeId": "subsystem.legado_processo_deadzone_actuator_tau1_tau2_deadtime",
+      "name": "Processo (convertido: ganho, deadzone, actuator, tau1, tau2, deadtime)",
+      "language": "pt-BR",
+      "folderPath": [
+        "Convertidos"
+      ],
+      "workspaceSection": "control",
+      "help": {
+        "description": "Processo (convertido: ganho, deadzone, actuator, tau1, tau2, deadtime): composição de blocos da biblioteca equivalente ao Simulink gerada pela migração dos blocos legados (docs/68)."
+      },
+      "components": [
+        {
+          "id": "tunnel_in_in",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "in",
+            "pinId": "in",
+            "direction": "Input",
+            "valueType": "Real",
+            "defaultValue": 0
+          },
+          "visual": {
+            "x": 20,
+            "y": 60,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "actuator_deadband",
+          "typeId": "sl.dead_zone",
+          "properties": {
+            "LowerValue": "-0.5",
+            "UpperValue": "0.5",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 100,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "actuator",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[0.5 1]"
+          },
+          "visual": {
+            "x": 210,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "gain",
+          "typeId": "sl.gain",
+          "properties": {
+            "Gain": "1",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 320,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau1",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[1.2 1]"
+          },
+          "visual": {
+            "x": 430,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau2",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[0.5 1]"
+          },
+          "visual": {
+            "x": 540,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "dead_time",
+          "typeId": "sl.transport_delay",
+          "properties": {
+            "DelayTime": "0.3",
+            "InitialOutput": "0"
+          },
+          "visual": {
+            "x": 650,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tunnel_out_out",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "out",
+            "pinId": "out",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 760,
+            "y": 60,
+            "rotation": 180
+          }
+        }
+      ],
+      "topology": {
+        "revision": 0,
+        "nodes": [],
+        "conductors": [
+          {
+            "id": "wire-1",
+            "from": {
+              "kind": "port",
+              "componentId": "tunnel_in_in",
+              "pinId": "value"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "actuator_deadband",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-2",
+            "from": {
+              "kind": "port",
+              "componentId": "actuator_deadband",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "actuator",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-3",
+            "from": {
+              "kind": "port",
+              "componentId": "actuator",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-4",
+            "from": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-5",
+            "from": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau2",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-6",
+            "from": {
+              "kind": "port",
+              "componentId": "tau2",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-7",
+            "from": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tunnel_out_out",
+              "pinId": "value"
+            },
+            "vertices": []
+          }
+        ]
+      },
+      "interface": [
+        {
+          "pinId": "in",
+          "label": "IN",
+          "internalTunnel": "in",
+          "domain": "signal",
+          "direction": "in",
+          "valueType": "Real",
+          "width": 1
+        },
+        {
+          "pinId": "out",
+          "label": "OUT",
+          "internalTunnel": "out",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        }
+      ],
+      "symbolMode": "generic",
+      "symbol": {
+        "width": 496,
+        "height": 40,
+        "border": true,
+        "pins": [
+          {
+            "id": "in",
+            "label": "IN",
+            "labelFontSize": 7,
+            "x": -8,
+            "y": 24,
+            "angle": 180,
+            "length": 8
+          },
+          {
+            "id": "out",
+            "label": "OUT",
+            "labelFontSize": 7,
+            "x": 504,
+            "y": 24,
+            "angle": 0,
+            "length": 8
+          }
+        ],
+        "shapes": [
+          {
+            "kind": "text",
+            "x": 248,
+            "y": 10,
+            "value": "Processo (convertido: ganho, deadzone, actuator, tau1, tau2, deadtime)",
+            "fontSize": 11,
+            "textAnchor": "middle",
+            "dominantBaseline": "middle"
+          }
+        ]
+      },
+      "exposedComponents": [],
+      "exportedPropertyComponentIds": [
+        "actuator_deadband",
+        "actuator",
+        "gain",
+        "tau1",
+        "tau2",
+        "dead_time"
+      ],
+      "origin": {
+        "kind": "migration",
+        "migrationId": "control-library-simulink",
+        "version": 1
+      }
+    },
+    {
+      "schemaVersion": 3,
+      "typeId": "subsystem.legado_processo_deadzone_stiction_actuator_tau1_tau2_deadtime",
+      "name": "Processo (convertido: ganho, deadzone, stiction, actuator, tau1, tau2, deadtime)",
+      "language": "pt-BR",
+      "folderPath": [
+        "Convertidos"
+      ],
+      "workspaceSection": "control",
+      "help": {
+        "description": "Processo (convertido: ganho, deadzone, stiction, actuator, tau1, tau2, deadtime): composição de blocos da biblioteca equivalente ao Simulink gerada pela migração dos blocos legados (docs/68)."
+      },
+      "components": [
+        {
+          "id": "tunnel_in_in",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "in",
+            "pinId": "in",
+            "direction": "Input",
+            "valueType": "Real",
+            "defaultValue": 0
+          },
+          "visual": {
+            "x": 20,
+            "y": 60,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "actuator_deadband",
+          "typeId": "sl.dead_zone",
+          "properties": {
+            "LowerValue": "-0.35",
+            "UpperValue": "0.35",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 100,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "stiction_mux",
+          "typeId": "sl.mux",
+          "properties": {
+            "Inputs": "2"
+          },
+          "visual": {
+            "x": 210,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "stiction",
+          "typeId": "sl.fcn",
+          "properties": {
+            "Expr": "(abs(u(1)-u(2))>=0.5)*u(1) + (abs(u(1)-u(2))<0.5)*u(2)",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 250,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "stiction_memory",
+          "typeId": "sl.unit_delay",
+          "properties": {
+            "InitialCondition": "0",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 250,
+            "y": 160,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "actuator",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[5 1]"
+          },
+          "visual": {
+            "x": 360,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "gain",
+          "typeId": "sl.gain",
+          "properties": {
+            "Gain": "1",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 470,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau1",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[2 1]"
+          },
+          "visual": {
+            "x": 580,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau2",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[5 1]"
+          },
+          "visual": {
+            "x": 690,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "dead_time",
+          "typeId": "sl.transport_delay",
+          "properties": {
+            "DelayTime": "2",
+            "InitialOutput": "0"
+          },
+          "visual": {
+            "x": 800,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tunnel_out_out",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "out",
+            "pinId": "out",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 910,
+            "y": 60,
+            "rotation": 180
+          }
+        }
+      ],
+      "topology": {
+        "revision": 0,
+        "nodes": [],
+        "conductors": [
+          {
+            "id": "wire-1",
+            "from": {
+              "kind": "port",
+              "componentId": "tunnel_in_in",
+              "pinId": "value"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "actuator_deadband",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-2",
+            "from": {
+              "kind": "port",
+              "componentId": "actuator_deadband",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "stiction_mux",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-3",
+            "from": {
+              "kind": "port",
+              "componentId": "stiction_mux",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "stiction",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-4",
+            "from": {
+              "kind": "port",
+              "componentId": "stiction_memory",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "stiction_mux",
+              "pinId": "in2"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-5",
+            "from": {
+              "kind": "port",
+              "componentId": "stiction",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "stiction_memory",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-6",
+            "from": {
+              "kind": "port",
+              "componentId": "stiction",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "actuator",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-7",
+            "from": {
+              "kind": "port",
+              "componentId": "actuator",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-8",
+            "from": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-9",
+            "from": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau2",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-10",
+            "from": {
+              "kind": "port",
+              "componentId": "tau2",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-11",
+            "from": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tunnel_out_out",
+              "pinId": "value"
+            },
+            "vertices": []
+          }
+        ]
+      },
+      "interface": [
+        {
+          "pinId": "in",
+          "label": "IN",
+          "internalTunnel": "in",
+          "domain": "signal",
+          "direction": "in",
+          "valueType": "Real",
+          "width": 1
+        },
+        {
+          "pinId": "out",
+          "label": "OUT",
+          "internalTunnel": "out",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        }
+      ],
+      "symbolMode": "generic",
+      "symbol": {
+        "width": 568,
+        "height": 40,
+        "border": true,
+        "pins": [
+          {
+            "id": "in",
+            "label": "IN",
+            "labelFontSize": 7,
+            "x": -8,
+            "y": 24,
+            "angle": 180,
+            "length": 8
+          },
+          {
+            "id": "out",
+            "label": "OUT",
+            "labelFontSize": 7,
+            "x": 576,
+            "y": 24,
+            "angle": 0,
+            "length": 8
+          }
+        ],
+        "shapes": [
+          {
+            "kind": "text",
+            "x": 284,
+            "y": 10,
+            "value": "Processo (convertido: ganho, deadzone, stiction, actuator, tau1, tau2, deadtime)",
+            "fontSize": 11,
+            "textAnchor": "middle",
+            "dominantBaseline": "middle"
+          }
+        ]
+      },
+      "exposedComponents": [],
+      "exportedPropertyComponentIds": [
+        "actuator_deadband",
+        "stiction",
+        "stiction_memory",
+        "actuator",
+        "gain",
+        "tau1",
+        "tau2",
+        "dead_time"
+      ],
+      "origin": {
+        "kind": "migration",
+        "migrationId": "control-library-simulink",
+        "version": 1
+      }
+    },
+    {
+      "schemaVersion": 3,
+      "typeId": "subsystem.legado_processo_tau1",
+      "name": "Processo (convertido: ganho, tau1)",
+      "language": "pt-BR",
+      "folderPath": [
+        "Convertidos"
+      ],
+      "workspaceSection": "control",
+      "help": {
+        "description": "Processo (convertido: ganho, tau1): composição de blocos da biblioteca equivalente ao Simulink gerada pela migração dos blocos legados (docs/68)."
+      },
+      "components": [
+        {
+          "id": "tunnel_in_in",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "in",
+            "pinId": "in",
+            "direction": "Input",
+            "valueType": "Real",
+            "defaultValue": 0
+          },
+          "visual": {
+            "x": 20,
+            "y": 60,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "gain",
+          "typeId": "sl.gain",
+          "properties": {
+            "Gain": "1",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 100,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau1",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[8 1]"
+          },
+          "visual": {
+            "x": 210,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tunnel_out_out",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "out",
+            "pinId": "out",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 320,
+            "y": 60,
+            "rotation": 180
+          }
+        }
+      ],
+      "topology": {
+        "revision": 0,
+        "nodes": [],
+        "conductors": [
+          {
+            "id": "wire-1",
+            "from": {
+              "kind": "port",
+              "componentId": "tunnel_in_in",
+              "pinId": "value"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-2",
+            "from": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-3",
+            "from": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tunnel_out_out",
+              "pinId": "value"
+            },
+            "vertices": []
+          }
+        ]
+      },
+      "interface": [
+        {
+          "pinId": "in",
+          "label": "IN",
+          "internalTunnel": "in",
+          "domain": "signal",
+          "direction": "in",
+          "valueType": "Real",
+          "width": 1
+        },
+        {
+          "pinId": "out",
+          "label": "OUT",
+          "internalTunnel": "out",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        }
+      ],
+      "symbolMode": "generic",
+      "symbol": {
+        "width": 248,
+        "height": 40,
+        "border": true,
+        "pins": [
+          {
+            "id": "in",
+            "label": "IN",
+            "labelFontSize": 7,
+            "x": -8,
+            "y": 24,
+            "angle": 180,
+            "length": 8
+          },
+          {
+            "id": "out",
+            "label": "OUT",
+            "labelFontSize": 7,
+            "x": 256,
+            "y": 24,
+            "angle": 0,
+            "length": 8
+          }
+        ],
+        "shapes": [
+          {
+            "kind": "text",
+            "x": 124,
+            "y": 10,
+            "value": "Processo (convertido: ganho, tau1)",
+            "fontSize": 11,
+            "textAnchor": "middle",
+            "dominantBaseline": "middle"
+          }
+        ]
+      },
+      "exposedComponents": [],
+      "exportedPropertyComponentIds": [
+        "gain",
+        "tau1"
+      ],
+      "origin": {
+        "kind": "migration",
+        "migrationId": "control-library-simulink",
+        "version": 1
+      }
+    },
+    {
+      "schemaVersion": 3,
+      "typeId": "subsystem.legado_processo_tau1_tau2_leadlag_deadtime_saturation",
+      "name": "Processo (convertido: ganho, tau1, tau2, leadlag, deadtime, saturation)",
+      "language": "pt-BR",
+      "folderPath": [
+        "Convertidos"
+      ],
+      "workspaceSection": "control",
+      "help": {
+        "description": "Processo (convertido: ganho, tau1, tau2, leadlag, deadtime, saturation): composição de blocos da biblioteca equivalente ao Simulink gerada pela migração dos blocos legados (docs/68)."
+      },
+      "components": [
+        {
+          "id": "tunnel_in_in",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "in",
+            "pinId": "in",
+            "direction": "Input",
+            "valueType": "Real",
+            "defaultValue": 0
+          },
+          "visual": {
+            "x": 20,
+            "y": 60,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "gain",
+          "typeId": "sl.gain",
+          "properties": {
+            "Gain": "1",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 100,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau1",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[3 1]"
+          },
+          "visual": {
+            "x": 210,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau2",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[3 1]"
+          },
+          "visual": {
+            "x": 320,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "lead_lag",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[4 1]",
+            "Denominator": "[2 1]"
+          },
+          "visual": {
+            "x": 430,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "dead_time",
+          "typeId": "sl.transport_delay",
+          "properties": {
+            "DelayTime": "1",
+            "InitialOutput": "0"
+          },
+          "visual": {
+            "x": 540,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "saturation",
+          "typeId": "sl.saturation",
+          "properties": {
+            "UpperLimit": "100",
+            "LowerLimit": "0",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 650,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tunnel_out_out",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "out",
+            "pinId": "out",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 760,
+            "y": 60,
+            "rotation": 180
+          }
+        }
+      ],
+      "topology": {
+        "revision": 0,
+        "nodes": [],
+        "conductors": [
+          {
+            "id": "wire-1",
+            "from": {
+              "kind": "port",
+              "componentId": "tunnel_in_in",
+              "pinId": "value"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-2",
+            "from": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-3",
+            "from": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau2",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-4",
+            "from": {
+              "kind": "port",
+              "componentId": "tau2",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "lead_lag",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-5",
+            "from": {
+              "kind": "port",
+              "componentId": "lead_lag",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-6",
+            "from": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "saturation",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-7",
+            "from": {
+              "kind": "port",
+              "componentId": "saturation",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tunnel_out_out",
+              "pinId": "value"
+            },
+            "vertices": []
+          }
+        ]
+      },
+      "interface": [
+        {
+          "pinId": "in",
+          "label": "IN",
+          "internalTunnel": "in",
+          "domain": "signal",
+          "direction": "in",
+          "valueType": "Real",
+          "width": 1
+        },
+        {
+          "pinId": "out",
+          "label": "OUT",
+          "internalTunnel": "out",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        }
+      ],
+      "symbolMode": "generic",
+      "symbol": {
+        "width": 504,
+        "height": 40,
+        "border": true,
+        "pins": [
+          {
+            "id": "in",
+            "label": "IN",
+            "labelFontSize": 7,
+            "x": -8,
+            "y": 24,
+            "angle": 180,
+            "length": 8
+          },
+          {
+            "id": "out",
+            "label": "OUT",
+            "labelFontSize": 7,
+            "x": 512,
+            "y": 24,
+            "angle": 0,
+            "length": 8
+          }
+        ],
+        "shapes": [
+          {
+            "kind": "text",
+            "x": 252,
+            "y": 10,
+            "value": "Processo (convertido: ganho, tau1, tau2, leadlag, deadtime, saturation)",
+            "fontSize": 11,
+            "textAnchor": "middle",
+            "dominantBaseline": "middle"
+          }
+        ]
+      },
+      "exposedComponents": [],
+      "exportedPropertyComponentIds": [
+        "gain",
+        "tau1",
+        "tau2",
+        "lead_lag",
+        "dead_time",
+        "saturation"
+      ],
+      "origin": {
+        "kind": "migration",
+        "migrationId": "control-library-simulink",
+        "version": 1
+      }
+    },
+    {
+      "schemaVersion": 3,
+      "typeId": "subsystem.legado_processo_deadzone_stiction_actuator_tau1_deadtime",
+      "name": "Processo (convertido: ganho, deadzone, stiction, actuator, tau1, deadtime)",
+      "language": "pt-BR",
+      "folderPath": [
+        "Convertidos"
+      ],
+      "workspaceSection": "control",
+      "help": {
+        "description": "Processo (convertido: ganho, deadzone, stiction, actuator, tau1, deadtime): composição de blocos da biblioteca equivalente ao Simulink gerada pela migração dos blocos legados (docs/68)."
+      },
+      "components": [
+        {
+          "id": "tunnel_in_in",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "in",
+            "pinId": "in",
+            "direction": "Input",
+            "valueType": "Real",
+            "defaultValue": 0
+          },
+          "visual": {
+            "x": 20,
+            "y": 60,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "actuator_deadband",
+          "typeId": "sl.dead_zone",
+          "properties": {
+            "LowerValue": "-0.2",
+            "UpperValue": "0.2",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 100,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "stiction_mux",
+          "typeId": "sl.mux",
+          "properties": {
+            "Inputs": "2"
+          },
+          "visual": {
+            "x": 210,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "stiction",
+          "typeId": "sl.fcn",
+          "properties": {
+            "Expr": "(abs(u(1)-u(2))>=10)*u(1) + (abs(u(1)-u(2))<10)*u(2)",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 250,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "stiction_memory",
+          "typeId": "sl.unit_delay",
+          "properties": {
+            "InitialCondition": "0",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 250,
+            "y": 160,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "actuator",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[0.2 1]"
+          },
+          "visual": {
+            "x": 360,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "gain",
+          "typeId": "sl.gain",
+          "properties": {
+            "Gain": "1.1",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 470,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau1",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[1.3 1]"
+          },
+          "visual": {
+            "x": 580,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "dead_time",
+          "typeId": "sl.transport_delay",
+          "properties": {
+            "DelayTime": "0.4",
+            "InitialOutput": "0"
+          },
+          "visual": {
+            "x": 690,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tunnel_out_out",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "out",
+            "pinId": "out",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 800,
+            "y": 60,
+            "rotation": 180
+          }
+        }
+      ],
+      "topology": {
+        "revision": 0,
+        "nodes": [],
+        "conductors": [
+          {
+            "id": "wire-1",
+            "from": {
+              "kind": "port",
+              "componentId": "tunnel_in_in",
+              "pinId": "value"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "actuator_deadband",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-2",
+            "from": {
+              "kind": "port",
+              "componentId": "actuator_deadband",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "stiction_mux",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-3",
+            "from": {
+              "kind": "port",
+              "componentId": "stiction_mux",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "stiction",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-4",
+            "from": {
+              "kind": "port",
+              "componentId": "stiction_memory",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "stiction_mux",
+              "pinId": "in2"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-5",
+            "from": {
+              "kind": "port",
+              "componentId": "stiction",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "stiction_memory",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-6",
+            "from": {
+              "kind": "port",
+              "componentId": "stiction",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "actuator",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-7",
+            "from": {
+              "kind": "port",
+              "componentId": "actuator",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-8",
+            "from": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-9",
+            "from": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-10",
+            "from": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tunnel_out_out",
+              "pinId": "value"
+            },
+            "vertices": []
+          }
+        ]
+      },
+      "interface": [
+        {
+          "pinId": "in",
+          "label": "IN",
+          "internalTunnel": "in",
+          "domain": "signal",
+          "direction": "in",
+          "valueType": "Real",
+          "width": 1
+        },
+        {
+          "pinId": "out",
+          "label": "OUT",
+          "internalTunnel": "out",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        }
+      ],
+      "symbolMode": "generic",
+      "symbol": {
+        "width": 528,
+        "height": 40,
+        "border": true,
+        "pins": [
+          {
+            "id": "in",
+            "label": "IN",
+            "labelFontSize": 7,
+            "x": -8,
+            "y": 24,
+            "angle": 180,
+            "length": 8
+          },
+          {
+            "id": "out",
+            "label": "OUT",
+            "labelFontSize": 7,
+            "x": 536,
+            "y": 24,
+            "angle": 0,
+            "length": 8
+          }
+        ],
+        "shapes": [
+          {
+            "kind": "text",
+            "x": 264,
+            "y": 10,
+            "value": "Processo (convertido: ganho, deadzone, stiction, actuator, tau1, deadtime)",
+            "fontSize": 11,
+            "textAnchor": "middle",
+            "dominantBaseline": "middle"
+          }
+        ]
+      },
+      "exposedComponents": [],
+      "exportedPropertyComponentIds": [
+        "actuator_deadband",
+        "stiction",
+        "stiction_memory",
+        "actuator",
+        "gain",
+        "tau1",
+        "dead_time"
+      ],
+      "origin": {
+        "kind": "migration",
+        "migrationId": "control-library-simulink",
+        "version": 1
+      }
+    },
+    {
+      "schemaVersion": 3,
+      "typeId": "subsystem.legado_processo_tau1_tau2",
+      "name": "Processo (convertido: ganho, tau1, tau2)",
+      "language": "pt-BR",
+      "folderPath": [
+        "Convertidos"
+      ],
+      "workspaceSection": "control",
+      "help": {
+        "description": "Processo (convertido: ganho, tau1, tau2): composição de blocos da biblioteca equivalente ao Simulink gerada pela migração dos blocos legados (docs/68)."
+      },
+      "components": [
+        {
+          "id": "tunnel_in_in",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "in",
+            "pinId": "in",
+            "direction": "Input",
+            "valueType": "Real",
+            "defaultValue": 0
+          },
+          "visual": {
+            "x": 20,
+            "y": 60,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "gain",
+          "typeId": "sl.gain",
+          "properties": {
+            "Gain": "0.02",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 100,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau1",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[3 1]"
+          },
+          "visual": {
+            "x": 210,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau2",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[3 1]"
+          },
+          "visual": {
+            "x": 320,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tunnel_out_out",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "out",
+            "pinId": "out",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 430,
+            "y": 60,
+            "rotation": 180
+          }
+        }
+      ],
+      "topology": {
+        "revision": 0,
+        "nodes": [],
+        "conductors": [
+          {
+            "id": "wire-1",
+            "from": {
+              "kind": "port",
+              "componentId": "tunnel_in_in",
+              "pinId": "value"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-2",
+            "from": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-3",
+            "from": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau2",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-4",
+            "from": {
+              "kind": "port",
+              "componentId": "tau2",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tunnel_out_out",
+              "pinId": "value"
+            },
+            "vertices": []
+          }
+        ]
+      },
+      "interface": [
+        {
+          "pinId": "in",
+          "label": "IN",
+          "internalTunnel": "in",
+          "domain": "signal",
+          "direction": "in",
+          "valueType": "Real",
+          "width": 1
+        },
+        {
+          "pinId": "out",
+          "label": "OUT",
+          "internalTunnel": "out",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        }
+      ],
+      "symbolMode": "generic",
+      "symbol": {
+        "width": 296,
+        "height": 40,
+        "border": true,
+        "pins": [
+          {
+            "id": "in",
+            "label": "IN",
+            "labelFontSize": 7,
+            "x": -8,
+            "y": 24,
+            "angle": 180,
+            "length": 8
+          },
+          {
+            "id": "out",
+            "label": "OUT",
+            "labelFontSize": 7,
+            "x": 304,
+            "y": 24,
+            "angle": 0,
+            "length": 8
+          }
+        ],
+        "shapes": [
+          {
+            "kind": "text",
+            "x": 148,
+            "y": 10,
+            "value": "Processo (convertido: ganho, tau1, tau2)",
+            "fontSize": 11,
+            "textAnchor": "middle",
+            "dominantBaseline": "middle"
+          }
+        ]
+      },
+      "exposedComponents": [],
+      "exportedPropertyComponentIds": [
+        "gain",
+        "tau1",
+        "tau2"
+      ],
+      "origin": {
+        "kind": "migration",
+        "migrationId": "control-library-simulink",
+        "version": 1
+      }
+    },
+    {
+      "schemaVersion": 3,
+      "typeId": "subsystem.legado_processo_tau1_tau2_deadtime",
+      "name": "Processo (convertido: ganho, tau1, tau2, deadtime)",
+      "language": "pt-BR",
+      "folderPath": [
+        "Convertidos"
+      ],
+      "workspaceSection": "control",
+      "help": {
+        "description": "Processo (convertido: ganho, tau1, tau2, deadtime): composição de blocos da biblioteca equivalente ao Simulink gerada pela migração dos blocos legados (docs/68)."
+      },
+      "components": [
+        {
+          "id": "tunnel_in_in",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "in",
+            "pinId": "in",
+            "direction": "Input",
+            "valueType": "Real",
+            "defaultValue": 0
+          },
+          "visual": {
+            "x": 20,
+            "y": 60,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "gain",
+          "typeId": "sl.gain",
+          "properties": {
+            "Gain": "0.8",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 100,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau1",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[0.3 1]"
+          },
+          "visual": {
+            "x": 210,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau2",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[0.2 1]"
+          },
+          "visual": {
+            "x": 320,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "dead_time",
+          "typeId": "sl.transport_delay",
+          "properties": {
+            "DelayTime": "0.1",
+            "InitialOutput": "0"
+          },
+          "visual": {
+            "x": 430,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tunnel_out_out",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "out",
+            "pinId": "out",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 540,
+            "y": 60,
+            "rotation": 180
+          }
+        }
+      ],
+      "topology": {
+        "revision": 0,
+        "nodes": [],
+        "conductors": [
+          {
+            "id": "wire-1",
+            "from": {
+              "kind": "port",
+              "componentId": "tunnel_in_in",
+              "pinId": "value"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-2",
+            "from": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-3",
+            "from": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau2",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-4",
+            "from": {
+              "kind": "port",
+              "componentId": "tau2",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-5",
+            "from": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tunnel_out_out",
+              "pinId": "value"
+            },
+            "vertices": []
+          }
+        ]
+      },
+      "interface": [
+        {
+          "pinId": "in",
+          "label": "IN",
+          "internalTunnel": "in",
+          "domain": "signal",
+          "direction": "in",
+          "valueType": "Real",
+          "width": 1
+        },
+        {
+          "pinId": "out",
+          "label": "OUT",
+          "internalTunnel": "out",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        }
+      ],
+      "symbolMode": "generic",
+      "symbol": {
+        "width": 360,
+        "height": 40,
+        "border": true,
+        "pins": [
+          {
+            "id": "in",
+            "label": "IN",
+            "labelFontSize": 7,
+            "x": -8,
+            "y": 24,
+            "angle": 180,
+            "length": 8
+          },
+          {
+            "id": "out",
+            "label": "OUT",
+            "labelFontSize": 7,
+            "x": 368,
+            "y": 24,
+            "angle": 0,
+            "length": 8
+          }
+        ],
+        "shapes": [
+          {
+            "kind": "text",
+            "x": 180,
+            "y": 10,
+            "value": "Processo (convertido: ganho, tau1, tau2, deadtime)",
+            "fontSize": 11,
+            "textAnchor": "middle",
+            "dominantBaseline": "middle"
+          }
+        ]
+      },
+      "exposedComponents": [],
+      "exportedPropertyComponentIds": [
+        "gain",
+        "tau1",
+        "tau2",
+        "dead_time"
+      ],
+      "origin": {
+        "kind": "migration",
+        "migrationId": "control-library-simulink",
+        "version": 1
+      }
+    },
+    {
+      "schemaVersion": 3,
+      "typeId": "subsystem.legado_processo_stiction_tau1_tau2_deadtime",
+      "name": "Processo (convertido: ganho, stiction, tau1, tau2, deadtime)",
+      "language": "pt-BR",
+      "folderPath": [
+        "Convertidos"
+      ],
+      "workspaceSection": "control",
+      "help": {
+        "description": "Processo (convertido: ganho, stiction, tau1, tau2, deadtime): composição de blocos da biblioteca equivalente ao Simulink gerada pela migração dos blocos legados (docs/68)."
+      },
+      "components": [
+        {
+          "id": "tunnel_in_in",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "in",
+            "pinId": "in",
+            "direction": "Input",
+            "valueType": "Real",
+            "defaultValue": 0
+          },
+          "visual": {
+            "x": 20,
+            "y": 60,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "stiction_mux",
+          "typeId": "sl.mux",
+          "properties": {
+            "Inputs": "2"
+          },
+          "visual": {
+            "x": 100,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "stiction",
+          "typeId": "sl.fcn",
+          "properties": {
+            "Expr": "(abs(u(1)-u(2))>=1.3)*u(1) + (abs(u(1)-u(2))<1.3)*u(2)",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 140,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "stiction_memory",
+          "typeId": "sl.unit_delay",
+          "properties": {
+            "InitialCondition": "0",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 140,
+            "y": 160,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "gain",
+          "typeId": "sl.gain",
+          "properties": {
+            "Gain": "1.1",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 250,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau1",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[2.5 1]"
+          },
+          "visual": {
+            "x": 360,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau2",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[1 1]"
+          },
+          "visual": {
+            "x": 470,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "dead_time",
+          "typeId": "sl.transport_delay",
+          "properties": {
+            "DelayTime": "0.3",
+            "InitialOutput": "0"
+          },
+          "visual": {
+            "x": 580,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tunnel_out_out",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "out",
+            "pinId": "out",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 690,
+            "y": 60,
+            "rotation": 180
+          }
+        }
+      ],
+      "topology": {
+        "revision": 0,
+        "nodes": [],
+        "conductors": [
+          {
+            "id": "wire-1",
+            "from": {
+              "kind": "port",
+              "componentId": "tunnel_in_in",
+              "pinId": "value"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "stiction_mux",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-2",
+            "from": {
+              "kind": "port",
+              "componentId": "stiction_mux",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "stiction",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-3",
+            "from": {
+              "kind": "port",
+              "componentId": "stiction_memory",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "stiction_mux",
+              "pinId": "in2"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-4",
+            "from": {
+              "kind": "port",
+              "componentId": "stiction",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "stiction_memory",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-5",
+            "from": {
+              "kind": "port",
+              "componentId": "stiction",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-6",
+            "from": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-7",
+            "from": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau2",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-8",
+            "from": {
+              "kind": "port",
+              "componentId": "tau2",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-9",
+            "from": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tunnel_out_out",
+              "pinId": "value"
+            },
+            "vertices": []
+          }
+        ]
+      },
+      "interface": [
+        {
+          "pinId": "in",
+          "label": "IN",
+          "internalTunnel": "in",
+          "domain": "signal",
+          "direction": "in",
+          "valueType": "Real",
+          "width": 1
+        },
+        {
+          "pinId": "out",
+          "label": "OUT",
+          "internalTunnel": "out",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        }
+      ],
+      "symbolMode": "generic",
+      "symbol": {
+        "width": 432,
+        "height": 40,
+        "border": true,
+        "pins": [
+          {
+            "id": "in",
+            "label": "IN",
+            "labelFontSize": 7,
+            "x": -8,
+            "y": 24,
+            "angle": 180,
+            "length": 8
+          },
+          {
+            "id": "out",
+            "label": "OUT",
+            "labelFontSize": 7,
+            "x": 440,
+            "y": 24,
+            "angle": 0,
+            "length": 8
+          }
+        ],
+        "shapes": [
+          {
+            "kind": "text",
+            "x": 216,
+            "y": 10,
+            "value": "Processo (convertido: ganho, stiction, tau1, tau2, deadtime)",
+            "fontSize": 11,
+            "textAnchor": "middle",
+            "dominantBaseline": "middle"
+          }
+        ]
+      },
+      "exposedComponents": [],
+      "exportedPropertyComponentIds": [
+        "stiction",
+        "stiction_memory",
+        "gain",
+        "tau1",
+        "tau2",
+        "dead_time"
+      ],
+      "origin": {
+        "kind": "migration",
+        "migrationId": "control-library-simulink",
+        "version": 1
+      }
+    },
+    {
+      "schemaVersion": 3,
+      "typeId": "subsystem.legado_processo_actuator_tau1_tau2_deadtime",
+      "name": "Processo (convertido: ganho, actuator, tau1, tau2, deadtime)",
+      "language": "pt-BR",
+      "folderPath": [
+        "Convertidos"
+      ],
+      "workspaceSection": "control",
+      "help": {
+        "description": "Processo (convertido: ganho, actuator, tau1, tau2, deadtime): composição de blocos da biblioteca equivalente ao Simulink gerada pela migração dos blocos legados (docs/68)."
+      },
+      "components": [
+        {
+          "id": "tunnel_in_in",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "in",
+            "pinId": "in",
+            "direction": "Input",
+            "valueType": "Real",
+            "defaultValue": 0
+          },
+          "visual": {
+            "x": 20,
+            "y": 60,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "actuator",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[2 1]"
+          },
+          "visual": {
+            "x": 100,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "gain",
+          "typeId": "sl.gain",
+          "properties": {
+            "Gain": "0.03",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 210,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau1",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[3 1]"
+          },
+          "visual": {
+            "x": 320,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau2",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[3 1]"
+          },
+          "visual": {
+            "x": 430,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "dead_time",
+          "typeId": "sl.transport_delay",
+          "properties": {
+            "DelayTime": "0.5",
+            "InitialOutput": "0"
+          },
+          "visual": {
+            "x": 540,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tunnel_out_out",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "out",
+            "pinId": "out",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 650,
+            "y": 60,
+            "rotation": 180
+          }
+        }
+      ],
+      "topology": {
+        "revision": 0,
+        "nodes": [],
+        "conductors": [
+          {
+            "id": "wire-1",
+            "from": {
+              "kind": "port",
+              "componentId": "tunnel_in_in",
+              "pinId": "value"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "actuator",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-2",
+            "from": {
+              "kind": "port",
+              "componentId": "actuator",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-3",
+            "from": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-4",
+            "from": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau2",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-5",
+            "from": {
+              "kind": "port",
+              "componentId": "tau2",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-6",
+            "from": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tunnel_out_out",
+              "pinId": "value"
+            },
+            "vertices": []
+          }
+        ]
+      },
+      "interface": [
+        {
+          "pinId": "in",
+          "label": "IN",
+          "internalTunnel": "in",
+          "domain": "signal",
+          "direction": "in",
+          "valueType": "Real",
+          "width": 1
+        },
+        {
+          "pinId": "out",
+          "label": "OUT",
+          "internalTunnel": "out",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        }
+      ],
+      "symbolMode": "generic",
+      "symbol": {
+        "width": 432,
+        "height": 40,
+        "border": true,
+        "pins": [
+          {
+            "id": "in",
+            "label": "IN",
+            "labelFontSize": 7,
+            "x": -8,
+            "y": 24,
+            "angle": 180,
+            "length": 8
+          },
+          {
+            "id": "out",
+            "label": "OUT",
+            "labelFontSize": 7,
+            "x": 440,
+            "y": 24,
+            "angle": 0,
+            "length": 8
+          }
+        ],
+        "shapes": [
+          {
+            "kind": "text",
+            "x": 216,
+            "y": 10,
+            "value": "Processo (convertido: ganho, actuator, tau1, tau2, deadtime)",
+            "fontSize": 11,
+            "textAnchor": "middle",
+            "dominantBaseline": "middle"
+          }
+        ]
+      },
+      "exposedComponents": [],
+      "exportedPropertyComponentIds": [
+        "actuator",
+        "gain",
+        "tau1",
+        "tau2",
+        "dead_time"
+      ],
+      "origin": {
+        "kind": "migration",
+        "migrationId": "control-library-simulink",
+        "version": 1
+      }
+    },
+    {
+      "schemaVersion": 3,
+      "typeId": "subsystem.legado_processo_actuator_tau1_deadtime",
+      "name": "Processo (convertido: ganho, actuator, tau1, deadtime)",
+      "language": "pt-BR",
+      "folderPath": [
+        "Convertidos"
+      ],
+      "workspaceSection": "control",
+      "help": {
+        "description": "Processo (convertido: ganho, actuator, tau1, deadtime): composição de blocos da biblioteca equivalente ao Simulink gerada pela migração dos blocos legados (docs/68)."
+      },
+      "components": [
+        {
+          "id": "tunnel_in_in",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "in",
+            "pinId": "in",
+            "direction": "Input",
+            "valueType": "Real",
+            "defaultValue": 0
+          },
+          "visual": {
+            "x": 20,
+            "y": 60,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "actuator",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[2.2 1]"
+          },
+          "visual": {
+            "x": 100,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "gain",
+          "typeId": "sl.gain",
+          "properties": {
+            "Gain": "1",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 210,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau1",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[10 1]"
+          },
+          "visual": {
+            "x": 320,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "dead_time",
+          "typeId": "sl.transport_delay",
+          "properties": {
+            "DelayTime": "0.8",
+            "InitialOutput": "0"
+          },
+          "visual": {
+            "x": 430,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tunnel_out_out",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "out",
+            "pinId": "out",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 540,
+            "y": 60,
+            "rotation": 180
+          }
+        }
+      ],
+      "topology": {
+        "revision": 0,
+        "nodes": [],
+        "conductors": [
+          {
+            "id": "wire-1",
+            "from": {
+              "kind": "port",
+              "componentId": "tunnel_in_in",
+              "pinId": "value"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "actuator",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-2",
+            "from": {
+              "kind": "port",
+              "componentId": "actuator",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-3",
+            "from": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-4",
+            "from": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-5",
+            "from": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tunnel_out_out",
+              "pinId": "value"
+            },
+            "vertices": []
+          }
+        ]
+      },
+      "interface": [
+        {
+          "pinId": "in",
+          "label": "IN",
+          "internalTunnel": "in",
+          "domain": "signal",
+          "direction": "in",
+          "valueType": "Real",
+          "width": 1
+        },
+        {
+          "pinId": "out",
+          "label": "OUT",
+          "internalTunnel": "out",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        }
+      ],
+      "symbolMode": "generic",
+      "symbol": {
+        "width": 392,
+        "height": 40,
+        "border": true,
+        "pins": [
+          {
+            "id": "in",
+            "label": "IN",
+            "labelFontSize": 7,
+            "x": -8,
+            "y": 24,
+            "angle": 180,
+            "length": 8
+          },
+          {
+            "id": "out",
+            "label": "OUT",
+            "labelFontSize": 7,
+            "x": 400,
+            "y": 24,
+            "angle": 0,
+            "length": 8
+          }
+        ],
+        "shapes": [
+          {
+            "kind": "text",
+            "x": 196,
+            "y": 10,
+            "value": "Processo (convertido: ganho, actuator, tau1, deadtime)",
+            "fontSize": 11,
+            "textAnchor": "middle",
+            "dominantBaseline": "middle"
+          }
+        ]
+      },
+      "exposedComponents": [],
+      "exportedPropertyComponentIds": [
+        "actuator",
+        "gain",
+        "tau1",
+        "dead_time"
+      ],
+      "origin": {
+        "kind": "migration",
+        "migrationId": "control-library-simulink",
+        "version": 1
+      }
+    },
+    {
+      "schemaVersion": 3,
+      "typeId": "subsystem.legado_processo_tau1_deadtime",
+      "name": "Processo (convertido: ganho, tau1, deadtime)",
+      "language": "pt-BR",
+      "folderPath": [
+        "Convertidos"
+      ],
+      "workspaceSection": "control",
+      "help": {
+        "description": "Processo (convertido: ganho, tau1, deadtime): composição de blocos da biblioteca equivalente ao Simulink gerada pela migração dos blocos legados (docs/68)."
+      },
+      "components": [
+        {
+          "id": "tunnel_in_in",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "in",
+            "pinId": "in",
+            "direction": "Input",
+            "valueType": "Real",
+            "defaultValue": 0
+          },
+          "visual": {
+            "x": 20,
+            "y": 60,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "gain",
+          "typeId": "sl.gain",
+          "properties": {
+            "Gain": "1",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 100,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau1",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[8 1]"
+          },
+          "visual": {
+            "x": 210,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "dead_time",
+          "typeId": "sl.transport_delay",
+          "properties": {
+            "DelayTime": "4",
+            "InitialOutput": "0"
+          },
+          "visual": {
+            "x": 320,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tunnel_out_out",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "out",
+            "pinId": "out",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 430,
+            "y": 60,
+            "rotation": 180
+          }
+        }
+      ],
+      "topology": {
+        "revision": 0,
+        "nodes": [],
+        "conductors": [
+          {
+            "id": "wire-1",
+            "from": {
+              "kind": "port",
+              "componentId": "tunnel_in_in",
+              "pinId": "value"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-2",
+            "from": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-3",
+            "from": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-4",
+            "from": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tunnel_out_out",
+              "pinId": "value"
+            },
+            "vertices": []
+          }
+        ]
+      },
+      "interface": [
+        {
+          "pinId": "in",
+          "label": "IN",
+          "internalTunnel": "in",
+          "domain": "signal",
+          "direction": "in",
+          "valueType": "Real",
+          "width": 1
+        },
+        {
+          "pinId": "out",
+          "label": "OUT",
+          "internalTunnel": "out",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        }
+      ],
+      "symbolMode": "generic",
+      "symbol": {
+        "width": 320,
+        "height": 40,
+        "border": true,
+        "pins": [
+          {
+            "id": "in",
+            "label": "IN",
+            "labelFontSize": 7,
+            "x": -8,
+            "y": 24,
+            "angle": 180,
+            "length": 8
+          },
+          {
+            "id": "out",
+            "label": "OUT",
+            "labelFontSize": 7,
+            "x": 328,
+            "y": 24,
+            "angle": 0,
+            "length": 8
+          }
+        ],
+        "shapes": [
+          {
+            "kind": "text",
+            "x": 160,
+            "y": 10,
+            "value": "Processo (convertido: ganho, tau1, deadtime)",
+            "fontSize": 11,
+            "textAnchor": "middle",
+            "dominantBaseline": "middle"
+          }
+        ]
+      },
+      "exposedComponents": [],
+      "exportedPropertyComponentIds": [
+        "gain",
+        "tau1",
+        "dead_time"
+      ],
+      "origin": {
+        "kind": "migration",
+        "migrationId": "control-library-simulink",
+        "version": 1
+      }
+    },
+    {
+      "schemaVersion": 3,
+      "typeId": "subsystem.legado_processo_tau1_tau2_leadlag_deadtime",
+      "name": "Processo (convertido: ganho, tau1, tau2, leadlag, deadtime)",
+      "language": "pt-BR",
+      "folderPath": [
+        "Convertidos"
+      ],
+      "workspaceSection": "control",
+      "help": {
+        "description": "Processo (convertido: ganho, tau1, tau2, leadlag, deadtime): composição de blocos da biblioteca equivalente ao Simulink gerada pela migração dos blocos legados (docs/68)."
+      },
+      "components": [
+        {
+          "id": "tunnel_in_in",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "in",
+            "pinId": "in",
+            "direction": "Input",
+            "valueType": "Real",
+            "defaultValue": 0
+          },
+          "visual": {
+            "x": 20,
+            "y": 60,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "gain",
+          "typeId": "sl.gain",
+          "properties": {
+            "Gain": "-1",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 100,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau1",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[3 1]"
+          },
+          "visual": {
+            "x": 210,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau2",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[3 1]"
+          },
+          "visual": {
+            "x": 320,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "lead_lag",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[13.5 1]",
+            "Denominator": "[19.16 1]"
+          },
+          "visual": {
+            "x": 430,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "dead_time",
+          "typeId": "sl.transport_delay",
+          "properties": {
+            "DelayTime": "2.9",
+            "InitialOutput": "0"
+          },
+          "visual": {
+            "x": 540,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tunnel_out_out",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "out",
+            "pinId": "out",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 650,
+            "y": 60,
+            "rotation": 180
+          }
+        }
+      ],
+      "topology": {
+        "revision": 0,
+        "nodes": [],
+        "conductors": [
+          {
+            "id": "wire-1",
+            "from": {
+              "kind": "port",
+              "componentId": "tunnel_in_in",
+              "pinId": "value"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-2",
+            "from": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-3",
+            "from": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau2",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-4",
+            "from": {
+              "kind": "port",
+              "componentId": "tau2",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "lead_lag",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-5",
+            "from": {
+              "kind": "port",
+              "componentId": "lead_lag",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-6",
+            "from": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tunnel_out_out",
+              "pinId": "value"
+            },
+            "vertices": []
+          }
+        ]
+      },
+      "interface": [
+        {
+          "pinId": "in",
+          "label": "IN",
+          "internalTunnel": "in",
+          "domain": "signal",
+          "direction": "in",
+          "valueType": "Real",
+          "width": 1
+        },
+        {
+          "pinId": "out",
+          "label": "OUT",
+          "internalTunnel": "out",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        }
+      ],
+      "symbolMode": "generic",
+      "symbol": {
+        "width": 424,
+        "height": 40,
+        "border": true,
+        "pins": [
+          {
+            "id": "in",
+            "label": "IN",
+            "labelFontSize": 7,
+            "x": -8,
+            "y": 24,
+            "angle": 180,
+            "length": 8
+          },
+          {
+            "id": "out",
+            "label": "OUT",
+            "labelFontSize": 7,
+            "x": 432,
+            "y": 24,
+            "angle": 0,
+            "length": 8
+          }
+        ],
+        "shapes": [
+          {
+            "kind": "text",
+            "x": 212,
+            "y": 10,
+            "value": "Processo (convertido: ganho, tau1, tau2, leadlag, deadtime)",
+            "fontSize": 11,
+            "textAnchor": "middle",
+            "dominantBaseline": "middle"
+          }
+        ]
+      },
+      "exposedComponents": [],
+      "exportedPropertyComponentIds": [
+        "gain",
+        "tau1",
+        "tau2",
+        "lead_lag",
+        "dead_time"
+      ],
+      "origin": {
+        "kind": "migration",
+        "migrationId": "control-library-simulink",
+        "version": 1
+      }
+    }
   ]
 }

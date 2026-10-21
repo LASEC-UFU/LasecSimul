@@ -7,6 +7,8 @@ import type { IdentProject } from "../ident/identification";
 import type { VisualDocument } from "../ui/webview/visualDocument";
 export type { HmiApplication, HmiPage, HmiPageElement, HmiPageNavigationItem } from "../ui/webview/model";
 
+import type { ModelWorkspaceVariable } from "./modelWorkspace";
+
 export const LS_PROJ_SCHEMA_VERSION = 2 as const;
 
 export interface ProjectSimulationSettings {
@@ -172,6 +174,8 @@ export interface ProjectDocument {
   subsystems?: SubsystemDefinition[];
   controlDesignProject?: ControlDesignProject;
   identProject?: IdentProject;
+  /** Model Workspace (docs/66 §3): variáveis dos parâmetros dos blocos `sl.*`, em ordem de avaliação. */
+  modelWorkspace?: ModelWorkspaceVariable[];
 }
 
 export function createEmptyProject(): ProjectDocument {

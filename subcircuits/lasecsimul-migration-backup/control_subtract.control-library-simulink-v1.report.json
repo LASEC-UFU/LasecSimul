@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.subtract",
+      "kind": "single",
+      "rule": "subtract->sum(+-)",
+      "newTypeIds": [
+        "sl.sum"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_subtract.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.809Z",
+  "original": {
+    "backup": "control_subtract.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "04ef652aa0d83e0030dbd218525dcfb395bd66c074bbe7b45e3570ab0ecb0a49"
+  },
+  "migrated": {
+    "sha256": "7b3ae3a176d11444835e357d5900e1ec243e354ff5b8123716ee34e1fde64290"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "subtract->sum(+-)": 1
+    }
+  }
+}

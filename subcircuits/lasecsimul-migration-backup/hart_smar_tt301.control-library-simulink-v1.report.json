@@ -1,0 +1,418 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "rtd_exc_value",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "",
+      "componentId": "rtd_r",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "rtd_t",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "rtd_fault",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "c_tterm",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "",
+      "componentId": "rtd_exc_cmd",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_det_value",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_mv",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_cj_b",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_cj_e",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_cj_j",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_cj_k",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_cj_n",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_cj_r",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_cj_s",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_cj_t",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_cj",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_e",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_ec_b",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_t_b",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_ec_e",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_t_e",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_ec_j",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_t_j",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_ec_k",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_t_k",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_ec_n",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_t_n",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_ec_r",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_t_r",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_ec_s",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_t_s",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_ec_t",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_t_t",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_t",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "tc_fault",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "pv_select",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "fault_select",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "hart_smar_tt301.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.900Z",
+  "original": {
+    "backup": "hart_smar_tt301.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "8f5d7b5e2b6dcbbee7029842a17705ed502687f69ecab8fdd9a25a7d4ca50949"
+  },
+  "migrated": {
+    "sha256": "2a873dd37e41847f9d7bfa8c7d6aee31c1e317cf03554dab1b70f5d6d62ab896"
+  },
+  "summary": {
+    "converted": 36,
+    "kept": 2,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 2,
+      "calc_expression->mux+fcn": 8,
+      "calc_expression->fcn": 28
+    }
+  }
+}

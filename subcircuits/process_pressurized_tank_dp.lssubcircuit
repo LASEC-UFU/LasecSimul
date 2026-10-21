@@ -47,7 +47,7 @@
       "id": "c_height",
       "typeId": "control.constant",
       "properties": {
-        "value": 3.0,
+        "value": 3,
         "unit": "m"
       },
       "visual": {
@@ -61,7 +61,7 @@
       "id": "c_diameter",
       "typeId": "control.constant",
       "properties": {
-        "value": 1.0,
+        "value": 1,
         "unit": "m"
       },
       "visual": {
@@ -75,7 +75,7 @@
       "id": "c_sg_process",
       "typeId": "control.constant",
       "properties": {
-        "value": 1.0,
+        "value": 1,
         "unit": ""
       },
       "visual": {
@@ -89,7 +89,7 @@
       "id": "c_sg_seal",
       "typeId": "control.constant",
       "properties": {
-        "value": 1.0,
+        "value": 1,
         "unit": ""
       },
       "visual": {
@@ -103,7 +103,7 @@
       "id": "c_sg_capillary",
       "typeId": "control.constant",
       "properties": {
-        "value": 1.0,
+        "value": 1,
         "unit": ""
       },
       "visual": {
@@ -131,7 +131,7 @@
       "id": "c_gas",
       "typeId": "control.constant",
       "properties": {
-        "value": 50.0,
+        "value": 50,
         "unit": "kPa"
       },
       "visual": {
@@ -145,7 +145,7 @@
       "id": "c_qin_max",
       "typeId": "control.constant",
       "properties": {
-        "value": 36.0,
+        "value": 36,
         "unit": "m³/h"
       },
       "visual": {
@@ -159,7 +159,7 @@
       "id": "c_qout_max",
       "typeId": "control.constant",
       "properties": {
-        "value": 36.0,
+        "value": 36,
         "unit": "m³/h"
       },
       "visual": {
@@ -171,11 +171,9 @@
     },
     {
       "id": "u_in",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "properties": {
-        "unit": "%",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       },
       "visual": {
         "x": 200,
@@ -186,11 +184,9 @@
     },
     {
       "id": "u_out",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "properties": {
-        "unit": "%",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       },
       "visual": {
         "x": 200,
@@ -201,20 +197,10 @@
     },
     {
       "id": "q_in",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "Qmax*((u>0)*u)/100*(h<H)",
-        "inputs": [
-          "u",
-          "h",
-          "H",
-          "Qmax"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(4)*((u(1) > 0)*u(1))/100*(u(2) < u(3))",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 420,
@@ -225,22 +211,10 @@
     },
     {
       "id": "q_out",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "Qmax*((u>0)*u)/100*((h>0.02)+(h<0.02)*h/0.02)*((((SG*h+0.101972*Pg)>0)*(SG*h+0.101972*Pg))/(SG*H+0.101972*Pg))^0.5",
-        "inputs": [
-          "u",
-          "h",
-          "H",
-          "SG",
-          "Pg",
-          "Qmax"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(6)*((u(1) > 0)*u(1))/100*((u(2) > 0.02) + (u(2) < 0.02)*u(2)/0.02)*((u(4)*u(2) + 0.101972*u(5) > 0)*(u(4)*u(2) + 0.101972*u(5))/(u(4)*u(3) + 0.101972*u(5)))^0.5",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 420,
@@ -251,18 +225,10 @@
     },
     {
       "id": "dh_in",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "q/3600/(0.785398163*D^2)",
-        "inputs": [
-          "q",
-          "D"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)/3600/(0.785398163*u(2)^2)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -273,18 +239,10 @@
     },
     {
       "id": "dh_out",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "q/3600/(0.785398163*D^2)",
-        "inputs": [
-          "q",
-          "D"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)/3600/(0.785398163*u(2)^2)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -295,7 +253,7 @@
     },
     {
       "id": "tank",
-      "typeId": "control.accumulator",
+      "typeId": "process.accumulator",
       "properties": {
         "initial": 1.5,
         "samplePeriodNs": 10000000
@@ -309,18 +267,10 @@
     },
     {
       "id": "level_percent",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "100*h/H",
-        "inputs": [
-          "h",
-          "H"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "100*u(1)/u(2)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 1020,
@@ -331,21 +281,10 @@
     },
     {
       "id": "p_high",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "1000*(SG*h+SGc*Lc)+101.972*Pg",
-        "inputs": [
-          "h",
-          "SG",
-          "SGc",
-          "Lc",
-          "Pg"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "1000*(u(2)*u(1) + u(3)*u(4)) + 101.972*u(5)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 1020,
@@ -356,20 +295,10 @@
     },
     {
       "id": "p_low",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "1000*SGs*(H+Lc)+101.972*Pg",
-        "inputs": [
-          "H",
-          "SGs",
-          "Lc",
-          "Pg"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "1000*u(2)*(u(1) + u(3)) + 101.972*u(4)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 1020,
@@ -380,18 +309,10 @@
     },
     {
       "id": "dp",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "a-b",
-        "inputs": [
-          "a",
-          "b"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1) - u(2)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 1220,
@@ -546,8 +467,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "m",
         "bindDecimals": 3
       },
@@ -574,8 +495,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "%",
         "bindDecimals": 1
       },
@@ -602,8 +523,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "mmH2O",
         "bindDecimals": 0
       },
@@ -630,8 +551,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "m³/h",
         "bindDecimals": 2
       },
@@ -658,8 +579,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "m³/h",
         "bindDecimals": 2
       },
@@ -686,8 +607,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "mmH2O",
         "bindDecimals": 0
       },
@@ -714,8 +635,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "mmH2O",
         "bindDecimals": 0
       },
@@ -742,8 +663,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "m",
         "bindDecimals": 2
       },
@@ -770,8 +691,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "",
         "bindDecimals": 3
       },
@@ -798,8 +719,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "",
         "bindDecimals": 3
       },
@@ -826,8 +747,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "",
         "bindDecimals": 3
       },
@@ -854,8 +775,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "m",
         "bindDecimals": 2
       },
@@ -882,14 +803,110 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "kPa",
         "bindDecimals": 1
       },
       "visual": {
         "x": 618,
         "y": 296,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "q_in__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "4"
+      },
+      "visual": {
+        "x": 340,
+        "y": 80,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "q_out__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "6"
+      },
+      "visual": {
+        "x": 340,
+        "y": 160,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "dh_in__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 540,
+        "y": 80,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "dh_out__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 540,
+        "y": 160,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "level_percent__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 940,
+        "y": 80,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "p_high__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "5"
+      },
+      "visual": {
+        "x": 940,
+        "y": 200,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "p_low__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "4"
+      },
+      "visual": {
+        "x": 940,
+        "y": 280,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "dp__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 1140,
+        "y": 240,
         "rotation": 0
       }
     }
@@ -908,7 +925,7 @@
         "to": {
           "kind": "port",
           "componentId": "u_in",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -922,7 +939,7 @@
         "to": {
           "kind": "port",
           "componentId": "u_out",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -931,12 +948,12 @@
         "from": {
           "kind": "port",
           "componentId": "u_in",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "q_in",
-          "pinId": "u"
+          "componentId": "q_in__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -949,8 +966,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "q_in",
-          "pinId": "h"
+          "componentId": "q_in__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -963,8 +980,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "q_in",
-          "pinId": "H"
+          "componentId": "q_in__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -977,8 +994,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "q_in",
-          "pinId": "Qmax"
+          "componentId": "q_in__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -987,12 +1004,12 @@
         "from": {
           "kind": "port",
           "componentId": "u_out",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "q_out",
-          "pinId": "u"
+          "componentId": "q_out__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1005,8 +1022,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "q_out",
-          "pinId": "h"
+          "componentId": "q_out__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1019,8 +1036,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "q_out",
-          "pinId": "H"
+          "componentId": "q_out__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1033,8 +1050,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "q_out",
-          "pinId": "SG"
+          "componentId": "q_out__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -1047,8 +1064,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "q_out",
-          "pinId": "Pg"
+          "componentId": "q_out__mux",
+          "pinId": "in5"
         },
         "points": []
       },
@@ -1061,8 +1078,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "q_out",
-          "pinId": "Qmax"
+          "componentId": "q_out__mux",
+          "pinId": "in6"
         },
         "points": []
       },
@@ -1071,12 +1088,12 @@
         "from": {
           "kind": "port",
           "componentId": "q_in",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dh_in",
-          "pinId": "q"
+          "componentId": "dh_in__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1089,8 +1106,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "dh_in",
-          "pinId": "D"
+          "componentId": "dh_in__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1099,12 +1116,12 @@
         "from": {
           "kind": "port",
           "componentId": "q_out",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dh_out",
-          "pinId": "q"
+          "componentId": "dh_out__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1117,8 +1134,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "dh_out",
-          "pinId": "D"
+          "componentId": "dh_out__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1127,7 +1144,7 @@
         "from": {
           "kind": "port",
           "componentId": "dh_in",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1141,7 +1158,7 @@
         "from": {
           "kind": "port",
           "componentId": "dh_out",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1159,8 +1176,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "level_percent",
-          "pinId": "h"
+          "componentId": "level_percent__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1173,8 +1190,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "level_percent",
-          "pinId": "H"
+          "componentId": "level_percent__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1187,8 +1204,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "p_high",
-          "pinId": "h"
+          "componentId": "p_high__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1201,8 +1218,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "p_high",
-          "pinId": "SG"
+          "componentId": "p_high__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1215,8 +1232,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "p_high",
-          "pinId": "SGc"
+          "componentId": "p_high__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1229,8 +1246,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "p_high",
-          "pinId": "Lc"
+          "componentId": "p_high__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -1243,8 +1260,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "p_high",
-          "pinId": "Pg"
+          "componentId": "p_high__mux",
+          "pinId": "in5"
         },
         "points": []
       },
@@ -1257,8 +1274,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "p_low",
-          "pinId": "H"
+          "componentId": "p_low__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1271,8 +1288,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "p_low",
-          "pinId": "SGs"
+          "componentId": "p_low__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1285,8 +1302,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "p_low",
-          "pinId": "Lc"
+          "componentId": "p_low__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1299,8 +1316,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "p_low",
-          "pinId": "Pg"
+          "componentId": "p_low__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -1309,12 +1326,12 @@
         "from": {
           "kind": "port",
           "componentId": "p_high",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dp",
-          "pinId": "a"
+          "componentId": "dp__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1323,12 +1340,12 @@
         "from": {
           "kind": "port",
           "componentId": "p_low",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "dp",
-          "pinId": "b"
+          "componentId": "dp__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1337,7 +1354,7 @@
         "from": {
           "kind": "port",
           "componentId": "p_high",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1351,7 +1368,7 @@
         "from": {
           "kind": "port",
           "componentId": "p_low",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1379,7 +1396,7 @@
         "from": {
           "kind": "port",
           "componentId": "level_percent",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1387,6 +1404,118 @@
           "pinId": "value"
         },
         "points": []
+      },
+      {
+        "id": "q_in__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "q_in__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_in",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "q_out__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "q_out__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_out",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "dh_in__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "dh_in__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dh_in",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "dh_out__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "dh_out__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dh_out",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "level_percent__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "level_percent__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "level_percent",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "p_high__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "p_high__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "p_high",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "p_low__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "p_low__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "p_low",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "dp__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "dp__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dp",
+          "pinId": "in1"
+        },
+        "vertices": []
       }
     ]
   },
@@ -1485,16 +1614,16 @@
         "kind": "line",
         "x1": 8,
         "y1": 84,
-        "x2": 280.0,
+        "x2": 280,
         "y2": 84,
         "stroke": "#64748b",
         "strokeWidth": 6
       },
       {
         "kind": "line",
-        "x1": 280.0,
+        "x1": 280,
         "y1": 84,
-        "x2": 280.0,
+        "x2": 280,
         "y2": 102.125,
         "stroke": "#64748b",
         "strokeWidth": 6
@@ -1510,9 +1639,9 @@
       },
       {
         "kind": "line",
-        "x1": 280.0,
+        "x1": 280,
         "y1": 311.78125,
-        "x2": 280.0,
+        "x2": 280,
         "y2": 362,
         "stroke": "#64748b",
         "strokeWidth": 6
@@ -1521,7 +1650,7 @@
         "kind": "line",
         "x1": 8,
         "y1": 362,
-        "x2": 280.0,
+        "x2": 280,
         "y2": 362,
         "stroke": "#64748b",
         "strokeWidth": 6
@@ -1537,7 +1666,7 @@
       },
       {
         "kind": "text",
-        "x": 280.0,
+        "x": 280,
         "y": 92.125,
         "value": "gás pressurizado",
         "fontSize": 9,

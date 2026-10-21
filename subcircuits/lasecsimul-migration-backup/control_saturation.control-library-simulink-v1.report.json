@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.saturation",
+      "kind": "single",
+      "rule": "saturation->saturation",
+      "newTypeIds": [
+        "sl.saturation"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_saturation.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.793Z",
+  "original": {
+    "backup": "control_saturation.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "54e58da05f951fbce093b34175986c5bfbb3a6ccc01681f9e00461aa54034f83"
+  },
+  "migrated": {
+    "sha256": "21ade433e5e75600dc87eb3eac7625a14040f93e1542c2d981000d3ceec5f72b"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "saturation->saturation": 1
+    }
+  }
+}

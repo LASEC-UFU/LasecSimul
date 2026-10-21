@@ -196,6 +196,7 @@ function visualWebviewState(doc: VisualDocument, session: VisualSession, instanc
     calculusLab: undefined,
     controlDesignProject: undefined,
     identProject: undefined,
+    modelWorkspace: undefined,
     hmiApplication: doc,
     viewport: session.viewport ?? { x: 0, y: 0, zoom: 1 },
     selectedComponentIds: [],

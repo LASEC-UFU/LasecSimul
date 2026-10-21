@@ -1,0 +1,170 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "c_qin",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "",
+      "componentId": "c_qout",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "",
+      "componentId": "c_area",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "",
+      "componentId": "c_hmax",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "",
+      "componentId": "c_k",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "",
+      "componentId": "c_torr",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "",
+      "componentId": "c_outlet",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "",
+      "componentId": "vmax",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "q_out",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "acc",
+      "legacyTypeId": "control.accumulator",
+      "kind": "rename",
+      "rule": "accumulator->process.accumulator (bloco de processo do LasecSimul)",
+      "newTypeIds": [
+        "process.accumulator"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "h",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "level_percent",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "obs_overflow",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "obs_unmet",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "process_hydraulic_tank.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.962Z",
+  "original": {
+    "backup": "process_hydraulic_tank.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "74688245dd45988ceb734f6b3b8f7a4013c6bfe16160b491089ebc02b83ec78e"
+  },
+  "migrated": {
+    "sha256": "d815e3e6df41c0a3892ba43a3264bb328d04b810236f64e972f13005d4ee8389"
+  },
+  "summary": {
+    "converted": 6,
+    "kept": 7,
+    "renamed": 1,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 7,
+      "calc_expression->mux+fcn": 4,
+      "accumulator->process.accumulator (bloco de processo do LasecSimul)": 1,
+      "observer->identity-gain": 2
+    }
+  }
+}

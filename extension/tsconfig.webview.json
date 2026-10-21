@@ -36,6 +36,7 @@
     "src/ui/webview/hartCommonTablesData.ts",
     "src/ui/webview/blockLibrary/**/*.ts",
     "src/ui/webview/lab/**/*.ts",
+    "src/ui/webview/scope/**/*.ts",
     "src/ui/webview/controlDesigner/**/*.ts",
     "src/ui/webview/ident/**/*.ts"
   ],

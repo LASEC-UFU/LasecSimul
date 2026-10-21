@@ -315,7 +315,7 @@ void stateSpacePropertiesCompileToOriginalContinuousAndDiscreteBlocks() {
         CHECK(block != compiled.graph.blocks.end(), "bloco A/B/C/D compilado");
         if (block != compiled.graph.blocks.end()) {
             CHECK(block->kind == expectedKind && block->intParameters == std::vector<int64_t>{1}, "dominio e dimensão são preservados");
-            CHECK(block->realParameters == std::vector<double>({-1.0, 1.0, 1.0, 0.0}), "matrizes originais são mantidas no plano compilado");
+            CHECK(block->realParameters == std::vector<double>({-1.0, 1.0, 1.0, 0.0, 0.0}), "matrizes originais e estado inicial são mantidos no plano compilado");
         }
     }
 }

@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.valve_characteristic",
+      "kind": "single",
+      "rule": "valve_characteristic->fcn(abs)",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_valve_characteristic.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.836Z",
+  "original": {
+    "backup": "control_valve_characteristic.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "ed6b9642fcfa6765231d4dbeeb9b079a0ce0192daeb8e0cadad4908a70bfd4f4"
+  },
+  "migrated": {
+    "sha256": "2c9da7f7d09faf4a5820a93c6031ebe2737d647da3c24d52ee36cc80b5506687"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "valve_characteristic->fcn(abs)": 1
+    }
+  }
+}

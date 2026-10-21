@@ -53,7 +53,7 @@ export class XYChart {
     return group;
   }
 
-  axes(group: SVGGElement, options: { xLabel: string; yLabel: string; xDecimals?: number; yDecimals?: number }): void {
+  axes(group: SVGGElement, options: { xLabel: string; yLabel: string; xDecimals?: number; yDecimals?: number; showGrid?: boolean; xTickOffset?: number }): void {
     const { x0, x1, y0, y1 } = this.view, g = this.geo;
     const zeroY = y0 <= 0 && y1 >= 0 ? this.y(0) : g.H - g.B;
     const zeroX = x0 <= 0 && x1 >= 0 ? this.x(0) : g.L;
@@ -61,11 +61,11 @@ export class XYChart {
     svg("line", { x1: zeroX, y1: g.T, x2: zeroX, y2: g.H - g.B, stroke: "#94a3b8" }, group);
     const xs = niceStep(x1 - x0), ys = niceStep(y1 - y0);
     for (let v = Math.ceil(x0 / xs) * xs; v <= x1 + xs * 1e-9; v += xs) {
-      svg("line", { x1: this.x(v), y1: g.T, x2: this.x(v), y2: g.H - g.B, stroke: "#e2e8f0" }, group);
-      svg("text", { x: this.x(v), y: g.H - 10, "text-anchor": "middle", "font-size": 11, fill: "#475569" }, group).textContent = nf(v, options.xDecimals ?? 2);
+      if (options.showGrid !== false) svg("line", { x1: this.x(v), y1: g.T, x2: this.x(v), y2: g.H - g.B, stroke: "#e2e8f0" }, group);
+      svg("text", { x: this.x(v), y: g.H - 10, "text-anchor": "middle", "font-size": 11, fill: "#475569" }, group).textContent = nf(v + (options.xTickOffset ?? 0), options.xDecimals ?? 2);
     }
     for (let v = Math.ceil(y0 / ys) * ys; v <= y1 + ys * 1e-9; v += ys) {
-      svg("line", { x1: g.L, y1: this.y(v), x2: g.W - g.R, y2: this.y(v), stroke: "#f1f5f9" }, group);
+      if (options.showGrid !== false) svg("line", { x1: g.L, y1: this.y(v), x2: g.W - g.R, y2: this.y(v), stroke: "#f1f5f9" }, group);
       svg("text", { x: g.L - 6, y: this.y(v) + 4, "text-anchor": "end", "font-size": 11, fill: "#475569" }, group).textContent = nf(v, options.yDecimals ?? 2);
     }
     svg("text", { x: 6, y: 12, "font-size": 12, fill: "#0f172a" }, group).textContent = options.yLabel;

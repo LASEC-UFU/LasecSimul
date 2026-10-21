@@ -1,0 +1,261 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "c_supply",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "c_action",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "c_plo",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "c_phi",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "c_stroke",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "c_tau",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "c_friction",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "c_kvs",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "c_char",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "c_dp",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "out1_bar",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "supply_bar",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "p_in",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "p_out",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "p_act",
+      "legacyTypeId": "control.accumulator",
+      "kind": "rename",
+      "rule": "accumulator->process.accumulator (bloco de processo do LasecSimul)",
+      "newTypeIds": [
+        "process.accumulator"
+      ]
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "x_eq",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "gap",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "stem_in",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "stem_out",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "stem",
+      "legacyTypeId": "control.accumulator",
+      "kind": "rename",
+      "rule": "accumulator->process.accumulator (bloco de processo do LasecSimul)",
+      "newTypeIds": [
+        "process.accumulator"
+      ]
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "opening",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791649688358-valve1/",
+      "componentId": "flow_m3h",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "component-1791649688358-ctrl02",
+      "legacyTypeId": "control.gain",
+      "kind": "single",
+      "rule": "gain->gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "posicionador_fy301.lsproj",
+  "generatedAt": "2026-10-21T17:07:39.262Z",
+  "original": {
+    "backup": "posicionador_fy301.control-library-simulink-v1.original.lsproj",
+    "sha256": "fe465e7c9477dc55df392db01fe48d60a35aed0c2aca8b39e568ca1ed4f82d5b"
+  },
+  "migrated": {
+    "sha256": "60079cb174c94c7af917fb01cab1901c8ff4cdccd658f8eec330a7dc663bffec"
+  },
+  "summary": {
+    "converted": 11,
+    "kept": 10,
+    "renamed": 2,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 10,
+      "calc_expression->fcn": 3,
+      "calc_expression->mux+fcn": 7,
+      "accumulator->process.accumulator (bloco de processo do LasecSimul)": 2,
+      "gain->gain": 1
+    }
+  }
+}

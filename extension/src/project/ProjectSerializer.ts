@@ -24,6 +24,9 @@ import { defaultHmiNavigationVisual } from "../ui/webview/model";
 import { VISUAL_DOCUMENT_SCHEMA_VERSION, faceplateDocumentId, type VisualDocument } from "../ui/webview/visualDocument";
 import { migrateLegacySignalTunnels } from "../catalog/legacySignalTunnelMigration";
 import { migrateLegacyTankBlocks } from "../catalog/legacyTankMigration";
+import { validateModelWorkspace } from "./modelWorkspace";
+import { LEGACY_LIBRARY_EXPORTS } from "../migration/controlLibrary/legacyLibraryExports";
+import { ControlMigrationReport, migrateControlDocument } from "../migration/controlLibrary/migrateDocument";
 import { findSubsystemCycle, hoistEmbeddedSubsystems, isSubsystemTypeId, SubsystemDefinition } from "../ui/webview/subsystemModel";
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -434,8 +437,36 @@ export function validateVisualDocuments(value: unknown): VisualDocument[] | unde
   });
 }
 
+/** Projeção `wires` (formato antigo, só em memória) dos condutores da topologia. */
+function wiresFromTopology(topology: ProjectTopology): ProjectWire[] {
+  return topology.conductors.map((conductor) => ({
+    id: conductor.id,
+    from: conductor.from.kind === "port" ? conductor.from : { componentId: conductor.from.nodeId, pinId: "pin-1" },
+    to: conductor.to.kind === "port" ? conductor.to : { componentId: conductor.to.nodeId, pinId: "pin-1" },
+  }));
+}
+
 export class ProjectSerializer {
   async load(filePath: string): Promise<ProjectDocument> {
+    return (await this.loadWithMigration(filePath)).project;
+  }
+
+  /**
+   * Carrega e aplica a migração automática dos blocos legados `control.*` para a biblioteca
+   * equivalente ao Simulink (docs/69), DEPOIS das migrações anteriores (o `control.tank` vira
+   * `control.accumulator` antes). `controlMigration` só vem quando o documento mudou: quem abre
+   * decide backup e regravação (`migration/controlLibrary/migrationFiles.ts`).
+   */
+  async loadWithMigration(filePath: string): Promise<{ project: ProjectDocument; controlMigration?: ControlMigrationReport }> {
+    const project = await this.loadUnmigrated(filePath);
+    const { document, report } = migrateControlDocument(project as unknown as Record<string, unknown>, { librarySnapshot: LEGACY_LIBRARY_EXPORTS });
+    if (!report.changed) return { project };
+    const migrated = document as unknown as ProjectDocument;
+    migrated.wires = wiresFromTopology(migrated.topology);
+    return { project: migrated, controlMigration: report };
+  }
+
+  private async loadUnmigrated(filePath: string): Promise<ProjectDocument> {
     const raw = await fs.readFile(filePath, "utf8");
     // Editores no Windows (ex.: PowerShell `Set-Content -Encoding UTF8`) gravam BOM; `JSON.parse`
     // recusa o U+FEFF inicial e o projeto não abria. O conteúdo em si não muda.
@@ -458,11 +489,7 @@ export class ProjectSerializer {
     const componentIds = new Set(components.map((c) => c.id));
     const topology = validateTopology(parsed.topology, componentIds);
     const migrated = migrateLegacySignalTunnels(components, topology);
-    const wires: ProjectWire[] = migrated.topology.conductors.map((conductor) => ({
-      id: conductor.id,
-      from: conductor.from.kind === "port" ? conductor.from : { componentId: conductor.from.nodeId, pinId: "pin-1" },
-      to: conductor.to.kind === "port" ? conductor.to : { componentId: conductor.to.nodeId, pinId: "pin-1" },
-    }));
+    const wires = wiresFromTopology(migrated.topology);
     return {
       schemaVersion: LS_PROJ_SCHEMA_VERSION,
       components: migrated.components,
@@ -504,6 +531,7 @@ export class ProjectSerializer {
       calculusLab: validateCalculusLab(parsed.calculusLab),
       controlDesignProject: validateControlDesignProject(parsed.controlDesignProject),
       identProject: validateIdentProject(parsed.identProject),
+      modelWorkspace: validateModelWorkspace(parsed.modelWorkspace),
       ...(subsystems.length > 0 ? { subsystems } : {}),
       mcuFirmware: Array.isArray(parsed.mcuFirmware)
         ? parsed.mcuFirmware.filter(isObject).map((entry) => ({
@@ -527,10 +555,17 @@ export class ProjectSerializer {
       calculusLab: validateCalculusLab(project.calculusLab),
       controlDesignProject: validateControlDesignProject(project.controlDesignProject),
       identProject: validateIdentProject(project.identProject),
+      modelWorkspace: validateModelWorkspace(project.modelWorkspace),
       subsystems: project.subsystems && project.subsystems.length > 0 ? project.subsystems : undefined,
       mcuFirmware: project.mcuFirmware,
     };
     await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+    const temporary = `${filePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    try {
+      await fs.writeFile(temporary, `${JSON.stringify(normalized, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+      await fs.rename(temporary, filePath);
+    } finally {
+      await fs.rm(temporary, { force: true }).catch(() => undefined);
+    }
   }
 }

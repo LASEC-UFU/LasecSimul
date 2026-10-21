@@ -15,6 +15,7 @@ export const MIGRATION_BACKUP_DIRECTORY = "lasecsimul-migration-backup";
 export interface MigrationBackup {
   backupPath: string;
   reportPath: string;
+  /** SHA-256 do original (igual ao do backup, conferido depois de gravar). */
   sha256: string;
 }
 
@@ -22,6 +23,16 @@ const sha256 = (data: Buffer | string) => createHash("sha256").update(data).dige
 
 async function exists(file: string): Promise<boolean> {
   try { await fs.access(file); return true; } catch { return false; }
+}
+
+async function atomicWrite(file: string, data: string | Buffer): Promise<void> {
+  const temporary = `${file}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  try {
+    await fs.writeFile(temporary, data, { flag: "wx" });
+    await fs.rename(temporary, file);
+  } finally {
+    await fs.rm(temporary, { force: true }).catch(() => undefined);
+  }
 }
 
 /** Copia o original para o diretório de backup e confere o hash da cópia relida. */
@@ -37,7 +48,11 @@ export async function backupOriginal(filePath: string, original: Buffer): Promis
       if (sha256(await fs.readFile(candidate)) === hash) return { backupPath: candidate, sha256: hash };
       continue;
     }
-    await fs.writeFile(candidate, original, { flag: "wx" });
+    try { await fs.writeFile(candidate, original, { flag: "wx" }); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") continue;
+      throw error;
+    }
     const reread = sha256(await fs.readFile(candidate));
     if (reread !== hash) throw new Error(`backup ${candidate} nao confere com o original (sha256 ${reread} != ${hash})`);
     return { backupPath: candidate, sha256: hash };
@@ -58,7 +73,7 @@ export async function writeMigrationReport(filePath: string, backup: { backupPat
     migrated: { sha256: sha256(migratedText) },
     summary: summarizeReport(report),
   };
-  await fs.writeFile(reportPath, `${JSON.stringify(body, null, 2)}\n`, "utf8");
+  await atomicWrite(reportPath, `${JSON.stringify(body, null, 2)}\n`);
   return reportPath;
 }
 
@@ -89,7 +104,7 @@ export function summarizeReport(report: ControlMigrationReport): MigrationSummar
  * (JSON com 2 espaços, como os serializadores) e relatório. Sem bloco legado conversível, não toca em
  * nada e devolve `undefined`.
  */
-export async function migrateFileInPlace(filePath: string): Promise<(MigrationBackup & { report: ControlMigrationReport }) | undefined> {
+export async function migrateFileInPlace(filePath: string): Promise<FileMigrationResult | undefined> {
   const original = await fs.readFile(filePath);
   const text = original.toString("utf8");
   const document = JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text) as Record<string, unknown>;
@@ -97,7 +112,55 @@ export async function migrateFileInPlace(filePath: string): Promise<(MigrationBa
   if (!report.changed) return undefined;
   const backup = await backupOriginal(filePath, original);
   const migratedText = `${JSON.stringify(migrated, null, 2)}\n`;
+  if (sha256(await fs.readFile(filePath)) !== sha256(original)) throw new Error(`arquivo mudou durante a migração; nenhuma alteração aplicada: ${filePath}`);
   const reportPath = await writeMigrationReport(filePath, backup, report, migratedText);
-  await fs.writeFile(filePath, migratedText, "utf8");
-  return { ...backup, reportPath, report };
+  await atomicWrite(filePath, migratedText);
+  const result = { filePath, ...backup, reportPath, report };
+  notifyFileMigrated(result);
+  return result;
+}
+
+/**
+ * Projeto aberto e migrado em memória (`ProjectSerializer.loadWithMigration`): backup verificado do
+ * arquivo como está no disco, gravação no formato novo pelo próprio serializador (`save`) e relatório.
+ */
+export async function persistDocumentMigration(filePath: string, report: ControlMigrationReport, save: () => Promise<void>): Promise<FileMigrationResult> {
+  const original = await fs.readFile(filePath);
+  const backup = await backupOriginal(filePath, original);
+  if (sha256(await fs.readFile(filePath)) !== sha256(original)) throw new Error(`arquivo mudou durante a migração; nenhuma alteração aplicada: ${filePath}`);
+  await save();
+  let reportPath: string;
+  try {
+    reportPath = await writeMigrationReport(filePath, backup, report, await fs.readFile(filePath, "utf8"));
+  } catch (error) {
+    throw new MigrationReportWriteError(`documento migrado e salvo, mas o relatório não pôde ser escrito: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  const result = { filePath, ...backup, reportPath, report };
+  notifyFileMigrated(result);
+  return result;
+}
+
+/** O arquivo foi salvo; apenas o artefato de auditoria falhou. */
+export class MigrationReportWriteError extends Error {
+  readonly documentSaved = true;
+}
+
+export interface FileMigrationResult extends MigrationBackup {
+  filePath: string;
+  report: ControlMigrationReport;
+}
+
+type FileMigrationListener = (result: FileMigrationResult) => void;
+const listeners = new Set<FileMigrationListener>();
+
+/** A interface (extension.ts) avisa o usuário de cada arquivo migrado, com o relatório. */
+export function onFileMigrated(listener: FileMigrationListener): { dispose(): void } {
+  listeners.add(listener);
+  return { dispose: () => { listeners.delete(listener); } };
+}
+
+function notifyFileMigrated(result: FileMigrationResult): void {
+  for (const listener of listeners) {
+    try { listener(result); } catch { /* aviso é acessório: a migração já foi gravada */ }
+  }
 }

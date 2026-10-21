@@ -1,0 +1,516 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "c_pmax",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "c_cap",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "c_ua",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "c_tamb",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "c_tau",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "c_type",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "c_lead",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "c_dev",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "c_cable",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "c_thead",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "c_reverse",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "c_broken",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "u",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "q_heat",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "q_loss",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "heat_in",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "heat_out",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "temp",
+      "legacyTypeId": "control.accumulator",
+      "kind": "rename",
+      "rule": "accumulator->process.accumulator (bloco de processo do LasecSimul)",
+      "newTypeIds": [
+        "process.accumulator"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "tau_th",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "t_steady",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "well_in",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "well_out",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "sensor_temp",
+      "legacyTypeId": "control.accumulator",
+      "kind": "rename",
+      "rule": "accumulator->process.accumulator (bloco de processo do LasecSimul)",
+      "newTypeIds": [
+        "process.accumulator"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "t_lo",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "t_hi",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "t_hot",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "t_ref",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_hot_b",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_ref_b",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_hot_e",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_ref_e",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_hot_j",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_ref_j",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_hot_k",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_ref_k",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_hot_n",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_ref_n",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_hot_r",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_ref_r",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_hot_s",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_ref_s",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_hot_t",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_ref_t",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_hot",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_ref",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "e_tc",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "emf_v",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "embedded/component-1791630045461-forno1/",
+      "componentId": "r_plus",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "forno_termopar_tt301.lsproj",
+  "generatedAt": "2026-10-21T17:07:39.309Z",
+  "original": {
+    "backup": "forno_termopar_tt301.control-library-simulink-v1.original.lsproj",
+    "sha256": "433574317814cb2f9fa824445af9bdbc3db3460643857f548e90da0a889e1388"
+  },
+  "migrated": {
+    "sha256": "c147f260c562eb55947f14960a10e2cb0be4ad810e8a45f43459baf8ef011aa3"
+  },
+  "summary": {
+    "converted": 34,
+    "kept": 12,
+    "renamed": 2,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 12,
+      "observer->identity-gain": 1,
+      "calc_expression->mux+fcn": 14,
+      "accumulator->process.accumulator (bloco de processo do LasecSimul)": 2,
+      "calc_expression->fcn": 19
+    }
+  }
+}

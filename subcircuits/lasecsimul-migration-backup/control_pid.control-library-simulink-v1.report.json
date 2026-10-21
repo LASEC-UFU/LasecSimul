@@ -1,0 +1,42 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.pid",
+      "kind": "subsystem",
+      "rule": "pid->discrete_pid_controller_2dof(D na PV)",
+      "newTypeIds": [
+        "subsystem.legado_pid_dpv"
+      ]
+    }
+  ],
+  "definitionsAdded": [
+    "subsystem.legado_pid_dpv"
+  ],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_pid.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.767Z",
+  "original": {
+    "backup": "control_pid.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "65d03db8d6e254ded854d8c1609987239e24705b88dce6f6035a7fe84f6c5782"
+  },
+  "migrated": {
+    "sha256": "4089a82dbc8c0f7c2c81336844d2a6e9b37f1823a1d051d16771a588af5becde"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 1,
+    "overridesRemapped": 0,
+    "byRule": {
+      "pid->discrete_pid_controller_2dof(D na PV)": 1
+    }
+  }
+}

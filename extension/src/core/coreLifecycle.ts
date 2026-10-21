@@ -1,3 +1,4 @@
+import { workspaceForCore } from "../project/modelWorkspace";
 import * as vscode from "vscode";
 import { PidTuningPanel } from "../ui/panels/PidTuningPanel";
 import { filePathFromSourceId } from "../project/embeddedSubcircuits";
@@ -1422,6 +1423,18 @@ async function registerProjectSubcircuitsInCore(): Promise<void> {
   }
 }
 
+/** Model Workspace do projeto antes dos componentes: os parâmetros dos blocos `sl.*` são avaliados
+ * com ele na compilação do plano. Variáveis sem valor não são enviadas (o bloco que as usa acusa). */
+export async function applyModelWorkspaceToCore(): Promise<void> {
+  if (!state.coreClient) return;
+  try {
+    const errors = await state.coreClient.setModelWorkspace(workspaceForCore(state.schematicState.modelWorkspace));
+    for (const error of errors) reportCoreWarning(`variável "${error.name}" do Model Workspace`, new Error(error.message));
+  } catch (err) {
+    reportCoreWarning("aplicar o Model Workspace", err);
+  }
+}
+
 async function rebuildCoreFromSchematicStateNow(options: { alreadyStopped?: boolean; resumeAfter?: boolean } = {}): Promise<void> {
   if (!state.coreClient) return;
   // Espera a carga inicial de bibliotecas de dispositivo terminar antes de recriar componentes --
@@ -1435,6 +1448,7 @@ async function rebuildCoreFromSchematicStateNow(options: { alreadyStopped?: bool
   readableItemsBySourceId.clear();
   boundChildIdsByOuter.clear();
   await registerProjectSubcircuitsInCore();
+  await applyModelWorkspaceToCore();
 
   const runningBeforeRebuild = options.resumeAfter ?? state.simulationStatus === "running";
   // Controle vem antes de configuração e mutações. Assim uma reconstrução nunca deixa add/remove

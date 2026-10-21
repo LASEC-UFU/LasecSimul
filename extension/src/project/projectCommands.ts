@@ -5,7 +5,7 @@ import { parseSubcircuitManifest } from "../catalog/registeredSources";
 import { currentLasecSimulLanguage } from "../currentLanguage";
 import { fileExists, normalizeAbsolutePath, readJsonFile } from "../pathUtils";
 import { state, projectSerializer } from "../state";
-import { rebuildCoreFromSchematicState, pinsForProjectComponent } from "../core/coreLifecycle";
+import { applyModelWorkspaceToCore, rebuildCoreFromSchematicState, pinsForProjectComponent } from "../core/coreLifecycle";
 import { CanonicalTopologyDocument, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, nodeEndpoint, portEndpoint } from "../ui/webview/model";
 import { ProjectComponent, ProjectDocument, ProjectTopology, createEmptyProject } from "./ProjectTypes";
 import { assertTopologyInvariants } from "../ui/webview/topologyDocument";
@@ -14,6 +14,9 @@ import { decideSaveTarget } from "./savePolicy";
 import { resolveProjectSourcePaths } from "./projectPathPolicy";
 import { isSimulideCircuitPath } from "../import/simulide/SimulideImporter";
 import { openSimulideAsLsproj } from "../import/simulide/SimulideOpenWorkflow";
+import { isSimulinkModelPath } from "../import/simulink/SimulinkImporter";
+import { openSimulinkAsLsproj } from "../import/simulink/SimulinkOpenWorkflow";
+import { editModelWorkspaceCommand } from "./modelWorkspaceCommand";
 import { createPlantTemplateLookup, embedLegacyPlantReferences, plantDisplayName, plantPinIds, resolvePlantTemplateDir } from "./plantTemplates";
 import { currentDocumentDir, projectLocalCatalogEntry, reservedSubsystemTypeIds, syncDocumentSubsystems, tryRegisterExternalSystemFile } from "./subsystemRuntime";
 import { hoistEmbeddedSubsystems, importExternalAsSubsystem, importSubsystemDefinitions, isSubsystemTypeId, mapTableRefPaths, rewriteComponentTypeIds } from "../ui/webview/subsystemModel";
@@ -22,6 +25,8 @@ import { migrateLegacyHmiApplication } from "../visual/legacyHmiMigration";
 import { LAB_SCREEN_TITLE, createLabScreenDocument, findLabScreen, labScreenButton } from "../visual/labScreens";
 import { uniqueScreenId, type VisualDocument } from "../ui/webview/visualDocument";
 import { adoptRestoredVisualPanels, closeAllVisualPanels } from "../visual/visualPanels";
+import type { ControlMigrationReport } from "../migration/controlLibrary/migrateDocument";
+import { MigrationReportWriteError, persistDocumentMigration } from "../migration/controlLibrary/migrationFiles";
 
 export function absoluteSubcircuitRefPath(refPath: string): string {
   if (path.isAbsolute(refPath)) return path.normalize(refPath);
@@ -214,6 +219,7 @@ function projectToWebviewState(project: ProjectDocument, projectDir?: string): W
     subsystems: projectDir ? mapTableRefPaths(project.subsystems ?? [], (refPath) => (path.isAbsolute(refPath) ? path.normalize(refPath) : path.resolve(projectDir, refPath))) : project.subsystems ?? [],
     controlDesignProject: project.controlDesignProject,
     identProject: project.identProject,
+    modelWorkspace: project.modelWorkspace,
     topology,
     viewport: project.visual.viewport,
     selectedComponentIds: [],
@@ -380,6 +386,7 @@ function projectContentSnapshot(): {
   calculusLab: WebviewProjectState["calculusLab"];
   controlDesignProject: WebviewProjectState["controlDesignProject"];
   identProject: WebviewProjectState["identProject"];
+  modelWorkspace: WebviewProjectState["modelWorkspace"];
   subsystems: WebviewProjectState["subsystems"];
 } {
   return {
@@ -391,6 +398,7 @@ function projectContentSnapshot(): {
     calculusLab: state.schematicState.calculusLab ? structuredClone(state.schematicState.calculusLab) : undefined,
     controlDesignProject: state.schematicState.controlDesignProject ? structuredClone(state.schematicState.controlDesignProject) : undefined,
     identProject: state.schematicState.identProject ? structuredClone(state.schematicState.identProject) : undefined,
+    modelWorkspace: state.schematicState.modelWorkspace ? structuredClone(state.schematicState.modelWorkspace) : undefined,
   };
 }
 
@@ -403,7 +411,7 @@ function markProjectSaved(): void {
  * um esquemático vazio recém-aberto não deve disparar aviso nenhum. */
 export function isProjectDirty(): boolean {
   const current = projectContentSnapshot();
-  if (!state.lastSavedProjectState) return current.components.length > 0 || current.topology.conductors.length > 0 || current.visualDocuments.length > 0 || Boolean(current.hmiApplication) || Boolean(current.calculusLab) || Boolean(current.controlDesignProject) || Boolean(current.identProject) || (current.subsystems?.length ?? 0) > 0;
+  if (!state.lastSavedProjectState) return current.components.length > 0 || current.topology.conductors.length > 0 || current.visualDocuments.length > 0 || Boolean(current.hmiApplication) || Boolean(current.calculusLab) || Boolean(current.controlDesignProject) || Boolean(current.identProject) || (current.modelWorkspace?.length ?? 0) > 0 || (current.subsystems?.length ?? 0) > 0;
   return JSON.stringify(current) !== JSON.stringify(state.lastSavedProjectState);
 }
 
@@ -535,6 +543,7 @@ async function writeProjectToFile(filePath: string): Promise<boolean> {
     subsystems: subsystemsForSave(),
     controlDesignProject: state.schematicState.controlDesignProject,
     identProject: state.schematicState.identProject,
+    modelWorkspace: state.schematicState.modelWorkspace,
     visual: {
       wires: state.schematicState.topology.conductors
         .filter((wire) => wire.points && wire.points.length > 0)
@@ -599,9 +608,10 @@ export async function openProjectCommand(options: {
   if (!(await canReplaceCurrentProject())) return;
   const uris = await vscode.window.showOpenDialog({
     filters: {
-      "LasecSimul / SimulIDE": ["lsproj", "sim1", "sim2"],
+      "LasecSimul / SimulIDE / Simulink": ["lsproj", "sim1", "sim2", "slx", "mdl"],
       "LasecSimul Project": ["lsproj"],
       "SimulIDE Circuit": ["sim1", "sim2"],
+      "Simulink Model": ["slx", "mdl"],
     },
     canSelectMany: false,
   });
@@ -632,6 +642,12 @@ export async function openSupportedProjectFile(filePath: string, options: {
     await openSimulideAsLsproj(filePath, (convertedPath) => openProjectFile(convertedPath, options));
     return;
   }
+  // Modelo do Simulink: convertido para `.lsproj` com a biblioteca equivalente (docs/66) e aberto.
+  if (isSimulinkModelPath(filePath)) {
+    await openSimulinkAsLsproj(filePath, options.extensionUri.fsPath, (convertedPath) => openProjectFile(convertedPath, options),
+      () => editModelWorkspaceCommand(async () => { refreshDirtyIndicator(); await applyModelWorkspaceToCore(); }));
+    return;
+  }
   vscode.window.showErrorMessage(`Formato de projeto não suportado: ${extension || filePath}`);
 }
 
@@ -645,11 +661,26 @@ export async function openProjectFile(filePath: string, options: {
   syncSchematicPanel: () => void;
 }): Promise<void> {
   let project: ProjectDocument;
+  let controlMigration: ControlMigrationReport | undefined;
   try {
-    project = await projectSerializer.load(filePath);
+    ({ project, controlMigration } = await projectSerializer.loadWithMigration(filePath));
   } catch (err) {
     vscode.window.showErrorMessage(`Não foi possível abrir o projeto: ${err instanceof Error ? err.message : String(err)}`);
     return;
+  }
+  // Blocos legados `control.*` convertidos para a biblioteca equivalente ao Simulink (docs/69): o
+  // arquivo é regravado no formato novo com backup verificado do original e relatório ao lado. Sem
+  // permissão de escrita, o projeto abre migrado em memória e fica marcado como não salvo.
+  let migrationUnsaved = false;
+  if (controlMigration) {
+    try {
+      const migratedProject = project;
+      await persistDocumentMigration(filePath, controlMigration, () => projectSerializer.save(filePath, migratedProject));
+    } catch (err) {
+      migrationUnsaved = !(err instanceof MigrationReportWriteError);
+      const advice = migrationUnsaved ? "Salve o projeto em outro local." : "O arquivo j\u00e1 foi salvo; confira a pasta de backup e o relat\u00f3rio de auditoria.";
+      vscode.window.showWarningMessage(`O projeto foi convertido para a nova biblioteca de blocos, mas ocorreu um problema ao registrar a migra\u00e7\u00e3o: ${err instanceof Error ? err.message : String(err)}. ${advice}`);
+    }
   }
   options.beforeOpen?.();
   const legacyPlants = embedLegacyPlants(project);
@@ -670,6 +701,10 @@ export async function openProjectFile(filePath: string, options: {
   options.openSchematicEditor(options.extensionUri);
   options.syncSchematicPanel();
   markProjectSaved();
+  if (migrationUnsaved) {
+    state.lastSavedProjectState = undefined;
+    refreshDirtyIndicator();
+  }
   // A HMI antiga e/ou o Laboratório antigo viraram Telas HMI só na memória: o arquivo ainda está no
   // formato anterior.
   if (convertedScreens.length > 0) {

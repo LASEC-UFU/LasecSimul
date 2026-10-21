@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.product",
+      "kind": "single",
+      "rule": "product->product",
+      "newTypeIds": [
+        "sl.product"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_product.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.773Z",
+  "original": {
+    "backup": "control_product.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "da9c18068bb450ef59a6cf41bffb3a6a36bb18e9e1953af96043f248a55575aa"
+  },
+  "migrated": {
+    "sha256": "f499e236564aead73d9e8d617f0acddf83c1ef2009e0923a2b3727984df968c0"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "product->product": 1
+    }
+  }
+}

@@ -387,6 +387,7 @@ export type WebviewToHostMessage =
   | { version: number; type: "visualWindowRequest"; documentId: string; action: VisualWindowAction }
   /** Esquemático: abrir a tela de um botão `tools.hmi_screen` (duplo clique, clique em execução, menu). */
   | { version: number; type: "requestOpenVisualScreen"; componentId: string; mode: "auto" | "docked" | "floating" | "fullscreen" }
+  | { version: number; type: "requestOpenScope"; componentId: string }
   | { version: number; type: "requestScreenAction"; componentId: string; action: "rename" | "duplicate" }
   /** Atividade do Laboratório embutida (`graphics.math.activity`): mensagem da atividade para o Host. */
   | { version: number; type: "labEmbedMessage"; documentId: string; elementId: string; message: unknown }

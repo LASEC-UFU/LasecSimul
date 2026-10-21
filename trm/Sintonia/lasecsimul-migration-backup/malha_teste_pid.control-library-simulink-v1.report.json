@@ -1,0 +1,82 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "sp",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "",
+      "componentId": "am",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "",
+      "componentId": "lr",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "",
+      "componentId": "pid",
+      "legacyTypeId": "control.pid_station",
+      "kind": "subsystem",
+      "rule": "pid_station->sampled-2dof-pid-manual-local",
+      "newTypeIds": [
+        "subsystem.legado_pid_station"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "plant",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1"
+      ]
+    }
+  ],
+  "definitionsAdded": [
+    "subsystem.legado_pid_station",
+    "subsystem.legado_processo_tau1"
+  ],
+  "overrides": [],
+  "warnings": [],
+  "file": "malha_teste_pid.lsproj",
+  "generatedAt": "2026-10-21T17:07:39.248Z",
+  "original": {
+    "backup": "malha_teste_pid.control-library-simulink-v1.original.lsproj",
+    "sha256": "4db7841ad6144dd0aaf3c55fe4d04956e4a121242ee9cf7b730d9dcc68186df5"
+  },
+  "migrated": {
+    "sha256": "e8d4f39a7ed3b88e8eb254cc7caae05636ffce8ecfcd17ab108f78818764d435"
+  },
+  "summary": {
+    "converted": 2,
+    "kept": 3,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 2,
+    "overridesRemapped": 0,
+    "byRule": {
+      "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 3,
+      "pid_station->sampled-2dof-pid-manual-local": 1,
+      "process->gain+tau1": 1
+    }
+  }
+}

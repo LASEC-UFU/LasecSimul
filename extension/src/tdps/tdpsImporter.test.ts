@@ -130,8 +130,9 @@ function listSmpFiles(root: string): string[] {
       assert(JSON.stringify(parsed.document.folderPath) === JSON.stringify(["Modelos"]), `${entry.file} deveria manter folderPath de origem`);
       assert(parsed.document.components.some((component) => component.typeId === "connectors.signal_tunnel"), `${entry.file} deve usar túnel de sinal`);
       assert(parsed.document.components.every((component) => component.typeId !== "connectors.tunnel"), `${entry.file} não deve misturar túnel elétrico`);
+      const internalSubsystemTypes = new Set((parsed.document.subsystems ?? []).map((definition) => definition.typeId));
       for (const component of parsed.document.components) {
-        assert(knownVisualTypes.has(component.typeId), `${entry.file}/${component.id}: ${component.typeId} precisa de entrada visual no catálogo`);
+        assert(knownVisualTypes.has(component.typeId) || internalSubsystemTypes.has(component.typeId), `${entry.file}/${component.id}: ${component.typeId} precisa de bloco visual ou definição interna`);
       }
       const image = path.join(repositoryRoot, "subcircuits", "tdps-reference-images", entry.file.replace(/\.lssubcircuit$/, ".png"));
       assert(fs.existsSync(image), `${entry.file} precisa da imagem de referencia normalizada`);

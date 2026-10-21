@@ -50,6 +50,8 @@ void buildCompareToZero(BuildContext& c) {
 }
 
 void detectBlock(BuildContext& c, int64_t kind) {
+    if (c.text("InputProcessing") == "Columns as channels (frame based)")
+        c.fail("Input processing 'Columns as channels (frame based)' nao suportado (exige DSP System Toolbox); use 'Elements as channels (sample based)'");
     if (c.resolution.rate.continuous())
         c.fail("exige tempo de amostragem discreto (tempo continuo nao e suportado pelo bloco)");
     const std::vector<double> vinit = c.value("vinit").linear();

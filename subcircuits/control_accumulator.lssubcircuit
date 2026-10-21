@@ -43,7 +43,7 @@
     },
     {
       "id": "stage",
-      "typeId": "control.accumulator",
+      "typeId": "process.accumulator",
       "label": "Acumulador",
       "properties": {
         "initial": 0,

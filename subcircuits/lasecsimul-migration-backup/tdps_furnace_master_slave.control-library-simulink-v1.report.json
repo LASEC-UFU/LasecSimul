@@ -1,0 +1,245 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "pid-01",
+      "legacyTypeId": "control.pid",
+      "kind": "subsystem",
+      "rule": "pid->discrete_pid_controller_2dof(D na PV)",
+      "newTypeIds": [
+        "subsystem.legado_pid_dpv"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "pid-02",
+      "legacyTypeId": "control.pid",
+      "kind": "subsystem",
+      "rule": "pid->discrete_pid_controller_2dof(D na PV)",
+      "newTypeIds": [
+        "subsystem.legado_pid_dpv"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-21",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-22",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+actuator+tau1+tau2",
+      "newTypeIds": [
+        "subsystem.legado_processo_actuator_tau1_tau2"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-23",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+actuator+tau1+tau2",
+      "newTypeIds": [
+        "subsystem.legado_processo_actuator_tau1_tau2"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-24",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-41",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-42",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn+saturation",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn",
+        "sl.saturation"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-43",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "recorder-202-3",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "recorder-202-5",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "recorder-202-7",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-101",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-102",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-103",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-104",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-105",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-106",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-107",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-108",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    }
+  ],
+  "definitionsAdded": [
+    "subsystem.legado_pid_dpv",
+    "subsystem.legado_processo_tau1_deadtime",
+    "subsystem.legado_processo_actuator_tau1_tau2",
+    "subsystem.legado_processo_tau1"
+  ],
+  "overrides": [],
+  "warnings": [],
+  "file": "tdps_furnace_master_slave.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:39.138Z",
+  "original": {
+    "backup": "tdps_furnace_master_slave.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "8768687114576c0dbc263aec4352ef04420c99a7168843358edd1178d3dc6411"
+  },
+  "migrated": {
+    "sha256": "861ccdbe7579a4cb5fe4841bfff5c2c0d8c604ed479ffa76de0b5b2f5c3b845b"
+  },
+  "summary": {
+    "converted": 20,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 4,
+    "overridesRemapped": 0,
+    "byRule": {
+      "pid->discrete_pid_controller_2dof(D na PV)": 2,
+      "process->gain+tau1+deadtime": 1,
+      "process->gain+actuator+tau1+tau2": 2,
+      "process->gain+tau1": 1,
+      "calc_expression->mux+fcn": 2,
+      "calc_expression->mux+fcn+saturation": 1,
+      "observer->identity-gain": 11
+    }
+  }
+}

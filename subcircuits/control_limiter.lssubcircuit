@@ -27,12 +27,12 @@
     },
     {
       "id": "stage",
-      "typeId": "control.limiter",
+      "typeId": "sl.saturation",
       "label": "Limitador",
       "properties": {
-        "minimum": 0,
-        "maximum": 100,
-        "samplePeriodNs": 10000000
+        "UpperLimit": "100",
+        "LowerLimit": "0",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 170,
@@ -70,7 +70,7 @@
         "to": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -79,7 +79,7 @@
         "from": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",

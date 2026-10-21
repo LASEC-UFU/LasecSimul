@@ -1063,6 +1063,8 @@ export interface WebviewProjectState {
   calculusLab?: CalculusLab;
   controlDesignProject?: ControlDesignProject;
   identProject?: IdentProject;
+  /** Model Workspace do projeto (docs/66 §3); editado pelo comando "Model Workspace", não pela Webview. */
+  modelWorkspace?: Array<{ name: string; value: string; description?: string }>;
   /** Definições de subsistemas INTERNOS do documento em edição (projeto, ou o sistema externo aberto):
    * manifestos completos guardados no próprio documento; instâncias as usam pelo `typeId`. */
   subsystems?: SubsystemDefinition[];

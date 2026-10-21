@@ -28,19 +28,12 @@
     },
     {
       "id": "plant",
-      "typeId": "control.process",
+      "typeId": "subsystem.legado_processo_tau1_deadtime",
       "properties": {
-        "gain": 1,
-        "tau1": 1,
-        "tau2": 0,
-        "deadTime": 0.1,
-        "hysteresis": 0,
-        "stiction": 0,
-        "rateLimiter": 0,
-        "actuatorTau": 0,
-        "lead": 0,
-        "lag": 0,
-        "samplePeriodNs": 10000000
+        "@gain.Gain": "1",
+        "@gain.SampleTime": "0.01",
+        "@tau1.Denominator": "[1 1]",
+        "@dead_time.DelayTime": "0.1"
       },
       "visual": {
         "x": 180,
@@ -163,5 +156,222 @@
   ],
   "exportedPropertyComponentIds": [
     "plant"
+  ],
+  "subsystems": [
+    {
+      "schemaVersion": 3,
+      "typeId": "subsystem.legado_processo_tau1_deadtime",
+      "name": "Processo (convertido: ganho, tau1, deadtime)",
+      "language": "pt-BR",
+      "folderPath": [
+        "Convertidos"
+      ],
+      "workspaceSection": "control",
+      "help": {
+        "description": "Processo (convertido: ganho, tau1, deadtime): composição de blocos da biblioteca equivalente ao Simulink gerada pela migração dos blocos legados (docs/68)."
+      },
+      "components": [
+        {
+          "id": "tunnel_in_in",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "in",
+            "pinId": "in",
+            "direction": "Input",
+            "valueType": "Real",
+            "defaultValue": 0
+          },
+          "visual": {
+            "x": 20,
+            "y": 60,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "gain",
+          "typeId": "sl.gain",
+          "properties": {
+            "Gain": "1",
+            "SampleTime": "0.01"
+          },
+          "visual": {
+            "x": 100,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tau1",
+          "typeId": "sl.transfer_fcn",
+          "properties": {
+            "Numerator": "[1]",
+            "Denominator": "[1 1]"
+          },
+          "visual": {
+            "x": 210,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "dead_time",
+          "typeId": "sl.transport_delay",
+          "properties": {
+            "DelayTime": "0.1",
+            "InitialOutput": "0"
+          },
+          "visual": {
+            "x": 320,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "tunnel_out_out",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "out",
+            "pinId": "out",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 430,
+            "y": 60,
+            "rotation": 180
+          }
+        }
+      ],
+      "topology": {
+        "revision": 0,
+        "nodes": [],
+        "conductors": [
+          {
+            "id": "wire-1",
+            "from": {
+              "kind": "port",
+              "componentId": "tunnel_in_in",
+              "pinId": "value"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-2",
+            "from": {
+              "kind": "port",
+              "componentId": "gain",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-3",
+            "from": {
+              "kind": "port",
+              "componentId": "tau1",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "in1"
+            },
+            "vertices": []
+          },
+          {
+            "id": "wire-4",
+            "from": {
+              "kind": "port",
+              "componentId": "dead_time",
+              "pinId": "out1"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "tunnel_out_out",
+              "pinId": "value"
+            },
+            "vertices": []
+          }
+        ]
+      },
+      "interface": [
+        {
+          "pinId": "in",
+          "label": "IN",
+          "internalTunnel": "in",
+          "domain": "signal",
+          "direction": "in",
+          "valueType": "Real",
+          "width": 1
+        },
+        {
+          "pinId": "out",
+          "label": "OUT",
+          "internalTunnel": "out",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        }
+      ],
+      "symbolMode": "generic",
+      "symbol": {
+        "width": 320,
+        "height": 40,
+        "border": true,
+        "pins": [
+          {
+            "id": "in",
+            "label": "IN",
+            "labelFontSize": 7,
+            "x": -8,
+            "y": 24,
+            "angle": 180,
+            "length": 8
+          },
+          {
+            "id": "out",
+            "label": "OUT",
+            "labelFontSize": 7,
+            "x": 328,
+            "y": 24,
+            "angle": 0,
+            "length": 8
+          }
+        ],
+        "shapes": [
+          {
+            "kind": "text",
+            "x": 160,
+            "y": 10,
+            "value": "Processo (convertido: ganho, tau1, deadtime)",
+            "fontSize": 11,
+            "textAnchor": "middle",
+            "dominantBaseline": "middle"
+          }
+        ]
+      },
+      "exposedComponents": [],
+      "exportedPropertyComponentIds": [
+        "gain",
+        "tau1",
+        "dead_time"
+      ],
+      "origin": {
+        "kind": "migration",
+        "migrationId": "control-library-simulink",
+        "version": 1
+      }
+    }
   ]
 }

@@ -401,6 +401,13 @@ export class CoreClient {
     return resp as RegisteredSubcircuitInfo;
   }
 
+  /** Model Workspace do projeto (docs/66 §3): variáveis em ordem de avaliação. Devolve os erros por
+   * variável (as válidas entram mesmo assim). */
+  async setModelWorkspace(variables: Array<{ name: string; value: string }>): Promise<Array<{ name: string; message: string }>> {
+    const resp = await this.request("setModelWorkspace", { variables }) as { errors?: Array<{ name: string; message: string }> } | undefined;
+    return resp?.errors ?? [];
+  }
+
   /** Mesmo registro avulso, mas sem pedir ao Core o manifesto serializado de volta. Use quando o
    * chamador jÃ¡ vai ler o `.lssubcircuit` localmente ou sÃ³ precisa garantir que o typeId estÃ¡ no
    * registry antes de `addComponent`/rebuild. */

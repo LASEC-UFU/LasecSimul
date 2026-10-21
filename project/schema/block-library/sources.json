@@ -80,7 +80,7 @@
         { "name": "SampleTime", "type": "expr", "default": "0", "title": { "en": "Sample time", "pt-BR": "Tempo de amostragem" } },
         { "name": "VectorParams1D", "type": "bool", "default": true, "title": { "en": "Interpret vector parameters as 1-D", "pt-BR": "Interpretar vetores como 1-D" } }
       ],
-      "inputs": [{ "id": "in1", "when": { "SineType": ["Time based"], "TimeSource": ["Use external signal"] } }],
+      "inputs": [{ "id": "in1", "label": "t", "when": { "SineType": ["Time based"], "TimeSource": ["Use external signal"] } }],
       "outputs": [{ "id": "out1" }]
     },
     {

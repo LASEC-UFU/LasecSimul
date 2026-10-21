@@ -27,12 +27,11 @@
     },
     {
       "id": "stage",
-      "typeId": "control.valve_characteristic",
+      "typeId": "sl.fcn",
       "label": "Caracteristica de valvula",
       "properties": {
-        "coefficient": 1,
-        "exponent": 1,
-        "samplePeriodNs": 10000000
+        "Expr": "1*((u(1)+abs(u(1)))/2)^1",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 170,
@@ -70,7 +69,7 @@
         "to": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -79,7 +78,7 @@
         "from": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",

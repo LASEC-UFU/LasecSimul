@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.unit_delay",
+      "kind": "single",
+      "rule": "unit_delay->unit_delay",
+      "newTypeIds": [
+        "sl.unit_delay"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_unit_delay.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.831Z",
+  "original": {
+    "backup": "control_unit_delay.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "ccca95c99a814e37134862aa8d3a776a6daf781b21ae3277038dc608bec70bc0"
+  },
+  "migrated": {
+    "sha256": "5c815e0318f34793a4bedb2960119717b47731c18ba56c7a21406e0cbef76cc1"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "unit_delay->unit_delay": 1
+    }
+  }
+}

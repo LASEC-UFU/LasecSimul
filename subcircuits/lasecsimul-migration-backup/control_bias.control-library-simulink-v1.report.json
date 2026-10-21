@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.bias",
+      "kind": "single",
+      "rule": "bias->bias",
+      "newTypeIds": [
+        "sl.bias"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_bias.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.685Z",
+  "original": {
+    "backup": "control_bias.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "efabb1974e559435df221a24f476f943b813616d8e763a0ef5e5e9c2b132b458"
+  },
+  "migrated": {
+    "sha256": "83d23a3ef46adb3c9281d8ce6b9f9de6f7e855bd9080e0d36da2452e1e9ee4f8"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "bias->bias": 1
+    }
+  }
+}

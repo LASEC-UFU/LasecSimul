@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "differential_pressure",
+      "legacyTypeId": "control.subtract",
+      "kind": "single",
+      "rule": "subtract->sum(+-)",
+      "newTypeIds": [
+        "sl.sum"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "hart_smar_ld301.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.868Z",
+  "original": {
+    "backup": "hart_smar_ld301.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "9ca34ddbcbe01dccffa35b31ec2964d3eb4d4145c9ef0fda749d25689451e8b9"
+  },
+  "migrated": {
+    "sha256": "80d49effda33e98fec796842ecb8c90783803da4e9313d3832e205c6d975fa9f"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "subtract->sum(+-)": 1
+    }
+  }
+}

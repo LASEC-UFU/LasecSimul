@@ -2492,6 +2492,38 @@ std::optional<std::string> SimulationSession::setPropertyUnlocked(uint32_t compo
     return validationError("unknown_property", "propriedade desconhecida: " + propertyName);
 }
 
+std::vector<std::pair<std::string, std::string>> SimulationSession::setModelWorkspace(const std::vector<ModelVariable>& variables) {
+    return runViaCommandQueue([variables](SimulationSession& self) {
+        std::vector<std::pair<std::string, std::string>> errors;
+        simulation::library::ParamWorkspace next;
+        for (const ModelVariable& variable : variables) {
+            const bool identifier = !variable.name.empty() && (std::isalpha(static_cast<unsigned char>(variable.name[0])) != 0) &&
+                std::all_of(variable.name.begin(), variable.name.end(), [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_'; });
+            if (!identifier) {
+                errors.emplace_back(variable.name, "nome de variavel invalido (letra seguida de letras, digitos ou _)");
+                continue;
+            }
+            try {
+                next.set(variable.name, simulation::library::evaluateParam(variable.expression, &next));
+            } catch (const std::exception& error) {
+                errors.emplace_back(variable.name, error.what());
+            }
+        }
+        self.m_modelWorkspace = std::move(next);
+        if (!self.m_scheduler.isRunning()) {
+            self.invalidatePlan(simulation::PlanDomain::Signal);
+            return errors;
+        }
+        for (uint32_t index : self.m_activeComponentIndices) {
+            const auto* block = dynamic_cast<const components::blocks::LibraryBlock*>(self.m_componentInstances[index].get());
+            if (!block) continue;
+            if (const std::optional<std::string> error = self.retuneLibraryBlockUnlocked(index, *block))
+                errors.emplace_back(block->typeId(), *error);
+        }
+        return errors;
+    });
+}
+
 std::optional<std::string> SimulationSession::retuneLibraryBlockUnlocked(uint32_t component,
                                                                         const components::blocks::LibraryBlock& block) {
     const auto resolution = m_libraryResolutions.find(component);

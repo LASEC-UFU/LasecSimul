@@ -34,6 +34,13 @@ PackedParams pack(const BuildContext& c, std::initializer_list<std::pair<const c
     return packed;
 }
 
+/** "Columns as channels (frame based)" exige a DSP System Toolbox no Simulink; aqui sinais são vetores 1-D
+ * processados elemento a elemento (sample based). */
+void requireSampleBased(const BuildContext& c) {
+    if (c.text("InputProcessing") == "Columns as channels (frame based)")
+        c.fail("Input processing 'Columns as channels (frame based)' nao suportado (exige DSP System Toolbox); use 'Elements as channels (sample based)'");
+}
+
 void requireDiscrete(const BuildContext& c) {
     if (c.resolution.rate.continuous())
         c.fail("exige tempo de amostragem discreto (use um solver de passo fixo/um sinal discreto na entrada)");
@@ -60,6 +67,7 @@ void buildSaturationDynamic(BuildContext& c) { simpleKernel(c, "saturation_dynam
 void buildDeadZoneDynamic(BuildContext& c) { simpleKernel(c, "dead_zone_dynamic", elementwiseWidth(c)); }
 
 void buildRelay(BuildContext& c) {
+    requireSampleBased(c);
     const std::vector<double> on = nonEmpty(c, "OnSwitchValue"), off = nonEmpty(c, "OffSwitchValue");
     const std::vector<double> onOut = nonEmpty(c, "OnOutputValue"), offOut = nonEmpty(c, "OffOutputValue");
     const PackedParams p = pack(c, {{"Switch on point", &on}, {"Switch off point", &off}, {"Output when on", &onOut}, {"Output when off", &offOut}});
@@ -94,6 +102,7 @@ void buildRateLimiterDynamic(BuildContext& c) {
 }
 
 void buildBacklash(BuildContext& c) {
+    requireSampleBased(c);
     const std::vector<double> width = nonEmpty(c, "BacklashWidth"), initial = nonEmpty(c, "InitialOutput");
     for (double w : width) if (!(w >= 0.0) || !std::isfinite(w)) c.fail("Deadband width precisa ser finita e >= 0");
     for (double y : initial) if (!std::isfinite(y)) c.fail("Initial output precisa ser finita");

@@ -423,6 +423,35 @@ void calcExpressionConversionIsBitExact() {
     check(legacyMismatches == 0, "interpretador legado da migracao (TS) = CalcExpression do Core (" + std::to_string(legacyMismatches) + " divergencias)");
 }
 
+/** Model Workspace: variáveis avaliadas em ordem (R usa l), usadas nos parâmetros (`2*l`, como nos
+ * modelos importados do Simulink); nome inválido e expressão inválida relatados; troca do workspace
+ * vale na próxima compilação do plano. */
+void modelWorkspaceVariables() {
+    Harness h;
+    const auto errors = h.session.setModelWorkspace({{"l", "2"}, {"R", "3*l"}, {"1x", "1"}, {"bad", "[1 2"}});
+    check(errors.size() == 2 && errors[0].first == "1x" && errors[1].first == "bad", "erros relatados por variavel (" + std::to_string(errors.size()) + ")");
+    const uint32_t one = h.add("constant", {{"Value", text("1")}});
+    const uint32_t gain = h.add("gain", {{"Gain", text("2*l")}});
+    const uint32_t gainR = h.add("gain", {{"Gain", text("R")}});
+    h.wire(one, "out1", gain, "in1");
+    h.wire(one, "out1", gainR, "in1");
+    h.runUntil(0.01);
+    check(h.value(gain) == 4.0 && h.value(gainR) == 6.0, "Gain 2*l = 4 e R = 3*l = 6");
+    check(h.session.setModelWorkspace({{"l", "5"}, {"R", "l + 1"}}).empty(), "workspace novo sem erros");
+    check(h.session.publishSimulationPlan(), "plano recompilado com o workspace novo");
+    h.runUntil(0.02);
+    check(h.value(gain) == 10.0 && h.value(gainR) == 6.0, "valores novos: 2*5 = 10, R = 6");
+    bool undefinedRejected = false;
+    try {
+        h.session.setModelWorkspace({});
+        h.session.publishSimulationPlan();
+        h.runUntil(0.03);
+    } catch (const std::exception& error) {
+        undefinedRejected = std::string(error.what()).find("l") != std::string::npos;
+    }
+    check(undefinedRejected, "variavel removida do workspace: o bloco recusa com a mensagem citando a variavel");
+}
+
 } // namespace
 
 int main() {
@@ -439,6 +468,7 @@ int main() {
         {"everyBlockCompilesWithDefaults", everyBlockCompilesWithDefaults},
         {"nestedSubsystemInstanceOverrides", nestedSubsystemInstanceOverrides},
         {"tunableParametersLive", tunableParametersLive},
+        {"modelWorkspaceVariables", modelWorkspaceVariables},
         {"calcExpressionConversionIsBitExact", calcExpressionConversionIsBitExact},
     };
     for (const auto& [name, test] : cases) {

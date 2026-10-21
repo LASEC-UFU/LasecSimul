@@ -27,13 +27,11 @@
     },
     {
       "id": "stage",
-      "typeId": "control.filtered_derivative",
+      "typeId": "sl.unit_delay",
       "label": "Derivador filtrado",
       "properties": {
-        "gain": 1,
-        "filterTau": 0.01,
-        "initial": 0,
-        "samplePeriodNs": 10000000
+        "InitialCondition": "0",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 170,
@@ -55,6 +53,22 @@
         "y": 95,
         "rotation": 180
       }
+    },
+    {
+      "id": "stage__state",
+      "typeId": "sl.state_space",
+      "properties": {
+        "A": "-100",
+        "B": "100",
+        "C": "-100",
+        "D": "100",
+        "InitialCondition": "0"
+      },
+      "visual": {
+        "x": 170,
+        "y": 85,
+        "rotation": 0
+      }
     }
   ],
   "topology": {
@@ -70,8 +84,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "stage",
-          "pinId": "in"
+          "componentId": "stage__state",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -80,7 +94,7 @@
         "from": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -88,6 +102,20 @@
           "pinId": "value"
         },
         "points": []
+      },
+      {
+        "id": "stage__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "stage__state",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "stage",
+          "pinId": "in1"
+        },
+        "vertices": []
       }
     ]
   },

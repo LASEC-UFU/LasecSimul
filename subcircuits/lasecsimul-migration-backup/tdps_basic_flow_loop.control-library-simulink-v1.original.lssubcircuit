@@ -1,0 +1,2616 @@
+{
+  "schemaVersion": 3,
+  "typeId": "subcircuits.tdps.basic_flow_loop",
+  "name": "Vazao Linear Simples",
+  "language": "pt-BR",
+  "components": [
+    {
+      "id": "pid-01",
+      "typeId": "control.pid",
+      "properties": {
+        "kc": 1,
+        "ti": 10,
+        "td": 0,
+        "bias": 50,
+        "derivativeFilter": 0.1,
+        "outputMin": 0,
+        "outputMax": 100,
+        "action": 1,
+        "derivativeOnPv": true,
+        "remoteSpEnabled": true,
+        "feedForwardEnabled": false,
+        "autoMode": true,
+        "samplePeriodNs": 10000000
+      },
+      "label": "FIC101",
+      "showValue": false,
+      "visual": {
+        "x": 180,
+        "y": 320,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "process-21",
+      "typeId": "control.process",
+      "properties": {
+        "tau1": 1.1,
+        "tau2": 0.8,
+        "saturationEnabled": false,
+        "hysteresis": 0,
+        "deadTime": 0.4,
+        "gain": 1.2,
+        "valveType": 0,
+        "stiction": 0,
+        "rateLimiter": 0,
+        "actuatorTau": 0.5,
+        "transferFunctionType": 0,
+        "lead": 0,
+        "lag": 0,
+        "samplePeriodNs": 10000000
+      },
+      "label": "FT101",
+      "showValue": false,
+      "visual": {
+        "x": 440,
+        "y": 320,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "calc-41",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "(1-0.2*x0)*x1+x2+x3*x4",
+        "inputs": [
+          "x0",
+          "x1",
+          "x2",
+          "x3",
+          "x4"
+        ],
+        "upperLimit": 105,
+        "lowerLimit": 0,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": true,
+        "samplePeriodNs": 10000000
+      },
+      "label": "FY101",
+      "showValue": false,
+      "visual": {
+        "x": 760,
+        "y": 280,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "calc-42",
+      "typeId": "control.calc_expression",
+      "properties": {
+        "expression": "x0*1.2",
+        "inputs": [
+          "x0"
+        ],
+        "upperLimit": 105,
+        "lowerLimit": -5,
+        "upperLimitEnabled": false,
+        "lowerLimitEnabled": false,
+        "samplePeriodNs": 10000000
+      },
+      "label": "Escala",
+      "showValue": false,
+      "visual": {
+        "x": 760,
+        "y": 440,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel-external-40",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "external-40",
+        "direction": "Input",
+        "valueType": "Real",
+        "legacyVariableIndex": 40,
+        "samplePeriodNs": 10000000,
+        "pinId": "external-40"
+      },
+      "label": "external-40",
+      "showValue": false,
+      "visual": {
+        "x": 80,
+        "y": 352,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel-external-14",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "external-14",
+        "direction": "Input",
+        "valueType": "Real",
+        "legacyVariableIndex": 14,
+        "samplePeriodNs": 10000000,
+        "pinId": "external-14"
+      },
+      "label": "external-14",
+      "showValue": false,
+      "visual": {
+        "x": 80,
+        "y": 336,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel-external-97",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "external-97",
+        "direction": "Input",
+        "valueType": "Real",
+        "legacyVariableIndex": 97,
+        "samplePeriodNs": 10000000,
+        "pinId": "external-97"
+      },
+      "label": "external-97",
+      "showValue": false,
+      "visual": {
+        "x": 660,
+        "y": 296,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel-external-81",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "external-81",
+        "direction": "Input",
+        "valueType": "Real",
+        "legacyVariableIndex": 81,
+        "samplePeriodNs": 10000000,
+        "pinId": "external-81"
+      },
+      "label": "external-81",
+      "showValue": false,
+      "visual": {
+        "x": 660,
+        "y": 328,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel-external-82",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "external-82",
+        "direction": "Input",
+        "valueType": "Real",
+        "legacyVariableIndex": 82,
+        "samplePeriodNs": 10000000,
+        "pinId": "external-82"
+      },
+      "label": "external-82",
+      "showValue": false,
+      "visual": {
+        "x": 660,
+        "y": 344,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel-external-98",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "external-98",
+        "direction": "Input",
+        "valueType": "Real",
+        "legacyVariableIndex": 98,
+        "samplePeriodNs": 10000000,
+        "pinId": "external-98"
+      },
+      "label": "external-98",
+      "showValue": false,
+      "visual": {
+        "x": 660,
+        "y": 360,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel-external-15",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "external-15",
+        "direction": "Input",
+        "valueType": "Real",
+        "legacyVariableIndex": 15,
+        "samplePeriodNs": 10000000,
+        "pinId": "external-15"
+      },
+      "label": "external-15",
+      "showValue": false,
+      "visual": {
+        "x": 660,
+        "y": 456,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "readout-104",
+      "typeId": "control.observer",
+      "properties": {
+        "unit": "%",
+        "observerOnly": true,
+        "samplePeriodNs": 10000000
+      },
+      "label": "Abertura FCV101",
+      "showValue": false,
+      "visual": {
+        "x": 440,
+        "y": 480,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "readout-105",
+      "typeId": "control.observer",
+      "properties": {
+        "unit": "L/min",
+        "observerOnly": true,
+        "samplePeriodNs": 10000000
+      },
+      "label": "Vazão Linha Principal",
+      "showValue": false,
+      "visual": {
+        "x": 180,
+        "y": 240,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "readout-106",
+      "typeId": "control.observer",
+      "properties": {
+        "unit": "",
+        "observerOnly": true,
+        "samplePeriodNs": 10000000
+      },
+      "label": "Posição",
+      "showValue": false,
+      "visual": {
+        "x": 440,
+        "y": 200,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel-external-96",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "external-96",
+        "direction": "Input",
+        "valueType": "Real",
+        "legacyVariableIndex": 96,
+        "samplePeriodNs": 10000000,
+        "pinId": "external-96"
+      },
+      "label": "external-96",
+      "showValue": false,
+      "visual": {
+        "x": 340,
+        "y": 224,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel-output-00",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "output-00",
+        "direction": "Output",
+        "valueType": "Real",
+        "legacyVariableIndex": 0,
+        "samplePeriodNs": 10000000,
+        "pinId": "output-00"
+      },
+      "label": "output-00",
+      "showValue": false,
+      "visual": {
+        "x": 340,
+        "y": 416,
+        "rotation": 180
+      }
+    },
+    {
+      "id": "tunnel-output-21",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "output-21",
+        "direction": "Output",
+        "valueType": "Real",
+        "legacyVariableIndex": 21,
+        "samplePeriodNs": 10000000,
+        "pinId": "output-21"
+      },
+      "label": "output-21",
+      "showValue": false,
+      "visual": {
+        "x": 600,
+        "y": 416,
+        "rotation": 180
+      }
+    },
+    {
+      "id": "tunnel-output-41",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "output-41",
+        "direction": "Output",
+        "valueType": "Real",
+        "legacyVariableIndex": 41,
+        "samplePeriodNs": 10000000,
+        "pinId": "output-41"
+      },
+      "label": "output-41",
+      "showValue": false,
+      "visual": {
+        "x": 920,
+        "y": 336,
+        "rotation": 180
+      }
+    },
+    {
+      "id": "tunnel-output-42",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "output-42",
+        "direction": "Output",
+        "valueType": "Real",
+        "legacyVariableIndex": 42,
+        "samplePeriodNs": 10000000,
+        "pinId": "output-42"
+      },
+      "label": "output-42",
+      "showValue": false,
+      "visual": {
+        "x": 920,
+        "y": 464,
+        "rotation": 180
+      }
+    },
+    {
+      "id": "tunnel-wire-3-from",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "pid-01.out"
+      },
+      "label": "pid-01.out",
+      "showValue": false,
+      "visual": {
+        "x": 340,
+        "y": 352,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel-wire-3-to",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "pid-01.out"
+      },
+      "label": "pid-01.out",
+      "showValue": false,
+      "visual": {
+        "x": 380,
+        "y": 336,
+        "rotation": 180
+      }
+    },
+    {
+      "id": "tunnel-wire-5-from",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "process-21.out"
+      },
+      "label": "process-21.out",
+      "showValue": false,
+      "visual": {
+        "x": 600,
+        "y": 344,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tunnel-wire-5-to",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "process-21.out"
+      },
+      "label": "process-21.out",
+      "showValue": false,
+      "visual": {
+        "x": 700,
+        "y": 312,
+        "rotation": 180
+      }
+    },
+    {
+      "id": "tunnel-wire-10-to",
+      "typeId": "connectors.signal_tunnel",
+      "properties": {
+        "name": "pid-01.out"
+      },
+      "label": "pid-01.out",
+      "showValue": false,
+      "visual": {
+        "x": 380,
+        "y": 504,
+        "rotation": 180
+      }
+    },
+    {
+      "id": "scr-001",
+      "typeId": "graphics.equipment",
+      "label": "equipment",
+      "properties": {
+        "width": 800,
+        "height": 616,
+        "stroke": "#cbd5e1",
+        "fill": "#eef1f4",
+        "strokeWidth": 1,
+        "opacity": 1,
+        "label": "",
+        "labelSize": 12,
+        "showBorder": false
+      },
+      "visual": {
+        "x": 0,
+        "y": 900,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-002",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 400,
+        "height": 22,
+        "text": "Vazão Linear Simples",
+        "fontSize": 18,
+        "align": "start",
+        "stroke": "#0f172a",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 24,
+        "y": 914,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-003",
+      "typeId": "graphics.group_box",
+      "label": "group_box",
+      "properties": {
+        "width": 214,
+        "height": 104,
+        "title": "Command Panel",
+        "titleSize": 12,
+        "titleWidth": 104,
+        "stroke": "#7f9db9",
+        "fill": "#dfe8f5",
+        "maskFill": "#eef1f4",
+        "strokeWidth": 1.2,
+        "opacity": 1
+      },
+      "visual": {
+        "x": 20,
+        "y": 934,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-004",
+      "typeId": "graphics.hmi_lamp_button",
+      "label": "hmi_lamp_button",
+      "properties": {
+        "width": 38,
+        "height": 38,
+        "stroke": "#475569",
+        "fill": "#cbd5e1",
+        "strokeWidth": 1.4,
+        "opacity": 1,
+        "onColor": "#86efac",
+        "offColor": "#94a3b8",
+        "value": 100,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 0,
+        "bindThreshold": 50,
+        "bindInvert": false,
+        "actionTarget": "",
+        "actionProperty": "",
+        "actionMode": "toggle",
+        "actionValue": "true",
+        "actionReleaseValue": "false",
+        "actionStep": 1,
+        "actionMin": 0,
+        "actionMax": 100
+      },
+      "visual": {
+        "x": 29,
+        "y": 946,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-005",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 150,
+        "height": 22,
+        "text": "Válvula FCV102",
+        "fontSize": 13,
+        "align": "start",
+        "stroke": "#1d4ed8",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 72,
+        "y": 948,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-006",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 130,
+        "height": 22,
+        "text": "Aberta",
+        "fontSize": 11,
+        "align": "start",
+        "stroke": "#b91c1c",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 72,
+        "y": 966,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-007",
+      "typeId": "graphics.hmi_lamp_button",
+      "label": "hmi_lamp_button",
+      "properties": {
+        "width": 38,
+        "height": 38,
+        "stroke": "#475569",
+        "fill": "#cbd5e1",
+        "strokeWidth": 1.4,
+        "opacity": 1,
+        "onColor": "#fde047",
+        "offColor": "#fbbf24",
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 0,
+        "bindThreshold": 50,
+        "bindInvert": false,
+        "actionTarget": "",
+        "actionProperty": "",
+        "actionMode": "toggle",
+        "actionValue": "true",
+        "actionReleaseValue": "false",
+        "actionStep": 1,
+        "actionMin": 0,
+        "actionMax": 100
+      },
+      "visual": {
+        "x": 29,
+        "y": 988,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-008",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 150,
+        "height": 22,
+        "text": "Dist. Aleatório",
+        "fontSize": 13,
+        "align": "start",
+        "stroke": "#1d4ed8",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 72,
+        "y": 990,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-009",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 130,
+        "height": 22,
+        "text": "Desligado",
+        "fontSize": 11,
+        "align": "start",
+        "stroke": "#b91c1c",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 72,
+        "y": 1008,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-010",
+      "typeId": "graphics.group_box",
+      "label": "group_box",
+      "properties": {
+        "width": 214,
+        "height": 66,
+        "title": "SP de Vazão(L/min)",
+        "titleSize": 12,
+        "titleWidth": 130,
+        "stroke": "#7f9db9",
+        "fill": "#eef3f9",
+        "maskFill": "#eef1f4",
+        "strokeWidth": 1.2,
+        "opacity": 1
+      },
+      "visual": {
+        "x": 520,
+        "y": 916,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-011",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 74,
+        "height": 26,
+        "stroke": "#334155",
+        "fill": "#050505",
+        "strokeWidth": 1,
+        "opacity": 1,
+        "label": "",
+        "valueColor": "#ffffff",
+        "value": 60,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 652,
+        "y": 922,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-012",
+      "typeId": "graphics.slider",
+      "label": "slider",
+      "properties": {
+        "width": 200,
+        "height": 32,
+        "stroke": "#475569",
+        "fill": "#ffffff",
+        "strokeWidth": 1.2,
+        "opacity": 1,
+        "showTicks": true,
+        "value": 60,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 0,
+        "actionTarget": "",
+        "actionProperty": "",
+        "actionMode": "set",
+        "actionValue": "60",
+        "actionReleaseValue": "0",
+        "actionStep": 1,
+        "actionMin": 0,
+        "actionMax": 100
+      },
+      "visual": {
+        "x": 526,
+        "y": 944,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-013",
+      "typeId": "graphics.group_box",
+      "label": "group_box",
+      "properties": {
+        "width": 234,
+        "height": 44,
+        "title": "Desvio Tolerado(L/min)",
+        "titleSize": 12,
+        "titleWidth": 156,
+        "stroke": "#7f9db9",
+        "fill": "#eef3f9",
+        "maskFill": "#eef1f4",
+        "strokeWidth": 1.2,
+        "opacity": 1
+      },
+      "visual": {
+        "x": 520,
+        "y": 994,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-014",
+      "typeId": "graphics.value_display",
+      "label": "value_display",
+      "properties": {
+        "width": 74,
+        "height": 26,
+        "stroke": "#334155",
+        "fill": "#050505",
+        "strokeWidth": 1,
+        "opacity": 1,
+        "label": "",
+        "valueColor": "#ffffff",
+        "value": 20,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 2
+      },
+      "visual": {
+        "x": 672,
+        "y": 1000,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-015",
+      "typeId": "graphics.group_box",
+      "label": "group_box",
+      "properties": {
+        "width": 86,
+        "height": 22,
+        "title": "",
+        "titleSize": 10,
+        "titleWidth": 0,
+        "stroke": "#7f9db9",
+        "fill": "#eef3f9",
+        "maskFill": "#eef1f4",
+        "strokeWidth": 1.1,
+        "opacity": 1
+      },
+      "visual": {
+        "x": 330,
+        "y": 948,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-016",
+      "typeId": "graphics.gauge_bar",
+      "label": "gauge_bar",
+      "properties": {
+        "width": 22,
+        "height": 13,
+        "stroke": "#475569",
+        "fill": "#ffffff",
+        "strokeWidth": 0.9,
+        "opacity": 1,
+        "barColor": "#22c55e",
+        "showValue": false,
+        "value": 70,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 0
+      },
+      "visual": {
+        "x": 335,
+        "y": 953,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-017",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 58,
+        "height": 22,
+        "text": "FIC101",
+        "fontSize": 12,
+        "align": "start",
+        "stroke": "#1d4ed8",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 360,
+        "y": 952,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-018",
+      "typeId": "graphics.controller_station",
+      "label": "controller_station",
+      "properties": {
+        "width": 72,
+        "height": 104,
+        "stroke": "#334155",
+        "fill": "#d7dce2",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "tag": "FIC-101",
+        "setpoint": 60,
+        "showValue": false,
+        "value": 0,
+        "bindSource": "pid-01",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 332,
+        "y": 978,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-019",
+      "typeId": "graphics.flow_transmitter",
+      "label": "flow_transmitter",
+      "properties": {
+        "width": 120,
+        "height": 150,
+        "stroke": "#334155",
+        "fill": "#d7dce2",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "tag": "",
+        "showValue": false,
+        "value": 0,
+        "bindSource": "readout-105",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 200,
+        "bindUnit": "L/min",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 214,
+        "y": 1050,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-020",
+      "typeId": "graphics.pipe",
+      "label": "pipe",
+      "properties": {
+        "height": 11,
+        "fill": "#d8dde3",
+        "stroke": "#475569",
+        "strokeWidth": 1.1,
+        "opacity": 1,
+        "showFlow": false,
+        "flowDirection": "forward",
+        "showFlanges": false,
+        "value": 100,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 0,
+        "bindThreshold": 1,
+        "bindInvert": false,
+        "width": 40
+      },
+      "visual": {
+        "x": 291,
+        "y": 1189,
+        "rotation": 90
+      }
+    },
+    {
+      "id": "scr-021",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 112,
+        "height": 22,
+        "text": "FT-101",
+        "fontSize": 14,
+        "align": "middle",
+        "stroke": "#0f172a",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 218,
+        "y": 1152,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-022",
+      "typeId": "graphics.signal_line",
+      "label": "signal_line",
+      "properties": {
+        "height": 10,
+        "stroke": "#475569",
+        "strokeWidth": 1.6,
+        "opacity": 1,
+        "dash": "solid",
+        "arrow": "none",
+        "width": 10
+      },
+      "visual": {
+        "x": 269,
+        "y": 1058,
+        "rotation": 90
+      }
+    },
+    {
+      "id": "scr-023",
+      "typeId": "graphics.signal_elbow",
+      "label": "signal_elbow",
+      "properties": {
+        "width": 26,
+        "height": 26,
+        "stroke": "#475569",
+        "strokeWidth": 1.6,
+        "opacity": 1,
+        "corner": "rb"
+      },
+      "visual": {
+        "x": 261,
+        "y": 1032,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-024",
+      "typeId": "graphics.signal_line",
+      "label": "signal_line",
+      "properties": {
+        "height": 10,
+        "stroke": "#475569",
+        "strokeWidth": 1.6,
+        "opacity": 1,
+        "dash": "solid",
+        "width": 45,
+        "arrow": "end"
+      },
+      "visual": {
+        "x": 287,
+        "y": 1040,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-025",
+      "typeId": "graphics.signal_line",
+      "label": "signal_line",
+      "properties": {
+        "height": 10,
+        "stroke": "#475569",
+        "strokeWidth": 1.6,
+        "opacity": 1,
+        "dash": "solid",
+        "width": 105,
+        "arrow": "none"
+      },
+      "visual": {
+        "x": 404,
+        "y": 1040,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-026",
+      "typeId": "graphics.signal_elbow",
+      "label": "signal_elbow",
+      "properties": {
+        "width": 26,
+        "height": 26,
+        "stroke": "#475569",
+        "strokeWidth": 1.6,
+        "opacity": 1,
+        "corner": "lb"
+      },
+      "visual": {
+        "x": 509,
+        "y": 1032,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-027",
+      "typeId": "graphics.signal_line",
+      "label": "signal_line",
+      "properties": {
+        "height": 10,
+        "stroke": "#475569",
+        "strokeWidth": 1.6,
+        "opacity": 1,
+        "dash": "solid",
+        "arrow": "end",
+        "width": 154
+      },
+      "visual": {
+        "x": 445,
+        "y": 1130,
+        "rotation": 90
+      }
+    },
+    {
+      "id": "scr-028",
+      "typeId": "graphics.pipe",
+      "label": "pipe",
+      "properties": {
+        "width": 580,
+        "height": 24,
+        "fill": "#d8dde3",
+        "stroke": "currentColor",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "showFlow": false,
+        "flowDirection": "forward",
+        "showFlanges": false,
+        "value": 100,
+        "bindSource": "readout-105",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1,
+        "bindThreshold": 1,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 46,
+        "y": 1210,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-029",
+      "typeId": "graphics.pipe_flange",
+      "label": "pipe_flange",
+      "properties": {
+        "width": 16,
+        "height": 30,
+        "stroke": "#374151",
+        "fill": "#cbd5e1",
+        "strokeWidth": 1.4,
+        "opacity": 1
+      },
+      "visual": {
+        "x": 362,
+        "y": 1207,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-030",
+      "typeId": "graphics.pipe_flange",
+      "label": "pipe_flange",
+      "properties": {
+        "width": 16,
+        "height": 30,
+        "stroke": "#374151",
+        "fill": "#cbd5e1",
+        "strokeWidth": 1.4,
+        "opacity": 1
+      },
+      "visual": {
+        "x": 462,
+        "y": 1207,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-031",
+      "typeId": "graphics.pipe_flange",
+      "label": "pipe_flange",
+      "properties": {
+        "width": 16,
+        "height": 30,
+        "stroke": "#374151",
+        "fill": "#cbd5e1",
+        "strokeWidth": 1.4,
+        "opacity": 1
+      },
+      "visual": {
+        "x": 566,
+        "y": 1207,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-032",
+      "typeId": "graphics.flow_arrow",
+      "label": "flow_arrow",
+      "properties": {
+        "width": 36,
+        "height": 22,
+        "stroke": "#2563eb",
+        "fill": "#3b82f6",
+        "strokeWidth": 1.2,
+        "opacity": 1
+      },
+      "visual": {
+        "x": 636,
+        "y": 1211,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-033",
+      "typeId": "graphics.hmi.valve",
+      "label": "hmi.valve",
+      "properties": {
+        "width": 60,
+        "height": 86,
+        "stroke": "#4a4a4a",
+        "fill": "#c2c2c2",
+        "opacity": 1,
+        "throttle": true,
+        "tag": "FCV-101",
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1,
+        "bindThreshold": 2,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 467,
+        "y": 1176,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-034",
+      "typeId": "graphics.pipe",
+      "label": "pipe",
+      "properties": {
+        "height": 18,
+        "fill": "#d8dde3",
+        "stroke": "#475569",
+        "strokeWidth": 1.3,
+        "opacity": 1,
+        "showFlow": false,
+        "flowDirection": "forward",
+        "showFlanges": true,
+        "value": 100,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 0,
+        "bindThreshold": 1,
+        "bindInvert": false,
+        "width": 152
+      },
+      "visual": {
+        "x": 92,
+        "y": 1289,
+        "rotation": 90
+      }
+    },
+    {
+      "id": "scr-035",
+      "typeId": "graphics.hmi.valve",
+      "label": "hmi.valve",
+      "properties": {
+        "width": 60,
+        "height": 86,
+        "stroke": "#4a4a4a",
+        "fill": "#c2c2c2",
+        "opacity": 1,
+        "throttle": false,
+        "tag": "FCV-102",
+        "value": 100,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 0,
+        "bindThreshold": 50,
+        "bindInvert": false
+      },
+      "visual": {
+        "x": 138,
+        "y": 1272,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-036",
+      "typeId": "graphics.flow_arrow",
+      "label": "flow_arrow",
+      "properties": {
+        "width": 34,
+        "height": 22,
+        "stroke": "#2563eb",
+        "fill": "#3b82f6",
+        "strokeWidth": 1.2,
+        "opacity": 1
+      },
+      "visual": {
+        "x": 151,
+        "y": 1378,
+        "rotation": 90
+      }
+    },
+    {
+      "id": "scr-037",
+      "typeId": "graphics.instrument",
+      "label": "instrument",
+      "properties": {
+        "width": 66,
+        "height": 66,
+        "stroke": "#475569",
+        "fill": "#f8fafc",
+        "strokeWidth": 1.4,
+        "opacity": 1,
+        "tag": "HS",
+        "tagNumber": "022",
+        "housing": "hexagon",
+        "location": "field",
+        "showValue": false,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 286,
+        "y": 1284,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-038",
+      "typeId": "graphics.signal_line",
+      "label": "signal_line",
+      "properties": {
+        "height": 10,
+        "stroke": "#475569",
+        "strokeWidth": 1.4,
+        "opacity": 1,
+        "dash": "solid",
+        "width": 45,
+        "arrow": "start"
+      },
+      "visual": {
+        "x": 241,
+        "y": 1312,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-039",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 120,
+        "height": 22,
+        "text": "FCV-102",
+        "fontSize": 13,
+        "align": "start",
+        "stroke": "#0f172a",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 180,
+        "y": 1362,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-040",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 120,
+        "height": 22,
+        "text": "Posição",
+        "fontSize": 12,
+        "align": "start",
+        "stroke": "#0f172a",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 196,
+        "y": 1382,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-041",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 120,
+        "height": 22,
+        "text": "Aberta",
+        "fontSize": 12,
+        "align": "start",
+        "stroke": "#1d4ed8",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 196,
+        "y": 1398,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-042",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 190,
+        "height": 22,
+        "text": "Vazão Linha Principal",
+        "fontSize": 13,
+        "align": "start",
+        "stroke": "#0f172a",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 150,
+        "y": 1174,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-043",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 190,
+        "height": 20,
+        "text": "",
+        "fontSize": 12,
+        "align": "start",
+        "stroke": "#1d4ed8",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "readout-105",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 200,
+        "bindUnit": "L/min",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 150,
+        "y": 1190,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-044",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 180,
+        "height": 22,
+        "text": "Abertura FCV101",
+        "fontSize": 13,
+        "align": "start",
+        "stroke": "#0f172a",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 556,
+        "y": 1112,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "scr-045",
+      "typeId": "graphics.label",
+      "label": "label",
+      "properties": {
+        "width": 160,
+        "height": 20,
+        "text": "",
+        "fontSize": 12,
+        "align": "start",
+        "stroke": "#1d4ed8",
+        "fill": "none",
+        "showBox": false,
+        "opacity": 1,
+        "value": 0,
+        "bindSource": "readout-104",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 1
+      },
+      "visual": {
+        "x": 556,
+        "y": 1130,
+        "rotation": 0
+      }
+    }
+  ],
+  "topology": {
+    "revision": 7,
+    "nodes": [],
+    "conductors": [
+      {
+        "id": "wire-1",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel-external-40",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pid-01",
+          "pinId": "pv"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-2",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel-external-14",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pid-01",
+          "pinId": "sp"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-3-from",
+        "from": {
+          "kind": "port",
+          "componentId": "pid-01",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tunnel-wire-3-from",
+          "pinId": "value"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-3-to",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel-wire-3-to",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "process-21",
+          "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-4",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel-external-97",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-41",
+          "pinId": "x0"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-5-from",
+        "from": {
+          "kind": "port",
+          "componentId": "process-21",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tunnel-wire-5-from",
+          "pinId": "value"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-5-to",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel-wire-5-to",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-41",
+          "pinId": "x1"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-6",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel-external-81",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-41",
+          "pinId": "x2"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-7",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel-external-82",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-41",
+          "pinId": "x3"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-8",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel-external-98",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-41",
+          "pinId": "x4"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-9",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel-external-15",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "calc-42",
+          "pinId": "x0"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-10-to",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel-wire-10-to",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "readout-104",
+          "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-11",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel-external-40",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "readout-105",
+          "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-12",
+        "from": {
+          "kind": "port",
+          "componentId": "tunnel-external-96",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "readout-106",
+          "pinId": "in"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-13",
+        "from": {
+          "kind": "port",
+          "componentId": "pid-01",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tunnel-output-00",
+          "pinId": "value"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-14",
+        "from": {
+          "kind": "port",
+          "componentId": "process-21",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tunnel-output-21",
+          "pinId": "value"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-15",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-41",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tunnel-output-41",
+          "pinId": "value"
+        },
+        "points": []
+      },
+      {
+        "id": "wire-16",
+        "from": {
+          "kind": "port",
+          "componentId": "calc-42",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tunnel-output-42",
+          "pinId": "value"
+        },
+        "points": []
+      }
+    ]
+  },
+  "interface": [
+    {
+      "pinId": "external-40",
+      "label": "external-40",
+      "internalTunnel": "external-40",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "external-14",
+      "label": "external-14",
+      "internalTunnel": "external-14",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "external-97",
+      "label": "external-97",
+      "internalTunnel": "external-97",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "external-81",
+      "label": "external-81",
+      "internalTunnel": "external-81",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "external-82",
+      "label": "external-82",
+      "internalTunnel": "external-82",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "external-98",
+      "label": "external-98",
+      "internalTunnel": "external-98",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "external-15",
+      "label": "external-15",
+      "internalTunnel": "external-15",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "external-96",
+      "label": "external-96",
+      "internalTunnel": "external-96",
+      "domain": "signal",
+      "direction": "in",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "output-00",
+      "label": "output-00",
+      "internalTunnel": "output-00",
+      "domain": "signal",
+      "direction": "out",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "output-21",
+      "label": "output-21",
+      "internalTunnel": "output-21",
+      "domain": "signal",
+      "direction": "out",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "output-41",
+      "label": "output-41",
+      "internalTunnel": "output-41",
+      "domain": "signal",
+      "direction": "out",
+      "valueType": "Real",
+      "width": 1
+    },
+    {
+      "pinId": "output-42",
+      "label": "output-42",
+      "internalTunnel": "output-42",
+      "domain": "signal",
+      "direction": "out",
+      "valueType": "Real",
+      "width": 1
+    }
+  ],
+  "symbolMode": "custom",
+  "symbol": {
+    "width": 800,
+    "height": 616,
+    "border": false,
+    "background": {
+      "kind": "none"
+    },
+    "pins": [
+      {
+        "id": "external-40",
+        "x": 0,
+        "y": 96,
+        "angle": 180,
+        "length": 8,
+        "label": "external-40",
+        "labelFontSize": 7,
+        "kind": "ANALOG_IN"
+      },
+      {
+        "id": "external-14",
+        "x": 0,
+        "y": 144,
+        "angle": 180,
+        "length": 8,
+        "label": "external-14",
+        "labelFontSize": 7,
+        "kind": "ANALOG_IN"
+      },
+      {
+        "id": "external-97",
+        "x": 0,
+        "y": 192,
+        "angle": 180,
+        "length": 8,
+        "label": "external-97",
+        "labelFontSize": 7,
+        "kind": "ANALOG_IN"
+      },
+      {
+        "id": "external-81",
+        "x": 0,
+        "y": 240,
+        "angle": 180,
+        "length": 8,
+        "label": "external-81",
+        "labelFontSize": 7,
+        "kind": "ANALOG_IN"
+      },
+      {
+        "id": "external-82",
+        "x": 0,
+        "y": 288,
+        "angle": 180,
+        "length": 8,
+        "label": "external-82",
+        "labelFontSize": 7,
+        "kind": "ANALOG_IN"
+      },
+      {
+        "id": "external-98",
+        "x": 0,
+        "y": 336,
+        "angle": 180,
+        "length": 8,
+        "label": "external-98",
+        "labelFontSize": 7,
+        "kind": "ANALOG_IN"
+      },
+      {
+        "id": "external-15",
+        "x": 0,
+        "y": 384,
+        "angle": 180,
+        "length": 8,
+        "label": "external-15",
+        "labelFontSize": 7,
+        "kind": "ANALOG_IN"
+      },
+      {
+        "id": "external-96",
+        "x": 0,
+        "y": 432,
+        "angle": 180,
+        "length": 8,
+        "label": "external-96",
+        "labelFontSize": 7,
+        "kind": "ANALOG_IN"
+      },
+      {
+        "id": "output-00",
+        "x": 640,
+        "y": 48,
+        "angle": 0,
+        "length": 8,
+        "label": "output-00",
+        "labelFontSize": 7,
+        "kind": "ANALOG_OUT"
+      },
+      {
+        "id": "output-21",
+        "x": 640,
+        "y": 96,
+        "angle": 0,
+        "length": 8,
+        "label": "output-21",
+        "labelFontSize": 7,
+        "kind": "ANALOG_OUT"
+      },
+      {
+        "id": "output-41",
+        "x": 640,
+        "y": 144,
+        "angle": 0,
+        "length": 8,
+        "label": "output-41",
+        "labelFontSize": 7,
+        "kind": "ANALOG_OUT"
+      },
+      {
+        "id": "output-42",
+        "x": 640,
+        "y": 192,
+        "angle": 0,
+        "length": 8,
+        "label": "output-42",
+        "labelFontSize": 7,
+        "kind": "ANALOG_OUT"
+      }
+    ],
+    "shapes": []
+  },
+  "exposedComponents": [
+    {
+      "componentId": "scr-001",
+      "x": 0,
+      "y": 0,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 0
+    },
+    {
+      "componentId": "scr-002",
+      "x": 24,
+      "y": 14,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 1
+    },
+    {
+      "componentId": "scr-003",
+      "x": 20,
+      "y": 34,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 2
+    },
+    {
+      "componentId": "scr-004",
+      "x": 29,
+      "y": 46,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 3
+    },
+    {
+      "componentId": "scr-005",
+      "x": 72,
+      "y": 48,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 4
+    },
+    {
+      "componentId": "scr-006",
+      "x": 72,
+      "y": 66,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 5
+    },
+    {
+      "componentId": "scr-007",
+      "x": 29,
+      "y": 88,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 6
+    },
+    {
+      "componentId": "scr-008",
+      "x": 72,
+      "y": 90,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 7
+    },
+    {
+      "componentId": "scr-009",
+      "x": 72,
+      "y": 108,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 8
+    },
+    {
+      "componentId": "scr-010",
+      "x": 520,
+      "y": 16,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 9
+    },
+    {
+      "componentId": "scr-011",
+      "x": 652,
+      "y": 22,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 10
+    },
+    {
+      "componentId": "scr-012",
+      "x": 526,
+      "y": 44,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 11
+    },
+    {
+      "componentId": "scr-013",
+      "x": 520,
+      "y": 94,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 12
+    },
+    {
+      "componentId": "scr-014",
+      "x": 672,
+      "y": 100,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 13
+    },
+    {
+      "componentId": "scr-015",
+      "x": 330,
+      "y": 48,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 14
+    },
+    {
+      "componentId": "scr-016",
+      "x": 335,
+      "y": 53,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 15
+    },
+    {
+      "componentId": "scr-017",
+      "x": 360,
+      "y": 52,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 16
+    },
+    {
+      "componentId": "scr-018",
+      "x": 332,
+      "y": 78,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 17
+    },
+    {
+      "componentId": "scr-019",
+      "x": 214,
+      "y": 150,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 18
+    },
+    {
+      "componentId": "scr-020",
+      "x": 291,
+      "y": 289,
+      "rotation": 90,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 19
+    },
+    {
+      "componentId": "scr-021",
+      "x": 218,
+      "y": 252,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 20
+    },
+    {
+      "componentId": "scr-022",
+      "x": 269,
+      "y": 158,
+      "rotation": 90,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 21
+    },
+    {
+      "componentId": "scr-023",
+      "x": 261,
+      "y": 132,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 22
+    },
+    {
+      "componentId": "scr-024",
+      "x": 287,
+      "y": 140,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 23
+    },
+    {
+      "componentId": "scr-025",
+      "x": 404,
+      "y": 140,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 24
+    },
+    {
+      "componentId": "scr-026",
+      "x": 509,
+      "y": 132,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 25
+    },
+    {
+      "componentId": "scr-027",
+      "x": 445,
+      "y": 230,
+      "rotation": 90,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 26
+    },
+    {
+      "componentId": "scr-028",
+      "x": 46,
+      "y": 310,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 27
+    },
+    {
+      "componentId": "scr-029",
+      "x": 362,
+      "y": 307,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 28
+    },
+    {
+      "componentId": "scr-030",
+      "x": 462,
+      "y": 307,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 29
+    },
+    {
+      "componentId": "scr-031",
+      "x": 566,
+      "y": 307,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 30
+    },
+    {
+      "componentId": "scr-032",
+      "x": 636,
+      "y": 311,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 31
+    },
+    {
+      "componentId": "scr-033",
+      "x": 467,
+      "y": 276,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 32
+    },
+    {
+      "componentId": "scr-034",
+      "x": 92,
+      "y": 389,
+      "rotation": 90,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 33
+    },
+    {
+      "componentId": "scr-035",
+      "x": 138,
+      "y": 372,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 34
+    },
+    {
+      "componentId": "scr-036",
+      "x": 151,
+      "y": 478,
+      "rotation": 90,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 35
+    },
+    {
+      "componentId": "scr-037",
+      "x": 286,
+      "y": 384,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 36
+    },
+    {
+      "componentId": "scr-038",
+      "x": 241,
+      "y": 412,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 37
+    },
+    {
+      "componentId": "scr-039",
+      "x": 180,
+      "y": 462,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 38
+    },
+    {
+      "componentId": "scr-040",
+      "x": 196,
+      "y": 482,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 39
+    },
+    {
+      "componentId": "scr-041",
+      "x": 196,
+      "y": 498,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 40
+    },
+    {
+      "componentId": "scr-042",
+      "x": 150,
+      "y": 274,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 41
+    },
+    {
+      "componentId": "scr-043",
+      "x": 150,
+      "y": 290,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 42
+    },
+    {
+      "componentId": "scr-044",
+      "x": 556,
+      "y": 212,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 43
+    },
+    {
+      "componentId": "scr-045",
+      "x": 556,
+      "y": 230,
+      "rotation": 0,
+      "flipH": false,
+      "flipV": false,
+      "scale": 1,
+      "layer": 44
+    }
+  ],
+  "exportedPropertyComponentIds": [
+    "pid-01",
+    "process-21"
+  ],
+  "folderPath": [
+    "Modelos"
+  ],
+  "help": {
+    "description": "Modelo TDPS v7.71 convertido da fonte basic flow loop/basic flow loop.smp."
+  },
+  "workspaceSection": "process"
+}

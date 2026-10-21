@@ -1,0 +1,41 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.filtered_derivative",
+      "kind": "inline",
+      "rule": "filtered_derivative->state_space(continuous)+unit_delay(output-phase)",
+      "newTypeIds": [
+        "sl.state_space",
+        "sl.unit_delay"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_filtered_derivative.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.706Z",
+  "original": {
+    "backup": "control_filtered_derivative.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "5d63f030a4e63a072d2461421f5f449ae43d6bd02f1c781ed95c943c88ca0f56"
+  },
+  "migrated": {
+    "sha256": "8135c8230885a3ee01cf10ad6a1cde3a696f18318b069c56cbe9cf973dc3ddc1"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "filtered_derivative->state_space(continuous)+unit_delay(output-phase)": 1
+    }
+  }
+}

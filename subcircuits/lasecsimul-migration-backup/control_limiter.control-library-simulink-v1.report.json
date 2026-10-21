@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.limiter",
+      "kind": "single",
+      "rule": "limiter->saturation",
+      "newTypeIds": [
+        "sl.saturation"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_limiter.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.761Z",
+  "original": {
+    "backup": "control_limiter.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "6417b048eecb1cdbe66393624ae4d9ad256ab15165451011f2e29b98469f63d6"
+  },
+  "migrated": {
+    "sha256": "5212f838afa31703162fbc92f41cce71e5425288f4ad7ad683a6b07f202ee336"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "limiter->saturation": 1
+    }
+  }
+}

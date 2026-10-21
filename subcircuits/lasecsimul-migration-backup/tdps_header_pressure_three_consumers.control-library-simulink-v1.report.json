@@ -1,0 +1,253 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "pid-01",
+      "legacyTypeId": "control.pid",
+      "kind": "subsystem",
+      "rule": "pid->discrete_pid_controller_2dof(D na PV)",
+      "newTypeIds": [
+        "subsystem.legado_pid_dpv"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "pid-02",
+      "legacyTypeId": "control.pid",
+      "kind": "subsystem",
+      "rule": "pid->discrete_pid_controller_2dof(D na PV)",
+      "newTypeIds": [
+        "subsystem.legado_pid_dpv"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "pid-03",
+      "legacyTypeId": "control.pid",
+      "kind": "subsystem",
+      "rule": "pid->discrete_pid_controller_2dof(D na PV)",
+      "newTypeIds": [
+        "subsystem.legado_pid_dpv"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-21",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-22",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-23",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1+tau2+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1_tau2_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-24",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-25",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-26",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-41",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-42",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-43",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-101",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-102",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-103",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-104",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-105",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-106",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-107",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-108",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-109",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    }
+  ],
+  "definitionsAdded": [
+    "subsystem.legado_pid_dpv",
+    "subsystem.legado_processo_tau1_deadtime",
+    "subsystem.legado_processo_tau1_tau2_deadtime",
+    "subsystem.legado_processo_tau1"
+  ],
+  "overrides": [],
+  "warnings": [],
+  "file": "tdps_header_pressure_three_consumers.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:39.146Z",
+  "original": {
+    "backup": "tdps_header_pressure_three_consumers.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "106964555f7ea4f563ad87ec8d1ab5821483829989cf207017a0a610322d61bf"
+  },
+  "migrated": {
+    "sha256": "f2a7a8a4aa1ebe3aa3313ec0aca8f30a3daece19d59baa64151b75b89826e13f"
+  },
+  "summary": {
+    "converted": 21,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 4,
+    "overridesRemapped": 0,
+    "byRule": {
+      "pid->discrete_pid_controller_2dof(D na PV)": 3,
+      "process->gain+tau1+deadtime": 3,
+      "process->gain+tau1+tau2+deadtime": 1,
+      "process->gain+tau1": 2,
+      "calc_expression->fcn": 1,
+      "calc_expression->mux+fcn": 2,
+      "observer->identity-gain": 9
+    }
+  }
+}

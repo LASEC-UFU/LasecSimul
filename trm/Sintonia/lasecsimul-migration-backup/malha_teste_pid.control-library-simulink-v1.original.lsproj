@@ -1,0 +1,212 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    {
+      "id": "sp",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 50,
+        "unit": "%"
+      },
+      "label": "SP remoto (0–100)",
+      "showValue": false,
+      "visual": {
+        "x": 204,
+        "y": 177.59999999999997,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "am",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 0,
+        "unit": ""
+      },
+      "label": "A/M (1=Auto, 0=Manual)",
+      "showValue": false,
+      "visual": {
+        "x": 204,
+        "y": 233.59999999999997,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "lr",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 0,
+        "unit": ""
+      },
+      "label": "L/R (0=Remoto, 1=Local)",
+      "showValue": false,
+      "visual": {
+        "x": 204,
+        "y": 290,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "pid",
+      "typeId": "control.pid_station",
+      "properties": {
+        "kc": 2,
+        "ti": 4,
+        "td": 0,
+        "bias": 0,
+        "derivativeFilter": 0.1,
+        "outputMin": 0,
+        "outputMax": 100,
+        "action": 1,
+        "derivativeOnPv": true,
+        "initialIntegral": 0,
+        "manual": false,
+        "manualOutput": 47.77,
+        "localMode": false,
+        "localSetpoint": 50,
+        "samplePeriodNs": 100000000
+      },
+      "label": "Estação de sintonia",
+      "showValue": false,
+      "visual": {
+        "x": 470,
+        "y": 210,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "plant",
+      "typeId": "control.process",
+      "properties": {
+        "gain": 1,
+        "tau1": 3,
+        "tau2": 0,
+        "deadTime": 0,
+        "samplePeriodNs": 100000000
+      },
+      "label": "Processo de primeira ordem",
+      "showValue": false,
+      "visual": {
+        "x": 600,
+        "y": 241.99999999999994,
+        "rotation": 0
+      }
+    }
+  ],
+  "topology": {
+    "revision": 76,
+    "nodes": [],
+    "conductors": [
+      {
+        "id": "wire-sp-pid",
+        "from": {
+          "kind": "port",
+          "componentId": "sp",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pid",
+          "pinId": "sp"
+        },
+        "vertices": [
+          {
+            "x": 470,
+            "y": 201.59999999999997
+          }
+        ]
+      },
+      {
+        "id": "wire-am-pid",
+        "from": {
+          "kind": "port",
+          "componentId": "am",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pid",
+          "pinId": "am"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-lr-pid",
+        "from": {
+          "kind": "port",
+          "componentId": "lr",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pid",
+          "pinId": "lr"
+        },
+        "vertices": [
+          {
+            "x": 458,
+            "y": 314
+          },
+          {
+            "x": 458,
+            "y": 274
+          }
+        ]
+      },
+      {
+        "id": "wire-1792179971890-986058",
+        "from": {
+          "kind": "port",
+          "componentId": "plant",
+          "pinId": "in"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pid",
+          "pinId": "out"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1792179991571-403429",
+        "from": {
+          "kind": "port",
+          "componentId": "pid",
+          "pinId": "pv"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "plant",
+          "pinId": "out"
+        },
+        "vertices": [
+          {
+            "x": 406,
+            "y": 242
+          },
+          {
+            "x": 406,
+            "y": 162
+          },
+          {
+            "x": 766,
+            "y": 162
+          },
+          {
+            "x": 766,
+            "y": 265.99999999999994
+          }
+        ]
+      }
+    ]
+  },
+  "visual": {
+    "viewport": {
+      "x": -208.5814936312072,
+      "y": -6.165692008024166,
+      "zoom": 1.394570105212983
+    },
+    "wireRoutes": "explicit"
+  },
+  "simulationSettings": {}
+}

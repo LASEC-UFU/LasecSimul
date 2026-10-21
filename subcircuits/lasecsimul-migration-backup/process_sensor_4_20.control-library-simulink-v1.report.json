@@ -1,0 +1,80 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "c_p",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "",
+      "componentId": "c_pmin",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "",
+      "componentId": "c_pmax",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "",
+      "componentId": "i_raw",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "i_loop",
+      "legacyTypeId": "control.saturation",
+      "kind": "single",
+      "rule": "saturation->saturation",
+      "newTypeIds": [
+        "sl.saturation"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "process_sensor_4_20.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.987Z",
+  "original": {
+    "backup": "process_sensor_4_20.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "001876ddae8287ae7d03af280f0da8b11d97d18a19795afc91e84fd85f19a719"
+  },
+  "migrated": {
+    "sha256": "7e5a60784b734682b30bd2f2978ffb8b8a02694ddcf383d44460dcc0e962dba9"
+  },
+  "summary": {
+    "converted": 2,
+    "kept": 3,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 3,
+      "calc_expression->mux+fcn": 1,
+      "saturation->saturation": 1
+    }
+  }
+}

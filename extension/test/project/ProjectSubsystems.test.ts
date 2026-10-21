@@ -36,14 +36,14 @@ import { createEmptyProject } from "../../src/project/ProjectTypes";
   assert.strictEqual(tankLoaded.components[0]!.subcircuitRef, undefined, "a instância não carrega mais a cópia");
   const migratedPlant = tankLoaded.subsystems!.find((definition) => definition.typeId === "subsystem.local.tanque") as unknown as typeof embeddedPlant & { origin?: { typeId?: string } };
   const plantComponents = migratedPlant.components;
-  assert.deepStrictEqual(plantComponents[0], { id: "tank", typeId: "control.accumulator", properties: { initial: 1.5, samplePeriodNs: 10000000 } },
+  assert.deepStrictEqual(plantComponents[0], { id: "tank", typeId: "process.accumulator", properties: { initial: 1.5, samplePeriodNs: 10000000 } },
     "tank com area 1 vira o acumulador equivalente, preservando id e as demais propriedades");
   assert.deepStrictEqual(plantComponents[1], embeddedPlant.components[1], "tank com area != 1 não tem equivalente exato e fica intocado");
-  assert.deepStrictEqual(plantComponents[2], embeddedPlant.components[2], "outros blocos não mudam");
-  assert.deepStrictEqual(migratedPlant.topology, embeddedPlant.topology, "ligações (portas in/outflow/out) não mudam");
+  assert.deepStrictEqual(plantComponents[2], { id: "gain", typeId: "sl.gain", properties: { Gain: "2", SampleTime: "0.1" } }, "outros blocos legados também são convertidos preservando o ID");
+  assert.deepStrictEqual(migratedPlant.topology.conductors[0], { id: "w1", from: { kind: "port", componentId: "gain", pinId: "out1" }, to: { kind: "port", componentId: "tank", pinId: "in" }, vertices: [] }, "ligação mantém os IDs e remapeia a porta do ganho");
   assert.deepStrictEqual(migratedPlant.exposedComponents, ["tank"], "componentes expostos continuam apontando para o mesmo id");
   assert.strictEqual(migratedPlant.origin?.typeId, "subcircuits.local.tanque", "a origem da cópia antiga fica registrada");
-  assert.strictEqual(tankLoaded.components[1]!.typeId, "control.accumulator", "tank no topo do projeto (area ausente = 1) também migra");
+  assert.strictEqual(tankLoaded.components[1]!.typeId, "process.accumulator", "tank no topo do projeto (area ausente = 1) também migra");
   assert.deepStrictEqual(tankLoaded.components[1]!.properties, { initial: 3 });
 
   // Tabela de subsistemas internos: ida e volta, instâncias independentes, hierarquia.

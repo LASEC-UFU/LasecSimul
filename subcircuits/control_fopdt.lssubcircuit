@@ -27,14 +27,13 @@
     },
     {
       "id": "stage",
-      "typeId": "control.fopdt",
+      "typeId": "sl.discrete_transfer_fcn",
       "label": "FOPDT",
       "properties": {
-        "gain": 1,
-        "tau": 1,
-        "delay": 0.1,
-        "initial": 0,
-        "samplePeriodNs": 10000000
+        "Numerator": "[0.009950166250831893]",
+        "Denominator": "[1 -0.9900498337491681]",
+        "InitialStates": "0",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 170,
@@ -56,6 +55,19 @@
         "y": 95,
         "rotation": 180
       }
+    },
+    {
+      "id": "stage__delay",
+      "typeId": "sl.transport_delay",
+      "properties": {
+        "DelayTime": "0.1",
+        "InitialOutput": "0"
+      },
+      "visual": {
+        "x": 70,
+        "y": 85,
+        "rotation": 0
+      }
     }
   ],
   "topology": {
@@ -71,8 +83,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "stage",
-          "pinId": "in"
+          "componentId": "stage__delay",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -81,7 +93,7 @@
         "from": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -89,6 +101,20 @@
           "pinId": "value"
         },
         "points": []
+      },
+      {
+        "id": "stage__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "stage__delay",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "stage",
+          "pinId": "in1"
+        },
+        "vertices": []
       }
     ]
   },

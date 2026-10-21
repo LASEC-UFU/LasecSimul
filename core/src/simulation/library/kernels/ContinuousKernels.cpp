@@ -700,7 +700,9 @@ uint64_t fohBreakpoint(const KernelContext& k) {
 // ip = [capacidade, TsNs (0 = por evento)]; rp = [InitialOutput]
 // d = [saidaAtual, inicio, quantidade, (instanteNs, valor, amostraNs) x capacidade]
 // Amostras com D <= 128*eps, com atraso que viola a ordem crescente dos instantes de saída ou (com
-// intervalos fixos) com D < Ts são descartadas (o Simulink pararia a simulação com erro).
+// intervalos fixos) com D < Ts são descartadas (o Simulink pararia a simulação com erro). Amostra com
+// o mesmo valor do último agendado não entra na fila (a saída não mudaria), o que mantém a fila
+// pequena com entrada contínua amostrada a cada passo maior.
 enum PropIp { PropCapacity = 0, PropFixedNs, PropIpCount };
 constexpr size_t kPropHeader = 3;
 
@@ -748,6 +750,9 @@ void propUpdate(KernelContext& k) {
             return;
         }
         if (due <= last[0]) return;
+        if (last[1] == u) return; // mesmo valor já agendado: a saída não muda
+    } else if (k.d[0] == u) {
+        return; // fila vazia e a saída já vale u
     }
     if (q.count() == q.capacity) { k.d[0] = q.entry(0)[1]; q.pop(); }
     double* slot = q.entry(q.count());

@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.accumulator",
+      "kind": "rename",
+      "rule": "accumulator->process.accumulator (bloco de processo do LasecSimul)",
+      "newTypeIds": [
+        "process.accumulator"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_accumulator.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.675Z",
+  "original": {
+    "backup": "control_accumulator.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "0c5be62bca4623a5462dd0b8b29711c3951eb1a0c810d958fac67a33a1650c45"
+  },
+  "migrated": {
+    "sha256": "787b36ef8e88fc52ed16600b7cc25878e2847871bab0657ec9cf1fa47370da9e"
+  },
+  "summary": {
+    "converted": 0,
+    "kept": 0,
+    "renamed": 1,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "accumulator->process.accumulator (bloco de processo do LasecSimul)": 1
+    }
+  }
+}

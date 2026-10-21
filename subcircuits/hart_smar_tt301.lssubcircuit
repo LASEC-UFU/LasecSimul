@@ -33,10 +33,10 @@
         "descriptor": "16 CHARACTERS",
         "finalAssemblyNumber": 0,
         "message": "32 CHARACTERS",
-        "sensorHighValue": 850.0,
-        "sensorHighVolts": 5.0,
-        "sensorLowValue": -200.0,
-        "sensorLowVolts": 0.0,
+        "sensorHighValue": 850,
+        "sensorHighVolts": 5,
+        "sensorLowValue": -200,
+        "sensorLowVolts": 0,
         "tag": "TAG",
         "longTag": "LONG TAG",
         "uniqueId": "010C3A",
@@ -66,11 +66,11 @@
         "analogSaturationLowPercent": -1.25,
         "analogSaturationHighPercent": 103.125,
         "analogFixedLowMilliamps": 3.6,
-        "analogFixedHighMilliamps": 21.0,
+        "analogFixedHighMilliamps": 21,
         "analogAlarmLowMilliamps": 3.6,
-        "analogAlarmHighMilliamps": 21.0,
-        "rangeLimitTolerancePercent": 0.0,
-        "minimumSpanAcceptPercent": 100.0,
+        "analogAlarmHighMilliamps": 21,
+        "rangeLimitTolerancePercent": 0,
+        "minimumSpanAcceptPercent": 100,
         "hartOperationCounters": "",
         "sensorFault": false,
         "hartVariablesJson": "[{\"id\":\"PV\",\"name\":\"Temperatura\",\"role\":\"PV\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":25.0,\"deviceVariableCode\":2,\"deviceVariableUnit\":32,\"classification\":64,\"family\":4,\"lowerRangeValue\":-200.0,\"upperRangeValue\":850.0,\"upperTransducerLimit\":850.0,\"lowerTransducerLimit\":-200.0,\"minimumSpan\":10.0,\"transducerSerialNumber\":0,\"dampingValue\":0.0,\"deviceVariableStatus\":192},{\"id\":\"terminalTemperature\",\"name\":\"Temperatura da borneira\",\"role\":\"SV\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":25.0,\"deviceVariableCode\":3,\"deviceVariableUnit\":32,\"classification\":64,\"family\":4,\"deviceVariableStatus\":192},{\"id\":\"sensor.type\",\"name\":\"Tipo do sensor (01 RTD, 83 TC)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"value\":1,\"codes\":{\"1\":\"RTD\",\"131\":\"TC\"}},{\"id\":\"sensor.model\",\"name\":\"Sensor (indice na lista do tipo: 2 = Pt 100 IEC no RTD; TC B E J K N R S T = 0-7, J capturado)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"value\":2},{\"id\":\"sensor.connection\",\"name\":\"Conexao do sensor (1 = 2 fios capturado; 0 e 2-7 pela ordem do manual)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"value\":1,\"codes\":{\"0\":\"Differential\",\"1\":\"Two wires\",\"2\":\"Three wires\",\"3\":\"Four wires\",\"4\":\"Backup\",\"5\":\"Average\",\"6\":\"Maximum\",\"7\":\"Minimum\"}},{\"id\":\"sensor.byte4\",\"name\":\"Cmd 130 byte 4 (somente leitura)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":1},{\"id\":\"sensor.coldJunction\",\"name\":\"Junta fria (00 habilitada; leitura real em RTD retorna 00; FF nao aplicavel)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"value\":0,\"codes\":{\"0\":\"Enabled\",\"255\":\"Not applicable (RTD)\"}},{\"id\":\"sensor.cmd198\",\"name\":\"Cmd 198 (tela Sensor): valor\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"cvd.r0\",\"name\":\"Callendar-Van Dusen R0\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"Ohm\",\"value\":100.0},{\"id\":\"cvd.a\",\"name\":\"Callendar-Van Dusen A\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.003908299840986729},{\"id\":\"cvd.b\",\"name\":\"Callendar-Van Dusen B\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":-5.774999749519338e-07},{\"id\":\"cvd.c\",\"name\":\"Callendar-Van Dusen C\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":-4.182999866625403e-12},{\"id\":\"writeProtect.localAdjust\",\"name\":\"Protecao do ajuste local (Cmd 168 byte 2)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255},{\"id\":\"display.firstVariable\",\"name\":\"Display 1a variavel\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":3,\"codes\":{\"0\":\"Out (mA)\",\"1\":\"Out (%)\",\"2\":\"Temp. PV\",\"3\":\"Temp.\",\"4\":\"PV (%)\",\"5\":\"SP (%)\",\"6\":\"SP\",\"7\":\"SP Time (min)\",\"8\":\"Error (%)\",\"9\":\"Kp\",\"10\":\"Tr (min)\",\"11\":\"Td (s)\",\"12\":\"MV (%)\"}},{\"id\":\"display.secondVariable\",\"name\":\"Display 2a variavel\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":2,\"codes\":{\"0\":\"Out (mA)\",\"1\":\"Out (%)\",\"2\":\"Temp. PV\",\"3\":\"Temp.\",\"4\":\"PV (%)\",\"5\":\"SP (%)\",\"6\":\"SP\",\"7\":\"SP Time (min)\",\"8\":\"Error (%)\",\"9\":\"Kp\",\"10\":\"Tr (min)\",\"11\":\"Td (s)\",\"12\":\"MV (%)\",\"251\":\"None\"}},{\"id\":\"pid.operatingMode0\",\"name\":\"PID modo de operacao byte 0\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255},{\"id\":\"pid.operatingMode1\",\"name\":\"PID modo de operacao byte 1\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255},{\"id\":\"pid.operatingMode2\",\"name\":\"PID modo de operacao byte 2\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":1},{\"id\":\"controller.mode\",\"name\":\"Modo do controlador (Off)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255},{\"id\":\"controller.modeWriteCode\",\"name\":\"Codigo de escrita do modo do controlador\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":1},{\"id\":\"pid.setpoint\",\"name\":\"PID setpoint\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"%\",\"value\":0.0,\"deviceVariableUnit\":57,\"deviceVariableCode\":5,\"classification\":0,\"deviceVariableStatus\":192},{\"id\":\"pid.modeCode\",\"name\":\"PID codigo de modo\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255},{\"id\":\"pid.spTracking\",\"name\":\"SP tracking\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255},{\"id\":\"pid.error\",\"name\":\"PID erro (PV% - SP%, inclusive com PID Off)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"%\",\"value\":0.0,\"deviceVariableUnit\":57,\"deviceVariableCode\":8,\"classification\":0,\"deviceVariableStatus\":192,\"derivedSource\":246},{\"id\":\"pid.kp\",\"name\":\"Kp\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1.0},{\"id\":\"pid.tr\",\"name\":\"Tr\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"min\",\"value\":10.0,\"deviceVariableUnit\":50},{\"id\":\"pid.td\",\"name\":\"Td\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"s\",\"value\":0.0,\"deviceVariableUnit\":51},{\"id\":\"pid.param4\",\"name\":\"PID parametro 4\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"pid.param5\",\"name\":\"PID parametro 5\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":100.0},{\"id\":\"spGenerator.time\",\"name\":\"Gerador de SP: tempo\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"min\",\"value\":0.0,\"deviceVariableUnit\":50,\"deviceVariableCode\":7,\"classification\":0,\"deviceVariableStatus\":192},{\"id\":\"spGenerator.mode\",\"name\":\"Gerador de SP (FF Off)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255,\"codes\":{\"0\":\"On\",\"255\":\"Off\"}},{\"id\":\"spGenerator.state\",\"name\":\"Gerador de SP: estado\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":255},{\"id\":\"orderingCode\",\"name\":\"Codigo de pedido\",\"role\":\"VendorSpecific\",\"type\":\"Ascii\",\"direction\":\"Internal\",\"width\":21,\"text\":\"                     \"},{\"id\":\"sensorFault\",\"name\":\"Falha do sensor (estagio de entrada RTD)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0},{\"id\":\"deviceVariable4\",\"name\":\"Canal 4 (alias PV percentual observado)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"%\",\"value\":0.0,\"deviceVariableCode\":4,\"deviceVariableUnit\":57,\"classification\":0,\"deviceVariableStatus\":192,\"derivedSource\":243},{\"id\":\"PVPercent\",\"name\":\"PV (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"%\",\"value\":26.5348,\"deviceVariableCode\":1,\"deviceVariableUnit\":57,\"classification\":0,\"family\":4,\"deviceVariableStatus\":192,\"derivedSource\":243},{\"id\":\"loopCurrent\",\"name\":\"Corrente do loop\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"mA\",\"value\":8.24556,\"deviceVariableCode\":0,\"deviceVariableUnit\":39,\"classification\":84,\"family\":4,\"deviceVariableStatus\":192,\"derivedSource\":244},{\"id\":\"pid.setpointEngineering\",\"name\":\"SP em unidade de engenharia\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"C\",\"value\":0.0,\"deviceVariableCode\":6,\"deviceVariableUnit\":32,\"classification\":0,\"deviceVariableStatus\":192,\"derivedSource\":245},{\"id\":\"pid.actionCode\",\"name\":\"PID action code (01=Direct observed)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":1,\"codes\":{\"0\":\"Reverse\",\"1\":\"Direct\"}},{\"id\":\"sensor.previousType\",\"name\":\"Tipo anterior do sensor (uso interno Cmd 131)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"value\":1}]",
@@ -218,7 +218,7 @@
       "id": "rtd_shunt",
       "typeId": "passive.resistor",
       "properties": {
-        "resistance": 100000000.0
+        "resistance": 100000000
       },
       "visual": {
         "x": 200,
@@ -230,7 +230,7 @@
       "id": "rtd_bias2",
       "typeId": "passive.resistor",
       "properties": {
-        "resistance": 100000000.0
+        "resistance": 100000000
       },
       "visual": {
         "x": 200,
@@ -242,7 +242,7 @@
       "id": "rtd_bias3",
       "typeId": "passive.resistor",
       "properties": {
-        "resistance": 100000000.0
+        "resistance": 100000000
       },
       "visual": {
         "x": 200,
@@ -264,7 +264,7 @@
       "id": "rtd_ref",
       "typeId": "passive.resistor",
       "properties": {
-        "resistance": 1000000000.0
+        "resistance": 1000000000
       },
       "visual": {
         "x": 200,
@@ -274,20 +274,10 @@
     },
     {
       "id": "rtd_r",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(v23-(conn>1.5)*(conn<2.5)*v34)/i",
-        "inputs": [
-          "v23",
-          "v34",
-          "i",
-          "conn"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) - (u(4) > 1.5)*(u(4) < 2.5)*u(2))/u(3)",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 420,
@@ -298,17 +288,10 @@
     },
     {
       "id": "rtd_t",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(-0.0039083+(0.0039083^2+0.00000231*(1-((r>18)*(r<400)*r+(r<18.0001)*18+(r>399.9999)*400)/100))^0.5)/(-0.000001155)",
-        "inputs": [
-          "r"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(-0.0039083 + (0.0039083^2 + 0.00000231*(1 - ((u(1) > 18)*(u(1) < 400)*u(1) + (u(1) < 18.0001)*18 + (u(1) > 399.9999)*400)/100))^0.5)/-0.000001155",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 620,
@@ -319,17 +302,10 @@
     },
     {
       "id": "rtd_fault",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(r>400)+(r<18)*(r>0.000000001)",
-        "inputs": [
-          "r"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) > 400) + (u(1) < 18)*(u(1) > 1e-9)",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 620,
@@ -354,18 +330,10 @@
     },
     {
       "id": "rtd_exc_cmd",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "i*(type<100)",
-        "inputs": [
-          "i",
-          "type"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "u(1)*(u(2) < 100)",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 200,
@@ -376,17 +344,10 @@
     },
     {
       "id": "tc_det_value",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(type>100)*0.00000001",
-        "inputs": [
-          "type"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) > 100)*1e-8",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 840,
@@ -408,17 +369,10 @@
     },
     {
       "id": "tc_mv",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "1000*v",
-        "inputs": [
-          "v"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "1000*u(1)",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 840,
@@ -429,17 +383,10 @@
     },
     {
       "id": "tc_cj_b",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(t<630.615)*(t*((-0.00024650818346)+t*(5.9040421171e-06+t*((-1.3257931636e-09)+t*(1.5668291901e-12+t*((-1.694452924e-15)+t*(6.2990347094e-19)))))))+(1-(t<630.615))*((-3.8938168621)+t*(0.02857174747+t*((-8.4885104785e-05)+t*(1.5785280164e-07+t*((-1.6835344864e-10)+t*(1.1109794013e-13+t*((-4.4515431033e-17)+t*(9.8975640821e-21+t*((-9.3791330289e-25))))))))))",
-        "inputs": [
-          "t"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 630.615)*(u(1)*(-0.00024650818346 + u(1)*(0.0000059040421171 + u(1)*(-1.3257931636e-9 + u(1)*(1.5668291901e-12 + u(1)*(-1.694452924e-15 + u(1)*6.2990347094e-19)))))) + (1 - (u(1) < 630.615))*(-3.8938168621 + u(1)*(0.02857174747 + u(1)*(-0.000084885104785 + u(1)*(1.5785280164e-7 + u(1)*(-1.6835344864e-10 + u(1)*(1.1109794013e-13 + u(1)*(-4.4515431033e-17 + u(1)*(9.8975640821e-21 + u(1)*-9.3791330289e-25))))))))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1040,
@@ -450,17 +397,10 @@
     },
     {
       "id": "tc_cj_e",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(t<0.0)*(t*(0.058665508708+t*(4.5410977124e-05+t*((-7.7998048686e-07)+t*((-2.5800160843e-08)+t*((-5.9452583057e-10)+t*((-9.3214058667e-12)+t*((-1.0287605534e-13)+t*((-8.0370123621e-16)+t*((-4.3979497391e-18)+t*((-1.6414776355e-20)+t*((-3.9673619516e-23)+t*((-5.5827328721e-26)+t*((-3.4657842013e-29)))))))))))))))+(1-(t<0.0))*(t*(0.05866550871+t*(4.5032275582e-05+t*(2.8908407212e-08+t*((-3.3056896652e-10)+t*(6.502440327e-13+t*((-1.9197495504e-16)+t*((-1.2536600497e-18)+t*(2.1489217569e-21+t*((-1.4388041782e-24)+t*(3.5960899481e-28)))))))))))",
-        "inputs": [
-          "t"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 0)*(u(1)*(0.058665508708 + u(1)*(0.000045410977124 + u(1)*(-7.7998048686e-7 + u(1)*(-2.5800160843e-8 + u(1)*(-5.9452583057e-10 + u(1)*(-9.3214058667e-12 + u(1)*(-1.0287605534e-13 + u(1)*(-8.0370123621e-16 + u(1)*(-4.3979497391e-18 + u(1)*(-1.6414776355e-20 + u(1)*(-3.9673619516e-23 + u(1)*(-5.5827328721e-26 + u(1)*-3.4657842013e-29))))))))))))) + (1 - (u(1) < 0))*(u(1)*(0.05866550871 + u(1)*(0.000045032275582 + u(1)*(2.8908407212e-8 + u(1)*(-3.3056896652e-10 + u(1)*(6.502440327e-13 + u(1)*(-1.9197495504e-16 + u(1)*(-1.2536600497e-18 + u(1)*(2.1489217569e-21 + u(1)*(-1.4388041782e-24 + u(1)*3.5960899481e-28))))))))))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1040,
@@ -471,17 +411,10 @@
     },
     {
       "id": "tc_cj_j",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(t<760.0)*(t*(0.050381187815+t*(3.047583693e-05+t*((-8.568106572e-08)+t*(1.3228195295e-10+t*((-1.7052958337e-13)+t*(2.0948090697e-16+t*((-1.2538395336e-19)+t*(1.5631725697e-23)))))))))+(1-(t<760.0))*(296.45625681+t*((-1.4976127786)+t*(0.0031787103924+t*((-3.1847686701e-06)+t*(1.5720819004e-09+t*((-3.0691369056e-13)))))))",
-        "inputs": [
-          "t"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 760)*(u(1)*(0.050381187815 + u(1)*(0.00003047583693 + u(1)*(-8.568106572e-8 + u(1)*(1.3228195295e-10 + u(1)*(-1.7052958337e-13 + u(1)*(2.0948090697e-16 + u(1)*(-1.2538395336e-19 + u(1)*1.5631725697e-23)))))))) + (1 - (u(1) < 760))*(296.45625681 + u(1)*(-1.4976127786 + u(1)*(0.0031787103924 + u(1)*(-0.0000031847686701 + u(1)*(1.5720819004e-9 + u(1)*-3.0691369056e-13)))))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1040,
@@ -492,17 +425,10 @@
     },
     {
       "id": "tc_cj_k",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(t<0.0)*(t*(0.039450128025+t*(2.3622373598e-05+t*((-3.2858906784e-07)+t*((-4.9904828777e-09)+t*((-6.7509059173e-11)+t*((-5.7410327428e-13)+t*((-3.1088872894e-15)+t*((-1.0451609365e-17)+t*((-1.9889266878e-20)+t*((-1.6322697486e-23))))))))))))+(1-(t<0.0))*((-0.017600413686)+t*(0.038921204975+t*(1.8558770032e-05+t*((-9.9457592874e-08)+t*(3.1840945719e-10+t*((-5.6072844889e-13)+t*(5.6075059059e-16+t*((-3.2020720003e-19)+t*(9.7151147152e-23+t*((-1.2104721275e-26)))))))))))+(1-(t<0))*0.1185976*2.718281828459045^((-0.0001183432)*(t-126.9686)*(t-126.9686))",
-        "inputs": [
-          "t"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 0)*(u(1)*(0.039450128025 + u(1)*(0.000023622373598 + u(1)*(-3.2858906784e-7 + u(1)*(-4.9904828777e-9 + u(1)*(-6.7509059173e-11 + u(1)*(-5.7410327428e-13 + u(1)*(-3.1088872894e-15 + u(1)*(-1.0451609365e-17 + u(1)*(-1.9889266878e-20 + u(1)*-1.6322697486e-23)))))))))) + (1 - (u(1) < 0))*(-0.017600413686 + u(1)*(0.038921204975 + u(1)*(0.000018558770032 + u(1)*(-9.9457592874e-8 + u(1)*(3.1840945719e-10 + u(1)*(-5.6072844889e-13 + u(1)*(5.6075059059e-16 + u(1)*(-3.2020720003e-19 + u(1)*(9.7151147152e-23 + u(1)*-1.2104721275e-26))))))))) + (1 - (u(1) < 0))*0.1185976*2.718281828459045^(-0.0001183432*(u(1) - 126.9686)*(u(1) - 126.9686))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1040,
@@ -513,17 +439,10 @@
     },
     {
       "id": "tc_cj_n",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(t<0.0)*(t*(0.026159105962+t*(1.0957484228e-05+t*((-9.3841111554e-08)+t*((-4.6412039759e-11)+t*((-2.6303357716e-12)+t*((-2.2653438003e-14)+t*((-7.6089300791e-17)+t*((-9.3419667835e-20))))))))))+(1-(t<0.0))*(t*(0.025929394601+t*(1.571014188e-05+t*(4.3825627237e-08+t*((-2.5261169794e-10)+t*(6.4311819339e-13+t*((-1.0063471519e-15)+t*(9.9745338992e-19+t*((-6.0863245607e-22)+t*(2.0849229339e-25+t*((-3.0682196151e-29))))))))))))",
-        "inputs": [
-          "t"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 0)*(u(1)*(0.026159105962 + u(1)*(0.000010957484228 + u(1)*(-9.3841111554e-8 + u(1)*(-4.6412039759e-11 + u(1)*(-2.6303357716e-12 + u(1)*(-2.2653438003e-14 + u(1)*(-7.6089300791e-17 + u(1)*-9.3419667835e-20)))))))) + (1 - (u(1) < 0))*(u(1)*(0.025929394601 + u(1)*(0.00001571014188 + u(1)*(4.3825627237e-8 + u(1)*(-2.5261169794e-10 + u(1)*(6.4311819339e-13 + u(1)*(-1.0063471519e-15 + u(1)*(9.9745338992e-19 + u(1)*(-6.0863245607e-22 + u(1)*(2.0849229339e-25 + u(1)*-3.0682196151e-29))))))))))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1040,
@@ -534,17 +453,10 @@
     },
     {
       "id": "tc_cj_r",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(t<1064.18)*(t*(0.00528961729765+t*(1.39166589782e-05+t*((-2.38855693017e-08)+t*(3.56916001063e-11+t*((-4.62347666298e-14)+t*(5.00777441034e-17+t*((-3.73105886191e-20)+t*(1.57716482367e-23+t*((-2.81038625251e-27)))))))))))+(1-(t<1064.18))*(t<1664.5)*(2.95157925316+t*((-0.00252061251332)+t*(1.59564501865e-05+t*((-7.64085947576e-09)+t*(2.05305291024e-12+t*((-2.93359668173e-16)))))))+(1-(t<1664.5))*(152.232118209+t*((-0.268819888545)+t*(0.000171280280471+t*((-3.45895706453e-08)+t*((-9.34633971046e-15))))))",
-        "inputs": [
-          "t"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 1064.18)*(u(1)*(0.00528961729765 + u(1)*(0.0000139166589782 + u(1)*(-2.38855693017e-8 + u(1)*(3.56916001063e-11 + u(1)*(-4.62347666298e-14 + u(1)*(5.00777441034e-17 + u(1)*(-3.73105886191e-20 + u(1)*(1.57716482367e-23 + u(1)*-2.81038625251e-27))))))))) + (1 - (u(1) < 1064.18))*(u(1) < 1664.5)*(2.95157925316 + u(1)*(-0.00252061251332 + u(1)*(0.0000159564501865 + u(1)*(-7.64085947576e-9 + u(1)*(2.05305291024e-12 + u(1)*-2.93359668173e-16))))) + (1 - (u(1) < 1664.5))*(152.232118209 + u(1)*(-0.268819888545 + u(1)*(0.000171280280471 + u(1)*(-3.45895706453e-8 + u(1)*-9.34633971046e-15))))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1040,
@@ -555,17 +467,10 @@
     },
     {
       "id": "tc_cj_s",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(t<1064.18)*(t*(0.00540313308631+t*(1.2593428974e-05+t*((-2.32477968689e-08)+t*(3.22028823036e-11+t*((-3.31465196389e-14)+t*(2.55744251786e-17+t*((-1.25068871393e-20)+t*(2.71443176145e-24)))))))))+(1-(t<1064.18))*(t<1664.5)*(1.32900444085+t*(0.00334509311344+t*(6.54805192818e-06+t*((-1.64856259209e-09)+t*(1.29989605174e-14)))))+(1-(t<1664.5))*(146.628232636+t*((-0.258430516752)+t*(0.000163693574641+t*((-3.30439046987e-08)+t*((-9.43223690612e-15))))))",
-        "inputs": [
-          "t"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 1064.18)*(u(1)*(0.00540313308631 + u(1)*(0.000012593428974 + u(1)*(-2.32477968689e-8 + u(1)*(3.22028823036e-11 + u(1)*(-3.31465196389e-14 + u(1)*(2.55744251786e-17 + u(1)*(-1.25068871393e-20 + u(1)*2.71443176145e-24)))))))) + (1 - (u(1) < 1064.18))*(u(1) < 1664.5)*(1.32900444085 + u(1)*(0.00334509311344 + u(1)*(0.00000654805192818 + u(1)*(-1.64856259209e-9 + u(1)*1.29989605174e-14)))) + (1 - (u(1) < 1664.5))*(146.628232636 + u(1)*(-0.258430516752 + u(1)*(0.000163693574641 + u(1)*(-3.30439046987e-8 + u(1)*-9.43223690612e-15))))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1040,
@@ -576,17 +481,10 @@
     },
     {
       "id": "tc_cj_t",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(t<0.0)*(t*(0.038748106364+t*(4.4194434347e-05+t*(1.1844323105e-07+t*(2.0032973554e-08+t*(9.0138019559e-10+t*(2.2651156593e-11+t*(3.6071154205e-13+t*(3.8493939883e-15+t*(2.8213521925e-17+t*(1.4251594779e-19+t*(4.8768662286e-22+t*(1.079553927e-24+t*(1.3945027062e-27+t*(7.9795153927e-31)))))))))))))))+(1-(t<0.0))*(t*(0.038748106364+t*(3.329222788e-05+t*(2.0618243404e-07+t*((-2.1882256846e-09)+t*(1.0996880928e-11+t*((-3.0815758772e-14)+t*(4.547913529e-17+t*((-2.7512901673e-20))))))))))",
-        "inputs": [
-          "t"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 0)*(u(1)*(0.038748106364 + u(1)*(0.000044194434347 + u(1)*(1.1844323105e-7 + u(1)*(2.0032973554e-8 + u(1)*(9.0138019559e-10 + u(1)*(2.2651156593e-11 + u(1)*(3.6071154205e-13 + u(1)*(3.8493939883e-15 + u(1)*(2.8213521925e-17 + u(1)*(1.4251594779e-19 + u(1)*(4.8768662286e-22 + u(1)*(1.079553927e-24 + u(1)*(1.3945027062e-27 + u(1)*7.9795153927e-31)))))))))))))) + (1 - (u(1) < 0))*(u(1)*(0.038748106364 + u(1)*(0.00003329222788 + u(1)*(2.0618243404e-7 + u(1)*(-2.1882256846e-9 + u(1)*(1.0996880928e-11 + u(1)*(-3.0815758772e-14 + u(1)*(4.547913529e-17 + u(1)*-2.7512901673e-20))))))))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1040,
@@ -597,25 +495,10 @@
     },
     {
       "id": "tc_cj",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(m>-0.5)*(m<0.5)*b+(m>0.5)*(m<1.5)*e+(m>1.5)*(m<2.5)*j+(m>2.5)*(m<3.5)*k+(m>3.5)*(m<4.5)*n+(m>4.5)*(m<5.5)*r+(m>5.5)*(m<6.5)*s+(m>6.5)*(m<7.5)*t",
-        "inputs": [
-          "m",
-          "b",
-          "e",
-          "j",
-          "k",
-          "n",
-          "r",
-          "s",
-          "t"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) > -0.5)*(u(1) < 0.5)*u(2) + (u(1) > 0.5)*(u(1) < 1.5)*u(3) + (u(1) > 1.5)*(u(1) < 2.5)*u(4) + (u(1) > 2.5)*(u(1) < 3.5)*u(5) + (u(1) > 3.5)*(u(1) < 4.5)*u(6) + (u(1) > 4.5)*(u(1) < 5.5)*u(7) + (u(1) > 5.5)*(u(1) < 6.5)*u(8) + (u(1) > 6.5)*(u(1) < 7.5)*u(9)",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1240,
@@ -626,19 +509,10 @@
     },
     {
       "id": "tc_e",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "mv+((en<0.5)+(en>254.5))*cj",
-        "inputs": [
-          "mv",
-          "cj",
-          "en"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "u(1) + ((u(3) < 0.5) + (u(3) > 254.5))*u(2)",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1240,
@@ -649,17 +523,10 @@
     },
     {
       "id": "tc_ec_b",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "e+(e<0.291)*(0.291-e)+(e>13.82)*(13.82-e)",
-        "inputs": [
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "u(1) + (u(1) < 0.291)*(0.291 - u(1)) + (u(1) > 13.82)*(13.82 - u(1))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1440,
@@ -670,17 +537,10 @@
     },
     {
       "id": "tc_t_b",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(e<2.431)*(98.423321+e*(699.715+e*((-847.65304)+e*(1005.2644+e*((-833.45952)+e*(455.08542+e*((-155.23037)+e*(29.88675+e*((-2.474286))))))))))+(1-(e<2.431))*(213.15071+e*(285.10504+e*((-52.742887)+e*(9.9160804+e*((-1.2965303)+e*(0.1119587+e*((-0.0060625199)+e*(0.00018661696+e*((-2.4878585e-06))))))))))",
-        "inputs": [
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 2.431)*(98.423321 + u(1)*(699.715 + u(1)*(-847.65304 + u(1)*(1005.2644 + u(1)*(-833.45952 + u(1)*(455.08542 + u(1)*(-155.23037 + u(1)*(29.88675 + u(1)*-2.474286)))))))) + (1 - (u(1) < 2.431))*(213.15071 + u(1)*(285.10504 + u(1)*(-52.742887 + u(1)*(9.9160804 + u(1)*(-1.2965303 + u(1)*(0.1119587 + u(1)*(-0.0060625199 + u(1)*(0.00018661696 + u(1)*-0.0000024878585))))))))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1640,
@@ -691,17 +551,10 @@
     },
     {
       "id": "tc_ec_e",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "e+(e<(-8.825))*((-8.825)-e)+(e>76.373)*(76.373-e)",
-        "inputs": [
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "u(1) + (u(1) < -8.825)*(-8.825 - u(1)) + (u(1) > 76.373)*(76.373 - u(1))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1440,
@@ -712,17 +565,10 @@
     },
     {
       "id": "tc_t_e",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(e<0.0)*(e*(16.977288+e*((-0.4351497)+e*((-0.15859697)+e*((-0.092502871)+e*((-0.026084314)+e*((-0.0041360199)+e*((-0.0003403403)+e*((-1.156489e-05))))))))))+(1-(e<0.0))*(e*(17.057035+e*((-0.23301759)+e*(0.0065435585+e*((-7.3562749e-05)+e*((-1.7896001e-06)+e*(8.4036165e-08+e*((-1.3735879e-09)+e*(1.0629823e-11+e*((-3.2447087e-14)))))))))))",
-        "inputs": [
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 0)*(u(1)*(16.977288 + u(1)*(-0.4351497 + u(1)*(-0.15859697 + u(1)*(-0.092502871 + u(1)*(-0.026084314 + u(1)*(-0.0041360199 + u(1)*(-0.0003403403 + u(1)*-0.00001156489)))))))) + (1 - (u(1) < 0))*(u(1)*(17.057035 + u(1)*(-0.23301759 + u(1)*(0.0065435585 + u(1)*(-0.000073562749 + u(1)*(-0.0000017896001 + u(1)*(8.4036165e-8 + u(1)*(-1.3735879e-9 + u(1)*(1.0629823e-11 + u(1)*-3.2447087e-14)))))))))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1640,
@@ -733,17 +579,10 @@
     },
     {
       "id": "tc_ec_j",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "e+(e<(-8.095))*((-8.095)-e)+(e>69.553)*(69.553-e)",
-        "inputs": [
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "u(1) + (u(1) < -8.095)*(-8.095 - u(1)) + (u(1) > 69.553)*(69.553 - u(1))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1440,
@@ -754,17 +593,10 @@
     },
     {
       "id": "tc_t_j",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(e<0.0)*(e*(19.528268+e*((-1.2286185)+e*((-1.0752178)+e*((-0.59086933)+e*((-0.17256713)+e*((-0.028131513)+e*((-0.002396337)+e*((-8.3823321e-05))))))))))+(1-(e<0.0))*(e<42.919)*(e*(19.78425+e*((-0.2001204)+e*(0.01036969+e*((-0.0002549687)+e*(3.585153e-06+e*((-5.344285e-08)+e*(5.09989e-10))))))))+(1-(e<42.919))*((-3113.58187)+e*(300.543684+e*((-9.9477323)+e*(0.17027663+e*((-0.00143033468)+e*(4.73886084e-06))))))",
-        "inputs": [
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 0)*(u(1)*(19.528268 + u(1)*(-1.2286185 + u(1)*(-1.0752178 + u(1)*(-0.59086933 + u(1)*(-0.17256713 + u(1)*(-0.028131513 + u(1)*(-0.002396337 + u(1)*-0.000083823321)))))))) + (1 - (u(1) < 0))*(u(1) < 42.919)*(u(1)*(19.78425 + u(1)*(-0.2001204 + u(1)*(0.01036969 + u(1)*(-0.0002549687 + u(1)*(0.000003585153 + u(1)*(-5.344285e-8 + u(1)*5.09989e-10))))))) + (1 - (u(1) < 42.919))*(-3113.58187 + u(1)*(300.543684 + u(1)*(-9.9477323 + u(1)*(0.17027663 + u(1)*(-0.00143033468 + u(1)*0.00000473886084)))))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1640,
@@ -775,17 +607,10 @@
     },
     {
       "id": "tc_ec_k",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "e+(e<(-5.891))*((-5.891)-e)+(e>54.886)*(54.886-e)",
-        "inputs": [
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "u(1) + (u(1) < -5.891)*(-5.891 - u(1)) + (u(1) > 54.886)*(54.886 - u(1))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1440,
@@ -796,17 +621,10 @@
     },
     {
       "id": "tc_t_k",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(e<0.0)*(e*(25.173462+e*((-1.1662878)+e*((-1.0833638)+e*((-0.8977354)+e*((-0.37342377)+e*((-0.086632643)+e*((-0.010450598)+e*((-0.00051920577))))))))))+(1-(e<0.0))*(e<20.644)*(e*(25.08355+e*(0.07860106+e*((-0.2503131)+e*(0.0831527+e*((-0.01228034)+e*(0.0009804036+e*((-4.41303e-05)+e*(1.057734e-06+e*((-1.052755e-08)))))))))))+(1-(e<20.644))*((-131.8058)+e*(48.30222+e*((-1.646031)+e*(0.05464731+e*((-0.0009650715)+e*(8.802193e-06+e*((-3.11081e-08))))))))",
-        "inputs": [
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 0)*(u(1)*(25.173462 + u(1)*(-1.1662878 + u(1)*(-1.0833638 + u(1)*(-0.8977354 + u(1)*(-0.37342377 + u(1)*(-0.086632643 + u(1)*(-0.010450598 + u(1)*-0.00051920577)))))))) + (1 - (u(1) < 0))*(u(1) < 20.644)*(u(1)*(25.08355 + u(1)*(0.07860106 + u(1)*(-0.2503131 + u(1)*(0.0831527 + u(1)*(-0.01228034 + u(1)*(0.0009804036 + u(1)*(-0.0000441303 + u(1)*(0.000001057734 + u(1)*-1.052755e-8))))))))) + (1 - (u(1) < 20.644))*(-131.8058 + u(1)*(48.30222 + u(1)*(-1.646031 + u(1)*(0.05464731 + u(1)*(-0.0009650715 + u(1)*(0.000008802193 + u(1)*-3.11081e-8))))))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1640,
@@ -817,17 +635,10 @@
     },
     {
       "id": "tc_ec_n",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "e+(e<(-3.99))*((-3.99)-e)+(e>47.513)*(47.513-e)",
-        "inputs": [
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "u(1) + (u(1) < -3.99)*(-3.99 - u(1)) + (u(1) > 47.513)*(47.513 - u(1))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1440,
@@ -838,17 +649,10 @@
     },
     {
       "id": "tc_t_n",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(e<0.0)*(e*(38.436847+e*(1.1010485+e*(5.2229312+e*(7.2060525+e*(5.8488586+e*(2.7754916+e*(0.77075166+e*(0.11582665+e*(0.0073138868))))))))))+(1-(e<0.0))*(e<20.613)*(e*(38.6896+e*((-1.08267)+e*(0.0470205+e*((-2.12169e-06)+e*((-0.000117272)+e*(5.3928e-06+e*((-7.98156e-08)))))))))+(1-(e<20.613))*(19.72485+e*(33.00943+e*((-0.3915159)+e*(0.009855391+e*((-0.0001274371)+e*(7.767022e-07))))))",
-        "inputs": [
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 0)*(u(1)*(38.436847 + u(1)*(1.1010485 + u(1)*(5.2229312 + u(1)*(7.2060525 + u(1)*(5.8488586 + u(1)*(2.7754916 + u(1)*(0.77075166 + u(1)*(0.11582665 + u(1)*0.0073138868))))))))) + (1 - (u(1) < 0))*(u(1) < 20.613)*(u(1)*(38.6896 + u(1)*(-1.08267 + u(1)*(0.0470205 + u(1)*(-0.00000212169 + u(1)*(-0.000117272 + u(1)*(0.0000053928 + u(1)*-7.98156e-8))))))) + (1 - (u(1) < 20.613))*(19.72485 + u(1)*(33.00943 + u(1)*(-0.3915159 + u(1)*(0.009855391 + u(1)*(-0.0001274371 + u(1)*7.767022e-7)))))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1640,
@@ -859,17 +663,10 @@
     },
     {
       "id": "tc_ec_r",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "e+(e<(-0.226))*((-0.226)-e)+(e>21.103)*(21.103-e)",
-        "inputs": [
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "u(1) + (u(1) < -0.226)*(-0.226 - u(1)) + (u(1) > 21.103)*(21.103 - u(1))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1440,
@@ -880,17 +677,10 @@
     },
     {
       "id": "tc_t_r",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(e<1.923)*(e*(188.9138+e*((-93.83529)+e*(130.68619+e*((-227.0358)+e*(351.45659+e*((-389.539)+e*(282.39471+e*((-126.07281)+e*(31.353611+e*((-3.3187769))))))))))))+(1-(e<1.923))*(e<11.361)*(13.34584505+e*(147.2644573+e*((-18.44024844)+e*(4.031129726+e*((-0.624942836)+e*(0.06468412046+e*((-0.004458750426)+e*(0.0001994710149+e*((-5.31340179e-06)+e*(6.481976217e-08))))))))))+(1-(e<11.361))*(e<19.739)*((-81.99599416)+e*(155.3962042+e*((-8.342197663)+e*(0.4279433549+e*((-0.0119157791)+e*(0.0001492290091))))))+(1-(e<19.739))*(34061.77836+e*((-7023.729171)+e*(558.2903813+e*((-19.52394635)+e*(0.2560740231)))))",
-        "inputs": [
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 1.923)*(u(1)*(188.9138 + u(1)*(-93.83529 + u(1)*(130.68619 + u(1)*(-227.0358 + u(1)*(351.45659 + u(1)*(-389.539 + u(1)*(282.39471 + u(1)*(-126.07281 + u(1)*(31.353611 + u(1)*-3.3187769)))))))))) + (1 - (u(1) < 1.923))*(u(1) < 11.361)*(13.34584505 + u(1)*(147.2644573 + u(1)*(-18.44024844 + u(1)*(4.031129726 + u(1)*(-0.624942836 + u(1)*(0.06468412046 + u(1)*(-0.004458750426 + u(1)*(0.0001994710149 + u(1)*(-0.00000531340179 + u(1)*6.481976217e-8))))))))) + (1 - (u(1) < 11.361))*(u(1) < 19.739)*(-81.99599416 + u(1)*(155.3962042 + u(1)*(-8.342197663 + u(1)*(0.4279433549 + u(1)*(-0.0119157791 + u(1)*0.0001492290091))))) + (1 - (u(1) < 19.739))*(34061.77836 + u(1)*(-7023.729171 + u(1)*(558.2903813 + u(1)*(-19.52394635 + u(1)*0.2560740231))))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1640,
@@ -901,17 +691,10 @@
     },
     {
       "id": "tc_ec_s",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "e+(e<(-0.235))*((-0.235)-e)+(e>18.693)*(18.693-e)",
-        "inputs": [
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "u(1) + (u(1) < -0.235)*(-0.235 - u(1)) + (u(1) > 18.693)*(18.693 - u(1))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1440,
@@ -922,17 +705,10 @@
     },
     {
       "id": "tc_t_s",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(e<1.874)*(e*(184.94946+e*((-80.0504062)+e*(102.23743+e*((-152.248592)+e*(188.821343+e*((-159.085941)+e*(82.302788+e*((-23.4181944)+e*(2.7978626))))))))))+(1-(e<1.874))*(e<10.332)*(12.91507177+e*(146.6298863+e*((-15.34713402)+e*(3.145945973+e*((-0.4163257839)+e*(0.03187963771+e*((-0.0012916375)+e*(2.183475087e-05+e*((-1.447379511e-07)+e*(8.211272125e-09))))))))))+(1-(e<10.332))*(e<17.536)*((-80.87801117)+e*(162.1573104+e*((-8.536869453)+e*(0.4719686976+e*((-0.01441693666)+e*(0.000208161889))))))+(1-(e<17.536))*(53338.75126+e*((-12358.92298)+e*(1092.657613+e*((-42.65693686)+e*(0.624720542)))))",
-        "inputs": [
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 1.874)*(u(1)*(184.94946 + u(1)*(-80.0504062 + u(1)*(102.23743 + u(1)*(-152.248592 + u(1)*(188.821343 + u(1)*(-159.085941 + u(1)*(82.302788 + u(1)*(-23.4181944 + u(1)*2.7978626))))))))) + (1 - (u(1) < 1.874))*(u(1) < 10.332)*(12.91507177 + u(1)*(146.6298863 + u(1)*(-15.34713402 + u(1)*(3.145945973 + u(1)*(-0.4163257839 + u(1)*(0.03187963771 + u(1)*(-0.0012916375 + u(1)*(0.00002183475087 + u(1)*(-1.447379511e-7 + u(1)*8.211272125e-9))))))))) + (1 - (u(1) < 10.332))*(u(1) < 17.536)*(-80.87801117 + u(1)*(162.1573104 + u(1)*(-8.536869453 + u(1)*(0.4719686976 + u(1)*(-0.01441693666 + u(1)*0.000208161889))))) + (1 - (u(1) < 17.536))*(53338.75126 + u(1)*(-12358.92298 + u(1)*(1092.657613 + u(1)*(-42.65693686 + u(1)*0.624720542))))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1640,
@@ -943,17 +719,10 @@
     },
     {
       "id": "tc_ec_t",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "e+(e<(-5.603))*((-5.603)-e)+(e>20.872)*(20.872-e)",
-        "inputs": [
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "u(1) + (u(1) < -5.603)*(-5.603 - u(1)) + (u(1) > 20.872)*(20.872 - u(1))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1440,
@@ -964,17 +733,10 @@
     },
     {
       "id": "tc_t_t",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(e<0.0)*(e*(25.949192+e*((-0.21316967)+e*(0.79018692+e*(0.42527777+e*(0.13304473+e*(0.020241446+e*(0.0012668171))))))))+(1-(e<0.0))*(e*(25.928+e*((-0.7602961)+e*(0.04637791+e*((-0.002165394)+e*(6.048144e-05+e*((-7.293422e-07))))))))",
-        "inputs": [
-          "e"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 0)*(u(1)*(25.949192 + u(1)*(-0.21316967 + u(1)*(0.79018692 + u(1)*(0.42527777 + u(1)*(0.13304473 + u(1)*(0.020241446 + u(1)*0.0012668171))))))) + (1 - (u(1) < 0))*(u(1)*(25.928 + u(1)*(-0.7602961 + u(1)*(0.04637791 + u(1)*(-0.002165394 + u(1)*(0.00006048144 + u(1)*-7.293422e-7))))))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1640,
@@ -985,25 +747,10 @@
     },
     {
       "id": "tc_t",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(m>-0.5)*(m<0.5)*b+(m>0.5)*(m<1.5)*e+(m>1.5)*(m<2.5)*j+(m>2.5)*(m<3.5)*k+(m>3.5)*(m<4.5)*n+(m>4.5)*(m<5.5)*r+(m>5.5)*(m<6.5)*s+(m>6.5)*(m<7.5)*t",
-        "inputs": [
-          "m",
-          "b",
-          "e",
-          "j",
-          "k",
-          "n",
-          "r",
-          "s",
-          "t"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) > -0.5)*(u(1) < 0.5)*u(2) + (u(1) > 0.5)*(u(1) < 1.5)*u(3) + (u(1) > 1.5)*(u(1) < 2.5)*u(4) + (u(1) > 2.5)*(u(1) < 3.5)*u(5) + (u(1) > 3.5)*(u(1) < 4.5)*u(6) + (u(1) > 4.5)*(u(1) < 5.5)*u(7) + (u(1) > 5.5)*(u(1) < 6.5)*u(8) + (u(1) > 6.5)*(u(1) < 7.5)*u(9)",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1840,
@@ -1014,18 +761,10 @@
     },
     {
       "id": "tc_fault",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(mv>150)+(mv<(-50))+(m>7.5)+(m<(-0.5))",
-        "inputs": [
-          "mv",
-          "m"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) > 150) + (u(1) < -50) + (u(2) > 7.5) + (u(2) < -0.5)",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 1840,
@@ -1036,19 +775,10 @@
     },
     {
       "id": "pv_select",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(type>100)*tc+(type<100)*rtd",
-        "inputs": [
-          "type",
-          "rtd",
-          "tc"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) > 100)*u(3) + (u(1) < 100)*u(2)",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 2040,
@@ -1059,19 +789,10 @@
     },
     {
       "id": "fault_select",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(type<100)*rf+(type>100)*tf",
-        "inputs": [
-          "type",
-          "rf",
-          "tf"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 100)*u(2) + (u(1) > 100)*u(3)",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 2040,
@@ -1079,6 +800,102 @@
         "rotation": 0
       },
       "label": "Falha do sensor do tipo configurado"
+    },
+    {
+      "id": "rtd_r__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "4"
+      },
+      "visual": {
+        "x": 340,
+        "y": 400,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "rtd_exc_cmd__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 120,
+        "y": 240,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tc_cj__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "9"
+      },
+      "visual": {
+        "x": 1160,
+        "y": 320,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tc_e__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 1160,
+        "y": 400,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tc_t__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "9"
+      },
+      "visual": {
+        "x": 1760,
+        "y": 320,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tc_fault__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 1760,
+        "y": 400,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "pv_select__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 1960,
+        "y": 320,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "fault_select__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 1960,
+        "y": 400,
+        "rotation": 0
+      }
     }
   ],
   "topology": {
@@ -1318,8 +1135,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "rtd_r",
-          "pinId": "v23"
+          "componentId": "rtd_r__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1332,8 +1149,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "rtd_r",
-          "pinId": "v34"
+          "componentId": "rtd_r__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1346,8 +1163,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "rtd_r",
-          "pinId": "i"
+          "componentId": "rtd_r__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1360,8 +1177,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "rtd_r",
-          "pinId": "conn"
+          "componentId": "rtd_r__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -1370,12 +1187,12 @@
         "from": {
           "kind": "port",
           "componentId": "rtd_r",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "rtd_t",
-          "pinId": "r"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1384,12 +1201,12 @@
         "from": {
           "kind": "port",
           "componentId": "rtd_r",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "rtd_fault",
-          "pinId": "r"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1416,8 +1233,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "rtd_exc_cmd",
-          "pinId": "i"
+          "componentId": "rtd_exc_cmd__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1430,8 +1247,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "rtd_exc_cmd",
-          "pinId": "type"
+          "componentId": "rtd_exc_cmd__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1440,7 +1257,7 @@
         "from": {
           "kind": "port",
           "componentId": "rtd_exc_cmd",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1459,7 +1276,7 @@
         "to": {
           "kind": "port",
           "componentId": "tc_det_value",
-          "pinId": "type"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1468,7 +1285,7 @@
         "from": {
           "kind": "port",
           "componentId": "tc_det_value",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1515,7 +1332,7 @@
         "to": {
           "kind": "port",
           "componentId": "tc_mv",
-          "pinId": "v"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1529,7 +1346,7 @@
         "to": {
           "kind": "port",
           "componentId": "tc_cj_b",
-          "pinId": "t"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1543,7 +1360,7 @@
         "to": {
           "kind": "port",
           "componentId": "tc_cj_e",
-          "pinId": "t"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1557,7 +1374,7 @@
         "to": {
           "kind": "port",
           "componentId": "tc_cj_j",
-          "pinId": "t"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1571,7 +1388,7 @@
         "to": {
           "kind": "port",
           "componentId": "tc_cj_k",
-          "pinId": "t"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1585,7 +1402,7 @@
         "to": {
           "kind": "port",
           "componentId": "tc_cj_n",
-          "pinId": "t"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1599,7 +1416,7 @@
         "to": {
           "kind": "port",
           "componentId": "tc_cj_r",
-          "pinId": "t"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1613,7 +1430,7 @@
         "to": {
           "kind": "port",
           "componentId": "tc_cj_s",
-          "pinId": "t"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1627,7 +1444,7 @@
         "to": {
           "kind": "port",
           "componentId": "tc_cj_t",
-          "pinId": "t"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1640,8 +1457,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_cj",
-          "pinId": "m"
+          "componentId": "tc_cj__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1650,12 +1467,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_cj_b",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_cj",
-          "pinId": "b"
+          "componentId": "tc_cj__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1664,12 +1481,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_cj_e",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_cj",
-          "pinId": "e"
+          "componentId": "tc_cj__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1678,12 +1495,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_cj_j",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_cj",
-          "pinId": "j"
+          "componentId": "tc_cj__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -1692,12 +1509,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_cj_k",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_cj",
-          "pinId": "k"
+          "componentId": "tc_cj__mux",
+          "pinId": "in5"
         },
         "points": []
       },
@@ -1706,12 +1523,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_cj_n",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_cj",
-          "pinId": "n"
+          "componentId": "tc_cj__mux",
+          "pinId": "in6"
         },
         "points": []
       },
@@ -1720,12 +1537,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_cj_r",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_cj",
-          "pinId": "r"
+          "componentId": "tc_cj__mux",
+          "pinId": "in7"
         },
         "points": []
       },
@@ -1734,12 +1551,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_cj_s",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_cj",
-          "pinId": "s"
+          "componentId": "tc_cj__mux",
+          "pinId": "in8"
         },
         "points": []
       },
@@ -1748,12 +1565,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_cj_t",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_cj",
-          "pinId": "t"
+          "componentId": "tc_cj__mux",
+          "pinId": "in9"
         },
         "points": []
       },
@@ -1762,12 +1579,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_mv",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_e",
-          "pinId": "mv"
+          "componentId": "tc_e__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1776,12 +1593,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_cj",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_e",
-          "pinId": "cj"
+          "componentId": "tc_e__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1794,8 +1611,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_e",
-          "pinId": "en"
+          "componentId": "tc_e__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1804,12 +1621,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_e",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "tc_ec_b",
-          "pinId": "e"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1818,12 +1635,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_ec_b",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "tc_t_b",
-          "pinId": "e"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1832,12 +1649,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_e",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "tc_ec_e",
-          "pinId": "e"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1846,12 +1663,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_ec_e",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "tc_t_e",
-          "pinId": "e"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1860,12 +1677,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_e",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "tc_ec_j",
-          "pinId": "e"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1874,12 +1691,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_ec_j",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "tc_t_j",
-          "pinId": "e"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1888,12 +1705,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_e",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "tc_ec_k",
-          "pinId": "e"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1902,12 +1719,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_ec_k",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "tc_t_k",
-          "pinId": "e"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1916,12 +1733,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_e",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "tc_ec_n",
-          "pinId": "e"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1930,12 +1747,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_ec_n",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "tc_t_n",
-          "pinId": "e"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1944,12 +1761,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_e",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "tc_ec_r",
-          "pinId": "e"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1958,12 +1775,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_ec_r",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "tc_t_r",
-          "pinId": "e"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1972,12 +1789,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_e",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "tc_ec_s",
-          "pinId": "e"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1986,12 +1803,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_ec_s",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "tc_t_s",
-          "pinId": "e"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2000,12 +1817,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_e",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "tc_ec_t",
-          "pinId": "e"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2014,12 +1831,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_ec_t",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "tc_t_t",
-          "pinId": "e"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2032,8 +1849,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_t",
-          "pinId": "m"
+          "componentId": "tc_t__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2042,12 +1859,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_t_b",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_t",
-          "pinId": "b"
+          "componentId": "tc_t__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2056,12 +1873,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_t_e",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_t",
-          "pinId": "e"
+          "componentId": "tc_t__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -2070,12 +1887,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_t_j",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_t",
-          "pinId": "j"
+          "componentId": "tc_t__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -2084,12 +1901,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_t_k",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_t",
-          "pinId": "k"
+          "componentId": "tc_t__mux",
+          "pinId": "in5"
         },
         "points": []
       },
@@ -2098,12 +1915,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_t_n",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_t",
-          "pinId": "n"
+          "componentId": "tc_t__mux",
+          "pinId": "in6"
         },
         "points": []
       },
@@ -2112,12 +1929,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_t_r",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_t",
-          "pinId": "r"
+          "componentId": "tc_t__mux",
+          "pinId": "in7"
         },
         "points": []
       },
@@ -2126,12 +1943,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_t_s",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_t",
-          "pinId": "s"
+          "componentId": "tc_t__mux",
+          "pinId": "in8"
         },
         "points": []
       },
@@ -2140,12 +1957,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_t_t",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_t",
-          "pinId": "t"
+          "componentId": "tc_t__mux",
+          "pinId": "in9"
         },
         "points": []
       },
@@ -2154,12 +1971,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_mv",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_fault",
-          "pinId": "mv"
+          "componentId": "tc_fault__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2172,8 +1989,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "tc_fault",
-          "pinId": "m"
+          "componentId": "tc_fault__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2186,8 +2003,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "pv_select",
-          "pinId": "type"
+          "componentId": "pv_select__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2196,12 +2013,12 @@
         "from": {
           "kind": "port",
           "componentId": "rtd_t",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "pv_select",
-          "pinId": "rtd"
+          "componentId": "pv_select__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2210,12 +2027,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_t",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "pv_select",
-          "pinId": "tc"
+          "componentId": "pv_select__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -2228,8 +2045,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "fault_select",
-          "pinId": "type"
+          "componentId": "fault_select__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2238,12 +2055,12 @@
         "from": {
           "kind": "port",
           "componentId": "rtd_fault",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "fault_select",
-          "pinId": "rf"
+          "componentId": "fault_select__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2252,12 +2069,12 @@
         "from": {
           "kind": "port",
           "componentId": "tc_fault",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "fault_select",
-          "pinId": "tf"
+          "componentId": "fault_select__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -2266,7 +2083,7 @@
         "from": {
           "kind": "port",
           "componentId": "pv_select",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -2280,7 +2097,7 @@
         "from": {
           "kind": "port",
           "componentId": "fault_select",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -2288,6 +2105,118 @@
           "pinId": "sensorFault"
         },
         "points": []
+      },
+      {
+        "id": "rtd_r__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "rtd_r__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "rtd_r",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "rtd_exc_cmd__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "rtd_exc_cmd__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "rtd_exc_cmd",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "tc_cj__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "tc_cj__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tc_cj",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "tc_e__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "tc_e__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tc_e",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "tc_t__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "tc_t__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tc_t",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "tc_fault__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "tc_fault__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tc_fault",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "pv_select__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "pv_select__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pv_select",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "fault_select__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "fault_select__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fault_select",
+          "pinId": "in1"
+        },
+        "vertices": []
       }
     ]
   },

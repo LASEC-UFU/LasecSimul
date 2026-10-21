@@ -1,0 +1,113 @@
+{
+ "revisionBefore": "ab4c1efb7",
+ "legacyExe": "core\\build-legacy-reference\\bin\\lasecsimul-core.exe",
+ "currentExe": "core\\build-main\\Release\\lasecsimul-core.exe",
+ "seconds": 0.04,
+ "gridMs": 10,
+ "stimulus": [
+  0,
+  1,
+  10,
+  0.5
+ ],
+ "generatedAt": "2026-10-21T14:28:27.293Z",
+ "results": [
+  {
+   "file": "subcircuits/control_rate_limiter.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.04,
+   "gridMs": 10,
+   "verdict": "equivalente",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 5,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 0.02,
+     "maxAbs": 6.591949208711867e-17,
+     "maxRelToRange": 3.2959746043559335e-15,
+     "rmse": 2.957182046092748e-17,
+     "nrmse": 1.478591023046374e-15,
+     "eventShiftS": 0,
+     "eventCount": 2,
+     "eventCountAfter": 2,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0.009999999999999995,
+       "after": 0.01
+      },
+      {
+       "t": 40000000,
+       "before": 0.019999999999999934,
+       "after": 0.02
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 5,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 0.02,
+     "maxAbs": 6.591949208711867e-17,
+     "maxRelToRange": 3.2959746043559335e-15,
+     "rmse": 2.957182046092748e-17,
+     "nrmse": 1.478591023046374e-15,
+     "eventShiftS": 0,
+     "eventCount": 2,
+     "eventCountAfter": 2,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0.009999999999999995,
+       "after": 0.01
+      },
+      {
+       "t": 40000000,
+       "before": 0.019999999999999934,
+       "after": 0.02
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    }
+   ]
+  }
+ ]
+}

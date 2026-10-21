@@ -1,0 +1,719 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "pid-01",
+      "legacyTypeId": "control.pid",
+      "kind": "subsystem",
+      "rule": "pid->discrete_pid_controller_2dof(D na PV)",
+      "newTypeIds": [
+        "subsystem.legado_pid_dpv"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "pid-02",
+      "legacyTypeId": "control.pid",
+      "kind": "subsystem",
+      "rule": "pid->discrete_pid_controller_2dof(D na PV)",
+      "newTypeIds": [
+        "subsystem.legado_pid_dpv"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "pid-03",
+      "legacyTypeId": "control.pid",
+      "kind": "subsystem",
+      "rule": "pid->discrete_pid_controller_2dof(D na PV)",
+      "newTypeIds": [
+        "subsystem.legado_pid_dpv"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "pid-04",
+      "legacyTypeId": "control.pid",
+      "kind": "subsystem",
+      "rule": "pid->discrete_pid_controller_2dof(D na PV)",
+      "newTypeIds": [
+        "subsystem.legado_pid_dpv"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "pid-05",
+      "legacyTypeId": "control.pid",
+      "kind": "subsystem",
+      "rule": "pid->discrete_pid_controller_2dof(D na PV)",
+      "newTypeIds": [
+        "subsystem.legado_pid_dpv"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "pid-06",
+      "legacyTypeId": "control.pid",
+      "kind": "subsystem",
+      "rule": "pid->discrete_pid_controller_2dof(D na PV)",
+      "newTypeIds": [
+        "subsystem.legado_pid_dpv"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-21",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-22",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+deadzone+actuator+tau1+tau2+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_deadzone_actuator_tau1_tau2_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-23",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+deadzone+stiction+actuator+tau1+tau2+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_deadzone_stiction_actuator_tau1_tau2_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-24",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-25",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1+tau2+leadlag+deadtime+saturation",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1_tau2_leadlag_deadtime_saturation"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-26",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+deadzone+stiction+actuator+tau1+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_deadzone_stiction_actuator_tau1_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-27",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1+tau2",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1_tau2"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-28",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1+tau2+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1_tau2_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-29",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+stiction+tau1+tau2+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_stiction_tau1_tau2_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-30",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+actuator+tau1+tau2+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_actuator_tau1_tau2_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-31",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-32",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-33",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+actuator+tau1+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_actuator_tau1_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-34",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-37",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1+tau2+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1_tau2_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-38",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1+tau2+leadlag+deadtime+saturation",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1_tau2_leadlag_deadtime_saturation"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-39",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1+tau2+leadlag+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1_tau2_leadlag_deadtime"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-41",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-42",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->fcn+saturation",
+      "newTypeIds": [
+        "sl.fcn",
+        "sl.saturation"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-43",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn+saturation",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn",
+        "sl.saturation"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-45",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-48",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-49",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "single",
+      "rule": "calc_expression->fcn",
+      "newTypeIds": [
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-50",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-51",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn+saturation",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn",
+        "sl.saturation"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-52",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-53",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-54",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-55",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-56",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-57",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-58",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "recorder-204-3",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "recorder-204-5",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "recorder-204-7",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "recorder-209-3",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "recorder-209-7",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "recorder-210-3",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "recorder-210-7",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-101",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-102",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-103",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-104",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-105",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-106",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-107",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-108",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-109",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-110",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-111",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-112",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-113",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-114",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-115",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-116",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-117",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-118",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-120",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    }
+  ],
+  "definitionsAdded": [
+    "subsystem.legado_pid_dpv",
+    "subsystem.legado_processo_deadtime",
+    "subsystem.legado_processo_deadzone_actuator_tau1_tau2_deadtime",
+    "subsystem.legado_processo_deadzone_stiction_actuator_tau1_tau2_deadtime",
+    "subsystem.legado_processo_tau1",
+    "subsystem.legado_processo_tau1_tau2_leadlag_deadtime_saturation",
+    "subsystem.legado_processo_deadzone_stiction_actuator_tau1_deadtime",
+    "subsystem.legado_processo_tau1_tau2",
+    "subsystem.legado_processo_tau1_tau2_deadtime",
+    "subsystem.legado_processo_stiction_tau1_tau2_deadtime",
+    "subsystem.legado_processo_actuator_tau1_tau2_deadtime",
+    "subsystem.legado_processo_actuator_tau1_deadtime",
+    "subsystem.legado_processo_tau1_deadtime",
+    "subsystem.legado_processo_tau1_tau2_leadlag_deadtime"
+  ],
+  "overrides": [],
+  "warnings": [],
+  "file": "tdps_ethane_plant.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:39.081Z",
+  "original": {
+    "backup": "tdps_ethane_plant.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "a754fad6cd4c8068d1a1566a59cfb731323af85143b959f447243dde4dc99a51"
+  },
+  "migrated": {
+    "sha256": "2fff13b7a5b58c1422d7580150e34e62cac5b81e6bbd0a268164aa64b21e8de2"
+  },
+  "summary": {
+    "converted": 64,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 14,
+    "overridesRemapped": 0,
+    "byRule": {
+      "pid->discrete_pid_controller_2dof(D na PV)": 6,
+      "process->gain+deadtime": 3,
+      "process->gain+deadzone+actuator+tau1+tau2+deadtime": 1,
+      "process->gain+deadzone+stiction+actuator+tau1+tau2+deadtime": 1,
+      "process->gain+tau1": 1,
+      "process->gain+tau1+tau2+leadlag+deadtime+saturation": 2,
+      "process->gain+deadzone+stiction+actuator+tau1+deadtime": 1,
+      "process->gain+tau1+tau2": 1,
+      "process->gain+tau1+tau2+deadtime": 2,
+      "process->gain+stiction+tau1+tau2+deadtime": 1,
+      "process->gain+actuator+tau1+tau2+deadtime": 1,
+      "process->gain+actuator+tau1+deadtime": 1,
+      "process->gain+tau1+deadtime": 1,
+      "process->gain+tau1+tau2+leadlag+deadtime": 1,
+      "calc_expression->mux+fcn": 11,
+      "calc_expression->fcn+saturation": 1,
+      "calc_expression->mux+fcn+saturation": 2,
+      "calc_expression->fcn": 1,
+      "observer->identity-gain": 26
+    }
+  }
+}

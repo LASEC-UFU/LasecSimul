@@ -1,0 +1,1850 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "generatedAt": "2026-10-21T17:07:40.623Z",
+  "root": ".",
+  "filesScanned": 128,
+  "filesMigrated": 102,
+  "totals": {
+    "converted": 1080,
+    "kept": 176,
+    "renamed": 22,
+    "unsupported": 0,
+    "definitionsAdded": 188,
+    "overridesRemapped": 0
+  },
+  "files": [
+    {
+      "file": "examples\\calculo\\laboratorio-calculo.lsproj",
+      "backup": "examples\\calculo\\lasecsimul-migration-backup\\laboratorio-calculo.control-library-simulink-v1.original.lsproj",
+      "report": "examples\\calculo\\lasecsimul-migration-backup\\laboratorio-calculo.control-library-simulink-v1.report.json",
+      "sha256": "f3bd1849d442644285a118bebbc1689770b35da520f812296d80cfcbe3a99941",
+      "converted": 9,
+      "kept": 11,
+      "renamed": 1,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 11,
+        "calc_expression->mux+fcn": 5,
+        "accumulator->process.accumulator (bloco de processo do LasecSimul)": 1,
+        "observer->identity-gain": 2,
+        "first_order->discrete_transfer_fcn(zoh-exact)": 1,
+        "saturation->saturation": 1
+      }
+    },
+    {
+      "file": "examples\\calculo\\primeira-ordem.lsproj",
+      "backup": "examples\\calculo\\lasecsimul-migration-backup\\primeira-ordem.control-library-simulink-v1.original.lsproj",
+      "report": "examples\\calculo\\lasecsimul-migration-backup\\primeira-ordem.control-library-simulink-v1.report.json",
+      "sha256": "f5cf740cfc9da57f6d1f0e4566e006d940d3543f6406d681922f4fc727413ad1",
+      "converted": 1,
+      "kept": 1,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 1,
+        "first_order->discrete_transfer_fcn(zoh-exact)": 1
+      }
+    },
+    {
+      "file": "examples\\calculo\\sensor.lsproj",
+      "backup": "examples\\calculo\\lasecsimul-migration-backup\\sensor.control-library-simulink-v1.original.lsproj",
+      "report": "examples\\calculo\\lasecsimul-migration-backup\\sensor.control-library-simulink-v1.report.json",
+      "sha256": "6c6d5d1663fd66ed2cc9e7029675d97df4a16e2b0cbbf6d0bbc86ac2a9580ec2",
+      "converted": 2,
+      "kept": 3,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 3,
+        "calc_expression->mux+fcn": 1,
+        "saturation->saturation": 1
+      }
+    },
+    {
+      "file": "examples\\calculo\\tanque.lsproj",
+      "backup": "examples\\calculo\\lasecsimul-migration-backup\\tanque.control-library-simulink-v1.original.lsproj",
+      "report": "examples\\calculo\\lasecsimul-migration-backup\\tanque.control-library-simulink-v1.report.json",
+      "sha256": "1c2dd034c87637cd933d59be61aec72213093a4b88f0b0091ac0928ebef0391c",
+      "converted": 6,
+      "kept": 7,
+      "renamed": 1,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 7,
+        "calc_expression->mux+fcn": 4,
+        "accumulator->process.accumulator (bloco de processo do LasecSimul)": 1,
+        "observer->identity-gain": 2
+      }
+    },
+    {
+      "file": "extension\\test\\e2e\\fixtures\\instruments.lsproj",
+      "backup": "extension\\test\\e2e\\fixtures\\lasecsimul-migration-backup\\instruments.control-library-simulink-v1.original.lsproj",
+      "report": "extension\\test\\e2e\\fixtures\\lasecsimul-migration-backup\\instruments.control-library-simulink-v1.report.json",
+      "sha256": "d14294e11c4de123dc645cb08f5c95796198798e1f3a987f27f82e6ccafb1ad6",
+      "converted": 3,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "gain->gain": 1,
+        "first_order->discrete_transfer_fcn(zoh-exact)": 1,
+        "transfer_function(discrete)->discrete_transfer_fcn": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_accumulator.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_accumulator.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_accumulator.control-library-simulink-v1.report.json",
+      "sha256": "0c5be62bca4623a5462dd0b8b29711c3951eb1a0c810d958fac67a33a1650c45",
+      "converted": 0,
+      "kept": 0,
+      "renamed": 1,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "accumulator->process.accumulator (bloco de processo do LasecSimul)": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_bias.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_bias.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_bias.control-library-simulink-v1.report.json",
+      "sha256": "efabb1974e559435df221a24f476f943b813616d8e763a0ef5e5e9c2b132b458",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "bias->bias": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_dead_time.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_dead_time.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_dead_time.control-library-simulink-v1.report.json",
+      "sha256": "6bce04d01a6b1e594709d7878115e11f2a9e89d02de12bedef37e9a1cb2ac02f",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "dead_time->transport_delay": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_deadband.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_deadband.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_deadband.control-library-simulink-v1.report.json",
+      "sha256": "d73a63929b93c80e43aa4bd903ccbabd8fb3af3fb9c910797be595de0bf9ccf1",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "deadband->dead_zone": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_divide.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_divide.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_divide.control-library-simulink-v1.report.json",
+      "sha256": "491f39c30b73c6195d03ff126e3ca90efc51b4f1e3fbf209e5e45ca99dbed7f5",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "divide->product(*/)": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_filtered_derivative.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_filtered_derivative.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_filtered_derivative.control-library-simulink-v1.report.json",
+      "sha256": "5d63f030a4e63a072d2461421f5f449ae43d6bd02f1c781ed95c943c88ca0f56",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "filtered_derivative->state_space(continuous)+unit_delay(output-phase)": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_first_order.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_first_order.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_first_order.control-library-simulink-v1.report.json",
+      "sha256": "a77d9a5aacacc809d9dc7246ae22e48bee2a6b78bd75b9767585d5429708ef06",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "first_order->discrete_transfer_fcn(zoh-exact)": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_fopdt.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_fopdt.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_fopdt.control-library-simulink-v1.report.json",
+      "sha256": "e8b22b8ee1ac576c222b0a1ba7116ae02786831c397f561420d9a4605ec0dbad",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "fopdt->transport_delay+discrete_transfer_fcn": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_gain.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_gain.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_gain.control-library-simulink-v1.report.json",
+      "sha256": "db7fb49ec01f30ba8cff30f5b1215052bdd908cbbe3cbe04b708d6f7f7cd0765",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "gain->gain": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_hysteresis.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_hysteresis.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_hysteresis.control-library-simulink-v1.report.json",
+      "sha256": "68abe9fb4e97b99f63187d94e755bc62fac0b788536a418ec87543fcfa637230",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "hysteresis->relay": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_integrator.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_integrator.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_integrator.control-library-simulink-v1.report.json",
+      "sha256": "57e766f6a7cd2d4d6c8d7fa2cad2281410acbb5f996669022174796443451768",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "integrator->discrete_time_integrator(forward-euler)": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_lead_lag.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_lead_lag.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_lead_lag.control-library-simulink-v1.report.json",
+      "sha256": "41a734cbe05ebd92ad06c80c91d235d798d808fa4d554dc23bfcd85d81765413",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "lead_lag->discrete_state_space(zoh-exact)": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_limiter.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_limiter.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_limiter.control-library-simulink-v1.report.json",
+      "sha256": "6417b048eecb1cdbe66393624ae4d9ad256ab15165451011f2e29b98469f63d6",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "limiter->saturation": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_pid.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_pid.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_pid.control-library-simulink-v1.report.json",
+      "sha256": "65d03db8d6e254ded854d8c1609987239e24705b88dce6f6035a7fe84f6c5782",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_product.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_product.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_product.control-library-simulink-v1.report.json",
+      "sha256": "da9c18068bb450ef59a6cf41bffb3a6a36bb18e9e1953af96043f248a55575aa",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "product->product": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_rate_limiter.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_rate_limiter.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_rate_limiter.control-library-simulink-v1.report.json",
+      "sha256": "eb4f5cf92d040c41cc615bc96b86dd5211813f3aae13d8784d150bf64fcf58b7",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "rate_limiter->unit_delay(input-phase)+rate_limiter(discrete)": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_saturation.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_saturation.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_saturation.control-library-simulink-v1.report.json",
+      "sha256": "54e58da05f951fbce093b34175986c5bfbb3a6ccc01681f9e00461aa54034f83",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "saturation->saturation": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_second_order.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_second_order.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_second_order.control-library-simulink-v1.report.json",
+      "sha256": "d9dc4f8db1acabc7d2e4754a9fdf50935d9ad42f70a83b36a6e1c1afdf59028e",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "second_order->state_space(x0)+unit_delay(output-phase)": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_stiction.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_stiction.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_stiction.control-library-simulink-v1.report.json",
+      "sha256": "b940d68d201fb0e34cd3862763fe74753356c65d897bb1578ac2ab8fd87ecf64",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "stiction->mux+fcn+unit_delay": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_subtract.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_subtract.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_subtract.control-library-simulink-v1.report.json",
+      "sha256": "04ef652aa0d83e0030dbd218525dcfb395bd66c074bbe7b45e3570ab0ecb0a49",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "subtract->sum(+-)": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_sum.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_sum.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_sum.control-library-simulink-v1.report.json",
+      "sha256": "09f6b2bab4b92982a9dd30e5e817d14659f7fdc502bd58ce76438c802c9d3b7d",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "sum->sum": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_transfer_function.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_transfer_function.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_transfer_function.control-library-simulink-v1.report.json",
+      "sha256": "57129bb7aa3ee4cc9d171662e55be67fa589ad6b39b5fefa20994179149645c7",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "transfer_function(first_order)->first_order->discrete_transfer_fcn(zoh-exact)": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_unit_delay.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_unit_delay.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_unit_delay.control-library-simulink-v1.report.json",
+      "sha256": "ccca95c99a814e37134862aa8d3a776a6daf781b21ae3277038dc608bec70bc0",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "unit_delay->unit_delay": 1
+      }
+    },
+    {
+      "file": "subcircuits\\control_valve_characteristic.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\control_valve_characteristic.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\control_valve_characteristic.control-library-simulink-v1.report.json",
+      "sha256": "ed6b9642fcfa6765231d4dbeeb9b079a0ce0192daeb8e0cadad4908a70bfd4f4",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "valve_characteristic->fcn(abs)": 1
+      }
+    },
+    {
+      "file": "subcircuits\\hart_smar_fy301.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\hart_smar_fy301.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\hart_smar_fy301.control-library-simulink-v1.report.json",
+      "sha256": "d246e362ac519bb26da25062004da0cfed7292dcd6bd5bd625b6609d87444ae8",
+      "converted": 25,
+      "kept": 17,
+      "renamed": 3,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 17,
+        "calc_expression->fcn": 2,
+        "calc_expression->mux+fcn": 21,
+        "integrator->discrete_time_integrator(forward-euler)": 2,
+        "accumulator->process.accumulator (bloco de processo do LasecSimul)": 3
+      }
+    },
+    {
+      "file": "subcircuits\\hart_smar_ld301.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\hart_smar_ld301.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\hart_smar_ld301.control-library-simulink-v1.report.json",
+      "sha256": "9ca34ddbcbe01dccffa35b31ec2964d3eb4d4145c9ef0fda749d25689451e8b9",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "subtract->sum(+-)": 1
+      }
+    },
+    {
+      "file": "subcircuits\\hart_smar_tt301.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\hart_smar_tt301.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\hart_smar_tt301.control-library-simulink-v1.report.json",
+      "sha256": "8f5d7b5e2b6dcbbee7029842a17705ed502687f69ecab8fdd9a25a7d4ca50949",
+      "converted": 36,
+      "kept": 2,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 2,
+        "calc_expression->mux+fcn": 8,
+        "calc_expression->fcn": 28
+      }
+    },
+    {
+      "file": "subcircuits\\process_control_valve.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\process_control_valve.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\process_control_valve.control-library-simulink-v1.report.json",
+      "sha256": "e992a70c10bf502c3d465849cdff44d8d3154248d2d59854e70d9af80718be0f",
+      "converted": 10,
+      "kept": 10,
+      "renamed": 2,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 10,
+        "calc_expression->fcn": 3,
+        "calc_expression->mux+fcn": 7,
+        "accumulator->process.accumulator (bloco de processo do LasecSimul)": 2
+      }
+    },
+    {
+      "file": "subcircuits\\process_electric_furnace_tc.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\process_electric_furnace_tc.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\process_electric_furnace_tc.control-library-simulink-v1.report.json",
+      "sha256": "8735e8774499652654d9e2ae27c48a5272888fe094b8420d9a9949f4fb1e8f80",
+      "converted": 34,
+      "kept": 12,
+      "renamed": 2,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 12,
+        "observer->identity-gain": 1,
+        "calc_expression->mux+fcn": 14,
+        "accumulator->process.accumulator (bloco de processo do LasecSimul)": 2,
+        "calc_expression->fcn": 19
+      }
+    },
+    {
+      "file": "subcircuits\\process_first_order_lab.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\process_first_order_lab.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\process_first_order_lab.control-library-simulink-v1.report.json",
+      "sha256": "8e434518bd4d446dc02081d490671b99ad72b75bde7fb16e923812ed2f028e89",
+      "converted": 1,
+      "kept": 1,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 1,
+        "first_order->discrete_transfer_fcn(zoh-exact)": 1
+      }
+    },
+    {
+      "file": "subcircuits\\process_fopdt.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\process_fopdt.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\process_fopdt.control-library-simulink-v1.report.json",
+      "sha256": "f056b3260cac133e9b55230c482d02f7c7247b56a2bc46118645723666ad372b",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "process->gain+tau1+deadtime": 1
+      }
+    },
+    {
+      "file": "subcircuits\\process_heated_tank_pt100.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\process_heated_tank_pt100.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\process_heated_tank_pt100.control-library-simulink-v1.report.json",
+      "sha256": "448e14412f79382734b1e05eba92d1be090ced6a73fb097082967e45870217d8",
+      "converted": 11,
+      "kept": 10,
+      "renamed": 2,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 10,
+        "observer->identity-gain": 1,
+        "calc_expression->mux+fcn": 9,
+        "calc_expression->fcn": 1,
+        "accumulator->process.accumulator (bloco de processo do LasecSimul)": 2
+      }
+    },
+    {
+      "file": "subcircuits\\process_hydraulic_tank.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\process_hydraulic_tank.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\process_hydraulic_tank.control-library-simulink-v1.report.json",
+      "sha256": "74688245dd45988ceb734f6b3b8f7a4013c6bfe16160b491089ebc02b83ec78e",
+      "converted": 6,
+      "kept": 7,
+      "renamed": 1,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 7,
+        "calc_expression->mux+fcn": 4,
+        "accumulator->process.accumulator (bloco de processo do LasecSimul)": 1,
+        "observer->identity-gain": 2
+      }
+    },
+    {
+      "file": "subcircuits\\process_orifice_flow_dp.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\process_orifice_flow_dp.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\process_orifice_flow_dp.control-library-simulink-v1.report.json",
+      "sha256": "d4c0bce95eed45f14c2eb334614949f2130a8afb116233caa2a84137d6bd282e",
+      "converted": 43,
+      "kept": 15,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 15,
+        "observer->identity-gain": 1,
+        "calc_expression->mux+fcn": 28,
+        "first_order->discrete_transfer_fcn(zoh-exact)": 1,
+        "calc_expression->fcn": 13
+      }
+    },
+    {
+      "file": "subcircuits\\process_pressurized_tank_dp.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\process_pressurized_tank_dp.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\process_pressurized_tank_dp.control-library-simulink-v1.report.json",
+      "sha256": "ec8f709de6aa4ce8aba044b1abf53bbd1db350d80615f137064f58937dc959fe",
+      "converted": 10,
+      "kept": 9,
+      "renamed": 1,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 9,
+        "observer->identity-gain": 2,
+        "calc_expression->mux+fcn": 8,
+        "accumulator->process.accumulator (bloco de processo do LasecSimul)": 1
+      }
+    },
+    {
+      "file": "subcircuits\\process_sensor_4_20.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\process_sensor_4_20.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\process_sensor_4_20.control-library-simulink-v1.report.json",
+      "sha256": "001876ddae8287ae7d03af280f0da8b11d97d18a19795afc91e84fd85f19a719",
+      "converted": 2,
+      "kept": 3,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 3,
+        "calc_expression->mux+fcn": 1,
+        "saturation->saturation": 1
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_basic_flow_loop.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_basic_flow_loop.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_basic_flow_loop.control-library-simulink-v1.report.json",
+      "sha256": "66152f8c5c9984d8cb1f433ba8a083302984561a67303148cbb96096f51aba3b",
+      "converted": 7,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 2,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 1,
+        "process->gain+actuator+tau1+tau2+deadtime": 1,
+        "calc_expression->mux+fcn+saturation": 1,
+        "calc_expression->fcn": 1,
+        "observer->identity-gain": 3
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_boiler.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_boiler.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_boiler.control-library-simulink-v1.report.json",
+      "sha256": "6b43ee923b35de21ce2f58eae6ec231ab800209d0090f41f21cd2e09c80c76b5",
+      "converted": 69,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 14,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 9,
+        "process->gain": 1,
+        "process->gain+stiction+tau1+tau2+deadtime": 1,
+        "process->gain+tau1+deadtime+saturation": 1,
+        "process->gain+actuator+tau1+leadlag+saturation": 1,
+        "process->gain+deadzone+tau1+leadlag+deadtime": 1,
+        "process->gain+tau1+tau2+leadlag+saturation": 1,
+        "process->gain+deadzone+stiction+actuator+tau2+deadtime": 1,
+        "process->gain+deadzone+stiction+actuator+tau1+tau2+deadtime": 1,
+        "process->gain+tau1+tau2+deadtime": 3,
+        "process->gain+actuator+tau1+tau2+deadtime": 1,
+        "process->gain+actuator+tau1+tau2": 1,
+        "process->gain+tau1": 1,
+        "process->gain+leadlag+deadtime": 1,
+        "calc_expression->fcn": 3,
+        "calc_expression->mux+fcn": 12,
+        "calc_expression->mux+fcn+saturation": 6,
+        "calc_expression->fcn+saturation": 1,
+        "observer->identity-gain": 23
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_combustion_cross_limits.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_combustion_cross_limits.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_combustion_cross_limits.control-library-simulink-v1.report.json",
+      "sha256": "9c1939455cefc4075b596cbdd63b844090cb4d21cd3c25d071b00e6bbb1d1ae3",
+      "converted": 22,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 5,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 3,
+        "process->gain+tau1+tau2": 1,
+        "process->gain+tau1+tau2+deadtime": 1,
+        "process->gain+tau1+deadtime": 1,
+        "process->gain+stiction": 1,
+        "calc_expression->mux+fcn": 4,
+        "calc_expression->mux+fcn+saturation": 1,
+        "observer->identity-gain": 10
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_combustion_dynamic_cross_limits.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_combustion_dynamic_cross_limits.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_combustion_dynamic_cross_limits.control-library-simulink-v1.report.json",
+      "sha256": "d1de712054de82f6c52e4fc9d6d8c74c2135adcc6e5afc30b431f2e223e91fc0",
+      "converted": 28,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 5,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 3,
+        "process->gain+tau1+tau2": 1,
+        "process->gain+tau1+tau2+deadtime": 1,
+        "process->gain+tau1+deadtime": 1,
+        "process->gain+stiction": 1,
+        "calc_expression->mux+fcn": 10,
+        "calc_expression->mux+fcn+saturation": 1,
+        "observer->identity-gain": 10
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_combustion_ratio.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_combustion_ratio.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_combustion_ratio.control-library-simulink-v1.report.json",
+      "sha256": "9169e5eaa493257d66ad46e52d5b8622d617db18218c5f0bf036518573747d4c",
+      "converted": 20,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 5,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 3,
+        "process->gain+tau1+tau2": 1,
+        "process->gain+tau1+tau2+deadtime": 1,
+        "process->gain+tau1+deadtime": 1,
+        "process->gain+stiction": 1,
+        "calc_expression->mux+fcn": 2,
+        "calc_expression->mux+fcn+saturation": 1,
+        "observer->identity-gain": 10
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_combustion_two_fuels.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_combustion_two_fuels.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_combustion_two_fuels.control-library-simulink-v1.report.json",
+      "sha256": "1c50c4c01252a0967578a40c3d103c02a64607bc45ca4c00b1b358594979a5a5",
+      "converted": 23,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 2,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 3,
+        "process->gain+tau1": 3,
+        "calc_expression->mux+fcn+saturation": 4,
+        "calc_expression->mux+fcn": 5,
+        "observer->identity-gain": 8
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_cooling_plant.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_cooling_plant.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_cooling_plant.control-library-simulink-v1.report.json",
+      "sha256": "b977b04449df61fd4a1366c0b62748da713b0db9f4c205a1f38b6bd65edec439",
+      "converted": 50,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 10,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 4,
+        "process->gain+tau1+deadtime+saturation": 2,
+        "process->gain+tau1+tau2+deadtime": 1,
+        "process->gain+tau1+deadtime": 3,
+        "process->gain+tau1+tau2": 2,
+        "process->gain+stiction+tau1+deadtime": 1,
+        "process->gain+rate+tau1+deadtime": 1,
+        "process->gain+actuator+tau1+tau2": 1,
+        "process->gain+tau1": 2,
+        "process->gain+tau1+tau2+saturation": 1,
+        "calc_expression->mux+fcn": 18,
+        "calc_expression->fcn": 6,
+        "observer->identity-gain": 8
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_course_fine_flow_loop.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_course_fine_flow_loop.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_course_fine_flow_loop.control-library-simulink-v1.report.json",
+      "sha256": "7933abe0c6fc01b30f7e816adba82bb12e9fe3b368700e1ea0d2ed4049a59b77",
+      "converted": 10,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 3,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 2,
+        "process->gain+deadzone+stiction+actuator+tau1+deadtime": 1,
+        "process->gain+actuator+tau1+deadtime": 1,
+        "calc_expression->mux+fcn+saturation": 1,
+        "observer->identity-gain": 5
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_ethane_plant.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_ethane_plant.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_ethane_plant.control-library-simulink-v1.report.json",
+      "sha256": "a754fad6cd4c8068d1a1566a59cfb731323af85143b959f447243dde4dc99a51",
+      "converted": 64,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 14,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 6,
+        "process->gain+deadtime": 3,
+        "process->gain+deadzone+actuator+tau1+tau2+deadtime": 1,
+        "process->gain+deadzone+stiction+actuator+tau1+tau2+deadtime": 1,
+        "process->gain+tau1": 1,
+        "process->gain+tau1+tau2+leadlag+deadtime+saturation": 2,
+        "process->gain+deadzone+stiction+actuator+tau1+deadtime": 1,
+        "process->gain+tau1+tau2": 1,
+        "process->gain+tau1+tau2+deadtime": 2,
+        "process->gain+stiction+tau1+tau2+deadtime": 1,
+        "process->gain+actuator+tau1+tau2+deadtime": 1,
+        "process->gain+actuator+tau1+deadtime": 1,
+        "process->gain+tau1+deadtime": 1,
+        "process->gain+tau1+tau2+leadlag+deadtime": 1,
+        "calc_expression->mux+fcn": 11,
+        "calc_expression->fcn+saturation": 1,
+        "calc_expression->mux+fcn+saturation": 2,
+        "calc_expression->fcn": 1,
+        "observer->identity-gain": 26
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_four_linear_processes.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_four_linear_processes.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_four_linear_processes.control-library-simulink-v1.report.json",
+      "sha256": "5ed2b88bfad5a1bf57017c4a81f3493830d9c6d5a343dd182bf572a222e324f5",
+      "converted": 30,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 5,
+      "overridesRemapped": 0,
+      "byRule": {
+        "process->gain+tau1+deadtime": 2,
+        "process->gain+actuator+tau1+tau2+deadtime": 1,
+        "process->gain+tau1+saturation": 1,
+        "process->gain+tau1+tau2+leadlag+saturation": 1,
+        "process->gain+tau1": 1,
+        "calc_expression->fcn": 2,
+        "calc_expression->mux+fcn+saturation": 3,
+        "calc_expression->mux+fcn": 2,
+        "observer->identity-gain": 17
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_frequency_response.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_frequency_response.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_frequency_response.control-library-simulink-v1.report.json",
+      "sha256": "324e40e9ad5646ae201ea3319fd4b2ecae8d61404baf2a79bae610a40306fe4c",
+      "converted": 11,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 3,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 1,
+        "process->gain+tau1": 1,
+        "process->gain+actuator+tau1+tau2": 1,
+        "calc_expression->mux+fcn+saturation": 1,
+        "calc_expression->fcn+saturation": 1,
+        "calc_expression->mux+fcn": 2,
+        "observer->identity-gain": 4
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_furnace.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_furnace.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_furnace.control-library-simulink-v1.report.json",
+      "sha256": "83ec41d7abfbd5281411d962231a073d2432a5e3c26c85cd32a755c5a747e45b",
+      "converted": 15,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 4,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 1,
+        "process->gain+tau1+deadtime": 1,
+        "process->gain+actuator+tau1+tau2": 2,
+        "process->gain": 1,
+        "calc_expression->mux+fcn": 1,
+        "calc_expression->mux+fcn+saturation": 1,
+        "observer->identity-gain": 8
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_furnace_master_slave.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_furnace_master_slave.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_furnace_master_slave.control-library-simulink-v1.report.json",
+      "sha256": "8768687114576c0dbc263aec4352ef04420c99a7168843358edd1178d3dc6411",
+      "converted": 20,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 4,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 2,
+        "process->gain+tau1+deadtime": 1,
+        "process->gain+actuator+tau1+tau2": 2,
+        "process->gain+tau1": 1,
+        "calc_expression->mux+fcn": 2,
+        "calc_expression->mux+fcn+saturation": 1,
+        "observer->identity-gain": 11
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_header_pressure_three_consumers.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_header_pressure_three_consumers.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_header_pressure_three_consumers.control-library-simulink-v1.report.json",
+      "sha256": "106964555f7ea4f563ad87ec8d1ab5821483829989cf207017a0a610322d61bf",
+      "converted": 21,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 4,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 3,
+        "process->gain+tau1+deadtime": 3,
+        "process->gain+tau1+tau2+deadtime": 1,
+        "process->gain+tau1": 2,
+        "calc_expression->fcn": 1,
+        "calc_expression->mux+fcn": 2,
+        "observer->identity-gain": 9
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_heat_exchanger.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_heat_exchanger.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_heat_exchanger.control-library-simulink-v1.report.json",
+      "sha256": "dcf300bd134da6996ac2add00f87342674bbe0f946dd77afe757a2cc4c5cde8c",
+      "converted": 21,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 3,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 1,
+        "process->gain+tau1+deadtime": 3,
+        "process->gain+tau1+tau2+leadlag+deadtime+saturation": 1,
+        "calc_expression->mux+fcn": 3,
+        "calc_expression->mux+fcn+saturation": 2,
+        "observer->identity-gain": 11
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_industrial_boiler.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_industrial_boiler.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_industrial_boiler.control-library-simulink-v1.report.json",
+      "sha256": "77c9b15d94b0ac7b9fc91caa482ce981d84b13bf4fcf95b42eba0828a78934cc",
+      "converted": 90,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 14,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 9,
+        "process->gain": 1,
+        "process->gain+stiction+tau1+tau2+deadtime": 1,
+        "process->gain+tau1+deadtime+saturation": 1,
+        "process->gain+actuator+tau1+leadlag+saturation": 1,
+        "process->gain+deadzone+tau1+leadlag+deadtime": 1,
+        "process->gain+tau1+tau2+leadlag+saturation": 1,
+        "process->gain+deadzone+stiction+actuator+tau2+deadtime": 1,
+        "process->gain+deadzone+stiction+actuator+tau1+tau2+deadtime": 1,
+        "process->gain+tau1+tau2+deadtime": 3,
+        "process->gain+actuator+tau1+tau2+deadtime": 1,
+        "process->gain+actuator+tau1+tau2": 1,
+        "process->gain+tau1": 1,
+        "process->gain+leadlag+deadtime": 1,
+        "calc_expression->fcn": 3,
+        "calc_expression->mux+fcn": 12,
+        "calc_expression->mux+fcn+saturation": 6,
+        "calc_expression->fcn+saturation": 1,
+        "observer->identity-gain": 44
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_linearized_ph.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_linearized_ph.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_linearized_ph.control-library-simulink-v1.report.json",
+      "sha256": "2b272d060faba11af94a6da4fdde7863de4ba9dbb89741fdd87691843a94c8d7",
+      "converted": 14,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 4,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 1,
+        "process->gain+tau1+tau2+deadtime": 1,
+        "process->gain+tau1+deadtime": 2,
+        "process->gain+tau1+saturation": 1,
+        "calc_expression->mux+fcn": 2,
+        "calc_expression->fcn": 1,
+        "observer->identity-gain": 6
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_nonlinear_flow_processes.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_nonlinear_flow_processes.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_nonlinear_flow_processes.control-library-simulink-v1.report.json",
+      "sha256": "10b484e0b56470e3eccb8f702a7624554e49bbbc3b043e293d5a3003a134d9f5",
+      "converted": 23,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 5,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 4,
+        "process->gain+stiction+tau1+deadtime": 1,
+        "process->gain+deadzone+tau1+deadtime": 1,
+        "process->gain+tau1+deadtime": 1,
+        "process->gain+rate+tau1+deadtime": 1,
+        "calc_expression->mux+fcn": 4,
+        "observer->identity-gain": 11
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_ph_control.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_ph_control.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_ph_control.control-library-simulink-v1.report.json",
+      "sha256": "877396f4c5e9f5d1be9cabff86f40863ee4e1fe5f3aa15d803f26922bc2eab3e",
+      "converted": 14,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 4,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 1,
+        "process->gain+tau1+tau2+deadtime": 1,
+        "process->gain+tau1+deadtime": 2,
+        "process->gain+tau1+saturation": 1,
+        "calc_expression->mux+fcn": 2,
+        "calc_expression->fcn": 1,
+        "observer->identity-gain": 6
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_reactor.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_reactor.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_reactor.control-library-simulink-v1.report.json",
+      "sha256": "2e55fe16394a720bf5921a2f7359d441d9d695d96d4bb41bacdef88dca98b140",
+      "converted": 34,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 9,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 4,
+        "process->gain+tau1": 1,
+        "process->gain+tau1+leadlag+saturation": 1,
+        "process->gain+actuator+deadtime": 1,
+        "process->gain+tau1+leadlag": 1,
+        "process->gain+tau1+deadtime": 2,
+        "process->gain+rate+actuator+tau1+deadtime": 1,
+        "process->gain+tau1+tau2+leadlag+deadtime": 1,
+        "process->gain+deadzone+stiction": 1,
+        "calc_expression->mux+fcn": 8,
+        "calc_expression->mux+fcn+saturation": 1,
+        "observer->identity-gain": 12
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_regulatory_level.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_regulatory_level.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_regulatory_level.control-library-simulink-v1.report.json",
+      "sha256": "aae1a35e95ff7a6fd741a59afa4b0938c6581131c37ce154858c30bcacdb9428",
+      "converted": 20,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 5,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 1,
+        "process->gain+tau1+tau2+deadtime": 1,
+        "process->gain+tau1+tau2": 1,
+        "process->gain+tau1+deadtime": 1,
+        "process->gain": 1,
+        "calc_expression->mux+fcn": 3,
+        "calc_expression->mux+fcn+saturation": 1,
+        "observer->identity-gain": 11
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_smith_predictor.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_smith_predictor.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_smith_predictor.control-library-simulink-v1.report.json",
+      "sha256": "6c0df009f1f39e858baa41cc1dc783c54e73d3f8031e084dfae45c0493895125",
+      "converted": 16,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 5,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 1,
+        "process->gain+tau1+deadtime": 1,
+        "process->gain+tau1": 1,
+        "process->gain+deadtime": 1,
+        "process->gain": 1,
+        "calc_expression->mux+fcn": 4,
+        "observer->identity-gain": 7
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_split_range.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_split_range.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_split_range.control-library-simulink-v1.report.json",
+      "sha256": "ed1654060b945f2e74c4a9a37b5107046cb53c8ab22b1a88e7ee624db4809e2c",
+      "converted": 15,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 2,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 1,
+        "process->gain+actuator+tau1+deadtime+saturation": 1,
+        "calc_expression->mux+fcn+saturation": 2,
+        "calc_expression->mux+fcn": 3,
+        "observer->identity-gain": 8
+      }
+    },
+    {
+      "file": "subcircuits\\tdps_surge_tank.lssubcircuit",
+      "backup": "subcircuits\\lasecsimul-migration-backup\\tdps_surge_tank.control-library-simulink-v1.original.lssubcircuit",
+      "report": "subcircuits\\lasecsimul-migration-backup\\tdps_surge_tank.control-library-simulink-v1.report.json",
+      "sha256": "6ec6d71b1a502af4800b1b6ab917afb914b2464933b7db3f8c485a0defbf1b0b",
+      "converted": 14,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 6,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 1,
+        "pid->discrete_pid_controller_2dof(D no erro)": 1,
+        "process->gain+deadzone+actuator+tau1+deadtime": 1,
+        "process->gain+actuator+tau1+tau2+deadtime": 1,
+        "process->gain+tau1+deadtime": 1,
+        "process->gain+actuator+tau1+tau2": 1,
+        "calc_expression->mux+fcn": 1,
+        "calc_expression->mux+fcn+saturation": 1,
+        "observer->identity-gain": 6
+      }
+    },
+    {
+      "file": "trm\\Sintonia\\malha_teste_pid.lsproj",
+      "backup": "trm\\Sintonia\\lasecsimul-migration-backup\\malha_teste_pid.control-library-simulink-v1.original.lsproj",
+      "report": "trm\\Sintonia\\lasecsimul-migration-backup\\malha_teste_pid.control-library-simulink-v1.report.json",
+      "sha256": "4db7841ad6144dd0aaf3c55fe4d04956e4a121242ee9cf7b730d9dcc68186df5",
+      "converted": 2,
+      "kept": 3,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 2,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 3,
+        "pid_station->sampled-2dof-pid-manual-local": 1,
+        "process->gain+tau1": 1
+      }
+    },
+    {
+      "file": "trm\\fy301\\posicionador_fy301.lsproj",
+      "backup": "trm\\fy301\\lasecsimul-migration-backup\\posicionador_fy301.control-library-simulink-v1.original.lsproj",
+      "report": "trm\\fy301\\lasecsimul-migration-backup\\posicionador_fy301.control-library-simulink-v1.report.json",
+      "sha256": "fe465e7c9477dc55df392db01fe48d60a35aed0c2aca8b39e568ca1ed4f82d5b",
+      "converted": 11,
+      "kept": 10,
+      "renamed": 2,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 10,
+        "calc_expression->fcn": 3,
+        "calc_expression->mux+fcn": 7,
+        "accumulator->process.accumulator (bloco de processo do LasecSimul)": 2,
+        "gain->gain": 1
+      }
+    },
+    {
+      "file": "trm\\ld301\\placa_orificio_ld301.lsproj",
+      "backup": "trm\\ld301\\lasecsimul-migration-backup\\placa_orificio_ld301.control-library-simulink-v1.original.lsproj",
+      "report": "trm\\ld301\\lasecsimul-migration-backup\\placa_orificio_ld301.control-library-simulink-v1.report.json",
+      "sha256": "46507f28a59e63a39ad4e79122edbe42ae4e3f24bcf94f90af541f2a68609f44",
+      "converted": 43,
+      "kept": 15,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 15,
+        "observer->identity-gain": 1,
+        "calc_expression->mux+fcn": 28,
+        "first_order->discrete_transfer_fcn(zoh-exact)": 1,
+        "calc_expression->fcn": 13
+      }
+    },
+    {
+      "file": "trm\\ld301\\tanque_pressurizado_ld301.lsproj",
+      "backup": "trm\\ld301\\lasecsimul-migration-backup\\tanque_pressurizado_ld301.control-library-simulink-v1.original.lsproj",
+      "report": "trm\\ld301\\lasecsimul-migration-backup\\tanque_pressurizado_ld301.control-library-simulink-v1.report.json",
+      "sha256": "2206af69726e243978cc8d402f9c38a0eb40e4efc2cababa02c660c0fa1d9555",
+      "converted": 10,
+      "kept": 9,
+      "renamed": 1,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 9,
+        "observer->identity-gain": 2,
+        "calc_expression->mux+fcn": 8,
+        "accumulator->process.accumulator (bloco de processo do LasecSimul)": 1
+      }
+    },
+    {
+      "file": "trm\\ld301\\teste_ld301.lsproj",
+      "backup": "trm\\ld301\\lasecsimul-migration-backup\\teste_ld301.control-library-simulink-v1.original.lsproj",
+      "report": "trm\\ld301\\lasecsimul-migration-backup\\teste_ld301.control-library-simulink-v1.report.json",
+      "sha256": "2206af69726e243978cc8d402f9c38a0eb40e4efc2cababa02c660c0fa1d9555",
+      "converted": 10,
+      "kept": 9,
+      "renamed": 1,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 9,
+        "observer->identity-gain": 2,
+        "calc_expression->mux+fcn": 8,
+        "accumulator->process.accumulator (bloco de processo do LasecSimul)": 1
+      }
+    },
+    {
+      "file": "trm\\tt301\\forno_termopar_tt301.lsproj",
+      "backup": "trm\\tt301\\lasecsimul-migration-backup\\forno_termopar_tt301.control-library-simulink-v1.original.lsproj",
+      "report": "trm\\tt301\\lasecsimul-migration-backup\\forno_termopar_tt301.control-library-simulink-v1.report.json",
+      "sha256": "433574317814cb2f9fa824445af9bdbc3db3460643857f548e90da0a889e1388",
+      "converted": 34,
+      "kept": 12,
+      "renamed": 2,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 12,
+        "observer->identity-gain": 1,
+        "calc_expression->mux+fcn": 14,
+        "accumulator->process.accumulator (bloco de processo do LasecSimul)": 2,
+        "calc_expression->fcn": 19
+      }
+    },
+    {
+      "file": "trm\\tt301\\tanque_aquecido_tt301.lsproj",
+      "backup": "trm\\tt301\\lasecsimul-migration-backup\\tanque_aquecido_tt301.control-library-simulink-v1.original.lsproj",
+      "report": "trm\\tt301\\lasecsimul-migration-backup\\tanque_aquecido_tt301.control-library-simulink-v1.report.json",
+      "sha256": "bcdaced888f24b87ee0c3ea14383611d3a74b4ae51b8442376bbb5d23cc7bfa9",
+      "converted": 11,
+      "kept": 10,
+      "renamed": 2,
+      "unsupported": 0,
+      "definitionsAdded": 0,
+      "overridesRemapped": 0,
+      "byRule": {
+        "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 10,
+        "observer->identity-gain": 1,
+        "calc_expression->mux+fcn": 9,
+        "calc_expression->fcn": 1,
+        "accumulator->process.accumulator (bloco de processo do LasecSimul)": 2
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\process_fopdt.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\process_fopdt.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\process_fopdt.control-library-simulink-v1.report.json",
+      "sha256": "9707f606f32a0396f77e4a6d7ee7c9796248650f2aeffcb8796a2ca35b476d85",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "process->gain+tau1+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\tdps_basic_flow_loop.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_basic_flow_loop.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_basic_flow_loop.control-library-simulink-v1.report.json",
+      "sha256": "5fc23c68ddf99a582c6d9cbbe99413e501570b3a522817c34458571acbe2348a",
+      "converted": 4,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 2,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 1,
+        "process->gain+actuator+tau1+tau2+deadtime": 1,
+        "calc_expression->mux+fcn+saturation": 1,
+        "probe->signal_conversion": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\tdps_boiler_drum.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_boiler_drum.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_boiler_drum.control-library-simulink-v1.report.json",
+      "sha256": "293c40a3e3c6f9c80bd6d6955a4807971cf7d683af73b0d294223ad53453b6a3",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\tdps_furnace_combustion.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_furnace_combustion.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_furnace_combustion.control-library-simulink-v1.report.json",
+      "sha256": "2b60f21defb6ba117218cebc2b61f192e2bf0d1a934d497c0cf2e6b56fe4deea",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+deadzone+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\tdps_heat_exchanger.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_heat_exchanger.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_heat_exchanger.control-library-simulink-v1.report.json",
+      "sha256": "6925a5152238daf17498a1dc603e2e5fceb1f9b136ee79890a37db53b5998b9f",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\tdps_ph_neutralization.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_ph_neutralization.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_ph_neutralization.control-library-simulink-v1.report.json",
+      "sha256": "ef30e3a114a7c5642af0c33ba6d20a539358cc10b8ad38ad300eed970d126d82",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+deadzone+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\tdps_reactor_temperature.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_reactor_temperature.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_reactor_temperature.control-library-simulink-v1.report.json",
+      "sha256": "7c6935c3c5a2a6b58d9aa024601664738553d43a3c4aabb4bfed255b9fe9925e",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+deadzone+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\tdps_smith_predictor.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_smith_predictor.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_smith_predictor.control-library-simulink-v1.report.json",
+      "sha256": "ceaf89f0d571698df84b2b3da129247164ff24c4daa9d0b8aa9ab9fa80e06fdc",
+      "converted": 9,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 5,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 1,
+        "process->gain+tau1+deadtime": 1,
+        "process->gain+tau1": 1,
+        "process->gain+deadtime": 1,
+        "process->gain": 1,
+        "calc_expression->mux+fcn": 4
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\tdps_split_range.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_split_range.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_split_range.control-library-simulink-v1.report.json",
+      "sha256": "5fe8b12a443a6e161d0f653b6940fe155ceaf764ee262d9341a2f8d36c225aea",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->fcn": 1,
+        "process->gain+deadzone+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\tdps_surge_tank_level.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_surge_tank_level.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-D-protocol-origin_20260910_110000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_surge_tank_level.control-library-simulink-v1.report.json",
+      "sha256": "f0018737a51aca78d559e212c0d4aebbecdecbacd3d148dcd5b4c656b975047f",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+tau1": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\process_fopdt.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\process_fopdt.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\process_fopdt.control-library-simulink-v1.report.json",
+      "sha256": "9707f606f32a0396f77e4a6d7ee7c9796248650f2aeffcb8796a2ca35b476d85",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "process->gain+tau1+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\tdps_basic_flow_loop.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_basic_flow_loop.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_basic_flow_loop.control-library-simulink-v1.report.json",
+      "sha256": "5fc23c68ddf99a582c6d9cbbe99413e501570b3a522817c34458571acbe2348a",
+      "converted": 4,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 2,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 1,
+        "process->gain+actuator+tau1+tau2+deadtime": 1,
+        "calc_expression->mux+fcn+saturation": 1,
+        "probe->signal_conversion": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\tdps_boiler_drum.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_boiler_drum.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_boiler_drum.control-library-simulink-v1.report.json",
+      "sha256": "293c40a3e3c6f9c80bd6d6955a4807971cf7d683af73b0d294223ad53453b6a3",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\tdps_furnace_combustion.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_furnace_combustion.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_furnace_combustion.control-library-simulink-v1.report.json",
+      "sha256": "2b60f21defb6ba117218cebc2b61f192e2bf0d1a934d497c0cf2e6b56fe4deea",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+deadzone+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\tdps_heat_exchanger.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_heat_exchanger.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_heat_exchanger.control-library-simulink-v1.report.json",
+      "sha256": "6925a5152238daf17498a1dc603e2e5fceb1f9b136ee79890a37db53b5998b9f",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\tdps_ph_neutralization.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_ph_neutralization.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_ph_neutralization.control-library-simulink-v1.report.json",
+      "sha256": "ef30e3a114a7c5642af0c33ba6d20a539358cc10b8ad38ad300eed970d126d82",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+deadzone+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\tdps_reactor_temperature.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_reactor_temperature.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_reactor_temperature.control-library-simulink-v1.report.json",
+      "sha256": "7c6935c3c5a2a6b58d9aa024601664738553d43a3c4aabb4bfed255b9fe9925e",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+deadzone+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\tdps_smith_predictor.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_smith_predictor.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_smith_predictor.control-library-simulink-v1.report.json",
+      "sha256": "ceaf89f0d571698df84b2b3da129247164ff24c4daa9d0b8aa9ab9fa80e06fdc",
+      "converted": 9,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 5,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 1,
+        "process->gain+tau1+deadtime": 1,
+        "process->gain+tau1": 1,
+        "process->gain+deadtime": 1,
+        "process->gain": 1,
+        "calc_expression->mux+fcn": 4
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\tdps_split_range.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_split_range.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_split_range.control-library-simulink-v1.report.json",
+      "sha256": "5fe8b12a443a6e161d0f653b6940fe155ceaf764ee262d9341a2f8d36c225aea",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->fcn": 1,
+        "process->gain+deadzone+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\tdps_surge_tank_level.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_surge_tank_level.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-G-nonvcpu-lost-wake_20260910_140000\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_surge_tank_level.control-library-simulink-v1.report.json",
+      "sha256": "f0018737a51aca78d559e212c0d4aebbecdecbacd3d148dcd5b4c656b975047f",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+tau1": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\process_fopdt.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\process_fopdt.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\process_fopdt.control-library-simulink-v1.report.json",
+      "sha256": "9707f606f32a0396f77e4a6d7ee7c9796248650f2aeffcb8796a2ca35b476d85",
+      "converted": 1,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "process->gain+tau1+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\tdps_basic_flow_loop.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_basic_flow_loop.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_basic_flow_loop.control-library-simulink-v1.report.json",
+      "sha256": "5fc23c68ddf99a582c6d9cbbe99413e501570b3a522817c34458571acbe2348a",
+      "converted": 4,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 2,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 1,
+        "process->gain+actuator+tau1+tau2+deadtime": 1,
+        "calc_expression->mux+fcn+saturation": 1,
+        "probe->signal_conversion": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\tdps_boiler_drum.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_boiler_drum.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_boiler_drum.control-library-simulink-v1.report.json",
+      "sha256": "293c40a3e3c6f9c80bd6d6955a4807971cf7d683af73b0d294223ad53453b6a3",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\tdps_furnace_combustion.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_furnace_combustion.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_furnace_combustion.control-library-simulink-v1.report.json",
+      "sha256": "2b60f21defb6ba117218cebc2b61f192e2bf0d1a934d497c0cf2e6b56fe4deea",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+deadzone+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\tdps_heat_exchanger.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_heat_exchanger.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_heat_exchanger.control-library-simulink-v1.report.json",
+      "sha256": "6925a5152238daf17498a1dc603e2e5fceb1f9b136ee79890a37db53b5998b9f",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\tdps_ph_neutralization.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_ph_neutralization.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_ph_neutralization.control-library-simulink-v1.report.json",
+      "sha256": "ef30e3a114a7c5642af0c33ba6d20a539358cc10b8ad38ad300eed970d126d82",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+deadzone+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\tdps_reactor_temperature.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_reactor_temperature.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_reactor_temperature.control-library-simulink-v1.report.json",
+      "sha256": "7c6935c3c5a2a6b58d9aa024601664738553d43a3c4aabb4bfed255b9fe9925e",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+deadzone+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\tdps_smith_predictor.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_smith_predictor.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_smith_predictor.control-library-simulink-v1.report.json",
+      "sha256": "ceaf89f0d571698df84b2b3da129247164ff24c4daa9d0b8aa9ab9fa80e06fdc",
+      "converted": 9,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 5,
+      "overridesRemapped": 0,
+      "byRule": {
+        "pid->discrete_pid_controller_2dof(D na PV)": 1,
+        "process->gain+tau1+deadtime": 1,
+        "process->gain+tau1": 1,
+        "process->gain+deadtime": 1,
+        "process->gain": 1,
+        "calc_expression->mux+fcn": 4
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\tdps_split_range.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_split_range.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_split_range.control-library-simulink-v1.report.json",
+      "sha256": "5fe8b12a443a6e161d0f653b6940fe155ceaf764ee262d9341a2f8d36c225aea",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->fcn": 1,
+        "process->gain+deadzone+stiction+rate+actuator+tau1+tau2+deadtime": 1
+      }
+    },
+    {
+      "file": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\tdps_surge_tank_level.lssubcircuit",
+      "backup": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_surge_tank_level.control-library-simulink-v1.original.lssubcircuit",
+      "report": "vnext_prototype\\mttcg_causality\\E147-J-uart-lost-wake\\diag_runtime\\subcircuits\\lasecsimul-migration-backup\\tdps_surge_tank_level.control-library-simulink-v1.report.json",
+      "sha256": "f0018737a51aca78d559e212c0d4aebbecdecbacd3d148dcd5b4c656b975047f",
+      "converted": 2,
+      "kept": 0,
+      "renamed": 0,
+      "unsupported": 0,
+      "definitionsAdded": 1,
+      "overridesRemapped": 0,
+      "byRule": {
+        "calc_expression->mux+fcn": 1,
+        "process->gain+tau1": 1
+      }
+    }
+  ]
+}

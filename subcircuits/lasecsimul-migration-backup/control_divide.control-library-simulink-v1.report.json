@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.divide",
+      "kind": "single",
+      "rule": "divide->product(*/)",
+      "newTypeIds": [
+        "sl.product"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_divide.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.701Z",
+  "original": {
+    "backup": "control_divide.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "491f39c30b73c6195d03ff126e3ca90efc51b4f1e3fbf209e5e45ca99dbed7f5"
+  },
+  "migrated": {
+    "sha256": "f6b9e1aee8b1e28a9fd79ee1fbb6c5438aa2ee85372a8dcc1e4d4211b750f66a"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "divide->product(*/)": 1
+    }
+  }
+}

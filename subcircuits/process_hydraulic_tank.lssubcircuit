@@ -15,7 +15,7 @@
       "id": "c_qin",
       "typeId": "control.constant",
       "properties": {
-        "value": 1.0,
+        "value": 1,
         "unit": "L/s"
       },
       "visual": {
@@ -57,7 +57,7 @@
       "id": "c_hmax",
       "typeId": "control.constant",
       "properties": {
-        "value": 1.0,
+        "value": 1,
         "unit": "m"
       },
       "visual": {
@@ -71,7 +71,7 @@
       "id": "c_k",
       "typeId": "control.constant",
       "properties": {
-        "value": 2.0,
+        "value": 2,
         "unit": "L/(s·m)"
       },
       "visual": {
@@ -99,7 +99,7 @@
       "id": "c_outlet",
       "typeId": "control.constant",
       "properties": {
-        "value": 0.0,
+        "value": 0,
         "unit": ""
       },
       "visual": {
@@ -111,18 +111,10 @@
     },
     {
       "id": "vmax",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "a*hm*1000",
-        "inputs": [
-          "a",
-          "hm"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)*u(2)*1000",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 240,
@@ -133,21 +125,10 @@
     },
     {
       "id": "q_out",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(m<0.5)*qo+(m>0.5)*(m<1.5)*k*h+(m>1.5)*c*h^0.5",
-        "inputs": [
-          "qo",
-          "m",
-          "k",
-          "c",
-          "h"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(2) < 0.5)*u(1) + (u(2) > 0.5)*(u(2) < 1.5)*u(3)*u(5) + (u(2) > 1.5)*u(4)*u(5)^0.5",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 240,
@@ -158,7 +139,7 @@
     },
     {
       "id": "acc",
-      "typeId": "control.accumulator",
+      "typeId": "process.accumulator",
       "properties": {
         "initial": 20,
         "lowerLimitEnabled": true,
@@ -178,18 +159,10 @@
     },
     {
       "id": "h",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "v/(a*1000)",
-        "inputs": [
-          "v",
-          "a"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)/(u(2)*1000)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 680,
@@ -200,18 +173,10 @@
     },
     {
       "id": "level_percent",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "100*h/hm",
-        "inputs": [
-          "h",
-          "hm"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "100*u(1)/u(2)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 680,
@@ -222,11 +187,9 @@
     },
     {
       "id": "obs_overflow",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "properties": {
-        "unit": "L/s",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       },
       "visual": {
         "x": 680,
@@ -237,11 +200,9 @@
     },
     {
       "id": "obs_unmet",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "properties": {
-        "unit": "L/s",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       },
       "visual": {
         "x": 680,
@@ -350,8 +311,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "L",
         "bindDecimals": 2
       },
@@ -378,8 +339,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "m",
         "bindDecimals": 3
       },
@@ -406,8 +367,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "L/s",
         "bindDecimals": 2
       },
@@ -434,8 +395,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "L/s",
         "bindDecimals": 2
       },
@@ -462,8 +423,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "L/s",
         "bindDecimals": 2
       },
@@ -490,14 +451,62 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "m²",
         "bindDecimals": 3
       },
       "visual": {
         "x": 340,
         "y": 260,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "vmax__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 160,
+        "y": 120,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "q_out__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "5"
+      },
+      "visual": {
+        "x": 160,
+        "y": 240,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "h__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 600,
+        "y": 120,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "level_percent__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 600,
+        "y": 220,
         "rotation": 0
       }
     }
@@ -515,8 +524,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "vmax",
-          "pinId": "a"
+          "componentId": "vmax__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -529,8 +538,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "vmax",
-          "pinId": "hm"
+          "componentId": "vmax__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -543,8 +552,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "q_out",
-          "pinId": "qo"
+          "componentId": "q_out__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -557,8 +566,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "q_out",
-          "pinId": "m"
+          "componentId": "q_out__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -571,8 +580,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "q_out",
-          "pinId": "k"
+          "componentId": "q_out__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -585,8 +594,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "q_out",
-          "pinId": "c"
+          "componentId": "q_out__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -595,12 +604,12 @@
         "from": {
           "kind": "port",
           "componentId": "h",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "q_out",
-          "pinId": "h"
+          "componentId": "q_out__mux",
+          "pinId": "in5"
         },
         "points": []
       },
@@ -623,7 +632,7 @@
         "from": {
           "kind": "port",
           "componentId": "q_out",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -637,7 +646,7 @@
         "from": {
           "kind": "port",
           "componentId": "vmax",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -655,8 +664,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "h",
-          "pinId": "v"
+          "componentId": "h__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -669,8 +678,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "h",
-          "pinId": "a"
+          "componentId": "h__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -679,12 +688,12 @@
         "from": {
           "kind": "port",
           "componentId": "h",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "level_percent",
-          "pinId": "h"
+          "componentId": "level_percent__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -697,8 +706,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "level_percent",
-          "pinId": "hm"
+          "componentId": "level_percent__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -712,7 +721,7 @@
         "to": {
           "kind": "port",
           "componentId": "obs_overflow",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -726,7 +735,7 @@
         "to": {
           "kind": "port",
           "componentId": "obs_unmet",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -749,7 +758,7 @@
         "from": {
           "kind": "port",
           "componentId": "h",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -763,7 +772,7 @@
         "from": {
           "kind": "port",
           "componentId": "level_percent",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -785,6 +794,62 @@
           "pinId": "value"
         },
         "points": []
+      },
+      {
+        "id": "vmax__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "vmax__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "vmax",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "q_out__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "q_out__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_out",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "h__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "h__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "h",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "level_percent__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "level_percent__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "level_percent",
+          "pinId": "in1"
+        },
+        "vertices": []
       }
     ]
   },

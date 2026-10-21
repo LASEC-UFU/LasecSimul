@@ -7,7 +7,9 @@ import { convertLegacyExpression, evaluateLegacyAst, parseLegacyExpression } fro
 import { LEGACY_CONTROL_TYPE_IDS, legacyInputPorts } from "./legacyBlocks";
 import { LEGACY_LIBRARY_EXPORTS } from "./legacyLibraryExports";
 import { migrateControlDocument, needsControlMigration } from "./migrateDocument";
-import { writeMigrationReport } from "./migrationFiles";
+import { backupOriginal, persistDocumentMigration, writeMigrationReport } from "./migrationFiles";
+import { ProjectSerializer } from "../../project/ProjectSerializer";
+import { createHash } from "crypto";
 
 /**
  * Migração dos blocos legados `control.*` (docs/68-69): conversor de expressões, regras por bloco,
@@ -109,23 +111,37 @@ function storedExpressions(): Array<{ file: string; id: string; expression: stri
   await test("cada tipo legado tem regra (ou motivo documentado)", () => {
     for (const typeId of LEGACY_CONTROL_TYPE_IDS) {
       const conversion = convertLegacyBlock("b", typeId, typeId === "control.calc_expression" ? { expression: "in" } : {});
-      assert(conversion.kind !== "unsupported" || typeId === "control.pid" || typeId === "control.pid_station", `${typeId}: ${conversion.rule}`);
+      assert(conversion.kind !== "unsupported", `${typeId}: ${conversion.rule}`);
     }
     const tf = convertLegacyBlock("fo", "control.first_order", { gain: 2, tau: 5, initial: 0 });
-    assert(tf.kind === "single" && tf.blocks[0]!.typeId === "sl.transfer_fcn" && tf.blocks[0]!.properties.Numerator === "[2]" && tf.blocks[0]!.properties.Denominator === "[5 1]", JSON.stringify(tf));
+    assert(tf.kind === "single" && tf.blocks[0]!.typeId === "sl.discrete_transfer_fcn" && tf.blocks[0]!.properties.Numerator === `[${2 * (1 - Math.exp(-0.1 / 5))}]` && tf.blocks[0]!.properties.Denominator === `[1 ${-Math.exp(-0.1 / 5)}]` && tf.blocks[0]!.properties.SampleTime === "0.1", JSON.stringify(tf));
     const ss = convertLegacyBlock("fo", "control.first_order", { gain: 2, tau: 5, initial: 1 });
-    assert(ss.kind === "single" && ss.blocks[0]!.typeId === "sl.state_space" && ss.blocks[0]!.properties.InitialCondition === "1", JSON.stringify(ss));
+    assert(ss.kind === "single" && ss.blocks[0]!.typeId === "sl.discrete_transfer_fcn" && ss.blocks[0]!.properties.InitialStates === "1", JSON.stringify(ss));
     const fopdt = convertLegacyBlock("p", "control.fopdt", { gain: 1, tau: 2, delay: 0.5 });
-    assert(fopdt.kind === "subsystem" && fopdt.overrides["@delay.DelayTime"] === "0.5", JSON.stringify(fopdt));
+    assert(fopdt.kind === "inline" && fopdt.blocks[0]!.id === "p__delay" && fopdt.blocks[0]!.typeId === "sl.transport_delay" && fopdt.blocks[0]!.properties.DelayTime === "0.5" && fopdt.blocks[1]!.id === "p" && fopdt.blocks[1]!.typeId === "sl.discrete_transfer_fcn" && fopdt.inputs.in!.componentId === "p__delay", JSON.stringify(fopdt));
+    const valve = convertLegacyBlock("v", "control.valve_characteristic", { coefficient: 2, exponent: 1.5, samplePeriodNs: 20_000_000 });
+    assert(valve.kind === "single" && valve.blocks[0]!.typeId === "sl.fcn" && valve.blocks[0]!.properties.SampleTime === "0.02" && valve.blocks[0]!.properties.Expr === "2*((u(1)+abs(u(1)))/2)^1.5", "característica de válvula preserva a cadência discreta e os parâmetros");
+    const derivative = convertLegacyBlock("d", "control.filtered_derivative", { gain: 2, filterTau: 0.5, initial: 1, samplePeriodNs: 20_000_000 });
+    assert(derivative.kind === "inline" && derivative.blocks[0]!.typeId === "sl.state_space" && derivative.blocks[1]!.typeId === "sl.unit_delay" && derivative.blocks[1]!.properties.SampleTime === "0.02", "derivada preserva o filtro contínuo e a fase de publicação da saída");
+    const secondOrder = convertLegacyBlock("so", "control.second_order", { gain: 2, omega: 3, zeta: 0.7, samplePeriodNs: 20_000_000 });
+    assert(secondOrder.kind === "inline" && secondOrder.blocks[0]!.typeId === "sl.state_space" && secondOrder.blocks[1]!.typeId === "sl.unit_delay" && secondOrder.blocks[1]!.properties.SampleTime === "0.02", "segunda ordem preserva estado contínuo e fase de publicação legada");
+    const rateLimiter = convertLegacyBlock("rl", "control.rate_limiter", { riseRate: 2, fallRate: 3, initial: 1, samplePeriodNs: 20_000_000 });
+    assert(rateLimiter.kind === "subsystem" && rateLimiter.definition.blocks.some((block) => block.id === "limiter" && block.typeId === "sl.rate_limiter") && rateLimiter.definition.blocks.some((block) => block.id === "sampled_input" && block.typeId === "sl.unit_delay" && block.properties.SampleTime === "0.02") && rateLimiter.overrides["@limiter.InitialCondition"] === "1" && rateLimiter.definition.blocks.length === 2, "limitador de taxa preserva a fase amostrada e a condição inicial legada");
     const sum = convertLegacyBlock("s", "control.sum", { inputs: ["a", "b", "c"] });
     assert(sum.kind === "single" && sum.inputs.c!.port === "in3" && sum.blocks[0]!.properties.Inputs === "+++", JSON.stringify(sum));
     const calc = convertLegacyBlock("c", "control.calc_expression", { inputs: ["x", "y"], expression: "x*y", upperLimitEnabled: true, upperLimit: 3 });
     assert(calc.kind === "inline" && calc.blocks.map((b) => b.typeId).join(",") === "sl.mux,sl.fcn,sl.saturation" && calc.outputs.out!.componentId === "c", JSON.stringify(calc));
     assert(convertLegacyBlock("k", "control.constant", { value: 3 }).kind === "keep", "constante de modelo mantida");
     assert(convertLegacyBlock("a", "control.accumulator", {}).kind === "rename", "acumulador renomeado para process.accumulator");
+    const station = convertLegacyBlock("station", "control.pid_station", { samplePeriodNs: 100_000_000, kc: 3, ti: 0.8, td: 0.2, manualOutput: 140 });
+    assert(station.kind === "subsystem" && station.definition.inputs.map((pin) => pin.pinId).join(",") === "sp,pv,am,lr", "estação PID migra como subsistema com os quatro sinais de entrada");
+    assert(station.kind === "subsystem" && station.definition.blocks.some((block) => block.typeId === "sl.discrete_pid_controller_2dof") && station.definition.blocks.some((block) => block.typeId === "sl.zero_order_hold"), "estação PID usa controlador 2DOF e amostra AM/LR");
+    assert(station.kind === "subsystem" && station.overrides["@manual_output.Value"] === "100" && station.definition.blocks.find((block) => block.id === "pid")!.properties.ExternalReset === "either", "saída manual respeita saturação e mantém reset manual/automático sem salto");
+    const observer = convertLegacyBlock("obs", "control.observer", {});
+    assert(observer.kind === "single" && observer.blocks[0]!.id === "obs" && observer.blocks[0]!.typeId === "sl.gain" && observer.outputs.out!.port === "out1", "observador preserva o sinal e evita uma conexão inválida a sl.display");
   });
 
-  await test("documento: portas remapeadas, ids preservados, subsistema por estrutura, idempotente", () => {
+  await test("documento: portas remapeadas, ids preservados, composição dinâmica e idempotente", () => {
     const document: Json = {
       schemaVersion: 2,
       components: [
@@ -151,14 +167,14 @@ function storedExpressions(): Array<{ file: string; id: string; expression: stri
     const components = migrated.components as Json[];
     const byId = new Map(components.map((c) => [c.id, c]));
     assert(byId.get("g")!.typeId === "sl.gain" && byId.get("g")!.label === "Ganho", "ganho mantem id e rotulo");
-    assert(byId.get("p1")!.typeId === byId.get("p2")!.typeId, "dois FOPDT de mesma estrutura compartilham a definicao");
-    assert((migrated.subsystems as Json[]).length === 1, `uma definicao: ${report.definitionsAdded.join(",")}`);
-    assert((byId.get("p2")!.properties as Json)["@delay.DelayTime"] === "0.1", "parametro por instancia");
+    assert(byId.get("p1")!.typeId === "sl.discrete_transfer_fcn" && byId.get("p2")!.typeId === "sl.discrete_transfer_fcn", "FOPDT preserva o bloco de planta sob o ID legado");
+    assert(components.some((component) => component.id === "p1__delay" && component.typeId === "sl.transport_delay") && components.some((component) => component.id === "p2__delay" && component.typeId === "sl.transport_delay"), "cada FOPDT ganha seu atraso explícito no mesmo diagrama");
+    assert((components.find((component) => component.id === "p2__delay")!.properties as Json).DelayTime === "0.1" && (migrated.subsystems as Json[] | undefined ?? []).length === 0, "atrasos por instância não dependem de override aninhado");
     const conductors = (migrated.topology as Json).conductors as Json[];
     const w1 = conductors.find((w) => w.id === "w1")! as { from: Json; to: Json };
     assert(w1.from.pinId === "out" && w1.to.pinId === "in1", `constante mantida (out), ganho in1: ${JSON.stringify(w1)}`);
     const w3 = conductors.find((w) => w.id === "w3")! as { from: Json; to: Json };
-    assert(w3.from.pinId === "out" && w3.to.componentId === "c__mux" && w3.to.pinId === "in1", `subsistema mantem 'out'; calc via Mux: ${JSON.stringify(w3)}`);
+    assert(w3.from.pinId === "out1" && w3.to.componentId === "c__mux" && w3.to.pinId === "in1", `FOPDT inline mantem a porta out1; calc via Mux: ${JSON.stringify(w3)}`);
     assert(conductors.some((w) => w.id === "c__w1"), "fio Mux -> Fcn criado");
     const again = migrateControlDocument(migrated);
     assert(!again.report.changed && JSON.stringify(again.document) === JSON.stringify(migrated), "segunda passada nao muda nada (idempotente)");
@@ -175,16 +191,18 @@ function storedExpressions(): Array<{ file: string; id: string; expression: stri
     };
     const { document: migrated, report } = migrateControlDocument(document);
     const props = ((migrated.components as Json[])[0]!.properties) as Json;
-    assert(props["@fo.Denominator"] === "[3 1]" && props["@fo.Numerator"] === "[2]" && props["@fo.tau"] === undefined, JSON.stringify(props));
+    assert(props["@fo.Denominator"] === `[1 ${-Math.exp(-0.1 / 3)}]` && props["@fo.Numerator"] === `[${2 * (1 - Math.exp(-0.1 / 3))}]` && props["@fo.SampleTime"] === "0.1" && props["@fo.tau"] === undefined, JSON.stringify(props));
     assert(report.overrides.length === 1, "remapeamento relatado");
     // Instância de subcircuito da BIBLIOTECA: usa o instantâneo congelado.
     const libraryType = Object.keys(LEGACY_LIBRARY_EXPORTS).find((typeId) => Object.values(LEGACY_LIBRARY_EXPORTS[typeId]!).some((child) => child.typeId === "control.first_order"));
     assert(libraryType !== undefined, "instantaneo contem um first_order exportado");
     const child = Object.entries(LEGACY_LIBRARY_EXPORTS[libraryType!]!).find(([, value]) => value.typeId === "control.first_order")![0];
+    const legacyChild = LEGACY_LIBRARY_EXPORTS[libraryType!]![child]!;
     const libraryDoc: Json = { schemaVersion: 2, components: [{ id: "i", typeId: libraryType, properties: { [`@${child}.gain`]: 7 } }], topology: { revision: 0, nodes: [], conductors: [] } };
     const migratedLibrary = migrateControlDocument(libraryDoc, { librarySnapshot: LEGACY_LIBRARY_EXPORTS });
     const libraryProps = ((migratedLibrary.document.components as Json[])[0]!.properties) as Json;
-    assert(String(libraryProps[`@${child}.Numerator`]) === "[7]", JSON.stringify(libraryProps));
+    const expectedLibraryConversion = convertLegacyBlock(child, legacyChild.typeId, { ...legacyChild.properties, gain: 7 });
+    assert(expectedLibraryConversion.kind === "single" && libraryProps[`@${child}.Numerator`] === expectedLibraryConversion.blocks[0]!.properties.Numerator && libraryProps[`@${child}.Denominator`] === expectedLibraryConversion.blocks[0]!.properties.Denominator && libraryProps[`@${child}.SampleTime`] === expectedLibraryConversion.blocks[0]!.properties.SampleTime, JSON.stringify(libraryProps));
   });
 
   await test("varredura: todos os arquivos de projeto do repositorio migram, deterministicos e idempotentes", () => {
@@ -201,7 +219,38 @@ function storedExpressions(): Array<{ file: string; id: string; expression: stri
       if (first.report.changed) migratedFiles++;
     }
     assert(migratedFiles > 50, `arquivos migrados: ${migratedFiles}`);
-    for (const typeId of pending.keys()) assert(typeId === "control.pid" || typeId === "control.pid_station", `sem conversao inesperada: ${typeId}`);
+    assert(pending.size === 0, `projetos versionados nao devem conter conversoes recusadas: ${JSON.stringify([...pending])}`);
+  });
+
+  await test("abrir projeto legado: backup verificado, arquivo regravado, relatorio; reabrir nao migra de novo", async () => {
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), "lasecsimul-migration-open-"));
+    try {
+      const source = path.join(repoRoot, "examples", "calculo", "primeira-ordem.lsproj");
+      const projectPath = path.join(temp, "primeira-ordem.lsproj");
+      // Original do git (o arquivo do repositório pode já estar migrado).
+      const legacyText = fs.readFileSync(source, "utf8").includes("control.first_order")
+        ? fs.readFileSync(source, "utf8")
+        : JSON.stringify({ schemaVersion: 2, components: [{ id: "g", typeId: "control.gain", properties: { gain: 2 } }], topology: { revision: 0, nodes: [], conductors: [] }, visual: { viewport: { x: 0, y: 0, zoom: 1 } }, simulationSettings: {} });
+      fs.writeFileSync(projectPath, legacyText);
+      const serializer = new ProjectSerializer();
+      const loaded = await serializer.loadWithMigration(projectPath);
+      assert(loaded.controlMigration?.changed === true, "projeto legado migrado na abertura");
+      const result = await persistDocumentMigration(projectPath, loaded.controlMigration!, () => serializer.save(projectPath, loaded.project));
+      assert(fs.readFileSync(result.backupPath, "utf8") === legacyText, "backup identico ao original");
+      assert(createHash("sha256").update(fs.readFileSync(result.backupPath)).digest("hex") === result.sha256, "hash do backup conferido");
+      const report = JSON.parse(fs.readFileSync(result.reportPath, "utf8")) as Json;
+      assert(report.migrationId === "control-library-simulink" && (report.summary as Json).converted as number > 0, JSON.stringify(report.summary));
+      assert(!fs.readFileSync(projectPath, "utf8").includes("\"control.first_order\"") && !fs.readFileSync(projectPath, "utf8").includes("\"control.gain\""), "arquivo regravado no formato novo");
+      const reopened = await serializer.loadWithMigration(projectPath);
+      assert(reopened.controlMigration === undefined, "reabrir nao migra de novo (idempotente)");
+      // Segunda migração do MESMO original não sobrescreve o backup existente.
+      const again = await backupOriginal(projectPath, Buffer.from(legacyText));
+      assert(again.backupPath === result.backupPath, "backup com mesmo conteudo reaproveitado, nunca sobrescrito");
+      const different = await backupOriginal(projectPath, Buffer.from(`${legacyText} `));
+      assert(different.backupPath !== result.backupPath && fs.existsSync(result.backupPath), "conteudo diferente ganha outro nome; o primeiro backup continua");
+    } finally {
+      fs.rmSync(temp, { recursive: true, force: true });
+    }
   });
 
   void test("relatorio preserva id e versao da migracao depois de mesclar os detalhes", async () => {

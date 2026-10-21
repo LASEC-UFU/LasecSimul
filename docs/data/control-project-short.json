@@ -1,0 +1,2093 @@
+{
+ "revisionBefore": "ab4c1efb7",
+ "legacyExe": "core\\build-legacy-reference\\bin\\lasecsimul-core.exe",
+ "currentExe": "core\\build-main\\Release\\lasecsimul-core.exe",
+ "seconds": 0.1,
+ "gridMs": 10,
+ "stimulus": [
+  0,
+  1,
+  10,
+  0.5
+ ],
+ "generatedAt": "2026-10-21T14:10:56.249Z",
+ "results": [
+  {
+   "file": "examples/calculo/laboratorio-calculo.lsproj",
+   "diagram": "subsystems/subsystem.process.hydraulic_tank",
+   "seconds": 0.1,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:level",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 0.2006,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0.2,
+       "after": 0.2
+      },
+      {
+       "t": 10000000,
+       "before": 0.20006000000000002,
+       "after": 0.20006000000000002
+      },
+      {
+       "t": 20000000,
+       "before": 0.20012,
+       "after": 0.20012
+      },
+      {
+       "t": 30000000,
+       "before": 0.20018,
+       "after": 0.20018
+      },
+      {
+       "t": 40000000,
+       "before": 0.20024,
+       "after": 0.20024
+      },
+      {
+       "t": 50000000,
+       "before": 0.2003,
+       "after": 0.2003
+      },
+      {
+       "t": 60000000,
+       "before": 0.20036,
+       "after": 0.20036
+      },
+      {
+       "t": 70000000,
+       "before": 0.20042000000000001,
+       "after": 0.20042000000000001
+      },
+      {
+       "t": 80000000,
+       "before": 0.20048,
+       "after": 0.20048
+      },
+      {
+       "t": 90000000,
+       "before": 0.20054,
+       "after": 0.20054
+      },
+      {
+       "t": 100000000,
+       "before": 0.2006,
+       "after": 0.2006
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "saida:level_pct",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 20.06,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 20,
+       "after": 20
+      },
+      {
+       "t": 10000000,
+       "before": 20.006,
+       "after": 20.006
+      },
+      {
+       "t": 20000000,
+       "before": 20.012,
+       "after": 20.012
+      },
+      {
+       "t": 30000000,
+       "before": 20.018,
+       "after": 20.018
+      },
+      {
+       "t": 40000000,
+       "before": 20.024,
+       "after": 20.024
+      },
+      {
+       "t": 50000000,
+       "before": 20.03,
+       "after": 20.03
+      },
+      {
+       "t": 60000000,
+       "before": 20.036,
+       "after": 20.036
+      },
+      {
+       "t": 70000000,
+       "before": 20.042,
+       "after": 20.042
+      },
+      {
+       "t": 80000000,
+       "before": 20.048,
+       "after": 20.048
+      },
+      {
+       "t": 90000000,
+       "before": 20.054,
+       "after": 20.054
+      },
+      {
+       "t": 100000000,
+       "before": 20.06,
+       "after": 20.06
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "saida:overflow",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "saida:volume",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 20.06,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 20,
+       "after": 20
+      },
+      {
+       "t": 10000000,
+       "before": 20.006,
+       "after": 20.006
+      },
+      {
+       "t": 20000000,
+       "before": 20.012,
+       "after": 20.012
+      },
+      {
+       "t": 30000000,
+       "before": 20.018,
+       "after": 20.018
+      },
+      {
+       "t": 40000000,
+       "before": 20.024,
+       "after": 20.024
+      },
+      {
+       "t": 50000000,
+       "before": 20.03,
+       "after": 20.03
+      },
+      {
+       "t": 60000000,
+       "before": 20.036,
+       "after": 20.036
+      },
+      {
+       "t": 70000000,
+       "before": 20.042,
+       "after": 20.042
+      },
+      {
+       "t": 80000000,
+       "before": 20.048,
+       "after": 20.048
+      },
+      {
+       "t": 90000000,
+       "before": 20.054,
+       "after": 20.054
+      },
+      {
+       "t": 100000000,
+       "before": 20.06,
+       "after": 20.06
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:vmax",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 100,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 100,
+       "after": 100
+      },
+      {
+       "t": 10000000,
+       "before": 100,
+       "after": 100
+      },
+      {
+       "t": 20000000,
+       "before": 100,
+       "after": 100
+      },
+      {
+       "t": 30000000,
+       "before": 100,
+       "after": 100
+      },
+      {
+       "t": 40000000,
+       "before": 100,
+       "after": 100
+      },
+      {
+       "t": 50000000,
+       "before": 100,
+       "after": 100
+      },
+      {
+       "t": 60000000,
+       "before": 100,
+       "after": 100
+      },
+      {
+       "t": 70000000,
+       "before": 100,
+       "after": 100
+      },
+      {
+       "t": 80000000,
+       "before": 100,
+       "after": 100
+      },
+      {
+       "t": 90000000,
+       "before": 100,
+       "after": 100
+      },
+      {
+       "t": 100000000,
+       "before": 100,
+       "after": 100
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:q_out",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 0.4,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 10000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 20000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 30000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 40000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 50000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 60000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 70000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 80000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 90000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 100000000,
+       "before": 0.4,
+       "after": 0.4
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:acc:out",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 20.06,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 20,
+       "after": 20
+      },
+      {
+       "t": 10000000,
+       "before": 20.006,
+       "after": 20.006
+      },
+      {
+       "t": 20000000,
+       "before": 20.012,
+       "after": 20.012
+      },
+      {
+       "t": 30000000,
+       "before": 20.018,
+       "after": 20.018
+      },
+      {
+       "t": 40000000,
+       "before": 20.024,
+       "after": 20.024
+      },
+      {
+       "t": 50000000,
+       "before": 20.03,
+       "after": 20.03
+      },
+      {
+       "t": 60000000,
+       "before": 20.036,
+       "after": 20.036
+      },
+      {
+       "t": 70000000,
+       "before": 20.042,
+       "after": 20.042
+      },
+      {
+       "t": 80000000,
+       "before": 20.048,
+       "after": 20.048
+      },
+      {
+       "t": 90000000,
+       "before": 20.054,
+       "after": 20.054
+      },
+      {
+       "t": 100000000,
+       "before": 20.06,
+       "after": 20.06
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:acc:inActual",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 1,
+     "eventCountAfter": 1,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 1,
+       "after": 1
+      },
+      {
+       "t": 20000000,
+       "before": 1,
+       "after": 1
+      },
+      {
+       "t": 30000000,
+       "before": 1,
+       "after": 1
+      },
+      {
+       "t": 40000000,
+       "before": 1,
+       "after": 1
+      },
+      {
+       "t": 50000000,
+       "before": 1,
+       "after": 1
+      },
+      {
+       "t": 60000000,
+       "before": 1,
+       "after": 1
+      },
+      {
+       "t": 70000000,
+       "before": 1,
+       "after": 1
+      },
+      {
+       "t": 80000000,
+       "before": 1,
+       "after": 1
+      },
+      {
+       "t": 90000000,
+       "before": 1,
+       "after": 1
+      },
+      {
+       "t": 100000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:acc:outActual",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 0.4,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 1,
+     "eventCountAfter": 1,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 20000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 30000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 40000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 50000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 60000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 70000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 80000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 90000000,
+       "before": 0.4,
+       "after": 0.4
+      },
+      {
+       "t": 100000000,
+       "before": 0.4,
+       "after": 0.4
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:acc:overflow",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:acc:unmet",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:acc:cumIn",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 0.1,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 10,
+     "eventCountAfter": 10,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0.01,
+       "after": 0.01
+      },
+      {
+       "t": 20000000,
+       "before": 0.02,
+       "after": 0.02
+      },
+      {
+       "t": 30000000,
+       "before": 0.030000000000000002,
+       "after": 0.030000000000000002
+      },
+      {
+       "t": 40000000,
+       "before": 0.04,
+       "after": 0.04
+      },
+      {
+       "t": 50000000,
+       "before": 0.05,
+       "after": 0.05
+      },
+      {
+       "t": 60000000,
+       "before": 0.060000000000000005,
+       "after": 0.060000000000000005
+      },
+      {
+       "t": 70000000,
+       "before": 0.07,
+       "after": 0.07
+      },
+      {
+       "t": 80000000,
+       "before": 0.08,
+       "after": 0.08
+      },
+      {
+       "t": 90000000,
+       "before": 0.09000000000000001,
+       "after": 0.09000000000000001
+      },
+      {
+       "t": 100000000,
+       "before": 0.1,
+       "after": 0.1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:acc:cumOut",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 0.04,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 10,
+     "eventCountAfter": 10,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0.004,
+       "after": 0.004
+      },
+      {
+       "t": 20000000,
+       "before": 0.008,
+       "after": 0.008
+      },
+      {
+       "t": 30000000,
+       "before": 0.012,
+       "after": 0.012
+      },
+      {
+       "t": 40000000,
+       "before": 0.016,
+       "after": 0.016
+      },
+      {
+       "t": 50000000,
+       "before": 0.02,
+       "after": 0.02
+      },
+      {
+       "t": 60000000,
+       "before": 0.024,
+       "after": 0.024
+      },
+      {
+       "t": 70000000,
+       "before": 0.028,
+       "after": 0.028
+      },
+      {
+       "t": 80000000,
+       "before": 0.032,
+       "after": 0.032
+      },
+      {
+       "t": 90000000,
+       "before": 0.036000000000000004,
+       "after": 0.036000000000000004
+      },
+      {
+       "t": 100000000,
+       "before": 0.04,
+       "after": 0.04
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:acc:cumOverflow",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:acc:cumUnmet",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:acc:cumSpill",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:acc:upperContactTime",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 10000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 20000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 30000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 40000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 50000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 60000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 70000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 80000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 90000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 100000000,
+       "before": -1,
+       "after": -1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:acc:lowerContactTime",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 10000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 20000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 30000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 40000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 50000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 60000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 70000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 80000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 90000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 100000000,
+       "before": -1,
+       "after": -1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:h",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 0.2006,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0.2,
+       "after": 0.2
+      },
+      {
+       "t": 10000000,
+       "before": 0.20006000000000002,
+       "after": 0.20006000000000002
+      },
+      {
+       "t": 20000000,
+       "before": 0.20012,
+       "after": 0.20012
+      },
+      {
+       "t": 30000000,
+       "before": 0.20018,
+       "after": 0.20018
+      },
+      {
+       "t": 40000000,
+       "before": 0.20024,
+       "after": 0.20024
+      },
+      {
+       "t": 50000000,
+       "before": 0.2003,
+       "after": 0.2003
+      },
+      {
+       "t": 60000000,
+       "before": 0.20036,
+       "after": 0.20036
+      },
+      {
+       "t": 70000000,
+       "before": 0.20042000000000001,
+       "after": 0.20042000000000001
+      },
+      {
+       "t": 80000000,
+       "before": 0.20048,
+       "after": 0.20048
+      },
+      {
+       "t": 90000000,
+       "before": 0.20054,
+       "after": 0.20054
+      },
+      {
+       "t": 100000000,
+       "before": 0.2006,
+       "after": 0.2006
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:level_percent",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 20.06,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 20,
+       "after": 20
+      },
+      {
+       "t": 10000000,
+       "before": 20.006,
+       "after": 20.006
+      },
+      {
+       "t": 20000000,
+       "before": 20.012,
+       "after": 20.012
+      },
+      {
+       "t": 30000000,
+       "before": 20.018,
+       "after": 20.018
+      },
+      {
+       "t": 40000000,
+       "before": 20.024,
+       "after": 20.024
+      },
+      {
+       "t": 50000000,
+       "before": 20.03,
+       "after": 20.03
+      },
+      {
+       "t": 60000000,
+       "before": 20.036,
+       "after": 20.036
+      },
+      {
+       "t": 70000000,
+       "before": 20.042,
+       "after": 20.042
+      },
+      {
+       "t": 80000000,
+       "before": 20.048,
+       "after": 20.048
+      },
+      {
+       "t": 90000000,
+       "before": 20.054,
+       "after": 20.054
+      },
+      {
+       "t": 100000000,
+       "before": 20.06,
+       "after": 20.06
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:obs_overflow",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:obs_unmet",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  },
+  {
+   "file": "examples/calculo/laboratorio-calculo.lsproj",
+   "diagram": "subsystems/subsystem.process.first_order_lab",
+   "seconds": 0.1,
+   "gridMs": 10,
+   "verdict": "equivalente",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:y",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 0.03960265338648936,
+     "maxAbs": 2.0816681711721685e-16,
+     "maxRelToRange": 5.256385603400856e-15,
+     "rmse": 1.3223989254804022e-16,
+     "nrmse": 3.339167486013816e-15,
+     "eventShiftS": 0,
+     "eventCount": 10,
+     "eventCountAfter": 10,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0.003996002665333868,
+       "after": 0.003996002665333842
+      },
+      {
+       "t": 20000000,
+       "before": 0.00798402131201705,
+       "after": 0.007984021312017007
+      },
+      {
+       "t": 30000000,
+       "before": 0.011964071892129462,
+       "after": 0.011964071892129398
+      },
+      {
+       "t": 40000000,
+       "before": 0.01593617032587873,
+       "after": 0.015936170325878643
+      },
+      {
+       "t": 50000000,
+       "before": 0.019900332501663884,
+       "after": 0.019900332501663773
+      },
+      {
+       "t": 60000000,
+       "before": 0.023856574276138912,
+       "after": 0.023856574276138773
+      },
+      {
+       "t": 70000000,
+       "before": 0.027804911474276175,
+       "after": 0.027804911474276026
+      },
+      {
+       "t": 80000000,
+       "before": 0.03174535988942978,
+       "after": 0.03174535988942958
+      },
+      {
+       "t": 90000000,
+       "before": 0.03567793528339855,
+       "after": 0.03567793528339835
+      },
+      {
+       "t": 100000000,
+       "before": 0.03960265338648936,
+       "after": 0.039602653386489155
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    },
+    {
+     "channel": "bloco:fo",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 0.03960265338648936,
+     "maxAbs": 2.0816681711721685e-16,
+     "maxRelToRange": 5.256385603400856e-15,
+     "rmse": 1.3223989254804022e-16,
+     "nrmse": 3.339167486013816e-15,
+     "eventShiftS": 0,
+     "eventCount": 10,
+     "eventCountAfter": 10,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0.003996002665333868,
+       "after": 0.003996002665333842
+      },
+      {
+       "t": 20000000,
+       "before": 0.00798402131201705,
+       "after": 0.007984021312017007
+      },
+      {
+       "t": 30000000,
+       "before": 0.011964071892129462,
+       "after": 0.011964071892129398
+      },
+      {
+       "t": 40000000,
+       "before": 0.01593617032587873,
+       "after": 0.015936170325878643
+      },
+      {
+       "t": 50000000,
+       "before": 0.019900332501663884,
+       "after": 0.019900332501663773
+      },
+      {
+       "t": 60000000,
+       "before": 0.023856574276138912,
+       "after": 0.023856574276138773
+      },
+      {
+       "t": 70000000,
+       "before": 0.027804911474276175,
+       "after": 0.027804911474276026
+      },
+      {
+       "t": 80000000,
+       "before": 0.03174535988942978,
+       "after": 0.03174535988942958
+      },
+      {
+       "t": 90000000,
+       "before": 0.03567793528339855,
+       "after": 0.03567793528339835
+      },
+      {
+       "t": 100000000,
+       "before": 0.03960265338648936,
+       "after": 0.039602653386489155
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    }
+   ]
+  },
+  {
+   "file": "examples/calculo/laboratorio-calculo.lsproj",
+   "diagram": "subsystems/subsystem.process.sensor_4_20",
+   "seconds": 0.1,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:current",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 10000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 20000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 30000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 40000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 50000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 60000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 70000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 80000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 90000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 100000000,
+       "before": 12,
+       "after": 12
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "saida:raw",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 10000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 20000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 30000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 40000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 50000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 60000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 70000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 80000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 90000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 100000000,
+       "before": 12,
+       "after": 12
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:i_raw",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 10000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 20000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 30000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 40000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 50000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 60000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 70000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 80000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 90000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 100000000,
+       "before": 12,
+       "after": 12
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:i_loop",
+     "samples": 11,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 10000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 20000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 30000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 40000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 50000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 60000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 70000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 80000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 90000000,
+       "before": 12,
+       "after": 12
+      },
+      {
+       "t": 100000000,
+       "before": 12,
+       "after": 12
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  }
+ ]
+}

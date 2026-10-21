@@ -1,0 +1,42 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "plant",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1+deadtime",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1_deadtime"
+      ]
+    }
+  ],
+  "definitionsAdded": [
+    "subsystem.legado_processo_tau1_deadtime"
+  ],
+  "overrides": [],
+  "warnings": [],
+  "file": "process_fopdt.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.945Z",
+  "original": {
+    "backup": "process_fopdt.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "f056b3260cac133e9b55230c482d02f7c7247b56a2bc46118645723666ad372b"
+  },
+  "migrated": {
+    "sha256": "cfe32d84d3f061f83b933ef836f7be91cc6094d1fdd0de8ef8f77dd225c77c40"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 1,
+    "overridesRemapped": 0,
+    "byRule": {
+      "process->gain+tau1+deadtime": 1
+    }
+  }
+}

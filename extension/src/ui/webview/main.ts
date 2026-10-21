@@ -10366,6 +10366,11 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
     persistState();
     render();
     if (event.detail >= 2) {
+      const clicked = liveComponent();
+      if (clicked?.typeId === "sl.scope") {
+        send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenScope", componentId: clicked.id });
+        return;
+      }
       queueMicrotask(openSelectedProperties);
     }
   });

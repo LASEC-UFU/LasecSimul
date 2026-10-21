@@ -90,6 +90,7 @@ import {
   shouldSyncComponentToCore,
   queueCoreRebuild,
   rebuildCoreFromSchematicState,
+  applyModelWorkspaceToCore,
   electricalOperationsDiff,
 } from "./core/coreLifecycle";
 import { ElementCategory, ElementScope, getElement, insertElements, moveElement, removeElement, setExposedComponentEntry, updateElement } from "./core/schematicModel";
@@ -147,11 +148,16 @@ import { maybeOfferMachineNetworkSetup, registerMachineNetworkSetupCommand } fro
 import { resolveNetworkMode } from "./network/networkMode";
 import { startMdnsResponder } from "./network/mdnsResponder";
 import { commitDslCommand, commitOpenDslIfPresent, onDslDraftOpenChanged, openDslCommand, registerDslDraftCloseTracking } from "./dsl/dslCommands";
+import { migrateFileInPlace, onFileMigrated, summarizeReport } from "./migration/controlLibrary/migrationFiles";
+import { editModelWorkspaceCommand } from "./project/modelWorkspaceCommand";
+import { migrateControlDocument, needsControlMigration } from "./migration/controlLibrary/migrateDocument";
+import { LEGACY_LIBRARY_EXPORTS } from "./migration/controlLibrary/legacyLibraryExports";
 import {
   configureVisualPanels, noteSchematicActive, openDefinitionFaceplate, openInstanceFaceplate, openScreenForButton, registerVisualPanelSerializer, republishScreenStates,
   routePlacementToVisualPanel, setMainWindowGeometry, syncVisualPanelsWithProject,
   openCalculusLabScreen,
 } from "./visual/visualPanels";
+import { configureScopePanels, openScope } from "./visual/scopePanels";
 import { getScreen, reconcileScreenButtons, uniqueTitleForNewScreen } from "./visual/screenStore";
 import { HMI_SCREEN_TYPE_ID, faceplateDocumentId, screenIdOf } from "./ui/webview/visualDocument";
 
@@ -1401,7 +1407,7 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       // `calculusLab` é do Laboratório de Cálculo (painel próprio): a cópia que o esquemático carrega
       // pode estar atrasada e nunca é editada lá -- sem preservar a do Host, mover um componente
       // depois de gravar uma atividade apagava a gravação.
-      state.schematicState = { ...message.project, calculusLab: previous.calculusLab, controlDesignProject: previous.controlDesignProject, identProject: previous.identProject, topology: { ...message.project.topology, revision } };
+      state.schematicState = { ...message.project, calculusLab: previous.calculusLab, controlDesignProject: previous.controlDesignProject, identProject: previous.identProject, modelWorkspace: previous.modelWorkspace, topology: { ...message.project.topology, revision } };
       // Desfazer/refazer de operações com definições (criar, colar, duplicar, excluir...) troca a
       // tabela inteira: catálogo e Core acompanham ANTES de a reconstrução recriar as instâncias.
       const subsystemsChanged = previous.subsystems !== message.project.subsystems &&
@@ -2080,6 +2086,9 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     case "requestOpenVisualScreen":
       void openScreenForButton(message.componentId, message.mode);
       return;
+    case "requestOpenScope":
+      void openScope(message.componentId);
+      return;
     case "requestScreenAction":
       void screenButtonAction(message.componentId, message.action);
       return;
@@ -2696,6 +2705,15 @@ async function openSubcircuitForEditingCommand(sourceId: string, initialMode: "c
     filePath = resolved;
     try {
       raw = readJsonFile(filePath);
+      // Blocos legados `control.*` (docs/69): migra o arquivo no disco (backup + relatório); sem
+      // permissão de escrita, edita a versão migrada em memória.
+      if (needsControlMigration(raw)) {
+        try {
+          if (await migrateFileInPlace(filePath)) raw = readJsonFile(filePath);
+        } catch {
+          raw = migrateControlDocument(raw as Record<string, unknown>, { librarySnapshot: LEGACY_LIBRARY_EXPORTS }).document;
+        }
+      }
     } catch (err) {
       vscode.window.showErrorMessage(`Não foi possível ler ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
       return;
@@ -3138,6 +3156,11 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   context.subscriptions.push(
     { dispose: disposeDeviceReferenceWatchers },
     vscode.commands.registerCommand("lasecsimul.showSimulationLog", () => showSimulationLogChannel()),
+    // Model Workspace (docs/66 §3): variáveis dos parâmetros dos blocos `sl.*`, aplicadas ao Core na hora.
+    vscode.commands.registerCommand("lasecsimul.editModelWorkspace", () => editModelWorkspaceCommand(async () => {
+      refreshDirtyIndicator();
+      await applyModelWorkspaceToCore();
+    })),
     // O Laboratório de Cálculo é uma Tela HMI (docs/62 §6.3): as atividades são páginas da tela.
     vscode.commands.registerCommand("lasecsimul.openCalculusLab", () => openCalculusLabScreen(() => { syncSchematicPanel(); refreshDirtyIndicator(); })),
     vscode.commands.registerCommand("lasecsimul.openControlDesigner", () => {
@@ -3313,6 +3336,19 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
       { webviewOptions: { retainContextWhenHidden: false } }
     )
   );
+  // Modelos do Simulink (.slx/.mdl): mesmo editor-gatilho do SimulIDE (converte e abre o .lsproj).
+  context.subscriptions.push(
+    vscode.window.registerCustomEditorProvider(
+      "lasecsimul.simulinkImportEditor",
+      new SimulideImportCustomEditorProvider({
+        extensionUri: context.extensionUri,
+        beforeOpen: closeAllMcuSerialMonitors,
+        resolveExternalDeviceReferences,
+        openSchematicEditor,
+        syncSchematicPanel,
+      })
+    )
+  );
   context.subscriptions.push(
     vscode.window.registerCustomEditorProvider(
       "lasecsimul.simulideImportEditor",
@@ -3396,7 +3432,20 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
     (geometry) => setMainWindowGeometry(geometry),
   );
   context.subscriptions.push(registerDslDraftCloseTracking());
+  // Migração automática dos blocos legados `control.*` (docs/69): cada arquivo regravado ganha um aviso
+  // com o caminho do original preservado e o relatório.
+  context.subscriptions.push(onFileMigrated((result) => {
+    const summary = summarizeReport(result.report);
+    const pending = summary.unsupported > 0 ? ` ${summary.unsupported} bloco(s) ainda sem conversão ficaram como estavam (ver relatório).` : "";
+    void vscode.window.showInformationMessage(
+      `${path.basename(result.filePath)} foi convertido para a biblioteca de blocos equivalente ao Simulink: ${summary.converted} bloco(s) convertido(s).${pending} Original preservado em ${path.relative(path.dirname(result.filePath), result.backupPath)}.`,
+      "Abrir relatório",
+    ).then((choice) => {
+      if (choice === "Abrir relatório") void vscode.window.showTextDocument(vscode.Uri.file(result.reportPath), { preview: true });
+    });
+  }));
   context.subscriptions.push(configureVisualPanels({ extensionUri: context.extensionUri, delegate: handleWebviewMessage }));
+  context.subscriptions.push(configureScopePanels(context.extensionUri));
   context.subscriptions.push(registerVisualPanelSerializer());
   SchematicPanel.onDidBecomeActive = noteSchematicActive;
 

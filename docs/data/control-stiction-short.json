@@ -1,0 +1,113 @@
+{
+ "revisionBefore": "ab4c1efb7",
+ "legacyExe": "core\\build-legacy-reference\\bin\\lasecsimul-core.exe",
+ "currentExe": "core\\build-main\\Release\\lasecsimul-core.exe",
+ "seconds": 0.04,
+ "gridMs": 10,
+ "stimulus": [
+  0,
+  1,
+  10,
+  0.5
+ ],
+ "generatedAt": "2026-10-21T14:43:25.407Z",
+ "results": [
+  {
+   "file": "subcircuits/control_stiction.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.04,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 5,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 1,
+       "after": 1
+      },
+      {
+       "t": 30000000,
+       "before": 10,
+       "after": 10
+      },
+      {
+       "t": 40000000,
+       "before": 0.5,
+       "after": 0.5
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 5,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 1,
+       "after": 1
+      },
+      {
+       "t": 30000000,
+       "before": 10,
+       "after": 10
+      },
+      {
+       "t": 40000000,
+       "before": 0.5,
+       "after": 0.5
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  }
+ ]
+}

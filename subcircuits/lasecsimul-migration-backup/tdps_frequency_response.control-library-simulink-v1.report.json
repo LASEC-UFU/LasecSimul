@@ -1,0 +1,155 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "pid-01",
+      "legacyTypeId": "control.pid",
+      "kind": "subsystem",
+      "rule": "pid->discrete_pid_controller_2dof(D na PV)",
+      "newTypeIds": [
+        "subsystem.legado_pid_dpv"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-21",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+tau1",
+      "newTypeIds": [
+        "subsystem.legado_processo_tau1"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "process-22",
+      "legacyTypeId": "control.process",
+      "kind": "subsystem",
+      "rule": "process->gain+actuator+tau1+tau2",
+      "newTypeIds": [
+        "subsystem.legado_processo_actuator_tau1_tau2"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-41",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn+saturation",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn",
+        "sl.saturation"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-43",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->fcn+saturation",
+      "newTypeIds": [
+        "sl.fcn",
+        "sl.saturation"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-44",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "calc-45",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-101",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-104",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-105",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "readout-106",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    }
+  ],
+  "definitionsAdded": [
+    "subsystem.legado_pid_dpv",
+    "subsystem.legado_processo_tau1",
+    "subsystem.legado_processo_actuator_tau1_tau2"
+  ],
+  "overrides": [],
+  "warnings": [],
+  "file": "tdps_frequency_response.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:39.119Z",
+  "original": {
+    "backup": "tdps_frequency_response.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "324e40e9ad5646ae201ea3319fd4b2ecae8d61404baf2a79bae610a40306fe4c"
+  },
+  "migrated": {
+    "sha256": "cf2b0a093732dd3f538da434670b63457b876db2b7fe986556ad5e2b3d1bb08b"
+  },
+  "summary": {
+    "converted": 11,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 3,
+    "overridesRemapped": 0,
+    "byRule": {
+      "pid->discrete_pid_controller_2dof(D na PV)": 1,
+      "process->gain+tau1": 1,
+      "process->gain+actuator+tau1+tau2": 1,
+      "calc_expression->mux+fcn+saturation": 1,
+      "calc_expression->fcn+saturation": 1,
+      "calc_expression->mux+fcn": 2,
+      "observer->identity-gain": 4
+    }
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "designerGain",
+      "legacyTypeId": "control.gain",
+      "kind": "single",
+      "rule": "gain->gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "designerPlant",
+      "legacyTypeId": "control.first_order",
+      "kind": "single",
+      "rule": "first_order->discrete_transfer_fcn(zoh-exact)",
+      "newTypeIds": [
+        "sl.discrete_transfer_fcn"
+      ]
+    },
+    {
+      "location": "",
+      "componentId": "designerDiscreteTf",
+      "legacyTypeId": "control.transfer_function",
+      "kind": "single",
+      "rule": "transfer_function(discrete)->discrete_transfer_fcn",
+      "newTypeIds": [
+        "sl.discrete_transfer_fcn"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "instruments.lsproj",
+  "generatedAt": "2026-10-21T17:07:38.663Z",
+  "original": {
+    "backup": "instruments.control-library-simulink-v1.original.lsproj",
+    "sha256": "d14294e11c4de123dc645cb08f5c95796198798e1f3a987f27f82e6ccafb1ad6"
+  },
+  "migrated": {
+    "sha256": "bb0bcd101597a9a139e08f039004f919cd53466125080a03bf8fa1138ceada8b"
+  },
+  "summary": {
+    "converted": 3,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "gain->gain": 1,
+      "first_order->discrete_transfer_fcn(zoh-exact)": 1,
+      "transfer_function(discrete)->discrete_transfer_fcn": 1
+    }
+  }
+}

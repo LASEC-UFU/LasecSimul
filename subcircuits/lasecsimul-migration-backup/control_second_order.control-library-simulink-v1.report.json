@@ -1,0 +1,41 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.second_order",
+      "kind": "inline",
+      "rule": "second_order->state_space(x0)+unit_delay(output-phase)",
+      "newTypeIds": [
+        "sl.state_space",
+        "sl.unit_delay"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_second_order.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.798Z",
+  "original": {
+    "backup": "control_second_order.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "d9dc4f8db1acabc7d2e4754a9fdf50935d9ad42f70a83b36a6e1c1afdf59028e"
+  },
+  "migrated": {
+    "sha256": "b51939b638cd6b4e5b8323c3ab6af2b9da33236a03bd8c66d11fb7e9381f4f8b"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "second_order->state_space(x0)+unit_delay(output-phase)": 1
+    }
+  }
+}

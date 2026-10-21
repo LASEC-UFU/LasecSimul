@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.lead_lag",
+      "kind": "single",
+      "rule": "lead_lag->discrete_state_space(zoh-exact)",
+      "newTypeIds": [
+        "sl.discrete_state_space"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_lead_lag.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.755Z",
+  "original": {
+    "backup": "control_lead_lag.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "41a734cbe05ebd92ad06c80c91d235d798d808fa4d554dc23bfcd85d81765413"
+  },
+  "migrated": {
+    "sha256": "1a30d2b984a905014e48ea4b5a3c4e0a51509cc10b9c2aea5f3014248298f67d"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "lead_lag->discrete_state_space(zoh-exact)": 1
+    }
+  }
+}

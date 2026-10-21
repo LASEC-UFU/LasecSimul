@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.transfer_function",
+      "kind": "single",
+      "rule": "transfer_function(first_order)->first_order->discrete_transfer_fcn(zoh-exact)",
+      "newTypeIds": [
+        "sl.discrete_transfer_fcn"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_transfer_function.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.825Z",
+  "original": {
+    "backup": "control_transfer_function.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "57129bb7aa3ee4cc9d171662e55be67fa589ad6b39b5fefa20994179149645c7"
+  },
+  "migrated": {
+    "sha256": "dfe907ab4aaeda4773484ea394baab97c91780b8c6dfc1e39a611502b16a40f2"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "transfer_function(first_order)->first_order->discrete_transfer_fcn(zoh-exact)": 1
+    }
+  }
+}

@@ -161,10 +161,12 @@ const documents = manifest.entries.map((entry) => ({
     }
   });
 
-  await test("a simulacao continua intacta: blocos de controle e topologia preservados", () => {
+  await test("a simulacao continua intacta: blocos de controle convertidos e topologia preservada", () => {
     for (const { entry, raw } of documents) {
-      const control = raw.components.filter((component) => component.typeId.startsWith("control."));
-      assert(control.length > 0, `${entry.file} perdeu os blocos de controle`);
+      const legacyControl = raw.components.filter((component) => component.typeId.startsWith("control.") && component.typeId !== "control.constant");
+      assert(legacyControl.length === 0, `${entry.file} ainda contem blocos de controle legados: ${legacyControl.map((component) => component.typeId).join(", ")}`);
+      const convertedControl = raw.components.filter((component) => component.typeId.startsWith("sl.") || component.typeId === "process.accumulator" || component.typeId.startsWith("subsystem.legado_"));
+      assert(convertedControl.length > 0, `${entry.file} perdeu os blocos de controle convertidos`);
       const tunnels = raw.components.filter((component) => component.typeId === "connectors.signal_tunnel");
       assert(tunnels.length > 0, `${entry.file} perdeu os tuneis de interface`);
     }

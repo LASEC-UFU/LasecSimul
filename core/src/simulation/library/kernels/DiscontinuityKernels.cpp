@@ -157,7 +157,11 @@ void relayUpdate(KernelContext& k) {
 // Discreto (taxa herdada discreta): dt = Ts, y(-1) = InitialCondition (a saída em t = 0 já sai
 // limitada a partir da condição inicial). Contínuo (SampleTimeMode = continuous, ou herdado de um
 // sinal contínuo): InitialCondition é ignorada e y(0) = u(0); nos estágios menores dt é contado do
-// último passo maior (o que o Simulink faz entre passos maiores).
+// último passo maior (o que o Simulink faz entre passos maiores). `inicializado`: 0 nada, 1 y(0) =
+// u(0) registrado no instante inicial, 2 comprometido por `update`. Sem grupo discreto o engine não
+// tem passo maior em t0 (o primeiro é o fim do primeiro passo); por isso a avaliação em t0 (o
+// primeiro estágio do primeiro passo, tNs == majorNs) registra u(0) -- escrita idempotente, sempre
+// sobrescrita pela avaliação seguinte no mesmo instante, nunca depois do primeiro `update`.
 KernelShape rateLimiterConfigure(const KernelConfig& c) {
     requireInputs(c, 1, "Rate Limiter");
     requireExpandable(c, "Rate Limiter");
@@ -177,8 +181,15 @@ void rateLimiterInit(KernelContext& k) {
 void rateLimiterOutputs(KernelContext& k) {
     const size_t n = k.outWidth;
     const bool continuous = k.ip[1] != 0;
-    if (continuous && k.d[n + 1] == 0.0) {
+    const double flag = k.d[n + 1];
+    const bool initialInstant = flag == 0.0 || (flag == 1.0 && static_cast<double>(k.tNs) == k.d[n]);
+    if (continuous && initialInstant) {
         for (size_t i = 0; i < n; ++i) k.out[i] = k.input(0, static_cast<uint16_t>(i));
+        if (k.tNs == k.majorNs) {
+            std::copy_n(k.out, n, k.d);
+            k.d[n] = static_cast<double>(k.tNs);
+            k.d[n + 1] = 1.0;
+        }
         return;
     }
     const double dt = continuous ? (static_cast<double>(k.tNs) - k.d[n]) * 1e-9 : k.ts;
@@ -193,7 +204,7 @@ void rateLimiterUpdate(KernelContext& k) {
     const size_t n = k.outWidth;
     std::copy_n(k.out, n, k.d);
     k.d[n] = static_cast<double>(k.tNs);
-    k.d[n + 1] = 1.0;
+    k.d[n + 1] = 2.0;
 }
 
 // ---- Rate Limiter Dynamic: entradas [up, u, lo]; d = [y_ant x n], y(-1) = 0. Só tempo discreto.
@@ -305,23 +316,30 @@ void wrapToZeroOutputs(KernelContext& k) {
 }
 
 // ---- Hit Crossing: ip = [direção (0 either, 1 rising, 2 falling)]; rp = HitCrossingOffset (1 ou n).
-// d = [s_ant x n, y_ant x n, inicializado], s = u - offset. y = 1 no passo em que s cruza zero na
-// direção escolhida (rising: de negativo para zero/positivo ou de zero para positivo; falling: o
+// d = [s_ant x n, y_ant x n, estado, t_inicial], s = u - offset. y = 1 no passo em que s cruza zero
+// na direção escolhida (rising: de negativo para zero/positivo ou de zero para positivo; falling: o
 // simétrico), e continua 1 enquanto u fica exatamente no offset depois do cruzamento. Entrada
 // inicial igual ao offset: y = 1 só com `either`. Nos estágios menores y fica no valor do passo maior.
+// `estado`: 0 nada, 1 instante inicial registrado (provisório, como no Rate Limiter contínuo: sem
+// grupo discreto o primeiro passo maior é o fim do primeiro passo), 2 comprometido por `update`.
 enum HitDirection : int64_t { HitEither = 0, HitRising = 1, HitFalling = 2 };
 KernelShape hitCrossingConfigure(const KernelConfig& c) {
     requireInputs(c, 1, "Hit Crossing");
     requireExpandable(c, "Hit Crossing");
     if (c.intParameters.size() != 1 || c.intParameters[0] < HitEither || c.intParameters[0] > HitFalling) fail("Hit Crossing: direcao invalida");
     if (c.realParameters.size() != 1 && c.realParameters.size() != c.outputWidth) fail("Hit Crossing: offset com largura incompativel");
-    return {0, 2u * c.outputWidth + 1u, {1}};
+    return {0, 2u * c.outputWidth + 2u, {1}};
 }
+bool hitCrossingInitialInstant(const KernelContext& k) {
+    const size_t n = k.outWidth;
+    return k.d[2 * n] == 0.0 || (k.d[2 * n] == 1.0 && static_cast<double>(k.tNs) == k.d[2 * n + 1]);
+}
+double hitCrossingSignal(const KernelContext& k, uint16_t i) { return k.input(0, i) - k.rp[k.rpCount == 1 ? 0 : i]; }
 double hitCrossingValue(const KernelContext& k, uint16_t i) {
     const size_t n = k.outWidth;
-    const double s = k.input(0, i) - k.rp[k.rpCount == 1 ? 0 : i];
+    const double s = hitCrossingSignal(k, i);
     const auto direction = static_cast<HitDirection>(k.ip[0]);
-    if (k.d[2 * n] == 0.0) return s == 0.0 && direction == HitEither ? 1.0 : 0.0;
+    if (hitCrossingInitialInstant(k)) return s == 0.0 && direction == HitEither ? 1.0 : 0.0;
     const double previous = k.d[i];
     const bool rising = risingEdge(previous, s), falling = fallingEdge(previous, s);
     const bool crossed = direction == HitRising ? rising : direction == HitFalling ? falling : rising || falling;
@@ -329,16 +347,26 @@ double hitCrossingValue(const KernelContext& k, uint16_t i) {
     return s == 0.0 && k.d[n + i] != 0.0 ? 1.0 : 0.0;
 }
 void hitCrossingOutputs(KernelContext& k) {
-    for (uint16_t i = 0; i < k.outWidth; ++i) k.out[i] = k.major ? hitCrossingValue(k, i) : k.d[k.outWidth + i];
+    const size_t n = k.outWidth;
+    if (!k.major && !hitCrossingInitialInstant(k)) {
+        for (uint16_t i = 0; i < n; ++i) k.out[i] = k.d[n + i];
+        return;
+    }
+    const bool record = k.d[2 * n] < 2.0 && k.tNs == k.majorNs && hitCrossingInitialInstant(k);
+    for (uint16_t i = 0; i < n; ++i) {
+        k.out[i] = hitCrossingValue(k, i);
+        if (record) { k.d[i] = hitCrossingSignal(k, i); k.d[n + i] = k.out[i]; }
+    }
+    if (record) { k.d[2 * n] = 1.0; k.d[2 * n + 1] = static_cast<double>(k.tNs); }
 }
 void hitCrossingUpdate(KernelContext& k) {
     const size_t n = k.outWidth;
     for (uint16_t i = 0; i < n; ++i) {
         const double y = hitCrossingValue(k, i);
         k.d[n + i] = y;
-        k.d[i] = k.input(0, i) - k.rp[k.rpCount == 1 ? 0 : i];
+        k.d[i] = hitCrossingSignal(k, i);
     }
-    k.d[2 * n] = 1.0;
+    k.d[2 * n] = 2.0;
 }
 
 // ---- PWM: ip = [modo (0 contínuo, 1 intervalos fixos), DisallowZeroDutyCycle]; rp = [Period,

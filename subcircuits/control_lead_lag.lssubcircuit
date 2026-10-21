@@ -27,14 +27,15 @@
     },
     {
       "id": "stage",
-      "typeId": "control.lead_lag",
+      "typeId": "sl.discrete_state_space",
       "label": "Lead-Lag",
       "properties": {
-        "gain": 1,
-        "leadTau": 0,
-        "lagTau": 1,
-        "initial": 0,
-        "samplePeriodNs": 10000000
+        "A": "0.9900498337491681",
+        "B": "0.009950166250831893",
+        "C": "1",
+        "D": "0",
+        "InitialCondition": "0",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 170,
@@ -72,7 +73,7 @@
         "to": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -81,7 +82,7 @@
         "from": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",

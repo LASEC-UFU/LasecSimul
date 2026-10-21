@@ -27,11 +27,12 @@
     },
     {
       "id": "stage",
-      "typeId": "control.deadband",
+      "typeId": "sl.dead_zone",
       "label": "Banda morta",
       "properties": {
-        "width": 0,
-        "samplePeriodNs": 10000000
+        "LowerValue": "0",
+        "UpperValue": "0",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 170,
@@ -69,7 +70,7 @@
         "to": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -78,7 +79,7 @@
         "from": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",

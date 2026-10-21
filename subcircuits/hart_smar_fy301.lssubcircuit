@@ -36,10 +36,10 @@
         "uniqueId": "0B2A61",
         "unit": "%",
         "writeProtectCode": 0,
-        "sensorLowVolts": 0.0,
-        "sensorHighVolts": 5.0,
-        "sensorLowValue": 0.0,
-        "sensorHighValue": 100.0,
+        "sensorLowVolts": 0,
+        "sensorHighVolts": 5,
+        "sensorLowValue": 0,
+        "sensorHighValue": 100,
         "hartManufacturerId": 62,
         "hartDeviceType": 3,
         "hartRequestPreambles": 5,
@@ -51,10 +51,10 @@
         "hartImplementedRevision": 5,
         "hartCommandSet": "0-3,6,11-19,33-48,59",
         "hartWriteProtectActiveCode": 1,
-        "analogSaturationLowPercent": -25.0,
-        "analogSaturationHighPercent": 125.0,
+        "analogSaturationLowPercent": -25,
+        "analogSaturationHighPercent": 125,
         "analogLoopDirection": "input",
-        "analogInputResistance": 550.0,
+        "analogInputResistance": 550,
         "analogInputMinimumMilliamps": 3.8,
         "analogInputVariable": "inputCurrent",
         "sensorFault": false,
@@ -391,17 +391,10 @@
     },
     {
       "id": "pv_in",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(i-4)/16*100",
-        "inputs": [
-          "i"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) - 4)/16*100",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 640,
@@ -412,19 +405,10 @@
     },
     {
       "id": "in_pct",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "((i-lo)/(((hi-lo)>0.1)*(hi-lo)+((hi-lo)<0.1001)*0.1)*100)+(((i-lo)/(((hi-lo)>0.1)*(hi-lo)+((hi-lo)<0.1001)*0.1)*100)<0)*(0-((i-lo)/(((hi-lo)>0.1)*(hi-lo)+((hi-lo)<0.1001)*0.1)*100))+(((i-lo)/(((hi-lo)>0.1)*(hi-lo)+((hi-lo)<0.1001)*0.1)*100)>100)*(100-((i-lo)/(((hi-lo)>0.1)*(hi-lo)+((hi-lo)<0.1001)*0.1)*100))",
-        "inputs": [
-          "i",
-          "lo",
-          "hi"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) - u(2))/((u(3) - u(2) > 0.1)*(u(3) - u(2)) + (u(3) - u(2) < 0.1001)*0.1)*100 + ((u(1) - u(2))/((u(3) - u(2) > 0.1)*(u(3) - u(2)) + (u(3) - u(2) < 0.1001)*0.1)*100 < 0)*(0 - (u(1) - u(2))/((u(3) - u(2) > 0.1)*(u(3) - u(2)) + (u(3) - u(2) < 0.1001)*0.1)*100) + ((u(1) - u(2))/((u(3) - u(2) > 0.1)*(u(3) - u(2)) + (u(3) - u(2) < 0.1001)*0.1)*100 > 100)*(100 - (u(1) - u(2))/((u(3) - u(2) > 0.1)*(u(3) - u(2)) + (u(3) - u(2) < 0.1001)*0.1)*100)",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 640,
@@ -435,19 +419,10 @@
     },
     {
       "id": "sp_src",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(m<0.5)*x+(m>0.5)*((sp)+((sp)<0)*(0-(sp))+((sp)>100)*(100-(sp)))",
-        "inputs": [
-          "x",
-          "m",
-          "sp"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(2) < 0.5)*u(1) + (u(2) > 0.5)*(u(3) + (u(3) < 0)*(0 - u(3)) + (u(3) > 100)*(100 - u(3)))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 640,
@@ -458,18 +433,10 @@
     },
     {
       "id": "sp_char",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(c>-0.5)*(c<0.5)*(x)+(c>0.5)*(c<1.5)*(100*(25^(x/100)-1)/(25-1))+(c>1.5)*(c<2.5)*(100*(33^(x/100)-1)/(33-1))+(c>2.5)*(c<3.5)*(100*(50^(x/100)-1)/(50-1))+(c>3.5)*(c<4.5)*(100*25*(x/100)/(1+(25-1)*(x/100)))+(c>4.5)*(c<5.5)*(100*33*(x/100)/(1+(33-1)*(x/100)))+(c>5.5)*(c<6.5)*(100*50*(x/100)/(1+(50-1)*(x/100)))",
-        "inputs": [
-          "x",
-          "c"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(2) > -0.5)*(u(2) < 0.5)*u(1) + (u(2) > 0.5)*(u(2) < 1.5)*(100*(25^(u(1)/100) - 1)/(25 - 1)) + (u(2) > 1.5)*(u(2) < 2.5)*(100*(33^(u(1)/100) - 1)/(33 - 1)) + (u(2) > 2.5)*(u(2) < 3.5)*(100*(50^(u(1)/100) - 1)/(50 - 1)) + (u(2) > 3.5)*(u(2) < 4.5)*(100*25*(u(1)/100)/(1 + (25 - 1)*(u(1)/100))) + (u(2) > 4.5)*(u(2) < 5.5)*(100*33*(u(1)/100)/(1 + (33 - 1)*(u(1)/100))) + (u(2) > 5.5)*(u(2) < 6.5)*(100*50*(u(1)/100)/(1 + (50 - 1)*(u(1)/100)))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 640,
@@ -480,19 +447,10 @@
     },
     {
       "id": "sp_lim",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(x)+((x)<lo)*(lo-(x))+((x)>hi)*(hi-(x))",
-        "inputs": [
-          "x",
-          "lo",
-          "hi"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "u(1) + (u(1) < u(2))*(u(2) - u(1)) + (u(1) > u(3))*(u(3) - u(1))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 640,
@@ -503,19 +461,10 @@
     },
     {
       "id": "sp_t",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(t>0.0001)*(c<t)*(0-5)+(1-(t>0.0001)*(c<t))*x",
-        "inputs": [
-          "x",
-          "c",
-          "t"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(3) > 0.0001)*(u(2) < u(3))*(0 - 5) + (1 - (u(3) > 0.0001)*(u(2) < u(3)))*u(1)",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 640,
@@ -526,19 +475,10 @@
     },
     {
       "id": "sp_rate",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(20*(x-r))+((20*(x-r))<(0-100/((T>0.1)*T+(T<0.1001)*0.1)))*((0-100/((T>0.1)*T+(T<0.1001)*0.1))-(20*(x-r)))+((20*(x-r))>(100/((T>0.1)*T+(T<0.1001)*0.1)))*((100/((T>0.1)*T+(T<0.1001)*0.1))-(20*(x-r)))",
-        "inputs": [
-          "x",
-          "r",
-          "T"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "20*(u(1) - u(2)) + (20*(u(1) - u(2)) < 0 - 100/((u(3) > 0.1)*u(3) + (u(3) < 0.1001)*0.1))*(0 - 100/((u(3) > 0.1)*u(3) + (u(3) < 0.1001)*0.1) - 20*(u(1) - u(2))) + (20*(u(1) - u(2)) > 100/((u(3) > 0.1)*u(3) + (u(3) < 0.1001)*0.1))*(100/((u(3) > 0.1)*u(3) + (u(3) < 0.1001)*0.1) - 20*(u(1) - u(2)))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 640,
@@ -549,11 +489,12 @@
     },
     {
       "id": "sp_r",
-      "typeId": "control.integrator",
+      "typeId": "sl.discrete_time_integrator",
       "properties": {
-        "gain": 1,
-        "initial": 0,
-        "samplePeriodNs": 1000000
+        "IntegratorMethod": "Integration: Forward Euler",
+        "gainval": "1",
+        "InitialCondition": "0",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 420,
@@ -564,17 +505,10 @@
     },
     {
       "id": "setup_in",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(s>0.5)",
-        "inputs": [
-          "s"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "u(1) > 0.5",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 640,
@@ -585,18 +519,10 @@
     },
     {
       "id": "setup_reset",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(s<0.5)*10*t",
-        "inputs": [
-          "s",
-          "t"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) < 0.5)*10*u(2)",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 640,
@@ -607,7 +533,7 @@
     },
     {
       "id": "setup_timer",
-      "typeId": "control.accumulator",
+      "typeId": "process.accumulator",
       "properties": {
         "initial": 0,
         "samplePeriodNs": 1000000
@@ -621,18 +547,10 @@
     },
     {
       "id": "setup_active",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(s>0.5)*(t<50)",
-        "inputs": [
-          "s",
-          "t"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) > 0.5)*(u(2) < 50)",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 640,
@@ -643,18 +561,10 @@
     },
     {
       "id": "setup_progress",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(s>0.5)*((t<50)*t*2+(t>49.9999)*100)",
-        "inputs": [
-          "s",
-          "t"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) > 0.5)*((u(2) < 50)*u(2)*2 + (u(2) > 49.9999)*100)",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 640,
@@ -665,20 +575,10 @@
     },
     {
       "id": "hold_rest_in",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(s>0.5)*(t>20)*(t<25)*((x-h)>0)*(x-h)*5",
-        "inputs": [
-          "s",
-          "t",
-          "x",
-          "h"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) > 0.5)*(u(2) > 20)*(u(2) < 25)*(u(3) - u(4) > 0)*(u(3) - u(4))*5",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 640,
@@ -689,20 +589,10 @@
     },
     {
       "id": "hold_rest_out",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(s>0.5)*(t>20)*(t<25)*((h-x)>0)*(h-x)*5",
-        "inputs": [
-          "s",
-          "t",
-          "x",
-          "h"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) > 0.5)*(u(2) > 20)*(u(2) < 25)*(u(4) - u(3) > 0)*(u(4) - u(3))*5",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 860,
@@ -713,7 +603,7 @@
     },
     {
       "id": "hold_rest",
-      "typeId": "control.accumulator",
+      "typeId": "process.accumulator",
       "properties": {
         "initial": 0,
         "samplePeriodNs": 1000000
@@ -727,20 +617,10 @@
     },
     {
       "id": "hold_full_in",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(s>0.5)*(t>45)*(t<50)*((x-h)>0)*(x-h)*5",
-        "inputs": [
-          "s",
-          "t",
-          "x",
-          "h"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) > 0.5)*(u(2) > 45)*(u(2) < 50)*(u(3) - u(4) > 0)*(u(3) - u(4))*5",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 860,
@@ -751,20 +631,10 @@
     },
     {
       "id": "hold_full_out",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(s>0.5)*(t>45)*(t<50)*((h-x)>0)*(h-x)*5",
-        "inputs": [
-          "s",
-          "t",
-          "x",
-          "h"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) > 0.5)*(u(2) > 45)*(u(2) < 50)*(u(4) - u(3) > 0)*(u(4) - u(3))*5",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 860,
@@ -775,7 +645,7 @@
     },
     {
       "id": "hold_full",
-      "typeId": "control.accumulator",
+      "typeId": "process.accumulator",
       "properties": {
         "initial": 30,
         "samplePeriodNs": 1000000
@@ -789,19 +659,10 @@
     },
     {
       "id": "pos_raw",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(x-((a<b)*a+(1-(a<b))*b))/((((a<b)*b+(1-(a<b))*a)-((a<b)*a+(1-(a<b))*b)>0.1)*(((a<b)*b+(1-(a<b))*a)-((a<b)*a+(1-(a<b))*b))+((((a<b)*b+(1-(a<b))*a)-((a<b)*a+(1-(a<b))*b))<0.1001)*0.1)*100",
-        "inputs": [
-          "x",
-          "a",
-          "b"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) - ((u(2) < u(3))*u(2) + (1 - (u(2) < u(3)))*u(3)))/(((u(2) < u(3))*u(3) + (1 - (u(2) < u(3)))*u(2) - ((u(2) < u(3))*u(2) + (1 - (u(2) < u(3)))*u(3)) > 0.1)*((u(2) < u(3))*u(3) + (1 - (u(2) < u(3)))*u(2) - ((u(2) < u(3))*u(2) + (1 - (u(2) < u(3)))*u(3))) + ((u(2) < u(3))*u(3) + (1 - (u(2) < u(3)))*u(2) - ((u(2) < u(3))*u(2) + (1 - (u(2) < u(3)))*u(3)) < 0.1001)*0.1)*100",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 860,
@@ -812,19 +673,10 @@
     },
     {
       "id": "pos_trim",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(p-lo)/((((up-lo)>0.1)*(up-lo))+(((up-lo)<0.1001)*0.1))*100",
-        "inputs": [
-          "p",
-          "lo",
-          "up"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(1) - u(2))/((u(3) - u(2) > 0.1)*(u(3) - u(2)) + (u(3) - u(2) < 0.1001)*0.1)*100",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 860,
@@ -835,18 +687,10 @@
     },
     {
       "id": "pos",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(1-((k>0.5)*(k<1.5)+(k>2.5)))*p+((k>0.5)*(k<1.5)+(k>2.5))*(100-p)",
-        "inputs": [
-          "p",
-          "k"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(1 - ((u(2) > 0.5)*(u(2) < 1.5) + (u(2) > 2.5)))*u(1) + ((u(2) > 0.5)*(u(2) < 1.5) + (u(2) > 2.5))*(100 - u(1))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 860,
@@ -857,19 +701,10 @@
     },
     {
       "id": "err",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(1-2*(a>0.5))*(r-p)",
-        "inputs": [
-          "r",
-          "p",
-          "a"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(1 - 2*(u(3) > 0.5))*(u(1) - u(2))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 860,
@@ -880,19 +715,10 @@
     },
     {
       "id": "u",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "3*kp*(e+i)",
-        "inputs": [
-          "e",
-          "i",
-          "kp"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "3*u(3)*(u(1) + u(2))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 860,
@@ -903,21 +729,10 @@
     },
     {
       "id": "servo_i_in",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(1-a)*(tr>0.001)*(1-(u>100)*(e>0)-(u<0)*(e<0))*e/((((tr>0.001)*tr)+((tr<0.0011)*1))*60)-a*5*i",
-        "inputs": [
-          "e",
-          "u",
-          "tr",
-          "a",
-          "i"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(1 - u(4))*(u(3) > 0.001)*(1 - (u(2) > 100)*(u(1) > 0) - (u(2) < 0)*(u(1) < 0))*u(1)/(((u(3) > 0.001)*u(3) + (u(3) < 0.0011)*1)*60) - u(4)*5*u(5)",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 860,
@@ -928,11 +743,12 @@
     },
     {
       "id": "servo_i",
-      "typeId": "control.integrator",
+      "typeId": "sl.discrete_time_integrator",
       "properties": {
-        "gain": 1,
-        "initial": 0,
-        "samplePeriodNs": 1000000
+        "IntegratorMethod": "Integration: Forward Euler",
+        "gainval": "1",
+        "InitialCondition": "0",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 420,
@@ -943,20 +759,10 @@
     },
     {
       "id": "out_pct",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(i>3.8)*(a*(t>25)*100+(1-a)*((u)+((u)<0)*(0-(u))+((u)>100)*(100-(u))))",
-        "inputs": [
-          "u",
-          "a",
-          "t",
-          "i"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(4) > 3.8)*(u(2)*(u(3) > 25)*100 + (1 - u(2))*(u(1) + (u(1) < 0)*(0 - u(1)) + (u(1) > 100)*(100 - u(1))))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 860,
@@ -967,18 +773,10 @@
     },
     {
       "id": "out1_bar",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "o/100*((s>0)*s)",
-        "inputs": [
-          "o",
-          "s"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 1000000
+        "Expr": "u(1)/100*((u(2) > 0)*u(2))",
+        "SampleTime": "0.001"
       },
       "visual": {
         "x": 860,
@@ -986,6 +784,258 @@
         "rotation": 0
       },
       "label": "OUT1 (bar)"
+    },
+    {
+      "id": "in_pct__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 560,
+        "y": 360,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "sp_src__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 560,
+        "y": 420,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "sp_char__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 560,
+        "y": 480,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "sp_lim__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 560,
+        "y": 540,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "sp_t__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 560,
+        "y": 600,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "sp_rate__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 560,
+        "y": 660,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "setup_reset__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 560,
+        "y": 780,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "setup_active__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 560,
+        "y": 840,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "setup_progress__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 560,
+        "y": 900,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "hold_rest_in__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "4"
+      },
+      "visual": {
+        "x": 560,
+        "y": 960,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "hold_rest_out__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "4"
+      },
+      "visual": {
+        "x": 780,
+        "y": 300,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "hold_full_in__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "4"
+      },
+      "visual": {
+        "x": 780,
+        "y": 360,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "hold_full_out__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "4"
+      },
+      "visual": {
+        "x": 780,
+        "y": 420,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "pos_raw__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 780,
+        "y": 480,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "pos_trim__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 780,
+        "y": 540,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "pos__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 780,
+        "y": 600,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "err__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 780,
+        "y": 660,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "u__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 780,
+        "y": 720,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "servo_i_in__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "5"
+      },
+      "visual": {
+        "x": 780,
+        "y": 780,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "out_pct__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "4"
+      },
+      "visual": {
+        "x": 780,
+        "y": 840,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "out1_bar__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 780,
+        "y": 900,
+        "rotation": 0
+      }
     }
   ],
   "topology": {
@@ -1030,7 +1080,7 @@
         "to": {
           "kind": "port",
           "componentId": "pv_in",
-          "pinId": "i"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1039,7 +1089,7 @@
         "from": {
           "kind": "port",
           "componentId": "pv_in",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1057,8 +1107,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "in_pct",
-          "pinId": "i"
+          "componentId": "in_pct__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1071,8 +1121,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "in_pct",
-          "pinId": "lo"
+          "componentId": "in_pct__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1085,8 +1135,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "in_pct",
-          "pinId": "hi"
+          "componentId": "in_pct__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1095,12 +1145,12 @@
         "from": {
           "kind": "port",
           "componentId": "in_pct",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_src",
-          "pinId": "x"
+          "componentId": "sp_src__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1113,8 +1163,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_src",
-          "pinId": "m"
+          "componentId": "sp_src__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1127,8 +1177,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_src",
-          "pinId": "sp"
+          "componentId": "sp_src__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1137,12 +1187,12 @@
         "from": {
           "kind": "port",
           "componentId": "sp_src",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_char",
-          "pinId": "x"
+          "componentId": "sp_char__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1155,8 +1205,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_char",
-          "pinId": "c"
+          "componentId": "sp_char__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1165,12 +1215,12 @@
         "from": {
           "kind": "port",
           "componentId": "sp_char",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_lim",
-          "pinId": "x"
+          "componentId": "sp_lim__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1183,8 +1233,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_lim",
-          "pinId": "lo"
+          "componentId": "sp_lim__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1197,8 +1247,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_lim",
-          "pinId": "hi"
+          "componentId": "sp_lim__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1207,12 +1257,12 @@
         "from": {
           "kind": "port",
           "componentId": "sp_lim",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_t",
-          "pinId": "x"
+          "componentId": "sp_t__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1221,12 +1271,12 @@
         "from": {
           "kind": "port",
           "componentId": "sp_char",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_t",
-          "pinId": "c"
+          "componentId": "sp_t__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1239,8 +1289,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_t",
-          "pinId": "t"
+          "componentId": "sp_t__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1249,12 +1299,12 @@
         "from": {
           "kind": "port",
           "componentId": "sp_t",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_rate",
-          "pinId": "x"
+          "componentId": "sp_rate__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1263,12 +1313,12 @@
         "from": {
           "kind": "port",
           "componentId": "sp_r",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_rate",
-          "pinId": "r"
+          "componentId": "sp_rate__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1281,8 +1331,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_rate",
-          "pinId": "T"
+          "componentId": "sp_rate__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1291,12 +1341,12 @@
         "from": {
           "kind": "port",
           "componentId": "sp_rate",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "sp_r",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1305,7 +1355,7 @@
         "from": {
           "kind": "port",
           "componentId": "sp_r",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1324,7 +1374,7 @@
         "to": {
           "kind": "port",
           "componentId": "setup_in",
-          "pinId": "s"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1337,8 +1387,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "setup_reset",
-          "pinId": "s"
+          "componentId": "setup_reset__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1351,8 +1401,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "setup_reset",
-          "pinId": "t"
+          "componentId": "setup_reset__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1361,7 +1411,7 @@
         "from": {
           "kind": "port",
           "componentId": "setup_in",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1375,7 +1425,7 @@
         "from": {
           "kind": "port",
           "componentId": "setup_reset",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1393,8 +1443,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "setup_active",
-          "pinId": "s"
+          "componentId": "setup_active__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1407,8 +1457,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "setup_active",
-          "pinId": "t"
+          "componentId": "setup_active__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1421,8 +1471,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "setup_progress",
-          "pinId": "s"
+          "componentId": "setup_progress__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1435,8 +1485,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "setup_progress",
-          "pinId": "t"
+          "componentId": "setup_progress__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1449,8 +1499,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest_in",
-          "pinId": "s"
+          "componentId": "hold_rest_in__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1463,8 +1513,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest_in",
-          "pinId": "t"
+          "componentId": "hold_rest_in__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1477,8 +1527,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest_in",
-          "pinId": "x"
+          "componentId": "hold_rest_in__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1491,8 +1541,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest_in",
-          "pinId": "h"
+          "componentId": "hold_rest_in__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -1505,8 +1555,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest_out",
-          "pinId": "s"
+          "componentId": "hold_rest_out__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1519,8 +1569,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest_out",
-          "pinId": "t"
+          "componentId": "hold_rest_out__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1533,8 +1583,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest_out",
-          "pinId": "x"
+          "componentId": "hold_rest_out__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1547,8 +1597,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest_out",
-          "pinId": "h"
+          "componentId": "hold_rest_out__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -1557,7 +1607,7 @@
         "from": {
           "kind": "port",
           "componentId": "hold_rest_in",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1571,7 +1621,7 @@
         "from": {
           "kind": "port",
           "componentId": "hold_rest_out",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1589,8 +1639,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_full_in",
-          "pinId": "s"
+          "componentId": "hold_full_in__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1603,8 +1653,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_full_in",
-          "pinId": "t"
+          "componentId": "hold_full_in__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1617,8 +1667,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_full_in",
-          "pinId": "x"
+          "componentId": "hold_full_in__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1631,8 +1681,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_full_in",
-          "pinId": "h"
+          "componentId": "hold_full_in__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -1645,8 +1695,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_full_out",
-          "pinId": "s"
+          "componentId": "hold_full_out__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1659,8 +1709,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_full_out",
-          "pinId": "t"
+          "componentId": "hold_full_out__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1673,8 +1723,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_full_out",
-          "pinId": "x"
+          "componentId": "hold_full_out__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1687,8 +1737,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_full_out",
-          "pinId": "h"
+          "componentId": "hold_full_out__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -1697,7 +1747,7 @@
         "from": {
           "kind": "port",
           "componentId": "hold_full_in",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1711,7 +1761,7 @@
         "from": {
           "kind": "port",
           "componentId": "hold_full_out",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1729,8 +1779,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "pos_raw",
-          "pinId": "x"
+          "componentId": "pos_raw__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1743,8 +1793,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "pos_raw",
-          "pinId": "a"
+          "componentId": "pos_raw__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1757,8 +1807,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "pos_raw",
-          "pinId": "b"
+          "componentId": "pos_raw__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1767,12 +1817,12 @@
         "from": {
           "kind": "port",
           "componentId": "pos_raw",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "pos_trim",
-          "pinId": "p"
+          "componentId": "pos_trim__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1785,8 +1835,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "pos_trim",
-          "pinId": "lo"
+          "componentId": "pos_trim__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1799,8 +1849,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "pos_trim",
-          "pinId": "up"
+          "componentId": "pos_trim__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1809,12 +1859,12 @@
         "from": {
           "kind": "port",
           "componentId": "pos_trim",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "pos",
-          "pinId": "p"
+          "componentId": "pos__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1827,8 +1877,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "pos",
-          "pinId": "k"
+          "componentId": "pos__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1837,7 +1887,7 @@
         "from": {
           "kind": "port",
           "componentId": "pos",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1851,12 +1901,12 @@
         "from": {
           "kind": "port",
           "componentId": "sp_r",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "err",
-          "pinId": "r"
+          "componentId": "err__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1865,12 +1915,12 @@
         "from": {
           "kind": "port",
           "componentId": "pos",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "err",
-          "pinId": "p"
+          "componentId": "err__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1883,8 +1933,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "err",
-          "pinId": "a"
+          "componentId": "err__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1893,12 +1943,12 @@
         "from": {
           "kind": "port",
           "componentId": "err",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "u",
-          "pinId": "e"
+          "componentId": "u__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1907,12 +1957,12 @@
         "from": {
           "kind": "port",
           "componentId": "servo_i",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "u",
-          "pinId": "i"
+          "componentId": "u__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1925,8 +1975,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "u",
-          "pinId": "kp"
+          "componentId": "u__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1935,12 +1985,12 @@
         "from": {
           "kind": "port",
           "componentId": "err",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "servo_i_in",
-          "pinId": "e"
+          "componentId": "servo_i_in__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1949,12 +1999,12 @@
         "from": {
           "kind": "port",
           "componentId": "u",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "servo_i_in",
-          "pinId": "u"
+          "componentId": "servo_i_in__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1967,8 +2017,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "servo_i_in",
-          "pinId": "tr"
+          "componentId": "servo_i_in__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1977,12 +2027,12 @@
         "from": {
           "kind": "port",
           "componentId": "setup_active",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "servo_i_in",
-          "pinId": "a"
+          "componentId": "servo_i_in__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -1991,12 +2041,12 @@
         "from": {
           "kind": "port",
           "componentId": "servo_i",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "servo_i_in",
-          "pinId": "i"
+          "componentId": "servo_i_in__mux",
+          "pinId": "in5"
         },
         "points": []
       },
@@ -2005,12 +2055,12 @@
         "from": {
           "kind": "port",
           "componentId": "servo_i_in",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "servo_i",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2019,12 +2069,12 @@
         "from": {
           "kind": "port",
           "componentId": "u",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "out_pct",
-          "pinId": "u"
+          "componentId": "out_pct__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2033,12 +2083,12 @@
         "from": {
           "kind": "port",
           "componentId": "setup_active",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "out_pct",
-          "pinId": "a"
+          "componentId": "out_pct__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2051,8 +2101,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "out_pct",
-          "pinId": "t"
+          "componentId": "out_pct__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -2065,8 +2115,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "out_pct",
-          "pinId": "i"
+          "componentId": "out_pct__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -2075,12 +2125,12 @@
         "from": {
           "kind": "port",
           "componentId": "out_pct",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "out1_bar",
-          "pinId": "o"
+          "componentId": "out1_bar__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -2093,8 +2143,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "out1_bar",
-          "pinId": "s"
+          "componentId": "out1_bar__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -2103,7 +2153,7 @@
         "from": {
           "kind": "port",
           "componentId": "out1_bar",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -2117,7 +2167,7 @@
         "from": {
           "kind": "port",
           "componentId": "out1_bar",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -2125,6 +2175,300 @@
           "pinId": "outputPressure"
         },
         "points": []
+      },
+      {
+        "id": "in_pct__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "in_pct__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "in_pct",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "sp_src__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_src__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_src",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "sp_char__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_char__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_char",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "sp_lim__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_lim__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_lim",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "sp_t__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_t__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_t",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "sp_rate__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_rate__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_rate",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "setup_reset__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_reset__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_reset",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "setup_active__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_active__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_active",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "setup_progress__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_progress__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_progress",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "hold_rest_in__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_rest_in__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest_in",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "hold_rest_out__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_rest_out__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest_out",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "hold_full_in__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_full_in__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_full_in",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "hold_full_out__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_full_out__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_full_out",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "pos_raw__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "pos_raw__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pos_raw",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "pos_trim__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "pos_trim__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pos_trim",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "pos__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "pos__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pos",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "err__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "err__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "err",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "u__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "u__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "u",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "servo_i_in__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "servo_i_in__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "servo_i_in",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "out_pct__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "out_pct__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out_pct",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "out1_bar__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "out1_bar__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out1_bar",
+          "pinId": "in1"
+        },
+        "vertices": []
       }
     ]
   },

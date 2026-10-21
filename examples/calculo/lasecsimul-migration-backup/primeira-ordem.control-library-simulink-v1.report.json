@@ -1,0 +1,50 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "subsystems/subsystem.process.first_order_lab",
+      "componentId": "c_u",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "subsystems/subsystem.process.first_order_lab",
+      "componentId": "fo",
+      "legacyTypeId": "control.first_order",
+      "kind": "single",
+      "rule": "first_order->discrete_transfer_fcn(zoh-exact)",
+      "newTypeIds": [
+        "sl.discrete_transfer_fcn"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "primeira-ordem.lsproj",
+  "generatedAt": "2026-10-21T17:07:38.621Z",
+  "original": {
+    "backup": "primeira-ordem.control-library-simulink-v1.original.lsproj",
+    "sha256": "f5cf740cfc9da57f6d1f0e4566e006d940d3543f6406d681922f4fc727413ad1"
+  },
+  "migrated": {
+    "sha256": "bb466e87af1b02b8a7e58a68dd70843b2a80649fbf150327e3033d4707061a9c"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 1,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 1,
+      "first_order->discrete_transfer_fcn(zoh-exact)": 1
+    }
+  }
+}

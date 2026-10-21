@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.sum",
+      "kind": "single",
+      "rule": "sum->sum",
+      "newTypeIds": [
+        "sl.sum"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_sum.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.815Z",
+  "original": {
+    "backup": "control_sum.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "09f6b2bab4b92982a9dd30e5e817d14659f7fdc502bd58ce76438c802c9d3b7d"
+  },
+  "migrated": {
+    "sha256": "bc7507caddebd90badd1f6e17c1195351cfca5a7374d5d3a3b6fd021416b94d0"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "sum->sum": 1
+    }
+  }
+}

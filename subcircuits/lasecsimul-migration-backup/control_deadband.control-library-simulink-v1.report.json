@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.deadband",
+      "kind": "single",
+      "rule": "deadband->dead_zone",
+      "newTypeIds": [
+        "sl.dead_zone"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_deadband.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.696Z",
+  "original": {
+    "backup": "control_deadband.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "d73a63929b93c80e43aa4bd903ccbabd8fb3af3fb9c910797be595de0bf9ccf1"
+  },
+  "migrated": {
+    "sha256": "9dd2dd28d8b8fa210f8c4de72731334dfd4a248b4adee58effe2c11095ce4f5a"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "deadband->dead_zone": 1
+    }
+  }
+}

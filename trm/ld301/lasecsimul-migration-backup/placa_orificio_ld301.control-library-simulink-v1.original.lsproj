@@ -1,0 +1,5012 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    {
+      "id": "component-1791288839897-764493",
+      "typeId": "subcircuits.hart.smar_ld301",
+      "properties": {
+        "@ld301.hartVariablesJson": "[{\"classification\":65,\"dampingValue\":0,\"deviceVariableCode\":246,\"deviceVariableUnit\":4,\"direction\":\"Input\",\"family\":5,\"id\":\"PV\",\"lowerRangeValue\":0,\"lowerTransducerLimit\":-5107.7451171875,\"minimumSpan\":25.538724899291992,\"name\":\"Pressao\",\"pressure\":{\"pressureUnitCode\":4},\"role\":\"PV\",\"transducerSerialNumber\":653944,\"type\":\"Float32\",\"unit\":\"mmH2O@20C\",\"upperRangeValue\":3376.3,\"upperTransducerLimit\":5107.7451171875,\"value\":0},{\"derivedSource\":244,\"deviceVariableCode\":0,\"deviceVariableUnit\":39,\"direction\":\"Internal\",\"id\":\"outputCurrent\",\"name\":\"Corrente de saida\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"unit\":\"mA\",\"value\":0},{\"derivedSource\":243,\"deviceVariableCode\":4,\"deviceVariableUnit\":49,\"direction\":\"Internal\",\"id\":\"pvUserUnit\",\"lowerRangeValue\":243,\"name\":\"PV em unidade do usuario\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"unit\":\"mm\",\"upperRangeValue\":800,\"value\":0,\"allowedUnitCodes\":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,237,238,239,15,16,17,18,19,22,23,24,25,26,27,28,29,30,31,121,122,123,130,131,132,133,134,135,136,137,138,235,20,21,114,115,116,120,40,41,42,43,46,110,111,112,113,166,167,236,44,45,47,48,49,60,61,62,63,64,65,70,71,72,73,74,75,76,77,78,79,80,81,82,83,90,91,92,95,96,97,100,101,102,103,104,54,55,39,57,253]},{\"classification\":64,\"deviceVariableCode\":5,\"deviceVariableUnit\":32,\"direction\":\"Input\",\"family\":4,\"id\":\"temperature\",\"name\":\"Temperatura do sensor\",\"role\":\"SV\",\"type\":\"Float32\",\"unit\":\"C\",\"value\":28.077999114990234},{\"deviceVariableCode\":20,\"deviceVariableUnit\":251,\"direction\":\"Internal\",\"id\":\"deviceVariable20\",\"name\":\"Variavel de dispositivo 20\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"value\":-1582.9156494140625},{\"direction\":\"Internal\",\"id\":\"flange.type\",\"name\":\"Flange type\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":12,\"codes\":{\"12\":\"Conventional (Biplanar)\",\"13\":\"Coplanar\",\"14\":\"Remote Seal\",\"15\":\"Level; 3 in, 150 lb\",\"16\":\"Level; 4 in, 150 lb\",\"17\":\"Level; 3 in, 300 lb\",\"18\":\"Level; 4 in, 300 lb\",\"19\":\"Level; DN 80, PN 25/40\",\"20\":\"Level; DN 100, PN 25/40\",\"21\":\"Level; DN 100, PN 10/16\",\"22\":\"Level; 2 in, 150 lb\",\"23\":\"Level; 2 in, 300 lb\",\"24\":\"Level; DN 50, PN 10/16\",\"25\":\"Level; DN 50, PN 25/40\",\"26\":\"Level; DN 80, PN 10/16\",\"251\":\"None\",\"252\":\"Unknown\",\"253\":\"Special\"}},{\"direction\":\"Internal\",\"id\":\"flange.material\",\"name\":\"Flange material\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":3,\"codes\":{\"0\":\"Carbon Steel\",\"2\":\"Stainless Steel 316\",\"3\":\"Hastelloy C\",\"4\":\"Monel\",\"5\":\"Tantalum\",\"251\":\"None\",\"252\":\"Unknown\",\"253\":\"Special\"}},{\"direction\":\"Internal\",\"id\":\"flange.oRing\",\"name\":\"Flange O-ring\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":10,\"codes\":{\"10\":\"PTFE\",\"11\":\"Viton\",\"12\":\"Buna N\",\"13\":\"Ethyl Prop\",\"251\":\"None\",\"252\":\"Unknown\",\"253\":\"Special\"}},{\"direction\":\"Internal\",\"id\":\"cmd128.byte3\",\"name\":\"Cmd 128 byte 3\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":1},{\"direction\":\"Internal\",\"id\":\"flange.drainVent\",\"name\":\"Flange drain/vent\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":2,\"codes\":{\"2\":\"316 Stainless Steel\",\"3\":\"Hastelloy C\",\"4\":\"Monel\",\"251\":\"None\",\"252\":\"Unknown\",\"253\":\"Special\"}},{\"direction\":\"Internal\",\"id\":\"remoteSeal.quantity\",\"name\":\"Remote seal quantity\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":251,\"codes\":{\"1\":\"One Seal\",\"2\":\"Two Seals\",\"251\":\"None\",\"252\":\"Unknown\",\"253\":\"Special\"}},{\"direction\":\"Internal\",\"id\":\"remoteSeal.type\",\"name\":\"Remote seal type\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":251,\"codes\":{\"2\":\"Chemical Tee\",\"3\":\"Flanged, Extended (E)\",\"4\":\"Pancake (P)\",\"5\":\"Flanged (F)\",\"6\":\"Threaded (R)\",\"7\":\"Sanitary (S)\",\"8\":\"Sanitary Tank Spud\",\"9\":\"Union Connection\",\"251\":\"None\",\"252\":\"Unknown\",\"253\":\"Special\"}},{\"direction\":\"Internal\",\"id\":\"remoteSeal.fillFluid\",\"name\":\"Remote seal fill fluid\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":251,\"codes\":{\"2\":\"Silicone Oil\",\"3\":\"Syltherm 800\",\"4\":\"Inert (Fluorolube)\",\"5\":\"Glycerin/H2O\",\"6\":\"Prop Gly/H2O\",\"7\":\"Neobee-M20\",\"8\":\"Fluorolube\",\"251\":\"None\",\"252\":\"Unknown\",\"253\":\"Special\"}},{\"direction\":\"Internal\",\"id\":\"remoteSeal.diaphragm\",\"name\":\"Remote seal diaphragm\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":251,\"codes\":{\"2\":\"316 Stainless Steel\",\"3\":\"Hastelloy C\",\"5\":\"Tantalum\",\"251\":\"None\",\"252\":\"Unknown\",\"253\":\"Special\"}},{\"direction\":\"Internal\",\"id\":\"sensor.fillFluid\",\"name\":\"Sensor fill fluid (Silicone)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":1},{\"direction\":\"Internal\",\"id\":\"sensor.diaphragm\",\"name\":\"Sensor diaphragm (Common Table 4: 316 SS)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":2},{\"direction\":\"Internal\",\"id\":\"cmd128.byte11\",\"name\":\"Cmd 128 byte 11\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":1},{\"direction\":\"Internal\",\"id\":\"cmd128.byte12\",\"name\":\"Cmd 128 byte 12\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":1},{\"direction\":\"Internal\",\"id\":\"calibration.unit\",\"name\":\"Calibration points unit (mmH2O)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":4},{\"direction\":\"Internal\",\"id\":\"calibration.lastUpperPoint\",\"name\":\"Last upper point calibration\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"mmH2O@20C\",\"value\":5088.8974609375},{\"direction\":\"Internal\",\"id\":\"calibration.lastLowerPoint\",\"name\":\"Last lower point calibration\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"mmH2O@20C\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"cmd128.byte22\",\"name\":\"Cmd 128 byte 22\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":250},{\"direction\":\"Internal\",\"id\":\"cmd128.byte23\",\"name\":\"Cmd 128 byte 23\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.points\",\"name\":\"Table number of points\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":6},{\"direction\":\"Internal\",\"id\":\"table.x1\",\"name\":\"Table X1\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.x2\",\"name\":\"Table X2\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":100},{\"direction\":\"Internal\",\"id\":\"table.x3\",\"name\":\"Table X3\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":100},{\"direction\":\"Internal\",\"id\":\"table.x4\",\"name\":\"Table X4\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":100},{\"direction\":\"Internal\",\"id\":\"table.x5\",\"name\":\"Table X5\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":100},{\"direction\":\"Internal\",\"id\":\"table.x6\",\"name\":\"Table X6\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":100},{\"direction\":\"Internal\",\"id\":\"table.x7\",\"name\":\"Table X7\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.x8\",\"name\":\"Table X8\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.x9\",\"name\":\"Table X9\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.x10\",\"name\":\"Table X10\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.x11\",\"name\":\"Table X11\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.x12\",\"name\":\"Table X12\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.x13\",\"name\":\"Table X13\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.x14\",\"name\":\"Table X14\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.x15\",\"name\":\"Table X15\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.x16\",\"name\":\"Table X16\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.y1\",\"name\":\"Table Y1\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.y2\",\"name\":\"Table Y2\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":100},{\"direction\":\"Internal\",\"id\":\"table.y3\",\"name\":\"Table Y3\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":100},{\"direction\":\"Internal\",\"id\":\"table.y4\",\"name\":\"Table Y4\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":100},{\"direction\":\"Internal\",\"id\":\"table.y5\",\"name\":\"Table Y5\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":100},{\"direction\":\"Internal\",\"id\":\"table.y6\",\"name\":\"Table Y6\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":100},{\"direction\":\"Internal\",\"id\":\"table.y7\",\"name\":\"Table Y7\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.y8\",\"name\":\"Table Y8\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.y9\",\"name\":\"Table Y9\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.y10\",\"name\":\"Table Y10\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.y11\",\"name\":\"Table Y11\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.y12\",\"name\":\"Table Y12\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.y13\",\"name\":\"Table Y13\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.y14\",\"name\":\"Table Y14\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.y15\",\"name\":\"Table Y15\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"table.y16\",\"name\":\"Table Y16\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"pid.operatingMode0\",\"name\":\"PID operating mode byte 0\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":23},{\"direction\":\"Internal\",\"id\":\"pid.operatingMode1\",\"name\":\"PID operating mode byte 1\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"pid.operatingMode2\",\"name\":\"PID operating mode byte 2\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"controller.mode\",\"name\":\"Controller mode (Off)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":255},{\"direction\":\"Internal\",\"id\":\"pid.setpoint\",\"name\":\"PID setpoint\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":50},{\"direction\":\"Internal\",\"id\":\"pid.modeCode\",\"name\":\"PID mode code\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":255},{\"direction\":\"Internal\",\"id\":\"pid.spTracking\",\"name\":\"SP tracking (Off)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"pid.error\",\"name\":\"PID error\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"%\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"pid.kp\",\"name\":\"Kp\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"\",\"value\":1},{\"direction\":\"Internal\",\"id\":\"pid.tr\",\"name\":\"Tr\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"\",\"value\":0.01},{\"direction\":\"Internal\",\"id\":\"pid.td\",\"name\":\"Td\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"pid.param4\",\"name\":\"PID parameter 4\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"pid.param5\",\"name\":\"PID parameter 5\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"\",\"value\":0.1},{\"direction\":\"Internal\",\"id\":\"sqrtCutoff.mode\",\"name\":\"Raiz: modo do corte (Hard 00 / Bumpless FF)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":0,\"transferParameter\":2},{\"direction\":\"Internal\",\"id\":\"sqrtCutoff.point\",\"name\":\"Raiz: ponto de corte (% da faixa)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"\",\"value\":6,\"transferParameter\":1},{\"direction\":\"Internal\",\"id\":\"characterization.code\",\"name\":\"Sensor characterization mode (Cmd 160)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":15,\"codes\":{\"0\":\"On\",\"15\":\"Off\"}},{\"direction\":\"Internal\",\"id\":\"characterization.points\",\"name\":\"Characterization number of points\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":5},{\"direction\":\"Internal\",\"id\":\"characterization.measured1\",\"name\":\"Characterization measured\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"mmH2O@20C\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"characterization.measured2\",\"name\":\"Characterization measured\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"mmH2O@20C\",\"value\":1276.936279296875},{\"direction\":\"Internal\",\"id\":\"characterization.measured3\",\"name\":\"Characterization measured\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"mmH2O@20C\",\"value\":2553.87255859375},{\"direction\":\"Internal\",\"id\":\"characterization.measured4\",\"name\":\"Characterization measured\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"mmH2O@20C\",\"value\":3830.808837890625},{\"direction\":\"Internal\",\"id\":\"characterization.measured5\",\"name\":\"Characterization measured\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"mmH2O@20C\",\"value\":5107.7451171875},{\"direction\":\"Internal\",\"id\":\"characterization.desired1\",\"name\":\"Characterization desired\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"mmH2O@20C\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"characterization.desired2\",\"name\":\"Characterization desired\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"mmH2O@20C\",\"value\":1276.936279296875},{\"direction\":\"Internal\",\"id\":\"characterization.desired3\",\"name\":\"Characterization desired\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"mmH2O@20C\",\"value\":2553.87255859375},{\"direction\":\"Internal\",\"id\":\"characterization.desired4\",\"name\":\"Characterization desired\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"mmH2O@20C\",\"value\":3830.808837890625},{\"direction\":\"Internal\",\"id\":\"characterization.desired5\",\"name\":\"Characterization desired\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"mmH2O@20C\",\"value\":5107.7451171875},{\"direction\":\"Internal\",\"id\":\"display.firstVariable\",\"name\":\"Display 1a variavel (0 OUT, 1 MV%, 2 PRES, 3 PV%, 4 PV, 5 TEMP, 6 SP%, 7 SP, 8 ER%, 9 TOT)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":3,\"codes\":{\"0\":\"OUT (mA)\",\"1\":\"OUT (%)\",\"2\":\"Pressure\",\"3\":\"PV (%)\",\"4\":\"PV\",\"5\":\"TEMP\",\"6\":\"SP (%)\",\"7\":\"SP\",\"8\":\"Error (%)\",\"9\":\"Total\"}},{\"direction\":\"Internal\",\"id\":\"display.secondVariable\",\"name\":\"Display 2a variavel (mesmos codigos; None)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":5,\"codes\":{\"0\":\"OUT (mA)\",\"1\":\"OUT (%)\",\"2\":\"Pressure\",\"3\":\"PV (%)\",\"4\":\"PV\",\"5\":\"TEMP\",\"6\":\"SP (%)\",\"7\":\"SP\",\"8\":\"Error (%)\",\"9\":\"Total\",\"251\":\"None\"}},{\"direction\":\"Internal\",\"id\":\"display.meter\",\"name\":\"Cmd 164 byte 2 (0 with second variable None)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":2},{\"direction\":\"Internal\",\"id\":\"display.byte3\",\"name\":\"Display byte 3\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":2},{\"direction\":\"Internal\",\"id\":\"counter.lrvUrv\",\"name\":\"Contador Valor Inferior/Superior (calibracao)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":61},{\"direction\":\"Internal\",\"id\":\"counter.function\",\"name\":\"Contador Funcao de transferencia\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":7},{\"direction\":\"Internal\",\"id\":\"counter.trim4mA\",\"name\":\"Contador Trim 4 mA\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"counter.trim20mA\",\"name\":\"Contador Trim 20 mA\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"counter.trimLowerZero\",\"name\":\"Contador Trim Zero/Inferior\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":14},{\"direction\":\"Internal\",\"id\":\"counter.trimUpper\",\"name\":\"Contador Trim de Pressao Superior\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"counter.trimTemperature\",\"name\":\"Contador Trim de Temperatura\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"counter.pidMode\",\"name\":\"Contador TRM/PID\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":8},{\"direction\":\"Internal\",\"id\":\"counter.characterization\",\"name\":\"Contador Caracterizacao\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"counter.autoClamping\",\"name\":\"Contador Auto Clamp\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":1},{\"direction\":\"Internal\",\"id\":\"counter.writeProtect\",\"name\":\"Contador Protecao de escrita\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"counter.multidrop\",\"name\":\"Contador Multidrop (endereco)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"counter.passwordLevel\",\"name\":\"Contador Senha/Configuracao de nivel\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":3},{\"direction\":\"Internal\",\"id\":\"counter.totalization\",\"name\":\"Contador Totalizacao\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":8},{\"direction\":\"Internal\",\"id\":\"orderingCode\",\"name\":\"Ordering code\",\"role\":\"VendorSpecific\",\"text\":\"LD301M21ITD10011-I6P0 \",\"type\":\"Ascii\",\"width\":22},{\"direction\":\"Internal\",\"id\":\"userUnit.label\",\"name\":\"User unit description\",\"role\":\"VendorSpecific\",\"text\":\"mm\",\"type\":\"Ascii\",\"width\":5},{\"direction\":\"Internal\",\"id\":\"userUnit.byte0\",\"name\":\"User unit byte 0\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":0,\"codes\":{\"0\":\"On\",\"255\":\"Off\"}},{\"direction\":\"Internal\",\"id\":\"totalization.mode\",\"name\":\"Totalization mode (Off)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":255,\"codes\":{\"0\":\"On\",\"255\":\"Off\"}},{\"direction\":\"Internal\",\"id\":\"totalization.unit\",\"name\":\"Totalization unit (None)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":251,\"codes\":{\"251\":\"None\",\"253\":\"Special\"}},{\"direction\":\"Internal\",\"id\":\"totalization.total\",\"name\":\"Accumulated total\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"totalization.maxFlow\",\"name\":\"Maximum flow\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"\",\"value\":100},{\"direction\":\"Internal\",\"id\":\"totalization.factor\",\"name\":\"Totalization factor\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"\",\"value\":1},{\"direction\":\"Internal\",\"id\":\"cmd189.byte0\",\"name\":\"Cmd 189 byte 0\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":251},{\"direction\":\"Internal\",\"id\":\"cmd189.byte1\",\"name\":\"Cmd 189 byte 1\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"cmd189.value\",\"name\":\"Cmd 189 value\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"unit\":\"\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"cmd204.result\",\"name\":\"Cmd 204 result byte\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"controller.modeWriteCode\",\"name\":\"Controller mode write code\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":1},{\"direction\":\"Internal\",\"id\":\"totalization.configByte\",\"name\":\"Totalization configuration byte (meaning pending)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":0},{\"direction\":\"Internal\",\"id\":\"userUnit.selectedUnit\",\"name\":\"Configured user unit code\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"value\":49}]",
+        "@ld301.tag": "FT100",
+        "@ld301.descriptor": "MEDIDOR VAZAO",
+        "@ld301.message": "TRANSMISSOR DE VAZAO FE-01"
+      },
+      "label": "SMAR LD301 (HART) — FT100",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 610.7044360945629,
+        "y": 457.1040895136738,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791289162830-859519",
+      "typeId": "sources.dc_voltage",
+      "properties": {
+        "voltage": 24,
+        "__ui_valueLabelX": 56,
+        "__ui_valueLabelY": 10
+      },
+      "label": "Voltage Source-1",
+      "showValue": true,
+      "showDialValue": false,
+      "visual": {
+        "x": 892.8550428314728,
+        "y": 625.1144957168527,
+        "rotation": 90
+      }
+    },
+    {
+      "id": "component-1791289285255-920511",
+      "typeId": "meters.ampmeter",
+      "properties": {
+        "resistance": 0.000001
+      },
+      "label": "Ampmeter-1",
+      "showValue": false,
+      "showDialValue": false,
+      "flipH": true,
+      "visual": {
+        "x": 855.007350089845,
+        "y": 539.8879543130956,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791298567681-219290",
+      "typeId": "protocol.hart.modem",
+      "properties": {
+        "pc_link": "serial",
+        "port_name": "CNCB0",
+        "udp_address": "127.0.0.1",
+        "udp_port": 5094,
+        "auto_open": false,
+        "senseResistance": 250,
+        "transmitAmplitudeMvpp": 500
+      },
+      "label": "Modem HART-1",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 854.1868755684786,
+        "y": 728.3013488537568,
+        "rotation": 90
+      }
+    },
+    {
+      "id": "component-1791298650899-835065",
+      "typeId": "passive.resistor",
+      "properties": {
+        "resistance": 250,
+        "__ui_valueLabelX": 16,
+        "__ui_valueLabelY": 11
+      },
+      "label": "Resistor-1",
+      "showValue": true,
+      "showDialValue": false,
+      "visual": {
+        "x": 791.2441122111177,
+        "y": 640.8796861568541,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791374315637-835373",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "NetA"
+      },
+      "label": "Tunnel.-1",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 556.3116678766052,
+        "y": 747.5569738487833,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791374334324-929938",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "NetA"
+      },
+      "label": "Tunnel.-2",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 743.8058750557734,
+        "y": 679.9491629183711,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791374352508-941802",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "NetB"
+      },
+      "label": "Tunnel.-3",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 786.1207502783213,
+        "y": 696.7710276585746,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791374384819-700152",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "NetB"
+      },
+      "label": "Tunnel.-4",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 553.7005733649667,
+        "y": 780.1174681987999,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791478193390-287006",
+      "typeId": "meters.oscope",
+      "properties": {
+        "inputMode": "differential",
+        "filter": 0,
+        "autoScale": true,
+        "tracks": 4,
+        "sampleIntervalNs": 50000,
+        "tunnels": ""
+      },
+      "label": "Oscope-1",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 601.1994642004439,
+        "y": 729.0604507522371,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "component-1791564831697-orif01",
+      "typeId": "subcircuits.local.orifice_flow_dp",
+      "label": "Placa de orifício",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": -457.2955639054371,
+        "y": -46.895910486326216,
+        "rotation": 0
+      },
+      "properties": {},
+      "subcircuitRef": {
+        "path": "placa_orificio_dp.lssubcircuit",
+        "lastKnownTypeId": "subcircuits.local.orifice_flow_dp",
+        "lastKnownPinIds": [
+          "valve",
+          "flow",
+          "dp",
+          "high",
+          "low"
+        ],
+        "embedded": {
+          "schemaVersion": 3,
+          "typeId": "subcircuits.local.orifice_flow_dp",
+          "name": "Placa de orifício (vazão por ΔP)",
+          "language": "pt-BR",
+          "folderPath": [
+            "Modelos"
+          ],
+          "workspaceSection": "process",
+          "help": {
+            "description": "Medição de vazão com placa de orifício concêntrica (ISO 5167-2) e transmissor de pressão diferencial (LD301). A válvula de controle a jusante (pino, 0–100 %) impõe a vazão. C pela equação de Reader-Harris/Gallagher para tomadas de flange, D e D/2 ou de canto; ε pela ISO para gases (1 para líquidos); D e d corrigidos pela dilatação dos materiais. Saídas HIGH/LOW em mmH2O, com ΔP = 8ρ(1−β⁴)Q²/(C²ε²π²d⁴). Trechos retos (Tabela 3, uma curva de 90° a montante), rugosidade e faixa de validade da norma são verificados; um desvio didático opcional aumenta o C real quando a instalação foge da norma. Com os padrões (água a 20 °C, D 52,5 mm, d 31,5 mm, tomadas de flange, 15 m³/h) o ΔP a 100 % é ≈ 3376 mmH2O. Diâmetros, tomada, trechos retos, materiais, fluido e vazão máxima ficam em Propriedades Exportadas e mudam com a simulação rodando."
+          },
+          "components": [
+            {
+              "id": "t_valve",
+              "typeId": "connectors.signal_tunnel",
+              "properties": {
+                "name": "valve",
+                "pinId": "valve",
+                "direction": "Input",
+                "valueType": "Real",
+                "defaultValue": 0
+              },
+              "visual": {
+                "x": 40,
+                "y": 80,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "c_D",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 52.5,
+                "unit": "mm"
+              },
+              "visual": {
+                "x": 200,
+                "y": 40,
+                "rotation": 0
+              },
+              "label": "Diâmetro interno da tubulação D (a 20 °C)"
+            },
+            {
+              "id": "c_d",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 31.5,
+                "unit": "mm"
+              },
+              "visual": {
+                "x": 200,
+                "y": 100,
+                "rotation": 0
+              },
+              "label": "Diâmetro do orifício d (a 20 °C)"
+            },
+            {
+              "id": "c_tap",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 1,
+                "unit": "",
+                "options": "1=Flange (25,4 mm da placa);2=D e D/2 (radius taps);3=Canto (corner taps)"
+              },
+              "visual": {
+                "x": 200,
+                "y": 160,
+                "rotation": 0
+              },
+              "label": "Tipo de tomada de pressão"
+            },
+            {
+              "id": "c_lup",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 44,
+                "unit": "D"
+              },
+              "visual": {
+                "x": 200,
+                "y": 220,
+                "rotation": 0
+              },
+              "label": "Trecho reto a montante (da curva de 90° até a placa)"
+            },
+            {
+              "id": "c_ldn",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 8,
+                "unit": "D"
+              },
+              "visual": {
+                "x": 200,
+                "y": 280,
+                "rotation": 0
+              },
+              "label": "Trecho reto a jusante (da placa até a válvula)"
+            },
+            {
+              "id": "c_pipe_mat",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 1,
+                "unit": "",
+                "options": "1=Aço carbono;2=Aço inox AISI 316;3=Ferro fundido;4=Aço galvanizado;5=Cobre;6=PVC"
+              },
+              "visual": {
+                "x": 200,
+                "y": 340,
+                "rotation": 0
+              },
+              "label": "Material da tubulação"
+            },
+            {
+              "id": "c_plate_mat",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 2,
+                "unit": "",
+                "options": "1=Aço carbono;2=Aço inox AISI 316;3=Ferro fundido;4=Aço galvanizado;5=Cobre;6=PVC"
+              },
+              "visual": {
+                "x": 200,
+                "y": 400,
+                "rotation": 0
+              },
+              "label": "Material da placa de orifício"
+            },
+            {
+              "id": "c_T",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 20,
+                "unit": "°C"
+              },
+              "visual": {
+                "x": 200,
+                "y": 460,
+                "rotation": 0
+              },
+              "label": "Temperatura de operação"
+            },
+            {
+              "id": "c_fluid",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 0,
+                "unit": "",
+                "options": "0=Líquido (ε = 1);1=Gás (ε pela ISO 5167-2)"
+              },
+              "visual": {
+                "x": 200,
+                "y": 520,
+                "rotation": 0
+              },
+              "label": "Fluido"
+            },
+            {
+              "id": "c_rho",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 998.2,
+                "unit": "kg/m³"
+              },
+              "visual": {
+                "x": 200,
+                "y": 580,
+                "rotation": 0
+              },
+              "label": "Massa específica do fluido na operação (a montante)"
+            },
+            {
+              "id": "c_mu",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 1.002,
+                "unit": "cP"
+              },
+              "visual": {
+                "x": 200,
+                "y": 640,
+                "rotation": 0
+              },
+              "label": "Viscosidade dinâmica"
+            },
+            {
+              "id": "c_kappa",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 1.4,
+                "unit": ""
+              },
+              "visual": {
+                "x": 200,
+                "y": 700,
+                "rotation": 0
+              },
+              "label": "Expoente isentrópico κ (gás)"
+            },
+            {
+              "id": "c_p1",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 200,
+                "unit": "kPa"
+              },
+              "visual": {
+                "x": 200,
+                "y": 760,
+                "rotation": 0
+              },
+              "label": "Pressão a montante (manométrica)"
+            },
+            {
+              "id": "c_qmax",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 15,
+                "unit": "m³/h"
+              },
+              "visual": {
+                "x": 200,
+                "y": 820,
+                "rotation": 0
+              },
+              "label": "Vazão máxima (válvula 100 %)"
+            },
+            {
+              "id": "c_inst",
+              "typeId": "control.constant",
+              "properties": {
+                "value": 1,
+                "unit": "",
+                "options": "0=Não aplicar;1=Aplicar"
+              },
+              "visual": {
+                "x": 200,
+                "y": 880,
+                "rotation": 0
+              },
+              "label": "Desvio didático de instalação e rugosidade"
+            },
+            {
+              "id": "u",
+              "typeId": "control.observer",
+              "properties": {
+                "unit": "%",
+                "observerOnly": true,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 40,
+                "y": 200,
+                "rotation": 0
+              },
+              "label": "Abertura da válvula"
+            },
+            {
+              "id": "q_set",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "Qmax*((u>0)*u)/100",
+                "inputs": [
+                  "u",
+                  "Qmax"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 40,
+                "rotation": 0
+              },
+              "label": "Vazão imposta pela válvula (m³/h)"
+            },
+            {
+              "id": "q",
+              "typeId": "control.first_order",
+              "properties": {
+                "gain": 1,
+                "tau": 1,
+                "initial": 0,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 40,
+                "y": 320,
+                "rotation": 0
+              },
+              "label": "Vazão (m³/h)"
+            },
+            {
+              "id": "alpha_pipe",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(m>0.5)*(m<1.5)*11.2+(m>1.5)*(m<2.5)*16.0+(m>2.5)*(m<3.5)*10.4+(m>3.5)*(m<4.5)*11.2+(m>4.5)*(m<5.5)*16.8+(m>5.5)*(m<6.5)*54.0",
+                "inputs": [
+                  "m"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 100,
+                "rotation": 0
+              },
+              "label": "α da tubulação (1e-6/K)"
+            },
+            {
+              "id": "alpha_plate",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(m>0.5)*(m<1.5)*11.2+(m>1.5)*(m<2.5)*16.0+(m>2.5)*(m<3.5)*10.4+(m>3.5)*(m<4.5)*11.2+(m>4.5)*(m<5.5)*16.8+(m>5.5)*(m<6.5)*54.0",
+                "inputs": [
+                  "m"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 160,
+                "rotation": 0
+              },
+              "label": "α da placa (1e-6/K)"
+            },
+            {
+              "id": "ra_pipe",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(m>0.5)*(m<1.5)*0.015+(m>1.5)*(m<2.5)*0.005+(m>2.5)*(m<3.5)*0.08+(m>3.5)*(m<4.5)*0.05+(m>4.5)*(m<5.5)*0.0005+(m>5.5)*(m<6.5)*0.0005",
+                "inputs": [
+                  "m"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 220,
+                "rotation": 0
+              },
+              "label": "Rugosidade Ra da tubulação (mm)"
+            },
+            {
+              "id": "D_T",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "D*(1+a*0.000001*(T-20))",
+                "inputs": [
+                  "D",
+                  "a",
+                  "T"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 280,
+                "rotation": 0
+              },
+              "label": "D na temperatura (mm)"
+            },
+            {
+              "id": "d_T",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "d*(1+a*0.000001*(T-20))",
+                "inputs": [
+                  "d",
+                  "a",
+                  "T"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 340,
+                "rotation": 0
+              },
+              "label": "d na temperatura (mm)"
+            },
+            {
+              "id": "beta",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "d/D",
+                "inputs": [
+                  "d",
+                  "D"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 400,
+                "rotation": 0
+              },
+              "label": "β = d/D"
+            },
+            {
+              "id": "velocity",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "q/3600/(0.785398163*(D/1000)^2)",
+                "inputs": [
+                  "q",
+                  "D"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 460,
+                "rotation": 0
+              },
+              "label": "Velocidade na tubulação (m/s)"
+            },
+            {
+              "id": "reynolds",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "1111.111111*rho*q/(3.14159265*mu*D)",
+                "inputs": [
+                  "q",
+                  "rho",
+                  "mu",
+                  "D"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 520,
+                "rotation": 0
+              },
+              "label": "Reynolds Re_D"
+            },
+            {
+              "id": "tap_L1",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t>0.5)*(t<1.5)*25.4/D+(t>1.5)*(t<2.5)*1",
+                "inputs": [
+                  "t",
+                  "D"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 580,
+                "rotation": 0
+              },
+              "label": "L1 (distância da tomada de alta / D)"
+            },
+            {
+              "id": "tap_L2",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t>0.5)*(t<1.5)*25.4/D+(t>1.5)*(t<2.5)*0.47",
+                "inputs": [
+                  "t",
+                  "D"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 640,
+                "rotation": 0
+              },
+              "label": "L'2 (distância da tomada de baixa / D)"
+            },
+            {
+              "id": "rhg_A",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(19000*b/(Re+(Re<1)))^0.8",
+                "inputs": [
+                  "b",
+                  "Re"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 700,
+                "rotation": 0
+              },
+              "label": "A = (19000 β / Re_D)^0,8"
+            },
+            {
+              "id": "c_iso",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "0.5961+0.0261*b^2-0.216*b^8+0.000521*(1000000*b/(Re+(Re<1)))^0.7+(0.0188+0.0063*A)*b^3.5*(1000000/(Re+(Re<1)))^0.3+(0.043+0.080*2.718281828^(-10*L1)-0.123*2.718281828^(-7*L1))*(1-0.11*A)*b^4/(1-b^4)-0.031*(2*L2/(1-b)-0.8*(2*L2/(1-b))^1.1)*b^1.3+(D<71.12)*0.011*(0.75-b)*(2.8-D/25.4)",
+                "inputs": [
+                  "b",
+                  "Re",
+                  "L1",
+                  "L2",
+                  "A",
+                  "D"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 760,
+                "rotation": 0
+              },
+              "label": "C (ISO 5167-2)"
+            },
+            {
+              "id": "req_up_a",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(b<0.2001)*6+(b>0.2001)*(b<0.4001)*16+(b>0.4001)*(b<0.5001)*22+(b>0.5001)*(b<0.6001)*42+(b>0.6001)*44",
+                "inputs": [
+                  "b"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 820,
+                "rotation": 0
+              },
+              "label": "Montante exigido, sem incerteza adicional (D)"
+            },
+            {
+              "id": "req_up_b",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(b<0.4001)*3+(b>0.4001)*(b<0.5001)*9+(b>0.5001)*(b<0.6001)*13+(b>0.6001)*20",
+                "inputs": [
+                  "b"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 620,
+                "y": 880,
+                "rotation": 0
+              },
+              "label": "Montante mínimo, com +0,5 % de incerteza (D)"
+            },
+            {
+              "id": "req_dn_a",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(b<0.2001)*4+(b>0.2001)*(b<0.5001)*6+(b>0.5001)*(b<0.6701)*7+(b>0.6701)*8",
+                "inputs": [
+                  "b"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 40,
+                "rotation": 0
+              },
+              "label": "Jusante exigido (D)"
+            },
+            {
+              "id": "dev_up",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(L<A)*(L>B)*0.5*(A-L)/(A-B)+(L<B+0.000001)*(0.5+1.5*(B-L)/B)",
+                "inputs": [
+                  "L",
+                  "A",
+                  "B"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 100,
+                "rotation": 0
+              },
+              "label": "Desvio do trecho a montante (%)"
+            },
+            {
+              "id": "dev_dn",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(L<A)*(L>A/2)*0.25*(A-L)/(A/2)+(L<A/2+0.000001)*(0.25+0.25*(A/2-L)/(A/2))",
+                "inputs": [
+                  "L",
+                  "A"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 160,
+                "rotation": 0
+              },
+              "label": "Desvio do trecho a jusante (%)"
+            },
+            {
+              "id": "rough_rel",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "10000*Ra/D",
+                "inputs": [
+                  "Ra",
+                  "D"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 220,
+                "rotation": 0
+              },
+              "label": "10⁴·Ra/D"
+            },
+            {
+              "id": "rough_limit",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(b<0.3)*25+(b>0.3)*(4+21*2.718281828^(-19.1*(b-0.3)))",
+                "inputs": [
+                  "b"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 280,
+                "rotation": 0
+              },
+              "label": "Limite de 10⁴·Ra/D (aprox. da Tabela 1)"
+            },
+            {
+              "id": "dev_rough",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(r>lim)*(0.5*(r/lim-1)*(r/lim<5)+2*(r/lim>5))",
+                "inputs": [
+                  "r",
+                  "lim"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 340,
+                "rotation": 0
+              },
+              "label": "Desvio por rugosidade (%)"
+            },
+            {
+              "id": "dev_total",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(on>0.5)*(u+d+r)",
+                "inputs": [
+                  "on",
+                  "u",
+                  "d",
+                  "r"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 400,
+                "rotation": 0
+              },
+              "label": "Desvio didático total de C (%)"
+            },
+            {
+              "id": "c_real",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "C*(1+dev/100)",
+                "inputs": [
+                  "C",
+                  "dev"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 460,
+                "rotation": 0
+              },
+              "label": "C real (com o desvio)"
+            },
+            {
+              "id": "dp0",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "8*rho*(1-b^4)*(q/3600)^2/(C^2*9.8696044*(d/1000)^4)",
+                "inputs": [
+                  "q",
+                  "rho",
+                  "b",
+                  "C",
+                  "d"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 520,
+                "rotation": 0
+              },
+              "label": "ΔP sem expansibilidade (Pa)"
+            },
+            {
+              "id": "eps1",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "1-(gas>0.5)*(0.351+0.256*b^4+0.93*b^8)*(1-(((p1+101.325-dp/1000)/(p1+101.325)>0.01)*(p1+101.325-dp/1000)/(p1+101.325)+((p1+101.325-dp/1000)/(p1+101.325)<0.01)*0.01)^(1/k))",
+                "inputs": [
+                  "gas",
+                  "b",
+                  "p1",
+                  "k",
+                  "dp"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 580,
+                "rotation": 0
+              },
+              "label": "ε (1ª passada)"
+            },
+            {
+              "id": "dp1",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "dp0/e^2",
+                "inputs": [
+                  "dp0",
+                  "e"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 640,
+                "rotation": 0
+              },
+              "label": "ΔP (1ª passada, Pa)"
+            },
+            {
+              "id": "epsilon",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "1-(gas>0.5)*(0.351+0.256*b^4+0.93*b^8)*(1-(((p1+101.325-dp/1000)/(p1+101.325)>0.01)*(p1+101.325-dp/1000)/(p1+101.325)+((p1+101.325-dp/1000)/(p1+101.325)<0.01)*0.01)^(1/k))",
+                "inputs": [
+                  "gas",
+                  "b",
+                  "p1",
+                  "k",
+                  "dp"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 700,
+                "rotation": 0
+              },
+              "label": "ε (expansibilidade)"
+            },
+            {
+              "id": "dp_pa",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "dp0/e^2",
+                "inputs": [
+                  "dp0",
+                  "e"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 760,
+                "rotation": 0
+              },
+              "label": "ΔP (Pa)"
+            },
+            {
+              "id": "dp_kpa",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "dp/1000",
+                "inputs": [
+                  "dp"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 820,
+                "rotation": 0
+              },
+              "label": "ΔP (kPa)"
+            },
+            {
+              "id": "dp_mm",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "dp/9.80665",
+                "inputs": [
+                  "dp"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 840,
+                "y": 880,
+                "rotation": 0
+              },
+              "label": "ΔP (mmH2O)"
+            },
+            {
+              "id": "loss",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "((1-b^4*(1-C^2))^0.5-C*b^2)/((1-b^4*(1-C^2))^0.5+C*b^2)*dp",
+                "inputs": [
+                  "dp",
+                  "b",
+                  "C"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 40,
+                "rotation": 0
+              },
+              "label": "Perda de carga permanente (kPa)"
+            },
+            {
+              "id": "p_ratio",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(p1+101.325-dp/1000)/(p1+101.325)",
+                "inputs": [
+                  "p1",
+                  "dp"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 100,
+                "rotation": 0
+              },
+              "label": "p2/p1"
+            },
+            {
+              "id": "p_high",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "101.97162*p1",
+                "inputs": [
+                  "p1"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 160,
+                "rotation": 0
+              },
+              "label": "Tomada de alta (mmH2O)"
+            },
+            {
+              "id": "p_low",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "h-dp",
+                "inputs": [
+                  "h",
+                  "dp"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 220,
+                "rotation": 0
+              },
+              "label": "Tomada de baixa (mmH2O)"
+            },
+            {
+              "id": "is_flange",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t<1.5)",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 280,
+                "rotation": 0
+              },
+              "label": "Tomada flange"
+            },
+            {
+              "id": "is_dd2",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t>1.5)*(t<2.5)",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 340,
+                "rotation": 0
+              },
+              "label": "Tomada D e D/2"
+            },
+            {
+              "id": "is_corner",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(t>2.5)",
+                "inputs": [
+                  "t"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 400,
+                "rotation": 0
+              },
+              "label": "Tomada de canto"
+            },
+            {
+              "id": "ok_up",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(L>A-0.0001)",
+                "inputs": [
+                  "L",
+                  "A"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 460,
+                "rotation": 0
+              },
+              "label": "Montante conforme"
+            },
+            {
+              "id": "ok_dn",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(L>A-0.0001)",
+                "inputs": [
+                  "L",
+                  "A"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 520,
+                "rotation": 0
+              },
+              "label": "Jusante conforme"
+            },
+            {
+              "id": "ok_rough",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(r<lim)",
+                "inputs": [
+                  "r",
+                  "lim"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 580,
+                "rotation": 0
+              },
+              "label": "Rugosidade conforme"
+            },
+            {
+              "id": "ok_iso",
+              "typeId": "control.calc_expression",
+              "properties": {
+                "expression": "(b>0.0999)*(b<0.7501)*(D>49.999)*(D<1000.001)*(d>12.499)*(Re>5000)*((t<1.5)*(Re>170*b^2*D)+(t>1.5)*((b<0.56)+(b>0.56)*(Re>16000*b^2))>0.5)*((gas<0.5)+(r>0.75)>0.5)",
+                "inputs": [
+                  "b",
+                  "D",
+                  "d",
+                  "Re",
+                  "t",
+                  "gas",
+                  "r"
+                ],
+                "upperLimit": 0,
+                "lowerLimit": 0,
+                "upperLimitEnabled": false,
+                "lowerLimitEnabled": false,
+                "samplePeriodNs": 10000000
+              },
+              "visual": {
+                "x": 1060,
+                "y": 640,
+                "rotation": 0
+              },
+              "label": "Dentro da faixa da ISO 5167-2"
+            },
+            {
+              "id": "t_high",
+              "typeId": "connectors.signal_tunnel",
+              "properties": {
+                "name": "high",
+                "pinId": "high",
+                "direction": "Output",
+                "valueType": "Real"
+              },
+              "visual": {
+                "x": 1340,
+                "y": 80,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "t_low",
+              "typeId": "connectors.signal_tunnel",
+              "properties": {
+                "name": "low",
+                "pinId": "low",
+                "direction": "Output",
+                "valueType": "Real"
+              },
+              "visual": {
+                "x": 1340,
+                "y": 160,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "t_flow",
+              "typeId": "connectors.signal_tunnel",
+              "properties": {
+                "name": "flow",
+                "pinId": "flow",
+                "direction": "Output",
+                "valueType": "Real"
+              },
+              "visual": {
+                "x": 1340,
+                "y": 240,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "t_dp",
+              "typeId": "connectors.signal_tunnel",
+              "properties": {
+                "name": "dp",
+                "pinId": "dp",
+                "direction": "Output",
+                "valueType": "Real"
+              },
+              "visual": {
+                "x": 1340,
+                "y": 320,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_pipe_up",
+              "typeId": "graphics.pipe",
+              "properties": {
+                "width": 368,
+                "height": 18,
+                "fill": "#cbd5e1",
+                "stroke": "currentColor",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "showFlow": true,
+                "flowDirection": "forward",
+                "showFlanges": false,
+                "value": 0,
+                "bindSource": "q",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": 0,
+                "bindMax": 100,
+                "bindUnit": "m³/h",
+                "bindDecimals": 2,
+                "bindThreshold": 0.01,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 94,
+                "y": 191,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_pipe_dn",
+              "typeId": "graphics.pipe",
+              "properties": {
+                "width": 273,
+                "height": 18,
+                "fill": "#cbd5e1",
+                "stroke": "currentColor",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "showFlow": true,
+                "flowDirection": "forward",
+                "showFlanges": false,
+                "value": 0,
+                "bindSource": "q",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": 0,
+                "bindMax": 100,
+                "bindUnit": "m³/h",
+                "bindDecimals": 2,
+                "bindThreshold": 0.01,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 538,
+                "y": 191,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_flange_up",
+              "typeId": "graphics.pipe_flange",
+              "properties": {
+                "width": 18,
+                "height": 46,
+                "stroke": "currentColor",
+                "fill": "#cbd5e1",
+                "strokeWidth": 1.5,
+                "opacity": 1
+              },
+              "visual": {
+                "x": 462,
+                "y": 177,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_plate",
+              "typeId": "graphics.orifice_plate",
+              "properties": {
+                "width": 40,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#cbd5e1",
+                "strokeWidth": 1.5,
+                "opacity": 1
+              },
+              "visual": {
+                "x": 480,
+                "y": 178,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_flange_dn",
+              "typeId": "graphics.pipe_flange",
+              "properties": {
+                "width": 18,
+                "height": 46,
+                "stroke": "currentColor",
+                "fill": "#cbd5e1",
+                "strokeWidth": 1.5,
+                "opacity": 1
+              },
+              "visual": {
+                "x": 520,
+                "y": 177,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_valve",
+              "typeId": "graphics.valve_globe_svg",
+              "properties": {
+                "width": 90,
+                "height": 90,
+                "value": 0,
+                "showValue": true,
+                "bindSource": "u",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": 0,
+                "bindMax": 100,
+                "bindUnit": "%",
+                "bindDecimals": 0,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 780,
+                "y": 127.55,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_arrow",
+              "typeId": "graphics.flow_arrow",
+              "properties": {
+                "width": 56,
+                "height": 32,
+                "stroke": "none",
+                "fill": "#0284c7",
+                "strokeWidth": 0,
+                "opacity": 1
+              },
+              "visual": {
+                "x": 924,
+                "y": 184,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_l_flange",
+              "typeId": "graphics.status_lamp",
+              "properties": {
+                "width": 34,
+                "height": 42,
+                "stroke": "currentColor",
+                "fill": "#94a3b8",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "value": 0,
+                "onColor": "#0284c7",
+                "offColor": "#cbd5e1",
+                "label": "Flange",
+                "bindSource": "is_flange",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": 0,
+                "bindMax": 1,
+                "bindUnit": "",
+                "bindDecimals": 0,
+                "bindThreshold": 0.5,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 160,
+                "y": 74,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_l_dd2",
+              "typeId": "graphics.status_lamp",
+              "properties": {
+                "width": 34,
+                "height": 42,
+                "stroke": "currentColor",
+                "fill": "#94a3b8",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "value": 0,
+                "onColor": "#0284c7",
+                "offColor": "#cbd5e1",
+                "label": "D e D/2",
+                "bindSource": "is_dd2",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": 0,
+                "bindMax": 1,
+                "bindUnit": "",
+                "bindDecimals": 0,
+                "bindThreshold": 0.5,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 222,
+                "y": 74,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_l_corner",
+              "typeId": "graphics.status_lamp",
+              "properties": {
+                "width": 34,
+                "height": 42,
+                "stroke": "currentColor",
+                "fill": "#94a3b8",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "value": 0,
+                "onColor": "#0284c7",
+                "offColor": "#cbd5e1",
+                "label": "Canto",
+                "bindSource": "is_corner",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": 0,
+                "bindMax": 1,
+                "bindUnit": "",
+                "bindDecimals": 0,
+                "bindThreshold": 0.5,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 284,
+                "y": 74,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_l_up",
+              "typeId": "graphics.status_lamp",
+              "properties": {
+                "width": 34,
+                "height": 42,
+                "stroke": "currentColor",
+                "fill": "#94a3b8",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "value": 0,
+                "onColor": "#22c55e",
+                "offColor": "#ef4444",
+                "label": "Montante",
+                "bindSource": "ok_up",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": 0,
+                "bindMax": 1,
+                "bindUnit": "",
+                "bindDecimals": 0,
+                "bindThreshold": 0.5,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 380,
+                "y": 74,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_l_dn",
+              "typeId": "graphics.status_lamp",
+              "properties": {
+                "width": 34,
+                "height": 42,
+                "stroke": "currentColor",
+                "fill": "#94a3b8",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "value": 0,
+                "onColor": "#22c55e",
+                "offColor": "#ef4444",
+                "label": "Jusante",
+                "bindSource": "ok_dn",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": 0,
+                "bindMax": 1,
+                "bindUnit": "",
+                "bindDecimals": 0,
+                "bindThreshold": 0.5,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 446,
+                "y": 74,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_l_rough",
+              "typeId": "graphics.status_lamp",
+              "properties": {
+                "width": 34,
+                "height": 42,
+                "stroke": "currentColor",
+                "fill": "#94a3b8",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "value": 0,
+                "onColor": "#22c55e",
+                "offColor": "#ef4444",
+                "label": "Rugosidade",
+                "bindSource": "ok_rough",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": 0,
+                "bindMax": 1,
+                "bindUnit": "",
+                "bindDecimals": 0,
+                "bindThreshold": 0.5,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 512,
+                "y": 74,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_l_iso",
+              "typeId": "graphics.status_lamp",
+              "properties": {
+                "width": 34,
+                "height": 42,
+                "stroke": "currentColor",
+                "fill": "#94a3b8",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "value": 0,
+                "onColor": "#22c55e",
+                "offColor": "#ef4444",
+                "label": "Faixa ISO",
+                "bindSource": "ok_iso",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": 0,
+                "bindMax": 1,
+                "bindUnit": "",
+                "bindDecimals": 0,
+                "bindThreshold": 0.5,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 578,
+                "y": 74,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_q",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "Vazão",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "q",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "m³/h",
+                "bindDecimals": 2,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 16,
+                "y": 290,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_v",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "Velocidade",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "velocity",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "m/s",
+                "bindDecimals": 2,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 190,
+                "y": 290,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_re",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "Reynolds Re_D",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "reynolds",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "",
+                "bindDecimals": 0,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 16,
+                "y": 340,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_beta",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "β = d/D",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "beta",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "",
+                "bindDecimals": 4,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 190,
+                "y": 340,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_c",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "C (ISO 5167-2)",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "c_iso",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "",
+                "bindDecimals": 4,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 16,
+                "y": 390,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_creal",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "C real (com desvio)",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "c_real",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "",
+                "bindDecimals": 4,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 190,
+                "y": 390,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_eps",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "ε (expansibilidade)",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "epsilon",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "",
+                "bindDecimals": 4,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 16,
+                "y": 440,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_dev",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "Desvio didático de C",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "dev_total",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "%",
+                "bindDecimals": 2,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 190,
+                "y": 440,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_dpk",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "ΔP na placa",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "dp_kpa",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "kPa",
+                "bindDecimals": 2,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 16,
+                "y": 490,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_dpm",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "ΔP na placa",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "dp_mm",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "mmH2O",
+                "bindDecimals": 0,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 190,
+                "y": 490,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_loss",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "Perda permanente",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "loss",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "kPa",
+                "bindDecimals": 2,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 16,
+                "y": 540,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_rough",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "currentColor",
+                "fill": "#f8fafc",
+                "strokeWidth": 1.5,
+                "opacity": 1,
+                "label": "10⁴·Ra/D",
+                "valueColor": "#0f172a",
+                "value": 0,
+                "bindSource": "rough_rel",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "",
+                "bindDecimals": 2,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 190,
+                "y": 540,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_par_D",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "D na temperatura",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "D_T",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "mm",
+                "bindDecimals": 2,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 644,
+                "y": 290,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_par_d",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "d na temperatura",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "d_T",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "mm",
+                "bindDecimals": 3,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 818,
+                "y": 290,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_par_lup",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "Montante instalado",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "c_lup",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "D",
+                "bindDecimals": 1,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 644,
+                "y": 340,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_par_lupreq",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "Montante exigido",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "req_up_a",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "D",
+                "bindDecimals": 0,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 818,
+                "y": 340,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_par_ldn",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "Jusante instalado",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "c_ldn",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "D",
+                "bindDecimals": 1,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 644,
+                "y": 390,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_par_ldnreq",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "Jusante exigido",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "req_dn_a",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "D",
+                "bindDecimals": 0,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 818,
+                "y": 390,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_par_T",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "Temperatura",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "c_T",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "°C",
+                "bindDecimals": 1,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 644,
+                "y": 440,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_par_p1",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "Pressão a montante",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "c_p1",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "kPa",
+                "bindDecimals": 1,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 818,
+                "y": 440,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_par_rho",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "Massa específica",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "c_rho",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "kg/m³",
+                "bindDecimals": 1,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 644,
+                "y": 490,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_par_mu",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "Viscosidade",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "c_mu",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "cP",
+                "bindDecimals": 3,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 818,
+                "y": 490,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_par_ra",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "Ra da tubulação",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "ra_pipe",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "mm",
+                "bindDecimals": 4,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 644,
+                "y": 540,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "g_par_rlim",
+              "typeId": "graphics.value_display",
+              "properties": {
+                "width": 164,
+                "height": 44,
+                "stroke": "#64748b",
+                "fill": "#fefce8",
+                "strokeWidth": 1.2,
+                "opacity": 1,
+                "label": "Limite 10⁴·Ra/D",
+                "valueColor": "#713f12",
+                "value": 0,
+                "bindSource": "rough_limit",
+                "bindChannel": 0,
+                "bindScale": 1,
+                "bindOffset": 0,
+                "bindMin": -1000000000000,
+                "bindMax": 1000000000000,
+                "bindUnit": "",
+                "bindDecimals": 2,
+                "bindThreshold": 50,
+                "bindInvert": false
+              },
+              "visual": {
+                "x": 818,
+                "y": 540,
+                "rotation": 0
+              }
+            }
+          ],
+          "topology": {
+            "revision": 0,
+            "nodes": [],
+            "conductors": [
+              {
+                "id": "w-1",
+                "from": {
+                  "kind": "port",
+                  "componentId": "t_valve",
+                  "pinId": "value"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "u",
+                  "pinId": "in"
+                },
+                "points": []
+              },
+              {
+                "id": "w-2",
+                "from": {
+                  "kind": "port",
+                  "componentId": "u",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "q_set",
+                  "pinId": "u"
+                },
+                "points": []
+              },
+              {
+                "id": "w-3",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_qmax",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "q_set",
+                  "pinId": "Qmax"
+                },
+                "points": []
+              },
+              {
+                "id": "w-4",
+                "from": {
+                  "kind": "port",
+                  "componentId": "q_set",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "q",
+                  "pinId": "in"
+                },
+                "points": []
+              },
+              {
+                "id": "w-5",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_pipe_mat",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "alpha_pipe",
+                  "pinId": "m"
+                },
+                "points": []
+              },
+              {
+                "id": "w-6",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_plate_mat",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "alpha_plate",
+                  "pinId": "m"
+                },
+                "points": []
+              },
+              {
+                "id": "w-7",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_pipe_mat",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "ra_pipe",
+                  "pinId": "m"
+                },
+                "points": []
+              },
+              {
+                "id": "w-8",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_D",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "D_T",
+                  "pinId": "D"
+                },
+                "points": []
+              },
+              {
+                "id": "w-9",
+                "from": {
+                  "kind": "port",
+                  "componentId": "alpha_pipe",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "D_T",
+                  "pinId": "a"
+                },
+                "points": []
+              },
+              {
+                "id": "w-10",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_T",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "D_T",
+                  "pinId": "T"
+                },
+                "points": []
+              },
+              {
+                "id": "w-11",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_d",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "d_T",
+                  "pinId": "d"
+                },
+                "points": []
+              },
+              {
+                "id": "w-12",
+                "from": {
+                  "kind": "port",
+                  "componentId": "alpha_plate",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "d_T",
+                  "pinId": "a"
+                },
+                "points": []
+              },
+              {
+                "id": "w-13",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_T",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "d_T",
+                  "pinId": "T"
+                },
+                "points": []
+              },
+              {
+                "id": "w-14",
+                "from": {
+                  "kind": "port",
+                  "componentId": "d_T",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "beta",
+                  "pinId": "d"
+                },
+                "points": []
+              },
+              {
+                "id": "w-15",
+                "from": {
+                  "kind": "port",
+                  "componentId": "D_T",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "beta",
+                  "pinId": "D"
+                },
+                "points": []
+              },
+              {
+                "id": "w-16",
+                "from": {
+                  "kind": "port",
+                  "componentId": "q",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "velocity",
+                  "pinId": "q"
+                },
+                "points": []
+              },
+              {
+                "id": "w-17",
+                "from": {
+                  "kind": "port",
+                  "componentId": "D_T",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "velocity",
+                  "pinId": "D"
+                },
+                "points": []
+              },
+              {
+                "id": "w-18",
+                "from": {
+                  "kind": "port",
+                  "componentId": "q",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "reynolds",
+                  "pinId": "q"
+                },
+                "points": []
+              },
+              {
+                "id": "w-19",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_rho",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "reynolds",
+                  "pinId": "rho"
+                },
+                "points": []
+              },
+              {
+                "id": "w-20",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_mu",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "reynolds",
+                  "pinId": "mu"
+                },
+                "points": []
+              },
+              {
+                "id": "w-21",
+                "from": {
+                  "kind": "port",
+                  "componentId": "D_T",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "reynolds",
+                  "pinId": "D"
+                },
+                "points": []
+              },
+              {
+                "id": "w-22",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_tap",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "tap_L1",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-23",
+                "from": {
+                  "kind": "port",
+                  "componentId": "D_T",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "tap_L1",
+                  "pinId": "D"
+                },
+                "points": []
+              },
+              {
+                "id": "w-24",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_tap",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "tap_L2",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-25",
+                "from": {
+                  "kind": "port",
+                  "componentId": "D_T",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "tap_L2",
+                  "pinId": "D"
+                },
+                "points": []
+              },
+              {
+                "id": "w-26",
+                "from": {
+                  "kind": "port",
+                  "componentId": "beta",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "rhg_A",
+                  "pinId": "b"
+                },
+                "points": []
+              },
+              {
+                "id": "w-27",
+                "from": {
+                  "kind": "port",
+                  "componentId": "reynolds",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "rhg_A",
+                  "pinId": "Re"
+                },
+                "points": []
+              },
+              {
+                "id": "w-28",
+                "from": {
+                  "kind": "port",
+                  "componentId": "beta",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "c_iso",
+                  "pinId": "b"
+                },
+                "points": []
+              },
+              {
+                "id": "w-29",
+                "from": {
+                  "kind": "port",
+                  "componentId": "reynolds",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "c_iso",
+                  "pinId": "Re"
+                },
+                "points": []
+              },
+              {
+                "id": "w-30",
+                "from": {
+                  "kind": "port",
+                  "componentId": "tap_L1",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "c_iso",
+                  "pinId": "L1"
+                },
+                "points": []
+              },
+              {
+                "id": "w-31",
+                "from": {
+                  "kind": "port",
+                  "componentId": "tap_L2",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "c_iso",
+                  "pinId": "L2"
+                },
+                "points": []
+              },
+              {
+                "id": "w-32",
+                "from": {
+                  "kind": "port",
+                  "componentId": "rhg_A",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "c_iso",
+                  "pinId": "A"
+                },
+                "points": []
+              },
+              {
+                "id": "w-33",
+                "from": {
+                  "kind": "port",
+                  "componentId": "D_T",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "c_iso",
+                  "pinId": "D"
+                },
+                "points": []
+              },
+              {
+                "id": "w-34",
+                "from": {
+                  "kind": "port",
+                  "componentId": "beta",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "req_up_a",
+                  "pinId": "b"
+                },
+                "points": []
+              },
+              {
+                "id": "w-35",
+                "from": {
+                  "kind": "port",
+                  "componentId": "beta",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "req_up_b",
+                  "pinId": "b"
+                },
+                "points": []
+              },
+              {
+                "id": "w-36",
+                "from": {
+                  "kind": "port",
+                  "componentId": "beta",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "req_dn_a",
+                  "pinId": "b"
+                },
+                "points": []
+              },
+              {
+                "id": "w-37",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_lup",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dev_up",
+                  "pinId": "L"
+                },
+                "points": []
+              },
+              {
+                "id": "w-38",
+                "from": {
+                  "kind": "port",
+                  "componentId": "req_up_a",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dev_up",
+                  "pinId": "A"
+                },
+                "points": []
+              },
+              {
+                "id": "w-39",
+                "from": {
+                  "kind": "port",
+                  "componentId": "req_up_b",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dev_up",
+                  "pinId": "B"
+                },
+                "points": []
+              },
+              {
+                "id": "w-40",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_ldn",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dev_dn",
+                  "pinId": "L"
+                },
+                "points": []
+              },
+              {
+                "id": "w-41",
+                "from": {
+                  "kind": "port",
+                  "componentId": "req_dn_a",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dev_dn",
+                  "pinId": "A"
+                },
+                "points": []
+              },
+              {
+                "id": "w-42",
+                "from": {
+                  "kind": "port",
+                  "componentId": "ra_pipe",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "rough_rel",
+                  "pinId": "Ra"
+                },
+                "points": []
+              },
+              {
+                "id": "w-43",
+                "from": {
+                  "kind": "port",
+                  "componentId": "D_T",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "rough_rel",
+                  "pinId": "D"
+                },
+                "points": []
+              },
+              {
+                "id": "w-44",
+                "from": {
+                  "kind": "port",
+                  "componentId": "beta",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "rough_limit",
+                  "pinId": "b"
+                },
+                "points": []
+              },
+              {
+                "id": "w-45",
+                "from": {
+                  "kind": "port",
+                  "componentId": "rough_rel",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dev_rough",
+                  "pinId": "r"
+                },
+                "points": []
+              },
+              {
+                "id": "w-46",
+                "from": {
+                  "kind": "port",
+                  "componentId": "rough_limit",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dev_rough",
+                  "pinId": "lim"
+                },
+                "points": []
+              },
+              {
+                "id": "w-47",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_inst",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dev_total",
+                  "pinId": "on"
+                },
+                "points": []
+              },
+              {
+                "id": "w-48",
+                "from": {
+                  "kind": "port",
+                  "componentId": "dev_up",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dev_total",
+                  "pinId": "u"
+                },
+                "points": []
+              },
+              {
+                "id": "w-49",
+                "from": {
+                  "kind": "port",
+                  "componentId": "dev_dn",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dev_total",
+                  "pinId": "d"
+                },
+                "points": []
+              },
+              {
+                "id": "w-50",
+                "from": {
+                  "kind": "port",
+                  "componentId": "dev_rough",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dev_total",
+                  "pinId": "r"
+                },
+                "points": []
+              },
+              {
+                "id": "w-51",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_iso",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "c_real",
+                  "pinId": "C"
+                },
+                "points": []
+              },
+              {
+                "id": "w-52",
+                "from": {
+                  "kind": "port",
+                  "componentId": "dev_total",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "c_real",
+                  "pinId": "dev"
+                },
+                "points": []
+              },
+              {
+                "id": "w-53",
+                "from": {
+                  "kind": "port",
+                  "componentId": "q",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dp0",
+                  "pinId": "q"
+                },
+                "points": []
+              },
+              {
+                "id": "w-54",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_rho",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dp0",
+                  "pinId": "rho"
+                },
+                "points": []
+              },
+              {
+                "id": "w-55",
+                "from": {
+                  "kind": "port",
+                  "componentId": "beta",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dp0",
+                  "pinId": "b"
+                },
+                "points": []
+              },
+              {
+                "id": "w-56",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_real",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dp0",
+                  "pinId": "C"
+                },
+                "points": []
+              },
+              {
+                "id": "w-57",
+                "from": {
+                  "kind": "port",
+                  "componentId": "d_T",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dp0",
+                  "pinId": "d"
+                },
+                "points": []
+              },
+              {
+                "id": "w-58",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_fluid",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "eps1",
+                  "pinId": "gas"
+                },
+                "points": []
+              },
+              {
+                "id": "w-59",
+                "from": {
+                  "kind": "port",
+                  "componentId": "beta",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "eps1",
+                  "pinId": "b"
+                },
+                "points": []
+              },
+              {
+                "id": "w-60",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_p1",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "eps1",
+                  "pinId": "p1"
+                },
+                "points": []
+              },
+              {
+                "id": "w-61",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_kappa",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "eps1",
+                  "pinId": "k"
+                },
+                "points": []
+              },
+              {
+                "id": "w-62",
+                "from": {
+                  "kind": "port",
+                  "componentId": "dp0",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "eps1",
+                  "pinId": "dp"
+                },
+                "points": []
+              },
+              {
+                "id": "w-63",
+                "from": {
+                  "kind": "port",
+                  "componentId": "dp0",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dp1",
+                  "pinId": "dp0"
+                },
+                "points": []
+              },
+              {
+                "id": "w-64",
+                "from": {
+                  "kind": "port",
+                  "componentId": "eps1",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dp1",
+                  "pinId": "e"
+                },
+                "points": []
+              },
+              {
+                "id": "w-65",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_fluid",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "epsilon",
+                  "pinId": "gas"
+                },
+                "points": []
+              },
+              {
+                "id": "w-66",
+                "from": {
+                  "kind": "port",
+                  "componentId": "beta",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "epsilon",
+                  "pinId": "b"
+                },
+                "points": []
+              },
+              {
+                "id": "w-67",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_p1",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "epsilon",
+                  "pinId": "p1"
+                },
+                "points": []
+              },
+              {
+                "id": "w-68",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_kappa",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "epsilon",
+                  "pinId": "k"
+                },
+                "points": []
+              },
+              {
+                "id": "w-69",
+                "from": {
+                  "kind": "port",
+                  "componentId": "dp1",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "epsilon",
+                  "pinId": "dp"
+                },
+                "points": []
+              },
+              {
+                "id": "w-70",
+                "from": {
+                  "kind": "port",
+                  "componentId": "dp0",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dp_pa",
+                  "pinId": "dp0"
+                },
+                "points": []
+              },
+              {
+                "id": "w-71",
+                "from": {
+                  "kind": "port",
+                  "componentId": "epsilon",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dp_pa",
+                  "pinId": "e"
+                },
+                "points": []
+              },
+              {
+                "id": "w-72",
+                "from": {
+                  "kind": "port",
+                  "componentId": "dp_pa",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dp_kpa",
+                  "pinId": "dp"
+                },
+                "points": []
+              },
+              {
+                "id": "w-73",
+                "from": {
+                  "kind": "port",
+                  "componentId": "dp_pa",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "dp_mm",
+                  "pinId": "dp"
+                },
+                "points": []
+              },
+              {
+                "id": "w-74",
+                "from": {
+                  "kind": "port",
+                  "componentId": "dp_kpa",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "loss",
+                  "pinId": "dp"
+                },
+                "points": []
+              },
+              {
+                "id": "w-75",
+                "from": {
+                  "kind": "port",
+                  "componentId": "beta",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "loss",
+                  "pinId": "b"
+                },
+                "points": []
+              },
+              {
+                "id": "w-76",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_real",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "loss",
+                  "pinId": "C"
+                },
+                "points": []
+              },
+              {
+                "id": "w-77",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_p1",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "p_ratio",
+                  "pinId": "p1"
+                },
+                "points": []
+              },
+              {
+                "id": "w-78",
+                "from": {
+                  "kind": "port",
+                  "componentId": "dp_pa",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "p_ratio",
+                  "pinId": "dp"
+                },
+                "points": []
+              },
+              {
+                "id": "w-79",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_p1",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "p_high",
+                  "pinId": "p1"
+                },
+                "points": []
+              },
+              {
+                "id": "w-80",
+                "from": {
+                  "kind": "port",
+                  "componentId": "p_high",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "p_low",
+                  "pinId": "h"
+                },
+                "points": []
+              },
+              {
+                "id": "w-81",
+                "from": {
+                  "kind": "port",
+                  "componentId": "dp_mm",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "p_low",
+                  "pinId": "dp"
+                },
+                "points": []
+              },
+              {
+                "id": "w-82",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_tap",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "is_flange",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-83",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_tap",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "is_dd2",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-84",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_tap",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "is_corner",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-85",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_lup",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "ok_up",
+                  "pinId": "L"
+                },
+                "points": []
+              },
+              {
+                "id": "w-86",
+                "from": {
+                  "kind": "port",
+                  "componentId": "req_up_a",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "ok_up",
+                  "pinId": "A"
+                },
+                "points": []
+              },
+              {
+                "id": "w-87",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_ldn",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "ok_dn",
+                  "pinId": "L"
+                },
+                "points": []
+              },
+              {
+                "id": "w-88",
+                "from": {
+                  "kind": "port",
+                  "componentId": "req_dn_a",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "ok_dn",
+                  "pinId": "A"
+                },
+                "points": []
+              },
+              {
+                "id": "w-89",
+                "from": {
+                  "kind": "port",
+                  "componentId": "rough_rel",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "ok_rough",
+                  "pinId": "r"
+                },
+                "points": []
+              },
+              {
+                "id": "w-90",
+                "from": {
+                  "kind": "port",
+                  "componentId": "rough_limit",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "ok_rough",
+                  "pinId": "lim"
+                },
+                "points": []
+              },
+              {
+                "id": "w-91",
+                "from": {
+                  "kind": "port",
+                  "componentId": "beta",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "ok_iso",
+                  "pinId": "b"
+                },
+                "points": []
+              },
+              {
+                "id": "w-92",
+                "from": {
+                  "kind": "port",
+                  "componentId": "D_T",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "ok_iso",
+                  "pinId": "D"
+                },
+                "points": []
+              },
+              {
+                "id": "w-93",
+                "from": {
+                  "kind": "port",
+                  "componentId": "d_T",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "ok_iso",
+                  "pinId": "d"
+                },
+                "points": []
+              },
+              {
+                "id": "w-94",
+                "from": {
+                  "kind": "port",
+                  "componentId": "reynolds",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "ok_iso",
+                  "pinId": "Re"
+                },
+                "points": []
+              },
+              {
+                "id": "w-95",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_tap",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "ok_iso",
+                  "pinId": "t"
+                },
+                "points": []
+              },
+              {
+                "id": "w-96",
+                "from": {
+                  "kind": "port",
+                  "componentId": "c_fluid",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "ok_iso",
+                  "pinId": "gas"
+                },
+                "points": []
+              },
+              {
+                "id": "w-97",
+                "from": {
+                  "kind": "port",
+                  "componentId": "p_ratio",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "ok_iso",
+                  "pinId": "r"
+                },
+                "points": []
+              },
+              {
+                "id": "w-98",
+                "from": {
+                  "kind": "port",
+                  "componentId": "p_high",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_high",
+                  "pinId": "value"
+                },
+                "points": []
+              },
+              {
+                "id": "w-99",
+                "from": {
+                  "kind": "port",
+                  "componentId": "p_low",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_low",
+                  "pinId": "value"
+                },
+                "points": []
+              },
+              {
+                "id": "w-100",
+                "from": {
+                  "kind": "port",
+                  "componentId": "q",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_flow",
+                  "pinId": "value"
+                },
+                "points": []
+              },
+              {
+                "id": "w-101",
+                "from": {
+                  "kind": "port",
+                  "componentId": "dp_mm",
+                  "pinId": "out"
+                },
+                "to": {
+                  "kind": "port",
+                  "componentId": "t_dp",
+                  "pinId": "value"
+                },
+                "points": []
+              }
+            ]
+          },
+          "interface": [
+            {
+              "pinId": "valve",
+              "label": "Válvula (%)",
+              "internalTunnel": "valve",
+              "domain": "signal",
+              "direction": "in",
+              "valueType": "Real",
+              "width": 1
+            },
+            {
+              "pinId": "flow",
+              "label": "Vazão (m³/h)",
+              "internalTunnel": "flow",
+              "domain": "signal",
+              "direction": "out",
+              "valueType": "Real",
+              "width": 1
+            },
+            {
+              "pinId": "dp",
+              "label": "ΔP (mmH2O)",
+              "internalTunnel": "dp",
+              "domain": "signal",
+              "direction": "out",
+              "valueType": "Real",
+              "width": 1
+            },
+            {
+              "pinId": "high",
+              "label": "HIGH (mmH2O)",
+              "internalTunnel": "high",
+              "domain": "signal",
+              "direction": "out",
+              "valueType": "Real",
+              "width": 1
+            },
+            {
+              "pinId": "low",
+              "label": "LOW (mmH2O)",
+              "internalTunnel": "low",
+              "domain": "signal",
+              "direction": "out",
+              "valueType": "Real",
+              "width": 1
+            }
+          ],
+          "symbolMode": "custom",
+          "symbol": {
+            "width": 1000,
+            "height": 720,
+            "border": true,
+            "shapes": [
+              {
+                "kind": "text",
+                "x": 160,
+                "y": 24,
+                "value": "Vazão por placa de orifício (ISO 5167-2) — transmissor de pressão diferencial",
+                "fontSize": 13,
+                "textAnchor": "start",
+                "color": "#0f172a"
+              },
+              {
+                "kind": "path",
+                "d": "M112 40 H756 V155.95 H806",
+                "stroke": "#0f172a",
+                "strokeWidth": 1.2,
+                "strokeDasharray": "6 4",
+                "fill": "none"
+              },
+              {
+                "kind": "path",
+                "d": "M70 56 V176 Q70 200 94 200",
+                "stroke": "#64748b",
+                "strokeWidth": 18,
+                "fill": "none"
+              },
+              {
+                "kind": "path",
+                "d": "M70 56 V176 Q70 200 94 200",
+                "stroke": "#cbd5e1",
+                "strokeWidth": 15,
+                "fill": "none"
+              },
+              {
+                "kind": "text",
+                "x": 84,
+                "y": 72,
+                "value": "entrada",
+                "fontSize": 10,
+                "textAnchor": "start",
+                "color": "#334155"
+              },
+              {
+                "kind": "text",
+                "x": 56,
+                "y": 230,
+                "value": "curva 90°",
+                "fontSize": 10,
+                "textAnchor": "start",
+                "color": "#334155"
+              },
+              {
+                "kind": "path",
+                "d": "M839 200 H922",
+                "stroke": "#64748b",
+                "strokeWidth": 18,
+                "fill": "none"
+              },
+              {
+                "kind": "path",
+                "d": "M839 200 H922",
+                "stroke": "#cbd5e1",
+                "strokeWidth": 15,
+                "fill": "none"
+              },
+              {
+                "kind": "text",
+                "x": 952,
+                "y": 178,
+                "value": "saída",
+                "fontSize": 10,
+                "textAnchor": "middle",
+                "color": "#334155"
+              },
+              {
+                "kind": "text",
+                "x": 825,
+                "y": 121.55,
+                "value": "FV (válvula)",
+                "fontSize": 10,
+                "textAnchor": "middle",
+                "color": "#334155"
+              },
+              {
+                "kind": "text",
+                "x": 500,
+                "y": 170,
+                "value": "FE (placa)",
+                "fontSize": 10,
+                "textAnchor": "middle",
+                "color": "#0f172a"
+              },
+              {
+                "kind": "line",
+                "x1": 94,
+                "y1": 240,
+                "x2": 462,
+                "y2": 240,
+                "stroke": "#0f172a",
+                "strokeWidth": 1
+              },
+              {
+                "kind": "line",
+                "x1": 94,
+                "y1": 234,
+                "x2": 94,
+                "y2": 246,
+                "stroke": "#0f172a",
+                "strokeWidth": 1
+              },
+              {
+                "kind": "line",
+                "x1": 462,
+                "y1": 234,
+                "x2": 462,
+                "y2": 246,
+                "stroke": "#0f172a",
+                "strokeWidth": 1
+              },
+              {
+                "kind": "text",
+                "x": 278,
+                "y": 256,
+                "value": "trecho reto a montante (L montante · D)",
+                "fontSize": 10,
+                "textAnchor": "middle",
+                "color": "#334155"
+              },
+              {
+                "kind": "line",
+                "x1": 538,
+                "y1": 240,
+                "x2": 803,
+                "y2": 240,
+                "stroke": "#0f172a",
+                "strokeWidth": 1
+              },
+              {
+                "kind": "line",
+                "x1": 538,
+                "y1": 234,
+                "x2": 538,
+                "y2": 246,
+                "stroke": "#0f172a",
+                "strokeWidth": 1
+              },
+              {
+                "kind": "line",
+                "x1": 803,
+                "y1": 234,
+                "x2": 803,
+                "y2": 246,
+                "stroke": "#0f172a",
+                "strokeWidth": 1
+              },
+              {
+                "kind": "text",
+                "x": 670.5,
+                "y": 256,
+                "value": "trecho reto a jusante (L jusante · D)",
+                "fontSize": 10,
+                "textAnchor": "middle",
+                "color": "#334155"
+              },
+              {
+                "kind": "text",
+                "x": 160,
+                "y": 68,
+                "value": "Tipo de tomada",
+                "fontSize": 9,
+                "textAnchor": "start",
+                "color": "#0369a1"
+              },
+              {
+                "kind": "text",
+                "x": 380,
+                "y": 68,
+                "value": "Conformidade com a ISO 5167-2",
+                "fontSize": 9,
+                "textAnchor": "start",
+                "color": "#166534"
+              },
+              {
+                "kind": "line",
+                "x1": 471,
+                "y1": 223,
+                "x2": 471,
+                "y2": 672,
+                "stroke": "#f97316",
+                "strokeWidth": 4
+              },
+              {
+                "kind": "line",
+                "x1": 471,
+                "y1": 672,
+                "x2": 1000,
+                "y2": 672,
+                "stroke": "#f97316",
+                "strokeWidth": 4
+              },
+              {
+                "kind": "line",
+                "x1": 529,
+                "y1": 223,
+                "x2": 529,
+                "y2": 698,
+                "stroke": "#eab308",
+                "strokeWidth": 4
+              },
+              {
+                "kind": "line",
+                "x1": 529,
+                "y1": 698,
+                "x2": 1000,
+                "y2": 698,
+                "stroke": "#eab308",
+                "strokeWidth": 4
+              },
+              {
+                "kind": "text",
+                "x": 463,
+                "y": 276,
+                "value": "alta (+)",
+                "fontSize": 10,
+                "textAnchor": "end",
+                "color": "#7c2d12"
+              },
+              {
+                "kind": "text",
+                "x": 537,
+                "y": 276,
+                "value": "baixa (−)",
+                "fontSize": 10,
+                "textAnchor": "start",
+                "color": "#713f12"
+              },
+              {
+                "kind": "text",
+                "x": 500,
+                "y": 470,
+                "value": "ΔP",
+                "fontSize": 16,
+                "textAnchor": "middle",
+                "color": "#0f172a"
+              },
+              {
+                "kind": "text",
+                "x": 16,
+                "y": 676,
+                "value": "ligue HIGH e LOW no LD301 (função raiz quadrada: corrente ∝ vazão)",
+                "fontSize": 10,
+                "textAnchor": "start",
+                "color": "#0f172a"
+              },
+              {
+                "kind": "text",
+                "x": 16,
+                "y": 280,
+                "value": "Medição",
+                "fontSize": 9,
+                "textAnchor": "start",
+                "color": "#0f172a"
+              },
+              {
+                "kind": "text",
+                "x": 644,
+                "y": 280,
+                "value": "Parâmetros (Propriedades exportadas)",
+                "fontSize": 9,
+                "textAnchor": "start",
+                "color": "#713f12"
+              }
+            ],
+            "pins": [
+              {
+                "id": "valve",
+                "kind": "ANALOG_IN",
+                "x": 0,
+                "y": 40,
+                "angle": 180,
+                "length": 8,
+                "label": "Válvula (%)"
+              },
+              {
+                "id": "flow",
+                "kind": "ANALOG_OUT",
+                "x": 1000,
+                "y": 620,
+                "angle": 0,
+                "length": 8,
+                "label": "Vazão (m³/h)"
+              },
+              {
+                "id": "dp",
+                "kind": "ANALOG_OUT",
+                "x": 1000,
+                "y": 645,
+                "angle": 0,
+                "length": 8,
+                "label": "ΔP (mmH2O)"
+              },
+              {
+                "id": "high",
+                "kind": "ANALOG_OUT",
+                "x": 1000,
+                "y": 672,
+                "angle": 0,
+                "length": 8,
+                "label": "HIGH"
+              },
+              {
+                "id": "low",
+                "kind": "ANALOG_OUT",
+                "x": 1000,
+                "y": 698,
+                "angle": 0,
+                "length": 8,
+                "label": "LOW"
+              }
+            ]
+          },
+          "exposedComponents": [
+            {
+              "componentId": "g_pipe_up",
+              "x": 94,
+              "y": 191,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 0
+            },
+            {
+              "componentId": "g_pipe_dn",
+              "x": 538,
+              "y": 191,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 1
+            },
+            {
+              "componentId": "g_flange_up",
+              "x": 462,
+              "y": 177,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 2
+            },
+            {
+              "componentId": "g_plate",
+              "x": 480,
+              "y": 178,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 3
+            },
+            {
+              "componentId": "g_flange_dn",
+              "x": 520,
+              "y": 177,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 4
+            },
+            {
+              "componentId": "g_valve",
+              "x": 780,
+              "y": 127.55,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 5
+            },
+            {
+              "componentId": "g_arrow",
+              "x": 924,
+              "y": 184,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 6
+            },
+            {
+              "componentId": "g_l_flange",
+              "x": 160,
+              "y": 74,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 7
+            },
+            {
+              "componentId": "g_l_dd2",
+              "x": 222,
+              "y": 74,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 8
+            },
+            {
+              "componentId": "g_l_corner",
+              "x": 284,
+              "y": 74,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 9
+            },
+            {
+              "componentId": "g_l_up",
+              "x": 380,
+              "y": 74,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 10
+            },
+            {
+              "componentId": "g_l_dn",
+              "x": 446,
+              "y": 74,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 11
+            },
+            {
+              "componentId": "g_l_rough",
+              "x": 512,
+              "y": 74,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 12
+            },
+            {
+              "componentId": "g_l_iso",
+              "x": 578,
+              "y": 74,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 13
+            },
+            {
+              "componentId": "g_q",
+              "x": 16,
+              "y": 290,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 14
+            },
+            {
+              "componentId": "g_v",
+              "x": 190,
+              "y": 290,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 15
+            },
+            {
+              "componentId": "g_re",
+              "x": 16,
+              "y": 340,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 16
+            },
+            {
+              "componentId": "g_beta",
+              "x": 190,
+              "y": 340,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 17
+            },
+            {
+              "componentId": "g_c",
+              "x": 16,
+              "y": 390,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 18
+            },
+            {
+              "componentId": "g_creal",
+              "x": 190,
+              "y": 390,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 19
+            },
+            {
+              "componentId": "g_eps",
+              "x": 16,
+              "y": 440,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 20
+            },
+            {
+              "componentId": "g_dev",
+              "x": 190,
+              "y": 440,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 21
+            },
+            {
+              "componentId": "g_dpk",
+              "x": 16,
+              "y": 490,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 22
+            },
+            {
+              "componentId": "g_dpm",
+              "x": 190,
+              "y": 490,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 23
+            },
+            {
+              "componentId": "g_loss",
+              "x": 16,
+              "y": 540,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 24
+            },
+            {
+              "componentId": "g_rough",
+              "x": 190,
+              "y": 540,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 25
+            },
+            {
+              "componentId": "g_par_D",
+              "x": 644,
+              "y": 290,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 26
+            },
+            {
+              "componentId": "g_par_d",
+              "x": 818,
+              "y": 290,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 27
+            },
+            {
+              "componentId": "g_par_lup",
+              "x": 644,
+              "y": 340,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 28
+            },
+            {
+              "componentId": "g_par_lupreq",
+              "x": 818,
+              "y": 340,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 29
+            },
+            {
+              "componentId": "g_par_ldn",
+              "x": 644,
+              "y": 390,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 30
+            },
+            {
+              "componentId": "g_par_ldnreq",
+              "x": 818,
+              "y": 390,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 31
+            },
+            {
+              "componentId": "g_par_T",
+              "x": 644,
+              "y": 440,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 32
+            },
+            {
+              "componentId": "g_par_p1",
+              "x": 818,
+              "y": 440,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 33
+            },
+            {
+              "componentId": "g_par_rho",
+              "x": 644,
+              "y": 490,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 34
+            },
+            {
+              "componentId": "g_par_mu",
+              "x": 818,
+              "y": 490,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 35
+            },
+            {
+              "componentId": "g_par_ra",
+              "x": 644,
+              "y": 540,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 36
+            },
+            {
+              "componentId": "g_par_rlim",
+              "x": 818,
+              "y": 540,
+              "rotation": 0,
+              "flipH": false,
+              "flipV": false,
+              "scale": 1,
+              "layer": 37
+            }
+          ],
+          "exportedPropertyComponentIds": [
+            "c_D",
+            "c_d",
+            "c_tap",
+            "c_lup",
+            "c_ldn",
+            "c_pipe_mat",
+            "c_plate_mat",
+            "c_T",
+            "c_fluid",
+            "c_rho",
+            "c_mu",
+            "c_kappa",
+            "c_p1",
+            "c_qmax",
+            "c_inst"
+          ]
+        }
+      }
+    },
+    {
+      "id": "component-1791564831697-valv01",
+      "typeId": "graphics.slider",
+      "label": "Válvula de controle (%)",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": -747.2955639054371,
+        "y": -23.895910486326216,
+        "rotation": 0
+      },
+      "properties": {
+        "width": 212,
+        "height": 34,
+        "stroke": "currentColor",
+        "fill": "#ffffff",
+        "strokeWidth": 1.5,
+        "opacity": 1,
+        "showTicks": true,
+        "value": 50,
+        "bindSource": "",
+        "bindChannel": 0,
+        "bindScale": 1,
+        "bindOffset": 0,
+        "bindMin": 0,
+        "bindMax": 100,
+        "bindUnit": "%",
+        "bindDecimals": 0,
+        "actionTarget": "",
+        "actionProperty": "",
+        "actionMode": "set",
+        "actionValue": "50",
+        "actionReleaseValue": "0",
+        "actionStep": 1,
+        "actionMin": 0,
+        "actionMax": 100
+      }
+    }
+  ],
+  "topology": {
+    "revision": 460,
+    "nodes": [],
+    "conductors": [
+      {
+        "id": "wire-1791289319738-917151",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791289162830-859519",
+          "pinId": "pin-1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791289285255-920511",
+          "pinId": "pin-1"
+        },
+        "vertices": [
+          {
+            "x": 924.8550428314728,
+            "y": 592
+          },
+          {
+            "x": 904,
+            "y": 592
+          },
+          {
+            "x": 904,
+            "y": 579.8879543130956
+          }
+        ]
+      },
+      {
+        "id": "wire-1791289326470-913544",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791288839897-764493",
+          "pinId": "loop_plus"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791289285255-920511",
+          "pinId": "pin-2"
+        },
+        "vertices": [
+          {
+            "x": 887.007350089845,
+            "y": 625.1040895136738
+          }
+        ]
+      },
+      {
+        "id": "wire-1791298588001-91206",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791298567681-219290",
+          "pinId": "loop_plus"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791289162830-859519",
+          "pinId": "pin-2"
+        },
+        "vertices": [
+          {
+            "x": 898.1868755684786,
+            "y": 688
+          },
+          {
+            "x": 924.8550428314728,
+            "y": 688
+          }
+        ]
+      },
+      {
+        "id": "wire-1791298748828-934933",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791298650899-835065",
+          "pinId": "pin-1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791288839897-764493",
+          "pinId": "loop_minus"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791374348388-270274",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791374334324-929938",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791298650899-835065",
+          "pinId": "pin-1"
+        },
+        "vertices": [
+          {
+            "x": 792,
+            "y": 685.9491629183711
+          },
+          {
+            "x": 792,
+            "y": 645.3796861568541
+          }
+        ]
+      },
+      {
+        "id": "wire-1791374421440-436107",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791374352508-941802",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791298650899-835065",
+          "pinId": "pin-2"
+        },
+        "vertices": [
+          {
+            "x": 824,
+            "y": 702.7710276585746
+          },
+          {
+            "x": 824,
+            "y": 645.3796861568541
+          }
+        ]
+      },
+      {
+        "id": "wire-1791374425471-750644",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791298567681-219290",
+          "pinId": "loop_minus"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791298650899-835065",
+          "pinId": "pin-2"
+        },
+        "vertices": [
+          {
+            "x": 882.1868755684786,
+            "y": 645.3796861568541
+          }
+        ]
+      },
+      {
+        "id": "wire-1791478211710-287323",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791478193390-287006",
+          "pinId": "pin-1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791374315637-835373",
+          "pinId": "pin"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791478214574-959464",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791374384819-700152",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791478193390-287006",
+          "pinId": "pin-2"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791564831697-valve",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791564831697-valv01",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791564831697-orif01",
+          "pinId": "valve"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791564831697-high",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791564831697-orif01",
+          "pinId": "high"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791288839897-764493",
+          "pinId": "high"
+        },
+        "vertices": []
+      },
+      {
+        "id": "wire-1791564831697-low",
+        "from": {
+          "kind": "port",
+          "componentId": "component-1791564831697-orif01",
+          "pinId": "low"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "component-1791288839897-764493",
+          "pinId": "low"
+        },
+        "vertices": [
+          {
+            "x": 580.7044360945629,
+            "y": 651.1040895136738
+          },
+          {
+            "x": 580.7044360945629,
+            "y": 645.1040895136738
+          }
+        ]
+      }
+    ]
+  },
+  "visual": {
+    "viewport": {
+      "x": 360.7830037574467,
+      "y": 50.1031597188468,
+      "zoom": 0.45
+    }
+  },
+  "simulationSettings": {}
+}

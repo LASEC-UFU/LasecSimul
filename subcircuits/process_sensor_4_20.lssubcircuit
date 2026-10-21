@@ -15,7 +15,7 @@
       "id": "c_p",
       "typeId": "control.constant",
       "properties": {
-        "value": 100.0,
+        "value": 100,
         "unit": "kPa"
       },
       "visual": {
@@ -29,7 +29,7 @@
       "id": "c_pmin",
       "typeId": "control.constant",
       "properties": {
-        "value": 0.0,
+        "value": 0,
         "unit": "kPa"
       },
       "visual": {
@@ -43,7 +43,7 @@
       "id": "c_pmax",
       "typeId": "control.constant",
       "properties": {
-        "value": 200.0,
+        "value": 200,
         "unit": "kPa"
       },
       "visual": {
@@ -55,19 +55,10 @@
     },
     {
       "id": "i_raw",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "4+16*(p-pmin)/(pmax-pmin)",
-        "inputs": [
-          "p",
-          "pmin",
-          "pmax"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "4 + 16*(u(1) - u(2))/(u(3) - u(2))",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 240,
@@ -78,11 +69,11 @@
     },
     {
       "id": "i_loop",
-      "typeId": "control.saturation",
+      "typeId": "sl.saturation",
       "properties": {
-        "minimum": 3.8,
-        "maximum": 20.5,
-        "samplePeriodNs": 10000000
+        "UpperLimit": "20.5",
+        "LowerLimit": "3.8",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 440,
@@ -138,8 +129,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "kPa",
         "bindDecimals": 1
       },
@@ -166,14 +157,26 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000.0,
-        "bindMax": 1000000000.0,
+        "bindMin": -1000000000,
+        "bindMax": 1000000000,
         "bindUnit": "mA",
         "bindDecimals": 3
       },
       "visual": {
         "x": 210,
         "y": 106,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "i_raw__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 160,
+        "y": 80,
         "rotation": 0
       }
     }
@@ -191,8 +194,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "i_raw",
-          "pinId": "p"
+          "componentId": "i_raw__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -205,8 +208,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "i_raw",
-          "pinId": "pmin"
+          "componentId": "i_raw__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -219,8 +222,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "i_raw",
-          "pinId": "pmax"
+          "componentId": "i_raw__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -229,12 +232,12 @@
         "from": {
           "kind": "port",
           "componentId": "i_raw",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
           "componentId": "i_loop",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -243,7 +246,7 @@
         "from": {
           "kind": "port",
           "componentId": "i_loop",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -257,7 +260,7 @@
         "from": {
           "kind": "port",
           "componentId": "i_raw",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -265,6 +268,20 @@
           "pinId": "value"
         },
         "points": []
+      },
+      {
+        "id": "i_raw__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "i_raw__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "i_raw",
+          "pinId": "in1"
+        },
+        "vertices": []
       }
     ]
   },

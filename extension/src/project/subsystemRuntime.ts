@@ -18,6 +18,9 @@ import {
   SubsystemDefinition,
 } from "../ui/webview/subsystemModel";
 import { fileSourceId, materializeEmbeddedSubcircuit } from "./embeddedSubcircuits";
+import { LEGACY_LIBRARY_EXPORTS } from "../migration/controlLibrary/legacyLibraryExports";
+import { migrateControlDocument, needsControlMigration } from "../migration/controlLibrary/migrateDocument";
+import { migrateFileInPlace } from "../migration/controlLibrary/migrationFiles";
 
 /**
  * Ponte entre as definições de subsistemas (tabela do documento, `ui/webview/subsystemModel.ts`) e o
@@ -81,7 +84,18 @@ export async function registerExternalSystemFile(filePath: string, options: { re
   const key = path.resolve(filePath).toLowerCase();
   if (visiting.has(key)) return; // referência circular entre arquivos: o Core recusa o que faltar
   visiting.add(key);
-  const manifest = readJsonFile(filePath) as Record<string, unknown>;
+  let manifest = readJsonFile(filePath) as Record<string, unknown>;
+  // Blocos legados `control.*` (docs/69): o arquivo é migrado no disco (backup verificado + relatório);
+  // sem permissão de escrita, migrado só em memória e registrado pela cópia materializada.
+  let migratedInMemory = false;
+  if (needsControlMigration(manifest)) {
+    try {
+      if (await migrateFileInPlace(filePath)) manifest = readJsonFile(filePath) as Record<string, unknown>;
+    } catch {
+      manifest = migrateControlDocument(manifest, { librarySnapshot: LEGACY_LIBRARY_EXPORTS }).document;
+      migratedInMemory = true;
+    }
+  }
   for (const nested of nestedExternalFiles(manifestWithAbsoluteRefs(manifest, filePath))) {
     try {
       await registerExternalSystemFile(nested, { replace: true }, visiting);
@@ -91,7 +105,7 @@ export async function registerExternalSystemFile(filePath: string, options: { re
   }
   const components = Array.isArray(manifest.components) ? manifest.components : [];
   const legacyEmbedded = components.some((component) => typeof component === "object" && component !== null && "subcircuitRef" in component && Boolean((component as { subcircuitRef?: { embedded?: unknown } }).subcircuitRef?.embedded));
-  if (manifestSubsystems(manifest).length === 0 && !legacyEmbedded) {
+  if (manifestSubsystems(manifest).length === 0 && !legacyEmbedded && !migratedInMemory) {
     await registerManifestFile(filePath, Boolean(options.replace));
     return;
   }

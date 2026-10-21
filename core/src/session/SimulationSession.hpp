@@ -623,6 +623,22 @@ private:
     void removeSubcircuitInstanceUnlocked(uint32_t subcircuitInstanceId);
     void sendComponentEventUnlocked(uint32_t componentIndex, const ComponentEvent& event);
 
+public:
+    /** Variável do Model Workspace (docs/66 §3): nome MATLAB e expressão do subconjunto MATLAB. */
+    struct ModelVariable {
+        std::string name;
+        std::string expression;
+    };
+    /**
+     * Troca o Model Workspace inteiro. As variáveis são avaliadas em ordem (cada uma enxerga as
+     * anteriores) e valem para os parâmetros de todos os blocos `sl.*`. Devolve os erros por variável;
+     * as válidas entram mesmo assim. Parada: o próximo plano recompila com os valores novos. Rodando:
+     * como o "Update Diagram" do Simulink, só parâmetros ajustáveis de mesma forma mudam na hora; os
+     * blocos cuja forma mudaria são relatados e esperam a próxima compilação.
+     */
+    std::vector<std::pair<std::string, std::string>> setModelWorkspace(const std::vector<ModelVariable>& variables);
+
+private:
     /** Parâmetro ajustável (`tunable`) de um bloco `sl.*` com o plano já compilado: reavalia o builder
      * com a resolução vigente e troca os parâmetros reais dos kernels sem recompilar (Simulink: parâmetro
      * ajustável muda durante a simulação, mas não a forma). Mudança de forma recompila com a simulação

@@ -170,11 +170,9 @@
     },
     {
       "id": "u",
-      "typeId": "control.observer",
+      "typeId": "sl.gain",
       "properties": {
-        "unit": "%",
-        "observerOnly": true,
-        "samplePeriodNs": 10000000
+        "Gain": "1"
       },
       "visual": {
         "x": 40,
@@ -185,18 +183,10 @@
     },
     {
       "id": "q_heat",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "1000*P*((u>0)*(u<100)*u+(u>99.9999)*100)/100",
-        "inputs": [
-          "u",
-          "P"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "1000*u(2)*((u(1) > 0)*(u(1) < 100)*u(1) + (u(1) > 99.9999)*100)/100",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -207,19 +197,10 @@
     },
     {
       "id": "q_loss",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "UA*(T-Ta)",
-        "inputs": [
-          "T",
-          "UA",
-          "Ta"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(2)*(u(1) - u(3))",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -230,17 +211,10 @@
     },
     {
       "id": "mc",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "4186*V",
-        "inputs": [
-          "V"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "4186*u(1)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -251,20 +225,10 @@
     },
     {
       "id": "heat_in",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "((T<100)*q+(T>99.9999)*((q<l)*q+(q>l-0.000001)*l))/mc",
-        "inputs": [
-          "q",
-          "l",
-          "T",
-          "mc"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "((u(3) < 100)*u(1) + (u(3) > 99.9999)*((u(1) < u(2))*u(1) + (u(1) > u(2) - 0.000001)*u(2)))/u(4)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -275,18 +239,10 @@
     },
     {
       "id": "heat_out",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "l/mc",
-        "inputs": [
-          "l",
-          "mc"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)/u(2)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -297,7 +253,7 @@
     },
     {
       "id": "temp",
-      "typeId": "control.accumulator",
+      "typeId": "process.accumulator",
       "properties": {
         "initial": 25,
         "samplePeriodNs": 10000000
@@ -311,18 +267,10 @@
     },
     {
       "id": "tau_th",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "mc/UA/60",
-        "inputs": [
-          "mc",
-          "UA"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)/u(2)/60",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -333,18 +281,10 @@
     },
     {
       "id": "well_in",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "T/((tau>0.1)*tau+(tau<0.1)*0.1)",
-        "inputs": [
-          "T",
-          "tau"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)/((u(2) > 0.1)*u(2) + (u(2) < 0.1)*0.1)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -355,18 +295,10 @@
     },
     {
       "id": "well_out",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "Ts/((tau>0.1)*tau+(tau<0.1)*0.1)",
-        "inputs": [
-          "Ts",
-          "tau"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(1)/((u(2) > 0.1)*u(2) + (u(2) < 0.1)*0.1)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -377,7 +309,7 @@
     },
     {
       "id": "sensor_temp",
-      "typeId": "control.accumulator",
+      "typeId": "process.accumulator",
       "properties": {
         "initial": 25,
         "samplePeriodNs": 10000000
@@ -391,19 +323,10 @@
     },
     {
       "id": "r_pt100",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "R0*(1+0.0039083*(Ts+d)+(-5.775e-07)*(Ts+d)^2+((Ts+d)<0)*(-4.183e-12)*((Ts+d)-100)*(Ts+d)^3)",
-        "inputs": [
-          "Ts",
-          "d",
-          "R0"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "u(3)*(1 + 0.0039083*(u(1) + u(2)) + -5.775e-7*(u(1) + u(2))^2 + (u(1) + u(2) < 0)*-4.183e-12*(u(1) + u(2) - 100)*(u(1) + u(2))^3)",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -414,18 +337,10 @@
     },
     {
       "id": "r_element",
-      "typeId": "control.calc_expression",
+      "typeId": "sl.fcn",
       "properties": {
-        "expression": "(b<0.5)*r+(b>0.5)*1000000000",
-        "inputs": [
-          "r",
-          "b"
-        ],
-        "upperLimit": 0,
-        "lowerLimit": 0,
-        "upperLimitEnabled": false,
-        "lowerLimitEnabled": false,
-        "samplePeriodNs": 10000000
+        "Expr": "(u(2) < 0.5)*u(1) + (u(2) > 0.5)*1000000000",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 620,
@@ -600,7 +515,7 @@
         "opacity": 1
       },
       "visual": {
-        "x": 198.0,
+        "x": 198,
         "y": 336.2265625,
         "rotation": 0
       }
@@ -718,8 +633,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "°C",
         "bindDecimals": 2,
         "bindThreshold": 50,
@@ -748,8 +663,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "°C",
         "bindDecimals": 2,
         "bindThreshold": 50,
@@ -778,8 +693,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "Ω",
         "bindDecimals": 3,
         "bindThreshold": 50,
@@ -808,8 +723,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "W",
         "bindDecimals": 0,
         "bindThreshold": 50,
@@ -838,8 +753,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "W",
         "bindDecimals": 0,
         "bindThreshold": 50,
@@ -868,8 +783,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "min",
         "bindDecimals": 1,
         "bindThreshold": 50,
@@ -898,8 +813,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "L",
         "bindDecimals": 1,
         "bindThreshold": 50,
@@ -928,8 +843,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "kW",
         "bindDecimals": 2,
         "bindThreshold": 50,
@@ -958,8 +873,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "W/K",
         "bindDecimals": 1,
         "bindThreshold": 50,
@@ -988,8 +903,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "°C",
         "bindDecimals": 1,
         "bindThreshold": 50,
@@ -1018,8 +933,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "s",
         "bindDecimals": 1,
         "bindThreshold": 50,
@@ -1048,8 +963,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "Ω",
         "bindDecimals": 1,
         "bindThreshold": 50,
@@ -1078,8 +993,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "Ω",
         "bindDecimals": 2,
         "bindThreshold": 50,
@@ -1108,8 +1023,8 @@
         "bindChannel": 0,
         "bindScale": 1,
         "bindOffset": 0,
-        "bindMin": -1000000000000.0,
-        "bindMax": 1000000000000.0,
+        "bindMin": -1000000000000,
+        "bindMax": 1000000000000,
         "bindUnit": "°C",
         "bindDecimals": 2,
         "bindThreshold": 50,
@@ -1118,6 +1033,114 @@
       "visual": {
         "x": 760,
         "y": 360,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "q_heat__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 540,
+        "y": 40,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "q_loss__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 540,
+        "y": 100,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "heat_in__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "4"
+      },
+      "visual": {
+        "x": 540,
+        "y": 220,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "heat_out__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 540,
+        "y": 280,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tau_th__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 540,
+        "y": 340,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "well_in__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 540,
+        "y": 400,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "well_out__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 540,
+        "y": 460,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "r_pt100__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 540,
+        "y": 520,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "r_element__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 540,
+        "y": 580,
         "rotation": 0
       }
     }
@@ -1136,7 +1159,7 @@
         "to": {
           "kind": "port",
           "componentId": "u",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1145,12 +1168,12 @@
         "from": {
           "kind": "port",
           "componentId": "u",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "q_heat",
-          "pinId": "u"
+          "componentId": "q_heat__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1163,8 +1186,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "q_heat",
-          "pinId": "P"
+          "componentId": "q_heat__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1177,8 +1200,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "q_loss",
-          "pinId": "T"
+          "componentId": "q_loss__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1191,8 +1214,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "q_loss",
-          "pinId": "UA"
+          "componentId": "q_loss__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1205,8 +1228,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "q_loss",
-          "pinId": "Ta"
+          "componentId": "q_loss__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1220,7 +1243,7 @@
         "to": {
           "kind": "port",
           "componentId": "mc",
-          "pinId": "V"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1229,12 +1252,12 @@
         "from": {
           "kind": "port",
           "componentId": "q_heat",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "heat_in",
-          "pinId": "q"
+          "componentId": "heat_in__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1243,12 +1266,12 @@
         "from": {
           "kind": "port",
           "componentId": "q_loss",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "heat_in",
-          "pinId": "l"
+          "componentId": "heat_in__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1261,8 +1284,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "heat_in",
-          "pinId": "T"
+          "componentId": "heat_in__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1271,12 +1294,12 @@
         "from": {
           "kind": "port",
           "componentId": "mc",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "heat_in",
-          "pinId": "mc"
+          "componentId": "heat_in__mux",
+          "pinId": "in4"
         },
         "points": []
       },
@@ -1285,12 +1308,12 @@
         "from": {
           "kind": "port",
           "componentId": "q_loss",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "heat_out",
-          "pinId": "l"
+          "componentId": "heat_out__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1299,12 +1322,12 @@
         "from": {
           "kind": "port",
           "componentId": "mc",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "heat_out",
-          "pinId": "mc"
+          "componentId": "heat_out__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1313,7 +1336,7 @@
         "from": {
           "kind": "port",
           "componentId": "heat_in",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1327,7 +1350,7 @@
         "from": {
           "kind": "port",
           "componentId": "heat_out",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1341,12 +1364,12 @@
         "from": {
           "kind": "port",
           "componentId": "mc",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "tau_th",
-          "pinId": "mc"
+          "componentId": "tau_th__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1359,8 +1382,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "tau_th",
-          "pinId": "UA"
+          "componentId": "tau_th__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1373,8 +1396,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "well_in",
-          "pinId": "T"
+          "componentId": "well_in__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1387,8 +1410,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "well_in",
-          "pinId": "tau"
+          "componentId": "well_in__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1401,8 +1424,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "well_out",
-          "pinId": "Ts"
+          "componentId": "well_out__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1415,8 +1438,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "well_out",
-          "pinId": "tau"
+          "componentId": "well_out__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1425,7 +1448,7 @@
         "from": {
           "kind": "port",
           "componentId": "well_in",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1439,7 +1462,7 @@
         "from": {
           "kind": "port",
           "componentId": "well_out",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1457,8 +1480,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "r_pt100",
-          "pinId": "Ts"
+          "componentId": "r_pt100__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1471,8 +1494,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "r_pt100",
-          "pinId": "d"
+          "componentId": "r_pt100__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1485,8 +1508,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "r_pt100",
-          "pinId": "R0"
+          "componentId": "r_pt100__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1495,12 +1518,12 @@
         "from": {
           "kind": "port",
           "componentId": "r_pt100",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "r_element",
-          "pinId": "r"
+          "componentId": "r_element__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1513,8 +1536,8 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "r_element",
-          "pinId": "b"
+          "componentId": "r_element__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1523,7 +1546,7 @@
         "from": {
           "kind": "port",
           "componentId": "r_element",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1713,6 +1736,132 @@
           "pinId": "value"
         },
         "points": []
+      },
+      {
+        "id": "q_heat__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "q_heat__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_heat",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "q_loss__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "q_loss__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "q_loss",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "heat_in__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "heat_in__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "heat_in",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "heat_out__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "heat_out__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "heat_out",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "tau_th__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "tau_th__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tau_th",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "well_in__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "well_in__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "well_in",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "well_out__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "well_out__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "well_out",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "r_pt100__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "r_pt100__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "r_pt100",
+          "pinId": "in1"
+        },
+        "vertices": []
+      },
+      {
+        "id": "r_element__w1",
+        "from": {
+          "kind": "port",
+          "componentId": "r_element__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "r_element",
+          "pinId": "in1"
+        },
+        "vertices": []
       }
     ]
   },
@@ -1837,7 +1986,7 @@
       },
       {
         "kind": "text",
-        "x": 230.0,
+        "x": 230,
         "y": 414.2265625,
         "value": "resistência de aquecimento",
         "fontSize": 9,
@@ -1846,7 +1995,7 @@
       },
       {
         "kind": "rect",
-        "x": 275.0,
+        "x": 275,
         "y": 92.15625,
         "w": 10,
         "h": 216.0703125,
@@ -1856,7 +2005,7 @@
       },
       {
         "kind": "rect",
-        "x": 276.0,
+        "x": 276,
         "y": 296.2265625,
         "w": 8,
         "h": 14,
@@ -1866,7 +2015,7 @@
       },
       {
         "kind": "rect",
-        "x": 266.0,
+        "x": 266,
         "y": 72.15625,
         "w": 28,
         "h": 22,
@@ -1876,7 +2025,7 @@
       },
       {
         "kind": "text",
-        "x": 280.0,
+        "x": 280,
         "y": 87.15625,
         "value": "TE",
         "fontSize": 9,
@@ -1885,7 +2034,7 @@
       },
       {
         "kind": "text",
-        "x": 292.0,
+        "x": 292,
         "y": 306.2265625,
         "value": "Pt100",
         "fontSize": 9,
@@ -1894,7 +2043,7 @@
       },
       {
         "kind": "text",
-        "x": 298.0,
+        "x": 298,
         "y": 68.15625,
         "value": "TE-101 (poço termométrico)",
         "fontSize": 9,
@@ -2046,7 +2195,7 @@
     },
     {
       "componentId": "g_coil",
-      "x": 198.0,
+      "x": 198,
       "y": 336.2265625,
       "rotation": 0,
       "flipH": false,

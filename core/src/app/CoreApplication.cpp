@@ -190,6 +190,7 @@ const std::unordered_map<std::string_view, std::pair<const char*, const char*>>&
         {"control.calc_expression", {"Expressão de Cálculo", "Calc Expression"}},
         {"control.probe", {"Ponta de Prova", "Probe"}},
         {"control.process", {"Processo", "Process"}},
+        {"process.accumulator", {"Acumulador", "Accumulator"}},
     };
     return kNames;
 }
@@ -2265,6 +2266,25 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             for (uint8_t b : *result) { out.push_back(digits[b >> 4]); out.push_back(digits[b & 15]); }
             resp.ok = true; resp.payloadJson = nlohmann::json{{"frameHex", out}, {"simulationTimeNs", session.scheduler().nowNs()}}.dump();
         } catch (const std::exception& e) { resp.ok = false; resp.error = std::string("hartTransact falhou: ") + e.what(); }
+        return resp;
+    }
+    if (msg.type == "setModelWorkspace") {
+        // Model Workspace do projeto (docs/66 §3): `{variables:[{name, value}]}` em ordem de avaliação.
+        try {
+            const nlohmann::json payload =
+                msg.payloadJson.empty() ? nlohmann::json::object() : nlohmann::json::parse(msg.payloadJson);
+            std::vector<session::SimulationSession::ModelVariable> variables;
+            for (const auto& entry : payload.value("variables", nlohmann::json::array()))
+                variables.push_back({entry.value("name", std::string{}), entry.value("value", std::string{})});
+            nlohmann::json errors = nlohmann::json::array();
+            for (const auto& [name, message] : session.setModelWorkspace(variables))
+                errors.push_back({{"name", name}, {"message", message}});
+            resp.ok = true;
+            resp.payloadJson = nlohmann::json{{"errors", errors}}.dump();
+        } catch (const std::exception& e) {
+            resp.ok = false;
+            resp.error = std::string("setModelWorkspace falhou: ") + e.what();
+        }
         return resp;
     }
     if (msg.type == "setSubcircuitChildProperty") {

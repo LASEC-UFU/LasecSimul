@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.hysteresis",
+      "kind": "single",
+      "rule": "hysteresis->relay",
+      "newTypeIds": [
+        "sl.relay"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_hysteresis.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.735Z",
+  "original": {
+    "backup": "control_hysteresis.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "68abe9fb4e97b99f63187d94e755bc62fac0b788536a418ec87543fcfa637230"
+  },
+  "migrated": {
+    "sha256": "de81cf1c24ae4db29eefe2475a93aa38abcb94e5246d11a35f9e4321d6f541c9"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "hysteresis->relay": 1
+    }
+  }
+}

@@ -54,8 +54,15 @@ namespace lasecsimul::components {
  */
 class SignalMathBlock final : public IComponentModel {
 public:
+    /** Acumulador conservativo (ADR 0013) com o typeId da migração para a biblioteca equivalente ao
+     * Simulink (docs/68): é bloco de PROCESSO do LasecSimul, não de controle; mesmas portas,
+     * propriedades e semântica do `control.accumulator`. */
+    static constexpr std::string_view kProcessAccumulatorTypeId = "process.accumulator";
+
     SignalMathBlock(std::string typeId, const registry::ComponentParams& params)
-        : m_typeId(std::move(typeId)), m_properties(params.properties) {}
+        : m_publicTypeId(typeId),
+          m_typeId(typeId == kProcessAccumulatorTypeId ? std::string("control.accumulator") : std::move(typeId)),
+          m_properties(params.properties) {}
 
     /** `true` para todo typeId que ESTA classe sabe materializar -- a mesma lista que
      * `registerBuiltinComponents` registra e que `computeGraph` cobre, em um único lugar. */
@@ -72,12 +79,12 @@ public:
             "control.fopdt", "control.transfer_function", "control.accumulator", "control.valve_characteristic",
             "control.saturation", "control.limiter", "control.deadband", "control.hysteresis",
             "control.stiction", "control.rate_limiter", "control.pid", "control.pid_station", "control.calc_expression",
-            "control.probe", "control.observer", "control.process", "control.state_space",
+            "control.probe", "control.observer", "control.process", "control.state_space", kProcessAccumulatorTypeId,
         };
         return {kIds, std::size(kIds)};
     }
 
-    const char* typeId() const override { return m_typeId.c_str(); }
+    const char* typeId() const override { return m_publicTypeId.c_str(); }
     std::span<Pin> pins() override { return {}; }
     void stamp(MnaMatrixView&) override {}
     void postStep(uint64_t) override {}
@@ -592,6 +599,9 @@ private:
         return fallback;
     }
 
+    /** typeId publicado (o da instância); `m_typeId` é o da semântica (`process.accumulator` usa a do
+     * `control.accumulator`). */
+    std::string m_publicTypeId;
     std::string m_typeId;
     std::unordered_map<std::string, PropertyValue> m_properties;
 };

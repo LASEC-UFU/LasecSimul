@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.gain",
+      "kind": "single",
+      "rule": "gain->gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_gain.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.730Z",
+  "original": {
+    "backup": "control_gain.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "db7fb49ec01f30ba8cff30f5b1215052bdd908cbbe3cbe04b708d6f7f7cd0765"
+  },
+  "migrated": {
+    "sha256": "4091fe172f033cbddd1413ed48db5451e9e86b57a2a4a90b865ce0e3da636410"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "gain->gain": 1
+    }
+  }
+}

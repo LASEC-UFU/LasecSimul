@@ -1,0 +1,32 @@
+{
+  "description": "Casos de porta das bibliotecas Continuous e Discrete (docs/66 §3). Core (BlockLibrary.cpp::resolvePorts) e Extension (ports.ts) devem produzir exatamente estas portas, na ordem do Simulink.",
+  "cases": [
+    { "typeId": "sl.integrator", "properties": { "ExternalReset": "level hold" }, "inputs": ["in1", "reset"], "outputs": ["out1"] },
+    { "typeId": "sl.integrator", "properties": { "InitialConditionSource": "external", "ShowStatePort": true }, "inputs": ["in1", "x0"], "outputs": ["out1", "state"] },
+    { "typeId": "sl.second_order_integrator", "properties": {}, "inputs": ["in1"], "outputs": ["out1", "dx"] },
+    { "typeId": "sl.second_order_integrator", "properties": { "ShowOutput": "x" }, "inputs": ["in1"], "outputs": ["out1"] },
+    { "typeId": "sl.second_order_integrator", "properties": { "ShowOutput": "dxdt" }, "inputs": ["in1"], "outputs": ["dx"] },
+    { "typeId": "sl.second_order_integrator", "properties": { "ICSourceX": "external", "ICSourceDXDT": "external", "ExternalReset": "either" }, "inputs": ["in1", "x0", "dx0", "reset"], "outputs": ["out1", "dx"] },
+    { "typeId": "sl.second_order_integrator", "properties": { "ICSourceDXDT": "external", "ExternalReset": "rising" }, "inputs": ["in1", "dx0", "reset"], "outputs": ["out1", "dx"] },
+    { "typeId": "sl.variable_time_delay", "properties": {}, "inputs": ["in1", "in2"], "outputs": ["out1"] },
+    { "typeId": "sl.variable_transport_delay", "properties": {}, "inputs": ["in1", "in2"], "outputs": ["out1"] },
+    { "typeId": "sl.variable_transport_delay", "properties": { "VariableDelayType": "Variable time delay" }, "inputs": ["in1", "in2"], "outputs": ["out1"] },
+    { "typeId": "sl.first_order_hold", "properties": {}, "inputs": ["in1"], "outputs": ["out1"] },
+    { "typeId": "sl.delay", "properties": {}, "inputs": ["in1"], "outputs": ["out1"] },
+    { "typeId": "sl.delay", "properties": { "DelayLengthSource": "Input port" }, "inputs": ["in1", "d"], "outputs": ["out1"] },
+    { "typeId": "sl.delay", "properties": { "InitialConditionSource": "Input port", "ExternalReset": "Rising" }, "inputs": ["in1", "reset", "x0"], "outputs": ["out1"] },
+    { "typeId": "sl.delay", "properties": { "DelayLengthSource": "Input port", "ShowEnablePort": true, "ExternalReset": "Level hold", "InitialConditionSource": "Input port" }, "inputs": ["in1", "d", "enable", "reset", "x0"], "outputs": ["out1"] },
+    { "typeId": "sl.discrete_time_integrator", "properties": {}, "inputs": ["in1"], "outputs": ["out1"] },
+    { "typeId": "sl.discrete_time_integrator", "properties": { "ExternalReset": "sampled level", "InitialConditionSource": "external", "LimitOutput": true, "ShowSaturationPort": true, "ShowStatePort": true }, "inputs": ["in1", "reset", "x0"], "outputs": ["out1", "sat", "state"] },
+    { "typeId": "sl.discrete_time_integrator", "properties": { "ShowSaturationPort": true }, "inputs": ["in1"], "outputs": ["out1"] },
+    { "typeId": "sl.discrete_transfer_fcn", "properties": {}, "inputs": ["in1"], "outputs": ["out1"] },
+    { "typeId": "sl.discrete_transfer_fcn", "properties": { "NumeratorSource": "Input port", "DenominatorSource": "Input port", "ExternalReset": "Either", "InitialStatesSource": "Input port" }, "inputs": ["in1", "num", "den", "reset", "x0"], "outputs": ["out1"] },
+    { "typeId": "sl.discrete_filter", "properties": { "InitialStatesSource": "Input port" }, "inputs": ["in1", "x0"], "outputs": ["out1"] },
+    { "typeId": "sl.discrete_filter", "properties": { "FilterStructure": "Direct form I", "InitialStatesSource": "Input port", "NumeratorSource": "Input port" }, "inputs": ["in1", "num"], "outputs": ["out1"] },
+    { "typeId": "sl.discrete_fir_filter", "properties": { "CoefSource": "Input port", "ExternalReset": "Rising", "ShowEnablePort": true }, "inputs": ["in1", "num", "reset", "enable"], "outputs": ["out1"] },
+    { "typeId": "sl.conditional_hold", "properties": {}, "inputs": ["in1", "h"], "outputs": ["out1"] },
+    { "typeId": "sl.propagation_delay", "properties": {}, "inputs": ["in1", "dt"], "outputs": ["out1"] },
+    { "typeId": "sl.transfer_fcn_direct_form_ii_time_varying", "properties": {}, "inputs": ["in1", "num", "den"], "outputs": ["out1"] },
+    { "typeId": "sl.tapped_delay", "properties": { "includeCurrent": true }, "inputs": ["in1"], "outputs": ["out1"] }
+  ]
+}

@@ -1,0 +1,4994 @@
+{
+ "revisionBefore": "ab4c1efb7",
+ "legacyExe": "core\\build-legacy-reference\\bin\\lasecsimul-core.exe",
+ "currentExe": "core\\build-main\\Release\\lasecsimul-core.exe",
+ "seconds": 0.4,
+ "gridMs": 10,
+ "stimulus": [
+  0,
+  1,
+  10,
+  0.5
+ ],
+ "generatedAt": "2026-10-21T15:26:21.365Z",
+ "results": [
+  {
+   "file": "subcircuits/control_accumulator.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage:inActual",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage:outActual",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage:overflow",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage:unmet",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage:cumIn",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1.145,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 10,
+     "eventCountAfter": 10,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage:cumOut",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1.145,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 10,
+     "eventCountAfter": 10,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage:cumOverflow",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage:cumUnmet",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage:cumSpill",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage:upperContactTime",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 10000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 20000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 30000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 40000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 50000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 60000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 70000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 80000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 90000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 100000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 110000000,
+       "before": -1,
+       "after": -1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage:lowerContactTime",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 10000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 20000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 30000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 40000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 50000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 60000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 70000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 80000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 90000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 100000000,
+       "before": -1,
+       "after": -1
+      },
+      {
+       "t": 110000000,
+       "before": -1,
+       "after": -1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_bias.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_dead_time.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 2,
+     "eventCountAfter": 2,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 2,
+     "eventCountAfter": 2,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_deadband.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_divide.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 10000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 20000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 30000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 40000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 50000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 60000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 70000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 80000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 90000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 100000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [
+      {
+       "t": 0,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 10000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 20000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 30000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 40000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 50000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 60000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 70000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 80000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 90000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 100000000,
+       "before": null,
+       "after": null
+      }
+     ],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 10000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 20000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 30000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 40000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 50000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 60000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 70000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 80000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 90000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 100000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [
+      {
+       "t": 0,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 10000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 20000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 30000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 40000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 50000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 60000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 70000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 80000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 90000000,
+       "before": null,
+       "after": null
+      },
+      {
+       "t": 100000000,
+       "before": null,
+       "after": null
+      }
+     ],
+     "verdict": "identico"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_filtered_derivative.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "equivalente",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 680.5636047342691,
+     "maxAbs": 5.684341886080802e-14,
+     "maxRelToRange": 8.35240357629805e-17,
+     "rmse": 1.340456309149869e-14,
+     "nrmse": 1.9696267914198258e-17,
+     "eventShiftS": 0,
+     "eventCount": 7,
+     "eventCountAfter": 7,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 680.5636047342691,
+     "maxAbs": 5.684341886080802e-14,
+     "maxRelToRange": 8.35240357629805e-17,
+     "rmse": 1.340456309149869e-14,
+     "nrmse": 1.9696267914198258e-17,
+     "eventShiftS": 0,
+     "eventCount": 7,
+     "eventCountAfter": 7,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_first_order.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "equivalente",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1.0377324845983813,
+     "maxAbs": 5.773159728050814e-15,
+     "maxRelToRange": 5.563244683705856e-15,
+     "rmse": 2.8290268141843947e-15,
+     "nrmse": 2.726161950379025e-15,
+     "eventShiftS": 0,
+     "eventCount": 10,
+     "eventCountAfter": 10,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1.0377324845983813,
+     "maxAbs": 5.773159728050814e-15,
+     "maxRelToRange": 5.563244683705856e-15,
+     "rmse": 2.8290268141843947e-15,
+     "nrmse": 2.726161950379025e-15,
+     "eventShiftS": 0,
+     "eventCount": 10,
+     "eventCountAfter": 10,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_gain.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_hysteresis.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 1,
+     "eventCountAfter": 1,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 1,
+     "eventCountAfter": 1,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_integrator.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "equivalente",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1.144999999999999,
+     "maxAbs": 1.723066134218243e-13,
+     "maxRelToRange": 1.5048612525923533e-13,
+     "rmse": 6.312160676343678e-14,
+     "nrmse": 5.5128040841429555e-14,
+     "eventShiftS": 0,
+     "eventCount": 10,
+     "eventCountAfter": 10,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1.144999999999999,
+     "maxAbs": 1.723066134218243e-13,
+     "maxRelToRange": 1.5048612525923533e-13,
+     "rmse": 6.312160676343678e-14,
+     "nrmse": 5.5128040841429555e-14,
+     "eventShiftS": 0,
+     "eventCount": 10,
+     "eventCountAfter": 10,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_lead_lag.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "equivalente",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1.0377324845983813,
+     "maxAbs": 5.551115123125783e-15,
+     "maxRelToRange": 5.349273734332554e-15,
+     "rmse": 2.684803053061875e-15,
+     "nrmse": 2.587182239072853e-15,
+     "eventShiftS": 0,
+     "eventCount": 10,
+     "eventCountAfter": 10,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1.0377324845983813,
+     "maxAbs": 5.551115123125783e-15,
+     "maxRelToRange": 5.349273734332554e-15,
+     "rmse": 2.684803053061875e-15,
+     "nrmse": 2.587182239072853e-15,
+     "eventShiftS": 0,
+     "eventCount": 10,
+     "eventCountAfter": 10,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_limiter.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_product.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 100,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 2,
+     "eventCountAfter": 2,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 100,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 2,
+     "eventCountAfter": 2,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_saturation.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_second_order.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 0.14176509677380886,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 12,
+     "eventCountAfter": 12,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 0.14176509677380886,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 12,
+     "eventCountAfter": 12,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_subtract.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_sum.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 20,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 2,
+       "after": 2
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 20,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 2,
+       "after": 2
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_transfer_function.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "equivalente",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1.0377324845983813,
+     "maxAbs": 5.773159728050814e-15,
+     "maxRelToRange": 5.563244683705856e-15,
+     "rmse": 2.8290268141843947e-15,
+     "nrmse": 2.726161950379025e-15,
+     "eventShiftS": 0,
+     "eventCount": 10,
+     "eventCountAfter": 10,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1.0377324845983813,
+     "maxAbs": 5.773159728050814e-15,
+     "maxRelToRange": 5.563244683705856e-15,
+     "rmse": 2.8290268141843947e-15,
+     "nrmse": 2.726161950379025e-15,
+     "eventShiftS": 0,
+     "eventCount": 10,
+     "eventCountAfter": 10,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_unit_delay.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_valve_characteristic.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_rate_limiter.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "equivalente",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 0.2900000000000001,
+     "maxAbs": 1.5709655798445965e-14,
+     "maxRelToRange": 5.417122689119297e-14,
+     "rmse": 5.668998411244863e-15,
+     "nrmse": 1.954827038360297e-14,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 0.2900000000000001,
+     "maxAbs": 1.5709655798445965e-14,
+     "maxRelToRange": 5.417122689119297e-14,
+     "rmse": 5.668998411244863e-15,
+     "nrmse": 1.954827038360297e-14,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_stiction.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 10,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 3,
+     "eventCountAfter": 3,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 1,
+       "after": 1
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_fopdt.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "equivalente",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 0.9476601986155847,
+     "maxAbs": 5.551115123125783e-15,
+     "maxRelToRange": 5.857706307846717e-15,
+     "rmse": 1.7566841706239965e-15,
+     "nrmse": 1.8537068172645602e-15,
+     "eventShiftS": 0,
+     "eventCount": 9,
+     "eventCountAfter": 9,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 0.9476601986155847,
+     "maxAbs": 5.551115123125783e-15,
+     "maxRelToRange": 5.857706307846717e-15,
+     "rmse": 1.7566841706239965e-15,
+     "nrmse": 1.8537068172645602e-15,
+     "eventShiftS": 0,
+     "eventCount": 9,
+     "eventCountAfter": 9,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "equivalente"
+    }
+   ]
+  },
+  {
+   "file": "subcircuits/control_pid.lssubcircuit",
+   "diagram": "principal",
+   "seconds": 0.4,
+   "gridMs": 10,
+   "verdict": "identico",
+   "missingChannels": [],
+   "extraChannels": [],
+   "comparisons": [
+    {
+     "channel": "saida:out",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    },
+    {
+     "channel": "bloco:stage",
+     "samples": 41,
+     "unmatchedSamples": 0,
+     "mismatchedNonFinite": 0,
+     "range": 1e-12,
+     "maxAbs": 0,
+     "maxRelToRange": 0,
+     "rmse": 0,
+     "nrmse": 0,
+     "eventShiftS": 0,
+     "eventCount": 0,
+     "eventCountAfter": 0,
+     "firstSamples": [
+      {
+       "t": 0,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 10000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 20000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 30000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 40000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 50000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 60000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 70000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 80000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 90000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 100000000,
+       "before": 0,
+       "after": 0
+      },
+      {
+       "t": 110000000,
+       "before": 0,
+       "after": 0
+      }
+     ],
+     "mismatchSamples": [],
+     "verdict": "identico"
+    }
+   ]
+  }
+ ]
+}

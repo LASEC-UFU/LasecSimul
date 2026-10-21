@@ -464,12 +464,12 @@
         },
         {
           "id": "fo",
-          "typeId": "control.first_order",
+          "typeId": "sl.discrete_transfer_fcn",
           "properties": {
-            "gain": 2,
-            "tau": 5,
-            "initial": 0,
-            "samplePeriodNs": 10000000
+            "Numerator": "[0.003996002665333842]",
+            "Denominator": "[1 -0.9980019986673331]",
+            "InitialStates": "0",
+            "SampleTime": "0.01"
           },
           "visual": {
             "x": 240,
@@ -564,7 +564,7 @@
             "to": {
               "kind": "port",
               "componentId": "fo",
-              "pinId": "in"
+              "pinId": "in1"
             },
             "points": []
           },
@@ -573,7 +573,7 @@
             "from": {
               "kind": "port",
               "componentId": "fo",
-              "pinId": "out"
+              "pinId": "out1"
             },
             "to": {
               "kind": "port",

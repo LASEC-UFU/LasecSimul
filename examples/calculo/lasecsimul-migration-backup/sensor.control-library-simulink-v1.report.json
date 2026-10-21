@@ -1,0 +1,80 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "subsystems/subsystem.process.sensor_4_20",
+      "componentId": "c_p",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "subsystems/subsystem.process.sensor_4_20",
+      "componentId": "c_pmin",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "subsystems/subsystem.process.sensor_4_20",
+      "componentId": "c_pmax",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "subsystems/subsystem.process.sensor_4_20",
+      "componentId": "i_raw",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "subsystems/subsystem.process.sensor_4_20",
+      "componentId": "i_loop",
+      "legacyTypeId": "control.saturation",
+      "kind": "single",
+      "rule": "saturation->saturation",
+      "newTypeIds": [
+        "sl.saturation"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "sensor.lsproj",
+  "generatedAt": "2026-10-21T17:07:38.633Z",
+  "original": {
+    "backup": "sensor.control-library-simulink-v1.original.lsproj",
+    "sha256": "6c6d5d1663fd66ed2cc9e7029675d97df4a16e2b0cbbf6d0bbc86ac2a9580ec2"
+  },
+  "migrated": {
+    "sha256": "a8b29bb6a2cf8a937df81b2fb80dfc014fbd1d4c54301cba2dd09e324e4746d7"
+  },
+  "summary": {
+    "converted": 2,
+    "kept": 3,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 3,
+      "calc_expression->mux+fcn": 1,
+      "saturation->saturation": 1
+    }
+  }
+}

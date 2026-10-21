@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.dead_time",
+      "kind": "single",
+      "rule": "dead_time->transport_delay",
+      "newTypeIds": [
+        "sl.transport_delay"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_dead_time.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.690Z",
+  "original": {
+    "backup": "control_dead_time.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "6bce04d01a6b1e594709d7878115e11f2a9e89d02de12bedef37e9a1cb2ac02f"
+  },
+  "migrated": {
+    "sha256": "410810bb16d47089a8c4e544579fc477eb9d80ccc611f60b33542918e8781a5c"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "dead_time->transport_delay": 1
+    }
+  }
+}

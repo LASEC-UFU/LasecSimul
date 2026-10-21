@@ -1,0 +1,964 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    {
+      "id": "laboratorio-calculo",
+      "typeId": "tools.hmi_screen",
+      "label": "Laboratório de Cálculo",
+      "showValue": false,
+      "showDialValue": false,
+      "properties": {
+        "title": "Laboratório de Cálculo",
+        "screenId": "laboratorio",
+        "width": 176,
+        "height": 64
+      },
+      "visual": {
+        "x": 40,
+        "y": 20,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "sensor-lab",
+      "typeId": "subsystem.process.sensor_4_20",
+      "properties": {},
+      "label": "Sensor 4–20 mA do laboratório",
+      "showValue": false,
+      "showDialValue": false,
+      "visual": {
+        "x": 40,
+        "y": 120,
+        "rotation": 0
+      }
+    }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": []
+  },
+  "visual": {
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    }
+  },
+  "simulationSettings": {},
+  "visualDocuments": [
+    {
+      "schemaVersion": 1,
+      "id": "laboratorio",
+      "kind": "screen",
+      "title": "Laboratório de Cálculo",
+      "startPageId": "pagina-sensor-composta",
+      "pages": [
+        {
+          "id": "pagina-sensor-composta",
+          "name": "Sensor 4–20 mA — função afim",
+          "width": 1920,
+          "height": 1080,
+          "elements": [
+            {
+              "id": "sensor-cartao-processo",
+              "typeId": "graphics.math.card",
+              "label": "sensor-cartao-processo",
+              "properties": {
+                "width": 936,
+                "height": 760,
+                "title": "Transmissor no laço 4–20 mA",
+                "icon": "gauge",
+                "variant": "dark"
+              },
+              "visual": {
+                "x": 24,
+                "y": 24,
+                "width": 936,
+                "height": 760,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-modelo",
+              "typeId": "graphics.math.equation",
+              "label": "sensor-modelo",
+              "properties": {
+                "width": 896,
+                "height": 140,
+                "formula": "I = 4 + 16 (P - P_min)/(P_max - P_min)",
+                "lhs": "",
+                "variable": "",
+                "showValue": false,
+                "fontSize": 38,
+                "background": "glass"
+              },
+              "visual": {
+                "x": 44,
+                "y": 96,
+                "width": 896,
+                "height": 140,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-leitura-p",
+              "typeId": "graphics.math.readout",
+              "label": "sensor-leitura-p",
+              "properties": {
+                "width": 420,
+                "height": 92,
+                "plantComponentId": "sensor-lab",
+                "quantity": "p",
+                "decimals": 1,
+                "fontSize": 40,
+                "label": "Pressão medida"
+              },
+              "visual": {
+                "x": 60,
+                "y": 262,
+                "width": 420,
+                "height": 92,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-leitura-i",
+              "typeId": "graphics.math.readout",
+              "label": "sensor-leitura-i",
+              "properties": {
+                "width": 420,
+                "height": 92,
+                "plantComponentId": "sensor-lab",
+                "quantity": "i",
+                "decimals": 2,
+                "fontSize": 40,
+                "label": "Corrente no laço",
+                "color": "#86efac"
+              },
+              "visual": {
+                "x": 500,
+                "y": 262,
+                "width": 420,
+                "height": 92,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-pressao",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "sensor-pressao",
+              "properties": {
+                "width": 896,
+                "height": 76,
+                "plantComponentId": "sensor-lab",
+                "parameterId": "p"
+              },
+              "visual": {
+                "x": 44,
+                "y": 384,
+                "width": 896,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-pmin",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "sensor-pmin",
+              "properties": {
+                "width": 430,
+                "height": 76,
+                "plantComponentId": "sensor-lab",
+                "parameterId": "pmin"
+              },
+              "visual": {
+                "x": 44,
+                "y": 476,
+                "width": 430,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-pmax",
+              "typeId": "graphics.math.plant_parameter",
+              "label": "sensor-pmax",
+              "properties": {
+                "width": 430,
+                "height": 76,
+                "plantComponentId": "sensor-lab",
+                "parameterId": "pmax"
+              },
+              "visual": {
+                "x": 500,
+                "y": 476,
+                "width": 430,
+                "height": 76,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-dica",
+              "typeId": "graphics.math.card",
+              "label": "sensor-dica",
+              "properties": {
+                "width": 896,
+                "height": 110,
+                "title": "",
+                "variant": "glass",
+                "textSize": 16,
+                "text": "Fora da faixa o transmissor satura, como num laço real: abaixo de Pmin a corrente fica em 3,8 mA e acima de Pmax em 20,5 mA."
+              },
+              "visual": {
+                "x": 44,
+                "y": 572,
+                "width": 896,
+                "height": 110,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-controles",
+              "typeId": "graphics.math.sim_controls",
+              "label": "sensor-controles",
+              "properties": {
+                "width": 620,
+                "height": 68,
+                "plantComponentId": "sensor-lab"
+              },
+              "visual": {
+                "x": 44,
+                "y": 700,
+                "width": 620,
+                "height": 68,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-grafico-corrente",
+              "typeId": "graphics.math.series_chart",
+              "label": "sensor-grafico-corrente",
+              "properties": {
+                "width": 912,
+                "height": 372,
+                "plantComponentId": "sensor-lab",
+                "channel": "i",
+                "title": "Corrente I(t)",
+                "color": "#16a34a",
+                "minSeconds": 20
+              },
+              "visual": {
+                "x": 984,
+                "y": 24,
+                "width": 912,
+                "height": 372,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-grafico-pressao",
+              "typeId": "graphics.math.series_chart",
+              "label": "sensor-grafico-pressao",
+              "properties": {
+                "width": 912,
+                "height": 372,
+                "plantComponentId": "sensor-lab",
+                "channel": "p",
+                "title": "Pressão P(t)",
+                "color": "#2563eb",
+                "minSeconds": 20
+              },
+              "visual": {
+                "x": 984,
+                "y": 412,
+                "width": 912,
+                "height": 372,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-cartao-equacoes",
+              "typeId": "graphics.math.card",
+              "label": "sensor-cartao-equacoes",
+              "properties": {
+                "width": 1386,
+                "height": 248,
+                "title": "Equações do processo",
+                "icon": "sigma",
+                "variant": "dark",
+                "titleStyle": "plain",
+                "titleSize": 16,
+                "accentColor": "#93c5fd"
+              },
+              "visual": {
+                "x": 24,
+                "y": 808,
+                "width": 1386,
+                "height": 248,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-explore",
+              "typeId": "graphics.math.card",
+              "label": "sensor-explore",
+              "properties": {
+                "width": 462,
+                "height": 248,
+                "title": "Explore:",
+                "icon": "bulb",
+                "variant": "dark",
+                "titleStyle": "accent",
+                "accentColor": "#f59e0b",
+                "titleSize": 22,
+                "textSize": 17,
+                "text": "Em que pressão a corrente chega a 12 mA? E acima de Pmax, o que acontece com a reta?"
+              },
+              "visual": {
+                "x": 1434,
+                "y": 808,
+                "width": 462,
+                "height": 248,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-equacao-1",
+              "typeId": "graphics.math.equation",
+              "label": "sensor-equacao-1",
+              "properties": {
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": true,
+                "decimals": 2,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "sensor-lab",
+                "formula": "I = 4 + 16 x",
+                "expression": "4 + 16 (p - pmin)/(pmax - pmin)",
+                "unit": "mA"
+              },
+              "visual": {
+                "x": 44,
+                "y": 868,
+                "width": 436,
+                "height": 160,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-equacao-2",
+              "typeId": "graphics.math.equation",
+              "label": "sensor-equacao-2",
+              "properties": {
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": true,
+                "decimals": 3,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "sensor-lab",
+                "formula": "x = (P - P_min)/(P_max - P_min)",
+                "expression": "(p - pmin)/(pmax - pmin)"
+              },
+              "visual": {
+                "x": 492,
+                "y": 868,
+                "width": 436,
+                "height": 160,
+                "rotation": 0
+              }
+            },
+            {
+              "id": "sensor-equacao-3",
+              "typeId": "graphics.math.equation",
+              "label": "sensor-equacao-3",
+              "properties": {
+                "width": 436,
+                "height": 160,
+                "lhs": "",
+                "variable": "",
+                "substitute": false,
+                "showValue": true,
+                "decimals": 4,
+                "fontSize": 32,
+                "background": "none",
+                "color": "#e8eef8",
+                "plantComponentId": "sensor-lab",
+                "formula": "dI/dP = 16/(P_max - P_min)",
+                "expression": "16/(pmax - pmin)",
+                "unit": "mA/kPa"
+              },
+              "visual": {
+                "x": 940,
+                "y": 868,
+                "width": 436,
+                "height": 160,
+                "rotation": 0
+              }
+            }
+          ]
+        }
+      ],
+      "presentation": {
+        "fullscreenContext": "lab",
+        "defaultContext": "lab",
+        "startInOperation": true
+      }
+    }
+  ],
+  "subsystems": [
+    {
+      "schemaVersion": 3,
+      "typeId": "subsystem.process.sensor_4_20",
+      "name": "Sensor 4–20 mA (laboratório)",
+      "language": "pt-BR",
+      "folderPath": [
+        "Modelos"
+      ],
+      "workspaceSection": "process",
+      "help": {
+        "description": "Transmissor de pressão como função afim: I = 4 mA + 16 mA·(P − Pmin)/(Pmax − Pmin), saturado em 3,8–20,5 mA como um laço 4–20 mA real. A saída 'raw' mostra o valor sem saturação. P muda com a simulação rodando; a faixa Pmin–Pmax é configuração. Usado pelo experimento A do Laboratório de Cálculo (função afim, ganho/offset, inversa, saturação)."
+      },
+      "components": [
+        {
+          "id": "c_p",
+          "typeId": "control.constant",
+          "properties": {
+            "value": 100,
+            "unit": "kPa"
+          },
+          "visual": {
+            "x": 40,
+            "y": 40,
+            "rotation": 0
+          },
+          "label": "Pressão aplicada P"
+        },
+        {
+          "id": "c_pmin",
+          "typeId": "control.constant",
+          "properties": {
+            "value": 0,
+            "unit": "kPa"
+          },
+          "visual": {
+            "x": 40,
+            "y": 100,
+            "rotation": 0
+          },
+          "label": "Início da faixa (Pmin → 4 mA)"
+        },
+        {
+          "id": "c_pmax",
+          "typeId": "control.constant",
+          "properties": {
+            "value": 200,
+            "unit": "kPa"
+          },
+          "visual": {
+            "x": 40,
+            "y": 160,
+            "rotation": 0
+          },
+          "label": "Fim da faixa (Pmax → 20 mA)"
+        },
+        {
+          "id": "i_raw",
+          "typeId": "control.calc_expression",
+          "properties": {
+            "expression": "4+16*(p-pmin)/(pmax-pmin)",
+            "inputs": [
+              "p",
+              "pmin",
+              "pmax"
+            ],
+            "upperLimit": 0,
+            "lowerLimit": 0,
+            "upperLimitEnabled": false,
+            "lowerLimitEnabled": false,
+            "samplePeriodNs": 10000000
+          },
+          "visual": {
+            "x": 240,
+            "y": 80,
+            "rotation": 0
+          },
+          "label": "Corrente sem saturação (mA)"
+        },
+        {
+          "id": "i_loop",
+          "typeId": "control.saturation",
+          "properties": {
+            "minimum": 3.8,
+            "maximum": 20.5,
+            "samplePeriodNs": 10000000
+          },
+          "visual": {
+            "x": 440,
+            "y": 80,
+            "rotation": 0
+          },
+          "label": "Corrente do laço (mA)"
+        },
+        {
+          "id": "t_current",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "current",
+            "pinId": "current",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 640,
+            "y": 80,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "t_raw",
+          "typeId": "connectors.signal_tunnel",
+          "properties": {
+            "name": "raw",
+            "pinId": "raw",
+            "direction": "Output",
+            "valueType": "Real"
+          },
+          "visual": {
+            "x": 640,
+            "y": 160,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "g_p",
+          "typeId": "graphics.value_display",
+          "properties": {
+            "width": 150,
+            "height": 40,
+            "stroke": "currentColor",
+            "fill": "#f8fafc",
+            "strokeWidth": 1.5,
+            "opacity": 1,
+            "label": "Pressão",
+            "valueColor": "#0f172a",
+            "value": 0,
+            "bindSource": "c_p",
+            "bindChannel": 0,
+            "bindScale": 1,
+            "bindOffset": 0,
+            "bindMin": -1000000000,
+            "bindMax": 1000000000,
+            "bindUnit": "kPa",
+            "bindDecimals": 1
+          },
+          "visual": {
+            "x": 210,
+            "y": 50,
+            "rotation": 0
+          }
+        },
+        {
+          "id": "g_i",
+          "typeId": "graphics.value_display",
+          "properties": {
+            "width": 150,
+            "height": 40,
+            "stroke": "currentColor",
+            "fill": "#f8fafc",
+            "strokeWidth": 1.5,
+            "opacity": 1,
+            "label": "Corrente",
+            "valueColor": "#0f172a",
+            "value": 0,
+            "bindSource": "i_loop",
+            "bindChannel": 0,
+            "bindScale": 1,
+            "bindOffset": 0,
+            "bindMin": -1000000000,
+            "bindMax": 1000000000,
+            "bindUnit": "mA",
+            "bindDecimals": 3
+          },
+          "visual": {
+            "x": 210,
+            "y": 106,
+            "rotation": 0
+          }
+        }
+      ],
+      "topology": {
+        "revision": 0,
+        "nodes": [],
+        "conductors": [
+          {
+            "id": "w-1",
+            "from": {
+              "kind": "port",
+              "componentId": "c_p",
+              "pinId": "out"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "i_raw",
+              "pinId": "p"
+            },
+            "points": []
+          },
+          {
+            "id": "w-2",
+            "from": {
+              "kind": "port",
+              "componentId": "c_pmin",
+              "pinId": "out"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "i_raw",
+              "pinId": "pmin"
+            },
+            "points": []
+          },
+          {
+            "id": "w-3",
+            "from": {
+              "kind": "port",
+              "componentId": "c_pmax",
+              "pinId": "out"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "i_raw",
+              "pinId": "pmax"
+            },
+            "points": []
+          },
+          {
+            "id": "w-4",
+            "from": {
+              "kind": "port",
+              "componentId": "i_raw",
+              "pinId": "out"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "i_loop",
+              "pinId": "in"
+            },
+            "points": []
+          },
+          {
+            "id": "w-5",
+            "from": {
+              "kind": "port",
+              "componentId": "i_loop",
+              "pinId": "out"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "t_current",
+              "pinId": "value"
+            },
+            "points": []
+          },
+          {
+            "id": "w-6",
+            "from": {
+              "kind": "port",
+              "componentId": "i_raw",
+              "pinId": "out"
+            },
+            "to": {
+              "kind": "port",
+              "componentId": "t_raw",
+              "pinId": "value"
+            },
+            "points": []
+          }
+        ]
+      },
+      "interface": [
+        {
+          "pinId": "current",
+          "label": "Corrente (mA)",
+          "internalTunnel": "current",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        },
+        {
+          "pinId": "raw",
+          "label": "Corrente sem saturação (mA)",
+          "internalTunnel": "raw",
+          "domain": "signal",
+          "direction": "out",
+          "valueType": "Real",
+          "width": 1
+        }
+      ],
+      "symbolMode": "custom",
+      "symbol": {
+        "width": 380,
+        "height": 220,
+        "border": true,
+        "shapes": [
+          {
+            "kind": "text",
+            "x": 12,
+            "y": 22,
+            "value": "Transmissor 4–20 mA (função afim)",
+            "fontSize": 13,
+            "textAnchor": "start",
+            "color": "#0f172a"
+          },
+          {
+            "kind": "rect",
+            "x": 24,
+            "y": 60,
+            "w": 150,
+            "h": 100,
+            "fill": "#e0f2fe",
+            "stroke": "#0369a1",
+            "strokeWidth": 1.5
+          },
+          {
+            "kind": "text",
+            "x": 99,
+            "y": 100,
+            "value": "I = 4 + 16·(P − Pmin)",
+            "fontSize": 10,
+            "textAnchor": "middle",
+            "color": "#0c4a6e"
+          },
+          {
+            "kind": "text",
+            "x": 99,
+            "y": 118,
+            "value": "/(Pmax − Pmin)",
+            "fontSize": 10,
+            "textAnchor": "middle",
+            "color": "#0c4a6e"
+          },
+          {
+            "kind": "text",
+            "x": 99,
+            "y": 142,
+            "value": "saturação 3,8–20,5 mA",
+            "fontSize": 9,
+            "textAnchor": "middle",
+            "color": "#0c4a6e"
+          }
+        ],
+        "pins": [
+          {
+            "id": "current",
+            "kind": "ANALOG_OUT",
+            "x": 380,
+            "y": 90,
+            "angle": 0,
+            "length": 8,
+            "label": "Corrente (mA)"
+          },
+          {
+            "id": "raw",
+            "kind": "ANALOG_OUT",
+            "x": 380,
+            "y": 130,
+            "angle": 0,
+            "length": 8,
+            "label": "Corrente sem saturação (mA)"
+          }
+        ]
+      },
+      "exposedComponents": [
+        {
+          "componentId": "g_p",
+          "x": 210,
+          "y": 50,
+          "rotation": 0,
+          "flipH": false,
+          "flipV": false,
+          "scale": 1,
+          "layer": 0
+        },
+        {
+          "componentId": "g_i",
+          "x": 210,
+          "y": 106,
+          "rotation": 0,
+          "flipH": false,
+          "flipV": false,
+          "scale": 1,
+          "layer": 1
+        }
+      ],
+      "exportedPropertyComponentIds": [
+        "c_p",
+        "c_pmin",
+        "c_pmax"
+      ],
+      "origin": {
+        "typeId": "subcircuits.process.sensor_4_20"
+      },
+      "faceplate": {
+        "schemaVersion": 1,
+        "id": "faceplate:subsystem.process.sensor_4_20",
+        "kind": "faceplate",
+        "title": "Sensor 4–20 mA (laboratório)",
+        "presentation": {
+          "fullscreenContext": "hmi",
+          "startInOperation": true
+        },
+        "startPageId": "faceplate-operacao",
+        "pages": [
+          {
+            "id": "faceplate-operacao",
+            "name": "Operação",
+            "width": 960,
+            "height": 540,
+            "elements": [
+              {
+                "id": "fp-titulo",
+                "typeId": "graphics.label",
+                "label": "fp-titulo",
+                "properties": {
+                  "width": 700,
+                  "height": 36,
+                  "text": "Sensor 4–20 mA (laboratório) — operação",
+                  "fontSize": 22,
+                  "align": "start",
+                  "stroke": "#e2e8f0"
+                },
+                "visual": {
+                  "x": 20,
+                  "y": 14,
+                  "width": 700,
+                  "height": 36,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-p",
+                "typeId": "graphics.value_display",
+                "label": "fp-p",
+                "properties": {
+                  "width": 200,
+                  "height": 56,
+                  "label": "Pressão P",
+                  "bindSource": "c_p",
+                  "bindUnit": "kPa",
+                  "bindDecimals": 1
+                },
+                "visual": {
+                  "x": 40,
+                  "y": 70,
+                  "width": 200,
+                  "height": 56,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-i",
+                "typeId": "graphics.value_display",
+                "label": "fp-i",
+                "properties": {
+                  "width": 200,
+                  "height": 56,
+                  "label": "Corrente I",
+                  "bindSource": "i_loop",
+                  "bindUnit": "mA",
+                  "bindDecimals": 2
+                },
+                "visual": {
+                  "x": 40,
+                  "y": 136,
+                  "width": 200,
+                  "height": 56,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-rotulo-p",
+                "typeId": "graphics.label",
+                "label": "fp-rotulo-p",
+                "properties": {
+                  "width": 400,
+                  "height": 22,
+                  "text": "Pressão P (kPa)",
+                  "fontSize": 14,
+                  "align": "start",
+                  "stroke": "#e2e8f0"
+                },
+                "visual": {
+                  "x": 300,
+                  "y": 60,
+                  "width": 400,
+                  "height": 22,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-slider-p",
+                "typeId": "graphics.slider",
+                "label": "fp-slider-p",
+                "properties": {
+                  "width": 400,
+                  "height": 40,
+                  "actionTarget": "c_p",
+                  "actionProperty": "value",
+                  "actionMode": "set",
+                  "actionMin": 0,
+                  "actionMax": 300,
+                  "actionStep": 5,
+                  "value": 100,
+                  "bindSource": "c_p",
+                  "bindMin": 0,
+                  "bindMax": 300
+                },
+                "visual": {
+                  "x": 300,
+                  "y": 84,
+                  "width": 400,
+                  "height": 40,
+                  "rotation": 0
+                }
+              },
+              {
+                "id": "fp-tendencia",
+                "typeId": "graphics.math.trend",
+                "label": "fp-tendencia",
+                "properties": {
+                  "width": 880,
+                  "height": 310,
+                  "title": "Corrente I(t)",
+                  "bindSource": "i_loop",
+                  "bindUnit": "mA",
+                  "bindDecimals": 2,
+                  "windowSeconds": 30
+                },
+                "visual": {
+                  "x": 40,
+                  "y": 210,
+                  "width": 880,
+                  "height": 310,
+                  "rotation": 0
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

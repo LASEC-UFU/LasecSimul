@@ -15,6 +15,7 @@
 #include <cmath>
 #include <vector>
 
+#include "components/control/SignalMathBlock.hpp"
 #include "library/LibraryTestHarness.hpp"
 
 using namespace library_test;
@@ -454,6 +455,214 @@ void limitsAndInitialConditionPorts() {
     }
 }
 
+// ---- Mapeamento do PID legado (relatorio para a migracao) ---------------------------------------------
+
+/** Evidencia do mapeamento `control.pid` -> Discrete PID Controller (2DOF) proposto no relatorio:
+ * Parallel, b = 1, c = 0 (derivada na PV) ou 1, P = a*kc, I = a*kc/ti, D = kc*td (a*kc*td na
+ * derivada do erro), N = 1/Tf, Backward Euler no integrador e no filtro, IC na saida com I0 =
+ * bias + initialIntegral e D0 = D*(c*sp - pv), saturacao [outputMin, outputMax] com clamping.
+ * Compara com o bloco legado (implementacao independente, SignalEngine::Pid). */
+void legacyPidMapping() {
+    for (const double action : {1.0, -1.0}) {
+        for (const bool derivativeOnPv : {true, false}) {
+            Harness h;
+            h.session.components().registerFactory("control.pid", [](const ComponentParams& p) {
+                return std::make_unique<lasecsimul::components::SignalMathBlock>("control.pid", p);
+            });
+            const double kc = 3.0, ti = 0.8, td = 0.2, tf = 0.05, bias = 10.0, initial = 5.0;
+            ComponentParams legacyParams;
+            legacyParams.properties = {{"kc", PropertyValue{kc}}, {"ti", PropertyValue{ti}}, {"td", PropertyValue{td}}, {"bias", PropertyValue{bias}},
+                                       {"derivativeFilter", PropertyValue{tf}}, {"outputMin", PropertyValue{0.0}}, {"outputMax", PropertyValue{100.0}},
+                                       {"action", PropertyValue{action}}, {"derivativeOnPv", PropertyValue{derivativeOnPv}},
+                                       {"initialIntegral", PropertyValue{initial}}, {"samplePeriodNs", PropertyValue{1e8}}};
+            const uint32_t legacy = h.session.addComponent("control.pid", legacyParams);
+            const uint32_t sp = h.add("step", {{"Time", text("0.3")}, {"InitialValue", text("20")}, {"FinalValue", text(action > 0 ? "60" : "10")},
+                                               {"SampleTime", text("0.1")}});
+            const uint32_t pv = h.add("sine_wave", {{"Amplitude", text("10")}, {"Bias", text("40")}, {"Frequency", text("2")}, {"SampleTime", text("0.1")}});
+            const double d = derivativeOnPv ? kc * td : action * kc * td;
+            char buffer[64];
+            const auto number = [&](double value) { std::snprintf(buffer, sizeof(buffer), "%.17g", value); return text(std::string(buffer)); };
+            const uint32_t pid = h.add("discrete_pid_controller_2dof",
+                                       {{"P", number(action * kc)}, {"I", number(action * kc / ti)}, {"D", number(d)}, {"N", number(1.0 / tf)}, {"b", text("1")},
+                                        {"c", text(derivativeOnPv ? "0" : "1")}, {"SampleTime", text("0.1")}, {"IntegratorMethod", text("Backward Euler")},
+                                        {"FilterMethod", text("Backward Euler")}, {"InitialConditionSource", text("external")},
+                                        {"InitialConditionSetting", text("Output")}, {"LimitOutput", on()}, {"UpperSaturationLimit", text("100")},
+                                        {"LowerSaturationLimit", text("0")}, {"AntiWindupMode", text("clamping")}});
+            const uint32_t i0 = h.add("constant", {{"Value", number(bias + initial)}});
+            // D0 = D*(c*sp - pv): derivada na PV -> Gain(-D) sobre pv; derivada do erro -> D*(sp - pv).
+            const uint32_t error = h.add("sum", {{"Inputs", text("|+-")}});
+            h.wire(sp, "out1", error, "in1");
+            h.wire(pv, "out1", error, "in2");
+            const uint32_t d0 = h.add("gain", {{"Gain", number(derivativeOnPv ? -d : d)}});
+            h.wire(derivativeOnPv ? pv : error, "out1", d0, "in1");
+            h.wire(sp, "out1", legacy, "sp");
+            h.wire(pv, "out1", legacy, "pv");
+            h.wire(sp, "out1", pid, "in1");
+            h.wire(pv, "out1", pid, "in2");
+            h.wire(i0, "out1", pid, "i0");
+            h.wire(d0, "out1", pid, "d0");
+            double worst = 0.0;
+            bool saturated = false;
+            for (int k = 0; k < 80; ++k) {
+                const double expected = sample(h, legacy, k, 0.1, "out");
+                const double actual = h.value(pid);
+                worst = std::max(worst, std::abs(actual - expected) / std::max(1.0, std::abs(expected)));
+                saturated = saturated || expected == 100.0 || expected == 0.0;
+            }
+            const std::string label = std::string("PID legado action=") + (action > 0 ? "+1" : "-1") + (derivativeOnPv ? " D na PV" : " D no erro");
+            check(saturated, label + ": o caso exercita a saturacao/clamping");
+            check(worst <= 1e-9, label + ": mapeamento para Discrete PID (2DOF) reproduz a saida (erro relativo max " + std::to_string(worst) + ")");
+            std::printf("  %s: erro relativo maximo %.3e\n", label.c_str(), worst);
+        }
+    }
+}
+
+/** Parametros legados de um `control.pid`/`control.pid_station` (nomes das propriedades legadas). */
+struct LegacyPid {
+    double kc = 3.0, ti = 0.8, td = 0.2, bias = 10.0, derivativeFilter = 0.05, outputMin = 0.0, outputMax = 100.0, action = 1.0;
+    bool derivativeOnPv = true;
+    double initialIntegral = 5.0, manualOutput = 50.0, localSetpoint = 45.0, samplePeriodNs = 1e8;
+};
+
+PropertyValue exact(double value) {
+    char buffer[64];
+    std::snprintf(buffer, sizeof(buffer), "%.17g", value);
+    return text(std::string(buffer));
+}
+
+/** Composicao proposta para `control.pid_station` (portas sp, pv, am, lr -> out); devolve o bloco de saida.
+ *  - am/lr amostrados no periodo do PID (Zero-Order Hold), como o legado le as entradas na ativacao;
+ *  - Ref = lr >= 0.5 ? localSetpoint : sp; e = Ref - pv;
+ *  - PID 2DOF (mapeamento do `control.pid`) com reset "either" alimentado por um sinal +-1 que troca de
+ *    sinal a cada amostra em manual e fica parado em automatico: reset em TODA amostra manual e nenhum
+ *    na volta ao automatico (o "level" do Simulink resetaria tambem na transicao para zero);
+ *  - IC na saida: I0 = am >= 0.5 ? bias + initialIntegral : clamp(MO) - P*e (rastreamento sem salto do
+ *    legado), D0 = D*(c*Ref - pv) (filtro com derivada nula e base anterior = base atual);
+ *  - saida = am >= 0.5 ? PID : clamp(MO). */
+uint32_t pidStationComposite(Harness& h, const LegacyPid& L, uint32_t sp, uint32_t pv, uint32_t am, uint32_t lr) {
+    const double ts = L.samplePeriodNs * 1e-9, a = L.action;
+    const double d = L.td > 0.0 ? (L.derivativeOnPv ? L.kc * L.td : a * L.kc * L.td) : 0.0;
+    const double clampMo = std::min(std::max(L.manualOutput, L.outputMin), L.outputMax);
+    const uint32_t amS = h.add("zero_order_hold", {{"SampleTime", exact(ts)}});
+    const uint32_t lrS = h.add("zero_order_hold", {{"SampleTime", exact(ts)}});
+    h.wire(am, "out1", amS, "in1");
+    h.wire(lr, "out1", lrS, "in1");
+    const uint32_t local = h.add("constant", {{"Value", exact(L.localSetpoint)}});
+    const uint32_t ref = h.add("switch", {{"Criteria", text("u2 >= Threshold")}, {"Threshold", text("0.5")}});
+    h.wire(local, "out1", ref, "in1");
+    h.wire(lrS, "out1", ref, "in2");
+    h.wire(sp, "out1", ref, "in3");
+    const uint32_t error = h.add("sum", {{"Inputs", text("|+-")}});
+    h.wire(ref, "out1", error, "in1");
+    h.wire(pv, "out1", error, "in2");
+    const uint32_t pe = h.add("gain", {{"Gain", exact(a * L.kc)}});
+    h.wire(error, "out1", pe, "in1");
+    const uint32_t mo = h.add("constant", {{"Value", exact(clampMo)}});
+    const uint32_t track = h.add("sum", {{"Inputs", text("|+-")}});
+    h.wire(mo, "out1", track, "in1");
+    h.wire(pe, "out1", track, "in2");
+    const uint32_t initial = h.add("constant", {{"Value", exact(L.bias + L.initialIntegral)}});
+    const uint32_t i0 = h.add("switch", {{"Criteria", text("u2 >= Threshold")}, {"Threshold", text("0.5")}});
+    h.wire(initial, "out1", i0, "in1");
+    h.wire(amS, "out1", i0, "in2");
+    h.wire(track, "out1", i0, "in3");
+    const uint32_t d0 = h.add("gain", {{"Gain", exact(L.derivativeOnPv ? -d : d)}});
+    h.wire(L.derivativeOnPv ? pv : error, "out1", d0, "in1");
+    const uint32_t previous = h.add("unit_delay", {{"InitialCondition", text("1")}, {"SampleTime", exact(ts)}});
+    const uint32_t flipped = h.add("gain", {{"Gain", text("-1")}});
+    const uint32_t toggle = h.add("switch", {{"Criteria", text("u2 >= Threshold")}, {"Threshold", text("0.5")}});
+    h.wire(previous, "out1", flipped, "in1");
+    h.wire(previous, "out1", toggle, "in1");
+    h.wire(amS, "out1", toggle, "in2");
+    h.wire(flipped, "out1", toggle, "in3");
+    h.wire(toggle, "out1", previous, "in1");
+    const uint32_t pid = h.add("discrete_pid_controller_2dof",
+                               {{"P", exact(a * L.kc)}, {"I", exact(L.ti > 0.0 ? a * L.kc / L.ti : 0.0)}, {"D", exact(d)},
+                                {"N", exact(L.td > 0.0 ? 1.0 / L.derivativeFilter : 100.0)}, {"b", text("1")}, {"c", text(L.derivativeOnPv ? "0" : "1")},
+                                {"SampleTime", exact(ts)}, {"IntegratorMethod", text("Backward Euler")}, {"FilterMethod", text("Backward Euler")},
+                                {"InitialConditionSource", text("external")}, {"InitialConditionSetting", text("Output")}, {"ExternalReset", text("either")},
+                                {"LimitOutput", on()}, {"UpperSaturationLimit", exact(L.outputMax)}, {"LowerSaturationLimit", exact(L.outputMin)},
+                                {"AntiWindupMode", text("clamping")}});
+    h.wire(ref, "out1", pid, "in1");
+    h.wire(pv, "out1", pid, "in2");
+    h.wire(toggle, "out1", pid, "reset");
+    h.wire(i0, "out1", pid, "i0");
+    h.wire(d0, "out1", pid, "d0");
+    const uint32_t out = h.add("switch", {{"Criteria", text("u2 >= Threshold")}, {"Threshold", text("0.5")}});
+    h.wire(pid, "out1", out, "in1");
+    h.wire(amS, "out1", out, "in2");
+    h.wire(mo, "out1", out, "in3");
+    return out;
+}
+
+/** `control.pid_station` real contra a composicao acima, com am (manual 1.0-1.6 s e 3.0-3.5 s) e lr
+ * (local 2.2-2.6 s e 3.1-3.3 s) trocando durante a simulacao. */
+void legacyPidStationMapping() {
+    bool saturatedTransfer[2] = {false, false}, freeTransfer[2] = {false, false};
+    for (const double action : {1.0, -1.0})
+        for (const bool derivativeOnPv : {true, false})
+            for (const double manualOutput : {95.0, 50.0, 140.0}) {
+                LegacyPid L;
+                L.action = action;
+                L.derivativeOnPv = derivativeOnPv;
+                L.manualOutput = manualOutput;
+                Harness h;
+                h.session.components().registerFactory("control.pid_station", [](const ComponentParams& p) {
+                    return std::make_unique<lasecsimul::components::SignalMathBlock>("control.pid_station", p);
+                });
+                ComponentParams legacyParams;
+                legacyParams.properties = {{"kc", PropertyValue{L.kc}}, {"ti", PropertyValue{L.ti}}, {"td", PropertyValue{L.td}}, {"bias", PropertyValue{L.bias}},
+                                           {"derivativeFilter", PropertyValue{L.derivativeFilter}}, {"outputMin", PropertyValue{L.outputMin}},
+                                           {"outputMax", PropertyValue{L.outputMax}}, {"action", PropertyValue{L.action}},
+                                           {"derivativeOnPv", PropertyValue{L.derivativeOnPv}}, {"initialIntegral", PropertyValue{L.initialIntegral}},
+                                           {"manualOutput", PropertyValue{L.manualOutput}}, {"localSetpoint", PropertyValue{L.localSetpoint}},
+                                           {"samplePeriodNs", PropertyValue{L.samplePeriodNs}}};
+                const uint32_t legacy = h.session.addComponent("control.pid_station", legacyParams);
+                const auto step = [&](const char* time) { return h.add("step", {{"Time", text(time)}, {"SampleTime", text("0.1")}}); };
+                const uint32_t sp = h.add("step", {{"Time", text("0.3")}, {"InitialValue", text("20")}, {"FinalValue", text(action > 0 ? "60" : "10")},
+                                                   {"SampleTime", text("0.1")}});
+                const uint32_t pv = h.add("sine_wave", {{"Amplitude", text("10")}, {"Bias", text("40")}, {"Frequency", text("2")}, {"SampleTime", text("0.1")}});
+                const uint32_t one = h.add("constant", {{"Value", text("1")}});
+                const uint32_t am = h.add("sum", {{"Inputs", text("+-+-+")}});
+                const char* amTimes[] = {"1.0", "1.6", "3.0", "3.5"};
+                h.wire(one, "out1", am, "in1");
+                for (int i = 0; i < 4; ++i) h.wire(step(amTimes[i]), "out1", am, ("in" + std::to_string(i + 2)).c_str());
+                const uint32_t lr = h.add("sum", {{"Inputs", text("+-+-")}});
+                const char* lrTimes[] = {"2.2", "2.6", "3.1", "3.3"};
+                for (int i = 0; i < 4; ++i) h.wire(step(lrTimes[i]), "out1", lr, ("in" + std::to_string(i + 1)).c_str());
+                h.wire(sp, "out1", legacy, "sp");
+                h.wire(pv, "out1", legacy, "pv");
+                h.wire(am, "out1", legacy, "am");
+                h.wire(lr, "out1", legacy, "lr");
+                const uint32_t out = pidStationComposite(h, L, sp, pv, am, lr);
+                double worst = 0.0;
+                int worstSample = -1;
+                bool previousManual = false;
+                for (int k = 0; k < 60; ++k) {
+                    const double expected = sample(h, legacy, k, 0.1, "out");
+                    const double actual = h.value(out);
+                    const double error = std::abs(actual - expected) / std::max(1.0, std::abs(expected));
+                    if (error > worst) { worst = error; worstSample = k; }
+                    const bool manual = h.value(am) < 0.5;
+                    if (previousManual && !manual) {
+                        const bool saturated = expected == L.outputMax || expected == L.outputMin;
+                        (saturated ? saturatedTransfer : freeTransfer)[derivativeOnPv ? 0 : 1] = true;
+                    }
+                    previousManual = manual;
+                }
+                const std::string label = std::string("pid_station action=") + (action > 0 ? "+1" : "-1") + (derivativeOnPv ? " D na PV" : " D no erro") +
+                                          " MO=" + std::to_string(static_cast<int>(manualOutput));
+                check(worst <= 1e-9, label + ": composicao reproduz o legado (erro relativo max " + std::to_string(worst) + " na amostra " +
+                                         std::to_string(worstSample) + ")");
+                std::printf("  %s: erro relativo maximo %.3e (amostra %d)\n", label.c_str(), worst, worstSample);
+            }
+    for (int mode = 0; mode < 2; ++mode) {
+        const char* name = mode == 0 ? "D na PV" : "D no erro";
+        check(saturatedTransfer[mode], std::string("pid_station ") + name + ": houve transferencia manual->auto com saida saturada");
+        check(freeTransfer[mode], std::string("pid_station ") + name + ": houve transferencia manual->auto sem saturacao");
+    }
+}
+
 // ---- Erros --------------------------------------------------------------------------------------------
 
 void errors() {
@@ -524,6 +733,8 @@ int main() {
         {"discreteTwoDofInheritanceAndExternalAntiWindup", discreteTwoDofInheritanceAndExternalAntiWindup},
         {"discreteTransferFunctionWithSine", discreteTransferFunctionWithSine},
         {"limitsAndInitialConditionPorts", limitsAndInitialConditionPorts},
+        {"legacyPidMapping", legacyPidMapping},
+        {"legacyPidStationMapping", legacyPidStationMapping},
         {"errors", errors},
     };
     for (const auto& [name, test] : cases) {

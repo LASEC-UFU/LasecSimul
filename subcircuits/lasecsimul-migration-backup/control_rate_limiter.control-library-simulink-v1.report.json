@@ -1,0 +1,42 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.rate_limiter",
+      "kind": "subsystem",
+      "rule": "rate_limiter->unit_delay(input-phase)+rate_limiter(discrete)",
+      "newTypeIds": [
+        "subsystem.legado_limitador_taxa"
+      ]
+    }
+  ],
+  "definitionsAdded": [
+    "subsystem.legado_limitador_taxa"
+  ],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_rate_limiter.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.783Z",
+  "original": {
+    "backup": "control_rate_limiter.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "eb4f5cf92d040c41cc615bc96b86dd5211813f3aae13d8784d150bf64fcf58b7"
+  },
+  "migrated": {
+    "sha256": "32d7f1dd1dffdea5655ad7da12a2480eb324bc2c94995e15d49ed9fe438c53a1"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 1,
+    "overridesRemapped": 0,
+    "byRule": {
+      "rate_limiter->unit_delay(input-phase)+rate_limiter(discrete)": 1
+    }
+  }
+}

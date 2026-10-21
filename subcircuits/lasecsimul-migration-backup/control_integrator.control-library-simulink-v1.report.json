@@ -1,0 +1,40 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.integrator",
+      "kind": "single",
+      "rule": "integrator->discrete_time_integrator(forward-euler)",
+      "newTypeIds": [
+        "sl.discrete_time_integrator"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_integrator.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.740Z",
+  "original": {
+    "backup": "control_integrator.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "57e766f6a7cd2d4d6c8d7fa2cad2281410acbb5f996669022174796443451768"
+  },
+  "migrated": {
+    "sha256": "b5df539a55eaece2bd345e58bd45406156978cee399aeee9b17f7da525128b7f"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "integrator->discrete_time_integrator(forward-euler)": 1
+    }
+  }
+}

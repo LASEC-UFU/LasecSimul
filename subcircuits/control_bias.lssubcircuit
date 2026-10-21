@@ -27,11 +27,10 @@
     },
     {
       "id": "stage",
-      "typeId": "control.bias",
+      "typeId": "sl.bias",
       "label": "Bias",
       "properties": {
-        "bias": 0,
-        "samplePeriodNs": 10000000
+        "Bias": "0"
       },
       "visual": {
         "x": 170,
@@ -69,7 +68,7 @@
         "to": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -78,7 +77,7 @@
         "from": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",

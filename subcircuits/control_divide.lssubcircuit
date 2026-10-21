@@ -43,14 +43,11 @@
     },
     {
       "id": "stage",
-      "typeId": "control.divide",
+      "typeId": "sl.product",
       "label": "Divisao",
       "properties": {
-        "inputs": [
-          "in0",
-          "in1"
-        ],
-        "samplePeriodNs": 10000000
+        "Inputs": "*/",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 170,
@@ -88,7 +85,7 @@
         "to": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "in0"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -102,7 +99,7 @@
         "to": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "in1"
+          "pinId": "in2"
         },
         "points": []
       },
@@ -111,7 +108,7 @@
         "from": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",

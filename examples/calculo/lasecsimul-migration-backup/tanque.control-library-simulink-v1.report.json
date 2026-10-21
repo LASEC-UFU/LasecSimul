@@ -1,0 +1,170 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "subsystems/subsystem.process.hydraulic_tank",
+      "componentId": "c_qin",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "subsystems/subsystem.process.hydraulic_tank",
+      "componentId": "c_qout",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "subsystems/subsystem.process.hydraulic_tank",
+      "componentId": "c_area",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "subsystems/subsystem.process.hydraulic_tank",
+      "componentId": "c_hmax",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "subsystems/subsystem.process.hydraulic_tank",
+      "componentId": "c_k",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "subsystems/subsystem.process.hydraulic_tank",
+      "componentId": "c_torr",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "subsystems/subsystem.process.hydraulic_tank",
+      "componentId": "c_outlet",
+      "legacyTypeId": "control.constant",
+      "kind": "keep",
+      "rule": "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)",
+      "newTypeIds": [],
+      "reason": "nao e bloco da biblioteca de controle"
+    },
+    {
+      "location": "subsystems/subsystem.process.hydraulic_tank",
+      "componentId": "vmax",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "subsystems/subsystem.process.hydraulic_tank",
+      "componentId": "q_out",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "subsystems/subsystem.process.hydraulic_tank",
+      "componentId": "acc",
+      "legacyTypeId": "control.accumulator",
+      "kind": "rename",
+      "rule": "accumulator->process.accumulator (bloco de processo do LasecSimul)",
+      "newTypeIds": [
+        "process.accumulator"
+      ]
+    },
+    {
+      "location": "subsystems/subsystem.process.hydraulic_tank",
+      "componentId": "h",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "subsystems/subsystem.process.hydraulic_tank",
+      "componentId": "level_percent",
+      "legacyTypeId": "control.calc_expression",
+      "kind": "inline",
+      "rule": "calc_expression->mux+fcn",
+      "newTypeIds": [
+        "sl.mux",
+        "sl.fcn"
+      ]
+    },
+    {
+      "location": "subsystems/subsystem.process.hydraulic_tank",
+      "componentId": "obs_overflow",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    },
+    {
+      "location": "subsystems/subsystem.process.hydraulic_tank",
+      "componentId": "obs_unmet",
+      "legacyTypeId": "control.observer",
+      "kind": "single",
+      "rule": "observer->identity-gain",
+      "newTypeIds": [
+        "sl.gain"
+      ]
+    }
+  ],
+  "definitionsAdded": [],
+  "overrides": [],
+  "warnings": [],
+  "file": "tanque.lsproj",
+  "generatedAt": "2026-10-21T17:07:38.644Z",
+  "original": {
+    "backup": "tanque.control-library-simulink-v1.original.lsproj",
+    "sha256": "1c2dd034c87637cd933d59be61aec72213093a4b88f0b0091ac0928ebef0391c"
+  },
+  "migrated": {
+    "sha256": "0622316e3a99d41add0c9fc9ec4568e846295b39274588c6a7c68fd51403d8e6"
+  },
+  "summary": {
+    "converted": 6,
+    "kept": 7,
+    "renamed": 1,
+    "unsupported": 0,
+    "definitionsAdded": 0,
+    "overridesRemapped": 0,
+    "byRule": {
+      "constant (parametro de modelo do LasecSimul, equivalente a parametro de mascara)": 7,
+      "calc_expression->mux+fcn": 4,
+      "accumulator->process.accumulator (bloco de processo do LasecSimul)": 1,
+      "observer->identity-gain": 2
+    }
+  }
+}

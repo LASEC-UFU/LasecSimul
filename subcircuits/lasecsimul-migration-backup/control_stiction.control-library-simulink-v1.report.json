@@ -1,0 +1,42 @@
+{
+  "migrationId": "control-library-simulink",
+  "version": 1,
+  "changed": true,
+  "entries": [
+    {
+      "location": "",
+      "componentId": "stage",
+      "legacyTypeId": "control.stiction",
+      "kind": "subsystem",
+      "rule": "stiction->mux+fcn+unit_delay",
+      "newTypeIds": [
+        "subsystem.legado_agarramento"
+      ]
+    }
+  ],
+  "definitionsAdded": [
+    "subsystem.legado_agarramento"
+  ],
+  "overrides": [],
+  "warnings": [],
+  "file": "control_stiction.lssubcircuit",
+  "generatedAt": "2026-10-21T17:07:38.804Z",
+  "original": {
+    "backup": "control_stiction.control-library-simulink-v1.original.lssubcircuit",
+    "sha256": "b940d68d201fb0e34cd3862763fe74753356c65d897bb1578ac2ab8fd87ecf64"
+  },
+  "migrated": {
+    "sha256": "c582ceeecb15267bc1c673f9f7605077c99b23fa1a47abc11dc30dc7859772fc"
+  },
+  "summary": {
+    "converted": 1,
+    "kept": 0,
+    "renamed": 0,
+    "unsupported": 0,
+    "definitionsAdded": 1,
+    "overridesRemapped": 0,
+    "byRule": {
+      "stiction->mux+fcn+unit_delay": 1
+    }
+  }
+}

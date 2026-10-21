@@ -90,7 +90,8 @@ void buildMemory(BuildContext& c) {
     c.outputWidths = {width};
     if (c.widthsOnly) return;
     simulation::SignalBlockDefinition& kernel = c.kernel("", "unit_delay", inputWidths(c), width, expandTo(c, ic, width, "Initial condition"));
-    if (!c.flag("InheritSampleTime")) kernel.rate = {0, 0, 0};
+    // Taxa constante (entrada constante) não tem passo maior para atrasar: também contínua.
+    if (!c.flag("InheritSampleTime") || c.resolution.rate.periodNs >= simulation::kConstantSamplePeriodNs) kernel.rate = {0, 0, 0};
     c.connectInputs(c.outputBlock(0));
 }
 

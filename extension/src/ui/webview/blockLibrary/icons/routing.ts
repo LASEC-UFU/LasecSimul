@@ -115,7 +115,8 @@ function selector(g: Geometry): string {
     map = [0, inputCount - 1].filter((v, i, all) => all.indexOf(v) === i);
   }
   const s = Math.max(3, Math.min(7, h / (2.2 * Math.max(inputCount, map.length, 1))));
-  const left = w * 0.18, right = w * 0.82;
+  // Com a porta Idx1 o rótulo dela ocupa a borda esquerda: o mapeamento começa mais à direita.
+  const left = w * (g.inputs.length > 1 ? 0.4 : 0.18), right = w * 0.82;
   const yIn = (i: number) => h * (0.15 + (0.7 * (i + 0.5)) / inputCount);
   const yOut = (j: number) => h * (0.15 + (0.7 * (j + 0.5)) / Math.max(1, map.length));
   const parts: string[] = [rectBody(g)];

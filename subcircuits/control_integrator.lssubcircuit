@@ -27,12 +27,13 @@
     },
     {
       "id": "stage",
-      "typeId": "control.integrator",
+      "typeId": "sl.discrete_time_integrator",
       "label": "Integrador",
       "properties": {
-        "gain": 1,
-        "initial": 0,
-        "samplePeriodNs": 10000000
+        "IntegratorMethod": "Integration: Forward Euler",
+        "gainval": "1",
+        "InitialCondition": "0",
+        "SampleTime": "0.01"
       },
       "visual": {
         "x": 170,
@@ -70,7 +71,7 @@
         "to": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "in"
+          "pinId": "in1"
         },
         "points": []
       },
@@ -79,7 +80,7 @@
         "from": {
           "kind": "port",
           "componentId": "stage",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
