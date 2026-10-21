@@ -1449,6 +1449,15 @@ async function clickSvgAt(locator, x, y) {
     if (prefilterNumAfterOptimization === prefilterNumBeforeOptimization) throw new Error("requirement optimizer did not apply its selected prefilter gain to F");
     await designerFrame.locator("#architecture").selectOption("forward-controller");
     if (!(await designerFrame.locator("#optimizerOptions").evaluate((details) => details.open))) await designerFrame.locator("#optimizerOptions summary").click();
+    const optimizerRequirementCountBefore = await designerFrame.locator("#optimizerRequirements [data-opt-req]").count();
+    await designerFrame.locator("#optimizerSettings").getByRole("button", { name: "Adicionar requisito de projeto" }).click();
+    await designerFrame.locator("#designerDialog").waitFor({ state: "visible" });
+    await designerFrame.locator("#reqKind").selectOption("settling");
+    await designerFrame.locator("#reqValue").fill("2");
+    await designerFrame.locator("#dialogSave").click();
+    await designerFrame.locator("#designerDialog").waitFor({ state: "hidden" });
+    const optimizerRequirementsAfterAdd = designerFrame.locator("#optimizerRequirements [data-opt-req]");
+    if (await optimizerRequirementsAfterAdd.count() <= optimizerRequirementCountBefore || !(await optimizerRequirementsAfterAdd.last().isChecked())) throw new Error("requirement created from optimizer was not added to its selected requirements");
     await designerFrame.locator('[data-model="F"][data-part="num"]').fill("1, 1");
     await designerFrame.locator('[data-model="F"][data-part="den"]').fill("1, 3");
     await designerFrame.locator("#addReq").click();
