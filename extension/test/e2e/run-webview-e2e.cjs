@@ -819,7 +819,7 @@ async function clickSvgAt(locator, x, y) {
         await designerFrame.locator("#rootContextMenu [data-root-context=requirement-new]").click();
         await designerFrame.locator("#designerDialog").waitFor({ state: "visible" });
         const expectedRequirement = graph === "filterBode" ? "gainLimitUpper" : "phaseMargin";
-        if (await designerFrame.locator("#reqKind").inputValue() !== expectedRequirement) throw new Error(`incorrect default requirement for ${graph}`);
+        if (await designerFrame.locator("#reqKind").inputValue() !== expectedRequirement || (graph !== "filterBode" && await designerFrame.locator("#reqPath").inputValue() !== "loop")) throw new Error(`incorrect default requirement or response path for ${graph}`);
         await designerFrame.locator("#designerDialog button[value=cancel]").click();
         await designerFrame.locator("#designerDialog").waitFor({ state: "hidden" });
       }
