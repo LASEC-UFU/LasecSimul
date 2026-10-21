@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { assert, createTestRunner } from "../../ipc/testSupport/MockCoreServer";
 import { convertLegacyBlock } from "./conversions";
@@ -6,6 +7,7 @@ import { convertLegacyExpression, evaluateLegacyAst, parseLegacyExpression } fro
 import { LEGACY_CONTROL_TYPE_IDS, legacyInputPorts } from "./legacyBlocks";
 import { LEGACY_LIBRARY_EXPORTS } from "./legacyLibraryExports";
 import { migrateControlDocument, needsControlMigration } from "./migrateDocument";
+import { writeMigrationReport } from "./migrationFiles";
 
 /**
  * Migração dos blocos legados `control.*` (docs/68-69): conversor de expressões, regras por bloco,
@@ -202,6 +204,19 @@ function storedExpressions(): Array<{ file: string; id: string; expression: stri
     for (const typeId of pending.keys()) assert(typeId === "control.pid" || typeId === "control.pid_station", `sem conversao inesperada: ${typeId}`);
   });
 
-  const result = finish();
-  if (result.failed > 0) process.exitCode = 1;
+  void test("relatorio preserva id e versao da migracao depois de mesclar os detalhes", async () => {
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), "lasecsimul-migration-report-"));
+    try {
+      const { document, report } = migrateControlDocument({ schemaVersion: 2, components: [], topology: { revision: 0, nodes: [], conductors: [] } });
+      const backupPath = path.join(temp, `project.${report.migrationId}-v${report.version}.original.lsproj`);
+      const reportPath = await writeMigrationReport(path.join(temp, "project.lsproj"), { backupPath, sha256: "test-hash" }, report, JSON.stringify(document));
+      const saved = JSON.parse(fs.readFileSync(reportPath, "utf8")) as Json;
+      assert(saved.migrationId === report.migrationId && saved.version === report.version, JSON.stringify(saved));
+    } finally {
+      fs.rmSync(temp, { recursive: true, force: true });
+    }
+  }).then(() => {
+    const result = finish();
+    if (result.failed > 0) process.exitCode = 1;
+  });
 })();

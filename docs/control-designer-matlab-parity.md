@@ -61,7 +61,7 @@ Data da revisão: 2026-10-21. Escopo: recursos do Control System Designer docume
 
 ## Verificação desta revisão
 
-- 2026-10-21: compilação passou; `npm run test:control-designer` passou (93 testes LTI, 11 de integração e 4 fixtures); `npm run test:control-designer:export:e2e` passou. A E2E ampla passou pela abertura do SisoTools, verificações UTF-8 e capturas do diagrama direto, IMC e PID 2DOF, mas ficou sem progresso em um cenário posterior fora do designer e foi interrompida.
+- 2026-10-21: compilação passou; `npm run test:control-designer` passou (93 testes LTI, 11 de integração e 4 fixtures); `npm run test:control-designer:export:e2e` passou. Com o Core Release reconstruído, a E2E ampla passou pela acentuação, pelos fluxos gráficos de polos/zeros, pelos diagramas direto/IMC/PID 2DOF e por todo o restante do Control Designer. A execução terminou com falha de comparação visual do analisador de instrumentos fora do designer (`analyzer`: 29,7% de pixels diferentes).
 - O reparo de acentuação foi aplicado explicitamente após `renderShell()` além do `MutationObserver`. O painel retido precisa ser reaberto ou a janela recarregada para receber o bundle recompilado. O diagrama direto verificado apresenta `F → Σ → C → G → y`, com `H` no ramo de realimentação negativa.
 - A auditoria do inventário está completa; paridade funcional total permanece impossível de afirmar. Permanecem as limitações documentadas em “Lacunas que permanecem após a implementação”, em especial a falta de conexão MATLAB, MIMO fora do escopo SISO e diferenças entre algoritmos proprietários de otimização/síntese.
 

@@ -49,6 +49,7 @@ export async function backupOriginal(filePath: string, original: Buffer): Promis
 export async function writeMigrationReport(filePath: string, backup: { backupPath: string; sha256: string }, report: ControlMigrationReport, migratedText: string): Promise<string> {
   const reportPath = backup.backupPath.replace(/\.original(-\d+)?\.[^.]+$/, (_, suffix: string | undefined) => `.report${suffix ?? ""}.json`);
   const body = {
+    ...report,
     file: path.basename(filePath),
     migrationId: report.migrationId,
     version: report.version,
@@ -56,7 +57,6 @@ export async function writeMigrationReport(filePath: string, backup: { backupPat
     original: { backup: path.basename(backup.backupPath), sha256: backup.sha256 },
     migrated: { sha256: sha256(migratedText) },
     summary: summarizeReport(report),
-    ...report,
   };
   await fs.writeFile(reportPath, `${JSON.stringify(body, null, 2)}\n`, "utf8");
   return reportPath;
