@@ -801,8 +801,13 @@ async function clickSvgAt(locator, x, y) {
     if (architectureChecks.length !== 5 || architectureChecks.some((item) => !item.fits || !item.hasWire)) throw new Error(`architecture diagram signs are misplaced: ${JSON.stringify(architectureChecks)}`);
 
     await designerFrame.locator("#rl").click({ button: "right", position: { x: 100, y: 80 } });
+    if (await designerFrame.locator("#rootContextMenu button[data-root-context=requirement-new]").count() !== 1) throw new Error("root locus context menu is missing the new design requirement action");
     if (!(await designerFrame.locator("#rootContextMenu").isVisible()) || await designerFrame.locator("#rootContextMenu button[data-root-context=complex-pole]").count() !== 1 || await designerFrame.locator("#rootContextMenu button[data-root-context=integrator]").count() !== 1) throw new Error("root locus context menu is missing dynamic options");
-    await designerFrame.locator("#rootContextMenu").press("Escape");
+    await designerFrame.locator("#rootContextMenu button[data-root-context=requirement-new]").click();
+    await designerFrame.locator("#designerDialog").waitFor({ state: "visible" });
+    if (await designerFrame.locator("#reqKind").inputValue() !== "settling" || !(await designerFrame.locator("#reqKind option[value=phaseMargin]").evaluate(option => option.hidden))) throw new Error("root locus requirement menu did not select and filter pole requirements");
+    await designerFrame.locator("#designerDialog button[value=cancel]").click();
+    await designerFrame.locator("#designerDialog").waitFor({ state: "hidden" });
     for (const graph of ["rl", "bode", "filterBode", "nichols", "controllerPz"]) {
       await designerFrame.locator(`#${graph}`).click({ button: "right", position: { x: 100, y: 80 } });
       if (!(await designerFrame.locator("#rootContextMenu").isVisible()) || await designerFrame.locator("#rootContextMenu button[data-root-context=real-pole]").count() !== 1 || await designerFrame.locator("#rootContextMenu button[data-root-context=real-zero]").count() !== 1) throw new Error(`compensator context menu missing on ${graph}`);
@@ -810,7 +815,15 @@ async function clickSvgAt(locator, x, y) {
       if ((graph === "rl" || graph === "bode" || graph === "filterBode" || graph === "nichols" || graph === "controllerPz") !== await complexOption.isVisible()) throw new Error(`complex pole option visibility is incorrect on ${graph}`);
       const networkOption = designerFrame.locator("#rootContextMenu button[data-root-context=network-lead]");
       if (["bode", "filterBode", "nichols"].includes(graph) !== await networkOption.isVisible()) throw new Error(`compound dynamics menu visibility is incorrect on ${graph}`);
-      await designerFrame.locator("#rootContextMenu").press("Escape");
+      if (graph === "bode" || graph === "filterBode" || graph === "nichols") {
+        await designerFrame.locator("#rootContextMenu [data-root-context=requirement-new]").click();
+        await designerFrame.locator("#designerDialog").waitFor({ state: "visible" });
+        const expectedRequirement = graph === "filterBode" ? "gainLimitUpper" : "phaseMargin";
+        if (await designerFrame.locator("#reqKind").inputValue() !== expectedRequirement) throw new Error(`incorrect default requirement for ${graph}`);
+        await designerFrame.locator("#designerDialog button[value=cancel]").click();
+        await designerFrame.locator("#designerDialog").waitFor({ state: "hidden" });
+      }
+      if (graph === "controllerPz") await designerFrame.locator("#rootContextMenu").press("Escape");
     }
     const rootLocusControllerPoles = designerFrame.locator('#rl [data-controller-root="pole"]');
     const directPoleCount = await rootLocusControllerPoles.count();
@@ -1576,6 +1589,10 @@ async function clickSvgAt(locator, x, y) {
     const poleRegionMark = designerFrame.locator('#rl [data-requirement-flip]').first();
     await poleRegionMark.waitFor({ state: "visible" });
     await poleRegionMark.dispatchEvent("contextmenu", { button: 2, bubbles: true, cancelable: true });
+    await designerFrame.locator("#rootContextMenu [data-root-context=requirement-edit]").click();
+    await designerFrame.locator("#designerDialog").waitFor({ state: "visible" });
+    await designerFrame.locator("#reqRegionSide").selectOption("left");
+    await designerFrame.locator("#dialogSave").click();
     await designerFrame.waitForFunction(() => Array.from(document.querySelectorAll("#requirements .req")).some(row => row.textContent?.includes("polos") && row.textContent.includes("lado left")));
     const poleRegionRow = designerFrame.locator("#requirements .req").filter({ hasText: "lado left" });
     const poleRegionBeforeDrag = await poleRegionRow.innerText();
@@ -1595,6 +1612,7 @@ async function clickSvgAt(locator, x, y) {
     const gainPhaseRegionMark = designerFrame.locator('#nichols [data-requirement-flip]').first();
     await gainPhaseRegionMark.waitFor({ state: "visible" });
     await gainPhaseRegionMark.dispatchEvent("contextmenu", { button: 2, bubbles: true, cancelable: true });
+    await designerFrame.locator("#rootContextMenu [data-root-context=requirement-flip]").click();
     await designerFrame.waitForFunction(() => Array.from(document.querySelectorAll("#requirements .req")).some(row => row.textContent?.includes("gainPhaseLower")));
     await designerFrame.locator('#requirements .req button[data-remove]').last().click();
     await poleRequirementPlot.locator('button[aria-label^="Remover plot"]').click();

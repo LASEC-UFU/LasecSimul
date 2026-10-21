@@ -242,3 +242,12 @@ O inventário oficial admite arrays SISO `tf`, `zpk`, `ss` e `frd`, inclusive ar
 
 
 Validação desta extensão: `npm run compile`; `npm run test:control-designer` (92 testes LTI, 11 de integração e 4 fixtures); `node --check test/e2e/run-webview-e2e.cjs`; E2E integral (`Webview E2E OK: scope=0px analyzer=195px`).
+
+
+## Menus contextuais de requisitos e correcao de acentuacao (2026-10-21)
+
+O Help oficial permite adicionar requisitos diretamente aos editores Bode, Root Locus e Nichols e editar requisitos pelo menu contextual do limite associado ([Design Requirements](https://www.mathworks.com/help/control/ug/design-requirements.html)). O menu contextual desses tres editores agora abre o dialogo de novo requisito. Ao clicar com o botao direito numa fronteira de regiao em Root Locus ou Nichols, o menu oferece edicao do requisito e, para regioes que admitem inversao, uma acao separada de inverter a area excluida. Os plots de analise mantem o fluxo de criacao com vinculo ao plot. Ainda ha diferencas de apresentacao e selecao de tipos validos por plot em relacao ao MATLAB.
+
+A captura fornecida mostrou sequencias como “MÃ©todo” e “ExibiÃ§Ã£o”, resultado de texto UTF-8 decodificado em mais de uma camada. A recuperacao de texto da webview agora repete a decodificacao ate tres vezes e continua observando texto e atributos inseridos depois da renderizacao. Um teste isolado da funcao cobriu as formas de uma e duas camadas; compilacao e testes funcionais passaram. A E2E foi atualizada para cobrir criar, editar e inverter requisitos por menu, mas ainda nao foi executada nesta revisao: o VS Code de teste terminou antes de abrir o painel por um erro de mutex/ativacao de instancia.
+
+Validacao desta atualizacao: `npm run compile` e `npm run test:control-designer` (93 testes LTI, 11 testes de integracao e 4 fixtures) passaram; `node --check test/e2e/run-webview-e2e.cjs` passou. As tentativas E2E nao alcancaram a webview, portanto as novas interacoes ainda precisam de verificacao visual automatizada quando o host de teste estiver funcional.
