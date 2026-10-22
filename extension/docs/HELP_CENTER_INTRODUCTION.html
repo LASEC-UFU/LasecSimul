@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Introdução detalhada ao LasecSimul: circuitos, controle, PLC, HMI, P&ID, subsistemas, Python, FPGA e ESP32.">
+  <title>Conheça o LasecSimul · Help Center</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hero">
+    <a class="brand" href="./">LasecSimul <b>Help Center</b></a>
+    <p>Introdução à ferramenta e aos recursos de simulação</p>
+  </header>
+  <main class="detail introduction">
+    <p class="eyebrow">VISÃO GERAL</p>
+    <h1>Conheça o LasecSimul</h1>
+    <p class="lead">O LasecSimul é um ambiente de modelagem e simulação técnica integrado ao Visual Studio Code. Nele, você pode desenhar circuitos, combinar eletrônica analógica e lógica digital, construir malhas de controle e processo, programar um PLC, montar telas HMI, encapsular modelos reutilizáveis e integrar código Python, VHDL ou firmware executado por uma ESP32 emulada.</p>
+    <p>Essas áreas convivem em projetos e interfaces próprias, mas não são simuladores independentes colados lado a lado. O esquemático, os sinais, a execução no tempo virtual e a telemetria são integrados pelo Core do LasecSimul. Assim, um sinal calculado por uma parte do projeto pode alimentar outra parte e ser observado em instrumentos ou telas.</p>
+
+    <nav class="toc" aria-label="Nesta página">
+      <strong>Nesta página</strong>
+      <a href="#como-funciona">Como a ferramenta funciona</a>
+      <a href="#analogica">Eletrônica analógica</a>
+      <a href="#digital">Eletrônica digital</a>
+      <a href="#controle">Controle e dinâmica de processos</a>
+      <a href="#plc">PLC IEC 61131-3</a>
+      <a href="#hmi">HMI</a>
+      <a href="#pid">Diagramas P&amp;ID</a>
+      <a href="#subsistemas">Subsistemas</a>
+      <a href="#python">Blocos Python</a>
+      <a href="#fpga">FPGA com VHDL</a>
+      <a href="#esp32">ESP32 e firmware</a>
+      <a href="#workflow">Fluxo de trabalho e limites</a>
+    </nav>
+
+    <h2 id="como-funciona">Como a ferramenta funciona</h2>
+    <p>A interface do VS Code cuida do editor, da paleta de componentes, dos projetos e dos painéis. A simulação é executada pelo <strong>Core</strong>, um processo nativo separado, que mantém o modelo, o scheduler de tempo, os resolvedores e a comunicação com dispositivos externos ou emulados. Essa separação permite que a interface organize e apresente o modelo enquanto o Core executa os cálculos.</p>
+    <p>O esquemático é salvo como projeto <code>.lsproj</code>. Ele registra componentes, propriedades, fios, documentos visuais e definições hierárquicas de subsistemas. Você pode salvar, fechar e reabrir o trabalho para continuar editando. Na paleta, as bibliotecas são organizadas em áreas como <strong>Circuito / Analógico</strong>, <strong>Circuito / Digital</strong>, <strong>Processo / Controle</strong> e <strong>Processo / Automação</strong>; essa organização ajuda a encontrar blocos, mas não impede conectar elementos de áreas diferentes.</p>
+
+    <h2 id="analogica">Eletrônica analógica</h2>
+    <p>A área analógica permite montar circuitos conectando componentes por fios e nós elétricos. Entre as famílias disponíveis estão elementos passivos, fontes, dispositivos semicondutores, sensores e instrumentos, conforme o catálogo do projeto. Parâmetros do componente definem o modelo que participa dos cálculos; o símbolo mostra sua representação no esquema e não substitui o modelo elétrico.</p>
+    <p>O Core monta as equações elétricas e resolve os circuitos usando análise nodal modificada (MNA). Isso permite estudar grandezas como tensão e corrente e acompanhar a evolução temporal de circuitos com armazenamento de energia, como redes RC e RLC. Componentes não lineares suportados, como diodos, também participam da resolução. Passos de tempo, tolerâncias e convergência afetam os resultados; portanto, escolha valores e condições coerentes com o fenômeno que deseja observar.</p>
+    <p>Instrumentos e probes ajudam a inspecionar sinais e resultados da simulação. Circuitos analógicos podem fazer parte de sistemas maiores: suas tensões e eventos podem interagir com portas digitais, blocos de controle, código executável e dispositivos emulados, conforme as interfaces de cada componente.</p>
+
+    <h2 id="digital">Eletrônica digital</h2>
+    <p>A biblioteca digital inclui portas lógicas e famílias de componentes digitais, por exemplo operações lógicas, elementos de memória, conversores e periféricos de visualização. O catálogo também contém instrumentos para inspecionar sinais digitais. Esses componentes podem ser usados em esquemas próprios ou combinados com circuitos elétricos e de controle.</p>
+    <p>Os sinais digitais e as mudanças de estado participam do scheduler da simulação. Isso permite relacionar eventos lógicos com outras atividades do modelo. O FPGA programável é uma categoria à parte: nele, em vez de selecionar apenas um componente lógico pronto, você fornece uma descrição de hardware VHDL que o GHDL compila e executa.</p>
+
+    <h2 id="controle">Controle e dinâmica de processos</h2>
+    <p>A seção de controle contém blocos para construir cadeias e malhas de sinais. Ela inclui operações usuais, como ganho, soma, saturação, integração, atraso e dinâmica de primeira ou segunda ordem, além de funções não lineares e modelos de processo disponíveis no catálogo. Esses blocos podem representar partes de uma planta, sensores, atuadores ou o cálculo de um controlador.</p>
+    <p>Você pode organizar uma malha em torno de variáveis como referência (<em>setpoint</em>), variável medida (PV) e saída de controle (OP). Um PID compara referência e medição e produz um comando para a planta ou atuador. As condições iniciais, unidades, escalas, ganhos e períodos de execução precisam corresponder ao cenário que você está estudando. O tempo da simulação é virtual e conduzido pelo scheduler, não por um relógio de parede fixo.</p>
+    <p>Os modelos dinâmicos de processo e os circuitos elétricos usam mecanismos distintos, mas podem ser integrados por componentes e interfaces de sinal apropriadas. Assim, uma malha pode unir processo, instrumentação, lógica e atuação sem fingir que todas essas partes obedecem às mesmas equações.</p>
+
+    <h2 id="plc">PLC IEC 61131-3</h2>
+    <p>O LasecSimul oferece autoria de programas de PLC dentro do VS Code e execução integrada à simulação. O projeto PLC usa o formato <code>.lsplc</code> e pode ser associado ao bloco de PLC no esquemático. Entradas e saídas declaradas no programa aparecem como conexões do bloco, permitindo ligar sensores, comandos e atuadores ao restante do modelo.</p>
+    <p>O editor oferece cinco linguagens IEC 61131-3: <strong>LD</strong> (Ladder), <strong>FBD</strong> (Function Block Diagram), <strong>ST</strong> (Structured Text), <strong>SFC</strong> (Sequential Function Chart) e <strong>IL</strong> (Instruction List). LD representa lógica por contatos, bobinas e redes; FBD organiza funções como blocos conectados; ST e IL permitem escrever instruções textuais; SFC descreve sequências por etapas, transições e ações.</p>
+    <p>Os programas são compilados antes da execução e rodam no runtime do Core com ciclos de varredura e estado por instância. O editor integrado inclui build, mensagens de diagnóstico e ferramentas de depuração compatíveis com a simulação, como inspeção de variáveis e recursos de forçamento suportados. A execução do PLC não requer um OpenPLC Runtime separado. Os recursos de comunicação industrial e programação física do OpenPLC que não fazem parte do simulador não devem ser presumidos como disponíveis.</p>
+
+    <h2 id="hmi">HMI: telas de operação ligadas à simulação</h2>
+    <p>A HMI permite compor uma tela de operação com widgets gráficos, como indicadores de barra e radiais, displays, tanques, válvulas, bombas, lâmpadas, faceplates e tarjas de alarme. Os elementos visuais podem ser organizados em painéis e ligados a variáveis da simulação. Quando a fonte publica novos valores, os widgets refletem esses valores e podem apresentá-los com escalas, limites ou estados visuais configurados.</p>
+    <p>Os widgets são uma camada de apresentação: o estado de um tanque, válvula ou controlador vem do modelo conectado, e não de uma segunda simulação escondida na tela HMI. Isso mantém uma única fonte para os valores do processo. A HMI ajuda a visualizar e operar um modelo didático ou de engenharia; ela não substitui um sistema supervisório certificado nem garante, por si só, alarmes de segurança funcional.</p>
+
+    <h2 id="pid">Diagramas P&amp;ID</h2>
+    <p>A biblioteca gráfica P&amp;ID fornece símbolos para representar equipamentos, instrumentos, tubulações e identificação de malhas em diagramas de processo. Ela serve para comunicar a estrutura e a instrumentação da planta de forma reconhecível a quem trabalha com automação e processos.</p>
+    <p>Um símbolo P&amp;ID é uma representação diagramática. Inserir uma bomba ou instrumento P&amp;ID não cria automaticamente o modelo físico correspondente nem acrescenta equações de fluxo, pressão, temperatura ou dinâmica. Para simular o comportamento, monte ou conecte os blocos de processo, sinais e atuadores apropriados. A tela HMI e os símbolos P&amp;ID podem complementar o mesmo projeto: uma descreve a representação da planta, a outra exibe variáveis ao vivo quando há fontes vinculadas.</p>
+
+    <h2 id="subsistemas">Subsistemas reutilizáveis</h2>
+    <p>Subsistemas permitem agrupar componentes e conexões em uma unidade com uma interface de entradas e saídas. A definição interna permanece no documento do projeto, pode conter outros subsistemas e pode ser usada por várias instâncias. Isso reduz a complexidade visual de um modelo grande e ajuda a manter uma parte repetida em um só lugar.</p>
+    <p>O LasecSimul também trabalha com sistemas externos em arquivos <code>.lssubcircuit</code>, que podem ser reutilizados entre projetos ou adicionados à paleta. É possível incorporar uma cópia ao projeto quando você quer que o modelo viaje junto com o documento, sem depender do arquivo externo original. Definições compartilhadas e valores exportados por instância ajudam a separar a estrutura comum dos parâmetros próprios de cada ocorrência.</p>
+
+    <h2 id="python">Blocos Python programáveis</h2>
+    <p>Um bloco Python permite escrever uma função de processamento ou controle em Python diretamente no VS Code. Você define pinos de entrada e saída com tipos e valores iniciais, liga o bloco ao esquemático e edita o código em um documento Python com validação e assistência de edição. O projeto salva o código e a definição das portas.</p>
+    <p>O Core executa as fontes em um worker Python persistente nos instantes programados pelo tempo simulado. A interface do código recebe os valores de entrada e pode publicar saídas; o objeto de simulação oferece informações como tempo e duração do passo, e o estado por bloco pode guardar memória entre chamadas. Isso permite implementar cálculos e algoritmos que complementam os blocos prontos.</p>
+    <p>O código roda usando o interpretador Python selecionado no VS Code e suas permissões de usuário; ele não é executado em sandbox. Pacotes externos precisam estar instalados nesse ambiente. Exceções e tempos limite são tratados pelo runtime, mas o custo e a repetibilidade do código dependem também do interpretador e das bibliotecas usados.</p>
+    <p><a href="./examples.html">Ver os projetos de exemplo</a> · <a href="./code-examples.html">Ver exemplos de código</a></p>
+
+    <h2 id="fpga">FPGA programável com VHDL</h2>
+    <p>O bloco programável FPGA permite associar uma ou mais fontes VHDL a uma entidade de topo (<em>top-level</em>). O GHDL analisa e compila as fontes, identifica as portas e gera os pinos correspondentes no bloco. Vetores de bits podem ser apresentados como pinos individuais para conexão no esquema. A ferramenta também reporta erros de compilação para que você localize o problema na fonte.</p>
+    <p>Durante a simulação, o processo GHDL avança sincronizado com o tempo aceito pelo scheduler do Core. Entradas VHDL são lidas do circuito conectado, e as saídas do VHDL retornam à simulação. O fluxo é útil para exercitar lógica descrita em VHDL junto a clocks, componentes e sinais do modelo.</p>
+    <p>O suporte documentado se concentra em portas <code>std_logic</code> e <code>std_logic_vector</code> de direção <code>in</code> ou <code>out</code>. A interface atual não oferece um FPGA físico, síntese para uma placa real ou suporte genérico a todos os recursos de VHDL: recursos não listados na documentação técnica devem ser verificados antes de depender deles.</p>
+    <p><a href="./code-examples.html">Consultar o exemplo de contador VHDL</a></p>
+
+    <h2 id="esp32">ESP32 e firmware emulado</h2>
+    <p>O LasecSimul pode executar firmware de ESP32 dentro de uma instância de QEMU integrada ao fluxo do Core. O firmware é compilado em sua ferramenta apropriada e a imagem é carregada no componente ou placa ESP32 do projeto. A CPU e periféricos emulados executam o programa, enquanto o adaptador do LasecSimul liga os pinos e eventos do microcontrolador ao restante da simulação.</p>
+    <p>Esse caminho permite explorar programas embarcados e interações como entradas e saídas GPIO, temporização e sinais conectados, respeitando o conjunto de periféricos modelado. O firmware não roda em um chip físico: está emulado. Uma experiência depende da implementação dos periféricos envolvidos, do firmware e da versão do modelo de QEMU.</p>
+    <p>A rede é configurável separadamente. No modo <code>disabled</code>, que é o padrão documentado, a sessão não cria a interface de rede. Quando a rede está habilitada, há opções como NAT isolado e modos de laboratório ligados a uma TAP. O frontend Wi-Fi transparente permite que firmwares Arduino comuns usem chamadas como <code>WiFi.begin</code> sem configurar OpenETH; essa compatibilidade de rede não significa que o simulador modele rádio, associação Wi-Fi ou segurança WPA. Consulte as instruções dos modos de rede antes de habilitar acesso à rede local.</p>
+
+    <h2 id="workflow">Um fluxo de trabalho recomendado</h2>
+    <ol>
+      <li>Crie ou abra um projeto <code>.lsproj</code> e monte primeiro o circuito ou processo básico que deseja estudar.</li>
+      <li>Defina parâmetros e unidades; conecte os sinais e confirme que as portas e direções estão corretas.</li>
+      <li>Acrescente a lógica de controle necessária: blocos de controle, PLC, Python, FPGA ou firmware ESP32, conforme o objetivo do exercício.</li>
+      <li>Adicione instrumentos, bindings HMI ou símbolos P&amp;ID para observar ou documentar o sistema.</li>
+      <li>Execute a simulação, examine mensagens e sinais, ajuste o modelo e salve o projeto junto com os subsistemas ou fontes que ele usa.</li>
+    </ol>
+    <p>O Help Center contém uma <a href="./index-alpha.html">referência dos componentes</a>, <a href="./examples.html">projetos de exemplo</a>, <a href="./code-examples.html">arquivos de código</a> e uma <a href="./developer/index.html">referência para desenvolvedores</a>. Cada recurso possui sua própria documentação de configuração e compatibilidade.</p>
+    <p class="notice"><strong>Uso responsável:</strong> o LasecSimul é uma ferramenta de modelagem, aprendizado e experimentação. Resultados dependem dos modelos, parâmetros, solver e dispositivos suportados. Valide as hipóteses e os resultados antes de usá-los para decisões de engenharia, operação ou segurança em sistemas reais.</p>
+    <p><a href="./">Voltar à página inicial do Help Center</a></p>
+  </main>
+</body>
+</html>

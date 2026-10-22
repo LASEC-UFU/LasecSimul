@@ -19,7 +19,7 @@ function htmlFilesUnder(dir, prefix = '') {
     return entry.isDirectory() ? htmlFilesUnder(path.join(dir, entry.name), rel) : entry.name.endsWith('.html') ? [rel] : [];
   });
 }
-for (const htmlFile of ['index.html', 'index-alpha.html', 'examples.html', 'code-examples.html', 'developer/index.html', ...htmlFilesUnder(path.join(site, 'components')).map((name) => path.join('components', name)), ...htmlFilesUnder(path.join(site, 'code-examples')).map((name) => path.join('code-examples', name))].map((name) => path.join(site, name))) {
+for (const htmlFile of ['index.html', 'introduction.html', 'index-alpha.html', 'examples.html', 'code-examples.html', 'developer/index.html', ...htmlFilesUnder(path.join(site, 'components')).map((name) => path.join('components', name)), ...htmlFilesUnder(path.join(site, 'code-examples')).map((name) => path.join('code-examples', name))].map((name) => path.join(site, name))) {
   const html = fs.readFileSync(htmlFile, 'utf8');
   for (const match of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
     const ref = match[1];
