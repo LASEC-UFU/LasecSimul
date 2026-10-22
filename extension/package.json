@@ -31,6 +31,11 @@
     ],
     "commands": [
       {
+        "command": "lasecsimul.openHelp",
+        "title": "LasecSimul: Help Center",
+        "icon": "$(question)"
+      },
+      {
         "command": "lasecsimul.openSchematicEditor",
         "title": "LasecSimul: Open Schematic Editor",
         "icon": "$(go-to-file)",
@@ -493,6 +498,11 @@
     },
     "keybindings": [
       {
+        "command": "lasecsimul.openHelp",
+        "key": "f1",
+        "when": "activeWebviewPanelId == 'lasecsimul.schematic'"
+      },
+      {
         "command": "lasecsimul.saveProject",
         "key": "ctrl+s",
         "mac": "cmd+s",
@@ -537,6 +547,9 @@
   },
   "scripts": {
     "compile": "node scripts/compile.js",
+    "docs:build": "npm run compile && node scripts/build-help-center.cjs",
+    "docs:generate": "node scripts/build-help-center.cjs",
+    "docs:check": "npm run docs:build && tsc -p ./tsconfig.test.json && node out-test/src/ui/webview/helpCenter.test.js && node scripts/test-help-center.cjs && node scripts/check-help-center.cjs",
     "watch": "tsc -p ./ -w",
     "watch:webview": "tsc -p ./tsconfig.webview.json -w",
     "pretest": "npm run compile && tsc -p ./tsconfig.test.json && node out-test/src/core/coreExecutable.test.js && node out-test/src/network/machineNetworkState.test.js && node out-test/src/network/networkMode.test.js && node out-test/src/network/releaseAssets.test.js && node out-test/src/network/mdnsResponder.test.js && node out-test/src/core/voltageTelemetry.test.js && node out-test/src/core/coreLifecycle.test.js && node out-test/src/ui/webview/wirePresentation.test.js && node out-test/src/ui/webview/dialInteraction.test.js && node out-test/src/lasecplot/manifest.test.js && node out-test/src/lasecplot/broker.test.js && node out-test/src/ui/webview/serialFormat.test.js && node out-test/src/project/savePolicy.test.js && node out-test/src/catalog/catalogGeometryAudit.test.js",
@@ -570,7 +583,10 @@
     "test:visual:math:e2e": "npm run compile && node test/e2e/run-visual-math-e2e.cjs",
     "test:visual:faceplate:e2e": "npm run compile && node test/e2e/run-visual-faceplate-e2e.cjs",
     "test:visual:performance": "npm run compile && node test/e2e/run-visual-performance-e2e.cjs",
-    "test:visual:lab:e2e": "npm run compile && node test/e2e/run-visual-lab-composed-e2e.cjs"
+    "test:visual:lab:e2e": "npm run compile && node test/e2e/run-visual-lab-composed-e2e.cjs",
+    "docs:test": "npm run compile && tsc -p ./tsconfig.test.json && node out-test/src/ui/webview/helpCenter.test.js && node scripts/test-help-center.cjs",
+    "docs:preview": "node scripts/preview-help-center.cjs",
+    "docs:doxygen": "node scripts/build-doxygen.cjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

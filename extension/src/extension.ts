@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
+import { helpCenterUrl } from "./ui/webview/helpCenter";
 import { CoreClient } from "./ipc/CoreClient";
 import { IpcError } from "./ipc/protocol";
 import { CoreProcess } from "./ipc/CoreProcess";
@@ -3252,6 +3253,12 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   initSimulationLog(context);
   context.subscriptions.push(
     { dispose: disposeDeviceReferenceWatchers },
+    vscode.commands.registerCommand("lasecsimul.openHelp", (typeId?: string) => {
+      const selectedId = state.schematicState.selectedComponentIds[0];
+      const selected = state.schematicState.components.find((component) => component.id === selectedId);
+      const id = typeof typeId === "string" ? typeId : selected?.typeId ?? "";
+      return vscode.env.openExternal(vscode.Uri.parse(helpCenterUrl(id)));
+    }),
     vscode.commands.registerCommand("lasecsimul.showSimulationLog", () => showSimulationLogChannel()),
     // Model Workspace (docs/66 §3): variáveis dos parâmetros dos blocos `sl.*`, aplicadas ao Core na hora.
     vscode.commands.registerCommand("lasecsimul.editModelWorkspace", () => editModelWorkspaceCommand(async () => {

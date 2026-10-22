@@ -1,0 +1,21 @@
+PROJECT_NAME           = "LasecSimul"
+PROJECT_BRIEF          = "Simulador de circuitos eletrônicos e sistemas de automação"
+OUTPUT_DIRECTORY       = build/doxygen
+INPUT                  = ../core/include ../core/src ../core/tools ../devices docs
+RECURSIVE              = YES
+FILE_PATTERNS          = *.c *.cpp *.h *.hpp *.md
+EXCLUDE                = ../core/build ../core/build-agent-cd ../core/build-agent-dll ../core/build-agent-pid ../core/build-agent-routing ../core/build-agent-srcmath ../core/build-canon ../core/build-legacy-reference ../core/build-main ../core/build-tdps-final
+EXCLUDE_PATTERNS       = */node_modules/* */test/* */tests/* */build/* */.git/*
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+USE_MATHJAX            = YES
+HAVE_DOT               = NO
+GENERATE_TREEVIEW      = NO
+QUIET                  = YES
+WARNINGS               = NO
+WARN_IF_UNDOCUMENTED   = NO
+JAVADOC_AUTOBRIEF      = YES
+MARKDOWN_SUPPORT       = YES
+ALIASES                = "helpid=\par Help ID: " "helpcategory=\par Help category: " "helpsummary=\par Summary: " "helpparameters=\par Parameters: " "helpports=\par Ports: " "helpicon=\par Icon: " "helpseealso=\sa"

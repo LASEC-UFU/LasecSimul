@@ -1,0 +1,16 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+const root = path.resolve(__dirname, '..');
+fs.mkdirSync(path.join(root, 'build', 'doxygen'), { recursive: true });
+const windowsInstall = path.join(process.env.ProgramFiles || 'C:\\Program Files', 'doxygen', 'bin', 'doxygen.exe');
+const executable = process.platform === 'win32' && fs.existsSync(windowsInstall) ? windowsInstall : 'doxygen';
+const result = spawnSync(executable, ['Doxyfile'], { cwd: root, stdio: 'inherit' });
+if (result.error) throw new Error(`Doxygen indisponível: instale o Doxygen antes de executar docs:doxygen (${result.error.message})`);
+if (result.status !== 0) process.exit(result.status || 1);
+const generated = path.join(root, 'build', 'doxygen', 'html');
+if (!fs.existsSync(path.join(generated, 'index.html'))) throw new Error(`Doxygen não gerou ${generated}`);
+const destination = path.join(root, 'site', 'developer');
+fs.rmSync(destination, { recursive: true, force: true });
+fs.cpSync(generated, destination, { recursive: true });
+console.log(`Referência Doxygen copiada para ${destination}`);

@@ -1,5 +1,6 @@
 import { WEBVIEW_MESSAGE_VERSION, AnalyzerVectorHistory, ComponentReadoutValue, HostToWebviewMessage, InternalComponentSnapshot, SimulationStatus, WebviewToHostMessage } from "./messages.js";
 import { conditionsHold } from "./blockLibrary/spec.js";
+import { helpCenterUrl } from "./helpCenter.js";
 import { CanonicalEndpoint, CanonicalTopologyDocument, HmiApplication, HmiPage, HmiPageElement, InteractionKindEntry, McuSerialPortEntry, PackagePin, PropertySchemaEntry, SYMBOL_PIN_TYPE_ID, TUNNEL_TYPE_ID, TopologyNode, ViewSpecInteraction, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, defaultHmiNavigationVisual, endpointId, endpointPinId, nodeEndpoint, portEndpoint, remapEndpoint } from "./model.js";
 import { isSubsystemTypeId, subsystemClosure, type SubsystemDefinition } from "./subsystemModel.js";
 import { HMI_SCREEN_TYPE_ID, HMI_3D_SCREEN_TYPE_ID, remapBindingPaths, type PresentationContext, type ScreenViewState, type VisualDocument, type VisualSession, type VisualWindowInfo } from "./visualDocument.js";
@@ -2833,6 +2834,15 @@ window.addEventListener("message", (event: MessageEvent) => {
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && pidDialogOverlay) closePidDialog();
 });
+
+/** F1 abre a referência pelo typeId persistente do componente selecionado. */
+window.addEventListener("keydown", (event) => {
+  if (event.key !== "F1" || hmiPresentationMode) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const id = state.selectedComponentIds.length ? state.components.find((item) => item.id === state.selectedComponentIds[0])?.typeId : undefined;
+  send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenExternal", url: helpCenterUrl(id) });
+}, { capture: true });
 
 /** Webviews do VS Code bloqueiam window.prompt/alert (sandbox sem allow-modals); este diálogo os substitui. */
 function askText(message: string, initial?: string): Promise<string | null> {
@@ -10598,6 +10608,12 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
       { label: t("copy"), icon: "copy", shortcut: "Ctrl+C", onClick: () => copySelectedItems() },
       { label: t("cut"), icon: "cut", shortcut: "Ctrl+X", onClick: () => cutSelectedItems() },
       { label: isGroup ? t("deleteSelectedItems") : t("remove"), icon: "remove", shortcut: "Del", onClick: () => deleteSelectedItems() },
+      ...(!isGroup ? [
+        { kind: "separator" } satisfies ContextMenuItem,
+        { label: currentLocale() === "pt-BR" ? "Ajuda do componente" : "Component help", onClick: () => {
+          send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenExternal", url: helpCenterUrl(component.typeId) });
+        } } satisfies ContextMenuItem,
+      ] : []),
       { kind: "separator" },
       { label: t("rotateCw"), icon: "rotateCw", shortcut: "Ctrl+R", onClick: () => rotateSelectedComponents(1) },
       { label: t("rotateCcw"), icon: "rotateCcw", shortcut: "Ctrl+Shift+R", onClick: () => rotateSelectedComponents(-1) },
@@ -12772,7 +12788,7 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
   helpButton.type = "button";
   helpButton.className = "property-sheet__button";
   helpButton.textContent = t("help");
-  helpButton.disabled = !helpInfo;
+  helpButton.disabled = false;
   // Painel inline expansível (achado de auditoria de UI 2026-07-09, paridade com o painel de ajuda
   // do `PropDialog` real do SimulIDE) -- antes o botão só abria a URL externa direto (sem handler
   // NENHUM se o typeId só tinha `help.description`, sem `help.url` -- botão habilitado mas morto,
@@ -12795,6 +12811,13 @@ function renderPropertySheet(component: WebviewComponentModel, options: Property
     helpLink.addEventListener("click", () => {
       send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenExternal", url: helpInfo.url! });
     });
+    helpPanel.appendChild(helpLink);
+  } else {
+    const helpLink = document.createElement("button");
+    helpLink.type = "button";
+    helpLink.className = "property-sheet__help-link";
+    helpLink.textContent = currentLocale() === "pt-BR" ? "Abrir referência do componente" : "Open component reference";
+    helpLink.addEventListener("click", () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenExternal", url: helpCenterUrl(component.typeId) }));
     helpPanel.appendChild(helpLink);
   }
   helpButton.addEventListener("click", () => {

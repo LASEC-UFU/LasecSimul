@@ -169,3 +169,7 @@ qemu-system-xtensa.pre-*.exe
 # Notas de pesquisa da documentacao MathWorks (inventario da biblioteca equivalente ao Simulink,
 # docs/67). Ficam locais: o repositorio guarda so o inventario curado (nomes, URLs, estado).
 /external-research/simulink-inventory/
+
+# Generated Help Center and Doxygen output
+/extension/site/
+/extension/build/doxygen/
