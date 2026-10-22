@@ -13,7 +13,13 @@ for (const item of catalog) {
   if (!fs.existsSync(path.join(site, 'components', `${id}.html`))) errors.push(`página ausente para ${item.id}`);
   if (item.icon && !['svg', 'png'].some((ext) => fs.existsSync(path.join(site, 'assets', `${id}.${ext}`)))) errors.push(`ícone não resolvido para ${item.id}`);
 }
-for (const htmlFile of ['index.html', 'index-alpha.html', 'examples.html', 'developer/index.html', ...fs.readdirSync(path.join(site, 'components')).filter((name) => name.endsWith('.html')).map((name) => path.join('components', name))].map((name) => path.join(site, name))) {
+function htmlFilesUnder(dir, prefix = '') {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const rel = path.join(prefix, entry.name);
+    return entry.isDirectory() ? htmlFilesUnder(path.join(dir, entry.name), rel) : entry.name.endsWith('.html') ? [rel] : [];
+  });
+}
+for (const htmlFile of ['index.html', 'index-alpha.html', 'examples.html', 'code-examples.html', 'developer/index.html', ...htmlFilesUnder(path.join(site, 'components')).map((name) => path.join('components', name)), ...htmlFilesUnder(path.join(site, 'code-examples')).map((name) => path.join('code-examples', name))].map((name) => path.join(site, name))) {
   const html = fs.readFileSync(htmlFile, 'utf8');
   for (const match of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
     const ref = match[1];
@@ -30,6 +36,7 @@ const report = {
   categories: [...new Set(catalog.map((item) => item.category))].length,
   withDescription: catalog.filter((item) => item.description).length,
   withExamples: catalog.filter((item) => item.examples?.length).length,
+  codeExamples: htmlFilesUnder(path.join(site, 'code-examples')).filter((name) => name.endsWith('.html') && !name.startsWith(`raw${path.sep}`)).length,
   withResolvedIcon: catalog.filter((item) => !item.icon || ['svg', 'png'].some((ext) => fs.existsSync(path.join(site, 'assets', `${item.id.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'component'}.${ext}`)))).length,
   incomplete: catalog.filter((item) => !item.description).map((item) => item.id),
   withoutExamples: catalog.filter((item) => !item.examples?.length).map((item) => item.id),

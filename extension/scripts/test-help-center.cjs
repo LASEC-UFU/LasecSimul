@@ -20,6 +20,10 @@ try {
   check(html.includes('range') && html.includes('out'), 'parâmetros e portas não foram extraídos');
   check(fs.readFileSync(path.join(root, 'site', 'assets', 'test-sensor.svg'), 'utf8').includes('v1'), 'ícone original não foi sincronizado');
   check(fs.readFileSync(path.join(root, 'site', 'index.html'), 'utf8').includes('pressão no processo'), 'descrição técnica não entrou no índice pesquisável');
+  const codeIndex = fs.readFileSync(path.join(root, 'site', 'code-examples.html'), 'utf8');
+  check(codeIndex.includes('esp32-wifi-transparent/src/main.cpp') && codeIndex.includes('fpga-vhdl-counter/counter.vhd'), 'a lista de exemplos não incluiu os exemplos de firmware e FPGA');
+  const wifiPage = fs.readFileSync(path.join(root, 'site', 'code-examples', 'esp32-wifi-transparent-src-main-cpp.html'), 'utf8');
+  check(wifiPage.includes('WiFi.begin') && wifiPage.includes('Baixar arquivo original'), 'o código do exemplo não foi exibido nem disponibilizado para download');
   generate([{ ...base, help: undefined }]);
   const checker = spawnSync(process.execPath, [path.join(root, 'scripts', 'check-help-center.cjs')], { cwd: root, encoding: 'utf8' });
   check(checker.status === 0, `verificador recusou a página de fixture: ${checker.stderr || checker.stdout}`);

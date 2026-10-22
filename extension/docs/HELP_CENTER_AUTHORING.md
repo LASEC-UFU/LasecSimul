@@ -27,6 +27,8 @@ Use IDs permanentes independentes dos rótulos traduzidos. O campo `help.descrip
 
 O relatório `site/coverage.json` separa presença estrutural de conteúdo explicativo. Páginas sem descrição continuam marcadas como incompletas; não preencha lacunas com comportamento presumido. Para acrescentar exemplos, associe arquivos de exemplo existentes e valide os resultados em testes antes de descrevê-los.
 
+O índice **Exemplos de código** é gerado a partir dos arquivos mantidos em `examples/`: fontes C/C++/VHDL, configurações e READMEs. Cada arquivo tem uma página de leitura e um link para baixar o original. Projetos `.lsproj` permanecem no índice separado **Projetos de exemplo**; artefatos compilados, diretórios `.pio` e backups de migração são ignorados.
+
 ## Fontes e limites
 
 O gerador consome `loadUnifiedCatalog` e a especificação carregada das bibliotecas de blocos. Dados de dispositivos registrados apenas no perfil local de uma pessoa não podem ser publicados pelo build da documentação; bibliotecas distribuídas no repositório são descobertas pelo mecanismo de catálogo do aplicativo. Os ícones são copiados dos arquivos efetivos em `media/components/light`; aliases antigos conhecidos usam um símbolo equivalente existente, e essa decisão fica centralizada em `scripts/build-help-center.cjs`.
