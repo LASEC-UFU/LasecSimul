@@ -986,6 +986,10 @@ void HartCommunicationComponent::rebuildConfiguredPlan() {
     try {
         const auto additional = nlohmann::json::parse(m_hartAdditionalJson.empty() ? "{}" : m_hartAdditionalJson);
         if (!additional.is_object()) { m_hartVariablesStatus = "ERROR: Additional Common Practice JSON must be an object"; return; }
+        // The LD301 transfer function is device non-volatile state (Command 47),
+        // not a derived value. Keep it alongside the other serialized HART
+        // state so a project save/rebuild cannot silently restore Linear.
+        device.pvTransferFunctionCode = static_cast<uint8_t>(std::clamp(additional.value("pvTransferFunctionCode", 0), 0, 255));
         const auto country = additional.value("countryCode", std::string{});
         if (country.size() == 2) { device.countryCode = {static_cast<uint8_t>(country[0]), static_cast<uint8_t>(country[1])}; }
         device.siUnitsControl = static_cast<uint8_t>(std::clamp(additional.value("siUnitsControl", 0), 0, 1));
@@ -1162,6 +1166,7 @@ void HartCommunicationComponent::syncPersistedStateFromEngine() {
     } catch (...) {}
     try {
         nlohmann::json additional;
+        additional["pvTransferFunctionCode"] = plan->pvTransferFunctionCode;
         additional["countryCode"] = std::string(reinterpret_cast<const char*>(plan->countryCode.data()), plan->countryCode.size());
         additional["siUnitsControl"] = plan->siUnitsControl;
         additional["deviceLocationSupported"] = plan->deviceLocationSupported;

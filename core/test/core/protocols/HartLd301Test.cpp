@@ -1418,6 +1418,13 @@ int main(int argc, char** argv) {
                   capturedFunction.data[1] == 0 && configuredFunction.data.size() == 17 && configuredFunction.data[1] == 1 &&
                   function.cmd(156).data == cat({Bytes{0x00}, f32(6.0f)}),
               "AA2 Cmd 47 selects Sqrt (code 1); the earlier readback was Linear and Hard cutoff remains 6 percent");
+        Device functionReopened(function.save());
+        functionReopened.cmd(0);
+        const Reply reopenedFunction = functionReopened.cmd(15);
+        const Reply reopenedCutoff = functionReopened.cmd(156);
+        check(reopenedFunction.data.size() == 17 && reopenedFunction.data[1] == 1 &&
+                  reopenedCutoff.data == cat({Bytes{0x00}, f32(6.0f)}),
+              "AA2a Cmd 47 Sqrt and Cmd 156 cutoff survive component save/reopen");
 
         Device bumpless;
         bumpless.component->setSignalInput("PV", 148023.625);

@@ -5,7 +5,7 @@ import { parseSubcircuitManifest } from "../catalog/registeredSources";
 import { currentLasecSimulLanguage } from "../currentLanguage";
 import { fileExists, normalizeAbsolutePath, readJsonFile } from "../pathUtils";
 import { state, projectSerializer } from "../state";
-import { applyModelWorkspaceToCore, rebuildCoreFromSchematicState, pinsForProjectComponent } from "../core/coreLifecycle";
+import { applyModelWorkspaceToCore, rebuildCoreFromSchematicState, pinsForProjectComponent, syncHartSubcircuitPropertiesFromRuntime } from "../core/coreLifecycle";
 import { CanonicalTopologyDocument, WebviewComponentCatalogEntry, WebviewComponentModel, WebviewProjectState, WebviewWireModel, nodeEndpoint, portEndpoint } from "../ui/webview/model";
 import { ProjectComponent, ProjectDocument, ProjectTopology, createEmptyProject } from "./ProjectTypes";
 import { assertTopologyInvariants } from "../ui/webview/topologyDocument";
@@ -512,6 +512,12 @@ async function confirmDiscardUnsavedChanges(): Promise<boolean> {
  * só falta validar antes de gravar e renomear `points` (campo vivo) pra `vertices` (campo
  * persistido, mesma convenção já usada por `ProjectTopology`). */
 async function writeProjectToFile(filePath: string): Promise<boolean> {
+  try {
+    await syncHartSubcircuitPropertiesFromRuntime();
+  } catch (err) {
+    vscode.window.showErrorMessage(`Nao foi possivel capturar a configuracao HART atual antes de salvar: ${err instanceof Error ? err.message : String(err)}`);
+    return false;
+  }
   const canonicalTopology: ProjectTopology = {
     revision: state.schematicState.topology.revision,
     nodes: state.schematicState.topology.nodes,

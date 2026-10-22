@@ -1405,6 +1405,42 @@ export function rebuildCoreFromSchematicState(): Promise<void> {
   return queueCoreRebuild();
 }
 
+/** HART writes received at runtime mutate the field device inside the LD301
+ * subcircuit. Capture its non-volatile properties into the parent project's
+ * child overrides before a Core rebuild destroys that runtime instance. This
+ * makes a normal Save, Stop, or schematic edit/rebuild preserve PACTware and
+ * in-simulator changes in the `.lsproj`. */
+export async function syncHartSubcircuitPropertiesFromRuntime(): Promise<boolean> {
+  const client = state.coreClient;
+  if (!client) return false;
+  const persistedProperties = [
+    "hartVariablesJson", "hartAdditionalJson", "hartBurstJson", "hartDynamicVariableAssignments",
+    "tag", "unit", "pollingAddress", "message", "descriptor", "dateDay", "dateMonth", "dateYear",
+    "finalAssemblyNumber", "longTag", "loopCurrentMode", "alarmSelectionCode", "writeProtectCode",
+    "hartConfigChangeCounter", "configurationChangedFlags",
+  ] as const;
+  let changed = false;
+  for (const component of state.schematicState.components) {
+    if (component.typeId !== "subcircuits.hart.smar_ld301") continue;
+    const outerId = coreInstanceIdByComponentId.get(component.id);
+    if (!outerId) continue;
+    const childId = await client.getSubcircuitChildInstanceId(outerId, "ld301");
+    for (const name of persistedProperties) {
+      const value = await client.getProperty(childId, name);
+      if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") continue;
+      const key = `@ld301.${name}`;
+      if (JSON.stringify(component.properties[key]) === JSON.stringify(value)) continue;
+      component.properties[key] = value;
+      changed = true;
+    }
+  }
+  if (changed) {
+    state.schematicPanel?.postMessage({ version: 1, type: "syncState", project: state.schematicState });
+    state.schematicPanel?.setDirty(true);
+  }
+  return changed;
+}
+
 /** Registra no Core os subcircuitos do projeto (por caminho ou incorporados ao `.lsproj`). O Core
  * não guarda nada entre reinícios e o projeto pode ter sido aberto antes de ele subir; registrar a
  * cada reconstrução (com `replace`) é idempotente e cobre os dois casos. */
@@ -1457,6 +1493,15 @@ async function rebuildCoreFromSchematicStateNow(options: { alreadyStopped?: bool
   await applyModelWorkspaceToCore();
 
   const runningBeforeRebuild = options.resumeAfter ?? state.simulationStatus === "running";
+  // HART writes arrive on the physical/virtual serial loop. Read them while
+  // the old Core instances still exist; stopping/rebuilding first loses the
+  // only copy of device-side configuration not yet written to the project.
+  try {
+    await syncHartSubcircuitPropertiesFromRuntime();
+  } catch (err) {
+    reportCoreWarning("capturar a configuracao HART antes de reconstruir o circuito", err);
+    throw err;
+  }
   // Controle vem antes de configuração e mutações. Assim uma reconstrução nunca deixa add/remove
   // atrás de trabalho normal da simulação nem reproduz o timeout visto ao trocar firmware rodando.
   if (runningBeforeRebuild && !options.alreadyStopped) {

@@ -537,6 +537,17 @@ function stageBundledAssets() {
   copyDirFiltered(path.join(repoRoot, "mcu-adapters"), path.join(bundledRoot, "mcu-adapters"), excluded);
   copyDirFiltered(path.join(repoRoot, "subcircuits"), path.join(bundledRoot, "subcircuits"), excluded);
   copyDirFiltered(path.join(repoRoot, "Externos"), path.join(bundledRoot, "Externos"), excluded);
+  // Runtime UI loads Simulink-compatible block schemas from this directory.
+  // Without staging it, sl.* blocks render as unknown on clean installations.
+  const blockLibrarySource = path.join(repoRoot, "project", "schema", "block-library");
+  if (!fs.existsSync(blockLibrarySource) || !fs.readdirSync(blockLibrarySource).some((name) => name.endsWith(".json"))) {
+    throw new Error(`Block library is missing or empty: ${blockLibrarySource}`);
+  }
+  const stagedBlockLibrary = path.join(bundledRoot, "project", "schema", "block-library");
+  copyDirFiltered(blockLibrarySource, stagedBlockLibrary, excluded);
+  if (!fs.readdirSync(stagedBlockLibrary).some((name) => name.endsWith(".json"))) {
+    throw new Error(`Block library was not staged: ${stagedBlockLibrary}`);
+  }
   // Arte final dos componentes gráficos HMI, referenciado pelo catálogo relativo a project/schema.
   copyDirFiltered(path.join(repoRoot, "Icones"), path.join(bundledRoot, "Icones"), excluded);
 
