@@ -199,7 +199,13 @@ void buildFcn(BuildContext& c) {
     compiler.compile();
     if (compiler.maxInputIndex() > c.inputWidth(0))
         c.fail("u(" + std::to_string(compiler.maxInputIndex()) + ") excede a largura da entrada (" + std::to_string(c.inputWidth(0)) + ")");
-    simpleKernel(c, "fcn", 1, compiler.constants(), compiler.program());
+    simulation::SignalBlockDefinition& block = c.kernel("", "fcn", inputWidths(c), 1,
+                                                        compiler.constants(), compiler.program());
+    // The Fcn schema declares SampleTime and Simulink Fcn inherits it by default. Leaving the
+    // generated kernel at the continuous default splits a discrete TDPS feedback SCC across
+    // incompatible rate groups even when the persisted block explicitly says 0.01 s.
+    block.rate = c.resolution.rate;
+    c.connectInputs(c.outputBlock(0));
 }
 
 } // namespace

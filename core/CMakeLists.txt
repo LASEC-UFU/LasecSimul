@@ -351,6 +351,87 @@ if(NOT WIN32)
 endif()
 add_test(NAME python_session COMMAND python_session_test)
 
+add_executable(python_program_block_test test/core/python/PythonProgramBlockTest.cpp)
+target_include_directories(python_program_block_test PRIVATE include src)
+target_link_libraries(python_program_block_test PRIVATE nlohmann_json::nlohmann_json)
+add_test(NAME python_program_block COMMAND python_program_block_test)
+
+add_executable(python_program_execution_test
+    test/core/python/PythonProgramExecutionTest.cpp
+    src/python/PythonRuntime.cpp
+    src/resources/ResourceGovernor.cpp
+)
+target_include_directories(python_program_execution_test PRIVATE include src)
+target_link_libraries(python_program_execution_test PRIVATE nlohmann_json::nlohmann_json)
+if(Python3_Interpreter_FOUND)
+    target_compile_definitions(python_program_execution_test PRIVATE
+        LASECSIMUL_TEST_PYTHON_EXECUTABLE="${Python3_EXECUTABLE}"
+    )
+endif()
+add_test(NAME python_program_execution COMMAND python_program_execution_test)
+
+add_executable(python_program_numpy_test
+    test/core/python/PythonProgramNumpyTest.cpp
+    src/python/PythonRuntime.cpp
+    src/resources/ResourceGovernor.cpp
+)
+target_include_directories(python_program_numpy_test PRIVATE include src)
+target_link_libraries(python_program_numpy_test PRIVATE nlohmann_json::nlohmann_json)
+if(Python3_Interpreter_FOUND)
+    target_compile_definitions(python_program_numpy_test PRIVATE
+        LASECSIMUL_TEST_PYTHON_EXECUTABLE="${Python3_EXECUTABLE}"
+    )
+endif()
+add_test(NAME python_program_numpy COMMAND python_program_numpy_test)
+set_tests_properties(python_program_numpy PROPERTIES TIMEOUT 30 LABELS "external-python" SKIP_REGULAR_EXPRESSION "PULADO:")
+
+add_executable(python_program_session_integration_test
+    test/core/python/PythonProgramSessionIntegrationTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(python_program_session_integration_test PRIVATE include src)
+target_link_libraries(python_program_session_integration_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(Python3_Interpreter_FOUND)
+    target_compile_definitions(python_program_session_integration_test PRIVATE
+        LASECSIMUL_TEST_PYTHON_EXECUTABLE="${Python3_EXECUTABLE}"
+    )
+endif()
+if(NOT WIN32)
+    target_link_libraries(python_program_session_integration_test PRIVATE dl)
+endif()
+add_test(NAME python_program_session_integration COMMAND python_program_session_integration_test)
+
+add_executable(python_program_benchmark
+    test/core/python/PythonProgramBenchmark.cpp
+    src/python/PythonRuntime.cpp
+    src/resources/ResourceGovernor.cpp
+)
+target_include_directories(python_program_benchmark PRIVATE include src)
+target_link_libraries(python_program_benchmark PRIVATE nlohmann_json::nlohmann_json)
+if(Python3_Interpreter_FOUND)
+    target_compile_definitions(python_program_benchmark PRIVATE
+        LASECSIMUL_TEST_PYTHON_EXECUTABLE="${Python3_EXECUTABLE}"
+    )
+endif()
+if(NOT WIN32)
+    target_link_libraries(python_program_benchmark PRIVATE dl)
+endif()
+
+add_executable(python_program_session_benchmark
+    test/core/python/PythonProgramSessionBenchmark.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(python_program_session_benchmark PRIVATE include src)
+target_link_libraries(python_program_session_benchmark PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+if(Python3_Interpreter_FOUND)
+    target_compile_definitions(python_program_session_benchmark PRIVATE
+        LASECSIMUL_TEST_PYTHON_EXECUTABLE="${Python3_EXECUTABLE}"
+    )
+endif()
+if(NOT WIN32)
+    target_link_libraries(python_program_session_benchmark PRIVATE dl)
+endif()
+
 # F9.2 (PLC IEC 61131-3): contrato de scan do PlcScanSession contra o fixture `hello` (ST->C++ ja
 # compilado pelo STruCpp vendorizado e commitado como snapshot -- ver
 # core/test/core/plc/fixtures/hello.generated.{cpp,hpp} -- nao chama strucpp.exe em tempo de teste,
@@ -2102,7 +2183,7 @@ set(LASECSIMUL_HERMETIC_TESTS
     logic_family_extension mcu_component mcu_usart_monitor mcu_uart_to_lasecplot
     mcu_component_live_poll_thread mcu_scheduler_pacing_sync pin_change_dispatch plugin_watchdog
     plc_scan_session plc_runtime plc_session_integration industrial_protocols
-    control_block_subcircuit dual_domain_tunnel electrical_signal_bridge_live adc_dac_bus
+    control_block_subcircuit dual_domain_tunnel electrical_signal_bridge_live adc_dac_bus python_program_block
 )
 set(LASECSIMUL_EXTERNAL_GHDL_TESTS
     ghdl_lockstep_real_ghdl ghdl_backend_real_ghdl fpga_component_real_ghdl
@@ -2115,7 +2196,7 @@ set(LASECSIMUL_EXTERNAL_QEMU_TESTS
     qemu_queue_full_timeout vnext_b_attachment vnext_b_production_scale cache_wait_e2e_real_qemu
 )
 set(LASECSIMUL_EXTERNAL_PYTHON_TESTS
-    python_runtime python_session
+    python_runtime python_session python_program_execution python_program_numpy python_program_session_integration
 )
 set(LASECSIMUL_EXTERNAL_PLC_TESTS
     plc_compiler plc_runtime_hang

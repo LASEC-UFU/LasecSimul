@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cerrno>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
@@ -50,6 +51,14 @@ import os
 import sys
 import traceback
 import platform
+from types import SimpleNamespace
+import ast
+
+# Avoid native math libraries creating dozens of competing thread pools in the shared worker.
+# Respect explicit environment choices from the VS Code host; users can still request parallel BLAS.
+for thread_setting in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
+                       "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
+    os.environ.setdefault(thread_setting, "1")
 
 blocks = {}
 
@@ -62,14 +71,42 @@ def initialize(definitions):
     for definition in definitions:
         block_id = definition["blockId"]
         namespace = {"__name__": "lasecsimul_block_" + block_id}
+        source = definition["source"]
         captured = io.StringIO()
-        with contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
-            exec(compile(definition["source"], "<lasecsimul:" + block_id + ">", "exec"), namespace, namespace)
+        tree = ast.parse(source, filename="<lasecsimul:" + block_id + ">", mode="exec")
+        code = compile(tree, "<lasecsimul:" + block_id + ">", "exec")
+        declares_step = any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "step" for node in tree.body)
+        if declares_step:
+            with contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
+                exec(code, namespace, namespace)
         step = namespace.get("step")
-        if not callable(step):
-            raise ValueError("block " + block_id + " must define step(inputs, state, time_ns)")
-        staged[block_id] = (step, {})
+        inputs = {port["name"]: port.get("type", "real") for port in definition.get("inputs", [])}
+        outputs = {port["name"]: port.get("type", "real") for port in definition.get("outputs", [])}
+        if not callable(step) and not source.strip():
+            raise ValueError("block " + block_id + " has empty source")
+        defaults = {port["name"]: port.get("initialValue", False if port.get("type", "real") == "bool" else 0 if port.get("type") == "int64" else 0.0) for port in definition.get("outputs", [])}
+        staged[block_id] = {"step": step if callable(step) else None, "code": code, "state": {},
+                            "last_outputs": defaults, "inputs": inputs, "outputs": outputs, "step_index": 0}
     return staged
+
+class State(dict):
+    def __getattr__(self, name):
+        try: return self[name]
+        except KeyError: raise AttributeError(name)
+    def __setattr__(self, name, value): self[name] = value
+
+def typed_value(value, kind, label):
+    if kind == "bool":
+        if not isinstance(value, bool): raise TypeError(label + " must be bool")
+        return value
+    if kind == "int64":
+        if isinstance(value, bool) or not isinstance(value, int): raise TypeError(label + " must be int")
+        if value < -(1 << 63) or value >= (1 << 63): raise OverflowError(label + " is outside int64")
+        return value
+    if isinstance(value, bool) or not isinstance(value, (int, float)): raise TypeError(label + " must be real")
+    value = float(value)
+    if not __import__("math").isfinite(value): raise ValueError(label + " must be finite")
+    return value
 
 for raw in sys.stdin:
     try:
@@ -89,18 +126,64 @@ for raw in sys.stdin:
                 "dependencies": dependency_versions}})
         elif operation == "STEP_BATCH":
             timestamp_ns = int(request["timestampNs"])
+            dt_ns = int(request.get("dtNs", 0))
             results = []
             for item in request.get("steps", []):
                 block_id = item["blockId"]
                 if block_id not in blocks:
                     raise KeyError("unknown block " + block_id)
-                step, state = blocks[block_id]
-                captured = io.StringIO()
-                with contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
-                    outputs = step(dict(item.get("inputs", {})), state, timestamp_ns)
-                if not isinstance(outputs, dict):
-                    raise TypeError("step for " + block_id + " must return a dict")
-                results.append({"blockId": block_id, "outputs": outputs})
+                block = blocks[block_id]
+                if block.get("fault"):
+                    results.append({"blockId": block_id, "outputs": block["last_outputs"],
+                                    "error": block["fault"]["error"], "traceback": block["fault"]["traceback"]})
+                    continue
+                state = block["state"]
+                previous_state = dict(state)
+                try:
+                    raw_inputs = dict(item.get("inputs", {}))
+                    raw_inputs.update(item.get("typedInputs", {}))
+                    input_types = dict(block["inputs"])
+                    if block["step"] is not None and not input_types:
+                        for name, value in raw_inputs.items():
+                            input_types[name] = "bool" if isinstance(value, bool) else "int64" if isinstance(value, int) else "real"
+                    inputs = {name: typed_value(raw_inputs.get(name, False if kind == "bool" else 0 if kind == "int64" else 0.0), kind, name)
+                              for name, kind in input_types.items()}
+                    block["step_index"] += 1
+                    captured = io.StringIO()
+                    with contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
+                        if block["step"] is not None:
+                            outputs = block["step"](inputs, state, timestamp_ns)
+                            if not isinstance(outputs, dict): raise TypeError("step for " + block_id + " must return a dict")
+                            next_outputs = dict(block["last_outputs"])
+                            next_outputs.update(outputs)
+                            output_types = dict(block["outputs"])
+                            # Preserve the pre-manifest runtime contract for legacy callers using
+                            # `def step(inputs, state, time_ns)` with arbitrary returned output names.
+                            if not output_types:
+                                for name, value in next_outputs.items():
+                                    output_types[name] = "bool" if isinstance(value, bool) else "int64" if isinstance(value, int) else "real"
+                        else:
+                            namespace = {"__name__": "lasecsimul_block_" + block_id, "state": State(state),
+                                         "sim": SimpleNamespace(time=timestamp_ns * 1e-9, dt=dt_ns * 1e-9,
+                                                                 step=block["step_index"]),
+                                         "inputs": inputs, "outputs": dict(block["last_outputs"])}
+                            namespace.update(inputs)
+                            namespace.update(block["last_outputs"])
+                            exec(block["code"], namespace, namespace)
+                            state.clear(); state.update(namespace["state"])
+                            next_outputs = dict(block["last_outputs"])
+                            for name in block["outputs"]:
+                                if name in namespace: next_outputs[name] = namespace[name]
+                            output_types = block["outputs"]
+                        outputs = {name: typed_value(next_outputs.get(name, False if kind == "bool" else 0 if kind == "int64" else 0.0), kind, name)
+                                   for name, kind in output_types.items()}
+                        block["last_outputs"] = outputs
+                    results.append({"blockId": block_id, "outputs": outputs, "typedOutputs": outputs})
+                except BaseException as error:
+                    state.clear(); state.update(previous_state)
+                    block["fault"] = {"error": str(error), "traceback": traceback.format_exc(limit=8)}
+                    results.append({"blockId": block_id, "outputs": block["last_outputs"],
+                                    "error": block["fault"]["error"], "traceback": block["fault"]["traceback"]})
             reply({"ok": True, "pid": os.getpid(), "rateGroupId": request.get("rateGroupId", ""), "results": results})
         elif operation == "SHUTDOWN":
             reply({"ok": True, "pid": os.getpid()})
@@ -553,7 +636,11 @@ void PythonRuntime::ensureStarted() {
         json definitions = json::array();
         std::unordered_set<std::string> dependencySet;
         for (const auto& block : m_blocks) {
-            definitions.push_back({{"blockId", block.blockId}, {"source", block.source}});
+            json inputPorts = json::array(), outputPorts = json::array();
+            for (const auto& port : block.inputs) inputPorts.push_back({{"name", port.name}, {"type", port.type}, {"initialValue", std::visit([](const auto& value) -> json { return value; }, port.initialValue)}});
+            for (const auto& port : block.outputs) outputPorts.push_back({{"name", port.name}, {"type", port.type}, {"initialValue", std::visit([](const auto& value) -> json { return value; }, port.initialValue)}});
+            definitions.push_back({{"blockId", block.blockId}, {"source", block.source},
+                                   {"inputs", inputPorts}, {"outputs", outputPorts}});
             dependencySet.insert(block.dependencies.begin(), block.dependencies.end());
         }
         std::vector<std::string> dependencies(dependencySet.begin(), dependencySet.end());
@@ -591,13 +678,21 @@ std::vector<PythonStepResult> PythonRuntime::stepBatch(uint64_t timestampNs,
     ensureStarted();
     json encodedSteps = json::array();
     for (const auto& step : steps) {
-        encodedSteps.push_back({{"blockId", step.blockId}, {"inputs", step.inputs}});
+        json typedInputs = json::object();
+        for (const auto& [name, value] : step.typedInputs) {
+            typedInputs[name] = std::visit([](const auto& item) -> json { return item; }, value);
+        }
+        encodedSteps.push_back({{"blockId", step.blockId}, {"inputs", step.inputs},
+                                {"typedInputs", typedInputs}, {"dtNs", step.dtNs},
+                                {"stepIndex", step.stepIndex}});
     }
     try {
         size_t sent = 0;
         size_t received = 0;
         const json response = m_process->request(
-            {{"op", "STEP_BATCH"}, {"timestampNs", timestampNs}, {"rateGroupId", rateGroupId}, {"steps", encodedSteps}},
+            {{"op", "STEP_BATCH"}, {"timestampNs", timestampNs},
+             {"dtNs", steps.empty() ? 0ull : steps.front().dtNs},
+             {"rateGroupId", rateGroupId}, {"steps", encodedSteps}},
             timeoutFrom(m_budget), sent, received);
         m_metrics.requestBytes += sent;
         m_metrics.responseBytes += received;
@@ -615,7 +710,27 @@ std::vector<PythonStepResult> PythonRuntime::stepBatch(uint64_t timestampNs,
             if (blockId != steps[i].blockId) throw std::runtime_error("Python STEP_BATCH changed deterministic plan order");
             PythonStepResult result;
             result.blockId = blockId;
-            result.outputs = item.at("outputs").get<std::unordered_map<std::string, double>>();
+            result.error = item.value("error", std::string{});
+            const json& encodedOutputs = item.at("outputs");
+            if (!encodedOutputs.is_object()) throw std::runtime_error("Python worker outputs must be an object");
+            for (auto output = encodedOutputs.begin(); output != encodedOutputs.end(); ++output) {
+                if (output.value().is_boolean()) {
+                    const bool value = output.value().get<bool>();
+                    result.typedOutputs.emplace(output.key(), value);
+                    result.outputs.emplace(output.key(), value ? 1.0 : 0.0);
+                } else if (output.value().is_number_integer()) {
+                    const int64_t value = output.value().get<int64_t>();
+                    result.typedOutputs.emplace(output.key(), value);
+                    result.outputs.emplace(output.key(), static_cast<double>(value));
+                } else if (output.value().is_number()) {
+                    const double value = output.value().get<double>();
+                    if (!std::isfinite(value)) throw std::runtime_error("Python worker returned a non-finite output: " + output.key());
+                    result.typedOutputs.emplace(output.key(), value);
+                    result.outputs.emplace(output.key(), value);
+                } else {
+                    throw std::runtime_error("Python worker returned a non-numeric output: " + output.key());
+                }
+            }
             results.push_back(std::move(result));
         }
         ++m_metrics.batches;
@@ -651,6 +766,20 @@ void PythonRuntime::shutdown() {
     if (m_process) m_process->kill();
     m_process.reset();
     m_health = PythonWorkerHealth::Stopped;
+}
+
+void PythonRuntime::setPythonExecutable(std::string executable) {
+    if (executable.empty()) throw std::invalid_argument("Python executable path cannot be empty");
+    if (workerRunning()) throw std::logic_error("Python executable can only change while the worker is stopped");
+    shutdown();
+    m_pythonExecutable = std::move(executable);
+    m_environment = {};
+}
+
+void PythonRuntime::setStepTimeoutMs(uint32_t timeoutMs) {
+    if (timeoutMs < 10 || timeoutMs > 60'000)
+        throw std::invalid_argument("Python step timeout must be between 10 and 60000 ms");
+    m_budget.pythonStepTimeoutMs = timeoutMs;
 }
 
 bool PythonRuntime::workerRunning() const { return m_process && m_process->running(); }

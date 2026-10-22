@@ -1,0 +1,99 @@
+{
+    "schemaVersion":  2,
+    "components":  [
+                       {
+                           "id":  "constant-1",
+                           "typeId":  "control.constant",
+                           "label":  "Permissão = 1",
+                           "visual":  {
+                                          "x":  100,
+                                          "y":  215,
+                                          "rotation":  0
+                                      },
+                           "properties":  {
+                                              "value":  1,
+                                              "unit":  "",
+                                              "options":  ""
+                                          }
+                       },
+                       {
+                           "id":  "constant-2",
+                           "typeId":  "control.constant",
+                           "label":  "Nível seguro = 1",
+                           "visual":  {
+                                          "x":  100,
+                                          "y":  290,
+                                          "rotation":  0
+                                      },
+                           "properties":  {
+                                              "value":  1,
+                                              "unit":  "",
+                                              "options":  ""
+                                          }
+                       },
+                       {
+                           "id":  "python-1",
+                           "typeId":  "python.programmable",
+                           "label":  "Intertravamento",
+                           "visual":  {
+                                          "x":  300,
+                                          "y":  220,
+                                          "rotation":  0
+                                      },
+                           "properties":  {
+                                              "source":  "bomba = permissao \u003e 0.5 and nivel_ok \u003e 0.5\n",
+                                              "ports":  "{\"inputs\":[{\"name\":\"permissao\",\"type\":\"real\"},{\"name\":\"nivel_ok\",\"type\":\"real\"}],\"outputs\":[{\"name\":\"bomba\",\"type\":\"bool\"}]}",
+                                              "periodNs":  10000000
+                                          }
+                       }
+                   ],
+    "topology":  {
+                     "nodes":  [
+
+                               ],
+                     "conductors":  [
+                                        {
+                                            "id":  "wire-1",
+                                            "from":  {
+                                                         "kind":  "port",
+                                                         "componentId":  "constant-1",
+                                                         "pinId":  "out"
+                                                     },
+                                            "to":  {
+                                                       "kind":  "port",
+                                                       "componentId":  "python-1",
+                                                       "pinId":  "permissao"
+                                                   },
+                                            "vertices":  [
+
+                                                         ]
+                                        },
+                                        {
+                                            "id":  "wire-2",
+                                            "from":  {
+                                                         "kind":  "port",
+                                                         "componentId":  "constant-2",
+                                                         "pinId":  "out"
+                                                     },
+                                            "to":  {
+                                                       "kind":  "port",
+                                                       "componentId":  "python-1",
+                                                       "pinId":  "nivel_ok"
+                                                   },
+                                            "vertices":  [
+
+                                                         ]
+                                        }
+                                    ]
+                 },
+    "visual":  {
+                   "viewport":  {
+                                    "x":  0,
+                                    "y":  0,
+                                    "zoom":  1
+                                }
+               },
+    "simulationSettings":  {
+
+                           }
+}

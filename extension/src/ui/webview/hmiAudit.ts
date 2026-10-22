@@ -363,7 +363,14 @@ export function auditHmiApplication(
           continue;
         }
         const channel = Number(properties[`bindChannel${suffix}`] ?? 0);
-        const channelCount = readoutFormat.kind === "scalar" ? 1 : readoutFormat.channels;
+        const channelCount = boundComponent.typeId === "python.programmable"
+          ? (() => {
+              try {
+                const ports = JSON.parse(String(boundComponent.properties.ports ?? "{}")) as { outputs?: unknown[] };
+                return Array.isArray(ports.outputs) ? ports.outputs.length : 0;
+              } catch { return 0; }
+            })()
+          : readoutFormat.kind === "scalar" ? 1 : readoutFormat.channels;
         if (!Number.isInteger(channel) || channel < 0 || channel >= channelCount) {
           add(issues, "HMI.BINDING.CHANNEL_INVALID", page, `${label} / bindChannel${suffix}: canal ${String(properties[`bindChannel${suffix}`] ?? 0)} inválido para ${boundComponent.label} (${readoutFormat.kind}, ${channelCount} canal(is))`, element.id);
         }

@@ -37,6 +37,7 @@
 #include "../components/control/SignalMathBlock.hpp"
 #include "../components/control/ManualSignalSlider.hpp"
 #include "../components/control/SignalConstant.hpp"
+#include "../python/PythonProgramBlock.hpp"
 #include "../components/blocks/LibraryBlock.hpp"
 #include "../components/connectors/Tunnel.hpp"
 #include "../components/connectors/Bus.hpp"
@@ -346,6 +347,14 @@ void registerBuiltinComponents(ComponentRegistry& reg, registry::ComponentMetada
     registerBuiltinMetadata(components::SignalConstant::kTypeId, "Constante", components::SignalConstant::propertySchema(),
                             R"json({"en":{"name":"Constant"}})json", components::SignalConstant::readoutFormat(), std::nullopt,
                             std::vector<std::string>{});
+
+    reg.registerFactory(python::PythonProgramBlock::kTypeId, [](const ComponentParams& p) {
+        return std::make_unique<python::PythonProgramBlock>(p);
+    });
+    registerBuiltinMetadata(python::PythonProgramBlock::kTypeId, "Python Programável",
+                            python::PythonProgramBlock::propertySchema(),
+                            R"json({"en":{"name":"Programmable Python"}})json",
+                            std::nullopt, std::nullopt, std::vector<std::string>{});
 
     reg.registerFactory("graphics.slider", [](const ComponentParams& p) {
         return std::make_unique<components::ManualSignalSlider>(p);
@@ -1854,6 +1863,24 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
     // ── esquemático: componentes e fios ───────────────────────────────────────
     // PLC IEC 61131-3: artifact/interface, bindings and watch/force/reset. The native module is
     // always spawned by PlcRuntime; this IPC surface never loads it into the Core process.
+    if (msg.type == "setPythonExecutable") {
+        try {
+            const auto payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
+            session.setPythonExecutable(payload.at("executable").get<std::string>());
+            resp.ok = true;
+        } catch (const std::exception& error) { resp.ok = false; resp.error = error.what(); }
+        return resp;
+    }
+    if (msg.type == "setPythonStepTimeout") {
+        try {
+            const auto payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
+            const int64_t timeoutMs = payload.at("timeoutMs").get<int64_t>();
+            if (timeoutMs < 10 || timeoutMs > 60'000) throw std::out_of_range("timeoutMs deve estar entre 10 e 60000");
+            session.setPythonStepTimeoutMs(static_cast<uint32_t>(timeoutMs));
+            resp.ok = true;
+        } catch (const std::exception& error) { resp.ok = false; resp.error = error.what(); }
+        return resp;
+    }
     if (msg.type == "loadPlcArtifact") {
         try {
             const auto payload = nlohmann::json::parse(msg.payloadJson.empty() ? "{}" : msg.payloadJson);
@@ -3141,6 +3168,12 @@ CoreApplication::CoreApplication(CoreConfig config)
         }
         if (!m_impl->ipcServer.sendNotification("pauseConditionTriggered", nlohmann::json{{"ownerId",event.ownerId},{"simulationTimeNs",event.simulationTimeNs},{"expression",event.expression},{"resolvedValues",values},{"error",event.error}}.dump())) {
             std::fprintf(stderr, "[Core] notificacao pauseConditionTriggered rejeitada pelo ResourceBudget\n");
+        }
+    });
+    m_impl->session.setPythonFaultCallback([this](uint64_t timestampNs, const std::string& detail) {
+        if (!m_impl->ipcServer.sendNotification("pythonRuntimeFault", nlohmann::json{
+                {"simulationTimeNs", timestampNs}, {"detail", detail}}.dump())) {
+            std::fprintf(stderr, "[Core] notificacao pythonRuntimeFault rejeitada pelo ResourceBudget\n");
         }
     });
 }

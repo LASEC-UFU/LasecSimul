@@ -203,6 +203,7 @@ public:
     int64_t integer(SignalSlotHandle slot, uint16_t element = 0) const;
     void setExternalReal(std::string_view blockId, double value, uint16_t element = 0);
     void setExternalBool(std::string_view blockId, bool value, uint16_t element = 0);
+    void setExternalInt64(std::string_view blockId, int64_t value, uint16_t element = 0);
     /** Parâmetro ajustável (tunable) de um bloco `Kernel` com a simulação rodando: troca os valores
      * reais SEM recompilar o plano; a quantidade precisa ser a mesma (mudança de forma exige
      * recompilação, como no Simulink). Blocos de tempo constante são reavaliados no próximo instante. */

@@ -217,9 +217,11 @@ struct CompiledBlock {
 };
 
 constexpr uint32_t kContinuousGroup = UINT32_MAX - 1;
+constexpr uint32_t kMixedRateGroup = UINT32_MAX - 2;
 
 struct ExecutionItem {
     std::vector<uint32_t> blocks;
+    std::vector<uint32_t> continuousBlocks;
     uint32_t group = 0;
     bool fixedPoint = false;
     uint32_t maxIterations = 1;
@@ -700,7 +702,6 @@ std::shared_ptr<const CompiledSignalGraph> SignalCompiler::compile(const SignalG
             const auto& member = definition.blocks[block];
             if (member.loopPolicy != AlgebraicLoopPolicy::FixedPoint)
                 throw std::invalid_argument("todos os blocos do SCC devem declarar FixedPoint");
-            if (!sameRate(member.rate, first.rate)) throw std::invalid_argument("blocos do mesmo SCC devem compartilhar RateGroup");
         }
     }
 
@@ -747,6 +748,11 @@ std::shared_ptr<const CompiledSignalGraph> SignalCompiler::compile(const SignalG
         ExecutionItem item;
         item.blocks = components[component]; item.fixedPoint = cyclic[component] != 0; item.microstep = level[component];
         item.group = groupOf(components[component].front());
+        for (uint32_t block : item.blocks) {
+            const uint32_t blockGroup = groupOf(block);
+            if (blockGroup == kContinuousGroup) item.continuousBlocks.push_back(block);
+            else if (blockGroup != item.group) item.group = kMixedRateGroup;
+        }
         if (item.microstep >= definition.maxMicrosteps) throw std::invalid_argument("limite de microsteps excedido");
         if (item.fixedPoint) {
             item.maxIterations = std::numeric_limits<uint32_t>::max(); item.tolerance = 0.0;
@@ -769,9 +775,9 @@ std::shared_ptr<const CompiledSignalGraph> SignalCompiler::compile(const SignalG
     graph->items = std::move(items);
     for (uint32_t itemIndex = 0; itemIndex < graph->items.size(); ++itemIndex) {
         const ExecutionItem& item = graph->items[itemIndex];
-        if (item.group == kContinuousGroup) {
+        if (!item.continuousBlocks.empty()) {
             graph->continuousItems.push_back(itemIndex);
-            graph->continuousPartition.insert(graph->continuousPartition.end(), item.blocks.begin(), item.blocks.end());
+            graph->continuousPartition.insert(graph->continuousPartition.end(), item.continuousBlocks.begin(), item.continuousBlocks.end());
         }
         for (uint32_t block : item.blocks)
             if (graph->blocks[block].kind == SignalBlockKind::Kernel) graph->kernelBlocks.push_back(block);
@@ -1090,9 +1096,11 @@ void SignalRuntime::bind(std::shared_ptr<const CompiledSignalGraph> graph) {
     m_passiveGroup.assign(m_graph ? m_graph->rateGroups.size() : 0, 1);
     for (size_t item = 0; m_graph && item < m_graph->items.size(); ++item) {
         const ExecutionItem& execution = m_graph->items[item];
-        if (execution.group == kContinuousGroup) continue;
-        for (uint32_t block : execution.blocks)
-            if (m_graph->blocks[block].kind != SignalBlockKind::ExternalInput) m_passiveGroup[execution.group] = 0;
+        for (uint32_t block : execution.blocks) {
+            const uint32_t group = m_graph->blocks[block].group;
+            if (group != kContinuousGroup && m_graph->blocks[block].kind != SignalBlockKind::ExternalInput)
+                m_passiveGroup[group] = 0;
+        }
     }
     m_kernelDiscrete.assign(m_graph ? m_graph->kernelDiscreteCount : 0, 0.0);
     m_kernelParams = m_graph ? m_graph->kernelParamInit : std::vector<double>{};
@@ -1349,7 +1357,13 @@ void SignalRuntime::activateBatch(uint64_t timestampNs) {
     for (const ExecutionItem& item : m_graph->items) {
         // A partição contínua é "devida" em todo passo maior: suas saídas com direct feedthrough
         // precisam refletir as saídas discretas novas deste instante.
-        const bool run = item.group == kContinuousGroup ? hasContinuous : m_due[item.group] != 0;
+        bool run = item.group == kContinuousGroup ? hasContinuous :
+                   item.group == kMixedRateGroup ? hasContinuous : m_due[item.group] != 0;
+        if (item.group == kMixedRateGroup && !run)
+            for (uint32_t blockIndex : item.blocks) {
+                const uint32_t group = m_graph->blocks[blockIndex].group;
+                if (group != kContinuousGroup && m_due[group]) { run = true; break; }
+            }
         if (!run) continue;
         if (item.microstep != currentMicrostep) {
             currentMicrostep = item.microstep;
@@ -1359,6 +1373,7 @@ void SignalRuntime::activateBatch(uint64_t timestampNs) {
         if (!item.fixedPoint) {
             for (uint32_t blockIndex : item.blocks) {
                 const CompiledBlock& block = m_graph->blocks[blockIndex];
+                if (item.group == kMixedRateGroup && block.group != kContinuousGroup && !m_due[block.group]) continue;
                 if (block.kind == SignalBlockKind::Kernel) {
                     runKernelOutputs(blockIndex, timestampNs, true, m_reals, m_dynamicState.data());
                     ++m_metrics.blockEvaluations;
@@ -1467,6 +1482,7 @@ void SignalRuntime::activateBatch(uint64_t timestampNs) {
             }
             for (uint32_t blockIndex : item.blocks) {
                 const CompiledBlock& block = m_graph->blocks[blockIndex];
+                if (item.group == kMixedRateGroup && block.group != kContinuousGroup && !m_due[block.group]) continue;
                 if (block.kind == SignalBlockKind::Kernel) continue;
                 const SignalSlotHandle slot = block.output;
                 if (slot.scalar == SignalScalarType::Real) commitSlot(slot, m_reals, m_realCandidate);
@@ -1480,6 +1496,7 @@ void SignalRuntime::activateBatch(uint64_t timestampNs) {
             m_realSnapshot = m_reals; m_intSnapshot = m_ints; m_boolSnapshot = m_bools;
             for (uint32_t blockIndex : item.blocks) {
                 const CompiledBlock& block = m_graph->blocks[blockIndex];
+                if (item.group == kMixedRateGroup && block.group != kContinuousGroup && !m_due[block.group]) continue;
                 if (block.kind == SignalBlockKind::Kernel) runKernelOutputs(blockIndex, timestampNs, true, m_reals, m_dynamicState.data());
                 else evaluate(block, m_realSnapshot, m_dynamicState, m_intSnapshot, m_boolSnapshot,
                               m_realCandidate, m_intCandidate, m_boolCandidate, m_expressionStack);
@@ -1487,6 +1504,7 @@ void SignalRuntime::activateBatch(uint64_t timestampNs) {
             }
             for (uint32_t blockIndex : item.blocks) {
                 const CompiledBlock& block = m_graph->blocks[blockIndex];
+                if (item.group == kMixedRateGroup && block.group != kContinuousGroup && !m_due[block.group]) continue;
                 if (block.kind == SignalBlockKind::Kernel) continue;
                 const SignalSlotHandle slot = block.output;
                 if (slot.scalar == SignalScalarType::Real) commitSlot(slot, m_reals, m_realCandidate);
@@ -1495,8 +1513,11 @@ void SignalRuntime::activateBatch(uint64_t timestampNs) {
             }
             ++m_metrics.algebraicIterations; ++m_metrics.microsteps;
             double delta = 0.0;
-            for (uint32_t blockIndex : item.blocks) delta = std::max(delta, difference(m_graph->blocks[blockIndex].output,
-                m_reals, m_realSnapshot, m_ints, m_intSnapshot, m_bools, m_boolSnapshot));
+            for (uint32_t blockIndex : item.blocks) {
+                const CompiledBlock& block = m_graph->blocks[blockIndex];
+                if (item.group == kMixedRateGroup && block.group != kContinuousGroup && !m_due[block.group]) continue;
+                delta = std::max(delta, difference(block.output, m_reals, m_realSnapshot, m_ints, m_intSnapshot, m_bools, m_boolSnapshot));
+            }
             if (delta <= item.tolerance) { converged = true; break; }
         }
         if (!converged) ++m_metrics.nonConvergentLoops;
@@ -1505,9 +1526,9 @@ void SignalRuntime::activateBatch(uint64_t timestampNs) {
     // UnitDelay publishes the state captured on the previous activation and latches only after
     // every item has committed, so its input edge is a true discrete-time delay.
     for (const ExecutionItem& item : m_graph->items) {
-        if (item.group == kContinuousGroup || !m_due[item.group]) continue;
         for (uint32_t blockIndex : item.blocks) {
         const CompiledBlock& block = m_graph->blocks[blockIndex];
+        if (block.group == kContinuousGroup || !m_due[block.group]) continue;
         if (block.kind == SignalBlockKind::UnitDelay) for (uint16_t element = 0; element < block.output.width; ++element)
             m_dynamicState[block.stateOffset + element] = readSlot(m_reals, block.inputs[0], element);
         if (block.kind == SignalBlockKind::DiscreteTransferFunction) {
@@ -1752,13 +1773,13 @@ void SignalRuntime::evaluateContinuousPartition(uint64_t timestampNs, double* st
     for (uint32_t itemIndex : m_graph->continuousItems) {
         const ExecutionItem& item = m_graph->items[itemIndex];
         if (!item.fixedPoint) {
-            for (uint32_t blockIndex : item.blocks) runKernelOutputs(blockIndex, timestampNs, false, m_stageReals, states);
+            for (uint32_t blockIndex : item.continuousBlocks) runKernelOutputs(blockIndex, timestampNs, false, m_stageReals, states);
             continue;
         }
         // Laço algébrico dentro da partição contínua: Gauss-Seidel limitado, mesma tolerância do item.
         for (uint32_t iteration = 0; iteration < item.maxIterations; ++iteration) {
             double delta = 0.0;
-            for (uint32_t blockIndex : item.blocks) {
+            for (uint32_t blockIndex : item.continuousBlocks) {
                 const SignalSlotHandle slot = m_graph->blocks[blockIndex].output;
                 std::copy_n(m_stageReals.begin() + slot.offset, slot.width, m_realSnapshot.begin() + slot.offset);
                 runKernelOutputs(blockIndex, timestampNs, false, m_stageReals, states);
@@ -1824,7 +1845,7 @@ void SignalRuntime::integrateContinuousPartition(uint64_t previousNs, uint64_t c
 
 void SignalRuntime::continuousPartitionMajorStep(uint64_t timestampNs) {
     for (uint32_t itemIndex : m_graph->continuousItems)
-        for (uint32_t blockIndex : m_graph->items[itemIndex].blocks)
+        for (uint32_t blockIndex : m_graph->items[itemIndex].continuousBlocks)
             runKernelOutputs(blockIndex, timestampNs, true, m_reals, m_dynamicState.data());
     for (uint32_t blockIndex : m_graph->continuousPartition) runKernelUpdate(blockIndex, timestampNs);
 }
@@ -2062,6 +2083,18 @@ void SignalRuntime::setExternalBool(std::string_view blockId, bool value, uint16
     m_bools.at(offset) = stored;
     m_boolSnapshot.at(offset) = stored;
     m_boolCandidate.at(offset) = stored;
+}
+
+void SignalRuntime::setExternalInt64(std::string_view blockId, int64_t value, uint16_t element) {
+    if (!SignalCompiler::isExternalInput(m_graph, blockId))
+        throw std::invalid_argument("bridge so pode publicar em ExternalInput: " + std::string(blockId));
+    const SignalSlotHandle slot = output(blockId);
+    if (slot.scalar != SignalScalarType::Int64 || element >= slot.width)
+        throw std::invalid_argument("ExternalInput nao e Int64/elemento invalido");
+    const uint32_t offset = slot.offset + element;
+    m_ints.at(offset) = value;
+    m_intSnapshot.at(offset) = value;
+    m_intCandidate.at(offset) = value;
 }
 
 } // namespace lasecsimul::simulation

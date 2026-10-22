@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1000" height="760" viewBox="0 0 1000 760" role="img" aria-label="Placa eletrônica vermelha redesenhada sem rotação, com seis pinos à esquerda e dois furos de fixação à direita">
+<defs>
+ <linearGradient id="pcb" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f52525"/><stop offset=".48" stop-color="#e60e14"/><stop offset="1" stop-color="#ba050d"/></linearGradient>
+ <linearGradient id="metal" x1="0" y1="0" x2=".9" y2="1"><stop stop-color="#858a8d"/><stop offset=".20" stop-color="#f7f8f8"/><stop offset=".47" stop-color="#a6abad"/><stop offset=".75" stop-color="#f1f1f0"/><stop offset="1" stop-color="#73777a"/></linearGradient>
+ <linearGradient id="chip" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#393939"/><stop offset=".45" stop-color="#1b1a1c"/><stop offset="1" stop-color="#08080a"/></linearGradient>
+ <linearGradient id="ceramic" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#f2d9bc"/><stop offset=".5" stop-color="#b98a62"/><stop offset="1" stop-color="#e3c19a"/></linearGradient>
+ <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#6a090c" flood-opacity=".26"/></filter>
+ <g id="headerpad"><circle r="26" fill="#b00911" stroke="#ff8889" stroke-width="2"/><circle r="20" fill="url(#metal)" stroke="#797d7d" stroke-width="2"/><circle r="12.4" fill="#4f5255"/><circle r="8.2" fill="#fff"/><path d="M -17 -5 A 18 18 0 0 1 12 -13" fill="none" stroke="#fff" opacity=".65" stroke-width="2"/></g>
+ <g id="mount"><circle r="40" fill="#99050a" stroke="#ff7977" stroke-width="3"/><circle r="34" fill="url(#metal)"/><circle r="25" fill="#fff"/><circle r="26" fill="none" stroke="#7e8283" stroke-width="2"/></g>
+ <g id="resistor"><rect x="-24" y="-11" width="48" height="22" rx="3" fill="#781219" stroke="#ff9999" stroke-opacity=".45"/><rect x="-21" y="-10" width="42" height="20" rx="2" fill="url(#metal)"/><rect x="-12" y="-9" width="24" height="18" rx="1" fill="#252326"/><path d="M -10 -7H10" stroke="#818182" stroke-width="1"/></g>
+ <g id="cap"><rect x="-24" y="-11" width="48" height="22" rx="3" fill="#9c1517"/><rect x="-22" y="-10" width="44" height="20" rx="3" fill="url(#metal)"/><rect x="-13" y="-9" width="26" height="18" fill="url(#ceramic)"/></g>
+ <g id="via"><circle r="8" fill="#9f151a" stroke="#fd6564" stroke-width="2"/><circle r="4" fill="#4d080b"/></g>
+</defs>
+<rect width="1000" height="760" fill="#fff"/>
+<!-- straight-on board, no transform or rotation on PCB -->
+<rect x="116" y="64" width="768" height="630" rx="12" fill="#79080b" filter="url(#shadow)"/>
+<rect x="116" y="58" width="768" height="630" rx="11" fill="url(#pcb)" stroke="#aa0d12" stroke-width="5"/>
+<rect x="125" y="67" width="750" height="612" rx="7" fill="none" stroke="#ff585a" stroke-width="2" opacity=".7"/>
+<!-- subtle copper routes visible under soldermask -->
+<g fill="none" stroke="#a6090e" stroke-linecap="round" stroke-linejoin="round" opacity=".76">
+ <path d="M175 140 H292 V196 H365 V277 H461" stroke-width="10"/>
+ <path d="M175 225 H318 V249 H415 V319 H461" stroke-width="8"/>
+ <path d="M175 310 H278 V344 H460" stroke-width="10"/>
+ <path d="M175 395 H319 V413 H463" stroke-width="8"/>
+ <path d="M175 480 H272 V459 H363 V432 H461" stroke-width="9"/>
+ <path d="M175 565 H338 V521 H530 V452" stroke-width="9"/>
+ <path d="M530 277 H630 V214 H699" stroke-width="8"/>
+ <path d="M530 319 H670 V317 H720" stroke-width="9"/>
+ <path d="M530 368 H637 V402 H722" stroke-width="9"/>
+ <path d="M530 412 H609 V510 H710" stroke-width="8"/>
+</g>
+<!-- left through-hole header exactly six -->
+<g>
+ <use xlink:href="#headerpad" x="178" y="140"/><use xlink:href="#headerpad" x="178" y="225"/>
+ <use xlink:href="#headerpad" x="178" y="310"/><use xlink:href="#headerpad" x="178" y="395"/>
+ <use xlink:href="#headerpad" x="178" y="480"/><use xlink:href="#headerpad" x="178" y="565"/>
+</g>
+<!-- all six labels are horizontal, clear and readable -->
+<g font-family="Arial,Helvetica,sans-serif" font-size="31" font-weight="700" fill="#fff" stroke="#c0171a" stroke-width=".7" paint-order="stroke" letter-spacing=".2">
+ <text x="224" y="151">OUT</text><text x="224" y="236">GND</text>
+ <text x="224" y="321">SCL</text><text x="224" y="406">SDA</text>
+ <text x="224" y="491">VCC</text><text x="224" y="576">GND</text>
+</g>
+<!-- two mounting holes on the opposite side -->
+<use xlink:href="#mount" x="800" y="144"/><use xlink:href="#mount" x="800" y="595"/>
+<!-- fine component solder pads and traces -->
+<g fill="#b70f13" stroke="#ff999a" stroke-width="2" opacity=".85">
+<rect x="409" y="173" width="52" height="34" rx="4"/><rect x="476" y="173" width="52" height="34" rx="4"/>
+<rect x="585" y="175" width="57" height="33" rx="4"/><rect x="650" y="175" width="57" height="33" rx="4"/>
+<rect x="588" y="246" width="54" height="34" rx="4"/><rect x="653" y="246" width="54" height="34" rx="4"/>
+<rect x="588" y="438" width="54" height="34" rx="4"/><rect x="653" y="438" width="54" height="34" rx="4"/>
+<rect x="414" y="507" width="54" height="33" rx="4"/><rect x="483" y="507" width="54" height="33" rx="4"/>
+</g>
+<!-- discrete components -->
+<use xlink:href="#cap" x="468" y="189"/><use xlink:href="#resistor" x="646" y="191"/>
+<use xlink:href="#resistor" x="649" y="263"/><use xlink:href="#cap" x="649" y="455"/>
+<use xlink:href="#resistor" x="476" y="523"/>
+<use xlink:href="#resistor" x="696" y="344"/>
+<!-- central 8-pin IC, detailed solder leads -->
+<g>
+ <rect x="449" y="289" width="94" height="150" rx="6" fill="#94090e" stroke="#ff777a" stroke-width="2"/>
+ <g fill="url(#metal)" stroke="#92999a" stroke-width="1">
+ <rect x="432" y="301" width="31" height="15" rx="2"/><rect x="432" y="334" width="31" height="15" rx="2"/>
+ <rect x="432" y="367" width="31" height="15" rx="2"/><rect x="432" y="400" width="31" height="15" rx="2"/>
+ <rect x="530" y="301" width="31" height="15" rx="2"/><rect x="530" y="334" width="31" height="15" rx="2"/>
+ <rect x="530" y="367" width="31" height="15" rx="2"/><rect x="530" y="400" width="31" height="15" rx="2"/>
+ </g>
+ <rect x="456" y="296" width="80" height="133" rx="7" fill="url(#chip)" stroke="#101011" stroke-width="2"/>
+ <path d="M461 302H531" stroke="#666" opacity=".45" stroke-width="2"/>
+ <circle cx="468" cy="313" r="4.4" fill="#777"/>
+ <text x="496" y="356" fill="#a3a4a4" font-family="Arial,sans-serif" font-size="13" font-weight="bold" text-anchor="middle">IC</text>
+ <text x="496" y="376" fill="#848486" font-family="Arial,sans-serif" font-size="12" text-anchor="middle">SMD</text>
+</g>
+<!-- small SMD details and test points -->
+<g>
+ <use xlink:href="#via" x="378" y="223"/><use xlink:href="#via" x="721" y="229"/>
+ <use xlink:href="#via" x="747" y="387"/><use xlink:href="#via" x="388" y="557"/>
+ <circle cx="735" cy="528" r="11" fill="url(#metal)"/><circle cx="735" cy="528" r="5" fill="#a50910"/>
+ <circle cx="342" cy="117" r="6" fill="#790509" stroke="#fc797d" stroke-width="2"/>
+</g>
+<!-- thin trace endpoints and small solder features -->
+<g fill="url(#metal)" stroke="#818486" stroke-width="1">
+ <rect x="380" y="263" width="20" height="10" rx="2"/><rect x="380" y="280" width="20" height="10" rx="2"/>
+ <rect x="593" y="346" width="23" height="10" rx="2"/><rect x="593" y="362" width="23" height="10" rx="2"/>
+</g>
+</svg>

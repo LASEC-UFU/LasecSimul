@@ -216,6 +216,8 @@ export type HostToWebviewMessage =
 export type VisualWindowAction = "dock" | "undock" | "fullscreen" | "exitFullscreen" | "toggleContext";
 
 export type WebviewToHostMessage =
+  | { version: number; type: "requestOpenPythonBlockEditor"; componentId: string }
+  | { version: number; type: "requestConfigurePythonBlockPorts"; componentId: string }
   | { version: number; type: "requestOpenPidTuning"; componentId: string }
   | { version: number; type: "pidPropertyChanged"; componentId: string; name: string; value: string | number | boolean }
   | { version: number; type: "pidDialogClosed" }

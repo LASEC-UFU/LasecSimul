@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900">
+  <defs>
+    <linearGradient id="boardGrad" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#1e73ca"/>
+      <stop offset="100%" stop-color="#0d5bb0"/>
+    </linearGradient>
+    <linearGradient id="ringGrad" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#b8c3ce"/>
+    </linearGradient>
+    <linearGradient id="padGrad" x1="0" x2="1">
+      <stop offset="0%" stop-color="#fafafa"/>
+      <stop offset="100%" stop-color="#d2d2d2"/>
+    </linearGradient>
+    <style><![CDATA[
+      .silk { fill: #ffffff; font-family: Arial, Helvetica, sans-serif; font-weight: 700; }
+      .silk-md { fill: #ffffff; font-family: Arial, Helvetica, sans-serif; font-weight: 700; font-size: 38px; }
+      .trace { fill: none; stroke: #2f79cd; stroke-width: 14; stroke-linecap: round; stroke-linejoin: round; }
+      .trace2 { fill: none; stroke: #4088d8; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; }
+      .smdlabel { fill: #f0f0f0; font-family: Arial, Helvetica, sans-serif; font-weight: 700; font-size: 20px; letter-spacing: 1px; }
+    ]]></style>
+  </defs>
+
+  <rect width="1400" height="900" fill="#efefef"/>
+
+  <!-- board -->
+  <rect x="130" y="120" width="1140" height="650" rx="14" fill="url(#boardGrad)" stroke="#75a7de" stroke-width="8"/>
+  <rect x="145" y="135" width="1110" height="620" rx="10" fill="none" stroke="#0f5bae" stroke-width="5" opacity="0.6"/>
+
+  <!-- traces -->
+  <g>
+    <path class="trace" d="M248 208 L300 208 L350 260"/>
+    <path class="trace" d="M418 208 L470 208 L520 260"/>
+    <path class="trace" d="M588 208 L640 208 L695 260"/>
+    <path class="trace" d="M758 208 L810 208 L865 260"/>
+
+    <path class="trace" d="M248 682 L300 682 L350 520"/>
+    <path class="trace" d="M418 682 L470 682 L520 520"/>
+    <path class="trace" d="M588 682 L640 682 L695 520"/>
+    <path class="trace" d="M758 682 L810 682 L865 520"/>
+
+    <path class="trace2" d="M350 260 L350 320 L315 350"/>
+    <path class="trace2" d="M520 260 L520 320 L485 350"/>
+    <path class="trace2" d="M695 260 L695 320 L660 350"/>
+    <path class="trace2" d="M865 260 L865 320 L830 350"/>
+
+    <path class="trace2" d="M350 520 L350 470 L315 440"/>
+    <path class="trace2" d="M520 520 L520 470 L485 440"/>
+    <path class="trace2" d="M695 520 L695 470 L660 440"/>
+    <path class="trace2" d="M865 520 L865 470 L830 440"/>
+
+    <path class="trace2" d="M350 320 L430 400 L485 400"/>
+    <path class="trace2" d="M520 320 L600 400 L660 400"/>
+    <path class="trace2" d="M695 320 L775 400 L830 400"/>
+    <path class="trace2" d="M865 320 L915 355 L975 355"/>
+
+    <path class="trace2" d="M350 470 L430 400 L485 400"/>
+    <path class="trace2" d="M520 470 L600 400 L660 400"/>
+    <path class="trace2" d="M695 470 L775 400 L830 400"/>
+    <path class="trace2" d="M865 470 L915 445 L975 445"/>
+  </g>
+
+  <!-- through holes top -->
+  <g id="top-pins">
+    <g transform="translate(220,190)"><circle r="31" fill="#dae1e9"/><circle r="25" fill="url(#ringGrad)"/><circle r="17" fill="#d8dde4"/></g>
+    <g transform="translate(390,190)"><circle r="31" fill="#dae1e9"/><circle r="25" fill="url(#ringGrad)"/><circle r="17" fill="#d8dde4"/></g>
+    <g transform="translate(560,190)"><circle r="31" fill="#dae1e9"/><circle r="25" fill="url(#ringGrad)"/><circle r="17" fill="#d8dde4"/></g>
+    <g transform="translate(730,190)"><circle r="31" fill="#dae1e9"/><circle r="25" fill="url(#ringGrad)"/><circle r="17" fill="#d8dde4"/></g>
+    <g transform="translate(900,190)"><circle r="31" fill="#dae1e9"/><circle r="25" fill="url(#ringGrad)"/><circle r="17" fill="#d8dde4"/></g>
+    <g transform="translate(1070,190)"><circle r="31" fill="#dae1e9"/><circle r="25" fill="url(#ringGrad)"/><circle r="17" fill="#d8dde4"/></g>
+  </g>
+
+  <!-- through holes bottom -->
+  <g id="bottom-pins">
+    <g transform="translate(220,700)"><circle r="31" fill="#dae1e9"/><circle r="25" fill="url(#ringGrad)"/><circle r="17" fill="#d8dde4"/></g>
+    <g transform="translate(390,700)"><circle r="31" fill="#dae1e9"/><circle r="25" fill="url(#ringGrad)"/><circle r="17" fill="#d8dde4"/></g>
+    <g transform="translate(560,700)"><circle r="31" fill="#dae1e9"/><circle r="25" fill="url(#ringGrad)"/><circle r="17" fill="#d8dde4"/></g>
+    <g transform="translate(730,700)"><circle r="31" fill="#dae1e9"/><circle r="25" fill="url(#ringGrad)"/><circle r="17" fill="#d8dde4"/></g>
+    <g transform="translate(900,700)"><circle r="31" fill="#dae1e9"/><circle r="25" fill="url(#ringGrad)"/><circle r="17" fill="#d8dde4"/></g>
+    <g transform="translate(1070,700)"><circle r="31" fill="#dae1e9"/><circle r="25" fill="url(#ringGrad)"/><circle r="17" fill="#d8dde4"/></g>
+  </g>
+
+  <!-- labels -->
+  <g text-anchor="middle">
+    <text class="silk-md" x="220" y="252">HV1</text>
+    <text class="silk-md" x="390" y="252">HV2</text>
+    <text class="silk-md" x="560" y="252">HV</text>
+    <text class="silk-md" x="730" y="252">GND</text>
+    <text class="silk-md" x="900" y="252">HV3</text>
+    <text class="silk-md" x="1070" y="252">HV4</text>
+
+    <text class="silk-md" x="220" y="645">LV1</text>
+    <text class="silk-md" x="390" y="645">LV2</text>
+    <text class="silk-md" x="560" y="645">LV</text>
+    <text class="silk-md" x="730" y="645">GND</text>
+    <text class="silk-md" x="900" y="645">LV3</text>
+    <text class="silk-md" x="1070" y="645">LV4</text>
+  </g>
+
+  <!-- upper resistor row -->
+  <g>
+    <g transform="translate(290,285)"><rect x="0" y="0" width="92" height="34" rx="6" fill="#2f343a"/><rect x="-18" y="4" width="20" height="26" rx="4" fill="url(#padGrad)"/><rect x="90" y="4" width="20" height="26" rx="4" fill="url(#padGrad)"/><text class="smdlabel" x="46" y="23" text-anchor="middle">E01</text></g>
+    <g transform="translate(458,285)"><rect x="0" y="0" width="92" height="34" rx="6" fill="#2f343a"/><rect x="-18" y="4" width="20" height="26" rx="4" fill="url(#padGrad)"/><rect x="90" y="4" width="20" height="26" rx="4" fill="url(#padGrad)"/><text class="smdlabel" x="46" y="23" text-anchor="middle">103</text></g>
+    <g transform="translate(628,285)"><rect x="0" y="0" width="92" height="34" rx="6" fill="#2f343a"/><rect x="-18" y="4" width="20" height="26" rx="4" fill="url(#padGrad)"/><rect x="90" y="4" width="20" height="26" rx="4" fill="url(#padGrad)"/><text class="smdlabel" x="46" y="23" text-anchor="middle">103</text></g>
+    <g transform="translate(968,285)"><rect x="0" y="0" width="92" height="34" rx="6" fill="#2f343a"/><rect x="-18" y="4" width="20" height="26" rx="4" fill="url(#padGrad)"/><rect x="90" y="4" width="20" height="26" rx="4" fill="url(#padGrad)"/><text class="smdlabel" x="46" y="23" text-anchor="middle">E01</text></g>
+  </g>
+
+  <!-- lower resistor row -->
+  <g>
+    <g transform="translate(290,482)"><rect x="0" y="0" width="92" height="34" rx="6" fill="#2f343a"/><rect x="-18" y="4" width="20" height="26" rx="4" fill="url(#padGrad)"/><rect x="90" y="4" width="20" height="26" rx="4" fill="url(#padGrad)"/><text class="smdlabel" x="46" y="23" text-anchor="middle">E01</text></g>
+    <g transform="translate(458,482)"><rect x="0" y="0" width="92" height="34" rx="6" fill="#2f343a"/><rect x="-18" y="4" width="20" height="26" rx="4" fill="url(#padGrad)"/><rect x="90" y="4" width="20" height="26" rx="4" fill="url(#padGrad)"/><text class="smdlabel" x="46" y="23" text-anchor="middle">103</text></g>
+    <g transform="translate(798,482)"><rect x="0" y="0" width="92" height="34" rx="6" fill="#2f343a"/><rect x="-18" y="4" width="20" height="26" rx="4" fill="url(#padGrad)"/><rect x="90" y="4" width="20" height="26" rx="4" fill="url(#padGrad)"/><text class="smdlabel" x="46" y="23" text-anchor="middle">E01</text></g>
+    <g transform="translate(968,482)"><rect x="0" y="0" width="92" height="34" rx="6" fill="#2f343a"/><rect x="-18" y="4" width="20" height="26" rx="4" fill="url(#padGrad)"/><rect x="90" y="4" width="20" height="26" rx="4" fill="url(#padGrad)"/><text class="smdlabel" x="46" y="23" text-anchor="middle">103</text></g>
+  </g>
+
+  <!-- transistor packages -->
+  <g>
+    <g transform="translate(270,355)"><rect x="0" y="0" width="150" height="72" rx="10" fill="#31363b" stroke="#4e555b" stroke-width="1.5"/><rect x="16" y="72" width="18" height="24" rx="2" fill="#f3f3f3"/><rect x="66" y="72" width="18" height="24" rx="2" fill="#f3f3f3"/><rect x="116" y="72" width="18" height="24" rx="2" fill="#f3f3f3"/><polygon points="20,72 30,42 40,72" fill="#f3f3f3"/><polygon points="70,72 75,50 84,72" fill="#f3f3f3"/><polygon points="120,72 126,42 136,72" fill="#f3f3f3"/></g>
+    <g transform="translate(440,355)"><rect x="0" y="0" width="150" height="72" rx="10" fill="#31363b" stroke="#4e555b" stroke-width="1.5"/><rect x="16" y="72" width="18" height="24" rx="2" fill="#f3f3f3"/><rect x="66" y="72" width="18" height="24" rx="2" fill="#f3f3f3"/><rect x="116" y="72" width="18" height="24" rx="2" fill="#f3f3f3"/><polygon points="20,72 30,42 40,72" fill="#f3f3f3"/><polygon points="70,72 75,50 84,72" fill="#f3f3f3"/><polygon points="120,72 126,42 136,72" fill="#f3f3f3"/></g>
+    <g transform="translate(615,355)"><rect x="0" y="0" width="150" height="72" rx="10" fill="#31363b" stroke="#4e555b" stroke-width="1.5"/><rect x="16" y="72" width="18" height="24" rx="2" fill="#f3f3f3"/><rect x="66" y="72" width="18" height="24" rx="2" fill="#f3f3f3"/><rect x="116" y="72" width="18" height="24" rx="2" fill="#f3f3f3"/><polygon points="20,72 30,42 40,72" fill="#f3f3f3"/><polygon points="70,72 75,50 84,72" fill="#f3f3f3"/><polygon points="120,72 126,42 136,72" fill="#f3f3f3"/></g>
+    <g transform="translate(785,355)"><rect x="0" y="0" width="150" height="72" rx="10" fill="#31363b" stroke="#4e555b" stroke-width="1.5"/><rect x="16" y="72" width="18" height="24" rx="2" fill="#f3f3f3"/><rect x="66" y="72" width="18" height="24" rx="2" fill="#f3f3f3"/><rect x="116" y="72" width="18" height="24" rx="2" fill="#f3f3f3"/><polygon points="20,72 30,42 40,72" fill="#f3f3f3"/><polygon points="70,72 75,50 84,72" fill="#f3f3f3"/><polygon points="120,72 126,42 136,72" fill="#f3f3f3"/></g>
+  </g>
+
+  <!-- tiny vias -->
+  <g fill="#0f58aa">
+    <circle cx="615" cy="340" r="8"/>
+    <circle cx="785" cy="340" r="8"/>
+    <circle cx="615" cy="530" r="8"/>
+    <circle cx="785" cy="530" r="8"/>
+  </g>
+</svg>

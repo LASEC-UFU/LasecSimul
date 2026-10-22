@@ -206,6 +206,12 @@ export class CoreClient {
   async step(deltaNs?: number): Promise<void> { await this.request("step", deltaNs !== undefined ? { deltaNs } : {}); }
   /** Para a simulação sem encerrar a conexão IPC. */
   async stopSimulation(): Promise<void> { await this.request("stop", {}); }
+  async setPythonExecutable(executable: string): Promise<void> {
+    await this.request("setPythonExecutable", { executable });
+  }
+  async setPythonStepTimeoutMs(timeoutMs: number): Promise<void> {
+    await this.request("setPythonStepTimeout", { timeoutMs });
+  }
 
   // ── controle do esquemático ────────────────────────────────────────────────
 

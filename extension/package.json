@@ -1,10 +1,10 @@
 {
   "name": "lasecsimul",
   "displayName": "LasecSimul",
-  "description": "Simulador de circuitos eletrônicos com MCUs emulados via QEMU, inspirado no SimulIDE.",
+  "description": "Simulador de circuitos eletrÃ´nicos com MCUs emulados via QEMU, inspirado no SimulIDE.",
   "publisher": "josuemoraisgh",
   "license": "GPL-3.0-or-later",
-  "version": "0.0.99",
+  "version": "0.0.100",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -43,7 +43,7 @@
       },
       {
         "command": "lasecsimul.openCalculusLab",
-        "title": "LasecSimul: Laboratório de Cálculo",
+        "title": "LasecSimul: LaboratÃ³rio de CÃ¡lculo",
         "icon": "$(graph-line)"
       },
       {
@@ -93,19 +93,19 @@
       },
       {
         "command": "lasecsimul.subsystem.insert",
-        "title": "LasecSimul: Inserir Subsistema Interno…"
+        "title": "LasecSimul: Inserir Subsistema Internoâ€¦"
       },
       {
         "command": "lasecsimul.subsystem.manage",
-        "title": "LasecSimul: Gerenciar Subsistemas Internos…"
+        "title": "LasecSimul: Gerenciar Subsistemas Internosâ€¦"
       },
       {
         "command": "lasecsimul.subsystem.importEmbedded",
-        "title": "LasecSimul: Importar Sistema Externo como Cópia Incorporada…"
+        "title": "LasecSimul: Importar Sistema Externo como CÃ³pia Incorporadaâ€¦"
       },
       {
         "command": "lasecsimul.newSubcircuit",
-        "title": "LasecSimul: Criar Subsistema Interno da Seleção",
+        "title": "LasecSimul: Criar Subsistema Interno da SeleÃ§Ã£o",
         "icon": "$(symbol-module)",
         "enablement": "false"
       },
@@ -181,7 +181,31 @@
       },
       {
         "command": "lasecsimul.editModelWorkspace",
-        "title": "LasecSimul: Model Workspace (variáveis dos blocos)"
+        "title": "LasecSimul: Model Workspace (variÃ¡veis dos blocos)"
+      },
+      {
+        "command": "lasecsimul.python.openBlockEditor",
+        "title": "LasecSimul: Editar cÃ³digo do bloco Python"
+      },
+      {
+        "command": "lasecsimul.python.applyBlockCode",
+        "title": "LasecSimul: Aplicar cÃ³digo ao bloco Python",
+        "icon": "$(check)"
+      },
+      {
+        "command": "lasecsimul.python.validateBlockCode",
+        "title": "LasecSimul: Validar cÃ³digo Python",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "lasecsimul.python.configurePorts",
+        "title": "LasecSimul: Configurar pinos do bloco Python",
+        "icon": "$(symbol-variable)"
+      },
+      {
+        "command": "lasecsimul.python.showEnvironment",
+        "title": "LasecSimul: DiagnÃ³stico do ambiente Python",
+        "icon": "$(terminal)"
       },
       {
         "command": "lasecsimul.showSimulationLog",
@@ -199,7 +223,7 @@
     "customEditors": [
       {
         "viewType": "lasecsimul.projectEditor",
-        "displayName": "LasecSimul: Esquemático",
+        "displayName": "LasecSimul: EsquemÃ¡tico",
         "selector": [
           {
             "filenamePattern": "*.lsproj"
@@ -275,25 +299,37 @@
           "default": "system",
           "description": "Language used by the LasecSimul editor, palette and property sheets."
         },
+        "lasecsimul.python.executable": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Fallback do interpretador Python quando a extensÃ£o ms-python.python ou a API pÃºblica de ambientes nÃ£o estiver disponÃ­vel. Normalmente o LasecSimul usa o ambiente ativo do workspace."
+        },
+        "lasecsimul.python.stepTimeoutMs": {
+          "type": "integer",
+          "default": 250,
+          "minimum": 10,
+          "maximum": 60000,
+          "markdownDescription": "Tempo mÃ¡ximo por lote sÃ­ncrono de execuÃ§Ã£o Python. Timeout encerra o worker e pausa a simulaÃ§Ã£o."
+        },
         "lasecsimul.simulation.targetStepUs": {
           "type": "number",
           "default": 0,
           "minimum": 0,
           "maximum": 1000000,
-          "markdownDescription": "Duração mínima (µs) de cada ciclo de liquidação da simulação em tempo real. `0` = ilimitado (máxima velocidade). Aumente para câmera lenta ou para reduzir uso de CPU."
+          "markdownDescription": "DuraÃ§Ã£o mÃ­nima (Âµs) de cada ciclo de liquidaÃ§Ã£o da simulaÃ§Ã£o em tempo real. `0` = ilimitado (mÃ¡xima velocidade). Aumente para cÃ¢mera lenta ou para reduzir uso de CPU."
         },
         "lasecsimul.simulation.realTimeRate": {
           "type": "number",
           "default": 1,
           "minimum": 0,
-          "markdownDescription": "Limite de velocidade em relação ao tempo real. `1` = acompanha o usuário em tempo real; `0` = ilimitado; `0.5` = meia velocidade; `2` = até duas vezes o tempo real."
+          "markdownDescription": "Limite de velocidade em relaÃ§Ã£o ao tempo real. `1` = acompanha o usuÃ¡rio em tempo real; `0` = ilimitado; `0.5` = meia velocidade; `2` = atÃ© duas vezes o tempo real."
         },
         "lasecsimul.simulation.maxNonLinearIterations": {
           "type": "integer",
           "default": 0,
           "minimum": 0,
           "maximum": 1000,
-          "markdownDescription": "Limite de iterações não-lineares por passo de liquidação. `0` = ilimitado. Reduzir pode evitar loops em circuitos oscilatórios, com alguma perda de precisão."
+          "markdownDescription": "Limite de iteraÃ§Ãµes nÃ£o-lineares por passo de liquidaÃ§Ã£o. `0` = ilimitado. Reduzir pode evitar loops em circuitos oscilatÃ³rios, com alguma perda de precisÃ£o."
         },
         "lasecsimul.simulation.integrationMethod": {
           "type": "string",
@@ -304,7 +340,7 @@
             "gear2"
           ],
           "default": "automatic",
-          "description": "Método de integração transiente."
+          "description": "MÃ©todo de integraÃ§Ã£o transiente."
         },
         "lasecsimul.simulation.adaptiveTimeStep": {
           "type": "boolean",
@@ -341,22 +377,22 @@
           "default": 20,
           "minimum": 1,
           "maximum": 60,
-          "description": "Taxa de atualização visual. Leituras são enviadas em lote e não alteram a frequência do solver."
+          "description": "Taxa de atualizaÃ§Ã£o visual. Leituras sÃ£o enviadas em lote e nÃ£o alteram a frequÃªncia do solver."
         },
         "lasecsimul.simulation.performanceProfiling": {
           "type": "boolean",
           "default": false,
-          "description": "Ativa contadores de desempenho de baixo custo no Core/IPC para benchmarks e diagnóstico."
+          "description": "Ativa contadores de desempenho de baixo custo no Core/IPC para benchmarks e diagnÃ³stico."
         },
         "lasecsimul.debug.gdbPath": {
           "type": "string",
           "default": "xtensa-esp32-elf-gdb",
-          "description": "Caminho do GDB compatível com a CPU emulada pelo QEMU."
+          "description": "Caminho do GDB compatÃ­vel com a CPU emulada pelo QEMU."
         },
         "lasecsimul.fpga.ghdlPath": {
           "type": "string",
           "default": "",
-          "description": "Override avançado do executável GHDL. Deixe vazio para usar automaticamente o runtime integrado à extensão."
+          "description": "Override avanÃ§ado do executÃ¡vel GHDL. Deixe vazio para usar automaticamente o runtime integrado Ã  extensÃ£o."
         },
         "lasecsimul.network.mode": {
           "type": "string",
@@ -367,14 +403,14 @@
             "lab-bridge"
           ],
           "enumDescriptions": [
-            "Padrão transparente: a ESP32 conecta à internet automaticamente por um uplink SLIRP/NAT por processo, sem administrador, sem TAP e sem configuração. Um firmware Arduino com WiFi.begin() simplesmente conecta (DNS, HTTP, TLS, MQTT e entrada por porta via hostfwd).",
-            "Sem rede: nenhum dispositivo de rede, socket, TAP ou thread é criado. Um firmware que usa WiFi apenas não conecta (não trava a simulação).",
-            "Laboratório roteado: conecta todas as ESP32 ao segmento da TAP local; oferece acesso do host, descoberta mDNS entre dispositivos e internet via NAT sem expor MACs na LAN física. Exige provisionamento da TAP (administrador).",
-            "Laboratório em bridge: conecta ao gateway central, que multiplexa os QEMUs sobre uma única TAP ligada à bridge física; cada ESP32 recebe IP do DHCP real da LAN. Exige provisionamento da TAP (administrador)."
+            "PadrÃ£o transparente: a ESP32 conecta Ã  internet automaticamente por um uplink SLIRP/NAT por processo, sem administrador, sem TAP e sem configuraÃ§Ã£o. Um firmware Arduino com WiFi.begin() simplesmente conecta (DNS, HTTP, TLS, MQTT e entrada por porta via hostfwd).",
+            "Sem rede: nenhum dispositivo de rede, socket, TAP ou thread Ã© criado. Um firmware que usa WiFi apenas nÃ£o conecta (nÃ£o trava a simulaÃ§Ã£o).",
+            "LaboratÃ³rio roteado: conecta todas as ESP32 ao segmento da TAP local; oferece acesso do host, descoberta mDNS entre dispositivos e internet via NAT sem expor MACs na LAN fÃ­sica. Exige provisionamento da TAP (administrador).",
+            "LaboratÃ³rio em bridge: conecta ao gateway central, que multiplexa os QEMUs sobre uma Ãºnica TAP ligada Ã  bridge fÃ­sica; cada ESP32 recebe IP do DHCP real da LAN. Exige provisionamento da TAP (administrador)."
           ],
           "default": "isolated",
           "scope": "window",
-          "markdownDescription": "Modo de rede da ESP32. `isolated` (padrão) é transparente e não exige nada do usuário: `WiFi.begin()` conecta à internet por SLIRP/NAT por processo, sem administrador nem TAP. `disabled` desliga a rede (a simulação não trava; firmware Wi‑Fi apenas não conecta). `lab-router`/`lab-bridge` são para laboratório com acesso à LAN real e descoberta mDNS a partir do host — exigem provisionamento de TAP com administrador. Recarregue a janela após alterar."
+          "markdownDescription": "Modo de rede da ESP32. `isolated` (padrÃ£o) Ã© transparente e nÃ£o exige nada do usuÃ¡rio: `WiFi.begin()` conecta Ã  internet por SLIRP/NAT por processo, sem administrador nem TAP. `disabled` desliga a rede (a simulaÃ§Ã£o nÃ£o trava; firmware Wiâ€‘Fi apenas nÃ£o conecta). `lab-router`/`lab-bridge` sÃ£o para laboratÃ³rio com acesso Ã  LAN real e descoberta mDNS a partir do host â€” exigem provisionamento de TAP com administrador. Recarregue a janela apÃ³s alterar."
         },
         "lasecsimul.network.gatewayPort": {
           "type": "integer",
@@ -382,7 +418,7 @@
           "minimum": 1,
           "maximum": 65535,
           "scope": "machine",
-          "markdownDescription": "Porta TCP somente-local do gateway central. Todos os QEMUs usam esta porta; normalmente não deve ser alterada."
+          "markdownDescription": "Porta TCP somente-local do gateway central. Todos os QEMUs usam esta porta; normalmente nÃ£o deve ser alterada."
         },
         "lasecsimul.network.namespace": {
           "type": "integer",
@@ -390,12 +426,12 @@
           "minimum": -1,
           "maximum": 255,
           "scope": "window",
-          "markdownDescription": "Identificador desta instância/aluno. `-1` usa o namespace padrão do roteador local (`42`) no modo `lab-router`; de `0` a `255`, use um valor explícito se houver mais de um domínio roteado. O gateway entrega `10.<namespace>.<instância>.15/16` por DHCP. No modo `lab-bridge`, namespace e instância geram um MAC local estável e o IP é entregue pelo DHCP real da LAN. Recarregue a janela após alterar."
+          "markdownDescription": "Identificador desta instÃ¢ncia/aluno. `-1` usa o namespace padrÃ£o do roteador local (`42`) no modo `lab-router`; de `0` a `255`, use um valor explÃ­cito se houver mais de um domÃ­nio roteado. O gateway entrega `10.<namespace>.<instÃ¢ncia>.15/16` por DHCP. No modo `lab-bridge`, namespace e instÃ¢ncia geram um MAC local estÃ¡vel e o IP Ã© entregue pelo DHCP real da LAN. Recarregue a janela apÃ³s alterar."
         },
         "lasecsimul.ui.showComponentIds": {
           "type": "boolean",
           "default": false,
-          "description": "Exibe o identificador (ex: 'Resistor-1') junto de cada componente no esquemático por padrão."
+          "description": "Exibe o identificador (ex: 'Resistor-1') junto de cada componente no esquemÃ¡tico por padrÃ£o."
         },
         "lasecsimul.ui.snapToGrid": {
           "type": "boolean",
@@ -432,6 +468,26 @@
           "command": "lasecsimul.applyDsl",
           "when": "editorLangId == lasecsimul-dsl",
           "group": "navigation@1"
+        },
+        {
+          "command": "lasecsimul.python.validateBlockCode",
+          "when": "lasecsimul.pythonBlockEditor",
+          "group": "navigation@1"
+        },
+        {
+          "command": "lasecsimul.python.applyBlockCode",
+          "when": "lasecsimul.pythonBlockEditor",
+          "group": "navigation@2"
+        },
+        {
+          "command": "lasecsimul.python.configurePorts",
+          "when": "lasecsimul.pythonBlockEditor",
+          "group": "navigation@3"
+        },
+        {
+          "command": "lasecsimul.python.showEnvironment",
+          "when": "lasecsimul.pythonBlockEditor",
+          "group": "navigation@4"
         }
       ]
     },
@@ -484,7 +540,7 @@
     "watch": "tsc -p ./ -w",
     "watch:webview": "tsc -p ./tsconfig.webview.json -w",
     "pretest": "npm run compile && tsc -p ./tsconfig.test.json && node out-test/src/core/coreExecutable.test.js && node out-test/src/network/machineNetworkState.test.js && node out-test/src/network/networkMode.test.js && node out-test/src/network/releaseAssets.test.js && node out-test/src/network/mdnsResponder.test.js && node out-test/src/core/voltageTelemetry.test.js && node out-test/src/core/coreLifecycle.test.js && node out-test/src/ui/webview/wirePresentation.test.js && node out-test/src/ui/webview/dialInteraction.test.js && node out-test/src/lasecplot/manifest.test.js && node out-test/src/lasecplot/broker.test.js && node out-test/src/ui/webview/serialFormat.test.js && node out-test/src/project/savePolicy.test.js && node out-test/src/catalog/catalogGeometryAudit.test.js",
-    "test": "node out-test/test/project/ProjectSerializer.test.js && node out-test/test/project/ProjectSubsystems.test.js && node out-test/src/ui/webview/subsystemModel.test.js && node out-test/src/project/plantTemplates.test.js && node out-test/src/ipc/CoreClient.test.js && node out-test/src/uart/CoreUartTransport.test.js && node out-test/src/catalog/UnifiedCatalog.test.js && node out-test/src/catalog/registeredSources.test.js && node out-test/src/catalog/catalogCommands.test.js && node out-test/src/catalog/externalComponents.test.js && node out-test/src/catalog/deviceUniqueness.test.js && node out-test/src/catalog/catalogMerge.test.js && node out-test/src/catalog/simulideGraphicalCatalog.test.js && node out-test/src/language.test.js && node out-test/src/fpga/fpgaPins.test.js && node out-test/src/ui/webview/simulationControls.test.js && node out-test/src/ui/webview/workspace.test.js && node out-test/src/ui/webview/paletteTree.test.js && node out-test/src/ui/webview/graphicsBinding.test.js && node out-test/src/ui/webview/hmiAudit.test.js && node out-test/src/ui/webview/graphicsAction.test.js && node out-test/src/ui/webview/zOrder.test.js && node out-test/src/ui/webview/contextMenuPosition.test.js && node out-test/src/ui/webview/ipdAlignment.test.js && node out-test/src/ui/webview/connectionEngine.test.js && node out-test/src/ui/webview/wireGeometry.test.js && node out-test/src/ui/webview/componentGeometry.test.js && node out-test/src/ui/webview/wireTopology.test.js && node out-test/src/ui/webview/wireRouting.test.js && node out-test/src/ui/webview/topologyDocument.test.js && node out-test/src/ui/webview/valueFormatting.test.js && node out-test/src/ui/webview/componentSymbols.test.js && node out-test/src/ui/webview/genericSubcircuitPackage.test.js && node out-test/src/ui/webview/componentLabels.test.js && node out-test/src/ui/webview/batchProperties.test.js && node out-test/src/ui/views/hartInspectorSections.test.js && node out-test/src/ui/webview/instrumentTrigger.test.js && node out-test/src/ui/webview/instrumentViewport.test.js && node out-test/src/trust/trustDecision.test.js && node out-test/src/catalog/subcircuitDocument.test.js && node out-test/src/catalog/graphicsLibrary.test.js && node out-test/src/catalog/subcircuitPinModel.test.js && node out-test/src/catalog/subcircuitExposedComponents.test.js && node out-test/src/catalog/subcircuitValidation.test.js && node out-test/src/catalog/subcircuitSymbolScene.test.js && node out-test/src/catalog/subcircuitLibraryLoad.test.js && node out-test/src/catalog/hartSmarDevices.test.js && node out-test/src/ui/webview/segmentLcd.test.js && node out-test/src/ui/webview/childPropertyOverrides.test.js && node out-test/src/serialport/hostPorts.test.js && node out-test/src/tdps/tdpsImporter.test.js && node out-test/src/tdps/tdpsProcessScreens.test.js && node out-test/src/dsl/DslReconciler.test.js && node out-test/src/dsl/graphicsDslRoundTrip.test.js && node out-test/src/dsl/HartCommandDsl.test.js && node out-test/src/core/schematicModel.test.js && node out-test/src/import/simulide/SimulideToLasecConverter.test.js && node out-test/src/import/simulink/SimulinkImporter.test.js && node out-test/src/plc/plcBuild.test.js && node out-test/src/plc/ilLowering.test.js && node out-test/src/plc/sfcLowering.test.js && node out-test/src/plc/openplc/openPlcBuild.test.js && node out-test/src/ui/webview/lab/calc/calc.test.js && node out-test/src/ui/webview/lab/graph/LabGraph.test.js && node out-test/src/ui/webview/lab/editor/EditorModel.test.js && node out-test/src/ui/webview/lab/units.test.js && node out-test/src/ui/webview/lab/series/SeriesBuffer.test.js && node out-test/src/lab/SeriesStore.test.js && node out-test/src/ui/webview/lab/calc/analysis.test.js && node out-test/src/ui/webview/lab/audit.test.js && node out-test/src/ui/webview/lab/noEval.test.js && node out-test/src/ui/webview/visualDocument.test.js && node out-test/src/ui/webview/mathWidgets.test.js && node out-test/src/ui/webview/labWidgets.test.js && node out-test/test/project/ProjectVisualDocuments.test.js && node out-test/src/ui/webview/blockLibrary/blockLibrary.test.js && node out-test/src/migration/controlLibrary/migration.test.js",
+    "test": "node out-test/test/project/ProjectSerializer.test.js && node out-test/test/project/PythonProgramProject.test.js && node out-test/test/project/ProjectSubsystems.test.js && node out-test/src/ui/webview/subsystemModel.test.js && node out-test/src/project/plantTemplates.test.js && node out-test/src/ipc/CoreClient.test.js && node out-test/src/uart/CoreUartTransport.test.js && node out-test/src/catalog/UnifiedCatalog.test.js && node out-test/src/catalog/registeredSources.test.js && node out-test/src/catalog/catalogCommands.test.js && node out-test/src/catalog/externalComponents.test.js && node out-test/src/catalog/deviceUniqueness.test.js && node out-test/src/catalog/catalogMerge.test.js && node out-test/src/catalog/simulideGraphicalCatalog.test.js && node out-test/src/language.test.js && node out-test/src/fpga/fpgaPins.test.js && node out-test/src/ui/webview/simulationControls.test.js && node out-test/src/ui/webview/workspace.test.js && node out-test/src/ui/webview/paletteTree.test.js && node out-test/src/ui/webview/graphicsBinding.test.js && node out-test/src/ui/webview/hmiAudit.test.js && node out-test/src/ui/webview/graphicsAction.test.js && node out-test/src/ui/webview/zOrder.test.js && node out-test/src/ui/webview/contextMenuPosition.test.js && node out-test/src/ui/webview/ipdAlignment.test.js && node out-test/src/ui/webview/connectionEngine.test.js && node out-test/src/ui/webview/wireGeometry.test.js && node out-test/src/ui/webview/componentGeometry.test.js && node out-test/src/ui/webview/wireTopology.test.js && node out-test/src/ui/webview/wireRouting.test.js && node out-test/src/ui/webview/topologyDocument.test.js && node out-test/src/ui/webview/valueFormatting.test.js && node out-test/src/ui/webview/componentSymbols.test.js && node out-test/src/ui/webview/genericSubcircuitPackage.test.js && node out-test/src/ui/webview/componentLabels.test.js && node out-test/src/ui/webview/batchProperties.test.js && node out-test/src/ui/views/hartInspectorSections.test.js && node out-test/src/ui/webview/instrumentTrigger.test.js && node out-test/src/ui/webview/instrumentViewport.test.js && node out-test/src/trust/trustDecision.test.js && node out-test/src/catalog/subcircuitDocument.test.js && node out-test/src/catalog/graphicsLibrary.test.js && node out-test/src/catalog/subcircuitPinModel.test.js && node out-test/src/catalog/subcircuitExposedComponents.test.js && node out-test/src/catalog/subcircuitValidation.test.js && node out-test/src/catalog/subcircuitSymbolScene.test.js && node out-test/src/catalog/subcircuitLibraryLoad.test.js && node out-test/src/catalog/hartSmarDevices.test.js && node out-test/src/ui/webview/segmentLcd.test.js && node out-test/src/ui/webview/childPropertyOverrides.test.js && node out-test/src/serialport/hostPorts.test.js && node out-test/src/tdps/tdpsImporter.test.js && node out-test/src/tdps/tdpsProcessScreens.test.js && node out-test/src/dsl/DslReconciler.test.js && node out-test/src/dsl/graphicsDslRoundTrip.test.js && node out-test/src/dsl/HartCommandDsl.test.js && node out-test/src/core/schematicModel.test.js && node out-test/src/import/simulide/SimulideToLasecConverter.test.js && node out-test/src/import/simulink/SimulinkImporter.test.js && node out-test/src/plc/plcBuild.test.js && node out-test/src/plc/ilLowering.test.js && node out-test/src/plc/sfcLowering.test.js && node out-test/src/plc/openplc/openPlcBuild.test.js && node out-test/src/ui/webview/lab/calc/calc.test.js && node out-test/src/ui/webview/lab/graph/LabGraph.test.js && node out-test/src/ui/webview/lab/editor/EditorModel.test.js && node out-test/src/ui/webview/lab/units.test.js && node out-test/src/ui/webview/lab/series/SeriesBuffer.test.js && node out-test/src/lab/SeriesStore.test.js && node out-test/src/ui/webview/lab/calc/analysis.test.js && node out-test/src/ui/webview/lab/audit.test.js && node out-test/src/ui/webview/lab/noEval.test.js && node out-test/src/ui/webview/visualDocument.test.js && node out-test/src/ui/webview/mathWidgets.test.js && node out-test/src/ui/webview/labWidgets.test.js && node out-test/test/project/ProjectVisualDocuments.test.js && node out-test/src/ui/webview/blockLibrary/blockLibrary.test.js && node out-test/src/migration/controlLibrary/migration.test.js",
     "posttest": "node out-test/src/ui/webview/ipdKeyboardNavigation.test.js && node out-test/src/ui/webview/ipdVertexClean.test.js && node out-test/src/ui/webview/ipdLineStyle.test.js",
     "test:tdps-reference": "tsc -p ./tsconfig.test.json && node out-test/src/tdps/tdpsImporter.test.js",
     "test:plc": "tsc -p ./tsconfig.test.json && node out-test/src/plc/plcBuild.test.js && node out-test/src/plc/ilLowering.test.js && node out-test/src/plc/sfcLowering.test.js && node out-test/src/plc/openplc/openPlcBuild.test.js",

@@ -2,6 +2,8 @@
 
 #include <cmath>
 #include <cstdio>
+#include <algorithm>
+#include <cctype>
 #include <stdexcept>
 #include <string>
 
@@ -25,6 +27,14 @@ std::string interpreter() {
 #else
     return {};
 #endif
+}
+
+std::string normalizedPath(std::string value) {
+    std::replace(value.begin(), value.end(), '/', '\\');
+#if defined(_WIN32)
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+#endif
+    return value;
 }
 
 const char* kCounterSource = R"PY(
@@ -114,6 +124,36 @@ void crashAndLimits() {
     catch (const std::invalid_argument&) { oversized = true; }
     CHECK(oversized && !limited.workerRunning(), "definition payload must be rejected before process creation");
 }
+
+void interpreterSelectionChangesOnlyBetweenWorkers() {
+    python::PythonRuntime runtime(testBudget(), interpreter());
+    runtime.configure({{"selected", kCounterSource}});
+    (void)runtime.stepBatch(0, "rg", {{"selected", {}}});
+    CHECK(normalizedPath(runtime.environment().executable) == normalizedPath(interpreter()),
+          ("worker diagnostics must report the selected Python executable: got '" + runtime.environment().executable + "', expected '" + interpreter() + "'").c_str());
+    bool refusedWhileRunning = false;
+    try { runtime.setPythonExecutable(interpreter()); }
+    catch (const std::logic_error&) { refusedWhileRunning = true; }
+    CHECK(refusedWhileRunning && runtime.workerRunning(),
+          "changing interpreters while a worker is active must be rejected without stopping it");
+    runtime.shutdown();
+    runtime.setPythonExecutable(interpreter());
+    CHECK(!runtime.workerRunning(), "changing interpreters while stopped must not eagerly start a process");
+    runtime.configure({{"selected", kCounterSource}});
+    (void)runtime.stepBatch(1, "rg", {{"selected", {}}});
+    CHECK(normalizedPath(runtime.environment().executable) == normalizedPath(interpreter()),
+          ("the next worker must start with the newly selected interpreter: got '" + runtime.environment().executable + "', expected '" + interpreter() + "'").c_str());
+}
+
+void stepTimeoutSettingIsValidated() {
+    python::PythonRuntime runtime(testBudget(), interpreter());
+    runtime.setStepTimeoutMs(10);
+    runtime.setStepTimeoutMs(60'000);
+    bool tooSmall = false, tooLarge = false;
+    try { runtime.setStepTimeoutMs(9); } catch (const std::invalid_argument&) { tooSmall = true; }
+    try { runtime.setStepTimeoutMs(60'001); } catch (const std::invalid_argument&) { tooLarge = true; }
+    CHECK(tooSmall && tooLarge, "Python timeout setting accepts only 10..60000 ms");
+}
 } // namespace
 
 int main() {
@@ -125,6 +165,8 @@ int main() {
     sessionsNeverShareWorkerOrState();
     timeoutFaultAndRestart();
     crashAndLimits();
+    interpreterSelectionChangesOnlyBetweenWorkers();
+    stepTimeoutSettingIsValidated();
     if (failures == 0) std::printf("Python runtime STEP_BATCH/watchdog/restart: OK\n");
     return failures == 0 ? 0 : 1;
 }

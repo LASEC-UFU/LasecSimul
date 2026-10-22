@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    {
+      "id": "qin",
+      "typeId": "control.constant",
+      "label": "Vazão de entrada",
+      "visual": { "x": 80, "y": 200, "rotation": 0 },
+      "properties": { "value": 1.0, "unit": "L/s", "options": "" }
+    },
+    {
+      "id": "tank",
+      "typeId": "process.accumulator",
+      "label": "Tanque 100 L",
+      "visual": { "x": 330, "y": 200, "rotation": 0 },
+      "properties": {
+        "initial": 20.0,
+        "lowerLimitEnabled": true,
+        "lowerLimit": 0.0,
+        "upperLimitEnabled": true,
+        "upperLimit": 100.0,
+        "lowerInput": false,
+        "upperInput": false
+      }
+    },
+    {
+      "id": "python-tank",
+      "typeId": "python.programmable",
+      "label": "Controle de nível",
+      "visual": { "x": 650, "y": 200, "rotation": 0 },
+      "properties": {
+        "source": "if nivel >= 75.0:\n    state.valvula = True\nelif nivel <= 35.0:\n    state.valvula = False\n\nqout = 2.0 if state.get('valvula', False) else 0.2\n",
+        "ports": "{\"inputs\":[{\"name\":\"nivel\",\"type\":\"real\",\"unit\":\"L\",\"description\":\"Volume atual do tanque\",\"initialValue\":20.0}],\"outputs\":[{\"name\":\"qout\",\"type\":\"real\",\"unit\":\"L/s\",\"description\":\"Vazão comandada para a válvula de saída\",\"initialValue\":0.2}]}",
+        "periodNs": 100000000
+      }
+    }
+  ],
+  "topology": {
+    "nodes": [],
+    "conductors": [
+      {
+        "id": "qin-to-tank",
+        "from": { "kind": "port", "componentId": "qin", "pinId": "out" },
+        "to": { "kind": "port", "componentId": "tank", "pinId": "in" },
+        "vertices": []
+      },
+      {
+        "id": "tank-to-python",
+        "from": { "kind": "port", "componentId": "tank", "pinId": "out" },
+        "to": { "kind": "port", "componentId": "python-tank", "pinId": "nivel" },
+        "vertices": []
+      },
+      {
+        "id": "python-to-tank",
+        "from": { "kind": "port", "componentId": "python-tank", "pinId": "qout" },
+        "to": { "kind": "port", "componentId": "tank", "pinId": "outflow" },
+        "vertices": []
+      }
+    ]
+  },
+  "visual": { "viewport": { "x": 0, "y": 0, "zoom": 1 } },
+  "simulationSettings": {}
+}

@@ -8306,6 +8306,10 @@ function usesRuntimeSymbolReadout(typeId: string): boolean {
  * `readoutFormat.kind` nunca ganharia popup "Expande"/rastreamento de histórico, só os 2 builtins.
  * Fallback legado pros mesmos 2 typeIds cobre o catálogo ainda não ter chegado do Core. */
 function instrumentHistoryKind(typeId: string): "channelHistory" | "bitmaskHistory" | "vectorHistory" | undefined {
+  // O bloco Python publica saídas como canais de leitura HMI, mas não é um instrumento com os
+  // controles fixos de quatro canais do popup Oscope. A aquisição gráfica continua pelo Scope
+  // conectado ao Signal Engine ou pelo Laboratório de Cálculo.
+  if (typeId === "python.programmable") return undefined;
   const readoutFormat = catalogEntryFor(typeId)?.readoutFormat;
   if (readoutFormat?.kind === "channelHistory" || readoutFormat?.kind === "bitmaskHistory" || readoutFormat?.kind === "vectorHistory") return readoutFormat.kind;
   if (readoutFormat) return undefined;
@@ -10576,6 +10580,11 @@ function createComponentElement(component: WebviewComponentModel): HTMLElement {
         ]
       : [];
     const menuItems: ContextMenuItem[] = [
+      ...(!isGroup && component.typeId === "python.programmable" ? [
+        { label: "Editar código Python", icon: "properties" as const, onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestOpenPythonBlockEditor", componentId: component.id }) },
+        { label: "Configurar pinos Python", icon: "properties" as const, onClick: () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestConfigurePythonBlockPorts", componentId: component.id }) },
+        { kind: "separator" } satisfies ContextMenuItem,
+      ] : []),
       ...plcMenuItems,
       ...(!isGroup && component.pins.length > 0 ? [
         { label: editingTerminalsComponentId === component.id ? t("finishTerminalEditing") : t("editTerminals"),
@@ -12208,6 +12217,15 @@ function graphicalBindingChannelOptions(
   const source = state.components.find((candidate) => candidate.id === sourceId);
   const format = source ? catalogEntryFor(source.typeId)?.readoutFormat : undefined;
   if (!format) return undefined;
+  if (source?.typeId === "python.programmable") {
+    try {
+      const ports = JSON.parse(String(source.properties.ports ?? "{}")) as { outputs?: Array<{ name?: string; type?: string; unit?: string }> };
+      return (ports.outputs ?? []).map((port, index) => ({
+        value: String(index),
+        label: [port.name || `Saída ${index + 1}`, port.type, port.unit].filter(Boolean).join(" · "),
+      }));
+    } catch { return []; }
+  }
   const count = format.kind === "scalar" ? 1 : format.channels;
   if (!Number.isInteger(count) || count < 1) return undefined;
   return Array.from({ length: count }, (_, index) => ({

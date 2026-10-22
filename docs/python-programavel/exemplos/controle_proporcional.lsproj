@@ -1,0 +1,99 @@
+{
+    "schemaVersion":  2,
+    "components":  [
+                       {
+                           "id":  "constant-1",
+                           "typeId":  "control.constant",
+                           "label":  "Referência = 60 %",
+                           "visual":  {
+                                          "x":  100,
+                                          "y":  215,
+                                          "rotation":  0
+                                      },
+                           "properties":  {
+                                              "value":  60,
+                                              "unit":  "",
+                                              "options":  ""
+                                          }
+                       },
+                       {
+                           "id":  "constant-2",
+                           "typeId":  "control.constant",
+                           "label":  "Medição = 45 %",
+                           "visual":  {
+                                          "x":  100,
+                                          "y":  290,
+                                          "rotation":  0
+                                      },
+                           "properties":  {
+                                              "value":  45,
+                                              "unit":  "",
+                                              "options":  ""
+                                          }
+                       },
+                       {
+                           "id":  "python-1",
+                           "typeId":  "python.programmable",
+                           "label":  "Controlador P",
+                           "visual":  {
+                                          "x":  300,
+                                          "y":  220,
+                                          "rotation":  0
+                                      },
+                           "properties":  {
+                                              "source":  "erro = referencia - medicao\ncontrole = 2.5 * erro\nsaida = max(0.0, min(100.0, controle))\n",
+                                              "ports":  "{\"inputs\":[{\"name\":\"referencia\",\"type\":\"real\",\"unit\":\"%\"},{\"name\":\"medicao\",\"type\":\"real\",\"unit\":\"%\"}],\"outputs\":[{\"name\":\"saida\",\"type\":\"real\",\"unit\":\"%\"}]}",
+                                              "periodNs":  10000000
+                                          }
+                       }
+                   ],
+    "topology":  {
+                     "nodes":  [
+
+                               ],
+                     "conductors":  [
+                                        {
+                                            "id":  "wire-1",
+                                            "from":  {
+                                                         "kind":  "port",
+                                                         "componentId":  "constant-1",
+                                                         "pinId":  "out"
+                                                     },
+                                            "to":  {
+                                                       "kind":  "port",
+                                                       "componentId":  "python-1",
+                                                       "pinId":  "referencia"
+                                                   },
+                                            "vertices":  [
+
+                                                         ]
+                                        },
+                                        {
+                                            "id":  "wire-2",
+                                            "from":  {
+                                                         "kind":  "port",
+                                                         "componentId":  "constant-2",
+                                                         "pinId":  "out"
+                                                     },
+                                            "to":  {
+                                                       "kind":  "port",
+                                                       "componentId":  "python-1",
+                                                       "pinId":  "medicao"
+                                                   },
+                                            "vertices":  [
+
+                                                         ]
+                                        }
+                                    ]
+                 },
+    "visual":  {
+                   "viewport":  {
+                                    "x":  0,
+                                    "y":  0,
+                                    "zoom":  1
+                                }
+               },
+    "simulationSettings":  {
+
+                           }
+}

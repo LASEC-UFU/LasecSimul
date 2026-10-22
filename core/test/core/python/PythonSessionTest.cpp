@@ -47,14 +47,20 @@ int main() {
           "session must execute a complete RateGroup as one ordered batch");
     CHECK(result[0].outputs.at("t") == 0.0, "session, not caller or wall clock, owns Python timestamp");
 
-    simulationSession.setPythonBlocks({{"hang", "def step(inputs, state, time_ns):\n    while True: pass\n", "fault"}});
     simulationSession.stopSimulation();
+    bool pythonFaultNotified = false;
+    simulationSession.setPythonFaultCallback([&](uint64_t timestampNs, const std::string& detail) {
+        pythonFaultNotified = timestampNs <= simulationSession.scheduler().nowNs() && detail.find("blocos Core: hang") != std::string::npos &&
+                              detail.find("timed out") != std::string::npos;
+    });
+    simulationSession.setPythonBlocks({{"hang", "def step(inputs, state, time_ns):\n    while True: pass\n", "fault"}});
     simulationSession.scheduler().start();
     bool faulted = false;
     try { (void)simulationSession.stepPythonBatch("fault", {{"hang", {}}}); }
     catch (const std::exception&) { faulted = true; }
     CHECK(faulted && simulationSession.pythonRuntime().health() == python::PythonWorkerHealth::Faulted,
           "worker timeout must surface as a session-domain fault");
+    CHECK(pythonFaultNotified, "Python runtime faults must publish simulated time, block IDs and traceback through the session callback");
     CHECK(simulationSession.scheduler().isPaused(), "Python fault must pause the owning simulation session");
     simulationSession.stopSimulation();
 

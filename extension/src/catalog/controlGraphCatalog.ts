@@ -104,6 +104,7 @@ export const controlGraphCatalog: WebviewComponentCatalogEntry[] = [
   { typeId: "connectors.signal_tunnel", label: "Túnel de sinal", category: "Conectores", folderPath: ["Conectores"], workspaceSection: "misc", icon: "tunel", hidden: false, graphical: true, pinCount: 1, pinIds: ["value"], defaultProperties: { name: "signal", direction: "Input", valueType: "Real" }, package: packageFor("SINAL", ["value"]) },
   ...unary.map(entry), ...multi.map(entry),
   { ...entry(["control.accumulator", "Acumulador", ["in", "outflow", ...ACCUMULATOR_OUTPUT_PORTS], ACCUMULATOR_DEFAULTS]), package: accumulatorPackage() },
+  { ...entry(["process.accumulator", "Acumulador de Processo", ["in", "outflow", ...ACCUMULATOR_OUTPUT_PORTS], ACCUMULATOR_DEFAULTS]), package: accumulatorPackage() },
 ];
 
 const dynamicInputTypes = new Set(["control.calc_expression", "control.sum", "control.product"]);
@@ -112,7 +113,7 @@ const dynamicInputTypes = new Set(["control.calc_expression", "control.sum", "co
  * catalog supplies defaults, while this resolves the instance-specific ports. */
 export function controlGraphPinIds(typeId: string, properties: Record<string, unknown>): string[] | undefined {
   // Fronteiras por entrada (ex.: Vmax = A·hmax ao vivo) só existem quando a instância as declara.
-  if (typeId === "control.accumulator") {
+  if (typeId === "control.accumulator" || typeId === "process.accumulator") {
     return ["in", "outflow", ...(properties.lowerInput === true ? ["lower"] : []), ...(properties.upperInput === true ? ["upper"] : []), ...ACCUMULATOR_OUTPUT_PORTS];
   }
   if (!dynamicInputTypes.has(typeId)) return undefined;

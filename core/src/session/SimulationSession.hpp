@@ -300,6 +300,11 @@ public:
     std::vector<python::PythonStepResult> stepPythonBatch(
         const std::string& rateGroupId, const std::vector<python::PythonStep>& steps);
     void restartPythonRuntime();
+    void setPythonExecutable(std::string executable);
+    void setPythonStepTimeoutMs(uint32_t timeoutMs);
+    void setPythonFaultCallback(std::function<void(uint64_t, const std::string&)> callback) {
+        m_pythonFaultCallback = std::move(callback);
+    }
     const python::PythonRuntime& pythonRuntime() const { return m_pythonRuntime; }
 
     /** F9.5: carrega (ou descarrega, se `module` for `nullopt`) um artefato compilado (F9.3) numa
@@ -693,6 +698,8 @@ private:
      * espírito de `scheduleNextSignalBoundaryUnlocked`. Cada scan subsequente se reagenda sozinho
      * (ver `runPlcScanBatchUnlocked`), então isto só precisa "dar a partida" em instâncias novas. */
     void schedulePlcScansUnlocked(uint64_t timestampNs);
+    void schedulePythonScansUnlocked(uint64_t timestampNs);
+    void runPythonBatchUnlocked(uint64_t timestampNs, uint64_t periodNs);
     /** Agenda UM scan (o próximo, `intervalNs` a partir de `fromTimeNs`) pra `componentIndex` --
      * usado tanto pra dar a partida inicial quanto pelo autoagendamento no fim de cada scan (ver
      * `runPlcScanBatchUnlocked`), garantindo as duas chamadas sempre usam exatamente a mesma lógica de
@@ -835,6 +842,7 @@ private:
     simulation::MnaSolver m_mnaSolver;
     simulation::Scheduler m_scheduler;
     python::PythonRuntime m_pythonRuntime;
+    std::function<void(uint64_t, const std::string&)> m_pythonFaultCallback;
 
     std::vector<std::unique_ptr<IComponentModel>> m_componentInstances;
     simulation::RuntimeState m_runtimeState;
@@ -885,6 +893,10 @@ private:
     simulation::SignalGraphDefinition m_signalGraphDefinition;
     std::vector<simulation::ElectricalSignalBridgeDefinition> m_electricalSignalBridgeDefinitions;
     std::vector<python::PythonBlockDefinition> m_pythonBlockDefinitions;
+    std::vector<uint32_t> m_pythonComponentIndices;
+    std::unordered_map<uint64_t, uint64_t> m_pythonScanScheduledNs;
+    std::unordered_set<uint64_t> m_pythonDuePeriods;
+    std::unordered_set<uint32_t> m_pythonBlockFaultReported;
     std::optional<uint64_t> m_signalBoundaryScheduledNs;
     uint64_t m_signalScheduleGeneration = 0;
     /** F9.5: `componentIndex` -> `simulationTimeNs` do próximo SCAN já agendado no Scheduler pra

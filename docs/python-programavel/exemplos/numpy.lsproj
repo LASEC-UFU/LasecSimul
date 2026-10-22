@@ -1,0 +1,130 @@
+{
+    "schemaVersion":  2,
+    "components":  [
+                       {
+                           "id":  "constant-1",
+                           "typeId":  "control.constant",
+                           "label":  "Sinal = 1,25",
+                           "visual":  {
+                                          "x":  100,
+                                          "y":  215,
+                                          "rotation":  0
+                                      },
+                           "properties":  {
+                                              "value":  1.25,
+                                              "unit":  "",
+                                              "options":  ""
+                                          }
+                       },
+                       {
+                           "id":  "constant-2",
+                           "typeId":  "control.constant",
+                           "label":  "Ganho = 2",
+                           "visual":  {
+                                          "x":  100,
+                                          "y":  290,
+                                          "rotation":  0
+                                      },
+                           "properties":  {
+                                              "value":  2,
+                                              "unit":  "",
+                                              "options":  ""
+                                          }
+                       },
+                       {
+                           "id":  "constant-3",
+                           "typeId":  "control.constant",
+                           "label":  "Limite = 2",
+                           "visual":  {
+                                          "x":  100,
+                                          "y":  365,
+                                          "rotation":  0
+                                      },
+                           "properties":  {
+                                              "value":  2,
+                                              "unit":  "",
+                                              "options":  ""
+                                          }
+                       },
+                       {
+                           "id":  "python-1",
+                           "typeId":  "python.programmable",
+                           "label":  "Saturação NumPy",
+                           "visual":  {
+                                          "x":  300,
+                                          "y":  220,
+                                          "rotation":  0
+                                      },
+                           "properties":  {
+                                              "source":  "import numpy as np\nsaida = float(np.clip(ganho * sinal, 0.0, limite))\n",
+                                              "ports":  "{\"inputs\":[{\"name\":\"sinal\",\"type\":\"real\"},{\"name\":\"ganho\",\"type\":\"real\"},{\"name\":\"limite\",\"type\":\"real\"}],\"outputs\":[{\"name\":\"saida\",\"type\":\"real\"}]}",
+                                              "periodNs":  10000000
+                                          }
+                       }
+                   ],
+    "topology":  {
+                     "nodes":  [
+
+                               ],
+                     "conductors":  [
+                                        {
+                                            "id":  "wire-1",
+                                            "from":  {
+                                                         "kind":  "port",
+                                                         "componentId":  "constant-1",
+                                                         "pinId":  "out"
+                                                     },
+                                            "to":  {
+                                                       "kind":  "port",
+                                                       "componentId":  "python-1",
+                                                       "pinId":  "sinal"
+                                                   },
+                                            "vertices":  [
+
+                                                         ]
+                                        },
+                                        {
+                                            "id":  "wire-2",
+                                            "from":  {
+                                                         "kind":  "port",
+                                                         "componentId":  "constant-2",
+                                                         "pinId":  "out"
+                                                     },
+                                            "to":  {
+                                                       "kind":  "port",
+                                                       "componentId":  "python-1",
+                                                       "pinId":  "ganho"
+                                                   },
+                                            "vertices":  [
+
+                                                         ]
+                                        },
+                                        {
+                                            "id":  "wire-3",
+                                            "from":  {
+                                                         "kind":  "port",
+                                                         "componentId":  "constant-3",
+                                                         "pinId":  "out"
+                                                     },
+                                            "to":  {
+                                                       "kind":  "port",
+                                                       "componentId":  "python-1",
+                                                       "pinId":  "limite"
+                                                   },
+                                            "vertices":  [
+
+                                                         ]
+                                        }
+                                    ]
+                 },
+    "visual":  {
+                   "viewport":  {
+                                    "x":  0,
+                                    "y":  0,
+                                    "zoom":  1
+                                }
+               },
+    "simulationSettings":  {
+
+                           }
+}

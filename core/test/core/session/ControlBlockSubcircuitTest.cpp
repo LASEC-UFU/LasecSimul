@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -22,6 +23,7 @@
 #include "components/connectors/Tunnel.hpp"
 #include "components/control/SignalConstant.hpp"
 #include "components/control/SignalMathBlock.hpp"
+#include "components/blocks/LibraryBlock.hpp"
 #include "plugins/GlobalPluginCache.hpp"
 #include "registry/SubcircuitRegistry.hpp"
 #include "session/SimulationSession.hpp"
@@ -41,6 +43,13 @@ void check(bool ok, const char* label) {
 }
 
 void registerControlFactories(SimulationSession& session) {
+    for (const components::blocks::BlockSpec& spec : components::blocks::blockLibrary()) {
+        const std::string typeId = spec.typeId;
+        session.components().registerFactory(typeId, [typeId](const ComponentParams& p) {
+            const auto* blockSpec = components::blocks::findBlockSpec(typeId);
+            return std::make_unique<components::blocks::LibraryBlock>(*blockSpec, p);
+        });
+    }
     session.components().registerFactory("connectors.signal_tunnel", [](const ComponentParams& p) {
         return std::make_unique<components::SignalTunnel>(p);
     });
@@ -116,12 +125,45 @@ SubcircuitDefinition loadManifest(const std::string& fileName) {
     return definition;
 }
 
+void registerManifestTree(SimulationSession& session, const std::string& fileName) {
+    std::ifstream stream(std::string(SUBCIRCUIT_LIBRARY_DIR) + "/" + fileName);
+    if (!stream) throw std::runtime_error("manifesto nao encontrado: " + fileName);
+    const nlohmann::json root = nlohmann::json::parse(stream);
+    std::function<void(const nlohmann::json&)> registerTree = [&](const nlohmann::json& manifest) {
+        SubcircuitDefinition definition;
+        definition.typeId = manifest.at("typeId").get<std::string>();
+        definition.name = manifest.value("name", definition.typeId);
+        for (const auto& component : manifest.at("components")) definition.components.push_back({
+            component.at("id").get<std::string>(), component.at("typeId").get<std::string>(),
+            component.value("properties", nlohmann::json::object()).dump()});
+        for (const auto& conductor : manifest.at("topology").at("conductors")) definition.wires.push_back({
+            conductor.at("from").at("componentId").get<std::string>(), conductor.at("from").at("pinId").get<std::string>(),
+            conductor.at("to").at("componentId").get<std::string>(), conductor.at("to").at("pinId").get<std::string>()});
+        for (const auto& entry : manifest.at("interface")) {
+            SubcircuitInterfaceDef interfaceDef;
+            interfaceDef.pinId = entry.at("pinId").get<std::string>();
+            interfaceDef.label = entry.value("label", interfaceDef.pinId);
+            interfaceDef.internalTunnel = entry.at("internalTunnel").get<std::string>();
+            interfaceDef.domain = entry.value("domain", "electrical");
+            interfaceDef.direction = entry.value("direction", "inout");
+            interfaceDef.valueType = entry.value("valueType", "Real");
+            interfaceDef.width = entry.value("width", 1);
+            interfaceDef.unit = entry.value("unit", "");
+            definition.interfaceDefs.push_back(std::move(interfaceDef));
+        }
+        session.subcircuits().registerDefinition(std::move(definition));
+        if (manifest.contains("subsystems") && manifest["subsystems"].is_array())
+            for (const auto& child : manifest["subsystems"]) registerTree(child);
+    };
+    registerTree(root);
+}
+
 // (1) O caso EXATO do erro relatado: abrir/recriar o dispositivo `subcircuits.process.fopdt`.
 void processFopdtInstantiatesThroughTheRealPath() {
     GlobalPluginCache cache;
     SimulationSession session(cache);
     registerControlFactories(session);
-    session.subcircuits().registerDefinition(loadManifest("process_fopdt.lssubcircuit"));
+    registerManifestTree(session, "process_fopdt.lssubcircuit");
 
     SubcircuitExpansionResult expansion{};
     bool threw = false;
@@ -155,7 +197,7 @@ void processFopdtRespondsToAStep() {
     GlobalPluginCache cache;
     SimulationSession session(cache);
     registerControlFactories(session);
-    session.subcircuits().registerDefinition(loadManifest("process_fopdt.lssubcircuit"));
+    registerManifestTree(session, "process_fopdt.lssubcircuit");
     const SubcircuitExpansionResult expansion = session.addSubcircuitInstance("subcircuits.process.fopdt");
     const auto& u = expansion.exposedSignalPins.at("u");
     const auto& y = expansion.exposedSignalPins.at("y");
@@ -166,9 +208,15 @@ void processFopdtRespondsToAStep() {
     // bloco de controle dentro de um subcircuito funciona.
     const std::optional<uint32_t> plant = session.findSubcircuitChildByLocalId(expansion.subcircuitInstanceId, "plant");
     check(plant.has_value(), "(2) o componente interno 'plant' e' localizavel pelo id local do subcircuito");
-    check(!session.setProperty(*plant, "tau1", PropertyValue{0.01}).has_value(), "(2) editar tau1 do bloco interno e' aceito");
-    check(!session.setProperty(*plant, "deadTime", PropertyValue{0.0}).has_value(), "(2) editar deadTime do bloco interno e' aceito");
-    check(!session.setProperty(*plant, "samplePeriodNs", PropertyValue{1'000'000.0}).has_value(), "(2) editar samplePeriodNs do bloco interno e' aceito");
+    check(!session.setSubcircuitChildProperty(expansion.subcircuitInstanceId, "plant", "@tau1.Denominator",
+                                               PropertyValue{std::string("[0.01 1]")}).has_value(),
+          "(2) editar denominator do bloco Tau1 dentro do wrapper migrado e' aceito");
+    check(!session.setSubcircuitChildProperty(expansion.subcircuitInstanceId, "plant", "@dead_time.DelayTime",
+                                               PropertyValue{std::string("0")}).has_value(),
+          "(2) editar atraso do bloco Dead Time dentro do wrapper migrado e' aceito");
+    check(!session.setSubcircuitChildProperty(expansion.subcircuitInstanceId, "plant", "@gain.SampleTime",
+                                               PropertyValue{std::string("0.001")}).has_value(),
+          "(2) editar sample time do bloco Gain dentro do wrapper migrado e' aceito");
 
     const uint32_t source = addConstantSource(session, 1.0, 1'000'000.0);
     session.connectWire(source, "out", u.instanceId, u.pinId);
@@ -208,7 +256,7 @@ void everyPublishedControlLibrarySubcircuitInstantiates() {
         registerControlFactories(session);
         const SubcircuitDefinition definition = loadManifest(fileName);
         const std::string typeId = definition.typeId;
-        session.subcircuits().registerDefinition(definition);
+        registerManifestTree(session, fileName);
         try {
             session.addSubcircuitInstance(typeId);
             const auto plan = session.simulationPlan();
@@ -297,7 +345,7 @@ void pressurizedTankParametersChangeWhileRunning() {
     GlobalPluginCache cache;
     SimulationSession session(cache);
     registerControlFactories(session);
-    session.subcircuits().registerDefinition(loadManifest("process_pressurized_tank_dp.lssubcircuit"));
+    registerManifestTree(session, "process_pressurized_tank_dp.lssubcircuit");
     const SubcircuitExpansionResult expansion = session.addSubcircuitInstance("subcircuits.process.pressurized_tank_dp");
     const auto read = [&](const char* pin) {
         const auto& exposed = expansion.exposedSignalPins.at(pin);
@@ -325,7 +373,7 @@ void orificePlateFollowsIso5167() {
     GlobalPluginCache cache;
     SimulationSession session(cache);
     registerControlFactories(session);
-    session.subcircuits().registerDefinition(loadManifest("process_orifice_flow_dp.lssubcircuit"));
+    registerManifestTree(session, "process_orifice_flow_dp.lssubcircuit");
     const SubcircuitExpansionResult expansion = session.addSubcircuitInstance("subcircuits.process.orifice_flow_dp");
     const auto& valve = expansion.exposedSignalPins.at("valve");
     const uint32_t source = addConstantSource(session, 100.0, 10'000'000.0);
@@ -341,7 +389,7 @@ void orificePlateFollowsIso5167() {
         return *index;
     };
     const auto inner = [&](const char* localId) {
-        return session.signalRuntime().real(session.signalRuntime().output(signalPortBlockId(child(localId), "out")));
+        return session.signalRuntime().real(session.signalRuntime().output(signalPortBlockId(child(localId), "out1")));
     };
     const auto setConstant = [&](const char* localId, double value) {
         return !session.setProperty(child(localId), "value", PropertyValue{value}).has_value();

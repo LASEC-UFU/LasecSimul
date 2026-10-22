@@ -5,6 +5,8 @@ import { CoreClient } from "./ipc/CoreClient";
 import { IpcError } from "./ipc/protocol";
 import { CoreProcess } from "./ipc/CoreProcess";
 import { resolveCoreExecutablePath } from "./core/coreExecutable";
+import { syncPythonInterpreter, watchPythonInterpreterChanges } from "./python/pythonEnvironment";
+import { registerPythonBlockEditor } from "./python/pythonBlockEditor";
 import { TrustStore } from "./trust/TrustStore";
 import { isPreApproved, isPreBlocked, resolveConsentChoice, shouldLoadLibrary, decisionToPersist } from "./trust/trustDecision";
 import { SchematicPanel } from "./ui/panels/SchematicPanel";
@@ -440,6 +442,15 @@ function attachCoreProcessHandlers(proc: CoreProcess, corePath: string): void {
  * `ensureCoreConnected()`. */
 function attachCoreClientNotifications(client: CoreClient): void {
   client.onNotification((notification) => {
+    if (notification.type === "pythonRuntimeFault") {
+      const payload = notification.payload as { simulationTimeNs?: number; detail?: string };
+      const simulatedSeconds = typeof payload.simulationTimeNs === "number" ? (payload.simulationTimeNs / 1e9).toPrecision(6) : "desconhecido";
+      logSimulation("error", `A simulação foi pausada por uma falha Python no tempo ${simulatedSeconds} s.`, {
+        stage: "python-runtime",
+        detail: payload.detail ?? "O Core não enviou detalhes adicionais.",
+      });
+      return;
+    }
     if (notification.type !== "pauseConditionTriggered") return;
     const payload = notification.payload as {
       ownerId?: string;
@@ -545,6 +556,7 @@ async function connectCoreClient(pipeName: string): Promise<CoreClient> {
   const client = new CoreClient(pipeName);
   attachCoreClientNotifications(client);
   await client.start();
+  await syncPythonInterpreter(client, (message) => logSimulation("info", message, { stage: "python-environment" }));
   return client;
 }
 
@@ -625,6 +637,7 @@ async function runSimulationWithFirmwareCheck(): Promise<void> {
   // "loadMcuFirmware requer execucao ativa".
   // O programa do CLP é compilado antes: carregar o artefato refaz o Core, o que exige parado.
   if (!(await ensureAllPlcsBuilt({ syncSchematicPanel }))) return;
+  if (state.coreClient) await syncPythonInterpreter(state.coreClient, (message) => logSimulation("info", message, { stage: "python-environment" }));
   await runSimulation();
   if ((state.simulationStatus as string) !== "running") return;
   const result = await ensureAllMcuFirmwareUpToDate(mcuCommandOptions());
@@ -1158,6 +1171,18 @@ export function pinsForTypeId(typeId: string, properties?: Record<string, unknow
     const ids = hartSignalGraphPinIds(hartVariablesJson);
     if (ids.length > 0) return ids.map((id, index) => ({ id, x: 0, y: index * 12 }));
   }
+  if (typeId === "python.programmable") {
+    const portsText = typeof properties?.ports === "string" ? properties.ports : "";
+    try {
+      const ports = JSON.parse(portsText) as { inputs?: Array<{ name?: unknown }>; outputs?: Array<{ name?: unknown }> };
+      const ids = [...(ports.inputs ?? []), ...(ports.outputs ?? [])]
+        .map((port) => port.name)
+        .filter((name): name is string => typeof name === "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(name));
+      if (ids.length > 0 && new Set(ids).size === ids.length)
+        return ids.map((id, index) => ({ id, x: 0, y: index * 12 }));
+    } catch { /* configuração inválida: mantém o bloco sem portas renderizadas até corrigir */ }
+    return [];
+  }
   const descriptor = state.schematicState.catalog.find((item) => item.typeId === typeId);
   const dynamicGroups = descriptor?.package?.dynamicLayout?.pinGroups;
   if (dynamicGroups && dynamicGroups.length > 0) {
@@ -1316,6 +1341,12 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
     return;
   }
   switch (message.type) {
+    case "requestOpenPythonBlockEditor":
+      void vscode.commands.executeCommand("lasecsimul.python.openBlockEditor", message.componentId);
+      return;
+    case "requestConfigurePythonBlockPorts":
+      void vscode.commands.executeCommand("lasecsimul.python.configurePorts", message.componentId);
+      return;
     case "requestOpenPidTuning": {
       const component = state.schematicState.components.find((item) => item.id === message.componentId && item.typeId === "control.pid_station");
       if (!state.extensionContext || !component) {
@@ -3179,6 +3210,45 @@ function hexAsciiPreview(bytes: Uint8Array): string {
 }
 
 export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi {
+  registerPythonBlockEditor(context,
+    (id) => {
+      const componentId = id ?? (state.schematicState.selectedComponentIds.length === 1 ? state.schematicState.selectedComponentIds[0] : undefined);
+      return componentId ? state.schematicState.components.find((component) => component.id === componentId) : undefined;
+    },
+    async (id, source) => {
+      const ref = getElement(state.schematicState, id);
+      if (!ref || ref.element.typeId !== "python.programmable") throw new Error("Bloco Python não encontrado no esquemático.");
+      const updated = updateElement(state.schematicState, id, { properties: { ...ref.element.properties, source } });
+      if (!updated.ok) throw new Error(updated.error);
+      state.schematicState = updated.value.state;
+      if (updated.value.ref.scope === "schematic") pushPropertyToCore(id, "source", source);
+      syncSchematicPanel();
+      refreshDirtyIndicator();
+    },
+    async (id, ports, renamedSource) => {
+      const identifiers = [...ports.inputs, ...ports.outputs].map((port) => port.name);
+      const pythonKeywords = new Set(["False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with", "yield", "match", "case", "sim", "state", "inputs", "outputs"]);
+      if (identifiers.some((name) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || pythonKeywords.has(name)) || new Set(identifiers).size !== identifiers.length) {
+        void vscode.window.showErrorMessage("As portas precisam ter identificadores Python válidos, únicos e não reservados.");
+        return;
+      }
+      const ref = getElement(state.schematicState, id);
+      if (!ref || ref.element.typeId !== "python.programmable") throw new Error("Bloco Python não encontrado no esquemático.");
+      const portJson = JSON.stringify(ports);
+      const properties = { ...ref.element.properties, ports: portJson, ...(renamedSource !== undefined ? { source: renamedSource } : {}) };
+      const pins = pinsForTypeId(ref.element.typeId, properties);
+      const pinIds = new Set(pins.map((pin) => pin.id));
+      const conductors = ref.scope === "schematic" ? state.schematicState.topology.conductors.filter((wire) =>
+        !((endpointId(wire.from) === id && !pinIds.has(endpointPinId(wire.from))) || (endpointId(wire.to) === id && !pinIds.has(endpointPinId(wire.to)))))
+        : state.schematicState.topology.conductors;
+      const updated = updateElement(state.schematicState, id, { properties, pins });
+      if (!updated.ok) throw new Error(updated.error);
+      state.schematicState = { ...updated.value.state, topology: { ...updated.value.state.topology, conductors }, selectedWireIds: state.schematicState.selectedWireIds.filter((wireId) => conductors.some((wire) => wire.id === wireId)) };
+      if (renamedSource !== undefined && ref.scope === "schematic") pushPropertyToCore(id, "source", renamedSource);
+      if (ref.scope === "schematic") pushPropertyToCore(id, "ports", portJson);
+      syncSchematicPanel();
+      refreshDirtyIndicator();
+    });
   initSimulationLog(context);
   context.subscriptions.push(
     { dispose: disposeDeviceReferenceWatchers },
@@ -3394,6 +3464,8 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   initializeSerialPort(context);
   registerMcuDebugTracking(context);
   state.extensionContext = context;
+  watchPythonInterpreterChanges(context, () => state.coreClient,
+    (message) => logSimulation("info", message, { stage: "python-environment" }));
   maybeOfferMachineNetworkSetup(context);
   const unifiedCatalog = loadUnifiedCatalog(context.extensionPath, currentLasecSimulLanguage());
   const initialResolved = resolveRegisteredItems(context.extensionPath, unifiedCatalog.registeredSources);
@@ -3412,7 +3484,10 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   // o VS Code ter qualquer chance de invocar `resolveCustomEditor` (ver comentário em state.ts).
   state.catalogReadyPromise = state.coreClient
     .start()
-    .then(() => refreshUnifiedCatalogState(true, catalogCommandOptions()))
+    .then(async () => {
+      if (state.coreClient) await syncPythonInterpreter(state.coreClient, (message) => logSimulation("info", message, { stage: "python-environment" }));
+      await refreshUnifiedCatalogState(true, catalogCommandOptions());
+    })
     .catch((err) => {
       logSimulation("error", `Falha ao conectar ao LasecSimul Core: ${err instanceof Error ? err.message : String(err)}`, { stage: "core-process" });
     });

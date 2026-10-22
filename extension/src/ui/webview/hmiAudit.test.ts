@@ -51,6 +51,36 @@ const audit = (app: HmiApplication, components: readonly WebviewComponentModel[]
     assert(result.warnings.some((finding) => finding.ruleId === "HMI.PAGE.UNREACHABLE" && finding.pageId === "lost"), "pagina fora da navegacao deve ser reportada");
   });
 
+  await test("bindings HMI do Python respeitam o numero dinamico de saidas", () => {
+    const app: HmiApplication = {
+      startPageId: "home",
+      pages: [page("home", [{ id: "gauge-python", typeId: "graphics.hmi.gauge", properties: { bindSource: "python-1", bindChannel: 1 }, visual: { x: 20, y: 20, width: 100, height: 80 } }])],
+    };
+    const components = [component("python-1", "python.programmable", "Controller", { ports: JSON.stringify({ inputs: [], outputs: [{ name: "level", type: "real" }] }) })];
+    const catalog = [
+      { typeId: "graphics.hmi.gauge", label: "Gauge", category: "Grafico", pinCount: 0, defaultProperties: {} },
+      { typeId: "python.programmable", label: "Python", category: "Controle", pinCount: 0, defaultProperties: {}, readoutFormat: { kind: "channelHistory", channels: 64 } },
+    ] as WebviewComponentCatalogEntry[];
+    const result = audit(app, components, catalog);
+    assert(result.issues.some((finding) => finding.ruleId === "HMI.BINDING.CHANNEL_INVALID" && finding.elementId === "gauge-python"),
+      "canal além das saídas Python configuradas deve ser inválido, mesmo que o formato aceite até 64 canais");
+  });
+
+  await test("binding HMI aceita a saida Python nomeada dentro da faixa configurada", () => {
+    const app: HmiApplication = {
+      startPageId: "home",
+      pages: [page("home", [{ id: "gauge-python", typeId: "graphics.hmi.gauge", properties: { bindSource: "python-1", bindChannel: 0 }, visual: { x: 20, y: 20, width: 100, height: 80 } }])],
+    };
+    const components = [component("python-1", "python.programmable", "Controller", { ports: JSON.stringify({ inputs: [], outputs: [{ name: "level", type: "real", unit: "%" }] }) })];
+    const catalog = [
+      { typeId: "graphics.hmi.gauge", label: "Gauge", category: "Grafico", pinCount: 0, defaultProperties: {} },
+      { typeId: "python.programmable", label: "Python", category: "Controle", pinCount: 0, defaultProperties: {}, readoutFormat: { kind: "channelHistory", channels: 64 } },
+    ] as WebviewComponentCatalogEntry[];
+    const result = audit(app, components, catalog);
+    assert(!result.issues.some((finding) => finding.elementId === "gauge-python"),
+      "a primeira saida Python configurada deve poder alimentar um widget HMI");
+  });
+
   await test("classifica tarja de limites visuais e deixa widget sem binding como composicao valida", () => {
     const app: HmiApplication = {
       startPageId: "home",

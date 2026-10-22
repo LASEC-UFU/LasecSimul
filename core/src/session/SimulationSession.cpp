@@ -6,6 +6,7 @@
 #include "../components/control/SignalMathBlock.hpp"
 #include "../components/control/ManualSignalSlider.hpp"
 #include "../components/control/SignalConstant.hpp"
+#include "../python/PythonProgramBlock.hpp"
 #include "../components/blocks/LibraryBlock.hpp"
 #include <array>
 #include <algorithm>
@@ -20,6 +21,7 @@
 #include <random>
 #include <span>
 #include <stdexcept>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <nlohmann/json.hpp>
@@ -219,6 +221,7 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
         // stopSimulation() limpa a fila de eventos do Scheduler, embora o SimulationPlan possa
         // continuar válido. Rearmar aqui garante que um novo start agenda novamente as tasks PLC.
         schedulePlcScansUnlocked(m_runtimeState.virtualTimeNs);
+        schedulePythonScansUnlocked(m_runtimeState.virtualTimeNs);
     });
     m_scheduler.setTimeStepCallbacks(
         [this](uint64_t previous, uint64_t current) {
@@ -343,6 +346,12 @@ simulation::PlanDomain SimulationSession::refreshComponentExecutionLists(uint32_
     if (setMembership(m_plcComponentIndices, isPlc)) {
         changed = changed | simulation::PlanDomain::ExecutionIndex | simulation::PlanDomain::Plc;
     }
+    const bool isPython = component && dynamic_cast<python::PythonProgramBlock*>(component) != nullptr;
+    if (setMembership(m_pythonComponentIndices, isPython)) {
+        changed = changed | simulation::PlanDomain::ExecutionIndex | simulation::PlanDomain::Python | simulation::PlanDomain::Signal;
+        m_pythonScanScheduledNs.clear();
+        m_pythonDuePeriods.clear();
+    }
     if (setMembership(m_signalSubscribers, component && !component->signalSubscriptions().empty())) {
         changed = changed | simulation::PlanDomain::ExecutionIndex | simulation::PlanDomain::Signal;
     }
@@ -395,8 +404,25 @@ bool SimulationSession::publishSimulationPlan() {
         materializeSignalGraphUnlocked(m_signalGraphDefinition);
     input.signalGraph = &materializedSignalGraph;
     input.electricalSignalBridges = m_electricalSignalBridgeDefinitions;
-    input.pythonBlocks.reserve(m_pythonBlockDefinitions.size());
-    for (const auto& block : m_pythonBlockDefinitions) {
+    std::vector<python::PythonBlockDefinition> configuredPythonBlocks = m_pythonBlockDefinitions;
+    for (const uint32_t componentIndex : m_pythonComponentIndices) {
+        const auto* block = static_cast<const python::PythonProgramBlock*>(m_componentInstances[componentIndex].get());
+        if (!block || block->source().empty()) continue;
+        python::PythonBlockDefinition definition;
+        definition.blockId = std::to_string(componentIndex);
+        definition.source = block->source();
+        definition.rateGroupId = "schematic-period-" + std::to_string(block->periodNs());
+        const auto typeName = [](python::PythonPortType type) -> std::string {
+            return type == python::PythonPortType::Bool ? "bool"
+                 : type == python::PythonPortType::Int64 ? "int64" : "real";
+        };
+        for (const auto& port : block->inputs()) definition.inputs.push_back({port.name, typeName(port.type), port.initialValue});
+        for (const auto& port : block->outputs()) definition.outputs.push_back({port.name, typeName(port.type), port.initialValue});
+        configuredPythonBlocks.push_back(std::move(definition));
+    }
+    m_pythonRuntime.configure(configuredPythonBlocks);
+    input.pythonBlocks.reserve(configuredPythonBlocks.size());
+    for (const auto& block : configuredPythonBlocks) {
         input.pythonBlocks.push_back({block.blockId, block.source, block.rateGroupId, block.dependencies});
     }
     input.plcInstances.reserve(m_plcComponentIndices.size());
@@ -429,6 +455,7 @@ bool SimulationSession::publishSimulationPlan() {
         });
     }
     schedulePlcScansUnlocked(m_runtimeState.virtualTimeNs);
+    schedulePythonScansUnlocked(m_runtimeState.virtualTimeNs);
     {
         std::lock_guard<std::mutex> lock(m_planMutex);
         m_publishedPlan = std::move(staged);
@@ -516,6 +543,7 @@ void SimulationSession::setPythonBlocks(std::vector<python::PythonBlockDefinitio
         // PythonRuntime::configure validates IDs and payload before mutating the session plan.
         self.m_pythonRuntime.configure(definitions);
         self.m_pythonBlockDefinitions = std::move(definitions);
+        self.m_pythonBlockFaultReported.clear();
         self.invalidatePlan(simulation::PlanDomain::Python);
     });
 }
@@ -543,6 +571,19 @@ std::vector<python::PythonStepResult> SimulationSession::stepPythonBatch(
         }
         try {
             return self.m_pythonRuntime.stepBatch(self.m_scheduler.nowNs(), rateGroupId, steps);
+        } catch (const std::exception& error) {
+            if (self.m_pythonFaultCallback) {
+                std::string detail = "RateGroup: " + rateGroupId + "; blocos Core: ";
+                for (size_t i = 0; i < steps.size(); ++i) {
+                    if (i) detail += ", ";
+                    detail += steps[i].blockId;
+                }
+                detail += "\n";
+                detail += error.what();
+                try { self.m_pythonFaultCallback(self.m_scheduler.nowNs(), detail); } catch (...) { /* diagnóstico nunca pode derrubar o scheduler */ }
+            }
+            self.m_scheduler.pause();
+            throw;
         } catch (...) {
             self.m_scheduler.pause();
             throw;
@@ -552,6 +593,20 @@ std::vector<python::PythonStepResult> SimulationSession::stepPythonBatch(
 
 void SimulationSession::restartPythonRuntime() {
     runViaCommandQueue([](SimulationSession& self) { self.m_pythonRuntime.restart(); });
+}
+
+void SimulationSession::setPythonExecutable(std::string executable) {
+    runViaCommandQueue([executable = std::move(executable)](SimulationSession& self) mutable {
+        if (self.m_scheduler.isRunning())
+            throw std::runtime_error("troca de interpretador Python exige simulação parada");
+        self.m_pythonRuntime.setPythonExecutable(std::move(executable));
+    });
+}
+
+void SimulationSession::setPythonStepTimeoutMs(uint32_t timeoutMs) {
+    runViaCommandQueue([timeoutMs](SimulationSession& self) {
+        self.m_pythonRuntime.setStepTimeoutMs(timeoutMs);
+    });
 }
 
 void SimulationSession::loadPlcArtifact(uint32_t componentIndex, std::optional<plc::PlcNativeModule> module) {
@@ -1169,6 +1224,13 @@ void SimulationSession::onStableStepUnlocked(uint64_t timestampNs) {
     publishHartOutputsToSignalUnlocked();
     publishElectricalBridgeSensorsToSignalUnlocked();
     m_runtimeState.signals.executeUntil(timestampNs);
+    if (!m_pythonDuePeriods.empty()) {
+        std::vector<uint64_t> due(m_pythonDuePeriods.begin(), m_pythonDuePeriods.end());
+        m_pythonDuePeriods.clear();
+        std::sort(due.begin(), due.end());
+        for (const uint64_t periodNs : due) runPythonBatchUnlocked(timestampNs, periodNs);
+        schedulePythonScansUnlocked(timestampNs);
+    }
     std::vector<std::pair<uint32_t, std::string>> eventActivations;
     const auto uppercaseEventName = [](std::string value) {
         for (char& c : value) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
@@ -1263,7 +1325,8 @@ std::vector<std::vector<uint8_t>> SimulationSession::captureComponentTelemetrySt
             throw std::runtime_error("getComponentTelemetryStates: componente removido");
 
         IComponentModel& instance = *m_componentInstances[componentIndex];
-        std::array<uint8_t, 256> compact{};
+        // Python's named output readout can expose up to 64 doubles (512 bytes).
+        std::array<uint8_t, 1024> compact{};
         const size_t compactWritten = instance.getTelemetryState(compact.data(), compact.size());
         if (compactWritten > 0 && compactWritten <= compact.size()) {
             states.emplace_back(compact.begin(), compact.begin() + compactWritten);
@@ -2089,16 +2152,20 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
             simulation::SignalBlockDefinition block;
             block.id = blockId;
             const simulation::SignalScalarType scalar = port.kind == SignalValueKind::Digital
-                ? simulation::SignalScalarType::Bool : simulation::SignalScalarType::Real;
+                ? simulation::SignalScalarType::Bool
+                : port.kind == SignalValueKind::Unsigned ? simulation::SignalScalarType::Int64
+                                                        : simulation::SignalScalarType::Real;
             block.output = {"out", {scalar, 1}, port.unit};
             // Process transmitters and their manual pressure sources change on
             // operator/property updates, not at nanosecond frequency. A 1 ns
             // Probe rate kept the whole LD301 circuit at <0.01% real time.
             // Other signal ports retain their existing fast rate.
+            const auto* pythonBlock = dynamic_cast<const python::PythonProgramBlock*>(component);
             const bool processSignal = dynamic_cast<const components::ManualSignalSlider*>(component) != nullptr ||
                                        dynamic_cast<const components::SignalConstant*>(component) != nullptr ||
                                        dynamic_cast<const protocols::HartCommunicationComponent*>(component) != nullptr;
-            block.rate = {processSignal ? 1'000'000ull : bridgeRate != bridgeRateByComponent.end() ? bridgeRate->second : 1ull, 0, 0};
+            block.rate = {pythonBlock ? pythonBlock->periodNs() : processSignal ? 1'000'000ull
+                : bridgeRate != bridgeRateByComponent.end() ? bridgeRate->second : 1ull, 0, 0};
             // Túnel de sinal (`connectors.signal_tunnel`):
             // sua declared `direction` só descreve o papel de FRONTEIRA (quem de fora pode dirigi-lo),
             // nunca decide sozinha se o BLOCO precisa de um `"in"` -- é `wiredInputTargets` (o fato de
@@ -2122,9 +2189,31 @@ simulation::SignalGraphDefinition SimulationSession::materializeSignalGraphUnloc
                 if (scalar == simulation::SignalScalarType::Real) {
                     const auto* slider = dynamic_cast<const components::ManualSignalSlider*>(component);
                     const auto* constant = dynamic_cast<const components::SignalConstant*>(component);
-                    block.realParameters = {slider ? slider->value() : constant ? constant->value() : 0.0};
+                    double initial = slider ? slider->value() : constant ? constant->value() : 0.0;
+                    if (pythonBlock) {
+                        const auto& configuredPorts = port.direction == SignalPortDirection::Input ? pythonBlock->inputs() : pythonBlock->outputs();
+                        const auto found = std::find_if(configuredPorts.begin(), configuredPorts.end(), [&](const auto& item) { return item.name == port.id; });
+                        if (found != configuredPorts.end()) if (const auto* value = std::get_if<double>(&found->initialValue)) initial = *value;
+                    }
+                    block.realParameters = {initial};
                 }
-                else block.boolParameters = {0};
+                else if (scalar == simulation::SignalScalarType::Bool) {
+                    bool initial = false;
+                    if (pythonBlock) {
+                        const auto& configuredPorts = port.direction == SignalPortDirection::Input ? pythonBlock->inputs() : pythonBlock->outputs();
+                        const auto found = std::find_if(configuredPorts.begin(), configuredPorts.end(), [&](const auto& item) { return item.name == port.id; });
+                        if (found != configuredPorts.end()) if (const auto* value = std::get_if<bool>(&found->initialValue)) initial = *value;
+                    }
+                    block.boolParameters = {static_cast<uint8_t>(initial)};
+                } else {
+                    int64_t initial = 0;
+                    if (pythonBlock) {
+                        const auto& configuredPorts = port.direction == SignalPortDirection::Input ? pythonBlock->inputs() : pythonBlock->outputs();
+                        const auto found = std::find_if(configuredPorts.begin(), configuredPorts.end(), [&](const auto& item) { return item.name == port.id; });
+                        if (found != configuredPorts.end()) if (const auto* value = std::get_if<int64_t>(&found->initialValue)) initial = *value;
+                    }
+                    block.intParameters = {initial};
+                }
             }
             if (const auto controlRate = controlRateByComponent.find(index); controlRate != controlRateByComponent.end()) {
                 block.rate = {controlRate->second, 0, 0};
@@ -2778,6 +2867,132 @@ void SimulationSession::schedulePlcScansUnlocked(uint64_t timestampNs) {
     }
 }
 
+void SimulationSession::schedulePythonScansUnlocked(uint64_t timestampNs) {
+    std::unordered_set<uint64_t> periods;
+    for (const uint32_t componentIndex : m_pythonComponentIndices) {
+        if (componentIndex >= m_componentInstances.size() || !m_componentInstances[componentIndex]) continue;
+        const auto* block = dynamic_cast<const python::PythonProgramBlock*>(m_componentInstances[componentIndex].get());
+        if (block && block->periodNs() > 0 && !block->source().empty()) periods.insert(block->periodNs());
+    }
+    for (const uint64_t periodNs : periods) {
+        if (m_pythonScanScheduledNs.contains(periodNs) || timestampNs > std::numeric_limits<uint64_t>::max() - periodNs) continue;
+        const uint64_t next = (timestampNs / periodNs + 1) * periodNs;
+        m_pythonScanScheduledNs[periodNs] = next;
+        m_scheduler.scheduleEventUnlocked(next - timestampNs, [this, periodNs, next] {
+            const auto scheduled = m_pythonScanScheduledNs.find(periodNs);
+            if (scheduled == m_pythonScanScheduledNs.end() || scheduled->second != next) return;
+            m_pythonScanScheduledNs.erase(scheduled);
+            m_pythonDuePeriods.insert(periodNs);
+        });
+    }
+}
+
+void SimulationSession::runPythonBatchUnlocked(uint64_t timestampNs, uint64_t periodNs) {
+    const std::string rateGroupId = "schematic-period-" + std::to_string(periodNs);
+    std::vector<python::PythonStep> steps;
+    std::vector<python::PythonProgramBlock*> blocks;
+    for (const uint32_t componentIndex : m_pythonComponentIndices) {
+        if (componentIndex >= m_componentInstances.size() || !m_componentInstances[componentIndex]) continue;
+        auto* block = dynamic_cast<python::PythonProgramBlock*>(m_componentInstances[componentIndex].get());
+        if (!block || block->periodNs() != periodNs || block->source().empty()) continue;
+        python::PythonStep step;
+        step.blockId = std::to_string(componentIndex);
+        step.dtNs = periodNs;
+        for (const auto& port : block->inputs()) {
+            try {
+                const auto slot = m_runtimeState.signals.output(signalPortBlockId(componentIndex, port.name));
+                double value = 0.0;
+                if (port.type == python::PythonPortType::Bool) {
+                    const bool typed = m_runtimeState.signals.boolean(slot);
+                    step.typedInputs.emplace(port.name, typed);
+                    value = typed ? 1.0 : 0.0;
+                } else if (port.type == python::PythonPortType::Int64) {
+                    const int64_t typed = m_runtimeState.signals.integer(slot);
+                    step.typedInputs.emplace(port.name, typed);
+                    value = static_cast<double>(typed);
+                } else {
+                    value = m_runtimeState.signals.real(slot);
+                    step.typedInputs.emplace(port.name, value);
+                }
+                step.inputs.emplace(port.name, value);
+            } catch (...) {
+                step.typedInputs.emplace(port.name, port.initialValue);
+                step.inputs.emplace(port.name, std::visit([](const auto& value) { return static_cast<double>(value); }, port.initialValue));
+            }
+        }
+        blocks.push_back(block);
+        steps.push_back(std::move(step));
+    }
+    if (steps.empty()) return;
+    try {
+        const auto results = m_pythonRuntime.stepBatch(timestampNs, rateGroupId, steps);
+        for (size_t i = 0; i < results.size() && i < blocks.size(); ++i) {
+            const uint32_t componentIndex = static_cast<uint32_t>(std::stoul(results[i].blockId));
+            if (!results[i].error.empty()) {
+                // Uma exceção de usuário isola esta instância: o worker mantém suas últimas saídas
+                // e outros blocos do mesmo lote continuam avançando. Só timeout/crash do processo
+                // atinge a sessão inteira, porque nesse caso não há como confiar na resposta IPC.
+                if (m_pythonBlockFaultReported.insert(componentIndex).second) {
+                    auto* failedBlock = blocks[i];
+                    std::unordered_map<std::string, python::PythonValue> fallbackOutputs;
+                    if (failedBlock->failureMode() == "initial" || failedBlock->failureMode() == "zero") {
+                        for (const auto& port : failedBlock->outputs()) {
+                            python::PythonValue value = port.initialValue;
+                            if (failedBlock->failureMode() == "zero") {
+                                value = std::visit([](const auto& item) -> python::PythonValue {
+                                    using Value = std::decay_t<decltype(item)>;
+                                    return Value{};
+                                }, port.initialValue);
+                            }
+                            fallbackOutputs.emplace(port.name, value);
+                            const std::string blockId = signalPortBlockId(componentIndex, port.name);
+                            if (const auto* boolean = std::get_if<bool>(&value)) m_runtimeState.signals.setExternalBool(blockId, *boolean);
+                            else if (const auto* integer = std::get_if<int64_t>(&value)) m_runtimeState.signals.setExternalInt64(blockId, *integer);
+                            else if (const auto* real = std::get_if<double>(&value)) m_runtimeState.signals.setExternalReal(blockId, *real);
+                        }
+                        failedBlock->recordOutputs(fallbackOutputs, timestampNs);
+                    }
+                    if (m_pythonFaultCallback) {
+                        const std::string detail = "Período simulado: " + std::to_string(periodNs) +
+                            " ns; bloco Core: " + std::to_string(componentIndex) + "\n" + results[i].error;
+                        try { m_pythonFaultCallback(timestampNs, detail); } catch (...) { /* diagnóstico nunca pode derrubar o scheduler */ }
+                    }
+                }
+                continue;
+            }
+            for (const auto& port : blocks[i]->outputs()) {
+                const auto found = results[i].typedOutputs.find(port.name);
+                if (found == results[i].typedOutputs.end()) continue;
+                const std::string blockId = signalPortBlockId(componentIndex, port.name);
+                if (port.type == python::PythonPortType::Bool) {
+                    const auto* value = std::get_if<bool>(&found->second);
+                    if (value) m_runtimeState.signals.setExternalBool(blockId, *value);
+                } else if (port.type == python::PythonPortType::Int64) {
+                    if (const auto* value = std::get_if<int64_t>(&found->second)) m_runtimeState.signals.setExternalInt64(blockId, *value);
+                } else {
+                    if (const auto* value = std::get_if<double>(&found->second); value && std::isfinite(*value))
+                        m_runtimeState.signals.setExternalReal(blockId, *value);
+                }
+            }
+            blocks[i]->recordOutputs(results[i].typedOutputs, timestampNs);
+        }
+    } catch (const std::exception& error) {
+        if (m_pythonFaultCallback) {
+            std::string message = "Período simulado: " + std::to_string(periodNs) + " ns; blocos Core: ";
+            for (size_t i = 0; i < steps.size(); ++i) {
+                if (i) message += ", ";
+                message += steps[i].blockId;
+            }
+            message += "\n";
+            message += error.what();
+            try { m_pythonFaultCallback(timestampNs, message); } catch (...) { /* diagnóstico nunca pode derrubar o scheduler */ }
+        }
+        std::fprintf(stderr, "[PythonProgramBlock] falha no lote em %llu ns: %s\n",
+                     static_cast<unsigned long long>(timestampNs), error.what());
+        m_scheduler.pause();
+    }
+}
+
 void SimulationSession::runPlcScanBatchUnlocked(uint64_t scanTimeNs) {
     struct PendingScan {
         uint32_t componentIndex;
@@ -3376,6 +3591,9 @@ void SimulationSession::stopSimulation() {
     ++m_signalScheduleGeneration;
     m_plcScanScheduledNs.clear();
     m_plcEventPrevious.clear();
+    m_pythonScanScheduledNs.clear();
+    m_pythonDuePeriods.clear();
+    m_pythonBlockFaultReported.clear();
     for (auto& [componentIndex, generation] : m_plcScanGeneration) ++generation;
 }
 
