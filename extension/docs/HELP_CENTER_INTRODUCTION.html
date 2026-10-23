@@ -21,6 +21,7 @@
     <nav class="toc" aria-label="Nesta página">
       <strong>Nesta página</strong>
       <a href="#como-funciona">Como a ferramenta funciona</a>
+      <a href="#core-runtime">Core e arquitetura de execução</a>
       <a href="#analogica">Eletrônica analógica</a>
       <a href="#digital">Eletrônica digital</a>
       <a href="#controle">Controle e dinâmica de processos</a>
@@ -37,6 +38,11 @@
     <h2 id="como-funciona">Como a ferramenta funciona</h2>
     <p>A interface do VS Code cuida do editor, da paleta de componentes, dos projetos e dos painéis. A simulação é executada pelo <strong>Core</strong>, um processo nativo separado, que mantém o modelo, o scheduler de tempo, os resolvedores e a comunicação com dispositivos externos ou emulados. Essa separação permite que a interface organize e apresente o modelo enquanto o Core executa os cálculos.</p>
     <p>O esquemático é salvo como projeto <code>.lsproj</code>. Ele registra componentes, propriedades, fios, documentos visuais e definições hierárquicas de subsistemas. Você pode salvar, fechar e reabrir o trabalho para continuar editando. Na paleta, as bibliotecas são organizadas em áreas como <strong>Circuito / Analógico</strong>, <strong>Circuito / Digital</strong>, <strong>Processo / Controle</strong> e <strong>Processo / Automação</strong>; essa organização ajuda a encontrar blocos, mas não impede conectar elementos de áreas diferentes.</p>
+
+    <h2 id="core-runtime">Core: arquitetura e execução</h2>
+    <p>O Core e o nucleo nativo de execução do LasecSimul. A extensão do VS Code prepara e apresenta o projeto; o Core recebe o modelo e executa a simulação fora da interface. Essa separação permite editar e visualizar o trabalho enquanto o runtime mantem o estado dos componentes, o tempo virtual e os cálculos.</p>
+    <p>O Core agenda atividades pelo scheduler e coordena mecanismos adequados a cada domínio. Circuitos elétricos usam análise nodal modificada (MNA); blocos continuos e discretos de controle e processo usam seus modelos de sinais e dinâmica; PLC, Python, VHDL/GHDL e firmware ESP32 emulado executam nos runtimes e adaptadores correspondentes. As conexões fazem a ponte entre domínios, mas cada um mantem seu modelo próprio.</p>
+    <p>Valores e séries publicados pelo Core alimentam instrumentos, registros e elementos visuais vinculados. O resultado depende de parâmetros, condições iniciais, passo de simulação, tolerancias, modelos disponíveis e comportamento do codigo ou firmware. O tempo virtual e conduzido pelo scheduler, portanto nao equivale necessariamente ao tempo de parede.</p>
 
     <h2 id="analogica">Eletrônica analógica</h2>
     <p>A área analógica permite montar circuitos conectando componentes por fios e nós elétricos. Entre as famílias disponíveis estão elementos passivos, fontes, dispositivos semicondutores, sensores e instrumentos, conforme o catálogo do projeto. Parâmetros do componente definem o modelo que participa dos cálculos; o símbolo mostra sua representação no esquema e não substitui o modelo elétrico.</p>
@@ -60,6 +66,11 @@
     <h2 id="hmi">HMI: telas de operação ligadas à simulação</h2>
     <p>A HMI permite compor uma tela de operação com widgets gráficos, como indicadores de barra e radiais, displays, tanques, válvulas, bombas, lâmpadas, faceplates e tarjas de alarme. Os elementos visuais podem ser organizados em painéis e ligados a variáveis da simulação. Quando a fonte publica novos valores, os widgets refletem esses valores e podem apresentá-los com escalas, limites ou estados visuais configurados.</p>
     <p>Os widgets são uma camada de apresentação: o estado de um tanque, válvula ou controlador vem do modelo conectado, e não de uma segunda simulação escondida na tela HMI. Isso mantém uma única fonte para os valores do processo. A HMI ajuda a visualizar e operar um modelo didático ou de engenharia; ela não substitui um sistema supervisório certificado nem garante, por si só, alarmes de segurança funcional.</p>
+
+    <h2 id="laboratorio-calculo">HMI e Laboratório de Cálculo: o mesmo recurso visual</h2>
+    <p>O HMI e o Laboratório de Cálculo usam o mesmo recurso de documento visual do LasecSimul. HMI descreve o uso da tela para supervisão e operação; Laboratório de Cálculo descreve atividades e ferramentas de análise apresentadas nesse mesmo ambiente visual. Não são dois produtos que precisam ser integrados: s?o funcionalidades e contextos de uso diferentes do mesmo recurso.</p>
+    <p>Uma tela pode reunir widgets de processo, valores ligados a sinais, gráficos e elementos de atividades matemáticas. Isso permite montar um dashboard para um laboratorio de calculo: organizar controles de parâmetros e condições iniciais, curvas de resposta ao longo do tempo, valores medidos e indicadores na mesma página visual. O dashboard acompanha as variáveis e séries disponíveis no projeto; a tela apresenta os dados, enquanto modelos e cálculos pertencem aos elementos executados pelo Core.</p>
+    <p>Um docente pode preparar páginas com explicacoes, parâmetros e gráficos para uma atividade. O estudante pode observar como a resposta muda ao variar valores e executar novamente a simulação. Vincule cada visualização a variavel ou serie correta e confira unidades, escalas, condições iniciais e período de amostragem antes de interpretar os gráficos.</p>
 
     <h2 id="pid">Diagramas P&amp;ID</h2>
     <p>A biblioteca gráfica P&amp;ID fornece símbolos para representar equipamentos, instrumentos, tubulações e identificação de malhas em diagramas de processo. Ela serve para comunicar a estrutura e a instrumentação da planta de forma reconhecível a quem trabalha com automação e processos.</p>
