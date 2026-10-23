@@ -10,7 +10,13 @@ for (const item of catalog) {
   if (ids.has(item.id)) errors.push(`identificador duplicado: ${item.id}`);
   ids.add(item.id);
   const id = item.id.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'component';
-  if (!fs.existsSync(path.join(site, 'components', `${id}.html`))) errors.push(`página ausente para ${item.id}`);
+  const componentPage = path.join(site, 'components', `${id}.html`);
+  if (!fs.existsSync(componentPage)) errors.push(`página ausente para ${item.id}`);
+  else {
+    const html = fs.readFileSync(componentPage, 'utf8');
+    if ((item.description ?? '').trim().length < 400) errors.push(`descrição detalhada curta para ${item.id}`);
+    if (!html.includes('Como usar este elemento') || !html.includes('Parametros e edicao')) errors.push(`orientação de uso ou parâmetros ausente para ${item.id}`);
+  }
   if (item.icon && !['svg', 'png'].some((ext) => fs.existsSync(path.join(site, 'assets', `${id}.${ext}`)))) errors.push(`ícone não resolvido para ${item.id}`);
 }
 function htmlFilesUnder(dir, prefix = '') {
@@ -35,13 +41,14 @@ const report = {
   pages: catalog.length,
   categories: [...new Set(catalog.map((item) => item.category))].length,
   withDescription: catalog.filter((item) => item.description).length,
+  withDetailedDescription: catalog.filter((item) => (item.description ?? '').trim().length >= 400).length,
   withExamples: catalog.filter((item) => item.examples?.length).length,
   codeExamples: htmlFilesUnder(path.join(site, 'code-examples')).filter((name) => name.endsWith('.html') && !name.startsWith(`raw${path.sep}`)).length,
   withResolvedIcon: catalog.filter((item) => !item.icon || ['svg', 'png'].some((ext) => fs.existsSync(path.join(site, 'assets', `${item.id.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'component'}.${ext}`)))).length,
-  incomplete: catalog.filter((item) => !item.description).map((item) => item.id),
+  incomplete: catalog.filter((item) => (item.description ?? '').trim().length < 400).map((item) => item.id),
   withoutExamples: catalog.filter((item) => !item.examples?.length).map((item) => item.id),
   errors,
 };
 fs.writeFileSync(path.join(site, 'coverage.json'), JSON.stringify(report, null, 2));
-console.log(`Cobertura: ${report.pages}/${report.resources} páginas; ${report.withDescription} descrições; ${report.withResolvedIcon} ícones resolvidos.`);
+console.log(`Cobertura: ${report.pages}/${report.resources} páginas; ${report.withDetailedDescription}/${report.resources} descrições detalhadas; ${report.withResolvedIcon} ícones resolvidos.`);
 if (errors.length) { console.error(errors.join('\n')); process.exitCode = 1; }
