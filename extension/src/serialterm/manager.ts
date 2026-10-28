@@ -9,6 +9,8 @@ export class SerialTerminalManager implements vscode.Disposable {
   private readonly open = new Set<string>();
   private readonly transport = new CoreUartTransport();
   private readonly hiddenData = new Map<string, number[]>();
+  /** Último erro de poll já avisado por componente (zerado a cada mudança de estado da simulação). */
+  private readonly lastPollError = new Map<string, string>();
   private timer: ReturnType<typeof setInterval> | undefined;
   private polling = false;
 
@@ -73,7 +75,9 @@ export class SerialTerminalManager implements vscode.Disposable {
           // Achado 2026-07-22 (baud alto perdendo dados): overflow do buffer RX não lança mais (ver
           // `CoreUartTransport.read`) -- reporta o drop como aviso, mas continua processando os
           // bytes que sobreviveram em `batch.data` (antes, o lote inteiro era descartado junto).
-          if (batch.droppedBytes > 0) this.status(componentId, true, `Buffer UART RX excedido: ${batch.droppedBytes} byte(s) perdido(s).`);
+          // Avisos do poll usam o estado REAL de abertura: com `true` fixo, qualquer erro reabria a
+          // janela que o usuário tinha fechado (e o poll de 10 ms a mantinha na frente da tela).
+          if (batch.droppedBytes > 0) this.status(componentId, this.open.has(componentId), `Buffer UART RX excedido: ${batch.droppedBytes} byte(s) perdido(s).`);
           if (!batch.data.byteLength) continue;
           if (this.open.has(componentId)) state.schematicPanel?.postMessage({ version: 1, type: "serialTerminalData", componentId,
             dataHex: Buffer.from(batch.data).toString("hex"), simulationTimeNs: batch.simulationTimeNs });
@@ -82,12 +86,20 @@ export class SerialTerminalManager implements vscode.Disposable {
             hidden.push(...batch.data); if (hidden.length > 100_000) hidden.splice(0, hidden.length - 100_000);
             this.hiddenData.set(componentId, hidden);
           }
-        } catch (error) { this.status(componentId, true, error instanceof Error ? error.message : String(error)); }
+        } catch (error) {
+          // O mesmo erro a cada 10 ms não vira mensagem nova: cada `serialTerminalStatus` redesenhava a
+          // Webview inteira, e o botão Parar era recriado entre o mousedown e o mouseup (clique perdido).
+          const message = error instanceof Error ? error.message : String(error);
+          if (this.lastPollError.get(componentId) === message) continue;
+          this.lastPollError.set(componentId, message);
+          this.status(componentId, this.open.has(componentId), message);
+        }
       }
     } finally { this.polling = false; }
   }
 
   updateSimulationState(): void {
+    this.lastPollError.clear();
     for (const id of this.open) this.status(id, true);
     this.updatePolling();
   }

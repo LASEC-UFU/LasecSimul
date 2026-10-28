@@ -163,6 +163,42 @@ const CORE_ID = "7";
     await server.stop();
   });
 
+  await test("drainUart BUSY -- read() devolve lote vazio sem lançar; baseline de rxDropped preservada; outros erros continuam lançando", async () => {
+    const name = `lasecsimul-test-uart-drain-busy-${process.pid}`;
+    let mode: "busy" | "data" | "fail" = "busy";
+    const server = new MockCoreServer(name, PROTOCOL_VERSION, (msg: RequestEnvelope): ResponseEnvelope => {
+      if (msg.type === "drainUart") {
+        if (mode === "busy") return { id: msg.id, ok: false, error: "drainUart falhou: simulacao ocupada; telemetria adiada", payload: { errorCode: "busy" } };
+        if (mode === "fail") return { id: msg.id, ok: false, error: "drainUart falhou: instancia desconhecida" };
+        return { id: msg.id, ok: true, payload: { dataHex: "4142", simulationTimeNs: 77, pending: 0, dropped: 3 } };
+      }
+      return { id: msg.id, ok: true, payload: {} };
+    });
+    await server.start();
+    const client = new CoreClient(name);
+    await client.start();
+    state.coreClient = client;
+    state.simulationStatus = "running";
+    coreInstanceIdByComponentId.set(COMPONENT_ID, CORE_ID);
+
+    const transport = new CoreUartTransport();
+    const busy = await transport.read(COMPONENT_ID);
+    assert(busy.data.byteLength === 0 && busy.droppedBytes === 0, "BUSY deveria virar lote vazio (nenhum byte drenado, nenhum drop inventado)");
+
+    mode = "data";
+    const batch = await transport.read(COMPONENT_ID);
+    assert(Buffer.from(batch.data).toString("hex") === "4142", "o poll seguinte deveria entregar os bytes que ficaram no anel");
+    assert(batch.droppedBytes === 3, `delta de drop deveria ser contra a baseline original (0), nao pulada pelo BUSY -- veio ${batch.droppedBytes}`);
+
+    mode = "fail";
+    let threw = false;
+    try { await transport.read(COMPONENT_ID); } catch { threw = true; }
+    assert(threw, "falha que nao e' BUSY deveria continuar lançando para o chamador reportar");
+
+    await client.stop();
+    await server.stop();
+  });
+
   const { failed } = finish();
   process.exitCode = failed > 0 ? 1 : 0;
 })();

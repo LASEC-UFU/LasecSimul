@@ -10,7 +10,16 @@ export class CoreUartTransport {
   async read(componentId: string): Promise<{ data: Uint8Array; simulationTimeNs: number; droppedBytes: number }> {
     const client = state.coreClient; const coreId = coreInstanceIdByComponentId.get(componentId);
     if (!client || !coreId) return { data: new Uint8Array(), simulationTimeNs: 0, droppedBytes: 0 };
-    const batch = await client.drainUart(coreId);
+    let batch: Awaited<ReturnType<typeof client.drainUart>>;
+    try {
+      batch = await client.drainUart(coreId);
+    } catch (err) {
+      // BUSY (Scheduler no meio de um settle) é esperado e frequente: o Core não drenou nada, os
+      // bytes continuam no anel RX e saem no próximo poll. Não é falha -- devolve lote vazio e
+      // mantém a baseline de `rxDropped` intacta (nada foi observado).
+      if (err instanceof IpcError && err.code === "busy") return { data: new Uint8Array(), simulationTimeNs: 0, droppedBytes: 0 };
+      throw err;
+    }
     const dropped = Number(batch.dropped ?? 0);
     const previousDropped = this.rxDropped.get(componentId) ?? 0;
     this.rxDropped.set(componentId, dropped);

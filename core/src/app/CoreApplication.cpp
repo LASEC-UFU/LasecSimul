@@ -2204,8 +2204,16 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             // (LasecPlotBroker::poll, a cada 10-50ms) já trata qualquer falha de leitura como "sem
             // dado novo desta vez, tenta de novo no próximo poll" -- nenhum byte se perde, o buffer
             // RX real só é drenado quando esta chamada de fato consegue o snapshot.
+            // errorCode="busy" (mesmo contrato do getProperty/getUartStatus): sem ele a Extension
+            // não distinguia "ocupado, tenta no próximo poll" de falha real e o Serial Terminal
+            // exibia (e reabria) a janela com o aviso a cada poll de 10 ms.
             const auto snapshot = session.tryDrainUartRx(instanceId);
-            if (!snapshot) throw std::runtime_error("simulacao ocupada; telemetria adiada");
+            if (!snapshot) {
+                resp.ok = false;
+                resp.error = "drainUart falhou: simulacao ocupada; telemetria adiada";
+                resp.payloadJson = nlohmann::json{{"errorCode", "busy"}}.dump();
+                return resp;
+            }
             resp.ok = true;
             resp.payloadJson = nlohmann::json{
                 {"dataHex", snapshot->dataHex},

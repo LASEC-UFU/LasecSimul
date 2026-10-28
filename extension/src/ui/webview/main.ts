@@ -769,8 +769,16 @@ interface SerialLogChunk { direction: "rx" | "tx"; bytes: number[]; }
 interface SerialTerminalRuntime {
   opened: boolean; online: boolean; error?: string; receiveFormat: SerialFormat; sendFormat: SerialFormat;
   chunks: SerialLogChunk[]; inputText: string; loadedFile?: Uint8Array; rxActivityUntil?: number; txActivityUntil?: number;
+  /** Posição da janela depois de arrastada pela barra de título; `undefined` = centralizada. */
+  x?: number; y?: number;
 }
 const serialTerminalRuntime = new Map<string, SerialTerminalRuntime>();
+/** `true` entre `pointerdown` e `pointerup` dentro de uma janela do Serial Terminal. Com a UART
+ * despejando dados (ex.: `Serial.println` a cada 50 ms), `renderSerialTerminalWindows` refazia o DOM
+ * no meio do clique -- o `click` do "×"/botões nunca chegava e o arrasto perdia o elemento. Enquanto
+ * isto vale, o render é só marcado como pendente e roda logo depois do gesto. */
+let serialTerminalPointerActive = false;
+let serialTerminalRenderPending = false;
 interface SerialPortRuntime {
   opened: boolean; online: boolean; error?: string; rxBytes: number; txBytes: number;
   rxActivityUntil: number; txActivityUntil: number;
@@ -840,24 +848,75 @@ function serialTerminalLogText(runtime: SerialTerminalRuntime): string {
   return runtime.chunks.map((chunk) => serialFormatBytes(chunk.bytes, runtime.receiveFormat)).join("");
 }
 
+/** Mantém a barra de título alcançável: a janela pode sair parcialmente da tela (pra liberar o
+ * esquemático), mas nunca a ponto de não dar mais pra pegá-la de volta. */
+function clampSerialTerminalPosition(x: number, y: number, width: number): { x: number; y: number } {
+  return {
+    x: Math.max(60 - width, Math.min(window.innerWidth - 60, x)),
+    y: Math.max(0, Math.min(window.innerHeight - 32, y)),
+  };
+}
+
 function renderSerialTerminalWindows(): void {
   if (!serialTerminalLayer) {
     serialTerminalLayer = document.createElement("div");
     serialTerminalLayer.className = "serial-terminal-layer";
     document.body.appendChild(serialTerminalLayer);
   }
+  if (serialTerminalPointerActive) { serialTerminalRenderPending = true; return; }
+  serialTerminalRenderPending = false;
   serialTerminalLayer.innerHTML = "";
   for (const [componentId, runtime] of serialTerminalRuntime) {
     if (!runtime.opened) continue;
     const component = state.components.find((entry) => entry.id === componentId);
     if (!component) continue;
     const windowEl = document.createElement("section"); windowEl.className = "serial-terminal-window";
+    if (runtime.x !== undefined && runtime.y !== undefined) {
+      windowEl.classList.add("serial-terminal-window--placed");
+      windowEl.style.left = `${runtime.x}px`; windowEl.style.top = `${runtime.y}px`;
+    }
+    // <select> fica de fora: o dropdown nativo pode engolir o `pointerup` e deixaria o render travado.
+    windowEl.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || (event.target as HTMLElement).closest("select")) return;
+      serialTerminalPointerActive = true;
+      const release = () => {
+        window.removeEventListener("pointerup", release); window.removeEventListener("pointercancel", release);
+        serialTerminalPointerActive = false;
+        // Adiado: o `click` é despachado logo após este `pointerup` e precisa achar o botão original.
+        if (serialTerminalRenderPending) setTimeout(renderSerialTerminalWindows, 0);
+      };
+      window.addEventListener("pointerup", release); window.addEventListener("pointercancel", release);
+    });
     const title = document.createElement("header"); title.className = "serial-terminal-window__title";
     const identity = document.createElement("strong"); identity.textContent = component.label;
     const status = document.createElement("span"); status.textContent = runtime.error ? `⚠ ${runtime.error}` : runtime.online ? "● Online" : "○ Simulação parada";
     const close = document.createElement("button"); close.textContent = "×"; close.title = "Fechar";
     close.addEventListener("click", () => send({ version: WEBVIEW_MESSAGE_VERSION, type: "requestToggleSerialTerminal", componentId }));
     title.append(identity, status, close);
+    title.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || event.target === close) return;
+      event.preventDefault();
+      const rect = windowEl.getBoundingClientRect();
+      const offsetX = event.clientX - rect.left;
+      const offsetY = event.clientY - rect.top;
+      windowEl.classList.add("serial-terminal-window--placed");
+      const onMove = (moveEvent: PointerEvent) => {
+        const position = clampSerialTerminalPosition(moveEvent.clientX - offsetX, moveEvent.clientY - offsetY, windowEl.offsetWidth);
+        // Relê do mapa: um `serialTerminalStatus` no meio do arrasto troca o objeto do runtime.
+        const current = serialTerminalRuntime.get(componentId);
+        if (current) { current.x = position.x; current.y = position.y; }
+        windowEl.style.left = `${position.x}px`; windowEl.style.top = `${position.y}px`;
+      };
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+      };
+      onMove(event);
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+    });
 
     const receiveBar = document.createElement("div"); receiveBar.className = "serial-terminal-window__toolbar";
     const save = document.createElement("button"); save.textContent = "Salvar log";
@@ -13729,8 +13788,12 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
     const previous = serialTerminalRuntime.get(message.componentId);
     serialTerminalRuntime.set(message.componentId, { opened: message.opened, online: message.online, error: message.error,
       receiveFormat: previous?.receiveFormat ?? "ASCII", sendFormat: previous?.sendFormat ?? "ASCII",
-      chunks: previous?.chunks ?? [], inputText: previous?.inputText ?? "", rxActivityUntil: previous?.rxActivityUntil, txActivityUntil: previous?.txActivityUntil });
-    render(); renderSerialTerminalWindows(); refreshOpenPropertyDialog();
+      chunks: previous?.chunks ?? [], inputText: previous?.inputText ?? "", rxActivityUntil: previous?.rxActivityUntil, txActivityUntil: previous?.txActivityUntil,
+      x: previous?.x, y: previous?.y });
+    // Esquemático e diálogo só mostram `opened` ("Abrir"/"Fechar"); o texto de erro vive só na janela.
+    // `render()` recria a barra inteira -- feito a cada aviso, o botão Parar sumia no meio do clique.
+    if (!previous || previous.opened !== message.opened || previous.online !== message.online) { render(); refreshOpenPropertyDialog(); }
+    renderSerialTerminalWindows();
   }
 
   if (message.type === "serialTerminalData") {

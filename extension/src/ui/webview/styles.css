@@ -1757,7 +1757,8 @@ rect.meter-expand-button:hover {
    editor de envio claro e toolbars independentes com formato ASCII/HEX/DEC/OCT/BIN. */
 .serial-terminal-layer { position: fixed; inset: 0; z-index: 1250; pointer-events: none; display: flex; align-items: center; justify-content: center; }
 .serial-terminal-window { pointer-events: auto; width: min(520px, calc(100vw - 32px)); height: min(430px, calc(100vh - 48px)); display: grid; grid-template-rows: auto auto 1fr auto minmax(80px, .45fr) auto; gap: 4px; padding: 4px; color: var(--vscode-foreground); background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 5px; box-shadow: 0 10px 32px #0008; }
-.serial-terminal-window__title { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding: 5px 8px; background: var(--vscode-titleBar-activeBackground); }
+.serial-terminal-window--placed { position: absolute; }
+.serial-terminal-window__title { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding: 5px 8px; background: var(--vscode-titleBar-activeBackground); cursor: move; user-select: none; touch-action: none; }
 .serial-terminal-window__title button { font-size: 20px; line-height: 20px; border: 0; background: transparent; color: inherit; cursor: pointer; }
 .serial-terminal-window__toolbar { display: flex; align-items: center; gap: 6px; }
 .serial-terminal-window__toolbar select { margin-left: auto; }
