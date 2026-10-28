@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <filesystem>
 #include <functional>
@@ -384,6 +385,9 @@ private:
                                            std::vector<DeferredSchedulerCall>* deferred = nullptr,
                                            bool schedulerLockHeld = false);
     bool dispatchArenaEvent(const qemu::QemuArenaEvent& event, uint64_t eventTimeNs);
+    // VNEXT_B: copia GPIO_IN/GPIO_IN1 do módulo para o snapshot que o QEMU lê em digitalRead()
+    // (só quando mudou). Chamado com m_callbackState->mutex travado.
+    void publishVnextBGpioInputsLocked();
     uint64_t electricalOutputFingerprint() const;
     void stampResetPin(MnaMatrixView& matrix, const Pin& pin);
     void resetModulesAndWakeups();
@@ -476,6 +480,12 @@ private:
     // electrical dispatch. See pollAndDispatchPendingEvents()'s VNEXT_B branch for the update
     // site and pacingPositionNs() for the read site.
     std::atomic<uint64_t> m_vnextBHeartbeatWatermarkNs{0};
+    // Último GPIO_IN/GPIO_IN1 publicado no snapshot (ver publishVnextBGpioInputsLocked()).
+    std::array<uint64_t, 2> m_vnextBPublishedGpioIn{};
+    bool m_vnextBGpioInPublished = false;
+    // true entre despachar uma mudança elétrica (VNEXT_B) e o próximo stamp() estampá-la: enquanto
+    // isso stamp() não despacha outra, senão duas mudanças caem no mesmo solve e o pulso some.
+    bool m_vnextBChangeAwaitingStamp = false;
     std::atomic<uint64_t> m_vnextI2cCompletionCount{0};
     std::atomic<uint64_t> m_vnextI2cSubmissionCount{0};
     uint64_t m_stampCount = 0;

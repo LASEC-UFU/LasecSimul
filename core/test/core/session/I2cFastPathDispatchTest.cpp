@@ -252,6 +252,41 @@ void testFastPathIgnoresTransparentComponents() {
           "resistor e tunel no mesmo no' nao impedem o fast path (tipos transparentes)");
 }
 
+/** Regressão (docs/35-bug-bordas-esp32-displays-2026-10-28.md): no VNEXT_B não há fallback elétrico
+ * de I2C, então um analisador lógico em SCL/SDA fazia toda transação voltar NACK. Instrumentos de
+ * observação (alta impedância) precisam ser transparentes como resistor/túnel. */
+void testFastPathIgnoresObservingInstruments() {
+    plugins::GlobalPluginCache cache;
+    SimulationSession session(cache);
+    session.mcus().registerFactory("test.fake_mcu", [] { return std::make_unique<FakeMcuAdapter>(); });
+    session.components().registerFactory("test.fake_i2c_device", [](const registry::ComponentParams&) {
+        return std::make_unique<FakeI2cDevice>(Pin{"sda"});
+    });
+    session.components().registerFactory("meters.logic_analyzer", [](const registry::ComponentParams&) {
+        return std::make_unique<FakeTransparentComponent>("meters.logic_analyzer", Pin{"sda"});
+    });
+    session.components().registerFactory("meters.probe", [](const registry::ComponentParams&) {
+        return std::make_unique<FakeTransparentComponent>("meters.probe", Pin{"sda"});
+    });
+
+    const uint32_t mcuIndex = session.addComponent("test.fake_mcu", {});
+    const uint32_t deviceIndex = session.addComponent("test.fake_i2c_device", {});
+    const uint32_t analyzerSdaIndex = session.addComponent("meters.logic_analyzer", {});
+    const uint32_t analyzerSclIndex = session.addComponent("meters.logic_analyzer", {});
+    const uint32_t probeIndex = session.addComponent("meters.probe", {});
+    session.connectWire(mcuIndex, "sda", deviceIndex, "sda");
+    session.connectWire(mcuIndex, "scl", deviceIndex, "scl");
+    session.connectWire(mcuIndex, "sda", analyzerSdaIndex, "sda");
+    session.connectWire(mcuIndex, "scl", analyzerSclIndex, "sda");
+    session.connectWire(mcuIndex, "sda", probeIndex, "sda");
+    for (int i = 0; i < 10 && session.settleStep(); ++i) {}
+
+    const uint8_t payload = 0x04;
+    const I2cTransferResult result = session.resolveI2cTransferForTesting(mcuIndex, 0, makeWrite(0x42, &payload, 1));
+    check(result.handled && result.addressAck,
+          "analisador logico e ponta de prova em SCL/SDA nao impedem o fast path (instrumentos de observacao)");
+}
+
 void testFastPathDefinitiveNackWithNothingConnected() {
     plugins::GlobalPluginCache cache;
     SimulationSession session(cache);
@@ -273,6 +308,7 @@ int main() {
     testFastPathFallsBackWithOpaqueComponentOnBus();
     testFastPathRequiresBothBusWires();
     testFastPathIgnoresTransparentComponents();
+    testFastPathIgnoresObservingInstruments();
     testFastPathDefinitiveNackWithNothingConnected();
     if (failures == 0) {
         std::printf("OK: fast path de I2C resolve topologia corretamente.\n");

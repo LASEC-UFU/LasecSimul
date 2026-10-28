@@ -136,6 +136,19 @@ int main() {
                   << " second=" << second << " lane1=" << lane1 << " snapshot=" << snapshot << "\n";
         return 1;
     }
+    // Core-side snapshot writer (docs/35-bug-bordas-esp32-displays-2026-10-28.md): QEMU serves
+    // GPIO_IN/GPIO_IN1 reads straight from this snapshot, so the Core must be able to publish it.
+    {
+        const uint64_t gpioIn[2] = {UINT64_C(0x00002000), UINT64_C(0x00000004)};
+        uint8_t readBack[sizeof(gpioIn)]{};
+        if (!dataAttachment.publishSnapshot(reinterpret_cast<const uint8_t*>(gpioIn), sizeof(gpioIn)) ||
+            !dataAttachment.readSnapshot(readBack, sizeof(readBack)) ||
+            std::memcmp(readBack, gpioIn, sizeof(gpioIn)) != 0) {
+            std::cerr << "FAIL: Core-published GPIO_IN snapshot did not round-trip\n";
+            return 1;
+        }
+        std::cout << "P3_CORE_SNAPSHOT_PUBLISH PASS\n";
+    }
     // The startup-ordering property this used to prove via [VNEXT_B_STARTUP] transition= log text
     // (Core RUNNING started the guest exactly once, before any self-test data appeared) is already
     // proven above, structurally: first/second/lane1/snapshot could only have become true by

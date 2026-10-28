@@ -61,6 +61,11 @@ bool vnextTraceEnabled() {
     return value && *value && std::strcmp(value, "0") != 0;
 }
 
+// GPIO_IN/GPIO_IN1 do ESP32. No VNEXT_B o QEMU atende leituras destes dois registradores a partir
+// do snapshot compartilhado (vnext_b_gpio_read em softmmu/vnext_b.c): GPIO_IN nos bytes 0-7,
+// GPIO_IN1 nos bytes 8-15 -- nunca com um pedido de leitura ao Core.
+constexpr std::array<uint64_t, 2> kVnextBGpioInAddresses{0x3FF4403Cull, 0x3FF44040ull};
+
 } // namespace
 
 McuComponent::CallbackState::CallbackState() {
@@ -1114,9 +1119,24 @@ uint64_t McuComponent::electricalOutputFingerprint() const {
     return fingerprint;
 }
 
+void McuComponent::publishVnextBGpioInputsLocked() {
+    if (!m_controller.vnextBActive()) return;
+    std::array<uint64_t, 2> words{};
+    for (size_t i = 0; i < kVnextBGpioInAddresses.size(); ++i) {
+        if (QemuModule* module = findModule(kVnextBGpioInAddresses[i])) words[i] = module->readRegister(kVnextBGpioInAddresses[i]);
+    }
+    if (m_vnextBGpioInPublished && words == m_vnextBPublishedGpioIn) return;
+    if (!m_controller.vnextBAttachment().publishSnapshot(reinterpret_cast<const uint8_t*>(words.data()), sizeof(words))) return;
+    m_vnextBPublishedGpioIn = words;
+    m_vnextBGpioInPublished = true;
+}
+
 McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
     uint64_t nowNs, std::vector<DeferredSchedulerCall>* deferred, bool schedulerLockHeld) {
     if (m_controller.vnextBActive()) {
+        // Entradas que mudaram por outro caminho (ex.: GPIO matrix reroteada) também precisam
+        // chegar ao snapshot antes de o firmware ler GPIO_IN de novo.
+        publishVnextBGpioInputsLocked();
         // PLAN_MTTCG_VNEXT_B_CAUSALITY.md sections 9/10: temporal-merge arbiter across lanes,
         // future-event deferral via the same schedulePollAt() mechanism the legacy transport
         // already uses (weak-lifetime + generation-deduplicated, see schedulePollAt() above --
@@ -1235,6 +1255,12 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
         bool changed = false;
         uint32_t dispatchedCount = 0;
         bool budgetExhausted = false;
+        // Uma mudança elétrica por settle: escritas de GPIO são aplicadas na hora no módulo, então
+        // despachar CLK=1 e CLK=0 na mesma rodada apagava o pulso antes de o solver vê-lo (SPI por
+        // bit-bang chegava sem bordas ao display). Mesmo princípio do caminho legado ("dirty
+        // primeiro", ver pollStepLocked()): depois de uma mudança, devolve o controle para o
+        // chamador marcar dirty/assentar e continua na próxima rodada (now+1 ns).
+        bool yieldForSettle = false;
         for (;;) {
             std::array<qemu::VnextBLanePeek, LASEC_AT_MAX_LANES> peeks{};
             for (uint32_t lane = 0; lane < laneCount; ++lane) {
@@ -1282,8 +1308,14 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
                     m_scheduler.notifyAdvanceLimitChanged();
                 }
             }
-            changed = dispatchOneEvent(decision.lane, *consumed) || changed;
+            const bool electricalChange = dispatchOneEvent(decision.lane, *consumed);
+            changed = electricalChange || changed;
             ++dispatchedCount;
+            if (electricalChange) {
+                yieldForSettle = true;
+                m_vnextBChangeAwaitingStamp = true;
+                break;
+            }
         }
         // scheduleNextPoll() (nowNs()+1, not schedulePollAt(nowNs, ...)): scheduling exactly at
         // the current instant risks the Scheduler treating it as already-due and invoking the
@@ -1291,7 +1323,7 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
         // std::recursive_mutex "resource deadlock would occur" once the recursion depth exceeded
         // its limit. This is the same livelock this codebase already solved once, see
         // scheduleNextPoll()'s own +1ns comment above.
-        if (budgetExhausted) scheduleNextPoll(deferred, schedulerLockHeld);
+        if (budgetExhausted || yieldForSettle) scheduleNextPoll(deferred, schedulerLockHeld);
 
         // Safe acknowledge (PLAN_MTTCG_VNEXT_B_CAUSALITY.md section 10.4, steps 1-5, EVIDENCE.md
         // H143/E144): drain first (above), THEN clear the notification flag, THEN re-arbitrate
@@ -1325,7 +1357,7 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
         // VnextBArbiterTest.cpp's H143 RED/GREEN cases) for the policy this mirrors.
         const bool notified = attachment.notificationPending();
         if (notified) attachment.acknowledgeNotification();
-        if (!budgetExhausted) {
+        if (!budgetExhausted && !yieldForSettle) {
             std::array<qemu::VnextBLanePeek, LASEC_AT_MAX_LANES> postAckPeeks{};
             for (uint32_t lane = 0; lane < laneCount; ++lane) {
                 if (const auto peeked = attachment.peekLane(lane)) {
@@ -1362,7 +1394,7 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
             }
         }
 
-        if (dispatchedCount > 0 || budgetExhausted) return PollStep::DispatchedReady;
+        if (dispatchedCount > 0 || budgetExhausted || yieldForSettle) return PollStep::DispatchedReady;
         if (m_nextPendingEventNs.load(std::memory_order_relaxed) != 0) return PollStep::DeferredFuture;
         (void)changed; // electrical-change tracking retained for parity/diagnostics; the return
                         // value no longer depends on it -- dispatchedCount already reflects every
@@ -1424,7 +1456,11 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
     // schedulerLockHeld=true: stamp() runs inside Scheduler::runUntil()'s settle loop, which
     // holds Scheduler::m_mutex throughout (same reasoning as this function's own
     // scheduleWakeupsForAllModules(..., true) call below -- see schedulePollAt()'s doc-comment).
-    const PollStep pollStepResult = pollAndDispatchPendingEvents(m_scheduler.nowNsUnlocked(), nullptr, true);
+    // VNEXT_B: se uma mudança elétrica já despachada ainda não foi estampada, estampa-a primeiro
+    // (o laço de pinos abaixo); a próxima sai no poll de continuação, depois deste solve.
+    const PollStep pollStepResult = m_vnextBChangeAwaitingStamp
+        ? PollStep::DispatchedReady
+        : pollAndDispatchPendingEvents(m_scheduler.nowNsUnlocked(), nullptr, true);
     lasecsimul::simulation::diag::ProvenanceTracker::instance().recordPollOutcome(
         pollStepResult == PollStep::DispatchedReady, pollStepResult == PollStep::DeferredFuture,
         pollStepResult == PollStep::NoEvent);
@@ -1494,6 +1530,8 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
             module->setInputVoltageAt(mapping.bitOrLine, voltage, m_scheduler.nowNsUnlocked());
         }
     }
+    m_vnextBChangeAwaitingStamp = false;
+    publishVnextBGpioInputsLocked();
     scheduleWakeupsForAllModules(m_scheduler.nowNsUnlocked(), true);
 }
 
@@ -1571,6 +1609,11 @@ void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath,
                        });
     diag::trace(diag::ConsumerTraceEvent::ArenaBind, identity.sessionExecutionId, 0, 0,
                 identity.launchGeneration);
+    // Anexação VNEXT_B nova = snapshot novo e zerado: republica o nível atual das entradas (ex.:
+    // botão já em 5 V desde t=0 nunca gera borda depois da carga do firmware).
+    m_vnextBGpioInPublished = false;
+    m_vnextBChangeAwaitingStamp = false;
+    publishVnextBGpioInputsLocked();
     if (!m_controller.vnextBActive()) {
         startPolling(&deferred);
     }
@@ -1687,6 +1730,7 @@ void McuComponent::onEvent(const ComponentEvent& event) {
                 module->setInputLevelAt(mapping.bitOrLine, levelHigh, m_scheduler.nowNsUnlocked());
             }
         }
+        publishVnextBGpioInputsLocked();
         return;
     }
     m_resetPinHigh = levelHigh;

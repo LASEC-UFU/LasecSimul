@@ -644,6 +644,30 @@ bool VnextBAttachment::readSnapshot(uint8_t* out, size_t bytes) const {
     return false;
 }
 
+bool VnextBAttachment::publishSnapshot(const uint8_t* data, size_t bytes) {
+#ifdef _WIN32
+    if (!m_impl || !m_impl->view || !m_view.snapshots || !data || bytes > LASEC_AT_SNAPSHOT_BYTES) return false;
+    const auto& d = m_view.snapshots[0].storage;
+    auto* snapshot = reinterpret_cast<lasec_at_snapshot*>(static_cast<uint8_t*>(m_impl->view) + d.offset);
+    std::atomic_ref<uint64_t> seq(snapshot->publish_seq);
+    const uint64_t odd = seq.load(std::memory_order_acquire) | 1u;
+    seq.store(odd, std::memory_order_release);
+    // Palavras de 64 bits alinhadas: o leitor do QEMU copia 8 bytes por registrador sem checar
+    // publish_seq, então cada registrador precisa ser escrito de uma vez só.
+    for (size_t i = 0; i < bytes; i += sizeof(uint64_t)) {
+        uint64_t word = 0;
+        const size_t chunk = (bytes - i) < sizeof(word) ? (bytes - i) : sizeof(word);
+        std::memcpy(&word, data + i, chunk);
+        std::atomic_ref<uint64_t>(*reinterpret_cast<uint64_t*>(snapshot->data + i)).store(word, std::memory_order_release);
+    }
+    seq.store(odd + 1, std::memory_order_release);
+    return true;
+#else
+    (void)data; (void)bytes;
+    return false;
+#endif
+}
+
 void VnextBAttachment::signalArtifactResume() {
 #ifdef _WIN32
     if (m_impl && m_impl->coreEvent) SetEvent(m_impl->coreEvent);

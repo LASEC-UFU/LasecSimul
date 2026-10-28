@@ -3792,7 +3792,14 @@ bool SimulationSession::isI2cFastPathTransparentUnlocked(const IComponentModel& 
     // fallback (ver resolveI2cTransferUnlocked). Comparação por typeId (não dynamic_cast) porque
     // são tipos embutidos com typeId estável, mesmo padrão já usado alhures neste arquivo.
     const std::string_view typeId = component.typeId();
-    return typeId == "passive.resistor" || typeId == "connectors.tunnel";
+    if (typeId == "passive.resistor" || typeId == "connectors.tunnel") return true;
+    // Instrumentos de observação (entrada de 1 GΩ / 10 MΩ, nunca dirigem o nó): antes forçavam
+    // fallback. No transporte VNEXT_B não há caminho elétrico de reserva para I2C, então um
+    // analisador lógico ligado em SCL/SDA (caso comum em aula) fazia TODA transação voltar NACK e
+    // o display nunca recebia nada (docs/35-bug-bordas-esp32-displays-2026-10-28.md). Com o fast
+    // path o instrumento não vê a forma de onda bit a bit, mas o barramento funciona.
+    return typeId == "meters.logic_analyzer" || typeId == "meters.probe" || typeId == "meters.oscope" ||
+           typeId == "meters.freqmeter" || typeId == "instruments.voltmeter";
 }
 
 I2cTransferResult SimulationSession::resolveI2cTransferUnlocked(uint32_t mcuIndex, uint32_t bus,

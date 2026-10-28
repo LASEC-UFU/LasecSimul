@@ -113,6 +113,10 @@ public:
                       std::span<const uint8_t> rx);
     bool c2aEmpty() const;
     bool readSnapshot(uint8_t* out, size_t bytes) const;
+    // Único escritor do snapshot do lado do Core (seqlock: publish_seq ímpar durante a escrita,
+    // mesmo protocolo de vnext_publish_snapshot() no QEMU). O QEMU atende leituras de GPIO_IN /
+    // GPIO_IN1 direto deste snapshot (vnext_b_gpio_read), sem perguntar ao Core.
+    bool publishSnapshot(const uint8_t* data, size_t bytes);
     void signalArtifactResume();
     void signalCoreRunningForTesting();
     bool notificationPending() const noexcept { return m_notificationPending.load(std::memory_order_acquire); }
