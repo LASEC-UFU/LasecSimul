@@ -107,6 +107,11 @@ public:
     uint64_t heartbeatWatermarkForTesting() const;
     bool publishC2A(uint64_t value);
     bool publishRegisterResult(uint64_t address, uint64_t value);
+    /** Byte que a USART `uart` recebeu pelo pino (ou pela caixa de envio do monitor): o FIFO de RX
+     * é do modelo de UART do QEMU, que o firmware lê sem passar pelo Core. */
+    bool publishUartRxByte(uint32_t uart, uint8_t byte);
+    /** O anel C2A não aceita mais nada agora (o QEMU ainda não consumiu). */
+    bool c2aFull() const;
     bool respondToRequest(uint32_t lane, uint64_t responseValue);
     bool respondToRequest(uint32_t lane, uint64_t requestSeq, uint64_t responseValue);
     bool respondToI2c(uint32_t lane, uint64_t requestSeq, const I2cTransferResult& result,
@@ -131,9 +136,16 @@ public:
     /** Publica até onde o Core processou tudo (timeNs) e o próximo instante em que pode mudar o
      * que o guest observa (horizonNs), ecoando a syncSeq de artifact_sync_seq lida antes das
      * filas; acorda o QEMU. `scheduleNs`: onde a simulação deveria estar pelo tempo real (0 = sem
-     * pacing). Tempos na linha do tempo do artefato. */
+     * pacing). Tempos na linha do tempo do artefato. `signal` falso: não acorda o QEMU por causa do
+     * tempo (a sequência já foi atendida), só se houver C2A esperando a campainha. */
     void publishCoreTime(uint64_t syncSeq, uint64_t timeNs, uint64_t horizonNs, uint64_t inputHorizonNs,
-                         uint64_t scheduleNs);
+                         uint64_t scheduleNs, bool signal = true);
+    /** Lockstep: o QEMU consome o C2A ao soltar as vCPUs, depois do eco do Core. Ligado, uma
+     * publicação no C2A não toca a campainha na hora; quem publica o tempo (publishCoreTime) ou
+     * flushSignal() a toca uma vez por todas. */
+    void setSignalCoalescing(bool enabled) noexcept { m_coalesceSignals.store(enabled, std::memory_order_relaxed); }
+    /** Toca a campainha se alguma publicação no C2A ficou esperando por ela. */
+    void flushSignal();
     void signalCoreRunningForTesting();
     bool notificationPending() const noexcept { return m_notificationPending.load(std::memory_order_acquire); }
     void acknowledgeNotification() noexcept { m_notificationPending.store(false, std::memory_order_release); }
@@ -155,11 +167,16 @@ public:
     std::pair<uint64_t, uint64_t> laneRingSeqForTesting(uint32_t lane) const;
 
 private:
+    /** Um evento no anel C2A (Core -> QEMU) e a campainha do QEMU; false com o anel cheio. */
+    bool publishC2aEvent(uint32_t kind, const void* payload, uint32_t bytes);
+
     class Impl;
     std::unique_ptr<Impl> m_impl;
     vnext::MappingView m_view{};
     std::string m_mappingName, m_coreEventName, m_artifactEventName;
     std::atomic<bool> m_notificationPending{false};
+    std::atomic<bool> m_coalesceSignals{false};
+    std::atomic<bool> m_signalPending{false};
     std::atomic<uint64_t> m_attachmentGeneration{0};
     VnextBLifecycleState m_state{VnextBLifecycleState::Stopped};
 };

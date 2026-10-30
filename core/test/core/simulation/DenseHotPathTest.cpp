@@ -163,10 +163,27 @@ int testPublishedSnapshotsAreRecycledOnlyWhenReleased() {
                 held = snapshot;
                 heldCurrent = snapshot->componentCurrents[stepped];
             }
+            // Como num componente real, a corrente nova chega pelo solve (o componente fica sujo).
             currentStep.store(event, std::memory_order_relaxed);
+            session.scheduler().markDirty(stepped);
         });
     }
     session.scheduler().runUntil(kEvents + 1);
+
+    // Passos sem solve (eventos que não mexem no circuito) não republicam: o snapshot publicado
+    // continua o mesmo objeto, com o valor do último solve.
+    const std::shared_ptr<const NodeVoltageSnapshot> afterRun = session.currentSnapshot();
+    int republished = 0;
+    for (int event = kEvents + 2; event <= kEvents + 50; ++event) {
+        session.scheduler().scheduleAt(static_cast<uint64_t>(event), [&] {
+            if (session.currentSnapshot() != afterRun) ++republished;
+        });
+    }
+    session.scheduler().runUntil(kEvents + 51);
+    if (republished != 0 || !afterRun || afterRun->componentCurrents[stepped] != std::optional<double>(kEvents)) {
+        std::fprintf(stderr, "FALHOU: %d passos sem solve republicaram o snapshot\n", republished);
+        return 1;
+    }
 
     if (staleReads != 0) {
         std::fprintf(stderr, "FALHOU: %d leituras viram um snapshot que nao era o do passo anterior\n", staleReads);

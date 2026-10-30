@@ -129,6 +129,12 @@ constexpr uint64_t kVnextBI2c1Base = 0x3FF67000ull;
 constexpr uint8_t kVnextBI2cStart = 1u, kVnextBI2cWireStop = 8u, kVnextBI2cLastReadNack = 16u;
 constexpr uint64_t kAdapterI2cLowPeriodOffset = 0x00;
 constexpr uint64_t kAdapterI2cStatusOffset = 0x08;
+// USART do adaptador: UART_FIFO (lê e consome um byte do FIFO de RX), UART_STATUS (bits 0..9 = bytes
+// no FIFO de RX) e o canal privado 0xF00 (1 = um quadro de RX está sendo recebido agora).
+constexpr uint64_t kAdapterUsartFifoOffset = 0x00;
+constexpr uint64_t kAdapterUsartStatusOffset = 0x1C;
+constexpr uint64_t kAdapterUsartRxCountMask = 0x3FF;
+constexpr uint64_t kAdapterUsartRxBusyOffset = 0xF00;
 constexpr uint64_t kAdapterI2cStatusBusBusy = 1u << 4;
 constexpr uint64_t kAdapterI2cCoreOpOffset = 0xF00;
 constexpr uint64_t kAdapterI2cCoreResultCountOffset = 0xF04;
@@ -205,9 +211,16 @@ void McuComponent::publishLockstepTime(uint64_t nowNs, uint64_t nextEventNs, uin
     if (!m_controller.lockstep()) return;
     std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
     if (!m_controller.vnextBActive() || !m_controller.lockstep()) return;
+    // O C2A publicado neste ciclo (aqui e no stamp/eventos) espera a campainha; qualquer saída
+    // abaixo a toca uma vez, mesmo sem tempo novo para publicar.
+    struct FlushSignalOnExit {
+        qemu::VnextBAttachment& attachment;
+        ~FlushSignalOnExit() { attachment.flushSignal(); }
+    } flushOnExit{m_controller.vnextBAttachment()};
     // Entradas antes do tempo: o QEMU consome o C2A ao soltar as vCPUs, então uma borda que o
     // circuito produziu neste instante chega ao guest neste mesmo instante.
     publishVnextBGpioInputsLocked();
+    const uint64_t seqBeforeLimit = m_lockstepObservedSyncSeq.load(std::memory_order_acquire);
     const uint64_t originNs = m_qemuTimeOriginNs.load(std::memory_order_relaxed);
     const uint64_t limitNs = vnextEventTimeNs(originNs, lockstepProvenNs());
     // Tudo até doneNs está processado: o instante atual, nunca além do que o QEMU provou, e antes
@@ -260,7 +273,13 @@ void McuComponent::publishLockstepTime(uint64_t nowNs, uint64_t nextEventNs, uin
     m_lockstepPublishedInputHorizonNs = inputHorizonNs;
     // Onde a simulação deveria estar pelo relógio real, na linha do tempo do artefato (0 = sem pacing).
     const uint64_t scheduleArtifactNs = scheduleNs && *scheduleNs > originNs ? *scheduleNs - originNs : 0;
-    m_controller.vnextBAttachment().publishCoreTime(syncSeq, timeNs, horizonNs, inputHorizonNs, scheduleArtifactNs);
+    // O QEMU espera só por isto: eco da syncSeq e Core no instante que ela pediu (<= limitNs). Depois
+    // que um eco já no limite a acordou, republicar horizonte ou ritmo da mesma sequência não muda o
+    // que ela espera: sem campainha (SetEvent custava ~1,5% da thread do Scheduler). A sequência tem
+    // de ser a mesma de antes da leitura do limite -- senão o limite pode ser anterior ao pedido dela.
+    const bool signal = syncSeq != m_lockstepSatisfiedSeq;
+    m_controller.vnextBAttachment().publishCoreTime(syncSeq, timeNs, horizonNs, inputHorizonNs, scheduleArtifactNs, signal);
+    if (doneNs >= limitNs && syncSeq == seqBeforeLimit) m_lockstepSatisfiedSeq = syncSeq;
 }
 
 std::optional<uint64_t> McuComponent::pacingPositionNs() const {
@@ -469,6 +488,21 @@ void McuComponent::waitForPollWork(const std::shared_ptr<CallbackState>& state) 
 #endif
 }
 
+void McuComponent::wakePollWorkerLocked() {
+#ifdef _WIN32
+    // Sem campainha a thread acorda no timeout limitado de waitForPollWork().
+    if (m_callbackState->doorbell) SetEvent(static_cast<HANDLE>(m_callbackState->doorbell));
+#endif
+}
+
+void McuComponent::onSettleFinished() {
+    if (!m_changeAwaitingSettle.load(std::memory_order_acquire) ||
+        !m_changeAwaitingSettle.exchange(false, std::memory_order_acq_rel)) return;
+    // A campainha é trocada sob este mutex (bindPollDoorbellLocked/stopFirmware).
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    wakePollWorkerLocked();
+}
+
 void McuComponent::scheduleNextPoll(std::vector<DeferredSchedulerCall>* deferred, bool schedulerLockHeld) {
     // +1ns (não `nowNs()` cru): quando chamado de dentro de `onPollEvent()` sem o Scheduler
     // rodando em background (`isRunning()==false` -- driver síncrono via `step()`/testes), um
@@ -640,6 +674,20 @@ McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedule
         }
         if (processI2cBurstLocked()) return PollStep::DispatchedReady;
     }
+    // Um instante assentado por mudança elétrica, como no VNEXT_B: um lote de escritas atrasadas (QEMU
+    // à frente do Core) era despachado inteiro antes de o Scheduler assentar, e um pino que ia a 1 e
+    // voltava a 0 nunca existia no circuito. A próxima mudança espera a anterior ser estampada e o
+    // settle dela terminar, no mesmo instante: esperar now+1 travava, porque o Scheduler não passa do
+    // tempo virtual do MCU e o QEMU, com a fila cheia, não o avança. Na própria thread do Scheduler (ou
+    // sem a worker) não há settle em curso aqui; ao assentar, onSettleFinished() acorda a thread de poll.
+    if (m_changeAwaitingSettle.load(std::memory_order_acquire) &&
+        (!m_scheduler.isRunning() || m_scheduler.isCurrentThreadWorker()))
+        m_changeAwaitingSettle.store(false, std::memory_order_release);
+    if (m_changeAwaitingStamp || m_changeAwaitingSettle.load(std::memory_order_acquire)) {
+        // Scheduler síncrono (testes): sem a thread de poll, o poll seguinte do Scheduler continua.
+        if (!m_scheduler.isRunning()) scheduleNextPoll(deferred);
+        return PollStep::DeferredFuture;
+    }
     const qemu::QemuPollResult result = arena.poll();
     // D2 STAGE 1 (2026-08-29, SHADOW/OBSERVATION ONLY -- see coreProgressNs's doc-comment in
     // qemu_arena_abi.h). Publishes Core's own causal position at the same already-audited
@@ -789,6 +837,7 @@ McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedule
         } else {
             m_scheduler.markDirty(m_componentIndex);
         }
+        m_changeAwaitingStamp = true;
     }
     scheduleWakeupsForAllModules(eventNs, false, deferred);
     return PollStep::DispatchedReady;
@@ -1111,6 +1160,8 @@ void McuComponent::scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool
         const uint64_t nowNs = self->m_scheduler.nowNs();
         const uint64_t before = self->electricalOutputFingerprint();
         self->m_modules[moduleIndex]->onWakeup(nowNs);
+        if (self->m_controller.vnextBActive() && self->m_modules[moduleIndex]->kind() == ModuleKind::Usart)
+            self->deliverVnextBUartRxLocked(*self->m_modules[moduleIndex]);
         if (self->m_controller.vnextBActive() && self->m_modules[moduleIndex]->kind() == ModuleKind::I2c) {
             auto& attachment = self->m_controller.vnextBAttachment();
             const uint64_t base = self->m_modules[moduleIndex]->memStart();
@@ -1130,7 +1181,11 @@ void McuComponent::scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool
         }
         for (auto& call : schedulerCalls) call();
     };
-    const bool soft = lockstepSoftModule(m_modules[moduleIndex]->kind());
+    // A USART só mexe em saídas deste MCU enquanto transmite. Recebendo um quadro, o despertar entrega
+    // um byte ao FIFO de RX do QEMU no fim do stop bit: é uma entrada do guest, rígida como uma borda.
+    const bool soft = lockstepSoftModule(m_modules[moduleIndex]->kind()) &&
+                      !(m_modules[moduleIndex]->kind() == ModuleKind::Usart &&
+                        m_modules[moduleIndex]->readRegister(m_modules[moduleIndex]->memStart() + kAdapterUsartRxBusyOffset) != 0);
     if (deferred) {
         // Ver doc-comment de DeferredSchedulerCall no .hpp -- evita inversão de ordem de lock com
         // stamp() quando quem chama é a thread de poll dedicada (segurando m_callbackState->mutex).
@@ -1190,6 +1245,12 @@ bool McuComponent::pinHasUartTxWireTap(size_t localPinIndex) const {
            module->isOutputEnabled(mapping.bitOrLine);
 }
 
+void McuComponent::setPinConnected(size_t localPinIndex, bool connected) {
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    if (m_pinConnected.size() < m_pins.size()) m_pinConnected.resize(m_pins.size(), 1);
+    if (localPinIndex < m_pinConnected.size()) m_pinConnected[localPinIndex] = connected ? 1 : 0;
+}
+
 void McuComponent::setPinTransitionsObserved(size_t localPinIndex, bool observed) {
     std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
     if (localPinIndex < m_adapter->pinMap().size()) {
@@ -1239,7 +1300,7 @@ int hexNibble(char c) {
 }
 } // namespace
 
-void McuComponent::injectUsartRxHex(uint64_t regionStart, const std::string& hex) const {
+void McuComponent::injectUsartRxHex(uint64_t regionStart, const std::string& hex) {
     QemuModule* module = findModule(regionStart);
     if (!module) return;
     std::vector<uint8_t> bytes;
@@ -1250,7 +1311,26 @@ void McuComponent::injectUsartRxHex(uint64_t regionStart, const std::string& hex
         if (hi < 0 || lo < 0) break;
         bytes.push_back(static_cast<uint8_t>((hi << 4) | lo));
     }
-    if (!bytes.empty()) module->injectRxBytes(bytes.data(), bytes.size());
+    if (bytes.empty()) return;
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    module->injectRxBytes(bytes.data(), bytes.size());
+    if (!m_controller.vnextBActive()) return;
+    deliverVnextBUartRxLocked(*module);
+    // Fora do ciclo do Scheduler (caixa de envio do monitor): toca a campainha já.
+    m_controller.vnextBAttachment().flushSignal();
+}
+
+void McuComponent::deliverVnextBUartRxLocked(QemuModule& usart) {
+    // VNEXT_B: o FIFO de RX que o firmware lê é o do modelo de UART do QEMU. O byte que o adaptador
+    // decodificou no pino (ou recebeu da caixa de envio do monitor) segue para lá pelo C2A; com o
+    // anel cheio fica no FIFO do adaptador até o próximo despertar ou a próxima chamada.
+    auto& attachment = m_controller.vnextBAttachment();
+    const uint64_t base = usart.memStart();
+    while ((usart.readRegister(base + kAdapterUsartStatusOffset) & kAdapterUsartRxCountMask) != 0 &&
+           !attachment.c2aFull()) {
+        const uint8_t byte = static_cast<uint8_t>(usart.readRegister(base + kAdapterUsartFifoOffset));
+        attachment.publishUartRxByte(usart.index(), byte);
+    }
 }
 
 std::vector<PropertyDescriptor> McuComponent::propertyDescriptors() {
@@ -1623,7 +1703,7 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
             ++dispatchedCount;
             if (electricalChange) {
                 yieldForSettle = true;
-                m_vnextBChangeAwaitingStamp = true;
+                m_changeAwaitingStamp = true;
                 break;
             }
         }
@@ -1738,7 +1818,8 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
     // Uma stamp causada por outra parte do circuito não pode antecipar o relógio virtual do QEMU.
     // A entrada permanece na fila; onPollEvent() já está agendado para consumi-la no instante certo.
     if (eventNs > nowNs && !m_syntheticArenaForTesting) return PollStep::DeferredFuture;
-    dispatchArenaEvent(*result.event, m_syntheticArenaForTesting ? nowNs : eventNs);
+    // Estampada logo a seguir por este mesmo stamp(); a próxima mudança espera o settle terminar.
+    if (dispatchArenaEvent(*result.event, m_syntheticArenaForTesting ? nowNs : eventNs)) m_changeAwaitingStamp = true;
     return PollStep::DispatchedReady;
 }
 
@@ -1778,11 +1859,13 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
     // schedulerLockHeld=true: stamp() runs inside Scheduler::runUntil()'s settle loop, which
     // holds Scheduler::m_mutex throughout (same reasoning as this function's own
     // scheduleWakeupsForAllModules(..., true) call below -- see schedulePollAt()'s doc-comment).
-    // VNEXT_B: se uma mudança elétrica já despachada ainda não foi estampada, estampa-a primeiro
-    // (o laço de pinos abaixo); a próxima sai no poll de continuação, depois deste solve.
-    const PollStep pollStepResult = m_vnextBChangeAwaitingStamp
+    // Se uma mudança elétrica já despachada (VNEXT_B ou LEGACY) ainda não foi estampada, estampa-a
+    // primeiro (o laço de pinos abaixo); a próxima sai no poll de continuação, depois deste solve.
+    const PollStep pollStepResult = m_changeAwaitingStamp
         ? PollStep::DispatchedReady
-        : pollAndDispatchPendingEvents(m_scheduler.nowNsUnlocked(), nullptr, true);
+        : m_changeAwaitingSettle.load(std::memory_order_acquire)
+            ? PollStep::DeferredFuture
+            : pollAndDispatchPendingEvents(m_scheduler.nowNsUnlocked(), nullptr, true);
     lasecsimul::simulation::diag::ProvenanceTracker::instance().recordPollOutcome(
         pollStepResult == PollStep::DispatchedReady, pollStepResult == PollStep::DeferredFuture,
         pollStepResult == PollStep::NoEvent);
@@ -1854,6 +1937,10 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
             if (!pullUp && !pullDown) {
                 matrix.addConductanceToGround(m_pins[i], kFloatingConductance);
             }
+            // Pino dedicado de uma USART sem nada ligado (o UART0_RX quando o circuito usa o pad GPIO3,
+            // como a WROOM32): no chip o sinal tem um pad só, e um pino solto em 0 V sobrescrevia, a
+            // cada stamp, o nível que o pad roteado entrega -- a USART nunca via o start bit.
+            if (mapping.moduleKind == ModuleKind::Usart && i < m_pinConnected.size() && !m_pinConnected[i]) continue;
             PinBatch& batch = m_pinBatches[m_pinBatchByPin[i]];
             batch.inputBits.push_back(mapping.bitOrLine);
             batch.inputVoltages.push_back(matrix.getNodeVoltage(m_pins[i]));
@@ -1865,7 +1952,11 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
         batch.inputBits.clear();
         batch.inputVoltages.clear();
     }
-    m_vnextBChangeAwaitingStamp = false;
+    // LEGACY: a mudança entrou na matriz; a próxima espera o fim deste settle (onSettleFinished()). O
+    // VNEXT_B continua pelo poll que agendou ao ceder (now+1, depois deste settle).
+    if (m_changeAwaitingStamp && !m_controller.vnextBActive())
+        m_changeAwaitingSettle.store(true, std::memory_order_release);
+    m_changeAwaitingStamp = false;
     publishVnextBGpioInputsLocked();
     scheduleWakeupsForAllModules(m_scheduler.nowNsUnlocked(), true);
 }
@@ -1957,7 +2048,8 @@ void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath,
     // botão já em 5 V desde t=0 nunca gera borda depois da carga do firmware).
     m_vnextBGpioInPublished = false;
     m_vnextBNotifiedGpioInValid = {};
-    m_vnextBChangeAwaitingStamp = false;
+    m_changeAwaitingStamp = false;
+    m_changeAwaitingSettle.store(false, std::memory_order_relaxed);
     m_vnextBElectricalI2c.reset();
     m_vnextBQueuedI2c.clear();
     m_lockstepObservedSyncSeq.store(0, std::memory_order_relaxed);
@@ -1966,6 +2058,7 @@ void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath,
     m_lockstepPublishedTimeNs = UINT64_MAX;
     m_lockstepPublishedHorizonNs = UINT64_MAX;
     m_lockstepPublishedInputHorizonNs = UINT64_MAX;
+    m_lockstepSatisfiedSeq = UINT64_MAX;
     publishVnextBGpioInputsLocked();
     if (!m_controller.vnextBActive()) {
         startPolling(&deferred);
@@ -2007,6 +2100,8 @@ void McuComponent::openSyntheticArenaForTesting(const std::string& arenaName) {
         m_vnextBHeartbeatWatermarkNs.store(0, std::memory_order_relaxed);
         m_nextPendingEventNs.store(0, std::memory_order_relaxed);
         m_qemuTimeOriginNs.store(m_scheduler.nowNs(), std::memory_order_relaxed);
+        m_changeAwaitingStamp = false;
+        m_changeAwaitingSettle.store(false, std::memory_order_relaxed);
         bindPollDoorbellLocked(arenaName);
         m_controller.arenaBridge().open(qemu::QemuArenaOpenOptions{arenaName, true});
         startPolling(&deferred);

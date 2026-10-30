@@ -300,6 +300,9 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
         bool hasLockstep = false;
         uint64_t lowest = UINT64_MAX, secondLowest = UINT64_MAX;
         for (uint32_t i : m_mcuComponentIndices) {
+            // Fora de settle (inclusive um cortado pelo limite de iterações): a fila LEGACY que
+            // esperava o settle da última mudança pode seguir.
+            static_cast<mcu::McuComponent*>(m_componentInstances[i].get())->onSettleFinished();
             const auto limit = static_cast<mcu::McuComponent*>(m_componentInstances[i].get())->lockstepLimitNs();
             if (!limit) continue;
             hasLockstep = true;
@@ -818,6 +821,10 @@ void SimulationSession::enqueueCommand(CommandQueue::Command command) {
 }
 
 void SimulationSession::drainCommandQueue() {
+    // Chamado a cada iteração do settle, quase sempre com a fila vazia: nem constrói o deque. O
+    // std::deque do MSVC aloca já no construtor padrão (medido: 1 alocação por deque vazio), e o
+    // `return {}` do takeAll() custava uma alocação e uma liberação por iteração (~0,6% da thread).
+    if (!m_commandQueue.hasPending()) return;
     std::deque<CommandQueue::Command> commands = m_commandQueue.takeAll();
     for (CommandQueue::Command& command : commands) command(*this);
 }
@@ -1420,6 +1427,12 @@ void SimulationSession::publishSnapshot() {
     // m_publishedSnapshot em si não é). O trabalho caro (copiar tensões/mapeamento de pinos) fica
     // FORA das duas seções críticas abaixo, que só copiam ponteiros -- por isso duas seções curtas
     // em vez de segurar o mutex pelo tempo inteiro da função.
+    //
+    // O Scheduler chama isto a cada passo de tempo aceito, também quando nenhum settleStep estampou
+    // (evento que não mexe no circuito, quantum do lockstep). Tensões e correntes só mudam no solve,
+    // e topologia nova marca m_snapshotTopologyStale: sem solução nova, o publicado continua exato.
+    if (!m_snapshotTopologyStale && m_publishedSolutionGeneration == m_solutionGeneration) return;
+    m_publishedSolutionGeneration = m_solutionGeneration;
     std::shared_ptr<const std::vector<uint32_t>> slotToNode;
     std::shared_ptr<const std::vector<std::unordered_map<std::string, uint32_t>>> pinSlotsByComponent;
     bool needsTopologyCopy;
@@ -2536,14 +2549,14 @@ std::optional<std::string> SimulationSession::setPropertyUnlocked(uint32_t compo
             return validationError("read_only", "propriedade somente leitura: " + propertyName);
         }
         if (!propertyKindMatches(value, schema.valueKind)) {
-            return validationError("type_mismatch", "tipo invÃ¡lido para propriedade: " + propertyName);
+            return validationError("type_mismatch", "tipo inválido para propriedade: " + propertyName);
         }
         if (const double* numericValue = std::get_if<double>(&value)) {
             if (schema.minValue && *numericValue < *schema.minValue) {
-                return validationError("out_of_range", "valor abaixo do mÃ­nimo para propriedade: " + propertyName);
+                return validationError("out_of_range", "valor abaixo do mínimo para propriedade: " + propertyName);
             }
             if (schema.maxValue && *numericValue > *schema.maxValue) {
-                return validationError("out_of_range", "valor acima do mÃ¡ximo para propriedade: " + propertyName);
+                return validationError("out_of_range", "valor acima do máximo para propriedade: " + propertyName);
             }
         }
         if (!schema.options.empty()) {
@@ -2557,7 +2570,7 @@ std::optional<std::string> SimulationSession::setPropertyUnlocked(uint32_t compo
                 return false;
             });
             if (!validOption) {
-                return validationError("invalid_option", "opÃ§Ã£o invÃ¡lida para propriedade: " + propertyName);
+                return validationError("invalid_option", "opção inválida para propriedade: " + propertyName);
             }
         }
 
@@ -3814,6 +3827,24 @@ bool SimulationSession::mcuPinTransitionsObservedUnlocked(uint32_t mcuIndex, siz
     return false;
 }
 
+bool SimulationSession::mcuPinConnectedUnlocked(uint32_t mcuIndex, size_t localPinIndex) const {
+    auto* mcu = static_cast<mcu::McuComponent*>(m_componentInstances[mcuIndex].get());
+    const std::span<Pin> pins = mcu->pins();
+    if (localPinIndex >= pins.size()) return true;
+    const auto& slots = m_netlist.pinSlotsOf(mcuIndex);
+    const auto slot = slots.find(pins[localPinIndex].id);
+    if (slot == slots.end() || slot->second >= m_topology.slotToNode.size()) return true;
+    const uint32_t node = m_topology.slotToNode[slot->second];
+    if (node >= m_topology.pinRefsByNode.size()) return true;
+    // Túnel só encaminha o nó (os parceiros de mesmo nome já estão nele): sozinho não liga nada.
+    for (const simulation::NodePinRef& ref : m_topology.pinRefsByNode[node]) {
+        if (ref.componentIndex == mcuIndex && ref.localPinIndex == localPinIndex) continue;
+        if (ref.componentIndex >= m_componentInstances.size() || !m_componentInstances[ref.componentIndex]) return true;
+        if (std::string_view(m_componentInstances[ref.componentIndex]->typeId()) != "connectors.tunnel") return true;
+    }
+    return false;
+}
+
 void SimulationSession::refreshMcuPinTransitionObserversUnlocked() {
     const char* mode = std::getenv("LASECSIMUL_UART_TX_FRAME_MODE");
     const bool forceBitLevel = mode && std::string_view(mode) == "bit";
@@ -3822,6 +3853,7 @@ void SimulationSession::refreshMcuPinTransitionObserversUnlocked() {
         const size_t pinCount = mcu->pins().size();
         for (size_t pin = 0; pin < pinCount; ++pin) {
             mcu->setPinTransitionsObserved(pin, forceBitLevel || mcuPinTransitionsObservedUnlocked(mcuIndex, pin));
+            mcu->setPinConnected(pin, mcuPinConnectedUnlocked(mcuIndex, pin));
         }
     }
 }
@@ -4273,6 +4305,7 @@ bool SimulationSession::settleStep() {
     const auto solverStart = profile ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     const uint64_t solveCpu0 = tracing ? mcu::diag::currentThreadCpuTimeNs() : 0;
     m_mnaSolver.solve(m_topology.groups, m_nodeVoltages, settleStepSeq);
+    ++m_solutionGeneration;
     if (tracing) mnaSolveCpuNs = mcu::diag::currentThreadCpuTimeNs() - solveCpu0;
     if (profile) {
         m_solverCalls.fetch_add(1, std::memory_order_relaxed);
@@ -4368,7 +4401,13 @@ bool SimulationSession::settleStep() {
     // Ainda há trabalho se alguma tensão mudou (logo, novos componentes podem ter ficado dirty), se
     // algum não-linear pediu outra iteração, OU se já havia dirty pendente que este round não tocou
     // — isso é o "settle loop" da seção 7 do .spec: só avança Δt quando esta função devolve false.
-    return anyVoltageChanged || anyNonlinearPending || !m_scheduler.dirtySet().empty();
+    const bool moreWork = anyVoltageChanged || anyNonlinearPending || !m_scheduler.dirtySet().empty();
+    // Assentou: a fila LEGACY de um MCU que esperava sua última mudança assentar pode seguir.
+    if (!moreWork) {
+        for (uint32_t i : m_mcuComponentIndices)
+            static_cast<mcu::McuComponent*>(m_componentInstances[i].get())->onSettleFinished();
+    }
+    return moreWork;
 }
 
 } // namespace lasecsimul::session

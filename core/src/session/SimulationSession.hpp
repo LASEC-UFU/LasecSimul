@@ -736,6 +736,8 @@ private:
      * `rebuildTopologyIfNeeded()` -- único ponto em que a topologia muda; durante o Run ela é imutável. */
     void refreshMcuPinTransitionObserversUnlocked();
     bool mcuPinTransitionsObservedUnlocked(uint32_t mcuIndex, size_t localPinIndex) const;
+    /** Há outro componente (que não um túnel) no nó do pino `localPinIndex` do MCU. */
+    bool mcuPinConnectedUnlocked(uint32_t mcuIndex, size_t localPinIndex) const;
     /** Reaproveita `CircuitGroup` (matriz/fatoração já estampada) de `previous` pra qualquer rede
      * cujo conjunto de componentes vivos E mapeamento pino->índice local não mudaram -- sem isso,
      * `Netlist::rebuildTopology()` sempre aloca `CircuitGroup` novo/vazio pra TUDO (deliberado,
@@ -981,6 +983,10 @@ private:
      * enquanto a telemetria guarda o seu. */
     std::vector<std::shared_ptr<NodeVoltageSnapshot>> m_snapshotPool;
     static constexpr size_t kSnapshotPoolCapacity = 4;
+    /** Solves feitos por settleStep(), e o valor dele na última publicação -- só da thread do
+     * Scheduler. Iguais (e topologia igual): o snapshot publicado ainda é o estado atual. */
+    uint64_t m_solutionGeneration = 0;
+    uint64_t m_publishedSolutionGeneration = ~uint64_t{0};
     /** `true` quando `slotToNode`/`pinSlotsByComponent` precisam ser recopiados na próxima
      * `publishSnapshot()` -- setado por `rebuildTopologyIfNeeded()` sempre que a topologia é
      * reconstruída de verdade; começa `true` pra garantir que a primeira publicação sempre copie. */

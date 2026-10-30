@@ -336,6 +336,54 @@ void runI2cPendingBurstDoesNotFreezeSchedulerTest(simulation::Scheduler& schedul
 }
 
 /** Receptor de teste com os pinos do LasecPlot. Nenhuma lógica: o que importa é o typeId no nó. */
+/** Conta cada borda digital que o Core entrega no nó (kPinChangeEventTag, uma por solve que cruzou o
+ * limiar) -- sem elétrica nenhuma, só observa. */
+class EdgeCounter final : public IComponentModel {
+public:
+    const char* typeId() const override { return "test.edge_counter"; }
+    std::span<Pin> pins() override { return {&m_pin, 1}; }
+    void stamp(MnaMatrixView&) override {}
+    void postStep(uint64_t) override {}
+    void onEvent(const ComponentEvent& event) override {
+        if (event.tag == kPinChangeEventTag) edges.fetch_add(1, std::memory_order_relaxed);
+    }
+    size_t getState(uint8_t*, size_t) const override { return 0; }
+    void setState(const uint8_t*, size_t) override {}
+    std::vector<PropertyDescriptor> propertyDescriptors() override { return {}; }
+
+    std::atomic<uint64_t> edges{0};
+
+private:
+    Pin m_pin{"in"};
+};
+
+// Transporte LEGACY (arena v5): um lote de escritas de GPIO que chega atrasado (o QEMU à frente do
+// Core) era despachado inteiro pela thread de poll antes de o Scheduler assentar -- cada borda só
+// existe para o circuito se houver um solve com ela. Aqui 2*K escritas de GPIO_OUT são publicadas de
+// uma vez; todas as 2*K bordas precisam chegar ao nó.
+void runLegacyLateBurstKeepsEveryEdgeTest(mcu::McuComponent& mcu, LsdnQemuArena* arena, uint64_t gpioStart,
+                                          const EdgeCounter& counter) {
+    constexpr int kToggles = 2 * 12;
+    static_assert(kToggles <= LSDN_QEMU_ARENA_QUEUE_DEPTH, "o lote inteiro cabe na fila da arena");
+    simulateQemuWrite(arena, gpioStart + 0x20, 1u << 2);   // GPIO_ENABLE_REG: pino 2 como saída
+    simulateQemuWrite(arena, gpioStart + 0x04, 0u);        // GPIO_OUT_REG: começa em 0
+    waitUntil([&] { return queueDrained(arena); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    const uint64_t before = counter.edges.load(std::memory_order_relaxed);
+    for (int i = 0; i < kToggles; ++i) simulateQemuWrite(arena, gpioStart + 0x04, (i % 2) == 0 ? (1u << 2) : 0u);
+    const bool drained = waitUntil([&] { return queueDrained(arena); });
+    waitUntil([&] { return counter.edges.load(std::memory_order_relaxed) - before >= kToggles; },
+              std::chrono::milliseconds(500));
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    const uint64_t seen = counter.edges.load(std::memory_order_relaxed) - before;
+    std::fprintf(stderr, "  [info] lote atrasado de %d escritas de GPIO: %llu bordas no no (%llu antes, das escritas espacadas)\n",
+                 kToggles, static_cast<unsigned long long>(seen), static_cast<unsigned long long>(before));
+    check(before > 0, "o contador ve as bordas das escritas espacadas anteriores (observador ligado ao no)");
+    check(drained && seen == static_cast<uint64_t>(kToggles),
+          "LEGACY: cada escrita de um lote atrasado vira uma borda no circuito (um instante assentado por mudanca)");
+    (void)mcu;
+}
+
 class FakeLasecPlot final : public IComponentModel {
 public:
     const char* typeId() const override { return "peripherals.lasecplot"; }
@@ -556,6 +604,14 @@ int main() {
     });
     const uint32_t plotIndex = session.addComponent("peripherals.lasecplot", {});
     session.connectWire(indexA, "UART0_TX", plotIndex, "rx");
+    EdgeCounter* edgeCounter = nullptr;
+    session.components().registerFactory("test.edge_counter", [&edgeCounter](const registry::ComponentParams&) {
+        auto instance = std::make_unique<EdgeCounter>();
+        edgeCounter = instance.get();
+        return instance;
+    });
+    const uint32_t edgeCounterIndex = session.addComponent("test.edge_counter", {});
+    session.connectWire(indexB, "GPIO2", edgeCounterIndex, "in");
     size_t uart0TxPin = 0;
     for (size_t i = 0; i < mcuA->pins().size(); ++i) {
         if (mcuA->pins()[i].id == "UART0_TX") uart0TxPin = i;
@@ -593,6 +649,7 @@ int main() {
     }
     check(allTogglesOk,
           "15 ciclos de escrita intercalada em 2 MCUs convergem via thread de poll dedicada, sem settleStep()/markDirty() manual");
+    runLegacyLateBurstKeepsEveryEdgeTest(*mcuB, arenaB, gpioStart, *edgeCounter);
 
     // pinMode(INPUT_PULLUP/INPUT_PULLDOWN) num pino solto: so' o IO_MUX muda (FUN_PU/FUN_PD), e no
     // chip o pad vai ao nivel do pull na hora. Antes o pull so' chegava ao circuito quando outra

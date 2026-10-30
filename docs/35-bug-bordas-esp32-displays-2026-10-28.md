@@ -145,20 +145,18 @@ Diagnóstico: `LASECSIMUL_LOCKSTEP_TRACE=1` (sincronizações, motivo, tempo de 
 `LASECSIMUL_SPI_ENGINE_TRACE=1` (bytes do motor SPI do adaptador); no script, `QEMULOG=n` e `METRICS=1`.
 
 **Limites que permanecem no modo exato:**
-- *Os dois núcleos dividem um único relógio de instruções* (icount do QEMU com TCG de uma thread): o
-  que a CPU0 executa (ex.: ISR do tick, ~2,9 µs/ms) atrasa a CPU1 no tempo virtual. No chip os núcleos
-  rodam em paralelo. Firmware com Wi-Fi ativo na CPU0 sente mais.
 - *Velocidade do TCG com icount*: um laço só de cálculo roda a 300–400 MIPS neste servidor (acima dos
   240 MHz do chip). Os ~0,2× medidos antes vinham da retradução a cada leitura de periférico, corrigida
   (ver a seção seguinte). O que ainda pode ficar abaixo de 240 MIPS — servidor cheio, código novo sendo
-  traduzido — o modo `realtime` compensa.
+  traduzido, as duas CPUs ocupadas (480 MIPS) — o modo `realtime` compensa.
 - *CPI = 1*: cada instrução custa um ciclo; o LX6 real perde ciclos em cache de flash e acessos à IRAM.
-- *UART RX no VNEXT_B*: o Core não entrega bytes de RX ao QEMU (C2A tipo 2 não é publicado).
-- *SCL ocioso em 0 V* depois do I2C nos dois modos (o real fica alto pelo pull-up interno do Wire).
-- *Motor de fade do LEDC* não modelado.
+- *Memória compartilhada entre os núcleos*: com as duas CPUs ocupadas, uma pode ver o que a outra
+  escreveu até 10 µs antes ou depois do instante real (o quantum entre os relógios das vCPUs, ver
+  "Pendências fechadas" adiante). Interrupções entre núcleos e sincronismos com o circuito são exatos.
 
-Pendente: o caminho LEGACY continua com a perda de bordas descrita abaixo (não é o transporte usado
-pela extensão).
+Os outros limites que estavam nesta lista (relógio único para os dois núcleos, UART RX, SCL ocioso em
+0 V, motor de fade do LEDC) e a perda de bordas no LEGACY foram corrigidos em 2026-10-30: ver
+"Pendências fechadas".
 
 ## Tempo real sincronizado — modo `realtime` (2026-10-29)
 
@@ -391,6 +389,98 @@ por um leitor intacto, assinantes de 1 e 2 canais dividindo o mesmo buffer) e `l
 `simulation_plan_session`, `electrical_signal_bridge_live`, `simulide_sources_meters` e
 `core_bootstrap`.
 
+### Pendências fechadas (2026-10-30)
+
+Core, adaptador e QEMU (patch 0016, SHA-256 `61AA17DF…`) mudam juntos. Firmwares de teste novos em
+`vnext_prototype/`: `guest_uart_echo`, `guest_ledc_fade` e `guest_dual_core`.
+
+- **As duas CPUs dividiam um relógio só (QEMU).** O TCG de uma thread executa as vCPUs em turnos, e o
+  icount contava as instruções das duas no mesmo contador, que é o relógio. Com os dois núcleos
+  ocupados, cada um andava à metade. Agora cada vCPU tem o próprio relógio (ns), avançado pelas próprias
+  instruções. Fora da execução do guest (timers, Core), `QEMU_CLOCK_VIRTUAL` é o relógio da vCPU mais
+  lenta que não está em `waiti` nem suspensa por um modelo de dispositivo. Enquanto as duas rodam,
+  nenhuma passa 10 µs à frente da outra. No lockstep, uma vCPU adiantada que precisa sincronizar
+  (leitura de `GPIO_IN`, interrupção armada, I2C) espera a outra chegar ao mesmo instante: o Core
+  continua vendo os eventos em ordem. Uma vCPU acordada por interrupção volta no instante em que a
+  interrupção apareceu.
+  Uma vCPU suspensa (acesso à flash com o cache desligado, raia cheia, resposta de I2C) não segura o
+  relógio. Na primeira versão segurava: a outra CPU ficava presa a 10 µs dela, e o sketch da aula
+  parava 0,7 s depois do boot. Os testes por firmware não pegaram isso; o projeto da aula pegou.
+- **Banner do boot ilegível no pad GPIO1 (QEMU).** A ROM calcula o cristal a partir da calibração RTC e
+  do eFuse `CK8M_FREQ`. Com o eFuse em branco ela assumia 26 MHz, e o bit da UART0 saía com 5642 ns
+  (177 kbaud) em vez de 8680 ns. Pela DevKitC o banner chegava certo, porque o pino dedicado entrega os
+  bytes por tap. Agora `CK8M_FREQ` em branco vale 80 (o RC_FAST de 8 MHz que o `esp32_timg` modela), e
+  o bit sai com 8679 ns. O teste `mcu_uart_rx_vnext_b` passou a exigir o banner legível.
+- **UART RX no VNEXT_B (Core + QEMU).** O Core não publicava os bytes recebidos. Agora cada byte que o
+  adaptador recebe vai ao QEMU (C2A tipo 2, na UART certa), tanto do pino RX quanto da caixa de envio
+  do monitor. Um quadro de RX em andamento acorda o Core como entrada do guest. Um pino dedicado
+  `UART0_RX` sem nada ligado não sobrescreve mais o nível que o pad GPIO3 roteado entrega.
+- **SCL ocioso em 0 V (QEMU).** Um STOP sem lista de dados, depois de uma transferência sem STOP, vai
+  ao Core como burst só de STOP, e SDA/SCL voltam a ficar altos como no chip.
+- **Motor de fade do LEDC (QEMU + adaptador).** `ledc_fade_start(..., LEDC_FADE_WAIT_DONE)` ficava
+  preso no primeiro fade. Agora `DUTY_INC/NUM/CYCLE/SCALE` avançam o duty a cada período e
+  `DUTY_CHNG_END` (fonte 43) chega à matriz de interrupções. `DUTY_R` lê o duty em vigor. Fade
+  0→255 pedido em 500 ms e 255→0 em 300 ms: 459,0–459,1 ms e 255,2 ms, duty 255/0. É o que o chip faz
+  (9×255 e 5×255 períodos de 200 µs).
+- **Perda de bordas no transporte LEGACY (Core).** Um lote de escritas atrasadas era despachado inteiro
+  pela thread de poll antes de o Scheduler assentar. No teste novo, 24 escritas de GPIO publicadas de
+  uma vez davam **0** bordas no nó, porque o pino terminava onde começou. Agora a próxima mudança
+  elétrica espera a anterior ser estampada e o circuito assentar no mesmo instante. Esperar now+1
+  travava, porque o Scheduler não passa do tempo virtual do MCU. Quem libera é `onSettleFinished()`:
+  `settleStep()` sem mais trabalho, ou o fim de um `runUntil()` da worker.
+  Resultado: 24/24 bordas, e a rajada concorrente de 4 s despacha 33.156 escritas. A primeira versão,
+  com um solve por mudança, despachava 6.665 e deixava o LED (não linear) sem convergir: 160 avisos de
+  50 iterações.
+- **Passo estável e campainhas (Core).** `publishSnapshot` não republica sem um solve novo.
+  `CommandQueue::takeAll` não aloca com a fila vazia. No lockstep, a campainha de cada publicação no C2A
+  espera a do tempo. Perfil da thread do Scheduler, sketch da aula:
+
+  | Medida | Antes | Depois |
+  |---|---|---|
+  | Tempo ocupado da thread | 38,7% | 26,3% |
+  | `SetEvent` | 2,9% | 0,5% |
+  | `MnaSolver` | 6,9% | 3,8% |
+  | `onStableStepUnlocked` | 3,4% | 2,4% |
+  | `publishSnapshot` | 1,9% | 1,0% |
+
+- **Textos com mojibake** (UTF-8 lido como cp1252) corrigidos em `extension/package.json`, `CoreClient.ts`,
+  `styles.css`, testes da extensão, `SimulationSession.cpp`, `CoreBootstrapTest.cpp` e três documentos.
+
+Medido neste servidor, com o binário final:
+
+| Teste | Antes | Depois |
+|---|---|---|
+| Laço de N iterações (`guest_dual_core`, `exact`), núcleo 1 sozinho / com o 0 ocupado | 75,8 / 143,1–151,0 ms | 75,3 / 75,3 ms |
+| `vnext_b_production_scale_test`, 8 sessões × 20 s, `realtime`, por sessão (A/B na mesma hora) | 23,9–25,9 mil | 34,9–38,2 mil |
+| O mesmo, barramento elétrico (ponta de prova e pull-ups) | 5,3–6,4 mil | 6,4–7,5 mil |
+| O mesmo, `exact` / `mttcg` (só o binário final) | — | 32,5–36,1 mil / 28,1–31,4 mil |
+| 8 sketches da aula ao mesmo tempo, `realtime` | 0,991–1,018× | 0,992–1,008×, LCD e Nokia corretos |
+| CPU por simulação nesse cenário, Core / QEMU | 40,6% / 32,9% (início deste lote) | 33,1% / 29,9% |
+
+Nenhuma perda, duplicação ou resposta trocada no teste de escala. Testes novos: `mcu_dual_core_timing`
+(também exige que a gravação da flash pela CPU0 termine com a CPU1 rodando na flash),
+`mcu_uart_rx_vnext_b`, `mcu_ledc_fade` e o lote atrasado em `mcu_component_live_poll_thread`. Para
+mudanças no QEMU, os testes por firmware não bastam: o projeto da aula com 8 sessões é o que pegou a
+vCPU suspensa segurando o relógio.
+
+Diagnóstico novo: `LASECSIMUL_IOMUX_TRACE=1` (adaptador: cada escrita de `IO_MUX_GPIOn_REG`) e
+`LASECSIMUL_ICOUNT_QUANTUM_NS` (QEMU: troca o quantum de 10 µs entre as vCPUs).
+
+**MTTCG (`lasecsimul.mcu.esp32Timing = mttcg`).** Nesse modo o relógio do guest segue o do host, e o
+Core roda milissegundos à frente dos eventos do QEMU. Os eventos chegam atrasados e são aplicados de uma
+vez, enquanto os motores do adaptador (SPI, UART) andam no tempo do Core. Daí as bordas de CS/DC do SPI
+por hardware trocam de ordem com os bytes (o Nokia não mostra nada). A UART no pad GPIO1 perde trechos
+e corrompe bytes: o guest vê o FIFO do QEMU esvaziar antes de a linha transmitir, e o adaptador recebe
+mais que os 128 bytes do seu FIFO (no lockstep o pico medido é 126, onde a ROM para de escrever). E a
+duração medida de um fade fica errada (descida em 327–334 ms em vez de 255 ms). Não há
+correção dentro do modo: a correção é o lockstep (`realtime`, padrão). Fica a decisão de retirar o modo
+ou mantê-lo como legado documentado.
+
+**Observado, não alterado.** `SPI.transfer()` byte a byte num laço apertado custa uma sincronização de
+lockstep por byte: o trace conta todas como motivo `write`, ~0,57 ms de host cada. Quadros de 504
+bytes a 4 MHz andam ~100× mais devagar que o real, igual com o binário anterior (mesmas 21 medidas em
+30 s). O projeto da aula, com o Nokia por SPI de hardware, roda a 0,99–1,01×.
+
 ## Atualização: com o transporte VNEXT_B (padrão da extensão) nada funciona
 
 A extensão sobe o Core com `LASECSIMUL_MCU_TRANSPORT=VNEXT_B` e `LASECSIMUL_ESP32_EXECUTION_MODE=mttcg`
@@ -482,6 +572,9 @@ software a 4 MHz via `Adafruit_PCD8544(18, 23, 16, 5, 19)`, ou SPI por hardware 
 
 ## Contornos aplicados (firmware da aula) — reverter quando o Core for corrigido
 
+**Obsoleto.** O sketch atual da aula (`src/devkitc_test.ino`) usa o PCD8544 por SPI de hardware, sem
+nenhum destes contornos; o `test.cpp` com eles ficou em `src/old`. Registro histórico:
+
 Em `C:\Prof_Josue\0II1\II1P06_SPI_I2C_UART\src\test.cpp`:
 
 - PCD8544 em **SPI por software a 10 kHz** (`Adafruit_SPIDevice(5, 18, -1, 23, 10000)` trocado no
@@ -494,6 +587,12 @@ Em `C:\Prof_Josue\0II1\II1P06_SPI_I2C_UART\src\test.cpp`:
   forma de onda I2C.
 
 ## Correção correta (a fazer)
+
+**Feito.** Item 1: no VNEXT_B em 2026-10-28 ("Correção no VNEXT_B") e no LEGACY em 2026-10-30
+("Pendências fechadas"). Item 2: lockstep, padrão desde a v0.0.104 (no `mttcg` continua, ver
+"Pendências fechadas"). Item 3: o caminho elétrico do I2C ficou correto em 2026-10-30, e um instrumento
+no barramento continua levando a transação para ele, como no chip. Item 4: as medições com 8 sessões
+do projeto da aula. Registro histórico:
 
 1. **Entregar cada transição de pino do MCU em ordem, com settle entre elas.** Opções: fila de
    transições por pino com timestamp, consumida um timestamp por vez no Scheduler; ou não colapsar no
@@ -508,6 +607,9 @@ Em `C:\Prof_Josue\0II1\II1P06_SPI_I2C_UART\src\test.cpp`:
    redesenho a cada 50 ms) deve dar LCD com texto exato e PCD8544 com "BUTTON High".
 
 ## Bug relacionado: LEDC de baixa velocidade no QEMU
+
+**Corrigido em 2026-10-29**: o QEMU passou a devolver `LEDC_CONF_REG` na leitura (ver "Correções
+definitivas", item LEDC). Registro histórico:
 
 `ledcSetup()` nos canais 8–15 (grupo low-speed) falha para 1 kHz/12 bits e 5 kHz/8 bits; o canal 0
 (high-speed) aceita todas as combinações testadas. Parece que o clock do timer low-speed é modelado

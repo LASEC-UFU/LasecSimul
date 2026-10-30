@@ -1,7 +1,7 @@
 QEMU source: C:\SourceCode\qemu_lasecSimul-invalid-state (https://github.com/josuemoraisgh/qemu_lasecSimul)
-QEMU HEAD: 7ead728b3d6393c63ec414915a1962aa173232ee + devices/qemu-esp32/patches/0011 + 0012 + 0013 + 0014 + 0015 (uncommitted working tree)
-Executable SHA-256: C4282DD6D2C9932B59A1D7A94F19C0C8C587CD577A8CD78E0A4CE105E9ACADB3
+QEMU HEAD: 7ead728b3d6393c63ec414915a1962aa173232ee + devices/qemu-esp32/patches/0011 + 0012 + 0013 + 0014 + 0015 + 0016 (uncommitted working tree; chain re-applied and verified to reproduce it exactly)
+Executable SHA-256: 61AA17DF6583E0B5F59C3D87F364A144A560BF73D4A787A373A1CCE141E3B79A
 Build: MSYS2 UCRT64, ninja -j2 qemu-system-xtensa.exe (build-i2c-invalid-state), xtensa-softmmu, gcrypt, slirp
-Etapa: leitura I2C pelo caminho do Core (0015) -- a primeira lista de uma leitura do ESP-IDF (RSTART, WRITE(endereco|R), END) vai ao Core como selecao do alvo (BATCH START + endereco, nenhum byte, sem fim logico) e as listas de READ seguintes (uma ou mais READ, fechadas por STOP ou END) como continuacao sem START. Antes a primeira lista caia no executor byte a byte, sempre eletrico: no lockstep (realtime/exact) o ACK do fio era lido de verdade e toda leitura recebia NACK; no fast path o dispositivo via o endereco pelo fio e os dados pela transferencia.
-Anterior: CA9B183F8E6404283166EE3F6DF0398817A3AA9E91AF01E10D9AE329380A0A94 (7ead728 + 0011 + 0012 + 0013 + 0014)
+Etapa: 0016 -- relogio de instrucoes por vCPU (as duas CPUs do ESP32 em paralelo: com -icount cada nucleo tem o proprio relogio; o global e o da vCPU mais lenta fora de halt e de suspensao por modelo de dispositivo; quantum de 10 us entre as duas; no lockstep uma vCPU adiantada que precisa sincronizar espera a outra chegar ao instante); eFuse CK8M_FREQ = 80 quando em branco (a ROM detectava cristal de 26 MHz e o banner do boot saia a 177 kbaud no pino); UART RX do Core (C2A tipo 2) entregue a UART certa; motor de fade do LEDC com a interrupcao DUTY_CHNG_END; I2C sem lista: STOP isolado vai ao Core (SCL/SDA voltam a ficar altos).
+Anterior: C4282DD6D2C9932B59A1D7A94F19C0C8C587CD577A8CD78E0A4CE105E9ACADB3 (7ead728 + 0011 + 0012 + 0013 + 0014 + 0015)
 Historical provenance preserved in BUILD-PROVENANCE.txt.

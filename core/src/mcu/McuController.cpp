@@ -422,6 +422,9 @@ void McuController::start(const std::filesystem::path& firmwarePath, const std::
         const char* timingSetting = std::getenv("LASECSIMUL_ESP32_TIMING");
         const bool realtime = !(timingSetting && std::string_view(timingSetting) == "exact");
         m_vnextB.setLockstep(lockstep, realtime);
+        // No lockstep o QEMU consome o C2A ao soltar as vCPUs, depois do eco do Core: a campainha de
+        // cada publicação no C2A espera pela do tempo (McuComponent::publishLockstepTime).
+        m_vnextB.setSignalCoalescing(lockstep);
         m_lockstep.store(lockstep, std::memory_order_release);
         try {
             m_vnextB.activate();

@@ -392,7 +392,9 @@ struct SpiState {
  * alto de HPOINT ate HPOINT+DUTY dentro de cada periodo do seu timer. DUTY tem 4 bits fracionarios,
  * distribuidos como um tick extra em `frac` de cada 16 periodos. Duty/HPOINT novos so valem a
  * partir do proximo estouro do contador apos DUTY_START, e SIG_OUT_EN=0 forca o nivel IDLE_LV.
- * Nao modelado: o motor de fade (DUTY_NUM/CYCLE/SCALE) -- o duty fica no valor inicial. */
+ * Fade (CONF1): a partir desse estouro o duty anda DUTY_SCALE (parte inteira) a cada DUTY_CYCLE
+ * periodos, DUTY_NUM vezes, subindo com DUTY_INC -- uma atualizacao comum e' um fade de 1 passo de
+ * escala 0. O QEMU faz a mesma conta para DUTY_R e para a interrupcao DUTY_CHNG_END. */
 struct LedcTimer {
     uint32_t config = 0;          // ultimo TIMERn_CONF efetivo (para LS: depois do PARA_UP)
     long double tickNs = 0;       // duracao de um tick do contador
@@ -407,6 +409,10 @@ struct LedcChannel {
     uint32_t hpoint = 0, duty = 0;           // valores em vigor (duty com 4 bits fracionarios)
     bool updatePending = false;
     uint64_t updateAfterPeriod = 0;          // indice do periodo em que DUTY_START foi pedido
+    // Atualizacao em curso desde o estouro seguinte ao DUTY_START (ver ledcEvaluateChannel).
+    bool fadeActive = false;
+    uint32_t fadeStartDuty = 0;              // DUTY no instante do DUTY_START
+    uint32_t fadeConf1 = 0;                  // CONF1 do DUTY_START (INC, NUM, CYCLE, SCALE)
 };
 struct LedcState {
     uint32_t confReg = 0;                    // LEDC_CONF_REG (APB_CLK_SEL bit0)
@@ -1283,6 +1289,16 @@ void ioMuxWriteRegisterAt(LsdnQemuModule* module, uint64_t address, uint64_t val
     const int pin = getIoMuxPin(offset);
     if (pin < 0) return;
     chip.ioMuxRegs[static_cast<size_t>(pin)] = static_cast<uint16_t>(value);
+    // LASECSIMUL_IOMUX_TRACE=1: cada escrita de IO_MUX_GPIOn_REG (função, pull, IE) -- só na
+    // configuração dos pinos, nunca em caminho quente.
+    static const bool ioMuxTrace = !processEnvironmentValue("LASECSIMUL_IOMUX_TRACE").empty() &&
+                                   processEnvironmentValue("LASECSIMUL_IOMUX_TRACE") != "0";
+    if (ioMuxTrace) {
+        std::fprintf(stderr, "[LasecSimul][adapter][IOMUX] pin=%d value=0x%04llx mcu_sel=%llu pu=%d pd=%d ie=%d at=%llu\n",
+                     pin, static_cast<unsigned long long>(value), static_cast<unsigned long long>((value >> 12) & 7u),
+                     (value & kIoMuxFunPuBit) ? 1 : 0, (value & kIoMuxFunPdBit) ? 1 : 0, (value >> 9) & 1u ? 1 : 0,
+                     static_cast<unsigned long long>(nowNs));
+    }
     if (analogTraceEnabled() && pin == 27) {
         std::fprintf(stderr, "[LasecSimul][adapter][GPIO27] iomux=0x%08llx mux=%u\n",
                      static_cast<unsigned long long>(value), selectedIoMuxIndex(chip, 27));
@@ -1369,6 +1385,10 @@ uint64_t usartReadRegister(LsdnQemuModule* module, uint64_t address) {
             return static_cast<uint64_t>(usart.rxFifo.size() & 0x7Fu) << 13u;
         case 0x78:
             return 0x15122500u;
+        case 0xF00:
+            // Canal privado Core<->adaptador (fora do mapa do periférico real): 1 enquanto um quadro
+            // de RX está sendo recebido -- o Core trata esse despertar como entrada do guest.
+            return usart.rxPhase != UartRxPhase::Idle ? 1u : 0u;
         default:
             return 0;
     }
@@ -2216,6 +2236,15 @@ LedcPeriodShape ledcPeriodShape(const LedcChannel& c, const LedcTimer& t, uint64
     return shape;
 }
 
+// Duty depois de `steps` passos do fade: DUTY_SCALE move a parte inteira (acima dos 4 bits
+// fracionarios), para cima com DUTY_INC.
+uint32_t ledcFadeDuty(const LedcChannel& c, uint64_t steps) {
+    const int64_t delta = static_cast<int64_t>(steps) * (static_cast<int64_t>(c.fadeConf1 & 0x3FFu) << 4u);
+    const int64_t duty = (c.fadeConf1 & (1u << 30u)) != 0 ? static_cast<int64_t>(c.fadeStartDuty) + delta
+                                                          : static_cast<int64_t>(c.fadeStartDuty) - delta;
+    return static_cast<uint32_t>(std::clamp<int64_t>(duty, 0, 0x1FFFFFF));
+}
+
 // Recalcula nivel e proxima borda do canal no instante `nowNs`.
 void ledcEvaluateChannel(LedcState& ledc, uint32_t channel, uint64_t nowNs) {
     LedcChannel& c = ledc.channels[channel];
@@ -2236,11 +2265,20 @@ void ledcEvaluateChannel(LedcState& ledc, uint32_t channel, uint64_t nowNs) {
     const uint64_t period = static_cast<uint64_t>(elapsed / periodNs);
     const long double phase = elapsed - static_cast<long double>(period) * periodNs;
 
-    // DUTY_START pedido num periodo vale a partir do estouro seguinte do contador.
+    // DUTY_START pedido num periodo vale a partir do estouro seguinte do contador; dali o duty anda
+    // DUTY_SCALE a cada DUTY_CYCLE periodos, DUTY_NUM vezes.
     if (c.updatePending && period > c.updateAfterPeriod) {
-        c.duty = c.dutyReg;
         c.hpoint = c.hpointReg;
         c.updatePending = false;
+        c.fadeActive = true;
+    }
+    if (c.fadeActive) {
+        const uint64_t first = c.updateAfterPeriod + 1u;
+        const uint32_t num = (c.fadeConf1 >> 20u) & 0x3FFu;
+        const uint32_t cycle = (c.fadeConf1 >> 10u) & 0x3FFu;
+        const uint64_t steps = cycle == 0 ? num : std::min<uint64_t>(num, (period - first) / cycle);
+        c.duty = ledcFadeDuty(c, steps);
+        if (steps >= num) c.fadeActive = false;
     }
 
     const LedcPeriodShape shape = ledcPeriodShape(c, t, period);
@@ -2261,7 +2299,7 @@ void ledcEvaluateChannel(LedcState& ledc, uint32_t channel, uint64_t nowNs) {
         for (const long double edge : {shape.highStartNs, wrappedEnd}) {
             if (edge > phase && edge < nextPhase) nextPhase = edge;
         }
-    } else if ((c.duty & 0xFu) == 0 && !c.updatePending) {
+    } else if ((c.duty & 0xFu) == 0 && !c.updatePending && !c.fadeActive) {
         return; // nivel constante e nada vai mudar no proximo periodo: nenhuma borda a agendar
     }
     const long double delta = std::max<long double>(1.0L, nextPhase - phase);
@@ -2332,8 +2370,12 @@ void ledcWriteRegisterAt(LsdnQemuModule* module, uint64_t address, uint64_t valu
             break;
         case 0xC:  // CONF1: DUTY_START agenda a troca para o proximo estouro do contador
             if ((value32 & kLedcConf1DutyStart) != 0) {
+                ledcEvaluateChannel(ledc, channel, nowNs); // fecha a atualizacao anterior ate agora
                 c.updatePending = true;
                 c.updateAfterPeriod = ledcCurrentPeriod(ledc, ledcChannelTimer(channel, c.conf0), nowNs);
+                c.fadeActive = false;
+                c.fadeStartDuty = c.dutyReg;
+                c.fadeConf1 = value32 & ~kLedcConf1DutyStart;
             }
             break;
         default:

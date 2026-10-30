@@ -85,6 +85,9 @@ public:
     /** Repassa ao adaptador (ver `IMcuAdapter::setPinTransitionsObserved`). `SimulationSession`
      * chama isto ao publicar o plano, com a simulação parada. */
     void setPinTransitionsObserved(size_t localPinIndex, bool observed);
+    /** Pela sessão, a cada topologia: há algo (além de túneis) no nó deste pino. Um pino dedicado de
+     * USART solto não entrega nível ao periférico (o pad roteado é quem manda). Padrão: ligado. */
+    void setPinConnected(size_t localPinIndex, bool connected);
 
     /** Agrega a saúde do adaptador (`create`/`build_launch_args`/`get_memory_regions`/
      * `get_pin_map`/`create_modules`, ver `NativeMcuAdapterProxy`) com a de cada módulo concreto
@@ -228,6 +231,10 @@ public:
      * Scheduler -- o instante que o QEMU provou ter alcançado, na timeline do Scheduler (a origem,
      * enquanto ele ainda não publicou nada). `std::nullopt` fora do lockstep. Só lê atômicos. */
     std::optional<uint64_t> lockstepLimitNs() const;
+    /** O circuito assentou (SimulationSession::settleStep() sem mais trabalho) ou a worker do
+     * Scheduler terminou um runUntil() (TimeSettledFn): libera a fila da arena LEGACY que esperava o
+     * settle da última mudança terminar. */
+    void onSettleFinished();
     /** Lockstep exato: chamado pela worker do Scheduler ao fim de cada ciclo (sem o mutex dele).
      * Entrega ao QEMU as entradas do instante atual e publica até onde o Core processou tudo e o
      * próximo evento (o horizonte que o guest não pode passar sem sincronizar). `peersProvenNs`: o
@@ -378,6 +385,9 @@ private:
     static void runBackgroundPollLoop(std::shared_ptr<CallbackState> state);
     void bindPollDoorbellLocked(const std::string& arenaName);
     static void waitForPollWork(const std::shared_ptr<CallbackState>& state);
+    /** Acorda a thread de poll (campainha) sem esperar o QEMU tocá-la: usado quando termina o settle
+     * que a fila da arena LEGACY esperava (ver onSettleFinished()). */
+    void wakePollWorkerLocked();
     void scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool schedulerLockHeld,
                                std::vector<DeferredSchedulerCall>* deferred = nullptr);
     void scheduleWakeupsForAllModules(uint64_t nowNs, bool schedulerLockHeld,
@@ -427,7 +437,10 @@ private:
      * elétrica de propósito). Hex malformado (tamanho ímpar/caractere inválido) é ignorado
      * silenciosamente a partir do ponto do erro, mesmo espírito tolerante de `uart_enqueue_hex` em
      * `devices/simulide-peripherals/src/lib.c`. */
-    void injectUsartRxHex(uint64_t regionStart, const std::string& hex) const;
+    void injectUsartRxHex(uint64_t regionStart, const std::string& hex);
+    /** VNEXT_B: passa ao QEMU (C2A) os bytes que estão no FIFO de RX da USART do adaptador. Com
+     * `m_callbackState->mutex` tomado. */
+    void deliverVnextBUartRxLocked(QemuModule& usart);
 
     // Mesmas impedâncias REAIS de `IoPin` no SimulIDE real (`.codex-simulide-src/src/gui/
     // circuitwidget/iopin.cpp` -- `m_outputImp`/`m_inputImp`, usadas por `Esp32Pin`/todo pino de
@@ -474,6 +487,7 @@ private:
     std::vector<PinBatch> m_pinBatches;
     std::vector<uint32_t> m_pinBatchByPin; // kNoPinBatch: sem módulo, ou pino de reset
     std::vector<uint8_t> m_pinStates;      // stamp(): QemuModule::kPin* de cada pino
+    std::vector<uint8_t> m_pinConnected;   // setPinConnected(): 1 = há algo no nó (vazio = todos)
     std::vector<uint64_t> m_moduleWakeupDueNs;
     std::vector<uint64_t> m_moduleWakeupGeneration;
     // Dono real do processo QEMU + arena de memória compartilhada -- ver McuController.hpp. Eram
@@ -530,15 +544,23 @@ private:
     uint64_t m_lockstepPublishedTimeNs = UINT64_MAX;
     uint64_t m_lockstepPublishedHorizonNs = UINT64_MAX;
     uint64_t m_lockstepPublishedInputHorizonNs = UINT64_MAX;
+    // Última syncSeq ecoada com o Core já no instante que o QEMU provou: a espera dela foi atendida
+    // e acordada, as publicações seguintes da mesma sequência não precisam da campainha.
+    uint64_t m_lockstepSatisfiedSeq = UINT64_MAX;
     // Último GPIO_IN/GPIO_IN1 publicado no snapshot (ver publishVnextBGpioInputsLocked()).
     std::array<uint64_t, 2> m_vnextBPublishedGpioIn{};
     bool m_vnextBGpioInPublished = false;
     // Último GPIO_IN/GPIO_IN1 entregue ao modelo de GPIO do QEMU como evento C2A (interrupção na borda).
     std::array<uint64_t, 2> m_vnextBNotifiedGpioIn{};
     std::array<bool, 2> m_vnextBNotifiedGpioInValid{};
-    // true entre despachar uma mudança elétrica (VNEXT_B) e o próximo stamp() estampá-la: enquanto
-    // isso stamp() não despacha outra, senão duas mudanças caem no mesmo solve e o pulso some.
-    bool m_vnextBChangeAwaitingStamp = false;
+    // true entre despachar uma mudança elétrica (VNEXT_B ou arena LEGACY) e o próximo stamp()
+    // estampá-la: enquanto isso nenhum outro evento é despachado, senão duas mudanças caem no mesmo
+    // solve e o pulso some.
+    bool m_changeAwaitingStamp = false;
+    // LEGACY: a mudança já foi estampada, mas o settle em que entrou ainda não terminou. Cada estado
+    // intermediário de um lote atrasado vira um instante assentado (como o passo de 1 ns do VNEXT_B):
+    // a próxima mudança só sai depois de onSettleFinished() ou de um poll fora de settle.
+    std::atomic<bool> m_changeAwaitingSettle{false};
     // Transações I2C elétricas do VNEXT_B: `op` é o envelope BATCH original (bus, flags, tx...).
     struct VnextBElectricalI2c {
         uint32_t lane = 0;

@@ -1,0 +1,823 @@
+diff --git a/accel/tcg/tcg-accel-ops-icount.c b/accel/tcg/tcg-accel-ops-icount.c
+index 3d2cfbb..0f037da 100644
+--- a/accel/tcg/tcg-accel-ops-icount.c
++++ b/accel/tcg/tcg-accel-ops-icount.c
+@@ -34,6 +34,19 @@
+ #include "tcg-accel-ops-icount.h"
+ #include "tcg-accel-ops-rr.h"
+ 
++/* ns from the global virtual clock to the next timer (INT32_MAX when none or further). */
++static int64_t icount_get_deadline_ns(void)
++{
++    int64_t deadline = qemu_clock_deadline_ns_all(QEMU_CLOCK_VIRTUAL, QEMU_TIMER_ATTR_ALL);
++
++    deadline = qemu_soonest_timeout(deadline,
++            qemu_clock_deadline_ns_all(QEMU_CLOCK_REALTIME, QEMU_TIMER_ATTR_ALL));
++    if ((deadline < 0) || (deadline > INT32_MAX)) {
++        deadline = INT32_MAX;
++    }
++    return deadline;
++}
++
+ static int64_t icount_get_limit(void)
+ {
+     int64_t deadline;
+@@ -116,7 +129,10 @@ void icount_prepare_for_run(CPUState *cpu, int64_t cpu_budget)
+ 
+     replay_mutex_lock();
+ 
+-    cpu->icount_budget = MIN(icount_get_limit(), cpu_budget);
++    /* LasecSimul: each vCPU runs on its own clock (softmmu/icount.c), up to the next timer seen from
++     * the global clock -- not a share of one budget, which made a busy pair of cores half as fast. */
++    cpu->icount_budget = replay_mode == REPLAY_MODE_PLAY ? MIN(icount_get_limit(), cpu_budget)
++                                                         : icount_cpu_budget(cpu, icount_get_deadline_ns());
+     insns_left = MIN(0xffff, cpu->icount_budget);
+     cpu_neg(cpu)->icount_decr.u16.low = insns_left;
+     cpu->icount_extra = cpu->icount_budget - insns_left;
+diff --git a/accel/tcg/tcg-accel-ops-rr.c b/accel/tcg/tcg-accel-ops-rr.c
+index 0622c51..569db14 100644
+--- a/accel/tcg/tcg-accel-ops-rr.c
++++ b/accel/tcg/tcg-accel-ops-rr.c
+@@ -236,6 +236,8 @@ static void *rr_cpu_thread_fn(void *arg)
+              * waking up the I/O thread and waiting for completion.
+              */
+             icount_handle_deadline();
++            /* Per-vCPU clocks: a sync a vCPU waits for, once the others reached its instant. */
++            vnext_b_lockstep_sync_poll();
+ 
+             cpu_budget = icount_percpu_budget(cpu_count);
+         }
+@@ -269,6 +271,9 @@ static void *rr_cpu_thread_fn(void *arg)
+                     icount_process_data(cpu);
+                 }
+                 qemu_mutex_lock_iothread();
++                if (icount_enabled()) {
++                    vnext_b_lockstep_sync_poll();
++                }
+ 
+                 if (r == EXCP_DEBUG) {
+                     cpu_handle_guest_debug(cpu);
+diff --git a/hw/i2c/esp32_i2c.c b/hw/i2c/esp32_i2c.c
+index 32ebcd5..bb51ede 100644
+--- a/hw/i2c/esp32_i2c.c
++++ b/hw/i2c/esp32_i2c.c
+@@ -219,6 +219,7 @@ static bool esp32_i2c_try_burst(Esp32I2CState *s)
+         s->burstActive = true;
+         s->burstPartial = false;
+         s->burstStop = logicalStop;
++        s->burstBusHeld = !plan.stop;
+         s->burstAddressAck = false;
+         s->burstFirstNack = UINT32_MAX;
+         s->burstRxLen = 0;
+@@ -306,6 +307,7 @@ static bool esp32_i2c_try_read_burst(Esp32I2CState *s)
+     s->burstActive = true;
+     s->burstPartial = false;
+     s->burstStop = wireStop;
++    s->burstBusHeld = !wireStop;
+     s->burstAddressByte = address;
+     s->burstAddressValid = true;
+     s->burstAddressAck = false;
+@@ -356,6 +358,7 @@ static bool esp32_i2c_try_continuation_burst(Esp32I2CState *s)
+                                                    s->period_ns, txbuf,
+                                                    payloadBytes + 1, plan.rxBytes);
+         if (!submitted) return false;
++        s->burstBusHeld = partial || !plan.stop;
+         if (partial) {
+             s->cmd_reg[s->lastCMD] = (s->cmd_reg[s->lastCMD] & ~0xffu) | 1u;
+         }
+@@ -407,6 +410,34 @@ static bool esp32_i2c_try_continuation_burst(Esp32I2CState *s)
+     return true;
+ }
+ 
++/* STOP numa lista so' dele, depois de uma lista fechada por END (o ESP-IDF termina assim algumas
++ * escritas). Se o Core executou o BATCH anterior no fio, o barramento esta' retido -- SCL baixo -- e
++ * so' este STOP o solta, como no chip. Antes ele nao ia ao Core (so' o executor byte a byte o
++ * espelhava) e o SCL ficava em 0 V ate' a transacao seguinte. Num barramento de transferencia
++ * direta e' so' a fronteira da transacao. O tempo do STOP no fio continua cobrado pelo caso STOP. */
++static bool esp32_i2c_try_stop_burst(Esp32I2CState *s)
++{
++    /* O endereco so' identifica o alvo (sem START); vale o ultimo selecionado, mesmo depois de um
++     * reset do FIFO -- o barramento do Core continua retido ate' um STOP ou um START novo. */
++    if (!vnext_b_active() || !s->burstBusHeld) return false;
++    uint8_t address = s->burstAddressByte;
++    s->vnextBurstNs = 0;
++    s->vnextBurstSubmitNs = getQemu_ns();
++    if (!vnext_b_i2c_submit(s->busIndex, 2u | VNEXT_I2C_WIRE_STOP | ((address & 1u) ? 4u : 0u),
++                            s->period_ns, &address, 1, 0)) return false;
++    s->burstBusHeld = false;
++    s->burstStopOnly = true;
++    s->burstActive = true;
++    s->burstPartial = false;
++    s->burstStop = true;
++    s->burstAddressAck = false;
++    s->burstFirstNack = UINT32_MAX;
++    s->burstRxLen = 0;
++    s->burstWriteCmdCount = 0;
++    s->burstReadCmdCount = 0;
++    return true;
++}
++
+ /* Opt-in gate for the per-operation I2C diagnostics below.  DECISION-003
+  * requires per-operation I2C diagnostic output to be off by default; the two
+  * ackERR sites had been reported as fixed but were still unconditional, and
+@@ -441,6 +472,12 @@ static void esp32_i2c_trace_rejected_plan(Esp32I2CState *s)
+ static void esp32_i2c_finish_burst(Esp32I2CState *s)
+ {
+     s->burstActive = false;
++    if (s->burstStopOnly) {
++        /* O STOP nao tem ACK: o estado do ultimo byte fica como estava. */
++        s->burstStopOnly = false;
++        esp32_i2c_do_transaction(s);
++        return;
++    }
+ 
+     const bool ackERR = !s->burstAddressAck || (s->burstFirstNack != UINT32_MAX);
+     s->sr_reg &= ~1;
+@@ -618,6 +655,9 @@ static void esp32_i2c_do_transaction( void* opaque )
+                 return;
+             }
+             s->electricalBusOpen = false;
++            s->burstBusHeld = false;
++        } else if (esp32_i2c_try_stop_burst(s)) {
++            return; /* esp32_i2c_finish_burst() volta a este STOP quando o Core responder */
+         }
+         time = (3*s->period_ns)/2;
+     }break;
+@@ -856,6 +896,7 @@ static void esp32_i2c_write(void * opaque, hwaddr addr, uint64_t value, unsigned
+             s->burstActive = false;
+             s->burstPartial = false;
+             s->burstStop = false;
++            s->burstStopOnly = false;
+             s->burstAddressValid = false;
+             s->sr_reg &= ~(1 << 4);      /* I2C_BUS_BUSY */
+             s->int_raw_reg &= ~(1 << 6); /* I2C_BYTE_TRANS */
+@@ -969,6 +1010,8 @@ static void esp32_i2c_reset(DeviceState * dev)
+     s->vnextContinuationBacklogged = false;
+     s->burstActive = false;
+     s->burstStop = false;
++    s->burstBusHeld = false;
++    s->burstStopOnly = false;
+     s->burstAddressValid = false;
+     s->electricalBusOpen = false;
+     s->trans_ongoing = false;
+diff --git a/hw/misc/esp32_ledc.c b/hw/misc/esp32_ledc.c
+index 97b60d3..d33e7ce 100644
+--- a/hw/misc/esp32_ledc.c
++++ b/hw/misc/esp32_ledc.c
+@@ -1,4 +1,5 @@
+ #include "qemu/osdep.h"
++#include <math.h>
+ #include "hw/sysbus.h"
+ #include "qemu/log.h"
+ #include "qemu/timer.h"
+@@ -18,6 +19,11 @@
+ #define LEDC_CONF0_SIG_OUT_EN    (1u << 2)
+ #define LEDC_CONF0_LS_PARA_UP    (1u << 4)   /* LSCHn only, self-clearing */
+ #define LEDC_CONF1_DUTY_START    (1u << 31)  /* self-clearing */
++#define LEDC_CONF1_DUTY_INC      (1u << 30)
++#define LEDC_CONF1_DUTY_NUM(v)   (((v) >> 20) & 0x3FFu)
++#define LEDC_CONF1_DUTY_CYCLE(v) (((v) >> 10) & 0x3FFu)
++#define LEDC_CONF1_DUTY_SCALE(v) ((v) & 0x3FFu)
++#define LEDC_INT_DUTY_CHNG_END(channel) (1u << (8 + (channel)))  /* HSCH0-7 bits 8-15, LSCH0-7 16-23 */
+ #define LEDC_DUTY_MASK           0x1FFFFFFu  /* 21-bit integer part + 4 fractional bits */
+ #define LEDC_TIMER_RES_MASK      0x1Fu
+ #define LEDC_TIMER_DIV_SHIFT     5
+@@ -80,6 +86,93 @@ static uint32_t ledc_timer_value(Esp32LEDCState *s, int timer)
+     return ledc_timer_running_value(s, timer);
+ }
+ 
++static int ledc_channel_timer(Esp32LEDCState *s, int channel)
++{
++    const uint32_t conf0 = s->regs[(channel * LEDC_CHANNEL_BYTES) >> 2];
++    return (int)(conf0 & 0x3u) + (channel >= 8 ? 4 : 0);
++}
++
++/* Counter period of `timer` in ns: 2^res ticks of div/256 source clocks; 0 when it is not counting. */
++static long double ledc_timer_period_ns(Esp32LEDCState *s, int timer)
++{
++    const uint32_t conf = ledc_timer_conf(s, timer);
++    const uint32_t res = conf & LEDC_TIMER_RES_MASK;
++    const uint32_t div = (conf >> LEDC_TIMER_DIV_SHIFT) & LEDC_TIMER_DIV_MASK;
++    if (!res || !div || (conf & (LEDC_TIMER_PAUSE | LEDC_TIMER_RST))) return 0;
++    return (long double)div / 256.0L * 1.0e9L / (long double)ledc_timer_src_hz(s, timer) *
++           (long double)(1u << res);
++}
++
++static void ledc_update_irq(Esp32LEDCState *s)
++{
++    qemu_set_irq(s->irq, (s->regs[A_LEDC_INT_RAW_REG >> 2] & s->regs[A_LEDC_INT_ENA_REG >> 2]) != 0);
++}
++
++static uint32_t ledc_fade_duty(Esp32LEDCState *s, int channel, uint32_t steps)
++{
++    const uint32_t conf1 = s->fade_conf1[channel];
++    /* DUTY_SCALE moves the integer part of the duty (above its 4 fractional bits). */
++    const int64_t delta = (int64_t)steps * ((int64_t)LEDC_CONF1_DUTY_SCALE(conf1) << 4);
++    int64_t duty = (conf1 & LEDC_CONF1_DUTY_INC) ? (int64_t)s->fade_start_duty[channel] + delta
++                                                  : (int64_t)s->fade_start_duty[channel] - delta;
++    if (duty < 0) duty = 0;
++    if (duty > LEDC_DUTY_MASK) duty = LEDC_DUTY_MASK;
++    return (uint32_t)duty;
++}
++
++/* Duty in effect now (CHn_DUTY_R): the previous one until the first overflow after DUTY_START, then
++ * the start duty moved DUTY_SCALE per DUTY_CYCLE periods, at most DUTY_NUM times. */
++static uint32_t ledc_duty_now(Esp32LEDCState *s, int channel)
++{
++    if (!s->fade_active[channel]) return s->duty_r[channel];
++    const long double now = (long double)qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    if (now < s->fade_first_ns[channel]) return s->fade_prev_duty[channel];
++    const uint32_t num = LEDC_CONF1_DUTY_NUM(s->fade_conf1[channel]);
++    uint64_t steps = num;
++    if (s->fade_step_ns[channel] > 0) {
++        const long double elapsed = (now - s->fade_first_ns[channel]) / s->fade_step_ns[channel];
++        if (elapsed < (long double)num) steps = (uint64_t)elapsed;
++    }
++    return ledc_fade_duty(s, channel, (uint32_t)steps);
++}
++
++static void ledc_start_update(Esp32LEDCState *s, int channel, uint32_t conf1)
++{
++    const int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    s->fade_prev_duty[channel] = ledc_duty_now(s, channel);
++    s->fade_start_duty[channel] = s->regs[(channel * LEDC_CHANNEL_BYTES + 0x8) >> 2] & LEDC_DUTY_MASK;
++    s->fade_conf1[channel] = conf1 & ~LEDC_CONF1_DUTY_START;
++    const uint32_t num = LEDC_CONF1_DUTY_NUM(conf1);
++    s->duty_r[channel] = ledc_fade_duty(s, channel, num);
++    const int timer = ledc_channel_timer(s, channel);
++    const long double period = ledc_timer_period_ns(s, timer);
++    if (period <= 0) {
++        /* Counter not running: no overflow to wait for -- the duty takes effect as written. */
++        s->fade_active[channel] = false;
++        timer_del(&s->fade_end_timer[channel]);
++        return;
++    }
++    const long double elapsed = (long double)(now - s->timer_epoch_ns[timer]);
++    const long double overflows = elapsed < 0 ? 1.0L : floorl(elapsed / period) + 1.0L;
++    s->fade_first_ns[channel] = (long double)s->timer_epoch_ns[timer] + overflows * period;
++    s->fade_step_ns[channel] = period * (long double)LEDC_CONF1_DUTY_CYCLE(conf1);
++    s->fade_end_ns[channel] = (int64_t)ceill(s->fade_first_ns[channel] + (long double)num * s->fade_step_ns[channel]);
++    s->fade_active[channel] = true;
++    timer_mod(&s->fade_end_timer[channel], s->fade_end_ns[channel]);
++}
++
++static void ledc_fade_end_cb(void *opaque)
++{
++    Esp32LEDCState *s = ESP32_LEDC(opaque);
++    const int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    for (int channel = 0; channel < ESP32_LEDC_CHANNEL_CNT; ++channel) {
++        if (!s->fade_active[channel] || now < s->fade_end_ns[channel]) continue;
++        s->fade_active[channel] = false;
++        s->regs[A_LEDC_INT_RAW_REG >> 2] |= LEDC_INT_DUTY_CHNG_END(channel);
++    }
++    ledc_update_irq(s);
++}
++
+ static uint64_t esp32_ledc_read(void *opaque, hwaddr addr, unsigned int size)
+ {
+     Esp32LEDCState *s = ESP32_LEDC(opaque);
+@@ -87,7 +180,7 @@ static uint64_t esp32_ledc_read(void *opaque, hwaddr addr, unsigned int size)
+     hwaddr offset;
+     if (addr >= ESP32_LEDC_REGS_SIZE) return 0;
+     if (ledc_is_channel_reg(addr, &index, &offset) && offset == 0x10) {
+-        return s->duty_r[index];                              /* CHn_DUTY_R */
++        return ledc_duty_now(s, index);                       /* CHn_DUTY_R */
+     }
+     if (ledc_is_timer_reg(addr, &index, &offset) && offset == 0x4) {
+         return ledc_timer_value(s, index);                    /* TIMERn_VALUE */
+@@ -123,9 +216,7 @@ static void esp32_ledc_write(void *opaque, hwaddr addr,
+             stored &= LEDC_DUTY_MASK;
+             break;
+         case 0xC:                                             /* CHn_CONF1 */
+-            if (stored & LEDC_CONF1_DUTY_START) {
+-                s->duty_r[index] = s->regs[(addr - 0xC + 0x8) >> 2] & LEDC_DUTY_MASK;
+-            }
++            if (stored & LEDC_CONF1_DUTY_START) ledc_start_update(s, index, stored);
+             stored &= ~LEDC_CONF1_DUTY_START;
+             break;
+         case 0x10:                                            /* CHn_DUTY_R is read-only */
+@@ -155,10 +246,12 @@ static void esp32_ledc_write(void *opaque, hwaddr addr,
+         }
+     } else if (addr == A_LEDC_INT_CLR_REG) {
+         s->regs[A_LEDC_INT_RAW_REG >> 2] &= ~stored;
++        ledc_update_irq(s);
+     } else if (addr == A_LEDC_INT_RAW_REG || addr == A_LEDC_INT_ST_REG) {
+         /* read-only status */
+     } else {
+         s->regs[addr >> 2] = stored;                          /* INT_ENA, LEDC_CONF */
++        if (addr == A_LEDC_INT_ENA_REG) ledc_update_irq(s);
+     }
+     /* The Core-side adapter rebuilds the pin waveform from the raw write, self-clearing update
+      * bits included (they tell it when a new duty/configuration takes effect). */
+@@ -189,9 +282,11 @@ static void esp32_ledc_init(Object *obj)
+     /* E118-AUDIT-2 (EVIDENCE.md, 2026-09-05): see the matching comment in hw/i2c/esp32_i2c.c. */
+     s->iomem.disable_reentrancy_guard = true;
+     sysbus_init_mmio(sbd, &s->iomem);
++    sysbus_init_irq(sbd, &s->irq);   /* ETS_LEDC_INTR_SOURCE (DUTY_CHNG_END) */
+     for (int i = 0; i < ESP32_LEDC_CHANNEL_CNT; i++) {
+         object_initialize_child(obj, g_strdup_printf("led%d", i + 1), &s->led[i], TYPE_LED);
+         s->led[i].color = (char *)"blue";
++        timer_init_ns(&s->fade_end_timer[i], QEMU_CLOCK_VIRTUAL, ledc_fade_end_cb, s);
+     }
+ }
+ 
+diff --git a/hw/nvram/esp32_efuse.c b/hw/nvram/esp32_efuse.c
+index 857940d..b1b5643 100644
+--- a/hw/nvram/esp32_efuse.c
++++ b/hw/nvram/esp32_efuse.c
+@@ -173,6 +173,15 @@ static void esp32_efuse_read_op(Esp32EfuseState *s)
+         s->efuse_rd.blk0[1] = 0x00c40a24;
+         s->efuse_rd.blk0[2] = 0xfe1001;
+     }
++    /* CK8M_FREQ (BLK0 word 4, bits 7:0) is programmed at the factory with the RC_FAST frequency in
++     * 100 kHz units. The boot ROM's ets_get_detected_xtal_freq() computes the crystal as
++     * RTC calibration (XTAL cycles per 8MD256 cycle) * 15625 * CK8M_FREQ / 40; with the field blank
++     * it gets 0, falls back to 26 MHz and programs UART0 for a 26 MHz crystal, so the boot banner
++     * leaves the pad at 177 kbaud instead of 115200 on a 40 MHz board. esp32_timg models RC_FAST at
++     * 8 MHz, so a blank field gets 80: the ROM then detects the 40 MHz crystal, as on the chip. */
++    if ((s->efuse_rd.blk0[4] & 0xffu) == 0) {
++        s->efuse_rd.blk0[4] |= 80u;
++    }
+ 
+     memset(&s->efuse_rd_dis, 0, sizeof(s->efuse_rd_dis));
+     memset(&s->efuse_wr_dis, 0, sizeof(s->efuse_wr_dis));
+diff --git a/hw/xtensa/esp32.c b/hw/xtensa/esp32.c
+index 096095f..0b4c651 100644
+--- a/hw/xtensa/esp32.c
++++ b/hw/xtensa/esp32.c
+@@ -583,6 +583,8 @@ static void esp32_soc_realize( DeviceState *dev, Error **errp )
+     esp32_soc_add_periph_device( sys_mem, &s->gpio, DR_REG_GPIO_BASE);
+     sysbus_connect_irq( SYS_BUS_DEVICE(&s->gpio),0,qdev_get_gpio_in(intmatrix_dev, ETS_GPIO_INTR_SOURCE));
+     esp32_gpio_vnext_bind( &s->gpio );
++    /* LEDC: DUTY_CHNG_END of a fade (ledc_fade_start waits for it). */
++    sysbus_connect_irq( SYS_BUS_DEVICE(&s->ledc), 0, qdev_get_gpio_in(intmatrix_dev, ETS_LEDC_INTR_SOURCE));
+ 
+     for (int i = 0; i < ESP32_UART_COUNT; ++i)
+     {
+diff --git a/include/hw/i2c/esp32_i2c.h b/include/hw/i2c/esp32_i2c.h
+index 5badaf7..d90a02b 100644
+--- a/include/hw/i2c/esp32_i2c.h
++++ b/include/hw/i2c/esp32_i2c.h
+@@ -47,6 +47,11 @@ typedef struct Esp32I2CState {
+     bool burstAddressValid;
+     bool burstPartial;
+     bool burstStop;
++    /* vNext-B: o ultimo BATCH terminou sem STOP no fio (lista fechada por END). Se o Core o
++     * executou eletricamente, o barramento esta retido (SCL baixo) ate' um STOP chegar. */
++    bool burstBusHeld;
++    /* O burst em voo e' so' o STOP de um barramento retido (esp32_i2c_try_stop_burst). */
++    bool burstStopOnly;
+     uint8_t burstAddressByte;
+     uint32_t burstFirstNack;
+     uint32_t burstWriteCmdCount;
+diff --git a/include/hw/misc/esp32_ledc.h b/include/hw/misc/esp32_ledc.h
+index 3bc4377..f0bb103 100644
+--- a/include/hw/misc/esp32_ledc.h
++++ b/include/hw/misc/esp32_ledc.h
+@@ -5,6 +5,7 @@
+ #include "hw/registerfields.h"
+ #include "hw/misc/esp32_reg.h"
+ #include "hw/misc/led.h"
++#include "qemu/timer.h"
+ 
+ #define TYPE_ESP32_LEDC "misc.esp32.ledc"
+ #define ESP32_LEDC(obj) OBJECT_CHECK(Esp32LEDCState, (obj), TYPE_ESP32_LEDC)
+@@ -19,11 +20,23 @@ typedef struct Esp32LEDCState {
+      * CHn DUTY_START, LSTIMERn PARA_UP) already cleared -- what the real peripheral reads back.
+      * The raw written value is still mirrored to the Core, which drives the pin waveform. */
+     uint32_t regs[ESP32_LEDC_REG_COUNT];
+-    uint32_t duty_r[ESP32_LEDC_CHANNEL_CNT];        /* duty latched at the last DUTY_START */
++    uint32_t duty_r[ESP32_LEDC_CHANNEL_CNT];        /* duty in effect once the last update is over */
+     int64_t timer_epoch_ns[ESP32_LEDC_TIMER_CNT];   /* virtual time the counter last restarted */
+     uint32_t timer_frozen[ESP32_LEDC_TIMER_CNT];    /* counter value while the timer is paused */
++    /* Duty update started by CONF1.DUTY_START (a plain update is a 1-step fade of scale 0): the
++     * start duty takes effect at the first counter overflow, then DUTY_SCALE every DUTY_CYCLE
++     * periods, DUTY_NUM times; DUTY_CHNG_END is raised at the last step. */
++    bool fade_active[ESP32_LEDC_CHANNEL_CNT];
++    uint32_t fade_prev_duty[ESP32_LEDC_CHANNEL_CNT];  /* in effect until the first overflow */
++    uint32_t fade_start_duty[ESP32_LEDC_CHANNEL_CNT];
++    uint32_t fade_conf1[ESP32_LEDC_CHANNEL_CNT];
++    long double fade_first_ns[ESP32_LEDC_CHANNEL_CNT];  /* first overflow after DUTY_START */
++    long double fade_step_ns[ESP32_LEDC_CHANNEL_CNT];   /* DUTY_CYCLE counter periods */
++    int64_t fade_end_ns[ESP32_LEDC_CHANNEL_CNT];        /* last step: DUTY_CHNG_END */
++    QEMUTimer fade_end_timer[ESP32_LEDC_CHANNEL_CNT];
+     LEDState led[ESP32_LEDC_CHANNEL_CNT];
+     qemu_irq ledc_sync[1];
++    qemu_irq irq;
+ } Esp32LEDCState;
+ 
+ REG32(LEDC_CONF_REG, 0x190)
+diff --git a/include/sysemu/cpu-timers.h b/include/sysemu/cpu-timers.h
+index f48240e..ccaab7a 100644
+--- a/include/sysemu/cpu-timers.h
++++ b/include/sysemu/cpu-timers.h
+@@ -62,6 +62,13 @@ void icount_set_ps_per_inst(double ps);
+ /* LasecSimul: VNEXT_B real-time lockstep -- each instruction costs `dilation` (>= 1) CPU periods.
+  * Call only while no vCPU executes (the instruction budget in flight uses the old rate). */
+ void icount_set_time_dilation(double dilation);
++/* LasecSimul (see softmmu/icount.c): instructions `cpu` may execute on its own clock before the next
++ * timer (`deadline_ns` from the global clock), the vCPU quantum or a pending lockstep sync. */
++int64_t icount_cpu_budget(CPUState *cpu, int64_t deadline_ns);
++/* LasecSimul: `cpu` got no budget because it is ahead of a slower vCPU -- idle until it catches up. */
++bool icount_cpu_waits(CPUState *cpu);
++/* LasecSimul: QEMU_CLOCK_VIRTUAL outside guest execution -- the slowest vCPU that is not halted. */
++int64_t icount_get_global_ns(void);
+ 
+ /* if the CPUs are idle, start accounting real time to virtual clock. */
+ void icount_start_warp_timer(void);
+diff --git a/softmmu/cpus.c b/softmmu/cpus.c
+index 38b7b9c..018ad89 100644
+--- a/softmmu/cpus.c
++++ b/softmmu/cpus.c
+@@ -89,7 +89,8 @@ bool cpu_thread_is_idle(CPUState *cpu)
+     if (cpu->stop || !cpu_work_list_empty(cpu)) {
+         return false;
+     }
+-    if (cpu_is_stopped(cpu) || vnext_b_lockstep_hold()) {
++    if (cpu_is_stopped(cpu) || vnext_b_lockstep_hold() || vnext_b_lockstep_sync_wait(cpu) ||
++        (icount_enabled() && icount_cpu_waits(cpu))) {
+         return true;
+     }
+     if (!cpu->halted || cpu_has_work(cpu)) {
+@@ -285,7 +286,7 @@ int vm_shutdown(void)
+ 
+ bool cpu_can_run(CPUState *cpu)
+ {
+-    if (cpu->stop || vnext_b_lockstep_hold()) {
++    if (cpu->stop || vnext_b_lockstep_hold() || vnext_b_lockstep_sync_wait(cpu)) {
+         return false;
+     }
+     if (cpu_is_stopped(cpu)) {
+diff --git a/softmmu/icount.c b/softmmu/icount.c
+index 4c69da6..b22377a 100644
+--- a/softmmu/icount.c
++++ b/softmmu/icount.c
+@@ -84,6 +84,100 @@ static int64_t icount_get_executed(CPUState *cpu)
+             (cpu_neg(cpu)->icount_decr.u16.low + cpu->icount_extra));
+ }
+ 
++/*
++ * LasecSimul: one virtual clock per vCPU. On the chip the two cores run in parallel: N instructions
++ * take the same time on one core whether the other is busy or idle. Single-threaded TCG runs the
++ * vCPUs in turn, and stock icount charged every instruction of both to the one counter that is the
++ * clock, so each core of a busy pair ran at half speed (measured: a loop took 75.8 ms on one core
++ * alone and 140-151 ms on either core with both busy). Now:
++ *  - each vCPU has its own clock (ns, without qemu_icount_bias), advanced by its own instructions at
++ *    the ps_per_inst in effect when they executed;
++ *  - QEMU_CLOCK_VIRTUAL is that clock inside guest execution (MMIO timestamps, CCOUNT, timer
++ *    reads); everywhere else (timers, bottom halves, the main loop, what the Core is told) it is the
++ *    global clock: the clock of the slowest vCPU that is not halted. Every event a vCPU publishes is
++ *    at or after it, so nothing older can still appear;
++ *  - a halted vCPU (waiti) leaves that minimum and rejoins at the global clock when it runs again;
++ *  - while two vCPUs run, neither may get more than ICOUNT_CPU_QUANTUM_NS ahead of the slowest (see
++ *    icount_cpu_budget): shared memory is visible at once, so this bounds how early or late one core
++ *    can see what the other wrote. Interrupts between cores are exact: raising one kicks the running
++ *    vCPU out, and the woken one rejoins at that instant (icount_cpu_on_timeline);
++ *  - with lockstep, a vCPU ahead of the global clock that needs a sync waits for the others to reach
++ *    its instant (vnext_b.c, vnext_sync_wait_ns): the Core still sees every event in time order;
++ *  - qemu_icount keeps counting every executed instruction: host work, as vnext_rt_step measures it.
++ */
++#define ICOUNT_CPU_CLOCKS 8
++/* 10 us: ~2400 instructions per turn at 240 MHz. At 2 us the RR switches took about half of the host
++ * time while both cores were busy (TCG in tcg_cpus_exec 54% of the window, 183 MIPS against ~430 at
++ * 10 us); the old shared clock let one core run whole slices of up to a tick (1 ms) alone. */
++#define ICOUNT_CPU_QUANTUM_NS 10000.0
++/* LASECSIMUL_ICOUNT_QUANTUM_NS overrides the quantum (diagnostics). */
++static double icount_cpu_quantum_ns(void)
++{
++    static double quantum = -1.0;
++    if (quantum < 0.0) {
++        const char *v = getenv("LASECSIMUL_ICOUNT_QUANTUM_NS");
++        const double parsed = v && *v ? strtod(v, NULL) : 0.0;
++        quantum = parsed > 0.0 ? parsed : ICOUNT_CPU_QUANTUM_NS;
++    }
++    return quantum;
++}
++static double icount_cpu_ns[ICOUNT_CPU_CLOCKS];
++static double icount_global_ns;
++/* A vCPU with nothing to run because it is ahead of a slower one (quantum, timer or sync instant
++ * reached on its own clock): idle until the others catch up (cpu_thread_is_idle), and the icount
++ * warp must not move the clock while it waits -- it would skip time this vCPU never executed. */
++static bool icount_cpu_waiting[ICOUNT_CPU_CLOCKS];
++
++static double *icount_cpu_clock(CPUState *cpu)
++{
++    return cpu->cpu_index >= 0 && cpu->cpu_index < ICOUNT_CPU_CLOCKS ? &icount_cpu_ns[cpu->cpu_index]
++                                                                     : &icount_global_ns;
++}
++
++/* A vCPU on the timeline: running, or halted with work pending (an interrupt raised by a timer or
++ * by the other core) -- it wakes at the instant the work appeared, not whenever the RR loop next
++ * gets to it, so it rejoins right away instead of letting the other core run on unbounded.
++ * A vCPU suspended by a device model (cpu_stop_current: flash access with the cache disabled by
++ * the other core, a full lane, an I2C reply) is stalled in time, like the core it models: the clock
++ * goes on without it and it rejoins at the global clock when resumed. Holding the clock at its
++ * instant froze the other core within a quantum of it -- often the core that has to release it
++ * (re-enable the cache): the class sketch crawled at a few MIPS and stopped 0.7 s after boot.
++ * A vCPU waiting for its own lockstep sync instant does hold the clock there (vnext_sync_wait_ns). */
++static bool icount_cpu_on_timeline(CPUState *cpu)
++{
++    if (vnext_b_lockstep_sync_wait(cpu)) {
++        return true;
++    }
++    if (cpu->stop || cpu->stopped) {
++        return false;
++    }
++    return !cpu->halted || cpu_has_work(cpu);
++}
++
++/* Lowest clock among vCPUs on the timeline; the global clock never goes back. */
++static void icount_update_global_locked(void)
++{
++    CPUState *cpu;
++    double lowest = -1.0;
++
++    CPU_FOREACH(cpu) {
++        if (!icount_cpu_on_timeline(cpu)) {
++            continue;
++        }
++        double *own = icount_cpu_clock(cpu);
++        if (*own < icount_global_ns) {
++            *own = icount_global_ns; /* woken or resumed now: rejoins here */
++        }
++        const double t = *own;
++        if (lowest < 0.0 || t < lowest) {
++            lowest = t;
++        }
++    }
++    if (lowest > icount_global_ns) {
++        icount_global_ns = lowest;
++    }
++}
++
+ /*
+  * Update the global shared timer_state.qemu_icount to take into
+  * account executed instructions. This is done by the TCG vCPU
+@@ -96,6 +190,81 @@ static void icount_update_locked(CPUState *cpu)
+ 
+     qatomic_set_i64(&timers_state.qemu_icount,
+                     timers_state.qemu_icount + executed);
++    if (executed > 0) {
++        *icount_cpu_clock(cpu) += (double)executed * ps_per_inst / 1000.0;
++    }
++    icount_update_global_locked();
++}
++
++int64_t icount_cpu_budget(CPUState *cpu, int64_t deadline_ns)
++{
++    CPUState *other;
++    bool other_running = false;
++    double left;
++
++    seqlock_write_lock(&timers_state.vm_clock_seqlock, &timers_state.vm_clock_lock);
++    icount_update_global_locked(); /* a vCPU woken since the last slice rejoins first */
++    double *own = icount_cpu_clock(cpu);
++    if (*own < icount_global_ns) {
++        *own = icount_global_ns; /* a halted vCPU rejoins the timeline */
++    }
++    double until = icount_global_ns + (double)deadline_ns;
++    CPU_FOREACH(other) {
++        if (other != cpu && icount_cpu_on_timeline(other)) {
++            other_running = true;
++        }
++    }
++    if (other_running && icount_global_ns + icount_cpu_quantum_ns() < until) {
++        until = icount_global_ns + icount_cpu_quantum_ns();
++    }
++    /* Lockstep: a sync another vCPU is waiting for -- reach that instant exactly, not past it. */
++    const int64_t sync_ns = vnext_b_lockstep_sync_limit_ns(cpu);
++    if (sync_ns > 0) {
++        const double sync_at = (double)(sync_ns - qatomic_read_i64(&timers_state.qemu_icount_bias));
++        if (sync_at < until) {
++            until = sync_at;
++        }
++    }
++    left = until - *own;
++    if (cpu->cpu_index >= 0 && cpu->cpu_index < ICOUNT_CPU_CLOCKS) {
++        qatomic_set(&icount_cpu_waiting[cpu->cpu_index], left <= 0.0 && *own > icount_global_ns);
++    }
++    seqlock_write_unlock(&timers_state.vm_clock_seqlock, &timers_state.vm_clock_lock);
++    return left > 0.0 ? icount_round((int64_t)ceil(left)) : 0;
++}
++
++/* Live, not just the flag: once the slower vCPU halts or catches up, this one is the slowest and
++ * must run (a stale flag left the RR thread asleep with nothing able to wake it). */
++static bool icount_cpu_index_waits(int index)
++{
++    return qatomic_read(&icount_cpu_waiting[index]) && icount_cpu_ns[index] > icount_global_ns;
++}
++
++bool icount_cpu_waits(CPUState *cpu)
++{
++    return cpu->cpu_index >= 0 && cpu->cpu_index < ICOUNT_CPU_CLOCKS && icount_cpu_index_waits(cpu->cpu_index);
++}
++
++static bool icount_any_cpu_waits(void)
++{
++    for (int i = 0; i < ICOUNT_CPU_CLOCKS; i++) {
++        if (icount_cpu_index_waits(i)) {
++            return true;
++        }
++    }
++    return false;
++}
++
++int64_t icount_get_global_ns(void)
++{
++    int64_t time_ns;
++    unsigned start;
++
++    do {
++        start = seqlock_read_begin(&timers_state.vm_clock_seqlock);
++        time_ns = qatomic_read_i64(&timers_state.qemu_icount_bias) + (int64_t)icount_global_ns;
++    } while (seqlock_read_retry(&timers_state.vm_clock_seqlock, start));
++    return time_ns;
+ }
+ 
+ /*
+@@ -133,10 +302,14 @@ static int64_t icount_get_raw_locked(void)
+ 
+ static int64_t icount_get_ns_locked(void) // -------------------------------------------
+ {
+-    int64_t icount = icount_get_raw_locked();
+-    //printf( "Qemu: icount_get_locked %li %li\n", timers_state.qemu_icount_bias, icount );
+-    return qatomic_read_i64( &timers_state.qemu_icount_bias ) + icount_to_ns(icount );
+-    //return icount_to_ns(icount);
++    CPUState *cpu = current_cpu;
++    double time_ns = icount_global_ns;
++
++    icount_get_raw_locked(); /* accounts what the running vCPU has executed so far */
++    if (cpu && cpu->running) {
++        time_ns = *icount_cpu_clock(cpu);
++    }
++    return qatomic_read_i64(&timers_state.qemu_icount_bias) + (int64_t)time_ns;
+ }
+ 
+ int64_t icount_get_raw(void)
+@@ -383,8 +556,10 @@ void icount_start_warp_timer(void)
+     if (!runstate_is_running()) {
+         return;
+     }
+-    /* VNEXT_B lockstep hold: the clock stays at the sync instant until the Core caught up. */
+-    if (vnext_b_lockstep_hold()) {
++    /* VNEXT_B lockstep hold: the clock stays at the sync instant until the Core caught up. A vCPU
++     * waiting for its sync instant (vnext_b_lockstep_sync_pending) is not idle either: the sync is
++     * issued there, not after a warp. */
++    if (vnext_b_lockstep_hold() || vnext_b_lockstep_sync_pending() || icount_any_cpu_waits()) {
+         return;
+     }
+ 
+diff --git a/softmmu/vnext_b.c b/softmmu/vnext_b.c
+index 8eaa459..5f02c9d 100644
+--- a/softmmu/vnext_b.c
++++ b/softmmu/vnext_b.c
+@@ -264,6 +264,42 @@ static CPUState *vnext_exec_cpu(void) {
+     return cpu && qatomic_read(&cpu->running) ? cpu : NULL;
+ }
+ 
++/* Up to where QEMU has proven elapsed for the Core: with -icount each vCPU has its own clock
++ * (softmmu/icount.c), and only up to the global one -- the slowest vCPU that is not halted -- can no
++ * vCPU still publish anything. Without -icount there is one clock. */
++static uint64_t vnext_proven_ns(uint64_t now) {
++    if (!icount_enabled()) return now;
++    const uint64_t global = (uint64_t)icount_get_global_ns();
++    return now < global ? now : global;
++}
++
++/* Lockstep with per-vCPU clocks: a vCPU that needs a sync at an instant ahead of the global clock
++ * (it read GPIO_IN, armed an interrupt, started an I2C transfer) waits there -- not runnable -- while
++ * the other vCPUs run up to that instant (icount_cpu_budget stops them on it); the sync is issued
++ * once the global clock got there, so the Core never passes an instant some vCPU can still publish
++ * before. 0 = not waiting. Indexed by cpu_index, like the lanes. */
++static uint64_t vnext_sync_wait_ns[VNEXT_LANES];
++
++bool vnext_b_lockstep_sync_wait(CPUState *cpu) {
++    return cpu->cpu_index >= 0 && (unsigned)cpu->cpu_index < VNEXT_LANES &&
++           qatomic_read(&vnext_sync_wait_ns[cpu->cpu_index]) != 0;
++}
++
++bool vnext_b_lockstep_sync_pending(void) {
++    for (unsigned i = 0; i < VNEXT_LANES; i++)
++        if (qatomic_read(&vnext_sync_wait_ns[i])) return true;
++    return false;
++}
++
++int64_t vnext_b_lockstep_sync_limit_ns(CPUState *cpu) {
++    uint64_t earliest = 0;
++    for (unsigned i = 0; i < VNEXT_LANES; i++) {
++        const uint64_t at = qatomic_read(&vnext_sync_wait_ns[i]);
++        if (at && (int)i != cpu->cpu_index && (!earliest || at < earliest)) earliest = at;
++    }
++    return (int64_t)earliest;
++}
++
+ static unsigned vnext_self_test_init_delay_ms(void)
+ {
+     const char *value = getenv("LASECSIMUL_VNEXT_B_SELF_TEST_INIT_DELAY_MS");
+@@ -573,10 +609,13 @@ VnextPublishResult vnext_b_gpio_write(uint64_t address, uint64_t value) {
+             vnext_lockstep_reason_count[1]++;
+             vnext_lockstep_request(event->timestamp);
+             if (cpu) cpu_exit(cpu);
+-        } else if (event->timestamp > qatomic_read(&vnext_control->artifactVirtualTimeNs)) {
++        } else {
+             /* Only pads and the GPIO_IN snapshot can change, and the next GPIO_IN read syncs
+-             * (dirty). Let the Core follow right behind the guest instead of waiting for it. */
+-            qatomic_store_release(&vnext_control->artifactVirtualTimeNs, event->timestamp);
++             * (dirty). Let the Core follow right behind the guest instead of waiting for it -- but
++             * only up to the global clock: the other vCPU may still publish anything after it. */
++            const uint64_t proven = vnext_proven_ns(event->timestamp);
++            if (proven > qatomic_read(&vnext_control->artifactVirtualTimeNs))
++                qatomic_store_release(&vnext_control->artifactVirtualTimeNs, proven);
+         }
+     }
+     if (vnext_lane_credit(lane) == 0) {
+@@ -602,8 +641,9 @@ uint64_t vnext_b_gpio_read(uint64_t address) {
+      * the Core keeps up with the guest exactly while it watches, like the real pad. */
+     if (!vnext_lockstep) {   /* lockstep: vnext_b_lockstep_input_barrier() already synced */
+         static uint64_t last_published_ns;
+-        const uint64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+-        if (now - qatomic_read(&last_published_ns) >= VNEXT_INPUT_WATERMARK_MIN_NS) {
++        const uint64_t now = vnext_proven_ns(qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
++        const uint64_t last = qatomic_read(&last_published_ns);
++        if (now > last && now - last >= VNEXT_INPUT_WATERMARK_MIN_NS) {
+             qatomic_set(&last_published_ns, now);
+             qatomic_store_release(&vnext_control->artifactVirtualTimeNs, now);
+             SetEvent(vnext_artifact_event);
+@@ -738,7 +778,7 @@ static void vnext_consume_c2a(void) {
+         /* Generic C2A byte delivery: payload is deliberately opaque to the
+          * transport; the UART model owns its interpretation and FIFO state. */
+         if (event->kind == 2 && event->bytes >= 1)
+-            esp32_uart_vnext_rx_byte(0, event->payload[0]);
++            esp32_uart_vnext_rx_byte(event->bytes >= 2 ? event->payload[1] : 0, event->payload[0]);
+         if (event->kind == 10 && event->bytes >= sizeof(uint64_t) * 2) {
+             uint64_t address = 0, value = 0;
+             memcpy(&address, event->payload, sizeof(address));
+@@ -807,6 +847,16 @@ bool vnext_b_lockstep_hold(void) { return qatomic_read(&vnext_lockstep_holding);
+  * published during the hold and the release must wait for the Core to see it too. */
+ static void vnext_lockstep_request(uint64_t now) {
+     VnextControl *c = vnext_control;
++    CPUState *cpu = vnext_exec_cpu();
++    if (cpu && !qatomic_read(&vnext_lockstep_holding) && cpu->cpu_index >= 0 &&
++        (unsigned)cpu->cpu_index < VNEXT_LANES && now > (uint64_t)icount_get_global_ns()) {
++        /* This vCPU is ahead of another one: wait at `now` (see vnext_sync_wait_ns). The caller
++         * already leaves cpu_exec() (and replays a load); vnext_b_lockstep_sync_poll() issues the
++         * sync when the global clock gets here. */
++        const uint64_t waiting = qatomic_read(&vnext_sync_wait_ns[cpu->cpu_index]);
++        if (!waiting || now < waiting) qatomic_set(&vnext_sync_wait_ns[cpu->cpu_index], now);
++        return;
++    }
+     if (!qatomic_read(&vnext_lockstep_holding)) {
+         vnext_lockstep_target_ns = now;
+         qatomic_set(&vnext_lockstep_holding, true);
+@@ -941,6 +991,11 @@ static void vnext_lockstep_try_release(void) {
+         vnext_lockstep_input_horizon_ns = vnext_lockstep_horizon_ns;
+     qatomic_set(&vnext_lockstep_dirty, false);
+     timer_mod(vnext_lockstep_timer, (int64_t)vnext_lockstep_horizon_ns);
++    /* vCPUs that waited for this instant (or an earlier one) run again, from this very instant. */
++    for (unsigned i = 0; i < VNEXT_LANES; i++) {
++        const uint64_t at = qatomic_read(&vnext_sync_wait_ns[i]);
++        if (at && at <= vnext_lockstep_target_ns) qatomic_set(&vnext_sync_wait_ns[i], 0);
++    }
+     qatomic_set(&vnext_lockstep_holding, false);
+     if (vnext_lockstep_trace > 0) {
+         vnext_lockstep_released_at_ns = get_clock();
+@@ -971,6 +1026,17 @@ static void vnext_lockstep_horizon_cb(void *opaque) {
+     vnext_lockstep_request(qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
+ }
+ 
++void vnext_b_lockstep_sync_poll(void) {
++    if (!vnext_lockstep || qatomic_read(&vnext_lockstep_holding)) return;
++    uint64_t earliest = 0;
++    for (unsigned i = 0; i < VNEXT_LANES; i++) {
++        const uint64_t at = qatomic_read(&vnext_sync_wait_ns[i]);
++        if (at && (!earliest || at < earliest)) earliest = at;
++    }
++    /* Every other vCPU reached the instant (icount_cpu_budget stops them on it) or halted. */
++    if (earliest && (uint64_t)icount_get_global_ns() >= earliest) vnext_lockstep_request(earliest);
++}
++
+ /* GPIO_IN/GPIO_IN1 MMIO read (vCPU context, BQL held). The snapshot is exact while the guest has
+  * written nothing since the last sync and is still before the Core's next event of any kind (the
+  * input horizon -- even an output-only edge moves its own pad); otherwise sync first and replay the
+diff --git a/softmmu/vnext_b.h b/softmmu/vnext_b.h
+index 475f80c..8c3db3b 100644
+--- a/softmmu/vnext_b.h
++++ b/softmmu/vnext_b.h
+@@ -31,6 +31,17 @@ bool vnext_b_active(void);
+ /* Exact lockstep (see vnext_b.c): true while every vCPU is held, virtual clock frozen, waiting for
+  * the Core. cpu_can_run()/cpu_thread_is_idle() and the icount warp honour it. */
+ bool vnext_b_lockstep_hold(void);
++/* Per-vCPU clocks (softmmu/icount.c): a vCPU ahead of the global clock that needs a sync waits for
++ * the others to reach its instant. True for that vCPU meanwhile (cpu_can_run()/cpu_thread_is_idle()). */
++bool vnext_b_lockstep_sync_wait(CPUState *cpu);
++/* Any vCPU waiting for its sync instant (the icount warp must not move the clock past it). */
++bool vnext_b_lockstep_sync_pending(void);
++/* Earliest instant (QEMU_CLOCK_VIRTUAL, ns) another vCPU waits to sync at, 0 if none: `cpu` must stop
++ * there so the global clock reaches it. */
++int64_t vnext_b_lockstep_sync_limit_ns(CPUState *cpu);
++/* RR TCG loop, BQL held, between vCPU executions: issues a waiting sync once the global clock
++ * reached its instant. */
++void vnext_b_lockstep_sync_poll(void);
+ /* Called by the GPIO model right before it reads GPIO_IN/GPIO_IN1 for a guest load. May not
+  * return: syncs with the Core and replays the load (cpu_loop_exit_restore). */
+ void vnext_b_lockstep_input_barrier(void);

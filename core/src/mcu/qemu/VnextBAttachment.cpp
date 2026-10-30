@@ -493,9 +493,9 @@ uint64_t VnextBAttachment::heartbeatWatermarkForTesting() const {
 #endif
 }
 
-bool VnextBAttachment::publishC2A(uint64_t value) {
+bool VnextBAttachment::publishC2aEvent(uint32_t kind, const void* payload, uint32_t bytes) {
 #ifdef _WIN32
-    if (!m_impl || !m_impl->view || !m_view.c2a) return false;
+    if (!m_impl || !m_impl->view || !m_view.c2a || bytes > sizeof(lasec_at_event::payload)) return false;
     auto* meta = reinterpret_cast<lasec_at_ring_header*>(static_cast<uint8_t*>(m_impl->view) + m_view.c2a->metadata.offset);
     const uint64_t write = std::atomic_ref<uint64_t>(meta->write_seq).load(std::memory_order_relaxed);
     const uint64_t read = std::atomic_ref<uint64_t>(meta->read_seq).load(std::memory_order_acquire);
@@ -504,16 +504,43 @@ bool VnextBAttachment::publishC2A(uint64_t value) {
                  (write & (m_view.c2a->depth - 1));
     std::memset(slot, 0, sizeof(*slot));
     slot->timestamp_ns = write;
-    slot->kind = 2;
+    slot->kind = kind;
     slot->endpoint_id = 0;
-    slot->payload_bytes = sizeof(value);
-    std::memcpy(slot->payload, &value, sizeof(value));
+    slot->payload_bytes = bytes;
+    std::memcpy(slot->payload, payload, bytes);
     slot->lane_sequence = write;
     std::atomic_ref<uint64_t>(meta->write_seq).store(write + 1, std::memory_order_release);
-    signalArtifactResume();
+    if (m_coalesceSignals.load(std::memory_order_relaxed)) m_signalPending.store(true, std::memory_order_release);
+    else signalArtifactResume();
     return true;
 #else
-    (void)value; return false;
+    (void)kind; (void)payload; (void)bytes; return false;
+#endif
+}
+
+void VnextBAttachment::flushSignal() {
+    if (m_signalPending.exchange(false, std::memory_order_acq_rel)) signalArtifactResume();
+}
+
+bool VnextBAttachment::publishC2A(uint64_t value) {
+    return publishC2aEvent(2, &value, sizeof(value));
+}
+
+bool VnextBAttachment::publishUartRxByte(uint32_t uart, uint8_t byte) {
+    // C2A tipo 2: [0] byte recebido, [1] UART (o QEMU antigo só lia [0] e entregava na UART0).
+    const uint8_t payload[2] = {byte, static_cast<uint8_t>(uart)};
+    return publishC2aEvent(2, payload, sizeof(payload));
+}
+
+bool VnextBAttachment::c2aFull() const {
+#ifdef _WIN32
+    if (!m_impl || !m_impl->view || !m_view.c2a) return true;
+    const auto* meta = reinterpret_cast<const lasec_at_ring_header*>(static_cast<const uint8_t*>(m_impl->view) + m_view.c2a->metadata.offset);
+    return std::atomic_ref<const uint64_t>(meta->write_seq).load(std::memory_order_relaxed) -
+               std::atomic_ref<const uint64_t>(meta->read_seq).load(std::memory_order_acquire) >=
+           m_view.c2a->depth;
+#else
+    return true;
 #endif
 }
 
@@ -528,28 +555,10 @@ void VnextBAttachment::signalCoreRunningForTesting() {
 }
 
 bool VnextBAttachment::publishRegisterResult(uint64_t address, uint64_t value) {
-#ifdef _WIN32
-    if (!m_impl || !m_impl->view || !m_view.c2a) return false;
-    auto* meta = reinterpret_cast<lasec_at_ring_header*>(static_cast<uint8_t*>(m_impl->view) + m_view.c2a->metadata.offset);
-    const uint64_t write = std::atomic_ref<uint64_t>(meta->write_seq).load(std::memory_order_relaxed);
-    const uint64_t read = std::atomic_ref<uint64_t>(meta->read_seq).load(std::memory_order_acquire);
-    if (write - read >= m_view.c2a->depth) return false;
-    auto* slot = reinterpret_cast<lasec_at_event*>(static_cast<uint8_t*>(m_impl->view) + m_view.c2a->events.offset) +
-                 (write & (m_view.c2a->depth - 1));
-    std::memset(slot, 0, sizeof(*slot));
-    slot->timestamp_ns = write;
-    slot->kind = 10;
-    slot->endpoint_id = 0;
-    slot->payload_bytes = sizeof(address) + sizeof(value);
-    std::memcpy(slot->payload, &address, sizeof(address));
-    std::memcpy(slot->payload + sizeof(address), &value, sizeof(value));
-    slot->lane_sequence = write;
-    std::atomic_ref<uint64_t>(meta->write_seq).store(write + 1, std::memory_order_release);
-    signalArtifactResume();
-    return true;
-#else
-    (void)address; (void)value; return false;
-#endif
+    uint8_t payload[sizeof(address) + sizeof(value)];
+    std::memcpy(payload, &address, sizeof(address));
+    std::memcpy(payload + sizeof(address), &value, sizeof(value));
+    return publishC2aEvent(10, payload, sizeof(payload));
 }
 
 bool VnextBAttachment::respondToRequest(uint32_t lane, uint64_t responseValue) {
@@ -713,7 +722,7 @@ std::optional<uint64_t> VnextBAttachment::lockstepSafeTimeNs() const {
 }
 
 void VnextBAttachment::publishCoreTime(uint64_t syncSeq, uint64_t timeNs, uint64_t horizonNs,
-                                       uint64_t inputHorizonNs, uint64_t scheduleNs) {
+                                       uint64_t inputHorizonNs, uint64_t scheduleNs, bool signal) {
     if (!m_view.control) return;
     auto* control = const_cast<lasec_at_control_page*>(m_view.control);
     // Horizonte e tempo antes da sequência: quem vê a sequência (acquire) vê os dois.
@@ -722,7 +731,8 @@ void VnextBAttachment::publishCoreTime(uint64_t syncSeq, uint64_t timeNs, uint64
     std::atomic_ref<uint64_t>(control->core_input_horizon_ns).store(inputHorizonNs, std::memory_order_relaxed);
     std::atomic_ref<uint64_t>(control->core_time_ns).store(timeNs, std::memory_order_relaxed);
     std::atomic_ref<uint64_t>(control->core_sync_seq).store(syncSeq, std::memory_order_release);
-    signalArtifactResume();
+    const bool pending = m_signalPending.exchange(false, std::memory_order_acq_rel);
+    if (signal || pending) signalArtifactResume();
 }
 
 void VnextBAttachment::signalArtifactResume() {

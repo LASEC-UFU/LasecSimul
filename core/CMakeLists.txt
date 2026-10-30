@@ -1989,6 +1989,61 @@ endif()
 add_test(NAME mcu_firmware_lasecplot COMMAND mcu_firmware_lasecplot_test)
 set_tests_properties(mcu_firmware_lasecplot PROPERTIES TIMEOUT 30)
 
+# UART RX no VNEXT_B com firmware de eco real (LASECSIMUL_TEST_UART_ECHO_FIRMWARE): os bytes do pino RX
+# e da caixa de envio do monitor chegam ao FIFO de RX do QEMU. Sem o firmware o teste é pulado.
+add_executable(mcu_uart_rx_vnext_b_test
+    test/core/mcu/McuUartRxVnextBTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_uart_rx_vnext_b_test PRIVATE include src)
+target_link_libraries(mcu_uart_rx_vnext_b_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_uart_rx_vnext_b_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_uart_rx_vnext_b_test PRIVATE dl)
+endif()
+add_test(NAME mcu_uart_rx_vnext_b COMMAND mcu_uart_rx_vnext_b_test)
+set_tests_properties(mcu_uart_rx_vnext_b PROPERTIES TIMEOUT 120)
+
+# Fade do LEDC por hardware com firmware real (LASECSIMUL_TEST_LEDC_FADE_FIRMWARE): duração, duty
+# lido de volta e a interrupção DUTY_CHNG_END que ledc_fade_start(WAIT_DONE) espera.
+add_executable(mcu_ledc_fade_test
+    test/core/mcu/McuLedcFadeTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_ledc_fade_test PRIVATE include src)
+target_link_libraries(mcu_ledc_fade_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_ledc_fade_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_ledc_fade_test PRIVATE dl)
+endif()
+add_test(NAME mcu_ledc_fade COMMAND mcu_ledc_fade_test)
+set_tests_properties(mcu_ledc_fade PROPERTIES TIMEOUT 120)
+
+add_executable(mcu_dual_core_timing_test
+    test/core/mcu/McuDualCoreTimingTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_dual_core_timing_test PRIVATE include src)
+target_link_libraries(mcu_dual_core_timing_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_dual_core_timing_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_dual_core_timing_test PRIVATE dl)
+endif()
+add_test(NAME mcu_dual_core_timing COMMAND mcu_dual_core_timing_test)
+set_tests_properties(mcu_dual_core_timing PROPERTIES TIMEOUT 120)
+
 add_executable(cache_wait_e2e_real_qemu_test
     test/core/mcu/CacheWaitE2ERealQemuTest.cpp
     ${CORE_SOURCES_NO_MAIN}
@@ -2194,6 +2249,7 @@ set(LASECSIMUL_EXTERNAL_QEMU_TESTS
     mcu_multiple_controllers_real_qemu mcu_blink_long_run mcu_firmware_lasecplot
     mcu_scheduler_pacing_sync_real_qemu mcu_scheduler_pacing_sync_real_qemu_mttcg
     qemu_queue_full_timeout vnext_b_attachment vnext_b_production_scale cache_wait_e2e_real_qemu
+    mcu_uart_rx_vnext_b mcu_ledc_fade mcu_dual_core_timing
 )
 set(LASECSIMUL_EXTERNAL_PYTHON_TESTS
     python_runtime python_session python_program_execution python_program_numpy python_program_session_integration

@@ -94,3 +94,25 @@ Core, preventing a response from racing ahead of the stop. A 180-second run of t
 `display.lsproj` and `merged.bin` had zero `ESP_ERR_INVALID_STATE` messages and display updates
 through the end of the run. The previous packaged executable had four such errors in 70 seconds
 with the same fixture.
+
+As of 2026-10-30 the packaged executable is built from `7ead728` plus patches 0011-0016, applied in
+order on the uncommitted working tree of `qemu_lasecSimul-invalid-state` (the chain re-applied
+reproduces that tree exactly; SHA-256 `61AA17DF...`, see `bin/BUILD-PROVENANCE-1H.txt`). 0011-0015
+are summarized in `orchestrator/.ai/QEMU_RUNTIME.json` (`promotion_note_v0104`). 0016:
+
+- `softmmu/icount.c`, `accel/tcg/tcg-accel-ops-icount.c`, `accel/tcg/tcg-accel-ops-rr.c`,
+  `softmmu/cpus.c`, `softmmu/vnext_b.c`: one virtual clock per vCPU. Single-threaded TCG runs the two
+  cores in turn and stock icount charged both cores' instructions to the one clock, so with both
+  busy each core ran at half speed (a loop: 75.8 ms on one core alone, 140-151 ms with the other
+  busy; now 75.3 ms in both cases). Outside guest execution `QEMU_CLOCK_VIRTUAL` is the clock of the
+  slowest vCPU that is not halted nor suspended by a device model (flash-cache wait, full lane, I2C
+  reply); while both run, neither gets more than 10 us ahead; in lockstep
+  a vCPU ahead of the other that needs a sync waits until the other reaches that instant.
+- `hw/nvram/esp32_efuse.c`: a blank `CK8M_FREQ` reads 80 (RC_FAST in 100 kHz units, as modeled by
+  `esp32_timg`). The boot ROM computes the crystal from it; with 0 it assumed 26 MHz and the boot
+  banner left the UART0 pad at 177 kbaud instead of 115200.
+- `softmmu/vnext_b.c`: a UART RX byte from the Core (C2A kind 2) goes to the UART it names.
+- `hw/misc/esp32_ledc.c`, `hw/xtensa/esp32.c`: LEDC hardware fade (`DUTY_INC/NUM/CYCLE/SCALE`) with
+  the `DUTY_CHNG_END` interrupt wired to the interrupt matrix; `DUTY_R` reads the duty in effect.
+- `hw/i2c/esp32_i2c.c`: a STOP with no data list (the bus held after a transfer without STOP) goes to
+  the Core as a STOP-only burst, so SDA/SCL return high as on the chip.

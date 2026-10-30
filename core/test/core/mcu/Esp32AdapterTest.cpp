@@ -422,6 +422,38 @@ int main() {
         TEST_ASSERT(gpioModule->outputLevel(27), "canal 15 (LS) com SLOW_CLK=APB comeca o periodo alto");
         TEST_ASSERT(pwmModule && pwmModule->nextWakeupDelayNs(2'000'000u) == 250'000u,
                     "1 kHz/12 bits a 25% no canal de baixa velocidade: alto por 250 us");
+        // Fade (CONF1): do estouro seguinte ao DUTY_START o duty anda DUTY_SCALE a cada DUTY_CYCLE
+        // periodos, DUTY_NUM vezes. HSCH0 a 1 kHz/8 bits (tick = 3906,25 ns): duty 20, +10 a cada 2
+        // periodos, 4 vezes -- 20 nos periodos 11-12, 30, 40, 50 e 60 a partir do periodo 19.
+        gpioModule->writeRegister(0x3FF44000 + 0x530 + 27u * 4u, 71u);
+        if (pwmModule) {
+            pwmModule->writeRegisterAt(0x3FF59000 + 0x008, 20u << 4u, 10'100'000u);
+            const uint32_t conf1 = (1u << 31) | (1u << 30) | (4u << 20) | (2u << 10) | 10u;
+            pwmModule->writeRegisterAt(0x3FF59000 + 0x00C, conf1, 10'100'000u);
+            uint64_t now = 10'100'000u;
+            const auto advanceTo = [&](uint64_t target) {
+                for (int guard = 0; guard < 64; ++guard) {
+                    const uint64_t delay = pwmModule->nextWakeupDelayNs(now);
+                    if (delay == QemuModule::kNoWakeup || now + delay > target) break;
+                    now += delay;
+                    pwmModule->onWakeup(now);
+                }
+            };
+            bool fadeOk = true;
+            for (uint64_t period = 11; period <= 21; ++period) {
+                advanceTo(period * 1'000'000u);
+                const uint64_t duty = period < 13 ? 20 : period < 15 ? 30 : period < 17 ? 40 : period < 19 ? 50 : 60;
+                const uint64_t highNs = (duty * 390'625u + 99u) / 100u;   // ceil(duty * 3906,25)
+                const uint64_t delay = pwmModule->nextWakeupDelayNs(now);
+                if (now != period * 1'000'000u || delay != highNs) {
+                    std::fprintf(stderr, "  fade: periodo %llu now=%llu alto=%llu ns (esperado %llu)\n",
+                                 static_cast<unsigned long long>(period), static_cast<unsigned long long>(now),
+                                 static_cast<unsigned long long>(delay), static_cast<unsigned long long>(highNs));
+                    fadeOk = false;
+                }
+            }
+            TEST_ASSERT(fadeOk, "fade do LEDC: o duty anda DUTY_SCALE a cada DUTY_CYCLE periodos, DUTY_NUM vezes");
+        }
         gpioModule->writeRegister(0x3FF44000 + 0x530 + 27u * 4u, 0x100u);                  // devolve ao GPIO puro
 
         // GPIO_IN1_REG: bit n = GPIO(32+n) (TRM). Antes o mapa comecava em 33 e digitalRead(34..39)
