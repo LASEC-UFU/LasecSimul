@@ -1,5 +1,7 @@
 #pragma once
+#include <cstdint>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -18,8 +20,19 @@ public:
 
     ComponentMatrixView(CircuitGroup& group, const std::unordered_map<std::string, uint32_t>& pins,
                         uint32_t owner, std::optional<uint32_t> extra = std::nullopt)
-        : m_group(group), m_pins(pins), m_extra(extra), m_owner(owner) {
-        m_group.beginPendingStamp(owner);
+        : m_group(group), m_pins(pins), m_extra(extra), m_owner(owner),
+          m_pending(&m_group.beginPendingStamp(owner)) {}
+
+    /** `componentPins` = IComponentModel::pins() do dono e `localIndexByOrdinal` o índice local de
+     * cada um, na mesma ordem: um Pin desse array resolve pela posição, sem hash. */
+    ComponentMatrixView(CircuitGroup& group, const std::unordered_map<std::string, uint32_t>& pins,
+                        uint32_t owner, std::optional<uint32_t> extra, std::span<const Pin> componentPins,
+                        const std::vector<uint32_t>& localIndexByOrdinal)
+        : ComponentMatrixView(group, pins, owner, extra) {
+        if (localIndexByOrdinal.size() == componentPins.size()) {
+            m_componentPins = componentPins;
+            m_localIndexByOrdinal = localIndexByOrdinal.data();
+        }
     }
 
     void commit() {
@@ -52,28 +65,50 @@ public:
     }
 
 private:
+    // Um stamp costuma tocar o mesmo pino várias vezes seguidas (condutância, corrente, tensão): o
+    // último pino resolvido evita um hash de string por operação. Compara o id (um Pin temporário
+    // pode reaparecer no mesmo endereço com outro id); a chave aponta para o mapa, que não muda
+    // durante a view.
     uint32_t index(const Pin& pin) const {
+        if (m_localIndexByOrdinal) {
+            // Endereço dentro do próprio array de pinos do componente: é aquele pino (nenhum Pin
+            // temporário aponta para dentro dele).
+            const auto address = reinterpret_cast<std::uintptr_t>(&pin);
+            const auto base = reinterpret_cast<std::uintptr_t>(m_componentPins.data());
+            if (address >= base && address < base + m_componentPins.size_bytes() && (address - base) % sizeof(Pin) == 0) {
+                const uint32_t local = m_localIndexByOrdinal[(address - base) / sizeof(Pin)];
+                if (local != UINT32_MAX) return local;
+            }
+        }
+        if (m_lastId && pin.id == *m_lastId) return m_lastIndex;
         const auto it = m_pins.find(pin.id);
         if (it == m_pins.end()) throw std::runtime_error("Pin desconhecido nesta view: " + pin.id);
+        m_lastId = &it->first;
+        m_lastIndex = it->second;
         return it->second;
     }
     void addMatrix(uint32_t row, uint32_t column, double value) {
-        if (!m_owner) { m_group.admittance()(row, column) += value; return; }
-        m_group.addPendingMatrix(*m_owner, row, column, value);
+        if (!m_pending) { m_group.admittance()(row, column) += value; return; }
+        CircuitGroup::addPendingMatrix(*m_pending, row, column, value);
     }
     void addRhs(uint32_t row, double value) {
-        if (!m_owner) { m_group.rhs()(row) += value; return; }
-        m_group.addPendingRhs(*m_owner, row, value);
+        if (!m_pending) { m_group.rhs()(row) += value; return; }
+        CircuitGroup::addPendingRhs(*m_pending, row, value);
     }
     void setRhs(uint32_t row, double value) {
-        if (!m_owner) { m_group.rhs()(row) = value; return; }
-        m_group.addPendingRhs(*m_owner, row, value, true);
+        if (!m_pending) { m_group.rhs()(row) = value; return; }
+        CircuitGroup::addPendingRhs(*m_pending, row, value, true);
     }
 
     CircuitGroup& m_group;
     const std::unordered_map<std::string, uint32_t>& m_pins;
     std::optional<uint32_t> m_extra;
     std::optional<uint32_t> m_owner;
+    CircuitGroup::StampContribution* m_pending = nullptr; // a de m_owner, de beginPendingStamp()
+    std::span<const Pin> m_componentPins;
+    const uint32_t* m_localIndexByOrdinal = nullptr;
+    mutable const std::string* m_lastId = nullptr;
+    mutable uint32_t m_lastIndex = 0;
     bool m_committed = false;
 };
 

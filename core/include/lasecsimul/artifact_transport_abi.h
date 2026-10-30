@@ -5,7 +5,7 @@
 
 #define LASEC_AT_MAGIC UINT64_C(0x4C415443564E4251)
 #define LASEC_AT_ABI_MAJOR 1u
-#define LASEC_AT_ABI_MINOR 1u
+#define LASEC_AT_ABI_MINOR 2u
 #define LASEC_AT_MAX_LANES 16u
 #define LASEC_AT_MAX_ENDPOINTS 64u
 #define LASEC_AT_MAX_RESPONSES 16u
@@ -71,6 +71,39 @@ typedef struct lasec_at_control_page {
      * measures confirmed *applied* events, not mere elapsed time) and must never be read by the
      * VnextBArbiter or dispatched as if it were guest activity. */
     uint64_t artifact_virtual_time_ns;
+    /* ABI v1.2 -- exact lockstep (Core sets `lockstep` before the artifact starts; QEMU honours it
+     * only when it runs with -icount, i.e. its virtual clock is instruction-counted). All times are
+     * on the artifact's virtual timeline (Core time minus the session origin).
+     *  - The artifact never runs past `core_horizon_ns` (the next Core event that may change what
+     *    the guest observes asynchronously: an armed GPIO interrupt, an I2C reply...) and holds its
+     *    vCPUs, virtual clock frozen, whenever it needs the Core: on reaching that horizon, on a GPIO_IN
+     *    read at or after `core_input_horizon_ns` (the next Core event of any kind -- it may move a
+     *    pad) or after a write it has not synced yet, and right after a register write whose
+     *    consequences the Core may deliver at once (any write while a GPIO interrupt is armed, and
+     *    writes to peripherals other than GPIO/IO_MUX/UART/SPI/LEDC). To request a
+     *    sync it stores artifact_virtual_time_ns = the instant it holds at, then increments
+     *    `artifact_sync_seq` (release).
+     *  - The Core never advances past artifact_virtual_time_ns. After processing every event up to
+     *    an instant it stores core_horizon_ns, core_time_ns and then core_sync_seq = the
+     *    artifact_sync_seq it had observed before reading the lanes (release).
+     *  - The artifact releases the hold when core_sync_seq == artifact_sync_seq and core_time_ns
+     *    reaches its instant; it first consumes responses and C2A, so inputs land at that instant.
+     * Real-time lockstep (`lockstep_realtime` nonzero, also set before the artifact starts): with
+     * every publish the Core also stores `core_realtime_schedule_ns`, the instant the simulation
+     * should be at by its real-time pacing (0 = no pacing). When the host cannot execute the guest
+     * fast enough to keep that schedule, the artifact stretches the virtual time of each instruction
+     * (as if the CPU had wait states) instead of letting the whole simulation fall behind; it returns
+     * to one instruction per CPU cycle as soon as the host keeps up. Timers, peripherals and every
+     * Core sync stay on the same virtual timeline -- only instruction timing changes. The artifact
+     * publishes the stretch it applies in `artifact_cpu_dilation_q16` (Q16.16, 65536 = exact). */
+    uint64_t artifact_sync_seq;
+    uint64_t core_sync_seq;
+    uint64_t core_time_ns;
+    uint64_t core_horizon_ns;
+    uint64_t core_input_horizon_ns;
+    uint32_t lockstep, lockstep_realtime;
+    uint64_t core_realtime_schedule_ns;
+    uint32_t artifact_cpu_dilation_q16, artifact_reserved;
 } lasec_at_control_page;
 typedef struct lasec_at_response_slot {
     uint64_t request_seq, response_seq;

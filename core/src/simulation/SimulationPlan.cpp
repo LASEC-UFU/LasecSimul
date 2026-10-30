@@ -194,6 +194,8 @@ std::shared_ptr<const ElectricalPlan> compileElectrical(const PlanCompileInput& 
     plan->slotToNode = topology.slotToNode;
     plan->extraVariablesByComponent = topology.extraVariablesByComponent;
     plan->stampResolutionByComponent = topology.stampResolutionByComponent;
+    // Cache por ordem de pins() da topologia ao vivo: refeito no primeiro stamp de quem usar o plano.
+    for (ComponentStampResolution& resolution : plan->stampResolutionByComponent) resolution.localIndexByPinOrdinal.clear();
     return plan;
 }
 

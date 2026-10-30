@@ -31,6 +31,9 @@ struct ExtraVariableResolution {
 struct ComponentStampResolution {
     uint32_t groupIndex = std::numeric_limits<uint32_t>::max();
     std::unordered_map<std::string, uint32_t> localIndexByPinId;
+    /** localIndexByPinId na ordem de IComponentModel::pins() (UINT32_MAX = pino fora do mapa),
+     * montado no primeiro stamp depois do rebuild: tira o hash de string de cada operação de stamp. */
+    std::vector<uint32_t> localIndexByPinOrdinal;
 };
 
 /** Um pino específico de um componente específico, presente num nó — usado pra disparar

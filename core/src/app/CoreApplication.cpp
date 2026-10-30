@@ -2102,6 +2102,8 @@ OutgoingResponse handleMessage(const IncomingMessage& msg, SimulationSession& se
             {"maxSettleAtNowNs", core.maxSettleAtNowNs},
             {"advanceLimitWaitCount", core.advanceLimitWaitCount},
             {"advanceLimitWaitNanoseconds", core.advanceLimitWaitNanoseconds},
+            {"pacingSleepNanoseconds", core.pacingSleepNanoseconds},
+            {"lockstepIdleWaitNanoseconds", core.lockstepIdleWaitNanoseconds},
             {"simulationPlan", plan ? nlohmann::json{
                 {"generation", plan->generation},
                 {"runtimeGeneration", session.runtimeState().planGeneration},

@@ -496,12 +496,18 @@ function launchCoreProcess(extensionPath: string): { corePath: string; pipeName:
   const configuredNetworkMode = networkConfiguration.get<string>("mode", "isolated");
   const networkMode = resolveNetworkMode(configuredNetworkMode);
   const configuredGatewayPort = networkConfiguration.get<number>("gatewayPort", 9011);
+  // "realtime" e "exact": QEMU com relógio contado por instrução (-icount) em lockstep com o Core -- o
+  // guest nunca passa do instante do circuito nem o circuito do instante do guest. "realtime" ainda
+  // estica o tempo de cada instrução quando o PC não executa o guest rápido o bastante para o ritmo
+  // real. "mttcg": o modo antigo, relógio do guest preso ao do host.
+  const esp32Timing = vscode.workspace.getConfiguration("lasecsimul.mcu").get<string>("esp32Timing", "realtime");
   const coreEnv: NodeJS.ProcessEnv = {
     // Prevent shared-memory arena collisions between thin-client instances.
     LASECSIMUL_HOST_INSTANCE_ID: String(process.pid),
     // VNEXT-B is the certified event-driven transport for the ESP32 runtime.
     LASECSIMUL_MCU_TRANSPORT: "VNEXT_B",
-    LASECSIMUL_ESP32_EXECUTION_MODE: "mttcg",
+    LASECSIMUL_ESP32_EXECUTION_MODE: esp32Timing === "mttcg" ? "mttcg" : "deterministic",
+    LASECSIMUL_ESP32_TIMING: esp32Timing === "exact" ? "exact" : "realtime",
     LASECSIMUL_NETWORK_MODE:
       networkMode.effectiveMode,
     LASECSIMUL_GATEWAY_PORT: String(configuredGatewayPort),

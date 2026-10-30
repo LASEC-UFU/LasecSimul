@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <set>
 #include <limits>
 #include <mutex>
 #include <optional>
@@ -24,6 +25,9 @@ struct ScheduledEvent {
     uint32_t componentIndex;
     uint64_t sequence;
     std::function<void()> callback;
+    // Lockstep: evento que só mexe em saídas de um MCU (borda de SPI/LEDC/UART TX). Não limita o
+    // horizonte que o guest pode correr sem sincronizar (ver Scheduler::TimeSettledFn).
+    bool soft = false;
 };
 
 struct ScheduledEventOrder {
@@ -56,6 +60,10 @@ public:
         /** Ver m_advanceLimitWaitCount/m_advanceLimitWaitNanoseconds. */
         uint64_t advanceLimitWaitCount = 0;
         uint64_t advanceLimitWaitNanoseconds = 0;
+        /** Tempo de parede dormindo no pacing de tempo real (à frente do relógio) e, no lockstep,
+         * parado sem trabalho esperando o guest publicar um instante adiante. */
+        uint64_t pacingSleepNanoseconds = 0;
+        uint64_t lockstepIdleWaitNanoseconds = 0;
     };
     struct TimeStepDecision { bool accept = true; double errorRatio = 0.0; };
     using SettleStepFn = std::function<bool()>;
@@ -106,6 +114,16 @@ public:
      * significa estar atrás do tempo real, então o pacing não dorme; `std::nullopt` = sem referência. */
     using HostPacedPositionFn = std::function<std::optional<uint64_t>()>;
     using BeforeExecutionFn = std::function<void()>;
+    /** Lockstep exato: posição que um artefato com relógio contado por instrução (QEMU -icount)
+     * provou ter alcançado. Diferente de `AdvanceLimitFn`, é um teto SEM folga -- o Core nunca passa
+     * do instante do guest, então nenhuma escrita dele chega no passado do Core. Com valor maior que
+     * `nowNs()`, o Core avança até ele mesmo sem evento na fila (o artefato pode estar parado
+     * esperando o Core chegar lá); o pacing de tempo real continua valendo. */
+    using ExactAdvanceLimitFn = std::function<std::optional<uint64_t>()>;
+    /** Chamado pela worker, sem `m_mutex`, ao fim de cada ciclo: `nowNs` e o instante do próximo
+     * evento da fila (`UINT64_MAX` se vazia). Base do lockstep exato (ver
+     * McuComponent::publishLockstepTime). */
+    using TimeSettledFn = std::function<void(uint64_t nowNs, uint64_t nextEventNs, uint64_t nextHardEventNs)>;
 
     Scheduler(size_t componentCapacity, SettleStepFn settleStep)
         : m_dirty(componentCapacity), m_pendingDirty(componentCapacity),
@@ -121,6 +139,8 @@ public:
     void setAdvanceLimitCallback(AdvanceLimitFn callback) { m_advanceLimit = std::move(callback); }
     void setHostPacedPositionCallback(HostPacedPositionFn callback) { m_hostPacedPosition = std::move(callback); }
     void setBeforeExecutionCallback(BeforeExecutionFn callback) { m_beforeExecution = std::move(callback); }
+    void setExactAdvanceLimitCallback(ExactAdvanceLimitFn callback) { m_exactAdvanceLimit = std::move(callback); }
+    void setTimeSettledCallback(TimeSettledFn callback) { m_timeSettled = std::move(callback); }
     /** Acorda a worker se ela estiver parked (ociosa ou pausada) depois que a thread de IPC publica
      * um comando. Usa um contador atômico, não condition_variable: `atomic::wait(valor)` verifica o
      * valor como parte do próprio protocolo de espera, portanto um notify ocorrido entre a última
@@ -179,6 +199,8 @@ public:
 
     void scheduleAt(uint64_t timeNs, uint32_t componentIndex);
     void scheduleAt(uint64_t timeNs, EventCallback callback);
+    /** `soft`: ver ScheduledEvent::soft. */
+    void scheduleAt(uint64_t timeNs, EventCallback callback, bool soft);
     void scheduleEvent(uint64_t delayNs, uint32_t componentIndex);
     void scheduleEvent(uint64_t delayNs, EventCallback callback);
 
@@ -195,6 +217,8 @@ public:
         m_maxSettleAtNowNs.store(0, std::memory_order_relaxed);
         m_advanceLimitWaitCount.store(0, std::memory_order_relaxed);
         m_advanceLimitWaitNanoseconds.store(0, std::memory_order_relaxed);
+        m_pacingSleepNanoseconds.store(0, std::memory_order_relaxed);
+        m_lockstepIdleWaitNanoseconds.store(0, std::memory_order_relaxed);
     }
     MetricsSnapshot metrics() const {
         return {m_profilingEnabled.load(std::memory_order_relaxed),
@@ -206,7 +230,9 @@ public:
                 m_maxSettleNanoseconds.load(std::memory_order_relaxed),
                 m_maxSettleAtNowNs.load(std::memory_order_relaxed),
                 m_advanceLimitWaitCount.load(std::memory_order_relaxed),
-                m_advanceLimitWaitNanoseconds.load(std::memory_order_relaxed)};
+                m_advanceLimitWaitNanoseconds.load(std::memory_order_relaxed),
+                m_pacingSleepNanoseconds.load(std::memory_order_relaxed),
+                m_lockstepIdleWaitNanoseconds.load(std::memory_order_relaxed)};
     }
     /** Snapshot lock-free: telemetry must never queue ahead of a stop IPC request. */
     uint64_t nowNs() const { return m_nowSnapshotNs.load(std::memory_order_acquire); }
@@ -247,8 +273,8 @@ public:
      * `callback` em si É invocado depois, fora dessa seção travada (ver
      * processNextEventUntilLocked: unlock -> callback() -> lock), então ele pode chamar
      * `scheduleEvent`/`markDirty` normais sem medo -- só a ENFILEIRADA aqui precisa ser unlocked. */
-    void scheduleEventUnlocked(uint64_t delayNs, EventCallback callback) {
-        pushEventLocked(m_nowNs + delayNs, kNoComponent, std::move(callback));
+    void scheduleEventUnlocked(uint64_t delayNs, EventCallback callback, bool soft = false) {
+        pushEventLocked(m_nowNs + delayNs, kNoComponent, std::move(callback), soft);
     }
 
     void start();
@@ -314,6 +340,13 @@ public:
      * recebem mais margem, sempre dentro de `[kMinAdvanceLeadNs, kMaxAdvanceLeadNs]`. Fica em `1`
      * (nanosegundo) até a primeira calibração completar. */
     uint64_t pacingQuantumNs() const { return m_pacingQuantumNs.load(std::memory_order_relaxed); }
+    /** Instante virtual em que a simulação deveria estar agora pelo pacing de tempo real (âncora de
+     * parede da worker + `realTimeRate()`), mesmo que ainda não tenha chegado lá: a diferença para
+     * `nowNs()` é o atraso em relação ao tempo real (no máximo kLockstepMaxPacingLagNs, o que o
+     * lockstep ainda recupera). `std::nullopt` sem pacing (ilimitado), pausado ou
+     * antes da primeira calibração. Base do lockstep em tempo real (ver
+     * McuComponent::publishLockstepTime). Thread-safe. */
+    std::optional<uint64_t> realTimeScheduleNs() const;
 
     /** Limite de iterações não-lineares por settle cycle. 0 = ilimitado (default). */
     void setMaxNonLinearIterations(size_t n) { m_maxNonLinearIterations.store(n, std::memory_order_relaxed); }
@@ -329,8 +362,14 @@ private:
      * refinar com medição ao vivo, não considerado definitivo. */
     static constexpr uint64_t kMinAdvanceLeadNs = 5'000'000;  // 5ms
     static constexpr uint64_t kMaxAdvanceLeadNs = 20'000'000; // 20ms
+    /** Lockstep: maior atraso em relação ao tempo real que o pacing ainda recupera. Cobre o vaivém
+     * normal de um sketch (um trecho pesado atrasa, o delay() seguinte recupera); um engasgo maior do
+     * host (outro processo pesado no mesmo servidor, troca de firmware) desliza a âncora em vez de
+     * fazer a simulação correr acelerada por segundos depois para alcançar o relógio. */
+    static constexpr uint64_t kLockstepMaxPacingLagNs = 1'000'000'000; // 1s
 
-    void pushEventLocked(uint64_t timeNs, uint32_t componentIndex, EventCallback callback);
+    void pushEventLocked(uint64_t timeNs, uint32_t componentIndex, EventCallback callback, bool soft = false);
+    void publishNextHardEventLocked();
     void signalWorkAvailable() {
         m_workGeneration.fetch_add(1, std::memory_order_seq_cst);
         m_workGeneration.notify_all();
@@ -365,6 +404,8 @@ private:
     CommandPendingFn m_commandPending;
     AdvanceLimitFn m_advanceLimit;
     HostPacedPositionFn m_hostPacedPosition;
+    ExactAdvanceLimitFn m_exactAdvanceLimit;
+    TimeSettledFn m_timeSettled;
     BeforeExecutionFn m_beforeExecution;
 
     std::thread m_thread;
@@ -397,6 +438,14 @@ private:
     std::atomic<uint64_t> m_targetStepUs{0};
     std::atomic<double> m_realTimeRate{0.0};
     std::atomic<uint64_t> m_pacingQuantumNs{1};
+    /** Cópia da âncora de pacing da worker para realTimeScheduleNs(); `rate` 0 = sem pacing. */
+    struct PacingAnchor {
+        std::chrono::steady_clock::time_point wall{};
+        uint64_t simNs = 0;
+        double rate = 0.0;
+    };
+    mutable std::mutex m_pacingAnchorMutex;
+    PacingAnchor m_pacingAnchor;
     /** Ver doc-comment de notifyAdvanceLimitChanged() acima. */
     std::atomic<uint64_t> m_advanceLimitGeneration{0};
     /** Instrumentação temporária (investigação de desempenho I2C) -- quantas vezes o ramo
@@ -405,6 +454,8 @@ private:
      * paga o tempo real até o próximo avanço genuíno. */
     std::atomic<uint64_t> m_advanceLimitWaitCount{0};
     std::atomic<uint64_t> m_advanceLimitWaitNanoseconds{0};
+    std::atomic<uint64_t> m_pacingSleepNanoseconds{0};
+    std::atomic<uint64_t> m_lockstepIdleWaitNanoseconds{0};
     std::atomic<size_t> m_maxNonLinearIterations{0};
     std::atomic<uint64_t> m_maximumTimeStepNs{0};
     std::atomic<bool> m_profilingEnabled{false};
@@ -419,6 +470,9 @@ private:
      * ele pela espera de pacing: um evento agendado por outra thread para um instante que a worker
      * já alcançou precisa encerrar a espera. */
     std::atomic<uint64_t> m_nextEventSnapshotNs{std::numeric_limits<uint64_t>::max()};
+    // Instantes dos eventos não suaves da fila (ver ScheduledEvent::soft), sob m_mutex.
+    std::multiset<uint64_t> m_hardEventTimes;
+    std::atomic<uint64_t> m_nextHardEventSnapshotNs{std::numeric_limits<uint64_t>::max()};
     /** true enquanto a worker está numa espera temporizada em m_pacingWake (ver signalWorkAvailable). */
     std::atomic<bool> m_workerTimedWait{false};
     /** Threads bloqueadas em synchronized() esperando m_mutex (ver synchronized()). */

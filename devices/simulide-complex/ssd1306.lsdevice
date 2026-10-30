@@ -102,6 +102,7 @@
       "step": 1
     }
   ],
+  "dynamic": true,
   "limits": {
     "stepTimeoutMs": 0,
     "expectedComplexity": "medium"

@@ -4,6 +4,7 @@
 // createModules(). Alem do GPIO simples, este teste agora verifica tambem a presenca do IOMUX e o
 // roteamento temporizado de UART0 TX/RX via IOMUX/GPIO matrix.
 #include <algorithm>
+#include <array>
 #include <cstdlib>
 #include <cstdio>
 #include <filesystem>
@@ -198,6 +199,21 @@ int main() {
     TEST_ASSERT(i2c0Module != nullptr, "teste encontrou o modulo I2C0");
     TEST_ASSERT(spiModule != nullptr, "teste encontrou o modulo SPI (HSPI)");
     if (gpioModule) {
+        // Canal privado do lockstep (0xF00/0xF04): pino com interrupção armada = INT_TYPE e algum
+        // INT_ENA no GPIO_PINn_REG, o mesmo critério do modelo de GPIO do QEMU.
+        TEST_ASSERT(gpioModule->readRegister(0x3FF44F00) == 0 && gpioModule->readRegister(0x3FF44F04) == 0,
+                    "nenhuma interrupcao de GPIO armada apos o reset");
+        gpioModule->writeRegister(0x3FF44088 + 13u * 4u, 1u << 7); // GPIO13: POSEDGE sem INT_ENA
+        TEST_ASSERT(gpioModule->readRegister(0x3FF44F00) == 0, "INT_TYPE sem INT_ENA nao arma interrupcao");
+        gpioModule->writeRegister(0x3FF44088 + 13u * 4u, (1u << 7) | (1u << 15)); // + PRO CPU
+        gpioModule->writeRegister(0x3FF44088 + 34u * 4u, (3u << 7) | (1u << 13)); // GPIO34: ANYEDGE APP
+        TEST_ASSERT(gpioModule->readRegister(0x3FF44F00) == (1u << 13), "GPIO13 armado aparece no bit 13");
+        TEST_ASSERT(gpioModule->readRegister(0x3FF44F04) == (1u << 2), "GPIO34 armado aparece no bit 2 da palavra alta");
+        gpioModule->writeRegister(0x3FF44088 + 13u * 4u, 0);
+        gpioModule->writeRegister(0x3FF44088 + 34u * 4u, 0);
+        TEST_ASSERT(gpioModule->readRegister(0x3FF44F00) == 0 && gpioModule->readRegister(0x3FF44F04) == 0,
+                    "desarmar zera o canal privado");
+
         gpioModule->writeRegister(0x3FF44000 + 0x20, 1u << 2);
         gpioModule->writeRegister(0x3FF44000 + 0x04, 1u << 2);
         TEST_ASSERT(gpioModule->isOutputEnabled(2), "modulo via plugin marca bit 2 como saida apos ENABLE_REG");
@@ -275,6 +291,25 @@ int main() {
         TEST_ASSERT(uart0Module && (uart0Module->readRegister(0x3FF40000 + 0x1C) & 0xFFu) == 0u,
                     "UART0 RX FIFO decrementa apos leitura");
 
+        // O stamp do MCU amostra todo pad a cada solve; o GPIO so' repassa um nivel novo aos sinais
+        // roteados. Repetir o nivel nao gera borda; depois do reset do periferico (RX volta ao repouso
+        // alto) a primeira amostra do pad chega de novo -- um pad baixo vira start bit, como antes.
+        if (uart0Module) uart0Module->reset();
+        if (uart0Module) uart0Module->writeRegisterAt(0x3FF40000 + 0x14, 5'000u, 0);
+        gpioModule->setInputVoltageAt(3, 3.3, 0);
+        gpioModule->setInputVoltageAt(3, 3.2, 10u);
+        TEST_ASSERT(uart0Module && uart0Module->nextWakeupDelayNs(10u) == QemuModule::kNoWakeup,
+                    "UART0 RX: o mesmo nivel alto repetido nao inicia recepcao");
+        gpioModule->setInputVoltageAt(3, 0.0, 100u);
+        TEST_ASSERT(uart0Module && uart0Module->nextWakeupDelayNs(100u) == 2'500u,
+                    "UART0 RX: queda do pad roteada inicia o start bit");
+        if (uart0Module) uart0Module->reset();
+        if (uart0Module) uart0Module->writeRegisterAt(0x3FF40000 + 0x14, 5'000u, 0);
+        gpioModule->setInputVoltageAt(3, 0.0, 200u);
+        TEST_ASSERT(uart0Module && uart0Module->nextWakeupDelayNs(200u) == 2'500u,
+                    "UART0 RX: depois do reset o pad ja baixo volta a chegar ao sinal");
+        if (uart0Module) uart0Module->reset();
+
         // mcu_abi.h 3.1: frame de TX sem bordas. Com todos os pinos que carregam U0TXD sem
         // observador (UART0_TX dedicado = indice 41 do pinMap, e GPIO1 pelo IOMUX), cada byte vira
         // um unico prazo no fim do frame -- o mesmo instante do caminho bit-a-bit -- e a linha fica
@@ -348,21 +383,65 @@ int main() {
         TEST_ASSERT(adcAfterControlWrite >= 2047 && adcAfterControlWrite <= 2048,
                     "ADC preserva o canal selecionado em escritas START/FORCE sem bitmap");
 
-        // LEDC HS channel 0, 1 kHz/8 bits, roteado pelo sinal 71 da GPIO Matrix ao GPIO27.
+        // LEDC HS channel 0, 1 kHz/8 bits, roteado pelo sinal 71 da GPIO Matrix ao GPIO27, na mesma
+        // sequencia do ESP-IDF: timer, CONF0 com SIG_OUT_EN, DUTY e CONF1.DUTY_START. Como no chip,
+        // o duty novo so vale no proximo estouro do contador (aqui, em t = 1 ms).
         if (ioMuxModule) ioMuxModule->writeRegister(0x3FF49000 + 0x2C, 2u << 12u);
         gpioModule->writeRegister(0x3FF44000 + 0x530 + 27u * 4u, 71u);
         if (pwmModule) {
             pwmModule->writeRegisterAt(0x3FF59000 + 0x140, 8u | (80'000u << 5u) | 0x02000000u, 0);
-            pwmModule->writeRegisterAt(0x3FF59000 + 0x000, 0, 0);
+            pwmModule->writeRegisterAt(0x3FF59000 + 0x000, 1u << 2, 0);        // SIG_OUT_EN, timer 0
             pwmModule->writeRegisterAt(0x3FF59000 + 0x008, 128u << 4u, 0);
+            pwmModule->writeRegisterAt(0x3FF59000 + 0x00C, 1u << 31, 0);       // DUTY_START
         }
         TEST_ASSERT(gpioModule->isOutputEnabled(27), "GPIO Matrix habilita GPIO27 como saida LEDC");
-        TEST_ASSERT(gpioModule->outputLevel(27), "PWM de 50% inicia no nivel alto");
-        TEST_ASSERT(pwmModule && pwmModule->nextWakeupDelayNs(0) >= 499'000u &&
-                        pwmModule->nextWakeupDelayNs(0) <= 501'000u,
-                    "PWM de 1 kHz/50% agenda a borda em aproximadamente 500 us");
-        if (pwmModule) pwmModule->onWakeup(500'000u);
+        TEST_ASSERT(!gpioModule->outputLevel(27), "duty novo ainda nao vale antes do estouro do contador");
+        TEST_ASSERT(pwmModule && pwmModule->nextWakeupDelayNs(0) == 1'000'000u,
+                    "LEDC acorda no estouro do contador (1 ms) para adotar o duty novo");
+        if (pwmModule) pwmModule->onWakeup(1'000'000u);
+        TEST_ASSERT(gpioModule->outputLevel(27), "no periodo seguinte o PWM de 50% comeca alto");
+        TEST_ASSERT(pwmModule && pwmModule->nextWakeupDelayNs(1'000'000u) == 500'000u,
+                    "PWM de 1 kHz/50% agenda a borda de descida 500 us depois");
+        if (pwmModule) pwmModule->onWakeup(1'500'000u);
         TEST_ASSERT(!gpioModule->outputLevel(27), "borda do PWM alterna GPIO27 para nivel baixo");
+
+        // Timer de BAIXA velocidade (LSTIMER0) com TICK_SEL: conta SLOW_CLK, que so e' APB_CLK
+        // (80 MHz) com LEDC_CONF.APB_CLK_SEL -- e' assim que o ESP-IDF faz 1 kHz/12 bits no canal 15
+        // do analogWrite(). Sem APB_CLK_SEL o mesmo divisor conta RC_FAST (8 MHz): 10x mais lento.
+        if (pwmModule) {
+            pwmModule->writeRegisterAt(0x3FF59000 + 0x190, 1u, 0);                         // APB_CLK_SEL
+            // div = 80e6 * 256 / (1000 * 4096) = 5000 (10.8): periodo de 1 ms.
+            pwmModule->writeRegisterAt(0x3FF59000 + 0x160, 12u | (5'000u << 5u) | 0x02000000u | (1u << 26), 0);
+            pwmModule->writeRegisterAt(0x3FF59000 + 0x12C, (1u << 2) | (1u << 4), 0);      // LSCH7: SIG_OUT_EN, PARA_UP
+            pwmModule->writeRegisterAt(0x3FF59000 + 0x12C + 0x8, 1024u << 4u, 0);          // 25%
+            pwmModule->writeRegisterAt(0x3FF59000 + 0x12C + 0xC, 1u << 31, 0);             // DUTY_START
+            pwmModule->onWakeup(1'000'000u);   // estouro em 1 ms: o duty de 25% passa a valer
+            pwmModule->onWakeup(2'000'000u);   // inicio do periodo seguinte
+        }
+        gpioModule->writeRegister(0x3FF44000 + 0x530 + 27u * 4u, 86u);                     // ledc_ls_sig_out7
+        TEST_ASSERT(gpioModule->outputLevel(27), "canal 15 (LS) com SLOW_CLK=APB comeca o periodo alto");
+        TEST_ASSERT(pwmModule && pwmModule->nextWakeupDelayNs(2'000'000u) == 250'000u,
+                    "1 kHz/12 bits a 25% no canal de baixa velocidade: alto por 250 us");
+        gpioModule->writeRegister(0x3FF44000 + 0x530 + 27u * 4u, 0x100u);                  // devolve ao GPIO puro
+
+        // GPIO_IN1_REG: bit n = GPIO(32+n) (TRM). Antes o mapa comecava em 33 e digitalRead(34..39)
+        // devolvia o pino vizinho.
+        gpioModule->setInputLevelAt(34, true, 0);
+        gpioModule->setInputLevelAt(32, true, 0);
+        TEST_ASSERT(gpioModule->readRegister(0x3FF44000 + 0x40) == ((1u << 2) | (1u << 0)),
+                    "GPIO_IN1 reporta GPIO32 no bit 0 e GPIO34 no bit 2");
+        gpioModule->setInputLevelAt(34, false, 0);
+        gpioModule->setInputLevelAt(32, false, 0);
+
+        // GPIO32/33 sao saidas reais: GPIO_ENABLE1_REG/GPIO_OUT1_REG (bit n = GPIO(32+n)).
+        gpioModule->writeRegister(0x3FF44000 + 0x2C, 1u << 0);
+        gpioModule->writeRegister(0x3FF44000 + 0x10, 1u << 0);
+        TEST_ASSERT(gpioModule->isOutputEnabled(32) && gpioModule->outputLevel(32),
+                    "GPIO32 dirige nivel alto via ENABLE1/OUT1");
+        gpioModule->writeRegister(0x3FF44000 + 0x18, 1u << 0);   // OUT1_W1TC
+        TEST_ASSERT(!gpioModule->outputLevel(32), "GPIO_OUT1_W1TC baixa o GPIO32");
+        gpioModule->writeRegister(0x3FF44000 + 0x2C, 0);
+        TEST_ASSERT(!gpioModule->isOutputEnabled(34), "GPIO34 continua so de entrada");
 
         // ---- Pull-up/pull-down interno real (IO_MUX FUN_PU/FUN_PD, bits 8/7) -- GPIO4, offset
         // 0x48 (ver getIoMuxPin) ----
@@ -396,6 +475,65 @@ int main() {
         gpioModule->writeRegister(0x3FF44000 + 0x04, 0); // GPIO_OUT_REG: GPIO4 = baixo
         TEST_ASSERT(gpioModule->isOutputEnabled(4) && !gpioModule->outputLevel(4),
                     "open-drain continua dirigindo o nivel baixo normalmente (so' o alto e' liberado)");
+
+        // ---- mcu_abi.h 3.2: leitura e escrita em lote ----
+        // Cada linha do lote e' o que as chamadas por linha devolvem, com saidas push-pull alta e
+        // baixa, open-drain dirigindo baixo, U0TXD pelo IOMUX, LEDC pela matrix e pulls internos.
+        if (ioMuxModule) ioMuxModule->writeRegister(0x3FF49000 + 0x6C, (2u << 12) | (1u << 8)); // GPIO5: FUN_PU
+        if (ioMuxModule) ioMuxModule->writeRegister(0x3FF49000 + 0x70, (2u << 12) | (1u << 7)); // GPIO18: FUN_PD
+        gpioModule->writeRegister(0x3FF44000 + 0x24, 1u << 2); // ENABLE_W1TS: GPIO2 saida
+        gpioModule->writeRegister(0x3FF44000 + 0x08, 1u << 2); // OUT_W1TS: GPIO2 alto
+        {
+            std::array<uint32_t, 40> bits{};
+            for (uint32_t bit = 0; bit < bits.size(); ++bit) bits[bit] = bit;
+            std::array<uint8_t, 40> batched{}, perLine{};
+            gpioModule->pinStates(bits, batched);
+            gpioModule->QemuModule::pinStates(bits, perLine);
+            TEST_ASSERT(batched == perLine,
+                        "get_pin_states devolve o mesmo que is_output_enabled/output_level/get_pull_state");
+            TEST_ASSERT(batched[2] == (QemuModule::kPinOutputEnabled | QemuModule::kPinOutputHigh),
+                        "lote: GPIO2 dirigido em nivel alto");
+            TEST_ASSERT(batched[4] == QemuModule::kPinOutputEnabled, "lote: GPIO4 open-drain dirigindo nivel baixo");
+            TEST_ASSERT(batched[5] == QemuModule::kPinPullUp && batched[18] == QemuModule::kPinPullDown,
+                        "lote: pull-up e pull-down de pinos nao dirigidos");
+            TEST_ASSERT(batched[34] == 0, "lote: GPIO34 so' de entrada, sem pull");
+
+            const std::array<uint32_t, 3> inputBits{12, 13, 34};
+            const std::array<double, 3> inputVolts{3.3, 0.2, 2.0};
+            gpioModule->setInputVoltagesAt(inputBits, inputVolts, 0);
+            TEST_ASSERT((gpioModule->readRegister(0x3FF44000 + 0x3C) & ((1u << 12) | (1u << 13))) == (1u << 12) &&
+                            (gpioModule->readRegister(0x3FF44000 + 0x40) & (1u << 2)) != 0,
+                        "set_input_voltages_at aplica cada pad do lote ao GPIO_IN/GPIO_IN1");
+            const std::array<double, 3> released{0.0, 0.0, 0.0};
+            gpioModule->setInputVoltagesAt(inputBits, released, 0);
+            TEST_ASSERT((gpioModule->readRegister(0x3FF44000 + 0x3C) & (1u << 12)) == 0 &&
+                            (gpioModule->readRegister(0x3FF44000 + 0x40) & (1u << 2)) == 0,
+                        "set_input_voltages_at baixa os mesmos pads");
+        }
+        if (ioMuxModule) ioMuxModule->writeRegister(0x3FF49000 + 0x6C, 2u << 12);
+        if (ioMuxModule) ioMuxModule->writeRegister(0x3FF49000 + 0x70, 2u << 12);
+        gpioModule->writeRegister(0x3FF44000 + 0x0C, 1u << 2); // OUT_W1TC
+        gpioModule->writeRegister(0x3FF44000 + 0x28, 1u << 2); // ENABLE_W1TC
+        if (uart0Module) {
+            // UART0_RX/UART0_TX dedicados (linhas 0/1): TX em repouso alto, RX nunca dirigido; a
+            // entrada em lote passa pelo mesmo limiar de 1,65 V, e a queda vira start bit.
+            const std::array<uint32_t, 2> lines{0, 1};
+            std::array<uint8_t, 2> batched{}, perLine{};
+            uart0Module->reset();
+            uart0Module->writeRegisterAt(0x3FF40000 + 0x14, 5'000u, 0);
+            uart0Module->pinStates(lines, batched);
+            uart0Module->QemuModule::pinStates(lines, perLine);
+            TEST_ASSERT(batched == perLine &&
+                            batched[1] == (QemuModule::kPinOutputEnabled | QemuModule::kPinOutputHigh) && batched[0] == 0,
+                        "UART0: lote igual as chamadas por linha (TX em repouso alto, RX entrada)");
+            const std::array<uint32_t, 1> rxLine{0};
+            uart0Module->setInputVoltagesAt(rxLine, std::array<double, 1>{3.3}, 0);
+            TEST_ASSERT(uart0Module->nextWakeupDelayNs(0) == QemuModule::kNoWakeup, "UART0 RX em repouso alto");
+            uart0Module->setInputVoltagesAt(rxLine, std::array<double, 1>{1.0}, 100u);
+            TEST_ASSERT(uart0Module->nextWakeupDelayNs(100u) == 2'500u,
+                        "UART0 RX: 1,0 V no lote fica abaixo do limiar e inicia o start bit");
+            uart0Module->reset();
+        }
 
         gpioModule->writeRegister(0x3FF44000 + 0x88 + 4u * 4u, 0); // desliga PAD_DRIVER
         gpioModule->writeRegister(0x3FF44000 + 0x28, 1u << 4); // ENABLE_W1TC: GPIO4 volta a entrada
@@ -645,6 +783,63 @@ int main() {
         TEST_ASSERT(!spiModule->isOutputEnabled(kCs0Line), "CS0_DIS desliga o CS0 de hardware");
         spiModule->writeRegisterAt(kSpiBase + 0x34, 0u, 0); // restaura CS0 habilitado
         TEST_ASSERT(spiModule->isOutputEnabled(kCs0Line), "limpar CS0_DIS reabilita o CS0 de hardware");
+    }
+
+    // Transacao I2C comandada pelo Core (VNEXT_B, BATCH que o fast path nao atende): operacoes nos
+    // registradores privados 0xF00, resultado de cada uma no log 0xF04/0xF08.
+    if (i2c0Module) {
+        constexpr uint64_t kI2cBase = 0x3FF53000;
+        constexpr uint32_t kSclLine = 0, kSdaLine = 1;
+        constexpr uint32_t kRestart = 0u << 8, kWrite = 1u << 8, kRead = 2u << 8, kStop = 3u << 8;
+        constexpr uint32_t kNack = 1u << 10, kAbortOnNack = 1u << 11;
+        const auto busy = [&] { return (i2c0Module->readRegister(kI2cBase + 0x08) & (1u << 4)) != 0; };
+        const auto runUntilIdle = [&](uint64_t t) {
+            for (int guard = 0; guard < 400; ++guard) {
+                const uint64_t delay = i2c0Module->nextWakeupDelayNs(t);
+                if (delay == QemuModule::kNoWakeup) break;
+                t += delay;
+                i2c0Module->onWakeup(t);
+            }
+            return t;
+        };
+        uint64_t t = runUntilIdle(50'000'000u);
+        i2c0Module->writeRegisterAt(kI2cBase + 0x00, 10'000u, t); // 100 kHz
+
+        // Ninguem puxa SDA no ACK: NACK no endereco aborta o resto e libera o barramento com STOP,
+        // como o controlador real com ACK_CHECK_EN.
+        i2c0Module->setInputLevel(kSdaLine, true);
+        for (const uint32_t op : {kRestart, kWrite | 0x7Cu | kAbortOnNack, kWrite | 0x80u | kAbortOnNack, kStop})
+            i2c0Module->writeRegisterAt(kI2cBase + 0xF00, op, t);
+        t = runUntilIdle(t);
+        TEST_ASSERT(!busy(), "transacao com NACK no endereco termina (barramento livre)");
+        TEST_ASSERT(i2c0Module->readRegister(kI2cBase + 0xF04) == 1, "so' o endereco chegou ao fio");
+        const uint64_t nackResult = i2c0Module->readRegister(kI2cBase + 0xF08);
+        TEST_ASSERT(((nackResult >> 9) & 0x3u) == 1u && (nackResult & (1u << 8)) == 0,
+                    "log registra a escrita do endereco com NACK");
+        TEST_ASSERT(!i2c0Module->isOutputEnabled(kSclLine) && !i2c0Module->isOutputEnabled(kSdaLine),
+                    "depois do STOP o mestre solta SCL e SDA");
+
+        // Escravo segurando SDA baixo: endereco e dado confirmados; sem STOP o barramento fica retido.
+        i2c0Module->setInputLevel(kSdaLine, false);
+        for (const uint32_t op : {kRestart, kWrite | 0x7Cu | kAbortOnNack, kWrite | 0x40u | kAbortOnNack})
+            i2c0Module->writeRegisterAt(kI2cBase + 0xF00, op, t);
+        t = runUntilIdle(t);
+        TEST_ASSERT(i2c0Module->readRegister(kI2cBase + 0xF04) == 2, "endereco e dado registrados");
+        TEST_ASSERT((i2c0Module->readRegister(kI2cBase + 0xF08) & (1u << 8)) != 0 &&
+                        (i2c0Module->readRegister(kI2cBase + 0xF08) & (1u << 8)) != 0,
+                    "os dois bytes recebem ACK");
+        TEST_ASSERT(i2c0Module->isOutputEnabled(kSclLine) && !i2c0Module->outputLevel(kSclLine),
+                    "sem STOP (END) o mestre segura SCL baixo ate' a proxima lista");
+
+        // Leitura de 1 byte com NACK do mestre e STOP: o byte vem do barramento (SDA baixo = 0x00).
+        for (const uint32_t op : {kRead | kNack, kStop})
+            i2c0Module->writeRegisterAt(kI2cBase + 0xF00, op, t);
+        t = runUntilIdle(t);
+        const uint64_t readResult = i2c0Module->readRegister(kI2cBase + 0xF08);
+        TEST_ASSERT(((readResult >> 9) & 0x3u) == 2u && (readResult & 0xFFu) == 0x00u &&
+                        (readResult & (1u << 8)) == 0,
+                    "log registra o byte lido e o NACK do mestre");
+        i2c0Module->setInputLevel(kSdaLine, true);
     }
 
     if (failures == 0) {

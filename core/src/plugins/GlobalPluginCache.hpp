@@ -194,6 +194,7 @@ private:
         if (device.contains("limits") && device["limits"].is_object()) {
             metadata.stepTimeoutMs = device["limits"].value("stepTimeoutMs", 0u);
         }
+        metadata.dynamic = device.value("dynamic", false);
         if (device.contains("pins") && device["pins"].is_array()) {
             for (const auto& pinJson : device["pins"]) {
                 Pin pin;

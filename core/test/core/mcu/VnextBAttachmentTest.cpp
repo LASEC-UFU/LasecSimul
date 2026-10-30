@@ -1,6 +1,7 @@
 #include "mcu/qemu/VnextBAttachment.hpp"
 #include <chrono>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <cstdlib>
@@ -379,8 +380,46 @@ int main() {
             std::cerr << "FAIL: R3c heartbeat publish must never appear as a lane event\n"; return 1;
         }
 
+        // Lockstep exato (ABI 1.2): sem evento nas filas o instante seguro é o do QEMU; a publicação
+        // do Core chega à página exatamente como o QEMU a lê (sequência por último).
+        {
+            const std::optional<uint64_t> safeNs = ringAttachment.lockstepSafeTimeNs();
+            if (!safeNs || *safeNs != 123456789) {
+                std::cerr << "FAIL: lockstep safe time should equal the artifact instant with empty lanes\n"; return 1;
+            }
+            ringAttachment.setLockstep(true, true);
+            ringAttachment.publishCoreTime(7, 1000, 3000, 2000, 5000);
+            const auto* control = ringAttachment.view().control;
+            if (control->lockstep != 1 || control->lockstep_realtime != 1 || control->core_sync_seq != 7 ||
+                control->core_time_ns != 1000 || control->core_horizon_ns != 3000 ||
+                control->core_input_horizon_ns != 2000 || control->core_realtime_schedule_ns != 5000 ||
+                control->abi_minor != LASEC_AT_ABI_MINOR) {
+                std::cerr << "FAIL: lockstep core publication did not land on the control page\n"; return 1;
+            }
+            if (ringAttachment.artifactSyncSeq() != control->artifact_sync_seq) {
+                std::cerr << "FAIL: artifact sync sequence read back differs from the page\n"; return 1;
+            }
+            // O QEMU (VnextControl em softmmu/vnext_b.c) lê estes campos pelos mesmos offsets.
+            static_assert(offsetof(lasec_at_control_page, core_realtime_schedule_ns) ==
+                          offsetof(lasec_at_control_page, lockstep) + 8);
+            static_assert(offsetof(lasec_at_control_page, artifact_cpu_dilation_q16) ==
+                          offsetof(lasec_at_control_page, core_realtime_schedule_ns) + 8);
+            // Antes de o QEMU publicar nada o esticamento é o exato; depois, o valor Q16.16 dele.
+            if (ringAttachment.artifactCpuDilation() != 1.0) {
+                std::cerr << "FAIL: cpu dilation must read as exact before the artifact publishes it\n"; return 1;
+            }
+            const_cast<lasec_at_control_page*>(control)->artifact_cpu_dilation_q16 = 5u * 65536u / 2u;
+            if (ringAttachment.artifactCpuDilation() != 2.5) {
+                std::cerr << "FAIL: cpu dilation published by the artifact did not round-trip\n"; return 1;
+            }
+            ringAttachment.setLockstep(true, false);
+            if (control->lockstep != 1 || control->lockstep_realtime != 0) {
+                std::cerr << "FAIL: exact lockstep must clear lockstep_realtime\n"; return 1;
+            }
+        }
+
         ringAttachment.stop();
-        std::cout << "R3A_RING_PEEK_CONSUME_INVARIANTS PASS\nR3C_HEARTBEAT_ROUNDTRIP PASS\n";
+        std::cout << "R3A_RING_PEEK_CONSUME_INVARIANTS PASS\nR3C_HEARTBEAT_ROUNDTRIP PASS\nLOCKSTEP_CONTROL_PAGE PASS\n";
     }
 
     // R3c heartbeat generation safety: a brand-new attachment (fresh arena name, fresh OS-backed

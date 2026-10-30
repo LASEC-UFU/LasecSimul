@@ -24,9 +24,12 @@ public:
         : m_libraryHandle(libraryHandle), m_kind(PluginKind::Device), m_vtable(vtable),
           m_binaryPath(std::move(binaryPath)) {}
 
-    PluginModule(void* libraryHandle, const LsdnMcuVTable* vtable, std::filesystem::path binaryPath)
+    /** `abiMinor`: o que `lsdn_get_mcu_vtable` declarou -- slots opcionais de um minor mais novo que
+     * o do plugin não existem na vtable dele (ver `QemuModuleProxy`). */
+    PluginModule(void* libraryHandle, const LsdnMcuVTable* vtable, std::filesystem::path binaryPath,
+                 uint32_t abiMinor = LSDN_MCU_ABI_VERSION_MINOR)
         : m_libraryHandle(libraryHandle), m_kind(PluginKind::McuAdapter), m_vtable(vtable),
-          m_binaryPath(std::move(binaryPath)) {}
+          m_binaryPath(std::move(binaryPath)), m_abiMinor(abiMinor) {}
 
     ~PluginModule();
 
@@ -45,12 +48,14 @@ public:
     }
 
     const std::filesystem::path& binaryPath() const { return m_binaryPath; }
+    uint32_t abiMinor() const { return m_abiMinor; }
 
 private:
     void* m_libraryHandle;
     PluginKind m_kind;
     const void* m_vtable;
     std::filesystem::path m_binaryPath;
+    uint32_t m_abiMinor = 0;
 };
 
 } // namespace lasecsimul::plugins

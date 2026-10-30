@@ -164,6 +164,8 @@ struct SimulationPerformanceSnapshot {
     uint64_t maxSettleAtNowNs = 0;
     uint64_t advanceLimitWaitCount = 0;
     uint64_t advanceLimitWaitNanoseconds = 0;
+    uint64_t pacingSleepNanoseconds = 0;
+    uint64_t lockstepIdleWaitNanoseconds = 0;
 };
 
 /** Um frame visual coerente, publicado apenas em fronteira de stable step. Estados de componente
@@ -680,9 +682,10 @@ private:
      * pode acontecer em microssegundos simulados sob passo adaptativo) -- acumula `acceptedDeltaNs`
      * por componente e só chama quando o total atinge `kDynamicComponentTickNs` (~60Hz, mesma
      * granularidade que simulide-complex/src/lib.c já usa pra rolagem de OLED/servo). Necessário
-     * porque `NativeDeviceProxy::postStep` passa por `PluginWatchdog::call`, que cria uma thread
-     * nova por chamada sempre que o manifesto declara `stepTimeoutMs` (todo device "complex" declara
-     * 8-10ms) -- despachar a cada passo MNA geraria uma tempestade de criação de threads. */
+     * porque `NativeDeviceProxy::postStep` passa pelo `PluginWatchdog` sempre que o manifesto
+     * declara `stepTimeoutMs` (todo device "complex" declara 8-10ms): cada chamada é uma ida e
+     * volta até a thread reservada do device, caro demais a cada passo MNA. Só entra quem declara
+     * `"dynamic": true` no manifesto (ver `NativeDeviceProxy::isDynamic`). */
     void advanceDynamicComponentsUnlocked(uint64_t acceptedDeltaNs);
     void publishElectricalSensorsToSignalUnlocked();
     /** Espelho de `publishElectricalSensorsToSignalUnlocked` pela lista genérica `signalPorts()`
@@ -1032,6 +1035,9 @@ private:
      * antiga fica atrás do Scheduler e não dispensa espera nenhuma. Mesma convenção de thread de
      * `computeSlowestMcuPositionNs()`: só lê atômicos de cada MCU. */
     std::optional<uint64_t> computeHostPacedMcuPositionNs() const;
+    /** Teto exato do Scheduler: o menor instante provado pelos MCUs em lockstep (QEMU -icount,
+     * ver McuComponent::lockstepLimitNs()); `std::nullopt` se nenhum estiver em lockstep. */
+    std::optional<uint64_t> computeLockstepMcuLimitNs() const;
 
     /** Fast path de transferência I2C (ver McuComponent::setI2cTransferHandler,
      * docs/39-i2c-mttcg-throughput-ceiling-*.md seção 9): dado o MCU e o índice de barramento I2C,

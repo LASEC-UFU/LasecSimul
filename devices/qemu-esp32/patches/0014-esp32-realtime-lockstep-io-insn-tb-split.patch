@@ -1,0 +1,430 @@
+diff --git a/accel/tcg/internal.h b/accel/tcg/internal.h
+index e8cbbde..a7727bd 100644
+--- a/accel/tcg/internal.h
++++ b/accel/tcg/internal.h
+@@ -24,6 +24,12 @@
+ #define assert_memory_lock()
+ #endif
+ 
++/* LasecSimul: true for the guest PC of an instruction that did I/O in the middle of a TB under
++ * icount (see cpu_io_recompile()). */
++bool tb_io_insn_pc(vaddr pc);
++/* LasecSimul diagnostics, also declared in softmmu/vnext_b.h. */
++uint64_t lasec_tcg_tb_gen_count(bool one_shot, uint64_t *last_one_shot_pc);
++
+ #if defined(CONFIG_SOFTMMU) && defined(CONFIG_DEBUG_TCG)
+ void assert_no_pages_locked(void);
+ #else
+diff --git a/accel/tcg/tcg-accel-ops-rr.c b/accel/tcg/tcg-accel-ops-rr.c
+index 7225ce2..0622c51 100644
+--- a/accel/tcg/tcg-accel-ops-rr.c
++++ b/accel/tcg/tcg-accel-ops-rr.c
+@@ -36,6 +36,7 @@
+ #include "tcg-accel-ops.h"
+ #include "tcg-accel-ops-rr.h"
+ #include "tcg-accel-ops-icount.h"
++#include "../../softmmu/vnext_b.h"
+ 
+ /* Kick all RR vCPUs */
+ void rr_kick_vcpu_thread(CPUState *unused)
+@@ -261,7 +262,9 @@ static void *rr_cpu_thread_fn(void *arg)
+                 if (icount_enabled()) {
+                     icount_prepare_for_run(cpu, cpu_budget);
+                 }
++                const int64_t exec_start_ns = get_clock();
+                 r = tcg_cpus_exec(cpu);
++                vnext_b_lockstep_account_exec(get_clock() - exec_start_ns);
+                 if (icount_enabled()) {
+                     icount_process_data(cpu);
+                 }
+diff --git a/accel/tcg/translate-all.c b/accel/tcg/translate-all.c
+index b2d4e22..a31f33b 100644
+--- a/accel/tcg/translate-all.c
++++ b/accel/tcg/translate-all.c
+@@ -283,6 +283,19 @@ static int setjmp_gen_code(CPUArchState *env, TranslationBlock *tb,
+     return tcg_gen_code(tcg_ctx, tb, pc);
+ }
+ 
++/* LasecSimul diagnostics (LASECSIMUL_LOCKSTEP_TRACE): TBs generated, of which one-shot (code
++ * fetched from outside RAM, translated one instruction at a time and never cached). */
++static uint64_t lasec_tb_gen_count[2];
++static vaddr lasec_tb_one_shot_pc;
++
++uint64_t lasec_tcg_tb_gen_count(bool one_shot, uint64_t *last_one_shot_pc)
++{
++    if (last_one_shot_pc) {
++        *last_one_shot_pc = qatomic_read(&lasec_tb_one_shot_pc);
++    }
++    return qatomic_read(&lasec_tb_gen_count[one_shot ? 1 : 0]);
++}
++
+ /* Called with mmap_lock held for user mode emulation.  */
+ TranslationBlock *tb_gen_code(CPUState *cpu,
+                               vaddr pc, uint64_t cs_base,
+@@ -301,9 +314,12 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
+ 
+     phys_pc = get_page_addr_code_hostp(env, pc, &host_pc);
+ 
++    qatomic_inc(&lasec_tb_gen_count[0]);
+     if (phys_pc == -1) {
+         /* Generate a one-shot TB with 1 insn in it */
+         cflags = (cflags & ~CF_COUNT_MASK) | CF_LAST_IO | 1;
++        qatomic_inc(&lasec_tb_gen_count[1]);
++        qatomic_set(&lasec_tb_one_shot_pc, pc);
+     }
+ 
+     max_insns = cflags & CF_COUNT_MASK;
+@@ -601,6 +617,59 @@ void tb_check_watchpoint(CPUState *cpu, uintptr_t retaddr)
+  *
+  * Called by softmmu_template.h, with iothread mutex not held.
+  */
++/*
++ * LasecSimul: an I/O access is only allowed as the last instruction of a TB (can_do_io starts false
++ * in every TB, with or without icount). One in the middle makes cpu_io_recompile() leave the TB (a
++ * longjmp -- stack unwinding on Windows) and run that instruction alone -- every time it executes,
++ * so a busy-wait polling a peripheral register (UART FIFO, SPI done bit, I2C status) ran at a few
++ * million instructions per second. The PCs of instructions that did it are remembered here: the
++ * translator then ends a TB right before them and gives each its own one-instruction TB with I/O
++ * allowed (translator_loop()), and later iterations stay on cached, chained TBs. With MTTCG several
++ * vCPU threads use it: every slot access is atomic, and two inserts racing for one slot only lose an
++ * entry, noted again on its next recompile. A stale or colliding entry only splits a TB needlessly;
++ * a full table falls back to the stock path.
++ */
++#define TB_IO_PC_SLOTS 8192u /* power of two */
++#define TB_IO_PC_PROBES 16u
++static vaddr tb_io_pcs[TB_IO_PC_SLOTS]; /* pc + 1; 0 = free */
++
++static unsigned tb_io_pc_slot(vaddr pc)
++{
++    return (unsigned)(((uint64_t)pc * UINT64_C(0x9E3779B97F4A7C15)) >> 51) & (TB_IO_PC_SLOTS - 1);
++}
++
++bool tb_io_insn_pc(vaddr pc)
++{
++    unsigned slot = tb_io_pc_slot(pc);
++    for (unsigned i = 0; i < TB_IO_PC_PROBES; ++i, slot = (slot + 1) & (TB_IO_PC_SLOTS - 1)) {
++        const vaddr entry = qatomic_read(&tb_io_pcs[slot]);
++        if (entry == pc + 1) {
++            return true;
++        }
++        if (!entry) {
++            return false;
++        }
++    }
++    return false;
++}
++
++/* Remembers `pc`; false when the table has no room for it. */
++static bool tb_io_insn_pc_note(vaddr pc)
++{
++    unsigned slot = tb_io_pc_slot(pc);
++    for (unsigned i = 0; i < TB_IO_PC_PROBES; ++i, slot = (slot + 1) & (TB_IO_PC_SLOTS - 1)) {
++        const vaddr entry = qatomic_read(&tb_io_pcs[slot]);
++        if (entry == pc + 1) {
++            return true;
++        }
++        if (!entry) {
++            qatomic_set(&tb_io_pcs[slot], pc + 1);
++            return true;
++        }
++    }
++    return false;
++}
++
+ void cpu_io_recompile(CPUState *cpu, uintptr_t retaddr)
+ {
+     TranslationBlock *tb;
+@@ -627,6 +696,11 @@ void cpu_io_recompile(CPUState *cpu, uintptr_t retaddr)
+         n = 2;
+     }
+ 
++    /* LasecSimul: see tb_io_insn_pc(). Retranslated, this TB ends before the I/O instruction. */
++    if (n == 1 && !(tb_cflags(tb) & CF_LAST_IO) && cc->get_pc && tb_io_insn_pc_note(cc->get_pc(cpu))) {
++        tb_phys_invalidate(tb, -1);
++    }
++
+     /*
+      * Exit the loop and potentially generate a new TB executing the
+      * just the I/O insns. We also limit instrumentation to memory
+diff --git a/accel/tcg/translator.c b/accel/tcg/translator.c
+index 358214d..1d97b44 100644
+--- a/accel/tcg/translator.c
++++ b/accel/tcg/translator.c
+@@ -144,6 +144,15 @@ void translator_loop(CPUState *cpu, TranslationBlock *tb, int *max_insns,
+     ops->init_disas_context(db, cpu);
+     tcg_debug_assert(db->is_jmp == DISAS_NEXT);  /* no early exit */
+ 
++    /* LasecSimul: an instruction known to do I/O (tb_io_insn_pc()) runs alone in its TB with I/O
++     * allowed, and a TB that reaches one ends right before it. Every mode: can_do_io starts false in
++     * every TB (gen_tb_start), so io_readx/io_writex recompile with or without icount. */
++    const bool split_io = !(cflags & CF_LAST_IO);
++    const bool io_first = split_io && tb_io_insn_pc(pc);
++    if (io_first) {
++        db->max_insns = 1;
++    }
++
+     /* Start translating.  */
+     icount_start_insn = gen_tb_start(db, cflags);
+     ops->tb_start(db, cpu);
+@@ -170,7 +179,7 @@ void translator_loop(CPUState *cpu, TranslationBlock *tb, int *max_insns,
+            update db->pc_next and db->is_jmp to indicate what should be
+            done next -- either exiting this loop or locate the start of
+            the next instruction.  */
+-        if (db->num_insns == db->max_insns && (cflags & CF_LAST_IO)) {
++        if ((db->num_insns == db->max_insns && (cflags & CF_LAST_IO)) || io_first) {
+             /* Accept I/O on the last instruction.  */
+             set_can_do_io(db, true);
+         }
+@@ -196,7 +205,8 @@ void translator_loop(CPUState *cpu, TranslationBlock *tb, int *max_insns,
+ 
+         /* Stop translation if the output buffer is full,
+            or we have executed all of the allowed instructions.  */
+-        if (tcg_op_buf_full() || db->num_insns >= db->max_insns) {
++        if (tcg_op_buf_full() || db->num_insns >= db->max_insns ||
++            (split_io && tb_io_insn_pc(db->pc_next))) {
+             db->is_jmp = DISAS_TOO_MANY;
+             break;
+         }
+diff --git a/include/sysemu/cpu-timers.h b/include/sysemu/cpu-timers.h
+index eb236ed..f48240e 100644
+--- a/include/sysemu/cpu-timers.h
++++ b/include/sysemu/cpu-timers.h
+@@ -59,6 +59,9 @@ void icount_configure(QemuOpts *opts, Error **errp);
+ int64_t icount_round(int64_t count);
+ /* LasecSimul: virtual ps per retired instruction (= the guest CPU clock period). */
+ void icount_set_ps_per_inst(double ps);
++/* LasecSimul: VNEXT_B real-time lockstep -- each instruction costs `dilation` (>= 1) CPU periods.
++ * Call only while no vCPU executes (the instruction budget in flight uses the old rate). */
++void icount_set_time_dilation(double dilation);
+ 
+ /* if the CPUs are idle, start accounting real time to virtual clock. */
+ void icount_start_warp_timer(void);
+diff --git a/softmmu/icount.c b/softmmu/icount.c
+index 8582780..4c69da6 100644
+--- a/softmmu/icount.c
++++ b/softmmu/icount.c
+@@ -286,10 +286,25 @@ int64_t icount_round(int64_t count)
+     return (int64_t)ceil((double)count * 1000.0 / ps);
+ }
+ 
++/* ps_per_inst = the guest CPU period (icount_set_ps_per_inst) times the VNEXT_B real-time lockstep
++ * stretch (icount_set_time_dilation, 1 = one instruction per CPU cycle). icount_to_ns() integrates
++ * instruction by instruction, so a change only affects instructions executed after it. */
++static double icount_cpu_ps_per_inst = 25000;
++static double icount_time_dilation = 1.0;
++
+ void icount_set_ps_per_inst(double ps)
+ {
+     if (ps > 0) {
+-        ps_per_inst = ps;
++        icount_cpu_ps_per_inst = ps;
++        ps_per_inst = ps * icount_time_dilation;
++    }
++}
++
++void icount_set_time_dilation(double dilation)
++{
++    if (dilation >= 1.0) {
++        icount_time_dilation = dilation;
++        ps_per_inst = icount_cpu_ps_per_inst * dilation;
+     }
+ }
+ 
+diff --git a/softmmu/vnext_b.c b/softmmu/vnext_b.c
+index efa147b..8eaa459 100644
+--- a/softmmu/vnext_b.c
++++ b/softmmu/vnext_b.c
+@@ -44,9 +44,11 @@ typedef struct VnextControl {
+      * byte-layout-identical to that one, appended last so no existing offset shifts). */
+     uint64_t artifactVirtualTimeNs;
+     /* ABI v1.2 exact lockstep -- byte-identical to lasec_at_control_page's artifact_sync_seq ..
+-     * lockstep_reserved (see its doc-comment for the protocol). Only valid when minor >= 2. */
++     * artifact_reserved (see its doc-comment for the protocol). Only valid when minor >= 2. */
+     uint64_t artifactSyncSeq, coreSyncSeq, coreTimeNs, coreHorizonNs, coreInputHorizonNs;
+-    uint32_t lockstep, lockstepReserved;
++    uint32_t lockstep, lockstepRealtime;
++    uint64_t coreRealtimeScheduleNs;
++    uint32_t artifactCpuDilationQ16, artifactReserved;
+ } VnextControl;
+ 
+ static uint8_t *vnext_base;
+@@ -224,6 +226,35 @@ static int64_t vnext_lockstep_run_ns;
+ static uint64_t vnext_lockstep_reason_count[4]; /* read, write, horizon, i2c */
+ static void vnext_lockstep_request(uint64_t now);
+ 
++/* Real-time lockstep (lockstep_realtime). When the host cannot execute the guest fast enough to
++ * keep the Core's real-time schedule (core_realtime_schedule_ns) -- a heavy sketch, or a lab server
++ * shared by many simulations -- each instruction costs more virtual time instead of the whole
++ * simulation falling behind: the CPU behaves as if it had wait states, while timers, peripherals and
++ * every Core sync stay on the same timeline. Once per window of host time, always at a release (the
++ * vCPUs are held, so no instruction budget is in flight with the old rate), the stretch is set from
++ * the progress the window made: it grows only when executing guest code took a large share of the
++ * window (measured around each tcg_cpus_exec(); a vCPU stopped for an I2C reply or for lane credit
++ * is not executing -- and a slow circuit is not fixed by a slower CPU), and it returns to one
++ * instruction per CPU cycle as soon as there is slack. */
++#define VNEXT_RT_WINDOW_NS (10 * 1000 * 1000)   /* host time per controller step */
++#define VNEXT_RT_STALE_NS (500 * 1000 * 1000)   /* a longer window (pause, reload) says nothing */
++#define VNEXT_RT_LATE_NS (2 * 1000 * 1000)      /* behind the schedule by more than this = late */
++#define VNEXT_RT_CATCHUP_NS (200 * 1000 * 1000) /* host time over which lag is recovered */
++#define VNEXT_RT_MAX_STEP 4.0
++#define VNEXT_RT_MAX_DILATION 64.0
++static bool vnext_rt;
++static double vnext_rt_dilation = 1.0;
++static int64_t vnext_rt_window_host_ns; /* 0 = no window open */
++static int64_t vnext_rt_window_exec_ns;  /* added by the vCPU thread, taken by the main loop */
++static uint64_t vnext_rt_window_schedule_ns, vnext_rt_window_core_ns;
++static uint64_t vnext_rt_windows;
++/* Instructions per host second of straight guest code (peak with slow decay). Execution time beyond
++ * instructions / this -- translating new code, a device model doing host I/O -- does not shrink
++ * when instructions cost more virtual time, so it never counts toward the stretch. */
++static double vnext_rt_peak_ips = 20e6;
++static int64_t vnext_rt_window_icount;
++static int64_t vnext_rt_trace_slices; /* LASECSIMUL_LOCKSTEP_TRACE only */
++
+ /* The vCPU executing the current guest access, or NULL for a timer or bottom half. With
+  * single-threaded TCG (-icount), QEMU_CLOCK_VIRTUAL timers run in the vCPU thread between
+  * executions with current_cpu still pointing at the last vCPU: treating that as a guest access made
+@@ -796,6 +827,99 @@ static void vnext_lockstep_request(uint64_t now) {
+     SetEvent(vnext_artifact_event);
+ }
+ 
++static void vnext_rt_open_window(int64_t host_now, uint64_t schedule, uint64_t core) {
++    vnext_rt_window_host_ns = host_now;
++    vnext_rt_window_schedule_ns = schedule;
++    vnext_rt_window_core_ns = core;
++    vnext_rt_window_icount = icount_get_raw();
++}
++
++void vnext_b_lockstep_account_exec(int64_t host_ns) {
++    if (vnext_rt && host_ns > 0) qatomic_add(&vnext_rt_window_exec_ns, host_ns);
++    if (vnext_lockstep_trace > 0) qatomic_inc(&vnext_rt_trace_slices);
++}
++
++static void vnext_rt_apply(double dilation) {
++    if (dilation < 1.0) dilation = 1.0;
++    if (dilation > VNEXT_RT_MAX_DILATION) dilation = VNEXT_RT_MAX_DILATION;
++    if (dilation == vnext_rt_dilation) return;
++    vnext_rt_dilation = dilation;
++    icount_set_time_dilation(dilation);
++    qatomic_set(&vnext_control->artifactCpuDilationQ16, (uint32_t)(dilation * 65536.0));
++}
++
++/* One controller step (see vnext_rt), at a release, vCPUs held. `schedule` and `core` were published
++ * together by the Core: where the simulation should be by the real-time clock, and where it is. */
++static void vnext_rt_step(int64_t host_now, uint64_t schedule, uint64_t core) {
++    if (!vnext_rt) return;
++    if (!schedule) { /* no real-time pacing (unlimited speed): exact instruction timing */
++        vnext_rt_window_host_ns = 0;
++        vnext_rt_apply(1.0);
++        return;
++    }
++    const int64_t wall = host_now - vnext_rt_window_host_ns;
++    if (!vnext_rt_window_host_ns || wall > VNEXT_RT_STALE_NS || schedule < vnext_rt_window_schedule_ns ||
++        core < vnext_rt_window_core_ns) {
++        qatomic_xchg(&vnext_rt_window_exec_ns, 0);
++        vnext_rt_open_window(host_now, schedule, core);
++        return;
++    }
++    if (wall < VNEXT_RT_WINDOW_NS) return;
++    const double ds = (double)(schedule - vnext_rt_window_schedule_ns);
++    const double dv = (double)(core - vnext_rt_window_core_ns);
++    const double exec = (double)MIN(qatomic_xchg(&vnext_rt_window_exec_ns, 0), wall);
++    const double instructions = (double)(icount_get_raw() - vnext_rt_window_icount);
++    const double lag = schedule > core ? (double)(schedule - core) : 0.0;
++    vnext_rt_open_window(host_now, schedule, core);
++    vnext_rt_windows++;
++    if (ds <= 0) return;
++    /* Host time the window's instructions took, at most its execution time: the part a stretch
++     * shrinks. The peak follows the fastest straight code seen (a window mostly executing). */
++    if (exec >= 0.05 * (double)wall && instructions > 0) {
++        const double ips = instructions * 1e9 / exec;
++        vnext_rt_peak_ips = ips > vnext_rt_peak_ips ? ips : MAX(20e6, vnext_rt_peak_ips * 0.995);
++    }
++    const double insn = MIN(exec, instructions * 1e9 / vnext_rt_peak_ips);
++    double dilation = vnext_rt_dilation;
++    if (lag > VNEXT_RT_LATE_NS) {
++        /* Late: the window should have advanced the schedule plus a share of the lag. */
++        const double want = ds + MIN(lag * (double)wall / VNEXT_RT_CATCHUP_NS, 0.25 * ds);
++        if (dv < want) {
++            if (insn >= 0.2 * (double)wall) {
++                /* To first order only the instructions' time shrinks with the stretch: the window
++                 * would have needed wall * dv / want of host time, all but `insn` of it unchanged. */
++                const double budget = (double)wall * dv / want - ((double)wall - insn);
++                double step = budget > 0 ? insn / budget : VNEXT_RT_MAX_STEP / 2;
++                if (step > VNEXT_RT_MAX_STEP) step = VNEXT_RT_MAX_STEP;
++                if (step > 1.0) dilation *= step;
++            } else {
++                dilation *= 0.9; /* guest instructions are not what holds the simulation back */
++            }
++        }
++    } else {
++        /* On schedule: give exact instruction timing back -- at once when guest code barely ran,
++         * probing gently while it is busy. */
++        dilation *= insn < 0.1 * (double)wall ? 0.5 : 0.97;
++    }
++    const double before = vnext_rt_dilation;
++    vnext_rt_apply(dilation);
++    if (vnext_lockstep_trace > 0) {
++        static uint64_t last_tbs;
++        const int64_t slices = qatomic_xchg(&vnext_rt_trace_slices, 0);
++        const uint64_t tbs = lasec_tcg_tb_gen_count(false, NULL);
++        if (vnext_rt_dilation > before * 1.1 || vnext_rt_dilation < before / 1.1 || vnext_rt_windows % 100 == 0)
++            fprintf(stderr, "[RT] d=%.1f x=%.2f i=%.2f mips=%.1f/%.0f sl=%" PRId64 " tb=%" PRIu64
++                    " pc=%08" PRIx64 ",%08" PRIx64 " lag=%.0f p=%.2f g=%" PRIu64 "\n",
++                    vnext_rt_dilation, exec / (double)wall, insn / (double)wall,
++                    exec > 0 ? instructions * 1000.0 / exec : 0.0, vnext_rt_peak_ips / 1e6, slices,
++                    tbs - last_tbs,
++                    vnext_cpus[0] ? (uint64_t)CPU_GET_CLASS(vnext_cpus[0])->get_pc(vnext_cpus[0]) : 0,
++                    vnext_cpus[1] ? (uint64_t)CPU_GET_CLASS(vnext_cpus[1])->get_pc(vnext_cpus[1]) : 0,
++                    lag / 1000.0, dv / ds, core / 1000000);
++        last_tbs = tbs;
++    }
++}
++
+ static void vnext_lockstep_try_release(void) {
+     VnextControl *c = vnext_control;
+     if (!vnext_lockstep || !qatomic_read(&vnext_lockstep_holding)) return;
+@@ -803,6 +927,7 @@ static void vnext_lockstep_try_release(void) {
+     if (qatomic_read(&c->coreTimeNs) < vnext_lockstep_target_ns) return;
+     const uint64_t horizon = qatomic_read(&c->coreHorizonNs);
+     const uint64_t input_horizon = qatomic_read(&c->coreInputHorizonNs);
++    vnext_rt_step(get_clock(), qatomic_read(&c->coreRealtimeScheduleNs), qatomic_read(&c->coreTimeNs));
+     /* Everything the Core produced up to the instant was published before core_sync_seq: deliver
+      * it now, with the clock still frozen at the instant. */
+     vnext_check_responses();
+@@ -910,8 +1035,12 @@ static void vnext_resume(void *opaque) {
+             vnext_vm_started = true;
+             vnext_lockstep = vnext_control->minor >= 2 && qatomic_load_acquire(&vnext_control->lockstep) &&
+                              icount_enabled();
++            vnext_rt = vnext_lockstep && qatomic_load_acquire(&vnext_control->lockstepRealtime);
+             if (vnext_lockstep) {
+-                fprintf(stderr, "[LasecSimul] lockstep=exact (icount clock held at every Core sync)\n");
++                qatomic_set(&vnext_control->artifactCpuDilationQ16, 65536u);
++                fprintf(stderr, vnext_rt ? "[LasecSimul] lockstep=realtime (icount clock held at every Core sync, "
++                                           "instruction time stretched only to keep real time)\n"
++                                         : "[LasecSimul] lockstep=exact (icount clock held at every Core sync)\n");
+                 vnext_lockstep_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, vnext_lockstep_horizon_cb, NULL);
+                 vnext_lockstep_request(0); /* no horizon yet: start held at t=0 */
+             }
+@@ -1154,4 +1283,5 @@ int vnext_b_main(int argc, char **argv) {
+ int vnext_b_main(int argc, char **argv) { (void)argc; (void)argv; return 1; }
+ bool vnext_b_lockstep_hold(void) { return false; }
+ void vnext_b_lockstep_input_barrier(void) {}
++void vnext_b_lockstep_account_exec(int64_t host_ns) { (void)host_ns; }
+ #endif
+diff --git a/softmmu/vnext_b.h b/softmmu/vnext_b.h
+index 698a7f1..475f80c 100644
+--- a/softmmu/vnext_b.h
++++ b/softmmu/vnext_b.h
+@@ -34,6 +34,11 @@ bool vnext_b_lockstep_hold(void);
+ /* Called by the GPIO model right before it reads GPIO_IN/GPIO_IN1 for a guest load. May not
+  * return: syncs with the Core and replays the load (cpu_loop_exit_restore). */
+ void vnext_b_lockstep_input_barrier(void);
++/* Real-time lockstep: host time a vCPU just spent executing guest code (the RR TCG loop, around
++ * each tcg_cpus_exec()). Only that time shrinks when instructions cost more virtual time. */
++void vnext_b_lockstep_account_exec(int64_t host_ns);
++/* accel/tcg/translate-all.c diagnostics: TBs generated (one_shot: from outside RAM, uncached). */
++uint64_t lasec_tcg_tb_gen_count(bool one_shot, uint64_t *last_one_shot_pc);
+ VnextPublishResult vnext_b_gpio_write(uint64_t address, uint64_t value);
+ uint64_t vnext_b_gpio_read(uint64_t address);
+ uint64_t vnext_b_register_read(uint64_t address);

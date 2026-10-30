@@ -118,6 +118,22 @@ public:
     // GPIO_IN1 direto deste snapshot (vnext_b_gpio_read), sem perguntar ao Core.
     bool publishSnapshot(const uint8_t* data, size_t bytes);
     void signalArtifactResume();
+    /** Lockstep exato (ABI 1.2, ver lasec_at_control_page): ligado antes de activate(). `realtime`:
+     * o QEMU pode esticar o tempo de cada instrução para manter o ritmo real publicado pelo Core. */
+    void setLockstep(bool enabled, bool realtime);
+    uint64_t artifactSyncSeq() const;
+    /** Esticamento do tempo de instrução que o QEMU aplica agora (1 = um ciclo por instrução). */
+    double artifactCpuDilation() const;
+    /** Lockstep: até onde o Core pode avançar sem passar de nenhum evento ainda não agendado --
+     * min(artifact_virtual_time_ns, cabeça de cada fila). Seguro em qualquer thread com a anexação
+     * viva: o QEMU publica os eventos de um instante antes do próprio instante. */
+    std::optional<uint64_t> lockstepSafeTimeNs() const;
+    /** Publica até onde o Core processou tudo (timeNs) e o próximo instante em que pode mudar o
+     * que o guest observa (horizonNs), ecoando a syncSeq de artifact_sync_seq lida antes das
+     * filas; acorda o QEMU. `scheduleNs`: onde a simulação deveria estar pelo tempo real (0 = sem
+     * pacing). Tempos na linha do tempo do artefato. */
+    void publishCoreTime(uint64_t syncSeq, uint64_t timeNs, uint64_t horizonNs, uint64_t inputHorizonNs,
+                         uint64_t scheduleNs);
     void signalCoreRunningForTesting();
     bool notificationPending() const noexcept { return m_notificationPending.load(std::memory_order_acquire); }
     void acknowledgeNotification() noexcept { m_notificationPending.store(false, std::memory_order_release); }

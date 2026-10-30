@@ -33,7 +33,15 @@ extern "C" {
 #endif
 
 #define LSDN_MCU_ABI_VERSION_MAJOR 3
-#define LSDN_MCU_ABI_VERSION_MINOR 1
+#define LSDN_MCU_ABI_VERSION_MINOR 2
+/* Minor 2 (2026-10-29): entrou get_pin_states/set_input_voltages_at (LsdnQemuModuleVTable) --
+ * leitura e escrita em lote dos pinos de um modulo. McuComponent::stamp() roda a cada solve do
+ * circuito e consultava cada pino separadamente (is_output_enabled, output_level, get_pull_state,
+ * set_input_voltage_at: ~120 chamadas por stamp no ESP32), e cada evento do QEMU comparava o
+ * estado eletrico de todos os pinos antes e depois (mais ~170): era o maior custo do Core por
+ * aluno no laboratorio de um servidor so'. Com o lote, 2 chamadas por modulo. Opcional -- NULL
+ * mantem o caminho por pino. O Core so' le estes slots de um plugin que declara minor >= 2 (a
+ * vtable de um plugin mais antigo termina antes deles). */
 /* Minor 1 (2026-09-29): entrou set_pin_transitions_observed -- o Core informa, por pino fisico e
  * antes de cada Run (topologia imutavel durante o Run), se algum outro componente do no' eletrico
  * observa transicoes individuais. Com todos os pinos que carregam o TX de uma USART nao
@@ -192,11 +200,30 @@ typedef struct LsdnQemuModuleVTable {
      * independente: abrir o monitor serial e usar LasecPlot ao mesmo tempo nao faz um roubar bytes
      * do outro. So' faz sentido para modulos USART; NULL = sem wire tap. */
     int32_t  (*drain_wire_tap_byte)(LsdnQemuModule* module, uint8_t* out_byte);
+    /* ABI 3.2: estado eletrico de `count` linhas numa chamada so' -- out_states[i] descreve
+     * bit_or_lines[i] com LSDN_PIN_STATE_*: OUTPUT_ENABLED/OUTPUT_HIGH = is_output_enabled/
+     * output_level dessa linha agora; PULL_UP/PULL_DOWN = get_pull_state, so' com a linha nao
+     * dirigida. O Core le todas as linhas antes de aplicar as entradas da mesma rodada: como no
+     * chip real, uma entrada so' muda uma saida pelo proprio relogio do periferico (wakeup), nunca
+     * na mesma chamada. Opcional -- NULL = uma chamada por linha. */
+    void     (*get_pin_states)(LsdnQemuModule* module, const uint32_t* bit_or_lines, uint32_t count,
+                               uint8_t* out_states);
+    /* ABI 3.2: amostra de tensao de `count` pads nao dirigidos, aplicada na ordem dada -- mesmo
+     * efeito de set_input_voltage_at(bit_or_lines[i], voltages[i], now_ns) para cada i. Opcional --
+     * NULL = uma chamada por linha. */
+    void     (*set_input_voltages_at)(LsdnQemuModule* module, const uint32_t* bit_or_lines,
+                                      const double* voltages, uint32_t count, uint64_t now_ns);
 } LsdnQemuModuleVTable;
 
 #define LSDN_PULL_NONE 0u
 #define LSDN_PULL_UP (1u << 0)
 #define LSDN_PULL_DOWN (1u << 1)
+
+/* get_pin_states (ABI 3.2). */
+#define LSDN_PIN_STATE_OUTPUT_ENABLED (1u << 0)
+#define LSDN_PIN_STATE_OUTPUT_HIGH (1u << 1)
+#define LSDN_PIN_STATE_PULL_UP (1u << 2)
+#define LSDN_PIN_STATE_PULL_DOWN (1u << 3)
 
 /* Um modulo concreto devolvido por create_modules(): estado opaco + vtable + identidade
  * (moduleKind/moduleIndex, mesma identidade ja usada em LsdnMemoryRegion/LsdnPinMapping) -- e assim

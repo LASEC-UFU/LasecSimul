@@ -234,6 +234,10 @@ struct ComponentMeta {
     /** `limits.stepTimeoutMs` do `.lsdevice` -- 0 == sem watchdog (chamada roda sem limite de
      * tempo, comportamento de hoje). Ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 13. */
     uint32_t stepTimeoutMs = 0;
+    /** `"dynamic": true` do `.lsdevice` -- o device se registra como dinâmico e recebe `post_step`
+     * (~60 Hz, ver `SimulationSession::advanceDynamicComponentsUnlocked`); sem isso nunca recebe
+     * (.spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 10, item 3). */
+    bool dynamic = false;
     /** `pinSpec` opcional do `.lsdevice` -- caminho declarativo pra pino dinâmico de plugin, SEM
      * escrever `pin_declare` na unha em C. Quando presente, `PluginRuntime::createDeviceInstance`
      * usa `resolveDynamicPins` (não `pins` acima, que vira só fallback pra manifesto sem `pinSpec`)

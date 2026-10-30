@@ -11,6 +11,7 @@
 #include "../simulation/Scheduler.hpp"
 #include "CrashGuard.hpp"
 #include "PluginModule.hpp"
+#include "PluginWatchdog.hpp"
 
 namespace lasecsimul::plugins {
 
@@ -62,7 +63,7 @@ public:
     NativeDeviceProxy(std::shared_ptr<PluginModule> module, LsdnDevice* handle, ComponentMeta meta,
                       std::shared_ptr<NativeDeviceHostContext> hostContext, simulation::Scheduler& scheduler)
         : m_module(std::move(module)), m_handle(handle), m_meta(std::move(meta)),
-          m_hostContext(std::move(hostContext)), m_scheduler(scheduler) {}
+          m_hostContext(std::move(hostContext)), m_scheduler(scheduler), m_postStepWatchdog(m_meta.typeId) {}
 
     ~NativeDeviceProxy() override;
 
@@ -74,12 +75,13 @@ public:
     std::span<Pin> pins() override { return m_hostContext->declaredPins; }
 
     void stamp(MnaMatrixView& matrix) override;
-    /** Sempre true: todo plugin nativo passa pelo mesmo `post_step` da vtable C. A maioria tem corpo
-     * vazio hoje (ex.: example-blinker, simulide-logic/-peripherals/-sensors -- ver comentários nos
-     * próprios .c), então o custo de incluir é só a chamada em si; só simulide-complex (OLED
-     * scroll/servo) de fato usa. Sem essa flag, `postStep` nunca era despachado (ver
-     * `SimulationSession::advanceDynamicComponentsUnlocked`). */
-    bool isDynamic() const override { return true; }
+    /** `"dynamic": true` do `.lsdevice` (`ComponentMeta::dynamic`): só o device que se declara
+     * dinâmico recebe `post_step` (.spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 10,
+     * item 3). Hoje só servo, SSD1306 e SH1107 (rolagem) usam; nos demais (example-blinker,
+     * simulide-logic/-peripherals/-sensors, LCDs e TFTs do simulide-complex) o corpo é vazio. Até
+     * 2026-10-29 isto era sempre true, e cada um desses pagava uma passagem pelo watchdog a ~60 Hz
+     * só pra chamar uma função vazia. */
+    bool isDynamic() const override { return m_meta.dynamic; }
     void postStep(uint64_t timeNs) override;
     void onEvent(const ComponentEvent& event) override;
     bool supportsI2cTransfer() const override;
@@ -114,8 +116,9 @@ private:
 
     /** Quantos timeouts seguidos de watchdog antes de desistir e marcar `Faulted` permanente --
      * ver .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 13, item 3 ("abandono da thread após N
-     * timeouts consecutivos"). Pequeno de propósito: cada timeout já deixa uma thread presa pra
-     * sempre (nunca terminada à força), então não vale a pena tolerar muitos antes de desistir. */
+     * timeouts consecutivos"). Pequeno de propósito: enquanto a thread reservada do device estiver
+     * presa no plugin (nunca terminada à força), cada `post_step` seguinte volta `TimedOut` sem
+     * rodar -- o device já não acompanha a simulação, não vale a pena tolerar muitos. */
     static constexpr uint32_t kMaxConsecutiveTimeouts = 3;
 
     std::shared_ptr<PluginModule> m_module; // mantém o binário vivo enquanto esta instância existir
@@ -128,6 +131,9 @@ private:
     mutable PluginHealthStatus m_health = PluginHealthStatus::Ok;
     mutable std::recursive_mutex m_deviceMutex;
     uint32_t m_consecutiveTimeouts = 0;
+    /** Thread reservada do `post_step` (seção 13, item 2), criada no primeiro `postStep` com
+     * `stepTimeoutMs` e reaproveitada -- ver `PluginWatchdog`. */
+    PluginWatchdog m_postStepWatchdog;
     /** Cache de `propertyDescriptors()` -- bug real de desempenho encontrado 2026-07-20 revisando a
      * arquitetura do Core: antes, cada chamada reconstruía o vetor inteiro com um `std::function`
      * (get+set) novo por propriedade, mesmo fora do caminho de settle (chamado sempre que o painel de

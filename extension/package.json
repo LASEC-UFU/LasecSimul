@@ -329,6 +329,21 @@
           "minimum": 0,
           "markdownDescription": "Limite de velocidade em relaÃ§Ã£o ao tempo real. `1` = acompanha o usuÃ¡rio em tempo real; `0` = ilimitado; `0.5` = meia velocidade; `2` = atÃ© duas vezes o tempo real."
         },
+        "lasecsimul.mcu.esp32Timing": {
+          "type": "string",
+          "enum": [
+            "realtime",
+            "exact",
+            "mttcg"
+          ],
+          "enumDescriptions": [
+            "Tempo real (padrão): o ESP32 anda sempre no ritmo do relógio real e em sincronia com o circuito. micros(), PWM, pulseIn, interrupções, I2C e SPI acontecem no instante certo. Quando o PC dá conta, cada instrução custa um ciclo de 240 MHz, como no chip real; quando o código é pesado demais para o PC (ou o servidor está cheio), a CPU do ESP32 fica mais lenta -- como se tivesse ciclos de espera -- em vez de a simulação atrasar.",
+            "Exato: cada instrução custa sempre um ciclo de 240 MHz e anda em sincronia com o circuito. Código que só calcula pode deixar a simulação mais lenta que o tempo real.",
+            "Livre (MTTCG, antigo): o relógio do ESP32 segue o relógio do PC e o circuito o acompanha de longe. O tempo visto pelo firmware oscila (pulseIn, bit-bang e SPI por hardware podem falhar)."
+          ],
+          "default": "realtime",
+          "markdownDescription": "Temporização do ESP32 simulado. Vale a partir da próxima vez que o Core iniciar (recarregue a janela)."
+        },
         "lasecsimul.simulation.maxNonLinearIterations": {
           "type": "integer",
           "default": 0,

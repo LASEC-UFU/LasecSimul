@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <stdexcept>
 #include <string>
 #include "lasecsimul/QemuModule.hpp"
@@ -47,9 +48,14 @@ inline ModuleKind toCoreModuleKind(LsdnModuleKind kind) {
  */
 class QemuModuleProxy final : public QemuModule {
 public:
-    QemuModuleProxy(LsdnQemuModuleHandle handle, uint64_t memStart, uint64_t memEnd)
+    /** `pluginAbiMinor`: minor de mcu_abi.h que o plugin declarou -- os slots de lote (3.2) só são
+     * lidos de uma vtable que os tem. */
+    QemuModuleProxy(LsdnQemuModuleHandle handle, uint64_t memStart, uint64_t memEnd,
+                    uint32_t pluginAbiMinor = LSDN_MCU_ABI_VERSION_MINOR)
         : QemuModule(toCoreModuleKind(handle.moduleKind), handle.moduleIndex, memStart, memEnd),
-          m_handle(handle), m_label("qemu-module#" + std::to_string(handle.moduleIndex)) {}
+          m_handle(handle), m_label("qemu-module#" + std::to_string(handle.moduleIndex)),
+          m_getPinStates(pluginAbiMinor >= 2 ? handle.vtable->get_pin_states : nullptr),
+          m_setInputVoltagesAt(pluginAbiMinor >= 2 ? handle.vtable->set_input_voltages_at : nullptr) {}
 
     ~QemuModuleProxy() override {
         if (m_handle.vtable && m_handle.vtable->destroy) {
@@ -217,6 +223,35 @@ public:
         return PullState::None;
     }
 
+    void pinStates(std::span<const uint32_t> bitsOrLines, std::span<uint8_t> out) const override {
+        if (!m_getPinStates) {
+            QemuModule::pinStates(bitsOrLines, out);
+            return;
+        }
+        const uint32_t count = static_cast<uint32_t>(std::min(bitsOrLines.size(), out.size()));
+        const bool ok = CrashGuard::call(m_label, [&] {
+            m_getPinStates(m_handle.module, bitsOrLines.data(), count, out.data());
+        });
+        if (!ok) {
+            // Mesmo resultado das chamadas por linha que falham: nenhuma linha dirigida, sem pull.
+            m_health = PluginHealthStatus::Faulted;
+            std::fill(out.begin(), out.begin() + count, uint8_t{0});
+        }
+    }
+
+    void setInputVoltagesAt(std::span<const uint32_t> bitsOrLines, std::span<const double> voltages,
+                            uint64_t nowNs) override {
+        if (!m_setInputVoltagesAt) {
+            QemuModule::setInputVoltagesAt(bitsOrLines, voltages, nowNs);
+            return;
+        }
+        const uint32_t count = static_cast<uint32_t>(std::min(bitsOrLines.size(), voltages.size()));
+        const bool ok = CrashGuard::call(m_label, [&] {
+            m_setInputVoltagesAt(m_handle.module, bitsOrLines.data(), voltages.data(), count, nowNs);
+        });
+        if (!ok) m_health = PluginHealthStatus::Faulted;
+    }
+
     size_t injectRxBytes(const uint8_t* bytes, size_t count) override {
         if (!m_handle.vtable->inject_rx_bytes) return 0;
         size_t result = 0;
@@ -232,6 +267,8 @@ public:
 private:
     LsdnQemuModuleHandle m_handle;
     std::string m_label;
+    decltype(LsdnQemuModuleVTable::get_pin_states) m_getPinStates;
+    decltype(LsdnQemuModuleVTable::set_input_voltages_at) m_setInputVoltagesAt;
     mutable PluginHealthStatus m_health = PluginHealthStatus::Ok;
 };
 

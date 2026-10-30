@@ -22,6 +22,7 @@
     { "id": "maxPulse", "label": "Pulso máximo", "group": "Principal", "unit": "µs", "valueKind": "number", "editor": "number", "default": 2000, "min": 1, "step": 10 },
     { "id": "angle", "label": "Ângulo", "group": "Leitura", "unit": "°", "valueKind": "number", "editor": "display", "default": 90, "readOnly": true }
   ],
+  "dynamic": true,
   "limits": { "stepTimeoutMs": 8, "expectedComplexity": "medium" },
   "package": {
     "width": 96,

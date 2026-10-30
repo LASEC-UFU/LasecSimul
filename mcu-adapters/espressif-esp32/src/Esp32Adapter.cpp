@@ -235,6 +235,11 @@ struct I2cOp {
     uint8_t byte = 0;   // Write: byte a enviar (MSB primeiro).
     bool nack = false;  // Read: ACK_VAL do comando -- true = mestre deve mandar NACK neste byte
                         // (ultimo byte de uma leitura), false = ACK (mais bytes vem a seguir).
+    // Transacao comandada pelo Core (ver kI2cCoreOpOffset): registra o resultado desta operacao e,
+    // numa escrita, aborta o resto da transacao com STOP se o escravo nao der ACK -- como o
+    // controlador real faz com ACK_CHECK_EN.
+    bool record = false;
+    bool abortOnNack = false;
 };
 
 /* Motor mestre de bit-bang SPI (ver spiAdvance/spiKick) -- MODE0 (CPOL=0/CPHA=0, o mais comum em
@@ -335,6 +340,10 @@ struct I2cState {
      * configure o clock (todo mundo, mais cedo ou mais tarde) substitui isto pelo valor real. */
     uint64_t halfPeriodNs = kI2cDefaultHalfPeriodNs;
     uint64_t dueNs = LSDN_QEMU_MODULE_NO_WAKEUP;
+    // Operacao em curso (a que i2cKick tirou da fila) e o log de resultados das operacoes com
+    // `record`, lido pelo Core via kI2cCoreResultOffset: [7:0] byte lido, bit 8 ACK, [10:9] tipo.
+    I2cOp currentOp{I2cOpKind::Stop};
+    std::deque<uint32_t> coreResults;
 };
 
 struct SpiState {
@@ -377,20 +386,47 @@ struct SpiState {
     bool csAsserted = false;
 };
 
+/* LED PWM (ESP32 TRM, LED_PWM chapter), modelado como o hardware: cada timer tem um contador que
+ * conta 0..2^res-1 no clock escolhido (REF_TICK, APB_CLK ou -- nos timers de baixa velocidade --
+ * SLOW_CLK = APB_CLK/RC_FAST conforme LEDC_CONF.APB_CLK_SEL) desde o ultimo reset; cada canal fica
+ * alto de HPOINT ate HPOINT+DUTY dentro de cada periodo do seu timer. DUTY tem 4 bits fracionarios,
+ * distribuidos como um tick extra em `frac` de cada 16 periodos. Duty/HPOINT novos so valem a
+ * partir do proximo estouro do contador apos DUTY_START, e SIG_OUT_EN=0 forca o nivel IDLE_LV.
+ * Nao modelado: o motor de fade (DUTY_NUM/CYCLE/SCALE) -- o duty fica no valor inicial. */
+struct LedcTimer {
+    uint32_t config = 0;          // ultimo TIMERn_CONF efetivo (para LS: depois do PARA_UP)
+    long double tickNs = 0;       // duracao de um tick do contador
+    uint32_t resolution = 0;      // bits do contador (0 = parado/nao configurado)
+    uint64_t epochNs = 0;         // instante em que o contador saiu do reset (contagem 0)
+    bool paused = false;
+    uint64_t pausedAtNs = 0;
+};
+struct LedcChannel {
+    uint32_t conf0 = 0;           // TIMER_SEL[1:0], SIG_OUT_EN bit2, IDLE_LV bit3
+    uint32_t hpointReg = 0, dutyReg = 0;     // valores escritos (alvo)
+    uint32_t hpoint = 0, duty = 0;           // valores em vigor (duty com 4 bits fracionarios)
+    bool updatePending = false;
+    uint64_t updateAfterPeriod = 0;          // indice do periodo em que DUTY_START foi pedido
+};
 struct LedcState {
-    std::array<uint32_t, 8> timerConfig{};
-    std::array<uint8_t, 8> dutyResolution{};
-    std::array<uint64_t, 8> periodNs{};
-    std::array<uint8_t, 16> channelTimer{};
-    std::array<uint32_t, 16> dutyRaw{};
+    uint32_t confReg = 0;                    // LEDC_CONF_REG (APB_CLK_SEL bit0)
+    std::array<LedcTimer, 8> timers{};       // 0-3 HSTIMER, 4-7 LSTIMER
+    std::array<LedcChannel, 16> channels{};  // 0-7 HSCH, 8-15 LSCH
     std::array<bool, 16> outputLevel{};
-    std::array<uint64_t, 16> nextEdgeNs{};
+    std::array<uint64_t, 16> nextEdgeNs{};   // 0 = sem borda agendada
 };
 
 struct Esp32SharedState {
     uint32_t gpioOut = 0;
     uint32_t gpioEnable = 0;
+    // GPIO_OUT1_REG / GPIO_ENABLE1_REG: bit n = GPIO(32+n). Only GPIO32/33 can drive (34..39 are
+    // input-only pads), but the registers hold all eight bits like the real chip.
+    uint32_t gpioOut1 = 0;
+    uint32_t gpioEnable1 = 0;
     std::array<bool, 40> gpioInputs{};
+    // gpioInputs[pin] already routed to the input signals (routePinInputAt); false after a reset, so
+    // the first sample always reaches signals whose idle level is not 0 (UART RX idles high).
+    std::array<bool, 40> gpioInputRouted{};
     std::array<double, 40> gpioVoltages{};
     std::array<uint32_t, 40> gpioPinRegs{};
     std::array<uint16_t, 40> ioMuxRegs{};
@@ -717,10 +753,16 @@ SignalDesc matrixOutputSignal(uint32_t func) {
     }
 }
 
+// GPIO_ENABLE_REG (GPIO0..31) / GPIO_ENABLE1_REG (GPIO32..39) bit of `pin`.
+bool gpioEnableBit(const Esp32SharedState& state, uint32_t pin) {
+    if (pin < 32) return (state.gpioEnable & (1u << pin)) != 0;
+    return pin < 40 && (state.gpioEnable1 & (1u << (pin - 32u))) != 0;
+}
+
 bool signalOutputEnabled(const Esp32SharedState& state, SignalDesc signal) {
     switch (signal.kind) {
         case SignalKind::RawGpio:
-            return signal.index < 32 && (state.gpioEnable & (1u << signal.index)) != 0;
+            return gpioEnableBit(state, signal.index);
         case SignalKind::UartTx: return signal.index < state.usarts.size();
         case SignalKind::I2cScl: return signal.index < state.i2cs.size() && state.i2cs[signal.index].sclOutputEnabled;
         case SignalKind::I2cSda: return signal.index < state.i2cs.size() && state.i2cs[signal.index].sdaOutputEnabled;
@@ -736,7 +778,8 @@ bool signalOutputEnabled(const Esp32SharedState& state, SignalDesc signal) {
 bool signalOutputLevel(const Esp32SharedState& state, SignalDesc signal) {
     switch (signal.kind) {
         case SignalKind::RawGpio:
-            return signal.index < 32 && (state.gpioOut & (1u << signal.index)) != 0;
+            if (signal.index < 32) return (state.gpioOut & (1u << signal.index)) != 0;
+            return signal.index < 40 && (state.gpioOut1 & (1u << (signal.index - 32u))) != 0;
         case SignalKind::UartTx: return signal.index < state.usarts.size() && state.usarts[signal.index].txLevel;
         case SignalKind::I2cScl: return signal.index < state.i2cs.size() && state.i2cs[signal.index].sclOutputLevel;
         case SignalKind::I2cSda: return signal.index < state.i2cs.size() && state.i2cs[signal.index].sdaOutputLevel;
@@ -846,8 +889,10 @@ uint32_t readPort(const Esp32SharedState& state, bool upperPort) {
         }
         return value;
     }
-    for (uint32_t pin = 33; pin < 40; ++pin) {
-        if (state.gpioInputs[pin]) value |= (1u << (pin - 33u));
+    // GPIO_IN1_REG bit n = GPIO(32+n) (TRM). Starting at 33 shifted every upper pin by one bit, so
+    // digitalRead(34..39) returned the neighbouring pad and GPIO32 was never readable.
+    for (uint32_t pin = 32; pin < 40; ++pin) {
+        if (state.gpioInputs[pin]) value |= (1u << (pin - 32u));
     }
     return value;
 }
@@ -931,7 +976,10 @@ void gpioReset(LsdnQemuModule* module) {
     auto* s = reinterpret_cast<GpioModuleState*>(module);
     s->chip->gpioOut = 0;
     s->chip->gpioEnable = 0;
+    s->chip->gpioOut1 = 0;
+    s->chip->gpioEnable1 = 0;
     s->chip->gpioInputs.fill(false);
+    s->chip->gpioInputRouted.fill(false);
     s->chip->gpioVoltages.fill(0.0);
     s->chip->gpioPinRegs.fill(0);
     s->chip->matrixInRegs.fill(0);
@@ -963,6 +1011,19 @@ void gpioWriteRegisterAt(LsdnQemuModule* module, uint64_t address, uint64_t valu
         chip.gpioOut &= ~value32;
         return;
     }
+    // GPIO_OUT1_REG / _W1TS / _W1TC (GPIO32..39) -- o fork QEMU espelha o valor final em 0x10.
+    if (offset == 0x10) {
+        chip.gpioOut1 = value32 & 0xFFu;
+        return;
+    }
+    if (offset == 0x14) {
+        chip.gpioOut1 |= value32 & 0xFFu;
+        return;
+    }
+    if (offset == 0x18) {
+        chip.gpioOut1 &= ~value32;
+        return;
+    }
     if (offset == 0x20) {
         chip.gpioEnable = value32;
         return;
@@ -975,6 +1036,19 @@ void gpioWriteRegisterAt(LsdnQemuModule* module, uint64_t address, uint64_t valu
     }
     if (offset == 0x28) {
         chip.gpioEnable &= ~value32;
+        return;
+    }
+    // GPIO_ENABLE1_REG / _W1TS / _W1TC (GPIO32..39) -- espelhado em 0x2C.
+    if (offset == 0x2C) {
+        chip.gpioEnable1 = value32 & 0xFFu;
+        return;
+    }
+    if (offset == 0x30) {
+        chip.gpioEnable1 |= value32 & 0xFFu;
+        return;
+    }
+    if (offset == 0x34) {
+        chip.gpioEnable1 &= ~value32;
         return;
     }
     if (offset >= 0x88 && offset < 0x130) {
@@ -1012,6 +1086,19 @@ uint64_t gpioReadRegister(LsdnQemuModule* module, uint64_t address) {
     const uint64_t offset = address - kGpioStart;
     if (offset == 0x3C) return readPort(*s->chip, false);
     if (offset == 0x40) return readPort(*s->chip, true);
+    // Canal privado do Core (0xF00 pinos 0-31, 0xF04 pinos 32-39): pinos com interrupção armada,
+    // INT_TYPE (bits 9:7) não nulo e algum INT_ENA (bits 17:13) -- o mesmo critério do modelo de GPIO
+    // do QEMU. O lockstep exato só deixa de sincronizar bordas suaves enquanto nenhum estiver armado.
+    if (offset == 0xF00 || offset == 0xF04) {
+        const uint32_t first = offset == 0xF00 ? 0u : 32u;
+        const uint32_t last = offset == 0xF00 ? 32u : 40u;
+        uint64_t armed = 0;
+        for (uint32_t pin = first; pin < last; ++pin) {
+            const uint32_t conf = s->chip->gpioPinRegs[pin];
+            if (((conf >> 7) & 7u) != 0 && (conf & 0x3E000u) != 0) armed |= 1ull << (pin - first);
+        }
+        return armed;
+    }
     return 0;
 }
 
@@ -1028,11 +1115,9 @@ bool gpioIsPadDriverOpenDrain(const Esp32SharedState& chip, uint32_t bit) {
 }
 
 // Nivel "cru" que o pino tentaria assumir se estivesse sendo dirigido, ANTES de qualquer decisao de
-// open-drain -- unico ponto de calculo (respeitando o invert da GPIO Matrix, bit9 de matrixOutRegs)
-// compartilhado entre gpioOutputLevel() e a checagem de open-drain em gpioIsOutputEnabled(), pra
-// nunca divergir entre "o nivel que a saida realmente tem" e "a saida deveria estar ligada agora".
-bool gpioRawOutputLevel(const Esp32SharedState& chip, uint32_t bit) {
-    const SignalDesc signal = selectedPinOutputSignal(chip, bit);
+// open-drain (respeitando o invert da GPIO Matrix, bit9 de matrixOutRegs), para o sinal `signal`
+// roteado ao pino. So' gpioPadOutput() chama: o mesmo nivel serve a saida e a checagem de open-drain.
+bool gpioRawOutputLevel(const Esp32SharedState& chip, uint32_t bit, SignalDesc signal) {
     bool level = signalOutputLevel(chip, signal);
     if (bit < chip.matrixOutRegs.size() && selectedIoMuxIndex(chip, bit) == 2) {
         if ((chip.matrixOutRegs[bit] & (1u << 9)) != 0) level = !level;
@@ -1040,25 +1125,37 @@ bool gpioRawOutputLevel(const Esp32SharedState& chip, uint32_t bit) {
     return level;
 }
 
-int32_t gpioIsOutputEnabled(LsdnQemuModule* module, uint32_t bit) {
-    auto* s = reinterpret_cast<GpioModuleState*>(module);
-    const Esp32SharedState& chip = *s->chip;
-    if (bit >= 34) return 0; // GPIO34-39 are input-only
+struct PadOutput {
+    bool enabled = false;
+    bool level = false; // nivel pretendido, mesmo com o pino liberado (open-drain alto)
+};
+
+// Saida do pad `bit` com uma consulta so' ao IOMUX/GPIO matrix -- unica fonte de
+// gpioIsOutputEnabled/gpioOutputLevel e do lote (gpioGetPinStates).
+PadOutput gpioPadOutput(const Esp32SharedState& chip, uint32_t bit) {
+    if (bit >= 34) return {}; // GPIO34-39 are input-only
 
     const SignalDesc signal = selectedPinOutputSignal(chip, bit);
-    bool enabled = signalOutputEnabled(chip, signal);
+    PadOutput out{signalOutputEnabled(chip, signal), gpioRawOutputLevel(chip, bit, signal)};
 
     if (bit < chip.matrixOutRegs.size() && selectedIoMuxIndex(chip, bit) == 2) {
         const uint32_t cfg = chip.matrixOutRegs[bit];
-        if ((cfg & (1u << 10)) != 0) enabled = (bit < 32) && (chip.gpioEnable & (1u << bit)) != 0;
-        if ((cfg & (1u << 11)) != 0) enabled = !enabled;
+        if ((cfg & (1u << 10)) != 0) out.enabled = gpioEnableBit(chip, bit);
+        if ((cfg & (1u << 11)) != 0) out.enabled = !out.enabled;
     }
     // Open-drain (PAD_DRIVER=1): o pino so' dirige de verdade o nivel BAIXO -- o nivel ALTO libera
     // o pino pro pull-up (interno, ver gpioGetPullState, ou externo no circuito do usuario)
     // resolver, exatamente como o hardware real faz (gpio_set_direction(..., GPIO_MODE_OUTPUT_OD)).
     // Reaproveita o MESMO ramo "floating" de McuComponent::stamp() que ja existe pro caso "nao
     // dirigido" -- nenhum caminho eletrico novo, so' esta decisao de QUANDO ele se aplica.
-    if (enabled && gpioIsPadDriverOpenDrain(chip, bit) && gpioRawOutputLevel(chip, bit)) enabled = false;
+    if (out.enabled && gpioIsPadDriverOpenDrain(chip, bit) && out.level) out.enabled = false;
+    return out;
+}
+
+int32_t gpioIsOutputEnabled(LsdnQemuModule* module, uint32_t bit) {
+    auto* s = reinterpret_cast<GpioModuleState*>(module);
+    const Esp32SharedState& chip = *s->chip;
+    const bool enabled = gpioPadOutput(chip, bit).enabled;
     if (analogTraceEnabled() && bit == 27) {
         static int previous = -1;
         const int current = enabled ? 1 : 0;
@@ -1075,9 +1172,7 @@ int32_t gpioIsOutputEnabled(LsdnQemuModule* module, uint32_t bit) {
 int32_t gpioOutputLevel(LsdnQemuModule* module, uint32_t bit) {
     auto* s = reinterpret_cast<GpioModuleState*>(module);
     const Esp32SharedState& chip = *s->chip;
-    if (bit >= 34) return 0;
-
-    const bool level = gpioRawOutputLevel(chip, bit);
+    const bool level = gpioPadOutput(chip, bit).level;
     if (analogTraceEnabled() && bit == 27) {
         static int previous = -1;
         static uint32_t changes = 0;
@@ -1109,12 +1204,22 @@ int32_t gpioGetPullState(LsdnQemuModule* module, uint32_t bit) {
     return result;
 }
 
+// McuComponent::stamp() samples every input pad on every solve. Routing walks all 256 GPIO-matrix
+// input selectors, and an unchanged level changes no routed signal (they keep levels or react to
+// edges; IO_MUX and GPIO_FUNCn_IN_SEL writes route the current level themselves): only a new
+// level is routed.
+void gpioUpdateInputAt(Esp32SharedState& chip, uint32_t bit, bool level, uint64_t nowNs) {
+    if (chip.gpioInputRouted[bit] && chip.gpioInputs[bit] == level) return;
+    chip.gpioInputs[bit] = level;
+    chip.gpioInputRouted[bit] = true;
+    routePinInputAt(chip, bit, nowNs);
+}
+
 void gpioSetInputLevelAt(LsdnQemuModule* module, uint32_t bit, int32_t level, uint64_t nowNs) {
     auto* s = reinterpret_cast<GpioModuleState*>(module);
     Esp32SharedState& chip = *s->chip;
     if (bit >= chip.gpioInputs.size()) return;
-    chip.gpioInputs[bit] = level != 0;
-    routePinInputAt(chip, bit, nowNs);
+    gpioUpdateInputAt(chip, bit, level != 0, nowNs);
 }
 
 void gpioSetInputLevel(LsdnQemuModule* module, uint32_t bit, int32_t level) {
@@ -1126,8 +1231,33 @@ void gpioSetInputVoltageAt(LsdnQemuModule* module, uint32_t bit, double voltage,
     Esp32SharedState& chip = *s->chip;
     if (bit >= chip.gpioInputs.size()) return;
     chip.gpioVoltages[bit] = voltage;
-    chip.gpioInputs[bit] = voltage > 1.65;
-    routePinInputAt(chip, bit, nowNs);
+    gpioUpdateInputAt(chip, bit, voltage > 1.65, nowNs);
+}
+
+// mcu_abi.h 3.2: McuComponent le todos os pinos a cada stamp e antes/depois de cada evento do QEMU.
+// Numa chamada so', com uma consulta ao IOMUX/GPIO matrix por pino (gpioPadOutput, a mesma das
+// chamadas por pino); com o trace analogico ligado, pelas proprias chamadas por pino, que o imprimem.
+void gpioGetPinStates(LsdnQemuModule* module, const uint32_t* bits, uint32_t count, uint8_t* out) {
+    const Esp32SharedState& chip = *reinterpret_cast<GpioModuleState*>(module)->chip;
+    const bool trace = analogTraceEnabled();
+    for (uint32_t i = 0; i < count; ++i) {
+        const uint32_t bit = bits[i];
+        PadOutput pad;
+        if (!trace) pad = gpioPadOutput(chip, bit);
+        else if ((pad.enabled = gpioIsOutputEnabled(module, bit) != 0)) pad.level = gpioOutputLevel(module, bit) != 0;
+        if (pad.enabled) {
+            out[i] = static_cast<uint8_t>(LSDN_PIN_STATE_OUTPUT_ENABLED | (pad.level ? LSDN_PIN_STATE_OUTPUT_HIGH : 0u));
+            continue;
+        }
+        const int32_t pull = gpioGetPullState(module, bit);
+        out[i] = static_cast<uint8_t>(((pull & static_cast<int32_t>(LSDN_PULL_UP)) ? LSDN_PIN_STATE_PULL_UP : 0u) |
+                                      ((pull & static_cast<int32_t>(LSDN_PULL_DOWN)) ? LSDN_PIN_STATE_PULL_DOWN : 0u));
+    }
+}
+
+void gpioSetInputVoltagesAt(LsdnQemuModule* module, const uint32_t* bits, const double* voltages, uint32_t count,
+                            uint64_t nowNs) {
+    for (uint32_t i = 0; i < count; ++i) gpioSetInputVoltageAt(module, bits[i], voltages[i], nowNs);
 }
 
 void gpioDestroy(LsdnQemuModule* module) {
@@ -1137,7 +1267,8 @@ void gpioDestroy(LsdnQemuModule* module) {
 const LsdnQemuModuleVTable kGpioModuleVTable = {
     &gpioReset, &gpioWriteRegister, &gpioReadRegister, &gpioIsOutputEnabled, &gpioOutputLevel,
     &gpioSetInputLevel, &gpioDestroy, nullptr, nullptr, &gpioWriteRegisterAt, &gpioSetInputLevelAt, nullptr,
-    &gpioSetInputVoltageAt, nullptr, nullptr, nullptr, &gpioGetPullState,
+    &gpioSetInputVoltageAt, nullptr, nullptr, nullptr, &gpioGetPullState, nullptr,
+    &gpioGetPinStates, &gpioSetInputVoltagesAt,
 };
 
 void ioMuxReset(LsdnQemuModule* module) {
@@ -1183,6 +1314,7 @@ const LsdnQemuModuleVTable kIoMuxModuleVTable = {
 void usartReset(LsdnQemuModule* module) {
     auto* s = reinterpret_cast<UsartModuleState*>(module);
     s->chip->usarts[s->index] = {};
+    s->chip->gpioInputRouted.fill(false); // the reset input levels get the pads' again (gpioUpdateInputAt)
 }
 
 void usartWriteRegisterAt(LsdnQemuModule* module, uint64_t address, uint64_t value, uint64_t nowNs) {
@@ -1336,17 +1468,34 @@ size_t usartInjectRxBytes(LsdnQemuModule* module, const uint8_t* bytes, size_t c
     return accepted;
 }
 
+// mcu_abi.h 3.2: UART0_RX/UART0_TX dedicados, numa chamada so' (ver gpioGetPinStates).
+void usartGetPinStates(LsdnQemuModule* module, const uint32_t* lines, uint32_t count, uint8_t* out) {
+    for (uint32_t i = 0; i < count; ++i) {
+        out[i] = usartIsOutputEnabled(module, lines[i])
+            ? static_cast<uint8_t>(LSDN_PIN_STATE_OUTPUT_ENABLED |
+                                   (usartOutputLevel(module, lines[i]) ? LSDN_PIN_STATE_OUTPUT_HIGH : 0u))
+            : uint8_t{0};
+    }
+}
+
+// Sem set_input_voltage_at, o Core ja' entregava cada amostra pelo limiar de 1,65 V.
+void usartSetInputVoltagesAt(LsdnQemuModule* module, const uint32_t* lines, const double* voltages, uint32_t count,
+                             uint64_t nowNs) {
+    for (uint32_t i = 0; i < count; ++i) usartSetInputLevelAt(module, lines[i], voltages[i] > 1.65 ? 1 : 0, nowNs);
+}
+
 const LsdnQemuModuleVTable kUsartModuleVTable = {
     &usartReset, &usartWriteRegister, &usartReadRegister, &usartIsOutputEnabled, &usartOutputLevel,
     &usartSetInputLevel, &usartDestroy, &usartNextWakeupDelayNs, &usartOnWakeup,
     &usartWriteRegisterAt, &usartSetInputLevelAt, &usartNextWakeupDelayNsAt, nullptr,
     &usartDrainMonitorByte, &usartMonitorDroppedCount, &usartInjectRxBytes, nullptr,
-    &usartDrainWireTapByte,
+    &usartDrainWireTapByte, &usartGetPinStates, &usartSetInputVoltagesAt,
 };
 
 void i2cReset(LsdnQemuModule* module) {
     auto* s = reinterpret_cast<I2cModuleState*>(module);
     s->chip->i2cs[s->index] = {};
+    s->chip->gpioInputRouted.fill(false); // see usartReset()
 }
 
 // Offsets reais do periferico I2C do ESP32 (ver hw/i2c/esp32_i2c.h no fork QEMU) -- so' os que o
@@ -1361,6 +1510,13 @@ constexpr uint32_t kI2cCmdOpcodeShift = 11;
 constexpr uint32_t kI2cCmdAckValBit = 1u << 10;
 constexpr uint32_t kI2cCmdOpcodeMask = 0x7u;
 enum : uint32_t { kI2cOpRstart = 0, kI2cOpWrite = 1, kI2cOpRead = 2, kI2cOpStop = 3 };
+// Transacao I2C comandada pelo Core (VNEXT_B: BATCH que o fast path nao pode atender -- ha
+// instrumento, pull-up ou dispositivo sem i2c_transfer no barramento). Registradores privados,
+// fora do mapa real do periferico. Palavra de operacao: [7:0] byte, [9:8] tipo (I2cOpKind),
+// bit 10 NACK (leitura), bit 11 abortar no NACK (escrita); toda operacao assim registra resultado.
+constexpr uint64_t kI2cCoreOpOffset = 0xF00;
+constexpr uint64_t kI2cCoreResultCountOffset = 0xF04;
+constexpr uint64_t kI2cCoreResultOffset = 0xF08;
 
 void i2cKick(I2cState& i2c, uint64_t nowNs);
 
@@ -1452,6 +1608,16 @@ void i2cAdvance(I2cState& i2c, uint64_t nowNs) {
             i2c.sclOutputLevel = false;
             i2c.phase = I2cPhase::WriteAckRelease;
             i2c.dueNs = addDelayNs(nowNs, i2cEdgeSettleNs(i2c));
+            if (i2c.currentOp.record) {
+                i2c.coreResults.push_back((i2c.lastAck ? 1u << 8 : 0u) |
+                                          (static_cast<uint32_t>(I2cOpKind::Write) << 9));
+            }
+            if (!i2c.lastAck && i2c.currentOp.abortOnNack) {
+                // NACK com ACK_CHECK_EN: o controlador para de executar comandos; o barramento e'
+                // liberado com STOP em vez de seguir mandando bytes que ninguem confirma.
+                i2c.pendingOps.clear();
+                i2c.pendingOps.push_back(I2cOp{I2cOpKind::Stop});
+            }
             return;
 
         case I2cPhase::WriteAckRelease:
@@ -1512,6 +1678,10 @@ void i2cAdvance(I2cState& i2c, uint64_t nowNs) {
             i2c.sdaOutputEnabled = true;
             i2c.sdaOutputLevel = true; // retoma controle, idle-alto
             i2c.lastReadByte = i2c.shiftByte; // disponibiliza o byte pro readRegister(A_I2C_CMD)
+            if (i2c.currentOp.record) {
+                i2c.coreResults.push_back(i2c.shiftByte | (i2c.pendingNack ? 0u : 1u << 8) |
+                                          (static_cast<uint32_t>(I2cOpKind::Read) << 9));
+            }
             i2c.phase = I2cPhase::Idle;
             i2c.dueNs = addDelayNs(nowNs, i2cLowRemainderNs(i2c));
             return;
@@ -1539,6 +1709,7 @@ void i2cKick(I2cState& i2c, uint64_t nowNs) {
 
     const I2cOp op = i2c.pendingOps.front();
     i2c.pendingOps.pop_front();
+    i2c.currentOp = op;
 
     switch (op.kind) {
         case I2cOpKind::Restart:
@@ -1591,6 +1762,15 @@ void i2cWriteRegisterAt(LsdnQemuModule* module, uint64_t address, uint64_t value
         if (data > 0) i2c.halfPeriodNs = std::max<uint64_t>(1, data / 2u);
         return;
     }
+    if (offset == kI2cCoreOpOffset) {
+        I2cOp op{static_cast<I2cOpKind>((data >> 8) & 0x3u), static_cast<uint8_t>(data & 0xFFu),
+                 (data & (1u << 10)) != 0};
+        op.record = op.kind == I2cOpKind::Write || op.kind == I2cOpKind::Read;
+        op.abortOnNack = op.kind == I2cOpKind::Write && (data & (1u << 11)) != 0;
+        i2c.pendingOps.push_back(op);
+        i2cKick(i2c, nowNs);
+        return;
+    }
     if (offset == kI2cCtrOffset) {
         // O QEMU e o motor eletrico sao assincronos: o proximo TRANS_START pode chegar quando o
         // ultimo STOP/ACK ja terminou no periferico emulado, mas ainda aguarda sua ultima fase no
@@ -1625,8 +1805,15 @@ void i2cWriteRegister(LsdnQemuModule* module, uint64_t address, uint64_t value) 
 uint64_t i2cReadRegister(LsdnQemuModule* module, uint64_t address) {
     auto* s = reinterpret_cast<I2cModuleState*>(module);
     if (s->index >= s->chip->i2cs.size()) return 0;
-    const I2cState& i2c = s->chip->i2cs[s->index];
+    I2cState& i2c = s->chip->i2cs[s->index];
     const uint64_t offset = address - i2cStartAddress(s->index);
+    if (offset == kI2cCoreResultCountOffset) return i2c.coreResults.size();
+    if (offset == kI2cCoreResultOffset) {
+        if (i2c.coreResults.empty()) return 0;
+        const uint32_t result = i2c.coreResults.front();
+        i2c.coreResults.pop_front();
+        return result;
+    }
     if (offset == kI2cStatusOffset) {
         // Mesma forma de I2C_STATUS_REG do hardware real (ver hw/i2c/esp32_i2c.h): BUS_BUSY = bit
         // 4, ACK_REC = bit 0 (0 = ACK recebido, 1 = NACK). esp32_i2c_event() (fork QEMU) agora le'
@@ -1695,6 +1882,7 @@ const LsdnQemuModuleVTable kI2cModuleVTable = {
 void spiReset(LsdnQemuModule* module) {
     auto* s = reinterpret_cast<SpiModuleState*>(module);
     s->chip->spis[s->index] = {};
+    s->chip->gpioInputRouted.fill(false); // see usartReset()
 }
 
 // Offsets reais do periferico SPI do ESP32 (ver hw/ssi/esp32_spi.h no fork QEMU).
@@ -1722,6 +1910,15 @@ void spiUpdateCs0(SpiState& spi) {
 }
 
 void spiKick(SpiState& spi, uint64_t nowNs);
+
+// LASECSIMUL_SPI_ENGINE_TRACE=1: cada byte do motor SPI (chegada, início no fio) e o CS de hardware.
+bool spiEngineTraceEnabled() {
+    static const bool enabled = [] {
+        const char* value = std::getenv("LASECSIMUL_SPI_ENGINE_TRACE");
+        return value != nullptr && value[0] != 0 && std::strcmp(value, "0") != 0;
+    }();
+    return enabled;
+}
 
 void spiAdvance(SpiState& spi, uint64_t nowNs) {
     switch (spi.phase) {
@@ -1755,6 +1952,10 @@ void spiKick(SpiState& spi, uint64_t nowNs) {
 
     spi.shiftByte = spi.pendingBytes.front();
     spi.pendingBytes.pop_front();
+    if (spiEngineTraceEnabled())
+        std::fprintf(stderr, "[SPI_ENGINE] start byte=%02x at=%llu period=%llu queued=%zu\n", spi.shiftByte,
+                     static_cast<unsigned long long>(nowNs), static_cast<unsigned long long>(spi.bitPeriodNs),
+                     spi.pendingBytes.size());
     spi.bitIndex = 0;
     spi.clkOutputEnabled = true;
     spi.mosiOutputEnabled = true;
@@ -1770,6 +1971,10 @@ void spiWriteRegisterAt(LsdnQemuModule* module, uint64_t address, uint64_t value
     SpiState& spi = s->chip->spis[s->index];
     const uint64_t offset = address - spiStartAddress(s->index);
 
+    if (spiEngineTraceEnabled())
+        std::fprintf(stderr, "[SPI_ENGINE] write off=%02llx value=%llx at=%llu phase=%d\n",
+                     static_cast<unsigned long long>(offset), static_cast<unsigned long long>(value),
+                     static_cast<unsigned long long>(nowNs), static_cast<int>(spi.phase));
     if (offset == kSpiCmdOffset) {
         // esp32_spi.c espelha 1 (inicio) antes do 1o byte de uma transacao HSPI/VSPI (numero>=2) e
         // 0 (fim) quando o ultimo byte termina -- bracket automatico real ao redor de QUALQUER
@@ -1933,56 +2138,147 @@ const LsdnQemuModuleVTable kAdcModuleVTable = {
     &adcReset, &adcWriteRegister, &adcReadRegister, nullptr, nullptr, nullptr, &adcDestroy,
 };
 
-uint64_t ledcPeriodNs(uint32_t config, uint8_t& dutyResolution, bool lowSpeed) {
-    dutyResolution = static_cast<uint8_t>(config & 0x1Fu);
-    const uint32_t dividerFixed8 = (config & 0x007FFFE0u) >> 5u;
-    if (dutyResolution == 0 || dividerFixed8 == 0) return 0;
+constexpr uint32_t kLedcConf0SigOutEn = 1u << 2;
+constexpr uint32_t kLedcConf0IdleLv = 1u << 3;
+constexpr uint32_t kLedcConf1DutyStart = 1u << 31;
+constexpr uint32_t kLedcTimerResMask = 0x1Fu;
+constexpr uint32_t kLedcTimerPause = 1u << 23;
+constexpr uint32_t kLedcTimerRst = 1u << 24;
+constexpr uint32_t kLedcTimerTickSel = 1u << 25;
+constexpr uint32_t kLedcLsTimerParaUp = 1u << 26;
+constexpr uint32_t kLedcConfApbClkSel = 1u << 0;
+constexpr uint64_t kLedcTimerOffset = 0x140;
+constexpr uint64_t kLedcConfOffset = 0x190;
 
-    uint64_t sourceHz = 1'000'000;
-    if ((config & 0x02000000u) != 0) sourceHz = lowSpeed ? 80'000'000 : 80'000'000;
-    const long double ticks = (static_cast<long double>(dividerFixed8) / 256.0L) *
-                              static_cast<long double>(uint64_t(1) << dutyResolution);
-    return std::max<uint64_t>(1, static_cast<uint64_t>(std::llround(ticks * 1.0e9L / sourceHz)));
+uint32_t ledcChannelTimer(uint32_t channel, uint32_t conf0) {
+    return (conf0 & 0x3u) + (channel >= 8 ? 4u : 0u);
 }
 
-void ledcRestartChannel(Esp32SharedState& chip, uint32_t channel, uint64_t nowNs) {
-    if (channel >= chip.ledc.outputLevel.size()) return;
-    const uint32_t timer = chip.ledc.channelTimer[channel];
-    if (timer >= chip.ledc.periodNs.size()) return;
-    const uint64_t period = chip.ledc.periodNs[timer];
-    const uint8_t resolution = chip.ledc.dutyResolution[timer];
-    if (analogTraceEnabled() && channel == 0) {
-        static uint32_t messages = 0;
-        if (messages < 32) {
-            std::fprintf(stderr,
-                         "[LasecSimul][adapter][LEDC0] timer=%u period_ns=%llu resolution=%u duty=%u now=%llu\n",
-                         timer, static_cast<unsigned long long>(period), resolution,
-                         chip.ledc.dutyRaw[channel], static_cast<unsigned long long>(nowNs));
-            ++messages;
+// Duracao de um tick do contador: o divisor e' 10.8 em ponto fixo; o clock e' REF_TICK (1 MHz) sem
+// TICK_SEL; com TICK_SEL, APB_CLK (80 MHz) nos timers de alta velocidade e SLOW_CLK nos de baixa --
+// APB_CLK se LEDC_CONF.APB_CLK_SEL, senao RC_FAST (8 MHz nominais).
+long double ledcTickNs(const LedcState& ledc, uint32_t timer, uint32_t config) {
+    const uint32_t dividerFixed8 = (config >> 5u) & 0x3FFFFu;
+    if (dividerFixed8 == 0) return 0;
+    long double sourceHz = 1.0e6L;
+    if ((config & kLedcTimerTickSel) != 0) {
+        sourceHz = timer < 4 || (ledc.confReg & kLedcConfApbClkSel) != 0 ? 80.0e6L : 8.0e6L;
+    }
+    return (static_cast<long double>(dividerFixed8) / 256.0L) * 1.0e9L / sourceHz;
+}
+
+// PAUSE e RST agem na hora (inclusive nos timers de baixa velocidade, que o ESP-IDF reseta com
+// RST=1/RST=0 antes do PARA_UP); resolucao, divisor e clock so quando `parameters`.
+void ledcApplyTimerConfig(LedcState& ledc, uint32_t timer, uint32_t config, uint64_t nowNs, bool parameters) {
+    LedcTimer& t = ledc.timers[timer];
+    const uint32_t previous = t.config;
+    if ((config & kLedcTimerPause) != 0 && !t.paused) {
+        t.paused = true;
+        t.pausedAtNs = nowNs;
+    } else if ((config & kLedcTimerPause) == 0 && t.paused) {
+        t.paused = false;
+        if (nowNs > t.pausedAtNs) t.epochNs += nowNs - t.pausedAtNs; // continua de onde parou
+    }
+    // RST segura o contador em 0; ao sair do reset ele recomeca a contar a partir deste instante.
+    if ((config & kLedcTimerRst) != 0 || (previous & kLedcTimerRst) != 0) t.epochNs = nowNs;
+    constexpr uint32_t kControlBits = kLedcTimerPause | kLedcTimerRst;
+    if (!parameters) {
+        t.config = (previous & ~kControlBits) | (config & kControlBits);
+        return;
+    }
+    t.config = config & ~kLedcLsTimerParaUp;
+    t.resolution = config & kLedcTimerResMask;
+    t.tickNs = ledcTickNs(ledc, timer, config);
+}
+
+struct LedcPeriodShape {
+    bool constant = true;   // nivel fixo durante todo o periodo
+    bool level = false;     // nivel quando `constant`
+    long double highStartNs = 0, highEndNs = 0;  // relativos ao inicio do periodo (end pode passar do periodo)
+};
+
+// Forma do periodo `period` do canal: alto de HPOINT ate HPOINT+DUTY ticks. A parte fracionaria do
+// duty (4 bits) vira um tick extra em `frac` de cada 16 periodos, distribuido uniformemente.
+LedcPeriodShape ledcPeriodShape(const LedcChannel& c, const LedcTimer& t, uint64_t period) {
+    LedcPeriodShape shape;
+    const uint64_t fullScale = uint64_t(1) << t.resolution;
+    const uint64_t frac = c.duty & 0xFu;
+    const uint64_t dutyTicks = (c.duty >> 4u) + ((period + 1) * frac / 16u - period * frac / 16u);
+    if (dutyTicks == 0) return shape;
+    if (dutyTicks >= fullScale) {
+        shape.level = true;
+        return shape;
+    }
+    const uint64_t hpoint = c.hpoint & (fullScale - 1u);
+    shape.constant = false;
+    shape.highStartNs = static_cast<long double>(hpoint) * t.tickNs;
+    shape.highEndNs = static_cast<long double>(hpoint + dutyTicks) * t.tickNs;
+    return shape;
+}
+
+// Recalcula nivel e proxima borda do canal no instante `nowNs`.
+void ledcEvaluateChannel(LedcState& ledc, uint32_t channel, uint64_t nowNs) {
+    LedcChannel& c = ledc.channels[channel];
+    ledc.nextEdgeNs[channel] = 0;
+    if ((c.conf0 & kLedcConf0SigOutEn) == 0) {
+        ledc.outputLevel[channel] = (c.conf0 & kLedcConf0IdleLv) != 0;
+        return;
+    }
+    const LedcTimer& t = ledc.timers[ledcChannelTimer(channel, c.conf0)];
+    if (t.resolution == 0 || t.tickNs <= 0) {
+        ledc.outputLevel[channel] = false;
+        return;
+    }
+    const long double periodNs = t.tickNs * static_cast<long double>(uint64_t(1) << t.resolution);
+    const bool frozen = t.paused || (t.config & kLedcTimerRst) != 0;
+    const uint64_t at = frozen ? ((t.config & kLedcTimerRst) != 0 ? t.epochNs : t.pausedAtNs) : nowNs;
+    const long double elapsed = at > t.epochNs ? static_cast<long double>(at - t.epochNs) : 0.0L;
+    const uint64_t period = static_cast<uint64_t>(elapsed / periodNs);
+    const long double phase = elapsed - static_cast<long double>(period) * periodNs;
+
+    // DUTY_START pedido num periodo vale a partir do estouro seguinte do contador.
+    if (c.updatePending && period > c.updateAfterPeriod) {
+        c.duty = c.dutyReg;
+        c.hpoint = c.hpointReg;
+        c.updatePending = false;
+    }
+
+    const LedcPeriodShape shape = ledcPeriodShape(c, t, period);
+    bool level = shape.level;
+    if (!shape.constant) {
+        level = shape.highEndNs <= periodNs
+            ? phase >= shape.highStartNs && phase < shape.highEndNs
+            : phase >= shape.highStartNs || phase < shape.highEndNs - periodNs;
+    }
+    ledc.outputLevel[channel] = level;
+    if (frozen) return;
+
+    // Proxima mudanca possivel: bordas deste periodo ou o estouro do contador (onde o duty pode
+    // mudar por dithering ou por uma atualizacao pendente, e onde a forma recomeca).
+    long double nextPhase = periodNs;
+    if (!shape.constant) {
+        const long double wrappedEnd = shape.highEndNs <= periodNs ? shape.highEndNs : shape.highEndNs - periodNs;
+        for (const long double edge : {shape.highStartNs, wrappedEnd}) {
+            if (edge > phase && edge < nextPhase) nextPhase = edge;
         }
+    } else if ((c.duty & 0xFu) == 0 && !c.updatePending) {
+        return; // nivel constante e nada vai mudar no proximo periodo: nenhuma borda a agendar
     }
-    if (period == 0 || resolution == 0) {
-        chip.ledc.outputLevel[channel] = false;
-        chip.ledc.nextEdgeNs[channel] = 0;
-        return;
-    }
+    const long double delta = std::max<long double>(1.0L, nextPhase - phase);
+    ledc.nextEdgeNs[channel] = addDelayNs(nowNs, static_cast<uint64_t>(std::ceil(delta)));
+}
 
-    const uint64_t fullScale = uint64_t(1) << resolution;
-    const uint64_t duty = std::min<uint64_t>(chip.ledc.dutyRaw[channel], fullScale);
-    if (duty == 0) {
-        chip.ledc.outputLevel[channel] = false;
-        chip.ledc.nextEdgeNs[channel] = 0;
-        return;
+void ledcEvaluateTimerChannels(LedcState& ledc, uint32_t timer, uint64_t nowNs) {
+    for (uint32_t channel = 0; channel < ledc.channels.size(); ++channel) {
+        if (ledcChannelTimer(channel, ledc.channels[channel].conf0) == timer) ledcEvaluateChannel(ledc, channel, nowNs);
     }
-    if (duty >= fullScale || period <= 1) {
-        chip.ledc.outputLevel[channel] = true;
-        chip.ledc.nextEdgeNs[channel] = 0;
-        return;
-    }
+}
 
-    const uint64_t highNs = std::clamp<uint64_t>((period * duty) / fullScale, 1, period - 1);
-    chip.ledc.outputLevel[channel] = true;
-    chip.ledc.nextEdgeNs[channel] = addDelayNs(nowNs, highNs);
+uint64_t ledcCurrentPeriod(const LedcState& ledc, uint32_t timer, uint64_t nowNs) {
+    const LedcTimer& t = ledc.timers[timer];
+    if (t.resolution == 0 || t.tickNs <= 0 || nowNs <= t.epochNs) return 0;
+    const long double periodNs = t.tickNs * static_cast<long double>(uint64_t(1) << t.resolution);
+    return static_cast<uint64_t>(static_cast<long double>(nowNs - t.epochNs) / periodNs);
 }
 
 void ledcReset(LsdnQemuModule* module) {
@@ -1992,38 +2288,58 @@ void ledcReset(LsdnQemuModule* module) {
 
 void ledcWriteRegisterAt(LsdnQemuModule* module, uint64_t address, uint64_t value, uint64_t nowNs) {
     auto* s = reinterpret_cast<LedcModuleState*>(module);
-    Esp32SharedState& chip = *s->chip;
+    LedcState& ledc = s->chip->ledc;
     const uint64_t offset = address - kLedcStart;
     const uint32_t value32 = static_cast<uint32_t>(value);
 
-    if (offset >= 0x140 && offset <= 0x178 && ((offset - 0x140) % 8u) == 0) {
-        const uint32_t timer = static_cast<uint32_t>((offset - 0x140) / 8u);
-        chip.ledc.timerConfig[timer] = value32;
-        chip.ledc.periodNs[timer] = ledcPeriodNs(value32, chip.ledc.dutyResolution[timer], timer >= 4);
-        if (analogTraceEnabled()) {
-            std::fprintf(stderr,
-                         "[LasecSimul][adapter][LEDC] timer=%u config=0x%08x period_ns=%llu resolution=%u\n",
-                         timer, value32, static_cast<unsigned long long>(chip.ledc.periodNs[timer]),
-                         chip.ledc.dutyResolution[timer]);
-        }
-        for (uint32_t channel = 0; channel < chip.ledc.channelTimer.size(); ++channel) {
-            if (chip.ledc.channelTimer[channel] == timer) ledcRestartChannel(chip, channel, nowNs);
+    if (offset == kLedcConfOffset) {
+        // SLOW_CLK muda o tick de todo timer de baixa velocidade com TICK_SEL.
+        ledc.confReg = value32;
+        for (uint32_t timer = 4; timer < 8; ++timer) {
+            ledc.timers[timer].tickNs = ledcTickNs(ledc, timer, ledc.timers[timer].config);
+            ledcEvaluateTimerChannels(ledc, timer, nowNs);
         }
         return;
     }
-
-    if (offset < 0x140) {
-        const uint32_t channel = static_cast<uint32_t>(offset / 0x14u);
-        const uint32_t registerOffset = static_cast<uint32_t>(offset % 0x14u);
-        if (channel >= chip.ledc.channelTimer.size()) return;
-        if (registerOffset == 0) {
-            chip.ledc.channelTimer[channel] = static_cast<uint8_t>((value32 & 0x3u) + (channel >= 8 ? 4u : 0u));
-            ledcRestartChannel(chip, channel, nowNs);
-        } else if (registerOffset == 8) {
-            chip.ledc.dutyRaw[channel] = (value32 >> 4u) & 0xFFFFFu;
-            ledcRestartChannel(chip, channel, nowNs);
+    if (offset >= kLedcTimerOffset && offset < kLedcTimerOffset + 8u * 8u && ((offset - kLedcTimerOffset) % 8u) == 0) {
+        const uint32_t timer = static_cast<uint32_t>((offset - kLedcTimerOffset) / 8u);
+        // Timers de baixa velocidade so adotam resolucao/divisor/clock novos no PARA_UP; os de alta,
+        // na hora.
+        const bool parameters = timer < 4 || (value32 & kLedcLsTimerParaUp) != 0;
+        ledcApplyTimerConfig(ledc, timer, value32, nowNs, parameters);
+        if (analogTraceEnabled()) {
+            std::fprintf(stderr, "[LasecSimul][adapter][LEDC] timer=%u config=0x%08x tick_ns=%.3Lf resolution=%u\n",
+                         timer, value32, ledc.timers[timer].tickNs, ledc.timers[timer].resolution);
         }
+        ledcEvaluateTimerChannels(ledc, timer, nowNs);
+        return;
     }
+    if (offset >= kLedcTimerOffset) return;
+
+    const uint32_t channel = static_cast<uint32_t>(offset / 0x14u);
+    const uint32_t registerOffset = static_cast<uint32_t>(offset % 0x14u);
+    if (channel >= ledc.channels.size()) return;
+    LedcChannel& c = ledc.channels[channel];
+    switch (registerOffset) {
+        case 0x0:  // CONF0: TIMER_SEL, SIG_OUT_EN, IDLE_LV (PARA_UP so confirma a escrita)
+            c.conf0 = value32;
+            break;
+        case 0x4:  // HPOINT
+            c.hpointReg = value32 & 0xFFFFFu;
+            break;
+        case 0x8:  // DUTY (21 bits inteiros + 4 fracionarios)
+            c.dutyReg = value32 & 0x1FFFFFFu;
+            break;
+        case 0xC:  // CONF1: DUTY_START agenda a troca para o proximo estouro do contador
+            if ((value32 & kLedcConf1DutyStart) != 0) {
+                c.updatePending = true;
+                c.updateAfterPeriod = ledcCurrentPeriod(ledc, ledcChannelTimer(channel, c.conf0), nowNs);
+            }
+            break;
+        default:
+            return;
+    }
+    ledcEvaluateChannel(ledc, channel, nowNs);
 }
 
 void ledcWriteRegister(LsdnQemuModule* module, uint64_t address, uint64_t value) {
@@ -2044,23 +2360,10 @@ uint64_t ledcNextWakeupAt(LsdnQemuModule* module, uint64_t nowNs) {
 
 void ledcOnWakeup(LsdnQemuModule* module, uint64_t nowNs) {
     auto* s = reinterpret_cast<LedcModuleState*>(module);
-    Esp32SharedState& chip = *s->chip;
-    for (uint32_t channel = 0; channel < chip.ledc.nextEdgeNs.size(); ++channel) {
-        if (chip.ledc.nextEdgeNs[channel] == 0 || chip.ledc.nextEdgeNs[channel] > nowNs) continue;
-        const uint32_t timer = chip.ledc.channelTimer[channel];
-        if (timer >= chip.ledc.periodNs.size()) continue;
-        const uint64_t period = chip.ledc.periodNs[timer];
-        const uint8_t resolution = chip.ledc.dutyResolution[timer];
-        const uint64_t fullScale = resolution == 0 ? 0 : uint64_t(1) << resolution;
-        const uint64_t duty = fullScale == 0 ? 0 : std::min<uint64_t>(chip.ledc.dutyRaw[channel], fullScale);
-        if (period <= 1 || duty == 0 || duty >= fullScale) {
-            ledcRestartChannel(chip, channel, nowNs);
-            continue;
-        }
-        const uint64_t highNs = std::clamp<uint64_t>((period * duty) / fullScale, 1, period - 1);
-        chip.ledc.outputLevel[channel] = !chip.ledc.outputLevel[channel];
-        chip.ledc.nextEdgeNs[channel] = addDelayNs(
-            nowNs, chip.ledc.outputLevel[channel] ? highNs : period - highNs);
+    LedcState& ledc = s->chip->ledc;
+    for (uint32_t channel = 0; channel < ledc.nextEdgeNs.size(); ++channel) {
+        if (ledc.nextEdgeNs[channel] == 0 || ledc.nextEdgeNs[channel] > nowNs) continue;
+        ledcEvaluateChannel(ledc, channel, nowNs);
     }
 }
 

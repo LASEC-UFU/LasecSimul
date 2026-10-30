@@ -29,6 +29,8 @@ struct ComponentMetadata {
     /** `limits.stepTimeoutMs` do `.lsdevice` -- 0 == sem watchdog. Ver
      * .spec/archive/legacy-v2/lasecsimul-native-devices.spec, seção 13. */
     uint32_t stepTimeoutMs = 0;
+    /** `"dynamic"` do `.lsdevice` -- true == recebe `post_step`. Ver `ComponentMeta::dynamic`. */
+    bool dynamic = false;
     /** ABI v2 (.spec/archive/legacy-v2/lasecsimul-native-devices.spec): como a UI decodifica leitura/interage com o
      * componente sem checar typeId. `std::nullopt` é uma declaração válida ("sem leitura
      * estruturada"/"sem interação especial"), não um estado "ainda não migrado". */

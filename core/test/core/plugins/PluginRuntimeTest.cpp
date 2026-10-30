@@ -241,6 +241,22 @@ const LsdnMcuVTable kMcuVTable = {&createMcu, &buildLaunchArgs, &getMemoryRegion
 
 const LsdnDeviceVTable* getDeviceVTable1Wrapper(uint32_t* major, uint32_t* minor) { return getDeviceVTable1(major, minor); }
 const LsdnDeviceVTable* getDeviceVTable2Wrapper(uint32_t* major, uint32_t* minor) { return getDeviceVTable2(major, minor); }
+
+// device4: grava a thread de cada post_step, pra provar que o watchdog reaproveita a thread
+// reservada do device em vez de criar uma por chamada.
+std::vector<std::thread::id> device4PostStepThreads;
+void postStepDevice4(LsdnDevice*, uint64_t) { device4PostStepThreads.push_back(std::this_thread::get_id()); }
+void destroyDevice4(LsdnDevice* dev) { delete reinterpret_cast<DeviceState*>(dev); }
+const LsdnDeviceVTable kDeviceVTable4 = {
+    &createDevice1, &initDevice1, &stampDevice3, &postStepDevice4, &onEventDevice, &getPropertyDevice,
+    &setPropertyDevice, &getStateDevice, &setStateDevice, &destroyDevice4,
+};
+const LsdnDeviceVTable* getDeviceVTable4(uint32_t* major, uint32_t* minor) {
+    *major = LSDN_ABI_VERSION_MAJOR;
+    *minor = LSDN_ABI_VERSION_MINOR;
+    return &kDeviceVTable4;
+}
+
 const LsdnMcuVTable* getMcuVTable(uint32_t* major, uint32_t* minor) {
     *major = LSDN_MCU_ABI_VERSION_MAJOR;
     *minor = LSDN_MCU_ABI_VERSION_MINOR;
@@ -285,6 +301,32 @@ int main() {
     proxy2->postStep(200);
     ok &= expect(device2StampCount == 1, "device v2 stamp called after versioned swap");
     ok &= expect(device2PostStepCount == 1, "device v2 postStep called after versioned swap");
+
+    // isDynamic() segue o "dynamic" do manifesto (secao 10, item 3 da spec de devices nativos), e
+    // com stepTimeoutMs cada post_step roda na MESMA thread reservada do device (secao 13, item 2),
+    // fora da thread de quem chama.
+    {
+        auto module4 = PluginLoader::createDeviceModuleFromExports(nullptr, &getDeviceVTable4, "device.v4");
+        cache.setActiveDeviceModule("test.watched", module4);
+        ComponentMeta watchedMeta{"test.watched", {Pin{"p1"}, Pin{"p2"}}};
+        watchedMeta.stepTimeoutMs = 200;
+        ComponentMeta dynamicMeta = watchedMeta;
+        dynamicMeta.dynamic = true;
+        auto watched = runtime.createDeviceInstance("test.watched", watchedMeta, params, scheduler);
+        auto dynamicDevice = runtime.createDeviceInstance("test.watched", dynamicMeta, params, scheduler);
+        ok &= expect(!watched->isDynamic(), "device sem \"dynamic\" no manifesto nao recebe post_step da sessao");
+        ok &= expect(dynamicDevice->isDynamic(), "device com \"dynamic\": true recebe post_step da sessao");
+
+        for (int i = 0; i < 20; ++i) watched->postStep(16'666'667);
+        bool sameThread = device4PostStepThreads.size() == 20;
+        for (const std::thread::id& id : device4PostStepThreads) {
+            sameThread = sameThread && id == device4PostStepThreads.front();
+        }
+        ok &= expect(sameThread, "20 post_step com stepTimeoutMs na mesma thread reservada");
+        ok &= expect(!device4PostStepThreads.empty() && device4PostStepThreads.front() != std::this_thread::get_id(),
+                     "post_step com stepTimeoutMs roda fora da thread de quem chama");
+        ok &= expect(watched->health() == PluginHealthStatus::Ok, "post_step dentro do prazo mantem o device Ok");
+    }
 
     auto mcuModule = PluginLoader::createMcuModuleFromExports(nullptr, &getMcuVTable, "mcu.v1");
     cache.setActiveMcuModule("esp32.fake", mcuModule);

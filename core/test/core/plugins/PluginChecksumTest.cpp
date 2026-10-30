@@ -105,6 +105,19 @@ int main() {
         CHECK(!threw, "GlobalPluginCache::loadLibrary(devices/library.json real) nao lanca");
         CHECK(cache.activeDeviceModule("example.blinker") == nullptr,
               "example.blinker permanece fora do registro apos loadLibrary real");
+
+        // "dynamic" do manifesto (secao 10, item 3 da spec de devices nativos): so quem usa
+        // post_step se declara dinamico; displays e portas logicas nunca recebem post_step.
+        const auto dynamicOf = [&cache](const char* typeId) -> int {
+            const registry::ComponentMetadata* metadata = cache.metadata().find(typeId);
+            return metadata ? (metadata->dynamic ? 1 : 0) : -1;
+        };
+        CHECK(dynamicOf("outputs.servo") == 1, "servo se declara dinamico (post_step move o eixo)");
+        CHECK(dynamicOf("outputs.ssd1306") == 1, "SSD1306 se declara dinamico (post_step rola a tela)");
+        CHECK(dynamicOf("outputs.sh1107") == 1, "SH1107 se declara dinamico (post_step rola a tela)");
+        CHECK(dynamicOf("outputs.aip31068_i2c") == 0, "AIP31068 nao e dinamico (post_step vazio)");
+        CHECK(dynamicOf("outputs.pcd8544") == 0, "PCD8544 nao e dinamico (post_step vazio)");
+        CHECK(dynamicOf("logic.and_gate") == 0, "porta AND nao e dinamica (post_step vazio)");
     }
 
 #ifdef ESP32_ADAPTER_MSVC_DLL_PATH

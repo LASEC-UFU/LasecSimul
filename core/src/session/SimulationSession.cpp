@@ -292,6 +292,34 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
     m_scheduler.setCommandPendingCallback([this] { return m_commandQueue.hasPending(); });
     m_scheduler.setAdvanceLimitCallback([this] { return computeSlowestMcuPositionNs(); });
     m_scheduler.setHostPacedPositionCallback([this] { return computeHostPacedMcuPositionNs(); });
+    m_scheduler.setExactAdvanceLimitCallback([this] { return computeLockstepMcuLimitNs(); });
+    m_scheduler.setTimeSettledCallback([this](uint64_t nowNs, uint64_t nextEventNs, uint64_t nextHardEventNs) {
+        // Com mais de um MCU em lockstep, uma escrita de um pode mudar uma entrada do outro no mesmo
+        // instante; cada guest só corre até onde os outros já provaram ter chegado (+ folga mínima,
+        // ver McuComponent::publishLockstepTime). Os dois menores bastam para "mínimo dos outros".
+        bool hasLockstep = false;
+        uint64_t lowest = UINT64_MAX, secondLowest = UINT64_MAX;
+        for (uint32_t i : m_mcuComponentIndices) {
+            const auto limit = static_cast<mcu::McuComponent*>(m_componentInstances[i].get())->lockstepLimitNs();
+            if (!limit) continue;
+            hasLockstep = true;
+            if (*limit < lowest) {
+                secondLowest = lowest;
+                lowest = *limit;
+            } else if (*limit < secondLowest) {
+                secondLowest = *limit;
+            }
+        }
+        if (!hasLockstep) return;
+        // Um mesmo relógio real para todos: cada QEMU ajusta o próprio ritmo de instrução a ele.
+        const std::optional<uint64_t> scheduleNs = m_scheduler.realTimeScheduleNs();
+        for (uint32_t i : m_mcuComponentIndices) {
+            auto* mcu = static_cast<mcu::McuComponent*>(m_componentInstances[i].get());
+            const auto own = mcu->lockstepLimitNs();
+            const uint64_t peersNs = own && *own == lowest ? secondLowest : lowest;
+            mcu->publishLockstepTime(nowNs, nextEventNs, nextHardEventNs, peersNs, scheduleNs);
+        }
+    });
     setTransientSettings(m_transientSettings);
 }
 
@@ -842,7 +870,8 @@ SimulationPerformanceSnapshot SimulationSession::performanceMetrics() const {
             signalMetrics.lastDynamicErrorRatio, m_mnaSolver.threadCount(),
             m_mnaSolver.workerThreadCount(), m_mnaSolver.resourceBudget().maxParallelTasks,
             schedulerMetrics.maxSettleNanoseconds, schedulerMetrics.maxSettleAtNowNs,
-            schedulerMetrics.advanceLimitWaitCount, schedulerMetrics.advanceLimitWaitNanoseconds};
+            schedulerMetrics.advanceLimitWaitCount, schedulerMetrics.advanceLimitWaitNanoseconds,
+            schedulerMetrics.pacingSleepNanoseconds, schedulerMetrics.lockstepIdleWaitNanoseconds};
 }
 
 void SimulationSession::registerKnownPluginTypes() {
@@ -854,6 +883,7 @@ void SimulationSession::registerKnownPluginTypes() {
             if (const registry::ComponentMetadata* metadata = m_globalCache.metadata().find(typeId)) {
                 meta.propertySchema = metadata->propertySchema;
                 meta.stepTimeoutMs = metadata->stepTimeoutMs;
+                meta.dynamic = metadata->dynamic;
                 meta.pinSpec = metadata->pinSpec;
             }
             return m_pluginRuntime.createDeviceInstance(typeId, std::move(meta), params, m_scheduler);
@@ -3688,7 +3718,9 @@ std::optional<uint64_t> SimulationSession::computeSlowestMcuPositionNs() {
     std::optional<uint64_t> slowest;
     for (uint32_t i : m_mcuComponentIndices) {
         auto* mcu = static_cast<mcu::McuComponent*>(m_componentInstances[i].get());
-        if (!mcu->vnextBActive() && !mcu->arenaBridge().arena()) {
+        // Em lockstep o teto é exato e não passa por aqui (computeLockstepMcuLimitNs()): nem folga,
+        // nem exclusão por inatividade -- um guest parado esperando o Core não está "lento".
+        if ((!mcu->vnextBActive() && !mcu->arenaBridge().arena()) || mcu->lockstepLimitNs()) {
             m_mcuPositionTracking.erase(i);
             continue;
         }
@@ -3773,6 +3805,16 @@ void SimulationSession::refreshMcuPinTransitionObserversUnlocked() {
     }
 }
 
+std::optional<uint64_t> SimulationSession::computeLockstepMcuLimitNs() const {
+    std::optional<uint64_t> limit;
+    for (uint32_t i : m_mcuComponentIndices) {
+        const auto* mcu = static_cast<const mcu::McuComponent*>(m_componentInstances[i].get());
+        if (const std::optional<uint64_t> position = mcu->lockstepLimitNs())
+            limit = limit ? std::min(*limit, *position) : *position;
+    }
+    return limit;
+}
+
 std::optional<uint64_t> SimulationSession::computeHostPacedMcuPositionNs() const {
     std::optional<uint64_t> latest;
     for (uint32_t i : m_mcuComponentIndices) {
@@ -3791,15 +3833,12 @@ bool SimulationSession::isI2cFastPathTransparentUnlocked(const IComponentModel& 
     // I2C sem suporte a transferI2c) precisa do caminho elétrico bit-a-bit de verdade, então força
     // fallback (ver resolveI2cTransferUnlocked). Comparação por typeId (não dynamic_cast) porque
     // são tipos embutidos com typeId estável, mesmo padrão já usado alhures neste arquivo.
+    // Instrumentos (analisador lógico, ponta de prova, osciloscópio...) NÃO são transparentes: o
+    // fast path não gera forma de onda, e o usuário precisa ver no instrumento as bordas reais de
+    // SCL/SDA. Com eles no barramento a transação roda eletricamente (no VNEXT_B, pelo motor do
+    // adaptador -- McuComponent::startOrQueueVnextBElectricalI2cLocked).
     const std::string_view typeId = component.typeId();
-    if (typeId == "passive.resistor" || typeId == "connectors.tunnel") return true;
-    // Instrumentos de observação (entrada de 1 GΩ / 10 MΩ, nunca dirigem o nó): antes forçavam
-    // fallback. No transporte VNEXT_B não há caminho elétrico de reserva para I2C, então um
-    // analisador lógico ligado em SCL/SDA (caso comum em aula) fazia TODA transação voltar NACK e
-    // o display nunca recebia nada (docs/35-bug-bordas-esp32-displays-2026-10-28.md). Com o fast
-    // path o instrumento não vê a forma de onda bit a bit, mas o barramento funciona.
-    return typeId == "meters.logic_analyzer" || typeId == "meters.probe" || typeId == "meters.oscope" ||
-           typeId == "meters.freqmeter" || typeId == "instruments.voltmeter";
+    return typeId == "passive.resistor" || typeId == "connectors.tunnel";
 }
 
 I2cTransferResult SimulationSession::resolveI2cTransferUnlocked(uint32_t mcuIndex, uint32_t bus,
@@ -3812,7 +3851,7 @@ I2cTransferResult SimulationSession::resolveI2cTransferUnlocked(uint32_t mcuInde
     causalTrace.record(lasecsimul::trace::EventType::I2cEnter, traceTransaction, 0,
                        m_scheduler.nowNs(), transfer.txSize);
     I2cTransferResult fallback{};
-    const bool traceI2c = [] {
+    static const bool traceI2c = [] { // uma vez: getenv varre o ambiente a cada chamada
         const char* value = std::getenv("LASECSIMUL_I2C_FASTPATH_TRACE");
         return value && *value && std::string_view(value) != "0";
     }();
@@ -4157,8 +4196,7 @@ bool SimulationSession::settleStep() {
                                componentIndex)) {
             m_stampedNonlinearThisRound.push_back(componentIndex);
         }
-        const simulation::ComponentStampResolution& stampResolution =
-            m_topology.stampResolutionByComponent[componentIndex];
+        simulation::ComponentStampResolution& stampResolution = m_topology.stampResolutionByComponent[componentIndex];
         const uint32_t groupIndex = stampResolution.groupIndex;
         if (groupIndex == UINT32_MAX) continue; // componente sem pinos (não deveria existir)
 
@@ -4167,8 +4205,17 @@ bool SimulationSession::settleStep() {
             extraVarBase = m_topology.extraVariablesByComponent[componentIndex].baseLocalIndex;
         }
 
+        const std::span<const Pin> componentPins = component->pins();
+        std::vector<uint32_t>& byOrdinal = stampResolution.localIndexByPinOrdinal;
+        if (byOrdinal.size() != componentPins.size()) {
+            byOrdinal.assign(componentPins.size(), UINT32_MAX);
+            for (size_t ordinal = 0; ordinal < componentPins.size(); ++ordinal) {
+                const auto it = stampResolution.localIndexByPinId.find(componentPins[ordinal].id);
+                if (it != stampResolution.localIndexByPinId.end()) byOrdinal[ordinal] = it->second;
+            }
+        }
         simulation::ComponentMatrixView view(m_topology.groups[groupIndex], stampResolution.localIndexByPinId, componentIndex,
-                                             extraVarBase);
+                                             extraVarBase, componentPins, byOrdinal);
         const uint64_t oneStampCpu0 = tracing ? mcu::diag::currentThreadCpuTimeNs() : 0;
         try {
             component->stamp(view);

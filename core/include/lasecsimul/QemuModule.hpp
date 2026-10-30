@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <span>
 #include "Types.hpp"
 
 namespace lasecsimul {
@@ -71,6 +72,36 @@ public:
      * mesma neutralidade de chip que `isOutputEnabled()`/`outputLevel()` ja tem. */
     enum class PullState { None, Up, Down, UpAndDown };
     virtual PullState pullState(uint32_t) const { return PullState::None; }
+
+    /** Estado elétrico de várias linhas de uma vez (mesmos bits de `LSDN_PIN_STATE_*` em
+     * mcu_abi.h): `McuComponent` lê assim todo pino deste módulo a cada stamp e antes/depois de
+     * cada evento. Default: os métodos por linha acima, `pullState()` só com a linha não dirigida.
+     * `QemuModuleProxy` troca por uma chamada só ao plugin quando ele tem `get_pin_states`. */
+    static constexpr uint8_t kPinOutputEnabled = 1u << 0;
+    static constexpr uint8_t kPinOutputHigh = 1u << 1;
+    static constexpr uint8_t kPinPullUp = 1u << 2;
+    static constexpr uint8_t kPinPullDown = 1u << 3;
+    virtual void pinStates(std::span<const uint32_t> bitsOrLines, std::span<uint8_t> out) const {
+        for (size_t i = 0; i < bitsOrLines.size() && i < out.size(); ++i) {
+            const uint32_t bitOrLine = bitsOrLines[i];
+            if (isOutputEnabled(bitOrLine)) {
+                out[i] = static_cast<uint8_t>(kPinOutputEnabled | (outputLevel(bitOrLine) ? kPinOutputHigh : 0u));
+                continue;
+            }
+            const PullState pull = pullState(bitOrLine);
+            out[i] = static_cast<uint8_t>(
+                (pull == PullState::Up || pull == PullState::UpAndDown ? kPinPullUp : 0u) |
+                (pull == PullState::Down || pull == PullState::UpAndDown ? kPinPullDown : 0u));
+        }
+    }
+    /** Tensão de vários pads não dirigidos, aplicada na ordem dada -- mesmo efeito de
+     * `setInputVoltageAt()` linha a linha (o default). */
+    virtual void setInputVoltagesAt(std::span<const uint32_t> bitsOrLines, std::span<const double> voltages,
+                                    uint64_t nowNs) {
+        for (size_t i = 0; i < bitsOrLines.size() && i < voltages.size(); ++i) {
+            setInputVoltageAt(bitsOrLines[i], voltages[i], nowNs);
+        }
+    }
 
     /** Modulos com protocolo temporizado (UART/SPI/I2C, timers, PWM) podem pedir um wakeup de
      * simulacao. O Core agenda a chamada e re-estampa o MCU; o modulo continua sem conhecer

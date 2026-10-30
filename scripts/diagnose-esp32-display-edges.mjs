@@ -27,7 +27,9 @@ const durationMs = Number(process.argv[4] ?? 15000);
 // RUNTIME_ROOT=<extensão instalada>\bundled roda contra o Core/devices empacotados em vez dos do repo.
 const runtimeRoot = process.env.RUNTIME_ROOT ? path.resolve(process.env.RUNTIME_ROOT) : repo;
 const corePath = path.join(runtimeRoot, "core", "build", "Release", "lasecsimul-core.exe");
-const qemuPath = path.join(runtimeRoot, "devices", "qemu-esp32", "bin", "qemu-system-xtensa.exe");
+// QEMU_PATH=<qemu-system-xtensa.exe> testa um QEMU recém-compilado antes de implantá-lo.
+const qemuPath = process.env.QEMU_PATH ??
+  path.join(runtimeRoot, "devices", "qemu-esp32", "bin", "qemu-system-xtensa.exe");
 const subcircuitPath = path.join(runtimeRoot, "subcircuits", "esp32_devkitc_v4.lssubcircuit");
 const coreLogPath = path.join(os.tmpdir(), "lasecsimul-display-edges-core.log");
 
@@ -56,6 +58,51 @@ function summarize(buf) {
     nonZero: [...payload].filter((v) => v !== 0).length,
     text: payload.subarray(0, 32).toString("latin1").replace(/[^\x20-\x7e]/g, "."),
   };
+}
+
+// Estado V2 do meters.logic_analyzer (LogicAnalyzer::getState): máscara, magic, versão, canais com
+// descritores, depois `count` amostras {timestampNs u64, 1 byte por canal de 1 bit}. Devolve as
+// durações (ns) de cada nível do canal pedido, no relógio do Core.
+function analyzerLevelDurations(buf, channelName) {
+  let o = 8;
+  const version = buf.readUInt16LE(o); o += 2;
+  const channels = buf.readUInt16LE(o); o += 2;
+  if (version !== 2) return undefined;
+  const names = [];
+  const widths = [];
+  for (let c = 0; c < channels; ++c) {
+    const idLen = buf.readUInt16LE(o), labelLen = buf.readUInt16LE(o + 2), sourceLen = buf.readUInt16LE(o + 4);
+    widths.push(buf.readUInt16LE(o + 6));
+    o += 14;
+    names.push(buf.subarray(o + idLen, o + idLen + labelLen).toString("utf8") || buf.subarray(o, o + idLen).toString("utf8"));
+    o += idLen + labelLen + sourceLen;
+  }
+  const index = names.findIndex((name) => name.includes(channelName));
+  if (index < 0) return { names };
+  const count = buf.readUInt32LE(o); o += 4;
+  const durations = [];
+  const samples = [];
+  let lastLevel, lastTime;
+  for (let i = 0; i < count; ++i) {
+    const t = Number(buf.readBigUInt64LE(o)); o += 8;
+    let level = 0;
+    let bits = "";
+    for (let c = 0; c < channels; ++c) {
+      const bytes = Math.max(1, Math.ceil(widths[c] / 8));
+      if (c === index) level = buf[o] & 1;
+      bits += buf[o] & 1;
+      o += bytes;
+    }
+    samples.push(`${t} ${bits}`);
+    if (lastLevel !== undefined && level !== lastLevel) {
+      if (lastTime !== undefined) durations.push({ level: lastLevel, ns: t - lastTime });
+      lastTime = t;
+    } else if (lastLevel === undefined) {
+      lastTime = undefined;
+    }
+    lastLevel = level;
+  }
+  return { names, durations, samples };
 }
 
 // getComponentState responde "simulacao ocupada" enquanto um settle está em andamento.
@@ -94,7 +141,7 @@ async function main() {
 
   // Mesmos valores padrão que extension/src/core/coreLifecycle.ts envia (exceto realTimeRate).
   await client.setSimulationConfig({
-    targetStepUs: 0, realTimeRate: Number(process.env.RTR ?? 0), maxNonLinearIterations: 0, performanceProfiling: false,
+    targetStepUs: 0, realTimeRate: Number(process.env.RTR ?? 0), maxNonLinearIterations: 0, performanceProfiling: !!process.env.METRICS,
     integrationMethod: "automatic", adaptiveTimeStep: true, initialStepNs: 100, minimumStepNs: 1,
     maximumStepNs: 100000, relativeTolerance: 1e-4, absoluteTolerance: 1e-9,
   });
@@ -108,6 +155,7 @@ async function main() {
     ["lcd.sda", "Aip31068_i2c-13", "sda"], ["lcd.scl", "Aip31068_i2c-13", "scl"],
     ["esp.G17", "devkitC-46", "G17"], ["led.anode", "Led-87", "anode"],
     ["esp.G13(botao)", "devkitC-46", "G13"], ["esp.G12(espelho)", "devkitC-46", "G12"], ["esp.G27(pisca)", "devkitC-46", "G27"],
+    ["esp.G32", "devkitC-46", "G32"],
   ].map(([key, comp, pin]) => ({ key, ...resolveEndpoint({ componentId: comp, pinId: pin }) }));
   // TOGGLE_BUTTON=1: desliga a fonte do botão na 6ª leitura e religa na 10ª, para ver se o
   // firmware acompanha a entrada GPIO13 (G12 espelha o que ele leu).
@@ -140,17 +188,40 @@ async function main() {
       if (iteration === 10) { await client.setProperty(buttonId, "out", true); log("botao -> 5 V"); }
     }
     const time = await client.getSimulationTime();
+    const wallS = (performance.now() - t0) / 1000; // junto do tempo simulado: ritmo real = Δcore/Δwall
     uart += await client.getProperty(mcuId, "uart0_tx_monitor_hex").catch(() => "");
     const v = await client.getNodeVoltages(probes);
     const volts = Object.fromEntries(Object.entries(v).map(([k, x]) => [k, Number(x).toFixed(2)]));
-    log(`t=${((time.mcuVirtualNs ?? time.simulatedNs) / 1e6).toFixed(0)}ms`, JSON.stringify(volts));
+    log(`t=${((time.mcuVirtualNs ?? time.simulatedNs) / 1e6).toFixed(0)}ms core=${(time.simulatedNs / 1e6).toFixed(1)}ms wall=${wallS.toFixed(3)}s`, JSON.stringify(volts));
+    // METRICS=1: contadores do Scheduler no último segundo (eventos, passos, iterações e tempo de settle).
+    if (process.env.METRICS) {
+      const m = await client.getPerformanceMetrics().catch(() => undefined);
+      log("  metrics", JSON.stringify(m?.scheduler ?? m));
+      await client.resetPerformanceMetrics().catch(() => {});
+    }
     const pcdState = await stateWithRetry(pcd);
     log("  pcd", JSON.stringify(summarize(pcdState)));
     if (pcdState && pcdState.length >= 540 && pcdState.subarray(36).some((b) => b !== 0)) lastPcd = Buffer.from(pcdState);
     log("  lcd", JSON.stringify(summarize(await stateWithRetry(lcd))));
   }
   clearInterval(probeAllTimer);
+  if (process.env.ANALYZER && instances.has("LAnalizer-31")) {
+    const state = await stateWithRetry(instances.get("LAnalizer-31").instanceId);
+    const result = state ? analyzerLevelDurations(state, process.env.ANALYZER_CHANNEL ?? "PWM") : undefined;
+    const fmt = (level) => result?.durations?.filter((d) => d.level === level).map((d) => Math.round(d.ns / 1000)).join(",");
+    log(`analisador canais=${JSON.stringify(result?.names)}`);
+    log(`analisador alto(us)=[${fmt(1)}] baixo(us)=[${fmt(0)}]`);
+    // ANALYZER_DUMP=n: as n primeiras amostras guardadas ("tempo_ns bits D0..D7").
+    if (process.env.ANALYZER_DUMP) {
+      for (const sample of (result?.samples ?? []).slice(0, Number(process.env.ANALYZER_DUMP))) console.error(sample);
+    }
+  }
   log("UART:", JSON.stringify(Buffer.from(uart, "hex").toString("latin1").slice(-Number(process.env.UARTLEN ?? 200))));
+  // QEMULOG=n: as n últimas linhas do stderr do QEMU (diagnósticos [VNEXT_*]).
+  if (process.env.QEMULOG) {
+    const lines = (await client.getMcuLogs(mcuId).catch((e) => `getMcuLogs falhou: ${e}`)).split(/\r?\n/);
+    for (const line of lines.slice(-Number(process.env.QEMULOG))) console.error("  qemu|", line);
+  }
   if (lastPcd && process.env.DUMP) {
     // PCD8544: 6 páginas de 84 bytes, bit 0 = linha de cima da página.
     const fb = lastPcd.subarray(36);

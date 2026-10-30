@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <optional>
 #include <thread>
 #include <vector>
@@ -207,6 +208,133 @@ void testAdvanceLimitLiftsImmediatelyWhenReferenceMoves() {
     // Retomou de verdade (sem decaimento gradual nenhum pra esperar) -- nao ficou preso perto do
     // teto antigo.
     assert(scheduler.nowNs() > cappedNowNs + 20'000'000);
+}
+
+// Lockstep exato (QEMU -icount): o teto não tem folga nenhuma, e o Core avança até ele mesmo sem
+// evento na fila -- o guest pode estar parado esperando o Core chegar ao instante que publicou.
+void testExactAdvanceLimitHasNoLeadAndAdvancesWithoutEvents() {
+    Scheduler* schedulerPtr = nullptr;
+    Scheduler scheduler(2, [&schedulerPtr] {
+        schedulerPtr->dirtySet().clear();
+        return false;
+    });
+    schedulerPtr = &scheduler;
+    scheduler.setMaximumTimeStepNs(0);
+    scheduler.setRealTimeRate(0.0);
+    std::atomic<uint64_t> limitNs{3'000'000};
+    scheduler.setExactAdvanceLimitCallback([&limitNs] {
+        return std::optional<uint64_t>(limitNs.load(std::memory_order_relaxed));
+    });
+    std::atomic<uint64_t> settledNs{0};
+    scheduler.setTimeSettledCallback([&settledNs](uint64_t nowNs, uint64_t, uint64_t) {
+        settledNs.store(nowNs, std::memory_order_relaxed);
+    });
+
+    scheduler.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
+    assert(scheduler.nowNs() == 3'000'000);
+    assert(settledNs.load() == 3'000'000);
+
+    limitNs.store(7'000'000, std::memory_order_relaxed);
+    scheduler.notifyAdvanceLimitChanged();
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
+    scheduler.stop();
+    assert(scheduler.nowNs() == 7'000'000);
+    assert(settledNs.load() == 7'000'000);
+}
+
+// Evento suave (borda que só mexe em saídas de um MCU) não limita o horizonte rígido do lockstep,
+// mas continua sendo o próximo evento -- e sai da contagem rígida quando processado.
+void testSoftEventsStayOutOfTheHardHorizon() {
+    Scheduler* schedulerPtr = nullptr;
+    Scheduler scheduler(2, [&schedulerPtr] {
+        schedulerPtr->dirtySet().clear();
+        return false;
+    });
+    schedulerPtr = &scheduler;
+    scheduler.setMaximumTimeStepNs(0);
+    scheduler.setRealTimeRate(0.0);
+    std::atomic<uint64_t> limitNs{500'000};
+    scheduler.setExactAdvanceLimitCallback([&limitNs] {
+        return std::optional<uint64_t>(limitNs.load(std::memory_order_relaxed));
+    });
+    std::atomic<uint64_t> nextNs{0}, nextHardNs{0};
+    scheduler.setTimeSettledCallback([&](uint64_t, uint64_t next, uint64_t nextHard) {
+        nextNs.store(next, std::memory_order_relaxed);
+        nextHardNs.store(nextHard, std::memory_order_relaxed);
+    });
+    std::atomic<int> fired{0};
+    scheduler.scheduleAt(1'000'000, [&fired] { fired.fetch_add(1); }, true);
+    scheduler.scheduleAt(2'000'000, [&fired] { fired.fetch_add(1); });
+
+    scheduler.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
+    assert(scheduler.nowNs() == 500'000);
+    assert(nextNs.load() == 1'000'000);
+    assert(nextHardNs.load() == 2'000'000);
+
+    limitNs.store(1'500'000, std::memory_order_relaxed);
+    scheduler.notifyAdvanceLimitChanged();
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
+    assert(fired.load() == 1);
+    assert(nextNs.load() == 2'000'000);
+    assert(nextHardNs.load() == 2'000'000);
+
+    limitNs.store(3'000'000, std::memory_order_relaxed);
+    scheduler.notifyAdvanceLimitChanged();
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
+    scheduler.stop();
+    assert(fired.load() == 2);
+    assert(nextNs.load() == std::numeric_limits<uint64_t>::max());
+    assert(nextHardNs.load() == std::numeric_limits<uint64_t>::max());
+}
+
+// Lockstep em tempo real: o QEMU acompanha a posição que o pacing quer agora, não a que o Core
+// alcançou. Sem pacing ela não existe; parado no teto do guest ela segue o relógio de parede, até o
+// atraso máximo recuperável -- e um atraso maior desliza a âncora em vez de virar corrida depois.
+void testRealTimeScheduleFollowsTheWallClockWithBoundedLag() {
+    Scheduler* schedulerPtr = nullptr;
+    Scheduler scheduler(2, [&schedulerPtr] {
+        schedulerPtr->dirtySet().clear();
+        return false;
+    });
+    schedulerPtr = &scheduler;
+    scheduler.setMaximumTimeStepNs(0);
+    std::atomic<uint64_t> limitNs{1'000'000};
+    scheduler.setExactAdvanceLimitCallback([&limitNs] {
+        return std::optional<uint64_t>(limitNs.load(std::memory_order_relaxed));
+    });
+
+    scheduler.setRealTimeRate(0.0);
+    scheduler.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    assert(scheduler.nowNs() == 1'000'000);
+    assert(!scheduler.realTimeScheduleNs());
+    scheduler.stop();
+    assert(!scheduler.realTimeScheduleNs());
+
+    scheduler.reset();
+    limitNs.store(1'000'000, std::memory_order_relaxed);
+    scheduler.setRealTimeRate(1.0);
+    scheduler.start();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    assert(scheduler.nowNs() == 1'000'000);
+    const std::optional<uint64_t> early = scheduler.realTimeScheduleNs();
+    assert(early && *early >= 1'000'000 + 30'000'000 && *early <= 1'000'000 + 200'000'000);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1150));
+    const std::optional<uint64_t> capped = scheduler.realTimeScheduleNs();
+    assert(capped && *capped == 1'000'000 + 1'000'000'000);
+
+    // Guest liberado, circuito com um evento por ms: o Core recupera o atraso em passos de 1 ms.
+    std::function<void()> tick = [&] { scheduler.scheduleEvent(1'000'000, tick); };
+    scheduler.scheduleEvent(1'000'000, tick);
+    limitNs.store(5'000'000'000, std::memory_order_relaxed);
+    scheduler.notifyAdvanceLimitChanged();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    const uint64_t caughtUpNs = scheduler.nowNs();
+    scheduler.stop();
+    // Recuperou o 1 s permitido e seguiu no ritmo real; sem o limite estaria em ~1,25 s.
+    assert(caughtUpNs > 1'001'000'000 && caughtUpNs < 1'180'000'000);
 }
 
 // Achado 2026-09-28: um QEMU em tempo real (MTTCG) já esteve em cada timestamp que publica. Atrás
@@ -715,6 +843,9 @@ int main() {
     testRealTimeRateCapsVirtualAdvanceWithoutFixedDelay();
     testAdvanceLimitCapsElectricalAdvance();
     testAdvanceLimitLiftsImmediatelyWhenReferenceMoves();
+    testExactAdvanceLimitHasNoLeadAndAdvancesWithoutEvents();
+    testSoftEventsStayOutOfTheHardHorizon();
+    testRealTimeScheduleFollowsTheWallClockWithBoundedLag();
     testHostPacedPositionSkipsPacingSleep();
     testPacingSleepEndsWhenHostPacedPositionMovesAhead();
     testAdvanceLimitChangeDuringCycleIsNotLost();

@@ -1,0 +1,522 @@
+diff --git a/hw/gpio/esp32_gpio.c b/hw/gpio/esp32_gpio.c
+index 86a68f8..355967a 100644
+--- a/hw/gpio/esp32_gpio.c
++++ b/hw/gpio/esp32_gpio.c
+@@ -21,6 +21,7 @@
+ #include "hw/gpio/esp32_gpio.h"
+ 
+ #include "../softmmu/simuliface.h"
++#include "../softmmu/vnext_b.h"
+ 
+ 
+ #define GPIO_OFFSET 0x3FF44000
+@@ -120,6 +121,16 @@ void esp32_gpio_vnext_bind( Esp32GpioState *s )
+     vnext_gpio_instance = s;
+ }
+ 
++bool esp32_gpio_vnext_irq_armed( void )
++{
++    if( !vnext_gpio_instance ) return false;
++    for( int pin = 0; pin < 40; ++pin ){
++        const uint32_t conf = vnext_gpio_instance->gpio_pin[pin];
++        if( GPIO_PIN_INT_TYPE( conf ) && (conf & 0x3E000u) ) return true;
++    }
++    return false;
++}
++
+ /* Called from vnext_b.c's C2A consumer (main loop, BQL held) for each GPIO_IN / GPIO_IN1 word the
+  * Core publishes when a pad changes level. */
+ void esp32_gpio_vnext_input( uint64_t address, uint64_t value )
+@@ -144,10 +155,12 @@ static uint64_t esp32_gpio_read( void *opaque, hwaddr addr, unsigned int size )
+         case 0x2C: r = gpioS->gpio_enable1;     break; //GPIO_ENABLE1_REG
+         case 0x38: r = gpioS->strap_mode;       break; //A_GPIO_STRAP:
+         case 0x3C:                                     //GPIO_IN_REG
++            vnext_b_lockstep_input_barrier();
+             readInput( gpioS, 0 );   // Read pins
+             r = gpioS->gpio_in[0];
+             break;
+         case 0x40:                                     //GPIO_IN1_REG
++            vnext_b_lockstep_input_barrier();
+             readInput( gpioS, 1 );   // Read pins
+             r = gpioS->gpio_in[1];
+             break;
+diff --git a/hw/ssi/esp32_spi.c b/hw/ssi/esp32_spi.c
+index e3f7c98..ba19f9f 100644
+--- a/hw/ssi/esp32_spi.c
++++ b/hw/ssi/esp32_spi.c
+@@ -44,6 +44,26 @@ enum {
+ 
+ static void esp32_spi_do_command(Esp32SpiState* state, uint32_t cmd_reg);
+ 
++/* Byte `index` of the MOSI data held in W0..W15, as the controller shifts it out (ESP32 TRM, SPI):
++ * the buffer is byte-addressed, low byte of each word first (SPI_USER.WR_BYTE_ORDER = 0) or high
++ * byte first (= 1), each byte MSB first (SPI_CTRL.WR_BIT_ORDER = 0) or LSB first (= 1). The Core's
++ * SPI engine always shifts MSB first, so an LSB-first byte is mirrored here. Sending
++ * data_reg[index] -- a whole word per byte, past W15 from the 17th byte on -- put the low byte of
++ * the wrong word on the wire: a PCD8544 driven by hardware SPI showed garbage. */
++static uint8_t esp32_spi_tx_byte( Esp32SpiState* s, uint32_t index )
++{
++    const uint32_t word = s->data_reg[(index / 4) % ESP32_SPI_BUF_WORDS];
++    const unsigned lane = index % 4;
++    const bool big_endian = (s->user_reg >> 11) & 1u;
++    uint8_t byte = (uint8_t)(word >> (8 * (big_endian ? 3 - lane : lane)));
++    if( (s->ctrl_reg >> 26) & 1u ){
++        uint8_t mirrored = 0;
++        for( int bit = 0; bit < 8; ++bit ) if( byte & (1u << bit) ) mirrored |= 0x80u >> bit;
++        byte = mirrored;
++    }
++    return byte;
++}
++
+ static void esp32_spi_event( void* opaque ) // Timer event
+ {
+     Esp32SpiState *s = ESP32_SPI(opaque);
+@@ -59,7 +79,7 @@ static void esp32_spi_event( void* opaque ) // Timer event
+     int bits = 8;
+     if( s->dataBytes )
+     {
+-        writeReg( s->iomem.addr+0x80, s->data_reg[s->bytesDone] );
++        writeReg( s->iomem.addr+0x80, esp32_spi_tx_byte( s, s->bytesDone ) );
+         timer_mod_ns( &s->event_timer, getQemu_ns()+s->period*bits );
+     }
+     else{
+@@ -337,7 +357,7 @@ static void esp32_spi_do_command( Esp32SpiState* s, uint32_t cmd_reg )
+         // -- ver o fim espelhado em esp32_spi_event() acima. Nenhum firmware/biblioteca especifica
+         // e' assumida: isto vale pra qualquer transacao SPI, USR ou nao, que chegue por este caminho.
+         writeReg( s->iomem.addr+A_SPI_CMD, 1 );
+-        writeReg( s->iomem.addr+0x80, s->data_reg[0] );
++        writeReg( s->iomem.addr+0x80, esp32_spi_tx_byte( s, 0 ) );
+         int bits = 8;
+         timer_mod_ns( &s->event_timer, getQemu_ns()+s->period*bits);
+     }
+diff --git a/include/hw/gpio/esp32_gpio.h b/include/hw/gpio/esp32_gpio.h
+index 9a327c9..59523e6 100644
+--- a/include/hw/gpio/esp32_gpio.h
++++ b/include/hw/gpio/esp32_gpio.h
+@@ -47,3 +47,6 @@ typedef struct Esp32GpioClass {
+  * interrupts fire on the edge like the real chip instead of only when the guest polls GPIO_IN. */
+ void esp32_gpio_vnext_bind(Esp32GpioState *s);
+ void esp32_gpio_vnext_input(uint64_t address, uint64_t value);
++/* True when some pin has a GPIO interrupt armed (INT_TYPE set and an INT_ENA bit), i.e. the guest
++ * can see a pad edge without reading GPIO_IN. Used by the VNEXT_B exact lockstep. */
++bool esp32_gpio_vnext_irq_armed(void);
+diff --git a/include/sysemu/cpu-timers.h b/include/sysemu/cpu-timers.h
+index 5c63733..eb236ed 100644
+--- a/include/sysemu/cpu-timers.h
++++ b/include/sysemu/cpu-timers.h
+@@ -57,6 +57,8 @@ void icount_configure(QemuOpts *opts, Error **errp);
+ 
+ /* used by tcg vcpu thread to calc icount budget */
+ int64_t icount_round(int64_t count);
++/* LasecSimul: virtual ps per retired instruction (= the guest CPU clock period). */
++void icount_set_ps_per_inst(double ps);
+ 
+ /* if the CPUs are idle, start accounting real time to virtual clock. */
+ void icount_start_warp_timer(void);
+diff --git a/softmmu/cpus.c b/softmmu/cpus.c
+index 4fe8115..38b7b9c 100644
+--- a/softmmu/cpus.c
++++ b/softmmu/cpus.c
+@@ -47,6 +47,7 @@
+ #include "hw/hw.h"
+ #include "qemu/timer.h"
+ #include "trace.h"
++#include "vnext_b.h"
+ 
+ #ifdef CONFIG_LINUX
+ 
+@@ -88,7 +89,7 @@ bool cpu_thread_is_idle(CPUState *cpu)
+     if (cpu->stop || !cpu_work_list_empty(cpu)) {
+         return false;
+     }
+-    if (cpu_is_stopped(cpu)) {
++    if (cpu_is_stopped(cpu) || vnext_b_lockstep_hold()) {
+         return true;
+     }
+     if (!cpu->halted || cpu_has_work(cpu)) {
+@@ -284,7 +285,7 @@ int vm_shutdown(void)
+ 
+ bool cpu_can_run(CPUState *cpu)
+ {
+-    if (cpu->stop) {
++    if (cpu->stop || vnext_b_lockstep_hold()) {
+         return false;
+     }
+     if (cpu_is_stopped(cpu)) {
+diff --git a/softmmu/icount.c b/softmmu/icount.c
+index 0a54100..8582780 100644
+--- a/softmmu/icount.c
++++ b/softmmu/icount.c
+@@ -23,6 +23,7 @@
+  */
+ 
+ #include "qemu/osdep.h"
++#include <math.h>
+ #include "qemu/cutils.h"
+ #include "migration/vmstate.h"
+ #include "qapi/error.h"
+@@ -35,6 +36,7 @@
+ #include "qemu/seqlock.h"
+ #include "sysemu/replay.h"
+ #include "sysemu/runstate.h"
++#include "vnext_b.h"
+ #include "hw/core/cpu.h"
+ #include "sysemu/cpu-timers.h"
+ #include "sysemu/cpu-throttle.h"
+@@ -270,10 +272,25 @@ static void icount_adjust_vm(void *opaque)
+     icount_adjust();
+ }
+ 
++/* Instruction budget for `count` ns of virtual time. icount_to_ns() converts instructions to time
++ * with ps_per_inst (the guest's real CPU period), so the inverse must use it too: the stock
++ * "shift" conversion handed TCG a budget unrelated to the actual clock and virtual timers fired
++ * late (budget too large) or the vCPU exited needlessly often (too small). */
+ int64_t icount_round(int64_t count)
+ {
+-    int shift = qatomic_read(&timers_state.icount_time_shift);
+-    return (count + (1 << shift) - 1) >> shift;
++    const double ps = ps_per_inst;
++    if (ps <= 0) {
++        int shift = qatomic_read(&timers_state.icount_time_shift);
++        return (count + (1 << shift) - 1) >> shift;
++    }
++    return (int64_t)ceil((double)count * 1000.0 / ps);
++}
++
++void icount_set_ps_per_inst(double ps)
++{
++    if (ps > 0) {
++        ps_per_inst = ps;
++    }
+ }
+ 
+ static void icount_warp_rt(void)
+@@ -351,6 +368,10 @@ void icount_start_warp_timer(void)
+     if (!runstate_is_running()) {
+         return;
+     }
++    /* VNEXT_B lockstep hold: the clock stays at the sync instant until the Core caught up. */
++    if (vnext_b_lockstep_hold()) {
++        return;
++    }
+ 
+     if (replay_mode != REPLAY_MODE_PLAY) {
+         if (!all_cpu_threads_idle()) {
+diff --git a/softmmu/simuliface.c b/softmmu/simuliface.c
+index 1474755..a6b7727 100644
+--- a/softmmu/simuliface.c
++++ b/softmmu/simuliface.c
+@@ -720,6 +720,12 @@ void updtCpuFreqHz( uint32_t clock_Hz )
+     if (!m_arena) {
+         period_ns = 50000;
+         period_ps = 1000 * period_ns;
++        /* vNext-B has no legacy arena to carry ps_per_inst to the icount warp hook, so the
++         * instruction-counted clock stayed at its 25 ns (40 MHz ROM) default even after the
++         * firmware switched the CPU to 240 MHz: every instruction cost 6x the real chip's time.
++         * Apply the guest's real CPU period directly -- one instruction per CPU cycle, the same
++         * rule the legacy path follows. Without -icount this value is unused. */
++        if (clock_Hz) icount_set_ps_per_inst(ps_instr);
+         return;
+     }
+     if( m_arena->ps_per_inst == ps_instr ) return;
+diff --git a/softmmu/vnext_b.c b/softmmu/vnext_b.c
+index 226bbd9..efa147b 100644
+--- a/softmmu/vnext_b.c
++++ b/softmmu/vnext_b.c
+@@ -7,6 +7,7 @@
+ #include "sysemu/cpus.h"
+ #include "sysemu/sysemu.h"
+ #include "sysemu/runstate.h"
++#include "sysemu/cpu-timers.h"
+ #include "hw/core/cpu.h"
+ #include "hw/char/esp32_uart.h"
+ #include "hw/gpio/esp32_gpio.h"
+@@ -42,6 +43,10 @@ typedef struct VnextControl {
+      * lasec_at_control_page::artifact_virtual_time_ns doc-comment -- this field must stay
+      * byte-layout-identical to that one, appended last so no existing offset shifts). */
+     uint64_t artifactVirtualTimeNs;
++    /* ABI v1.2 exact lockstep -- byte-identical to lasec_at_control_page's artifact_sync_seq ..
++     * lockstep_reserved (see its doc-comment for the protocol). Only valid when minor >= 2. */
++    uint64_t artifactSyncSeq, coreSyncSeq, coreTimeNs, coreHorizonNs, coreInputHorizonNs;
++    uint32_t lockstep, lockstepReserved;
+ } VnextControl;
+ 
+ static uint8_t *vnext_base;
+@@ -180,6 +185,54 @@ static uint32_t vnext_i2c_rx_len[2], vnext_i2c_rx_pos[2];
+ static uint64_t vnext_i2c_status[2];
+ static uint64_t vnext_i2c_cmd[2];
+ 
++/* Exact lockstep (ABI 1.2). With an instruction-counted clock (-icount) the guest's virtual time is
++ * exact, so it can be held: the vCPUs stop and the clock freezes until the Core has processed every
++ * event up to the same instant. The guest never runs past the Core's horizon (its next event, which
++ * may change a pad, a UART byte or an I2C reply) without syncing, it syncs on every GPIO_IN read that
++ * could see something new, and right after every register write (the circuit may react to it at
++ * once, e.g. an output wired to an interrupt input). Inputs the Core produced at the sync instant are
++ * consumed before the vCPUs run again, so edge interrupts and reads land at the right instant. */
++static bool vnext_lockstep;
++static bool vnext_lockstep_holding;
++static bool vnext_lockstep_dirty;      /* lane publish since the last release */
++static uint64_t vnext_lockstep_target_ns;
++static uint64_t vnext_lockstep_horizon_ns;       /* never run past it without syncing */
++static uint64_t vnext_lockstep_input_horizon_ns; /* a GPIO_IN read from here on syncs first */
++
++/* Peripherals whose register writes only move pads (GPIO, IO_MUX) or start Core-side output-only
++ * engines (UART TX, SPI master, LEDC). Without an armed GPIO interrupt the guest can only see their
++ * consequences by reading GPIO_IN, which syncs, so these writes need no hold. */
++static bool vnext_lockstep_soft_address(uint64_t address) {
++    /* GPIO_PINn_REG may arm an interrupt: the Core must know it before the guest runs on. */
++    if (address >= UINT64_C(0x3FF44088) && address < UINT64_C(0x3FF44130)) return false;
++    return (address >= UINT64_C(0x3FF44000) && address < UINT64_C(0x3FF45000)) || /* GPIO */
++           (address >= UINT64_C(0x3FF49000) && address < UINT64_C(0x3FF4A000)) || /* IO_MUX */
++           (address >= UINT64_C(0x3FF40000) && address < UINT64_C(0x3FF41000)) || /* UART0 */
++           (address >= UINT64_C(0x3FF50000) && address < UINT64_C(0x3FF51000)) || /* UART1 */
++           (address >= UINT64_C(0x3FF6E000) && address < UINT64_C(0x3FF6F000)) || /* UART2 */
++           (address >= UINT64_C(0x3FF64000) && address < UINT64_C(0x3FF66000)) || /* SPI2, SPI3 */
++           (address >= UINT64_C(0x3FF59000) && address < UINT64_C(0x3FF5A000));   /* LEDC */
++}
++static QEMUTimer *vnext_lockstep_timer;
++static uint64_t vnext_lockstep_sync_count;
++/* LASECSIMUL_LOCKSTEP_TRACE=1: syncs, host time spent held, and why each sync happened. */
++static int vnext_lockstep_trace = -1;
++static int64_t vnext_lockstep_hold_started_ns;
++static int64_t vnext_lockstep_held_ns;
++static int64_t vnext_lockstep_released_at_ns;
++static int64_t vnext_lockstep_run_ns;
++static uint64_t vnext_lockstep_reason_count[4]; /* read, write, horizon, i2c */
++static void vnext_lockstep_request(uint64_t now);
++
++/* The vCPU executing the current guest access, or NULL for a timer or bottom half. With
++ * single-threaded TCG (-icount), QEMU_CLOCK_VIRTUAL timers run in the vCPU thread between
++ * executions with current_cpu still pointing at the last vCPU: treating that as a guest access made
++ * a full-lane write replay a guest instruction from a timer (cpu_exec_longjmp_cleanup assertion). */
++static CPUState *vnext_exec_cpu(void) {
++    CPUState *cpu = current_cpu;
++    return cpu && qatomic_read(&cpu->running) ? cpu : NULL;
++}
++
+ static unsigned vnext_self_test_init_delay_ms(void)
+ {
+     const char *value = getenv("LASECSIMUL_VNEXT_B_SELF_TEST_INIT_DELAY_MS");
+@@ -203,7 +256,7 @@ static uint64_t vnext_read(void *opaque, hwaddr addr, unsigned size);
+ bool vnext_b_i2c_submit(uint32_t bus, uint32_t flags, uint64_t period_ns,
+                         const uint8_t *tx, uint32_t tx_len, uint32_t rx_len) {
+     if (!vnext_b_active() || bus > 1 || !tx || !tx_len || tx_len > 32 || rx_len > 32) return false;
+-    CPUState *cpu = current_cpu;
++    CPUState *cpu = vnext_exec_cpu();
+     const uint32_t lane = cpu ? cpu->cpu_index : 0;
+     if (lane >= vnext_control->laneCount || vnext_i2c_waiting[lane]) return false;
+     VnextLane *d = (VnextLane *)(vnext_base + vnext_control->laneDescriptorOffset) + lane;
+@@ -269,6 +322,14 @@ bool vnext_b_i2c_submit(uint32_t bus, uint32_t flags, uint64_t period_ns,
+     // the corresponding resume.
+     qatomic_store_release(&meta[0], write + 1);
+     SetEvent(vnext_artifact_event);
++    if (vnext_lockstep) {
++        /* The Core answers a transparent bus at this very instant: hold until it did, so the reply
++         * is consumed before the guest clock moves. An electrical transfer replies later, at the
++         * horizon the Core publishes for its bus engine. */
++        qatomic_set(&vnext_lockstep_dirty, true);
++        if (!qatomic_read(&vnext_lockstep_holding)) vnext_lockstep_reason_count[3]++;
++        vnext_lockstep_request(event->timestamp);
++    }
+     if (!cpu && vnext_lane_credit(lane) == 0) {
+         /* E118: cpu may be NULL here (a non-vCPU producer -- see vnext_b_gpio_write()'s comment
+          * on the same distinction); vnext_block_producer_on_lane() already handles both cases
+@@ -402,7 +463,7 @@ static void vnext_notify_lane_backlog_cleared(uint32_t lane) {
+ 
+ VnextPublishResult vnext_b_gpio_write(uint64_t address, uint64_t value) {
+     if (!vnext_b_active()) return VNEXT_PUBLISHED;
+-    CPUState *cpu = current_cpu;
++    CPUState *cpu = vnext_exec_cpu();
+     /* UART TX effects are drained by a main-loop BH, where current_cpu is
+      * intentionally NULL.  They still belong to the fixed producer lane 0;
+      * use that lane's live CPU as the stop/resume owner instead of treating
+@@ -465,6 +526,28 @@ VnextPublishResult vnext_b_gpio_write(uint64_t address, uint64_t value) {
+     event->sequence = write;
+     qatomic_store_release(&meta[0], write + 1);
+     SetEvent(vnext_artifact_event);
++    if (vnext_lockstep) {
++        qatomic_set(&vnext_lockstep_dirty, true);
++        if (qatomic_read(&vnext_lockstep_holding)) {
++            /* Published during a hold (a bottom half, a peripheral timer): the release must wait
++             * for the Core to see it too. */
++            vnext_lockstep_request(event->timestamp);
++        } else if (esp32_gpio_vnext_irq_armed() || !vnext_lockstep_soft_address(address) ||
++                   vnext_lane_credit(lane) <= 2) {
++            /* The Core may answer at this very instant with something the guest sees without
++             * reading GPIO_IN (an armed GPIO interrupt reached through the circuit, a peripheral
++             * reply): hold right after this instruction, so it lands now, not at the next sync.
++             * Also hold before the lane fills: frozen, nothing (not even a peripheral timer) can
++             * meet a full lane, and the Core drains it meanwhile. */
++            vnext_lockstep_reason_count[1]++;
++            vnext_lockstep_request(event->timestamp);
++            if (cpu) cpu_exit(cpu);
++        } else if (event->timestamp > qatomic_read(&vnext_control->artifactVirtualTimeNs)) {
++            /* Only pads and the GPIO_IN snapshot can change, and the next GPIO_IN read syncs
++             * (dirty). Let the Core follow right behind the guest instead of waiting for it. */
++            qatomic_store_release(&vnext_control->artifactVirtualTimeNs, event->timestamp);
++        }
++    }
+     if (vnext_lane_credit(lane) == 0) {
+         /* Just became exactly full: pre-emptively engage the MWDT pause window now (matching
+          * DECISION-011's timing intent) rather than waiting for the next publish attempt to
+@@ -486,7 +569,7 @@ uint64_t vnext_b_gpio_read(uint64_t address) {
+      * (pulseIn, while (digitalRead(...)), a bit-banged sensor read) produced no lane events, so the
+      * electrical world it reads froze for up to a second. Publish "QEMU is here" on input reads so
+      * the Core keeps up with the guest exactly while it watches, like the real pad. */
+-    {
++    if (!vnext_lockstep) {   /* lockstep: vnext_b_lockstep_input_barrier() already synced */
+         static uint64_t last_published_ns;
+         const uint64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+         if (now - qatomic_read(&last_published_ns) >= VNEXT_INPUT_WATERMARK_MIN_NS) {
+@@ -686,6 +769,104 @@ static void vnext_heartbeat_cb(void *opaque)
+     timer_mod(vnext_heartbeat_timer, now + VNEXT_HEARTBEAT_INTERVAL_NS);
+ }
+ 
++bool vnext_b_lockstep_hold(void) { return qatomic_read(&vnext_lockstep_holding); }
++
++/* Hold every vCPU, virtual clock frozen, until the Core has processed everything up to `now`.
++ * Called with the BQL held. While already holding, it only republishes the request: something was
++ * published during the hold and the release must wait for the Core to see it too. */
++static void vnext_lockstep_request(uint64_t now) {
++    VnextControl *c = vnext_control;
++    if (!qatomic_read(&vnext_lockstep_holding)) {
++        vnext_lockstep_target_ns = now;
++        qatomic_set(&vnext_lockstep_holding, true);
++        vnext_lockstep_sync_count++;
++        if (vnext_lockstep_trace < 0) {
++            const char *v = getenv("LASECSIMUL_LOCKSTEP_TRACE");
++            vnext_lockstep_trace = v && *v && *v != '0';
++        }
++        if (vnext_lockstep_trace) {
++            vnext_lockstep_hold_started_ns = get_clock();
++            if (vnext_lockstep_released_at_ns)
++                vnext_lockstep_run_ns += vnext_lockstep_hold_started_ns - vnext_lockstep_released_at_ns;
++        }
++    }
++    if (vnext_lockstep_target_ns > qatomic_read(&c->artifactVirtualTimeNs))
++        qatomic_store_release(&c->artifactVirtualTimeNs, vnext_lockstep_target_ns);
++    qatomic_store_release(&c->artifactSyncSeq, qatomic_read(&c->artifactSyncSeq) + 1);
++    SetEvent(vnext_artifact_event);
++}
++
++static void vnext_lockstep_try_release(void) {
++    VnextControl *c = vnext_control;
++    if (!vnext_lockstep || !qatomic_read(&vnext_lockstep_holding)) return;
++    if (qatomic_load_acquire(&c->coreSyncSeq) != qatomic_read(&c->artifactSyncSeq)) return;
++    if (qatomic_read(&c->coreTimeNs) < vnext_lockstep_target_ns) return;
++    const uint64_t horizon = qatomic_read(&c->coreHorizonNs);
++    const uint64_t input_horizon = qatomic_read(&c->coreInputHorizonNs);
++    /* Everything the Core produced up to the instant was published before core_sync_seq: deliver
++     * it now, with the clock still frozen at the instant. */
++    vnext_check_responses();
++    vnext_check_i2c_responses();
++    vnext_consume_c2a();
++    vnext_lockstep_horizon_ns = horizon > vnext_lockstep_target_ns ? horizon : vnext_lockstep_target_ns + 1;
++    if (vnext_lockstep_horizon_ns > (uint64_t)INT64_MAX) vnext_lockstep_horizon_ns = INT64_MAX;
++    vnext_lockstep_input_horizon_ns = input_horizon > vnext_lockstep_target_ns ? input_horizon
++                                                                               : vnext_lockstep_target_ns + 1;
++    if (vnext_lockstep_input_horizon_ns > vnext_lockstep_horizon_ns)
++        vnext_lockstep_input_horizon_ns = vnext_lockstep_horizon_ns;
++    qatomic_set(&vnext_lockstep_dirty, false);
++    timer_mod(vnext_lockstep_timer, (int64_t)vnext_lockstep_horizon_ns);
++    qatomic_set(&vnext_lockstep_holding, false);
++    if (vnext_lockstep_trace > 0) {
++        vnext_lockstep_released_at_ns = get_clock();
++        vnext_lockstep_held_ns += vnext_lockstep_released_at_ns - vnext_lockstep_hold_started_ns;
++        if (vnext_is_power_of_two(vnext_lockstep_sync_count) || vnext_lockstep_sync_count % 65536 == 0)
++            fprintf(stderr, "[LOCKSTEP] syncs=%" PRIu64 " guest_ns=%" PRIu64 " held_host_ns=%" PRId64
++                    " avg_hold_ns=%" PRId64 " avg_run_ns=%" PRId64 " read=%" PRIu64 " write=%" PRIu64 " horizon=%" PRIu64 " i2c=%" PRIu64 "\n",
++                    vnext_lockstep_sync_count, vnext_lockstep_target_ns, vnext_lockstep_held_ns,
++                    vnext_lockstep_held_ns / (int64_t)vnext_lockstep_sync_count,
++                    vnext_lockstep_run_ns / (int64_t)vnext_lockstep_sync_count,
++                    vnext_lockstep_reason_count[0], vnext_lockstep_reason_count[1],
++                    vnext_lockstep_reason_count[2], vnext_lockstep_reason_count[3]);
++    }
++    CPUState *cpu;
++    CPU_FOREACH(cpu) {
++        qemu_cpu_kick(cpu);
++    }
++    /* Idle vCPUs (waiti, or stopped waiting for an I2C reply): warp the clock to the next deadline
++     * right now -- at most the horizon timer -- instead of on a later main-loop pass. */
++    icount_start_warp_timer();
++    qemu_notify_event();
++}
++
++static void vnext_lockstep_horizon_cb(void *opaque) {
++    (void)opaque;
++    if (!vnext_lockstep || qatomic_read(&vnext_lockstep_holding)) return;
++    vnext_lockstep_reason_count[2]++;
++    vnext_lockstep_request(qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
++}
++
++/* GPIO_IN/GPIO_IN1 MMIO read (vCPU context, BQL held). The snapshot is exact while the guest has
++ * written nothing since the last sync and is still before the Core's next event of any kind (the
++ * input horizon -- even an output-only edge moves its own pad); otherwise sync first and replay the
++ * load once the Core caught up -- it then reads the pads of this very instant. */
++void vnext_b_lockstep_input_barrier(void) {
++    CPUState *cpu = vnext_exec_cpu();
++    if (!vnext_lockstep || !cpu) return;
++    const uint64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    if (!qatomic_read(&vnext_lockstep_holding) && !qatomic_read(&vnext_lockstep_dirty) &&
++        now < vnext_lockstep_input_horizon_ns) return;
++    if (!qatomic_read(&vnext_lockstep_holding)) {
++        vnext_lockstep_reason_count[0]++;
++        vnext_lockstep_request(now);
++    }
++    /* Leave cpu_exec() (exit_request) before replaying the load: a bare cpu_loop_exit_restore()
++     * resumes inside cpu_exec(), which never checks cpu_can_run() -- the vCPU spun on this load
++     * for the whole hold, fighting the main loop for the BQL and free to take interrupts. */
++    cpu_exit(cpu);
++    cpu_loop_exit_restore(cpu, cpu->mem_io_pc);
++}
++
+ static void vnext_resume(void *opaque) {
+     (void)opaque;
+     if (vnext_provenance_enabled()) {
+@@ -727,6 +908,13 @@ static void vnext_resume(void *opaque) {
+         }
+         if (vnext_start_guest_on_core_ready && !vnext_vm_started) {
+             vnext_vm_started = true;
++            vnext_lockstep = vnext_control->minor >= 2 && qatomic_load_acquire(&vnext_control->lockstep) &&
++                             icount_enabled();
++            if (vnext_lockstep) {
++                fprintf(stderr, "[LasecSimul] lockstep=exact (icount clock held at every Core sync)\n");
++                vnext_lockstep_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, vnext_lockstep_horizon_cb, NULL);
++                vnext_lockstep_request(0); /* no horizon yet: start held at t=0 */
++            }
+             vm_start();
+             if (!vnext_heartbeat_initialized) {
+                 vnext_heartbeat_initialized = true;
+@@ -742,6 +930,8 @@ static void vnext_resume(void *opaque) {
+     vnext_check_responses();
+     vnext_check_i2c_responses();
+     vnext_consume_c2a();
++    /* Before the sweep below: it resumes a vCPU whose I2C reply this release just consumed. */
++    vnext_lockstep_try_release();
+     if (vnext_vm_started) {
+         /* Do not re-signal the artifact doorbell merely because this callback ran.
+          * Only a real publish, response, heartbeat, or credit transition should wake Core;
+@@ -962,4 +1152,6 @@ int vnext_b_main(int argc, char **argv) {
+ }
+ #else
+ int vnext_b_main(int argc, char **argv) { (void)argc; (void)argv; return 1; }
++bool vnext_b_lockstep_hold(void) { return false; }
++void vnext_b_lockstep_input_barrier(void) {}
+ #endif
+diff --git a/softmmu/vnext_b.h b/softmmu/vnext_b.h
+index bb22f7d..698a7f1 100644
+--- a/softmmu/vnext_b.h
++++ b/softmmu/vnext_b.h
+@@ -28,6 +28,12 @@ typedef enum {
+ 
+ int vnext_b_main(int argc, char **argv);
+ bool vnext_b_active(void);
++/* Exact lockstep (see vnext_b.c): true while every vCPU is held, virtual clock frozen, waiting for
++ * the Core. cpu_can_run()/cpu_thread_is_idle() and the icount warp honour it. */
++bool vnext_b_lockstep_hold(void);
++/* Called by the GPIO model right before it reads GPIO_IN/GPIO_IN1 for a guest load. May not
++ * return: syncs with the Core and replays the load (cpu_loop_exit_restore). */
++void vnext_b_lockstep_input_barrier(void);
+ VnextPublishResult vnext_b_gpio_write(uint64_t address, uint64_t value);
+ uint64_t vnext_b_gpio_read(uint64_t address);
+ uint64_t vnext_b_register_read(uint64_t address);

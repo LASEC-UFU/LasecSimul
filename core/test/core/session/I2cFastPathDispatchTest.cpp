@@ -252,10 +252,10 @@ void testFastPathIgnoresTransparentComponents() {
           "resistor e tunel no mesmo no' nao impedem o fast path (tipos transparentes)");
 }
 
-/** Regressão (docs/35-bug-bordas-esp32-displays-2026-10-28.md): no VNEXT_B não há fallback elétrico
- * de I2C, então um analisador lógico em SCL/SDA fazia toda transação voltar NACK. Instrumentos de
- * observação (alta impedância) precisam ser transparentes como resistor/túnel. */
-void testFastPathIgnoresObservingInstruments() {
+/** docs/35-bug-bordas-esp32-displays-2026-10-28.md: um instrumento no barramento precisa ver as bordas
+ * reais, então ele força o caminho elétrico (handled=false) -- que no VNEXT_B agora existe, pelo motor
+ * do adaptador. Nunca um fast path que deixaria o analisador mostrando SCL/SDA parados. */
+void testFastPathYieldsToObservingInstruments() {
     plugins::GlobalPluginCache cache;
     SimulationSession session(cache);
     session.mcus().registerFactory("test.fake_mcu", [] { return std::make_unique<FakeMcuAdapter>(); });
@@ -283,8 +283,8 @@ void testFastPathIgnoresObservingInstruments() {
 
     const uint8_t payload = 0x04;
     const I2cTransferResult result = session.resolveI2cTransferForTesting(mcuIndex, 0, makeWrite(0x42, &payload, 1));
-    check(result.handled && result.addressAck,
-          "analisador logico e ponta de prova em SCL/SDA nao impedem o fast path (instrumentos de observacao)");
+    check(!result.handled,
+          "analisador logico e ponta de prova em SCL/SDA forcam o caminho eletrico (bordas reais no instrumento)");
 }
 
 void testFastPathDefinitiveNackWithNothingConnected() {
@@ -308,7 +308,7 @@ int main() {
     testFastPathFallsBackWithOpaqueComponentOnBus();
     testFastPathRequiresBothBusWires();
     testFastPathIgnoresTransparentComponents();
-    testFastPathIgnoresObservingInstruments();
+    testFastPathYieldsToObservingInstruments();
     testFastPathDefinitiveNackWithNothingConnected();
     if (failures == 0) {
         std::printf("OK: fast path de I2C resolve topologia corretamente.\n");

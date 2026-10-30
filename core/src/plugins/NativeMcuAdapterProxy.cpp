@@ -122,7 +122,7 @@ std::vector<std::unique_ptr<QemuModule>> NativeMcuAdapterProxy::createModules() 
                 break;
             }
         }
-        modules.push_back(std::make_unique<QemuModuleProxy>(handle, memStart, memEnd));
+        modules.push_back(std::make_unique<QemuModuleProxy>(handle, memStart, memEnd, m_module->abiMinor()));
     }
     return modules;
 }

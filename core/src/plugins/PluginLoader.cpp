@@ -77,7 +77,8 @@ std::shared_ptr<PluginModule> PluginLoader::createMcuModuleFromExports(
         throw std::runtime_error("ABI incompativel em: " + binaryPath.string());
     }
 
-    return std::make_shared<PluginModule>(libraryHandle, vtable, binaryPath);
+    // O minor fica guardado: slots de um minor posterior ao do plugin não existem na vtable dele.
+    return std::make_shared<PluginModule>(libraryHandle, vtable, binaryPath, abiMinor);
 }
 
 void PluginLoader::scanDirectory(const std::filesystem::path& libraryJsonPath) {

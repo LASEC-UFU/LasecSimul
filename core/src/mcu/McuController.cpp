@@ -411,6 +411,18 @@ void McuController::start(const std::filesystem::path& firmwarePath, const std::
         m_vnextB.prepare(std::move(spec), identity.sessionExecutionId, arenaName, m_adapter.chipId(),
                          std::move(notificationWake), [this] { return m_vnextBAttached; });
         m_vnextBAttached = true;
+        // Lockstep exato só com relógio contado por instrução: no MTTCG o relógio do QEMU segue o
+        // do host e não pode ser segurado. Ligado antes de activate(), que libera o guest.
+        const char* lockstepSetting = std::getenv("LASECSIMUL_ESP32_LOCKSTEP");
+        const bool lockstep = !m_hostPacedVirtualClock.load(std::memory_order_relaxed) &&
+                              !(lockstepSetting && std::string_view(lockstepSetting) == "0");
+        // Padrão: tempo real -- quando o host não executa o guest rápido o bastante, o QEMU estica o
+        // tempo de cada instrução em vez de a simulação inteira atrasar. "exact": sempre um ciclo por
+        // instrução, mesmo que a simulação fique mais lenta que o real.
+        const char* timingSetting = std::getenv("LASECSIMUL_ESP32_TIMING");
+        const bool realtime = !(timingSetting && std::string_view(timingSetting) == "exact");
+        m_vnextB.setLockstep(lockstep, realtime);
+        m_lockstep.store(lockstep, std::memory_order_release);
         try {
             m_vnextB.activate();
         } catch (...) {
@@ -466,6 +478,7 @@ void McuController::start(const std::filesystem::path& firmwarePath, const std::
 
 void McuController::stop() {
     m_hostPacedVirtualClock.store(false, std::memory_order_release);
+    m_lockstep.store(false, std::memory_order_release);
     if (m_vnextBAttached) {
         m_vnextB.stop();
         m_vnextBAttached = false;

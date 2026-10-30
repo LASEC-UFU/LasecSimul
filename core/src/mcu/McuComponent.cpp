@@ -56,15 +56,101 @@ uint64_t tailSimuTimePs(const qemu::QemuArenaBridge& arena, uint64_t writeIndex,
     return a->queue[slot].simuTime;
 }
 
+// Lockstep exato: maior intervalo de tempo do guest sem sincronizar com o Core, mesmo sem eventos.
+// Mantém o guest no ritmo do tempo real (o Core faz o pacing) e o tempo da sessão andando. Medido
+// (2026-10-29): 5 ou 10 ms dividem as sincronizações por 2 sem ganhar ritmo -- cada uma só demora mais.
+constexpr uint64_t kLockstepQuantumNs = 1'000'000;
+// Folga sobre a posição provada dos outros MCUs em lockstep: sem ela os dois guests esperariam um pelo
+// outro para sempre. É o maior atraso com que um sinal entre dois MCUs pode chegar.
+constexpr uint64_t kLockstepPeerLookaheadNs = 1'000;
+
+// LASECSIMUL_LOCKSTEP_TRACE=1: onde vai o tempo de parede de cada sincronização do lockstep.
+bool lockstepTraceEnabled() {
+    static const bool enabled = [] {
+        const char* value = std::getenv("LASECSIMUL_LOCKSTEP_TRACE");
+        return value && *value && std::strcmp(value, "0") != 0;
+    }();
+    return enabled;
+}
+uint64_t steadyNowNs() {
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+
+// Só o que stamp() aplica a um pino: o nível de um pino dirigido, ou o pull de um não dirigido.
+uint8_t electricalPinState(uint8_t state) {
+    constexpr uint8_t kDriven = QemuModule::kPinOutputEnabled | QemuModule::kPinOutputHigh;
+    constexpr uint8_t kPulls = QemuModule::kPinPullUp | QemuModule::kPinPullDown;
+    return static_cast<uint8_t>(state & ((state & QemuModule::kPinOutputEnabled) != 0 ? kDriven : kPulls));
+}
+
+// Estado elétrico de `bitsOrLines` de `module`, lido em lotes de até 64 linhas sem alocar;
+// `visit(posição, estado)` para cada linha, na ordem dada.
+template <class Visit>
+void visitPinStates(const QemuModule& module, std::span<const uint32_t> bitsOrLines, Visit&& visit) {
+    std::array<uint8_t, 64> states{};
+    for (size_t first = 0; first < bitsOrLines.size(); first += states.size()) {
+        const size_t count = std::min(states.size(), bitsOrLines.size() - first);
+        module.pinStates(bitsOrLines.subspan(first, count), std::span<uint8_t>(states).first(count));
+        for (size_t i = 0; i < count; ++i) visit(first + i, electricalPinState(states[i]));
+    }
+}
+
+struct LockstepTrace {
+    std::atomic<uint64_t> wakeNs{0};
+    uint64_t observedNs = 0;
+    uint64_t syncs = 0, wakeToObserveNs = 0, observeToPublishNs = 0, cycles = 0, releasedSeq = 0;
+};
+LockstepTrace g_lockstepTrace;
+
+// Lido uma vez: consultado a cada escrita de GPIO e a cada transação I2C do VNEXT_B, e getenv no
+// CRT do Windows varre o bloco de ambiente inteiro (mesmo achado de analogTraceEnabled no adaptador).
 bool vnextTraceEnabled() {
-    const char* value = std::getenv("LASECSIMUL_VNEXT_TRACE");
-    return value && *value && std::strcmp(value, "0") != 0;
+    static const bool enabled = [] {
+        const char* value = std::getenv("LASECSIMUL_VNEXT_TRACE");
+        return value && *value && std::strcmp(value, "0") != 0;
+    }();
+    return enabled;
 }
 
 // GPIO_IN/GPIO_IN1 do ESP32. No VNEXT_B o QEMU atende leituras destes dois registradores a partir
 // do snapshot compartilhado (vnext_b_gpio_read em softmmu/vnext_b.c): GPIO_IN nos bytes 0-7,
 // GPIO_IN1 nos bytes 8-15 -- nunca com um pedido de leitura ao Core.
 constexpr std::array<uint64_t, 2> kVnextBGpioInAddresses{0x3FF4403Cull, 0x3FF44040ull};
+
+// I2C elétrico do VNEXT_B: periféricos I2C0/I2C1 do ESP32 (mesmos endereços que o QEMU usa em
+// vnext_i2c_address) e o protocolo privado do motor do adaptador (Esp32Adapter.cpp, kI2cCoreOpOffset).
+constexpr uint64_t kVnextBI2c0Base = 0x3FF53000ull;
+constexpr uint64_t kVnextBI2c1Base = 0x3FF67000ull;
+// Flags do BATCH (byte 1 do envelope): START 1, fim lógico da transação 2 (STOP *ou* END -- a
+// fronteira em que os modelos de dispositivo do fast path consolidam), READ 4; e para o caminho
+// elétrico: a lista termina num STOP de verdade 8 (END segura o barramento, sem STOP no fio) e o
+// mestre dá NACK no último byte lido 16 (ACK_VAL do último READ). Ver esp32_i2c.c no fork QEMU.
+constexpr uint8_t kVnextBI2cStart = 1u, kVnextBI2cWireStop = 8u, kVnextBI2cLastReadNack = 16u;
+constexpr uint64_t kAdapterI2cLowPeriodOffset = 0x00;
+constexpr uint64_t kAdapterI2cStatusOffset = 0x08;
+constexpr uint64_t kAdapterI2cStatusBusBusy = 1u << 4;
+constexpr uint64_t kAdapterI2cCoreOpOffset = 0xF00;
+constexpr uint64_t kAdapterI2cCoreResultCountOffset = 0xF04;
+constexpr uint64_t kAdapterI2cCoreResultOffset = 0xF08;
+// Canal privado do módulo GPIO do adaptador: pinos 0-31 / 32-39 com interrupção armada.
+constexpr uint64_t kAdapterGpioIrqArmedAddress = 0x3FF44F00;
+
+// Módulos cujos despertares só mexem em saídas deste MCU (e no snapshot de GPIO_IN): eventos suaves
+// do lockstep. O I2C fica de fora -- cada fase publica o estado do barramento para o QEMU (C2A).
+bool lockstepSoftModule(ModuleKind kind) {
+    return kind == ModuleKind::Spi || kind == ModuleKind::Pwm || kind == ModuleKind::Usart;
+}
+
+// LASECSIMUL_LOCKSTEP_SOFT=0: toda borda vale como rígida (diagnóstico; mesmo resultado, mais lento).
+bool lockstepSoftEventsEnabled() {
+    static const bool enabled = [] {
+        const char* value = std::getenv("LASECSIMUL_LOCKSTEP_SOFT");
+        return !(value && std::strcmp(value, "0") == 0);
+    }();
+    return enabled;
+}
+enum : uint32_t { kAdapterI2cOpRestart = 0, kAdapterI2cOpWrite = 1, kAdapterI2cOpRead = 2, kAdapterI2cOpStop = 3 };
 
 } // namespace
 
@@ -92,6 +178,89 @@ McuComponent::CallbackState::~CallbackState() {
     if (doorbell) CloseHandle(static_cast<HANDLE>(doorbell));
     if (stopEvent) CloseHandle(static_cast<HANDLE>(stopEvent));
 #endif
+}
+
+uint64_t McuComponent::lockstepProvenNs() const {
+    return std::max(m_vnextBHeartbeatWatermarkNs.load(std::memory_order_acquire),
+                    m_lockstepPrefetchNs.load(std::memory_order_acquire));
+}
+
+std::optional<uint64_t> McuComponent::lockstepLimitNs() const {
+    if (!m_controller.lockstep()) return std::nullopt;
+    return vnextEventTimeNs(m_qemuTimeOriginNs.load(std::memory_order_relaxed), lockstepProvenNs());
+}
+
+bool McuComponent::vnextBGpioInterruptArmedLocked() const {
+    QemuModule* gpio = findModule(kVnextBGpioInAddresses[0]);
+    return gpio && (gpio->readRegister(kAdapterGpioIrqArmedAddress) != 0 ||
+                    gpio->readRegister(kAdapterGpioIrqArmedAddress + 4) != 0);
+}
+
+double McuComponent::lockstepCpuDilation() const {
+    return m_controller.lockstep() ? m_controller.vnextBAttachment().artifactCpuDilation() : 1.0;
+}
+
+void McuComponent::publishLockstepTime(uint64_t nowNs, uint64_t nextEventNs, uint64_t nextHardEventNs,
+                                       uint64_t peersProvenNs, std::optional<uint64_t> scheduleNs) {
+    if (!m_controller.lockstep()) return;
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    if (!m_controller.vnextBActive() || !m_controller.lockstep()) return;
+    // Entradas antes do tempo: o QEMU consome o C2A ao soltar as vCPUs, então uma borda que o
+    // circuito produziu neste instante chega ao guest neste mesmo instante.
+    publishVnextBGpioInputsLocked();
+    const uint64_t originNs = m_qemuTimeOriginNs.load(std::memory_order_relaxed);
+    const uint64_t limitNs = vnextEventTimeNs(originNs, lockstepProvenNs());
+    // Tudo até doneNs está processado: o instante atual, nunca além do que o QEMU provou, e antes
+    // de qualquer evento que ainda espera na fila.
+    uint64_t doneNs = std::min(nowNs, limitNs);
+    if (nextEventNs <= doneNs) {
+        if (nextEventNs <= originNs) return;
+        doneNs = nextEventNs - 1;
+    }
+    if (doneNs < originNs) return;
+    const uint64_t timeNs = doneNs - originNs;
+    // Dois horizontes, ambos à frente de doneNs (nextEventNs > doneNs aqui, e o próximo evento
+    // rígido nunca vem antes do próximo evento):
+    //  - de entrada: o próximo evento de qualquer tipo pode mover um pad -- uma leitura de GPIO_IN
+    //    a partir dele sincroniza;
+    //  - rígido: o guest não passa dele sem sincronizar. Eventos suaves (bordas que só mexem em
+    //    saídas deste MCU: SPI, LEDC, UART TX) ficam de fora enquanto nenhum pino tiver interrupção
+    //    armada -- sem interrupção, uma borda só é vista lendo GPIO_IN. Com uma armada, qualquer borda
+    //    pode chegar a ela pelo circuito e vale como rígida.
+    // Teto comum: o quantum e, com outros MCUs em lockstep, o ponto até onde eles já chegaram.
+    uint64_t capNs = timeNs + kLockstepQuantumNs;
+    if (peersProvenNs != UINT64_MAX && peersProvenNs >= originNs)
+        capNs = std::min(capNs, std::max(peersProvenNs - originNs, timeNs) + kLockstepPeerLookaheadNs);
+    const auto toArtifact = [&](uint64_t coreNs) {
+        return coreNs == UINT64_MAX ? capNs : std::min(coreNs - originNs, capNs);
+    };
+    const uint64_t inputHorizonNs = toArtifact(nextEventNs);
+    const uint64_t horizonNs = toArtifact(!lockstepSoftEventsEnabled() || vnextBGpioInterruptArmedLocked() ? nextEventNs
+                                                                          : std::max(nextHardEventNs, nextEventNs));
+    const uint64_t syncSeq = m_lockstepObservedSyncSeq.load(std::memory_order_acquire);
+    if (lockstepTraceEnabled()) ++g_lockstepTrace.cycles;
+    if (syncSeq == m_lockstepPublishedSeq && timeNs == m_lockstepPublishedTimeNs &&
+        horizonNs == m_lockstepPublishedHorizonNs && inputHorizonNs == m_lockstepPublishedInputHorizonNs) return;
+    if (lockstepTraceEnabled() && syncSeq != g_lockstepTrace.releasedSeq && timeNs >= m_vnextBHeartbeatWatermarkNs.load()) {
+        g_lockstepTrace.releasedSeq = syncSeq;
+        auto& t = g_lockstepTrace;
+        const uint64_t now = steadyNowNs();
+        ++t.syncs;
+        t.observeToPublishNs += now - t.observedNs;
+        if ((t.syncs & (t.syncs - 1)) == 0 || t.syncs % 65536 == 0)
+            std::fprintf(stderr, "[LOCKSTEP_CORE] syncs=%llu avg_wake_to_observe_ns=%llu avg_observe_to_publish_ns=%llu hook_calls=%llu\n",
+                         static_cast<unsigned long long>(t.syncs),
+                         static_cast<unsigned long long>(t.wakeToObserveNs / t.syncs),
+                         static_cast<unsigned long long>(t.observeToPublishNs / t.syncs),
+                         static_cast<unsigned long long>(t.cycles));
+    }
+    m_lockstepPublishedSeq = syncSeq;
+    m_lockstepPublishedTimeNs = timeNs;
+    m_lockstepPublishedHorizonNs = horizonNs;
+    m_lockstepPublishedInputHorizonNs = inputHorizonNs;
+    // Onde a simulação deveria estar pelo relógio real, na linha do tempo do artefato (0 = sem pacing).
+    const uint64_t scheduleArtifactNs = scheduleNs && *scheduleNs > originNs ? *scheduleNs - originNs : 0;
+    m_controller.vnextBAttachment().publishCoreTime(syncSeq, timeNs, horizonNs, inputHorizonNs, scheduleArtifactNs);
 }
 
 std::optional<uint64_t> McuComponent::pacingPositionNs() const {
@@ -161,6 +330,22 @@ McuComponent::McuComponent(std::unique_ptr<IMcuAdapter> adapter, simulation::Sch
         }
         m_moduleByPin.push_back(resolved);
     }
+    m_pinBatchByPin.assign(pinMap.size(), kNoPinBatch);
+    for (size_t index = 0; index < pinMap.size(); ++index) {
+        QemuModule* module = m_moduleByPin[index];
+        if (!module || pinMap[index].moduleKind == ModuleKind::Reset) continue; // ver stampResetPin()
+        auto batch = std::find_if(m_pinBatches.begin(), m_pinBatches.end(),
+                                  [&](const PinBatch& candidate) { return candidate.module == module; });
+        if (batch == m_pinBatches.end()) batch = m_pinBatches.insert(m_pinBatches.end(), PinBatch{module});
+        m_pinBatchByPin[index] = static_cast<uint32_t>(batch - m_pinBatches.begin());
+        batch->pinIndices.push_back(static_cast<uint32_t>(index));
+        batch->bitsOrLines.push_back(pinMap[index].bitOrLine);
+    }
+    for (PinBatch& batch : m_pinBatches) {
+        batch.inputBits.reserve(batch.bitsOrLines.size());
+        batch.inputVoltages.reserve(batch.bitsOrLines.size());
+    }
+    m_pinStates.assign(pinMap.size(), 0);
     // m_controller já chamou setMemoryRegions(m_adapter->memoryRegions()) no próprio construtor.
 }
 
@@ -926,13 +1111,15 @@ void McuComponent::scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool
         const uint64_t nowNs = self->m_scheduler.nowNs();
         const uint64_t before = self->electricalOutputFingerprint();
         self->m_modules[moduleIndex]->onWakeup(nowNs);
-        const bool changed = before != self->electricalOutputFingerprint();
         if (self->m_controller.vnextBActive() && self->m_modules[moduleIndex]->kind() == ModuleKind::I2c) {
             auto& attachment = self->m_controller.vnextBAttachment();
             const uint64_t base = self->m_modules[moduleIndex]->memStart();
             attachment.publishRegisterResult(base + 0x08, self->m_modules[moduleIndex]->readRegister(base + 0x08));
             attachment.publishRegisterResult(base + 0x58, self->m_modules[moduleIndex]->readRegister(base + 0x58));
+            // Pode iniciar a próxima transação da fila: conta na mudança elétrica abaixo.
+            self->completeVnextBElectricalI2cIfDoneLocked();
         }
+        const bool changed = before != self->electricalOutputFingerprint();
         // Este callback já roda com Scheduler::m_mutex liberado (ver
         // Scheduler::processNextEventUntilLocked: unlock -> callback() -> lock) e na própria
         // thread do Scheduler. Mesmo assim, chamadas que adquirem o lock do Scheduler
@@ -943,16 +1130,17 @@ void McuComponent::scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool
         }
         for (auto& call : schedulerCalls) call();
     };
+    const bool soft = lockstepSoftModule(m_modules[moduleIndex]->kind());
     if (deferred) {
         // Ver doc-comment de DeferredSchedulerCall no .hpp -- evita inversão de ordem de lock com
         // stamp() quando quem chama é a thread de poll dedicada (segurando m_callbackState->mutex).
-        deferred->push_back([&scheduler = m_scheduler, targetNs = nowNs + delayNs, callback = std::move(callback)]() mutable {
-            scheduler.scheduleAt(targetNs, std::move(callback));
+        deferred->push_back([&scheduler = m_scheduler, targetNs = nowNs + delayNs, callback = std::move(callback), soft]() mutable {
+            scheduler.scheduleAt(targetNs, std::move(callback), soft);
         });
     } else if (schedulerLockHeld) {
-        m_scheduler.scheduleEventUnlocked(delayNs, std::move(callback));
+        m_scheduler.scheduleEventUnlocked(delayNs, std::move(callback), soft);
     } else {
-        m_scheduler.scheduleEvent(delayNs, std::move(callback));
+        m_scheduler.scheduleAt(m_scheduler.nowNs() + delayNs, std::move(callback), soft);
     }
 }
 
@@ -1101,20 +1289,16 @@ std::vector<PropertyDescriptor> McuComponent::propertyDescriptors() {
 }
 
 uint64_t McuComponent::electricalOutputFingerprint() const {
-    // FNV-1a: estado compacto, sem alocação, suficiente para detectar a mudança que exige
-    // restamp. Inclui a posição implicitamente pela ordem do pinMap.
+    // FNV-1a do que stamp() aplica a cada pino, sem alocação, uma leitura em lote por módulo. Inclui
+    // a posição implicitamente pela ordem fixa dos lotes. O pull de um pino não dirigido entra:
+    // pinMode(INPUT_PULLUP) num pino solto muda o nível do pad como no chip, sem esperar outro
+    // pino mudar para o MCU ser estampado de novo.
     uint64_t fingerprint = 1469598103934665603ull;
-    const std::span<const PinMapping> mappings = m_adapter->pinMap();
-    for (size_t index = 0; index < mappings.size(); ++index) {
-        const PinMapping& mapping = mappings[index];
-        uint8_t value = 0;
-        if (QemuModule* module = m_moduleByPin[index]) {
-            if (module->isOutputEnabled(mapping.bitOrLine)) {
-                value = static_cast<uint8_t>(1u | (module->outputLevel(mapping.bitOrLine) ? 2u : 0u));
-            }
-        }
-        fingerprint ^= value;
-        fingerprint *= 1099511628211ull;
+    for (const PinBatch& batch : m_pinBatches) {
+        visitPinStates(*batch.module, batch.bitsOrLines, [&](size_t, uint8_t state) {
+            fingerprint ^= state;
+            fingerprint *= 1099511628211ull;
+        });
     }
     return fingerprint;
 }
@@ -1125,10 +1309,117 @@ void McuComponent::publishVnextBGpioInputsLocked() {
     for (size_t i = 0; i < kVnextBGpioInAddresses.size(); ++i) {
         if (QemuModule* module = findModule(kVnextBGpioInAddresses[i])) words[i] = module->readRegister(kVnextBGpioInAddresses[i]);
     }
-    if (m_vnextBGpioInPublished && words == m_vnextBPublishedGpioIn) return;
-    if (!m_controller.vnextBAttachment().publishSnapshot(reinterpret_cast<const uint8_t*>(words.data()), sizeof(words))) return;
-    m_vnextBPublishedGpioIn = words;
-    m_vnextBGpioInPublished = true;
+    qemu::VnextBAttachment& attachment = m_controller.vnextBAttachment();
+    if (!m_vnextBGpioInPublished || words != m_vnextBPublishedGpioIn) {
+        if (attachment.publishSnapshot(reinterpret_cast<const uint8_t*>(words.data()), sizeof(words))) {
+            m_vnextBPublishedGpioIn = words;
+            m_vnextBGpioInPublished = true;
+        }
+    }
+    // The snapshot only serves the guest's own GPIO_IN reads. The real chip also latches an edge
+    // interrupt the moment the pad changes, so each changed word is pushed to QEMU's GPIO model
+    // as well (esp32_gpio_vnext_input). A full C2A ring is retried on the next call.
+    for (size_t i = 0; i < words.size(); ++i) {
+        if (m_vnextBNotifiedGpioInValid[i] && m_vnextBNotifiedGpioIn[i] == words[i]) continue;
+        if (!attachment.publishRegisterResult(kVnextBGpioInAddresses[i], words[i])) continue;
+        m_vnextBNotifiedGpioIn[i] = words[i];
+        m_vnextBNotifiedGpioInValid[i] = true;
+    }
+}
+
+void McuComponent::startOrQueueVnextBElectricalI2cLocked(uint32_t lane, uint64_t requestSeq,
+                                                         std::vector<uint8_t> op, uint64_t nowNs) {
+    m_vnextBQueuedI2c.push_back(VnextBElectricalI2c{lane, requestSeq, std::move(op)});
+    if (m_vnextBElectricalI2c) return;
+    startVnextBElectricalI2cLocked(nowNs);
+    // Transação sem nada para pôr no fio (continuação só com o endereço de roteamento) não gera
+    // wakeup do motor: conclui já.
+    completeVnextBElectricalI2cIfDoneLocked();
+}
+
+void McuComponent::startVnextBElectricalI2cLocked(uint64_t nowNs) {
+    while (!m_vnextBElectricalI2c && !m_vnextBQueuedI2c.empty()) {
+        VnextBElectricalI2c transaction = std::move(m_vnextBQueuedI2c.front());
+        m_vnextBQueuedI2c.pop_front();
+        // Envelope BATCH (ver o despacho em pollAndDispatchPendingEvents): [0] barramento,
+        // [1] flags (START 1, STOP 2, READ 4), [2..3] bytes tx, [4..5] bytes rx, [6..13] período de
+        // bit em ns, [14..] tx -- tx[0] é sempre o byte de endereço, mas numa continuação sem START
+        // ele só identifica o alvo e não vai para o fio.
+        const std::vector<uint8_t>& op = transaction.op;
+        uint16_t txBytes = 0, rxBytes = 0;
+        uint64_t periodNs = 0;
+        std::memcpy(&txBytes, op.data() + 2, sizeof(txBytes));
+        std::memcpy(&rxBytes, op.data() + 4, sizeof(rxBytes));
+        std::memcpy(&periodNs, op.data() + 6, sizeof(periodNs));
+        transaction.start = (op[1] & kVnextBI2cStart) != 0;
+        const bool stop = (op[1] & kVnextBI2cWireStop) != 0;
+        const bool lastReadNack = (op[1] & kVnextBI2cLastReadNack) != 0;
+        transaction.moduleBase = op[0] == 0 ? kVnextBI2c0Base : kVnextBI2c1Base;
+        QemuModule* module = findModule(transaction.moduleBase);
+        if (!module) {
+            I2cTransferResult nack{};
+            nack.handled = true;
+            nack.firstNack = 0;
+            m_controller.vnextBAttachment().respondToI2c(transaction.lane, transaction.requestSeq, nack, {});
+            continue;
+        }
+        const auto queue = [&](uint32_t kind, uint8_t byte, bool nack, bool abortOnNack) {
+            module->writeRegisterAt(transaction.moduleBase + kAdapterI2cCoreOpOffset,
+                                    byte | (kind << 8) | (nack ? 1u << 10 : 0u) | (abortOnNack ? 1u << 11 : 0u), nowNs);
+        };
+        if (periodNs > 0) module->writeRegisterAt(transaction.moduleBase + kAdapterI2cLowPeriodOffset, periodNs, nowNs);
+        const uint8_t* tx = op.data() + 14;
+        if (transaction.start) {
+            queue(kAdapterI2cOpRestart, 0, false, false);
+            queue(kAdapterI2cOpWrite, tx[0], false, true);
+        }
+        for (uint16_t i = 1; i < txBytes; ++i) queue(kAdapterI2cOpWrite, tx[i], false, true);
+        // O mestre confirma cada byte lido; o último leva o ACK_VAL do último READ da lista (ESP-IDF:
+        // READ n-1 com ACK + READ 1 com NACK antes do STOP).
+        for (uint16_t i = 0; i < rxBytes; ++i) queue(kAdapterI2cOpRead, 0, lastReadNack && i + 1 == rxBytes, false);
+        if (stop) queue(kAdapterI2cOpStop, 0, false, false);
+        m_vnextBElectricalI2c = std::move(transaction);
+    }
+}
+
+void McuComponent::completeVnextBElectricalI2cIfDoneLocked() {
+    if (!m_vnextBElectricalI2c) return;
+    const VnextBElectricalI2c& transaction = *m_vnextBElectricalI2c;
+    QemuModule* module = findModule(transaction.moduleBase);
+    if (!module) return;
+    if ((module->readRegister(transaction.moduleBase + kAdapterI2cStatusOffset) & kAdapterI2cStatusBusBusy) != 0) return;
+
+    I2cTransferResult result{};
+    result.handled = true;
+    result.firstNack = UINT32_MAX;
+    result.addressAck = !transaction.start; // continuação: o alvo já foi selecionado antes
+    std::array<uint8_t, 32> rx{};
+    uint32_t rxCount = 0;
+    uint32_t writes = 0;
+    const uint64_t results = module->readRegister(transaction.moduleBase + kAdapterI2cCoreResultCountOffset);
+    for (uint64_t i = 0; i < results; ++i) {
+        const uint64_t word = module->readRegister(transaction.moduleBase + kAdapterI2cCoreResultOffset);
+        const bool ack = (word & (1u << 8)) != 0;
+        if (((word >> 9) & 0x3u) == kAdapterI2cOpWrite) {
+            if (transaction.start && writes == 0) {
+                result.addressAck = ack;
+            } else if (!ack && result.firstNack == UINT32_MAX) {
+                result.firstNack = writes - (transaction.start ? 1u : 0u);
+            }
+            ++writes;
+        } else if (rxCount < rx.size()) {
+            rx[rxCount++] = static_cast<uint8_t>(word & 0xFFu);
+        }
+    }
+    result.rxSize = rxCount;
+    const bool published = m_controller.vnextBAttachment().respondToI2c(
+        transaction.lane, transaction.requestSeq, result, std::span<const uint8_t>(rx.data(), rxCount));
+    if (vnextTraceEnabled()) std::fprintf(stderr, "[VNEXT_CORE_I2C] electrical done ack=%d nack=%u rx=%u published=%d\n",
+                                          result.addressAck ? 1 : 0, result.firstNack, rxCount, published ? 1 : 0);
+    if (published) m_vnextI2cCompletionCount.fetch_add(1, std::memory_order_relaxed);
+    m_vnextBElectricalI2c.reset();
+    startVnextBElectricalI2cLocked(m_scheduler.nowNsUnlocked());
+    completeVnextBElectricalI2cIfDoneLocked(); // próxima da fila também pode não ter nada no fio
 }
 
 McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
@@ -1145,6 +1436,10 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
         auto& attachment = m_controller.vnextBAttachment();
         const uint32_t laneCount = attachment.view().control->lane_count;
         const uint64_t originNs = m_qemuTimeOriginNs.load(std::memory_order_relaxed);
+        // Lockstep: a sequência é lida ANTES do instante e das filas -- tudo que o QEMU publicou
+        // antes dela é visto (e despachado ou agendado) nesta chamada; só então ela é ecoada.
+        const bool lockstep = m_controller.lockstep();
+        const uint64_t observedSyncSeq = lockstep ? attachment.artifactSyncSeq() : 0;
 
         // R3c heartbeat: read on every call (independent of whether any lane has anything to
         // arbitrate), forward-only via qemu::advanceMonotonicNs() (see its doc-comment: this is
@@ -1200,8 +1495,15 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
                 if (vnextTraceEnabled()) std::fprintf(stderr, "[VNEXT_CORE_I2C] req=%llu handler=%d op=%u tx=%u rx=%u\\n",
                              static_cast<unsigned long long>(requestSeq), m_i2cTransferHandler ? 1 : 0,
                              op[0], txBytes, rxBytes);
-                if (!requestSeq || !m_i2cTransferHandler) return false;
+                if (!requestSeq) return false;
                 m_vnextI2cSubmissionCount.fetch_add(1, std::memory_order_relaxed);
+                if (!m_i2cTransferHandler) {
+                    // Sem resolvedor de topologia: executa no barramento real em vez de deixar o
+                    // QEMU (que pausou a vCPU esperando esta resposta) sem resposta para sempre.
+                    const uint64_t before = electricalOutputFingerprint();
+                    startOrQueueVnextBElectricalI2cLocked(lane, requestSeq, std::vector<uint8_t>(op, op + opBytes), nowNs);
+                    return before != electricalOutputFingerprint();
+                }
                 uint64_t periodNs = 0;
                 std::memcpy(&periodNs, op + 6, sizeof(periodNs));
                 std::array<uint8_t, 32> rx{};
@@ -1223,6 +1525,14 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
                              result.handled ? 1 : 0, result.addressAck ? 1 : 0, result.rxSize, result.firstNack);
                 traceRecorder.setCurrentI2cRequest(0);
                 traceRecorder.setRuntimeIdentity({});
+                if (!result.handled) {
+                    // O fast path só vale quando o barramento é indistinguível de uma transferência
+                    // direta (só dispositivos I2C, túneis e resistores). Com instrumento, pull-up ou
+                    // dispositivo sem i2c_transfer, a transação roda eletricamente, como no chip.
+                    const uint64_t before = electricalOutputFingerprint();
+                    startOrQueueVnextBElectricalI2cLocked(lane, requestSeq, std::vector<uint8_t>(op, op + opBytes), nowNs);
+                    return before != electricalOutputFingerprint();
+                }
                 const bool published = attachment.respondToI2c(lane, requestSeq, result,
                     std::span<const uint8_t>(rx.data(), std::min<uint32_t>(result.rxSize, 32u)));
                 if (vnextTraceEnabled()) std::fprintf(stderr, "[VNEXT_CORE_I2C] response published=%d\\n", published ? 1 : 0);
@@ -1323,7 +1633,7 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
         // std::recursive_mutex "resource deadlock would occur" once the recursion depth exceeded
         // its limit. This is the same livelock this codebase already solved once, see
         // scheduleNextPoll()'s own +1ns comment above.
-        if (budgetExhausted || yieldForSettle) scheduleNextPoll(deferred, schedulerLockHeld);
+        if (budgetExhausted) scheduleNextPoll(deferred, schedulerLockHeld);
 
         // Safe acknowledge (PLAN_MTTCG_VNEXT_B_CAUSALITY.md section 10.4, steps 1-5, EVIDENCE.md
         // H143/E144): drain first (above), THEN clear the notification flag, THEN re-arbitrate
@@ -1357,6 +1667,11 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
         // VnextBArbiterTest.cpp's H143 RED/GREEN cases) for the policy this mirrors.
         const bool notified = attachment.notificationPending();
         if (notified) attachment.acknowledgeNotification();
+        // Depois de ceder para o settle, só há o que continuar se ainda houver evento nas filas
+        // (relido depois do ack, como o rearm abaixo). Um poll vazio em now+1 virava, no lockstep,
+        // um horizonte 1 ns à frente e uma sincronização a mais por escrita.
+        if (yieldForSettle && !budgetExhausted && attachment.hasPendingLaneEvents())
+            scheduleNextPoll(deferred, schedulerLockHeld);
         if (!budgetExhausted && !yieldForSettle) {
             std::array<qemu::VnextBLanePeek, LASEC_AT_MAX_LANES> postAckPeeks{};
             for (uint32_t lane = 0; lane < laneCount; ++lane) {
@@ -1394,6 +1709,13 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
             }
         }
 
+        if (lockstep && lockstepTraceEnabled() &&
+            observedSyncSeq != m_lockstepObservedSyncSeq.load(std::memory_order_relaxed)) {
+            g_lockstepTrace.observedNs = steadyNowNs();
+            const uint64_t wake = g_lockstepTrace.wakeNs.exchange(0);
+            if (wake) g_lockstepTrace.wakeToObserveNs += g_lockstepTrace.observedNs - wake;
+        }
+        if (lockstep) m_lockstepObservedSyncSeq.store(observedSyncSeq, std::memory_order_release);
         if (dispatchedCount > 0 || budgetExhausted || yieldForSettle) return PollStep::DispatchedReady;
         if (m_nextPendingEventNs.load(std::memory_order_relaxed) != 0) return PollStep::DeferredFuture;
         (void)changed; // electrical-change tracking retained for parity/diagnostics; the return
@@ -1468,15 +1790,21 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
     // Ponte pino<->matriz, genérica (ver doc da classe): pra cada PinMapping, pergunta ao módulo
     // responsável (nunca sabe qual chip é) se aquele bit está em modo saída -- se sim, dirige o
     // pino real; se não, lê a tensão atual do pino e alimenta de volta no módulo (pra uma leitura
-    // de registrador futura, ex: GPIO_IN_REG, devolver o valor certo).
+    // de registrador futura, ex: GPIO_IN_REG, devolver o valor certo). Estado e entradas vão em
+    // lote, uma chamada de cada por módulo: todo estado é lido antes das entradas desta rodada
+    // (uma entrada só muda uma saída por wakeup do periférico, ver get_pin_states em mcu_abi.h).
+    for (const PinBatch& batch : m_pinBatches) {
+        visitPinStates(*batch.module, batch.bitsOrLines,
+                       [&](size_t position, uint8_t state) { m_pinStates[batch.pinIndices[position]] = state; });
+    }
+    const std::span<const PinMapping> mappings = m_adapter->pinMap();
     for (size_t i = 0; i < m_pins.size(); ++i) {
-        const PinMapping& mapping = m_adapter->pinMap()[i];
+        const PinMapping& mapping = mappings[i];
         if (mapping.moduleKind == ModuleKind::Reset) {
             stampResetPin(matrix, m_pins[i]);
             continue;
         }
-        QemuModule* module = m_moduleByPin[i];
-        if (!module) {
+        if (m_pinBatchByPin[i] == kNoPinBatch) {
             // Sem módulo concreto pra essa faixa ainda (ex: UART0_RX/TX -- só GPIO está
             // implementado nesta versão, ver Esp32Adapter::createModules()) -- mesma rede de
             // segurança do ramo "entrada" abaixo: nunca deixar uma linha inteiramente zerada.
@@ -1484,8 +1812,9 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
             continue;
         }
 
-        if (module->isOutputEnabled(mapping.bitOrLine)) {
-            const double targetVolts = module->outputLevel(mapping.bitOrLine) ? kDriveHighVolts : 0.0;
+        const uint8_t state = m_pinStates[i];
+        if ((state & QemuModule::kPinOutputEnabled) != 0) {
+            const double targetVolts = (state & QemuModule::kPinOutputHigh) != 0 ? kDriveHighVolts : 0.0;
             matrix.addConductanceToGround(m_pins[i], kDriveConductance);
             matrix.addCurrentToGround(m_pins[i], targetVolts * kDriveConductance);
         } else {
@@ -1513,9 +1842,8 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
             // Os dois juntos (pull-up E pull-down habilitados ao mesmo tempo, config incomum mas
             // fisicamente válida) simplesmente somam as duas stamps -- resultado real é um divisor
             // de tensão mais forte, não um erro a ser resolvido aqui.
-            const QemuModule::PullState pull = module->pullState(mapping.bitOrLine);
-            const bool pullUp = pull == QemuModule::PullState::Up || pull == QemuModule::PullState::UpAndDown;
-            const bool pullDown = pull == QemuModule::PullState::Down || pull == QemuModule::PullState::UpAndDown;
+            const bool pullUp = (state & QemuModule::kPinPullUp) != 0;
+            const bool pullDown = (state & QemuModule::kPinPullDown) != 0;
             if (pullUp) {
                 matrix.addConductanceToGround(m_pins[i], kWeakPullConductance);
                 matrix.addCurrentToGround(m_pins[i], kDriveHighVolts * kWeakPullConductance);
@@ -1526,9 +1854,16 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
             if (!pullUp && !pullDown) {
                 matrix.addConductanceToGround(m_pins[i], kFloatingConductance);
             }
-            const double voltage = matrix.getNodeVoltage(m_pins[i]);
-            module->setInputVoltageAt(mapping.bitOrLine, voltage, m_scheduler.nowNsUnlocked());
+            PinBatch& batch = m_pinBatches[m_pinBatchByPin[i]];
+            batch.inputBits.push_back(mapping.bitOrLine);
+            batch.inputVoltages.push_back(matrix.getNodeVoltage(m_pins[i]));
         }
+    }
+    const uint64_t inputNs = m_scheduler.nowNsUnlocked();
+    for (PinBatch& batch : m_pinBatches) {
+        if (!batch.inputBits.empty()) batch.module->setInputVoltagesAt(batch.inputBits, batch.inputVoltages, inputNs);
+        batch.inputBits.clear();
+        batch.inputVoltages.clear();
     }
     m_vnextBChangeAwaitingStamp = false;
     publishVnextBGpioInputsLocked();
@@ -1602,6 +1937,15 @@ void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath,
     bindPollDoorbellLocked(arenaName);
     m_controller.start(firmwarePath, arenaName, qemuBinaryOverride, debug, identity,
                        [this] {
+                           if (lockstepTraceEnabled()) {
+                               uint64_t expected = 0;
+                               g_lockstepTrace.wakeNs.compare_exchange_strong(expected, steadyNowNs());
+                           }
+                           if (m_controller.lockstep()) {
+                               if (const auto safeNs = m_controller.vnextBAttachment().lockstepSafeTimeNs();
+                                   safeNs && qemu::advanceMonotonicNs(m_lockstepPrefetchNs, *safeNs))
+                                   m_scheduler.notifyAdvanceLimitChanged();
+                           }
                            m_scheduler.markDirty(m_componentIndex);
                            lasecsimul::simulation::diag::ProvenanceTracker::instance().recordDirty(
                                lasecsimul::simulation::diag::DirtyOrigin::ExternalMarkDirty,
@@ -1612,7 +1956,16 @@ void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath,
     // Anexação VNEXT_B nova = snapshot novo e zerado: republica o nível atual das entradas (ex.:
     // botão já em 5 V desde t=0 nunca gera borda depois da carga do firmware).
     m_vnextBGpioInPublished = false;
+    m_vnextBNotifiedGpioInValid = {};
     m_vnextBChangeAwaitingStamp = false;
+    m_vnextBElectricalI2c.reset();
+    m_vnextBQueuedI2c.clear();
+    m_lockstepObservedSyncSeq.store(0, std::memory_order_relaxed);
+    m_lockstepPrefetchNs.store(0, std::memory_order_relaxed);
+    m_lockstepPublishedSeq = 0;
+    m_lockstepPublishedTimeNs = UINT64_MAX;
+    m_lockstepPublishedHorizonNs = UINT64_MAX;
+    m_lockstepPublishedInputHorizonNs = UINT64_MAX;
     publishVnextBGpioInputsLocked();
     if (!m_controller.vnextBActive()) {
         startPolling(&deferred);

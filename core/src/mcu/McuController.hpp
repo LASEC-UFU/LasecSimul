@@ -66,7 +66,9 @@ public:
 
     /** Explicit production opt-in for the frozen vNext-B transport. Legacy remains the
      * default and is never started alongside this attachment. */
-    bool vnextBActive() const noexcept { return m_vnextB.running() || m_vnextBAttached; }
+    /** O flag primeiro: running() consulta o processo do QEMU (uma chamada de sistema) e isto roda em
+     * todo stamp do MCU. */
+    bool vnextBActive() const noexcept { return m_vnextBAttached || m_vnextB.running(); }
     qemu::VnextBAttachment& vnextBAttachment() { return m_vnextB; }
     const qemu::VnextBAttachment& vnextBAttachment() const { return m_vnextB; }
 
@@ -81,6 +83,10 @@ public:
     bool hostPacedVirtualClock() const noexcept {
         return m_hostPacedVirtualClock.load(std::memory_order_acquire);
     }
+    /** true quando o QEMU VNEXT_B roda com relógio contado por instrução (-icount) em lockstep
+     * exato com o Core (ver lasec_at_control_page::lockstep). LASECSIMUL_ESP32_LOCKSTEP=0 desliga;
+     * LASECSIMUL_ESP32_TIMING=exact tira o ajuste ao tempo real (lockstep_realtime). */
+    bool lockstep() const noexcept { return m_lockstep.load(std::memory_order_acquire); }
 
 private:
     const IMcuAdapter& m_adapter;
@@ -90,6 +96,7 @@ private:
     qemu::VnextBAttachment m_vnextB;
     bool m_vnextBAttached = false;
     std::atomic<bool> m_hostPacedVirtualClock{false};
+    std::atomic<bool> m_lockstep{false};
     RuntimeLaunchIdentity m_runtimeIdentity{};
 };
 

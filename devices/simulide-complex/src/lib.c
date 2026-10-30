@@ -712,6 +712,24 @@ static void handle_pin_change(SimDevice* s, uint32_t pin, uint32_t level) {
     s->pin_level[pin] = now;
     if (old == now) return;
 
+    if (s->kind == KIND_AIP31068 || s->kind == KIND_OLED || s->kind == KIND_SH1107) {
+        /* LASECSIMUL_I2C_DEVICE_TRACE=1: cada borda de SCL(0)/SDA(1) com o estado do decodificador,
+         * para depurar a decodificação elétrica do I2C. */
+        static unsigned trace_count;
+        static int trace_enabled = -1; /* lido uma vez: esta funcao roda a cada borda */
+        if (trace_enabled < 0) {
+            const char* trace = getenv("LASECSIMUL_I2C_DEVICE_TRACE");
+            trace_enabled = trace && trace[0] && strcmp(trace, "0") != 0;
+        }
+        if (trace_enabled && trace_count++ < 4000) {
+            fprintf(stderr, "[I2C dev] %s=%u scl=%u sda=%u started=%u bits=%u shift=%02x seen=%u addr=%u ack=%u pend=%u clk=%u\n",
+                    pin == 0 ? "SCL" : "SDA", now, s->pin_level[0], s->pin_level[1], s->i2c_started, s->bit_count,
+                    s->shift_reg & 0xffu, s->i2c_seen_address, s->i2c_addressed, s->i2c_ack, s->i2c_ack_pending,
+                    s->i2c_ack_clocked);
+            fflush(stderr);
+        }
+    }
+
     if ((s->kind == KIND_AIP31068 || s->kind == KIND_OLED || s->kind == KIND_SH1107) && pin == 1 && s->pin_level[0]) {
         if (old && !now) {
             s->i2c_started = 1;

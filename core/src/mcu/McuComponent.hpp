@@ -2,6 +2,7 @@
 
 #include <array>
 #include <atomic>
+#include <deque>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -223,6 +224,20 @@ public:
     /** Ver `McuController::hostPacedVirtualClock()`: `pacingPositionNs()` deste MCU é então um
      * limite inferior do tempo real na timeline do Scheduler. */
     bool hostPacedVirtualClock() const noexcept { return m_controller.hostPacedVirtualClock(); }
+    /** Lockstep exato (QEMU VNEXT_B com -icount, ver lasec_at_control_page): teto SEM folga para o
+     * Scheduler -- o instante que o QEMU provou ter alcançado, na timeline do Scheduler (a origem,
+     * enquanto ele ainda não publicou nada). `std::nullopt` fora do lockstep. Só lê atômicos. */
+    std::optional<uint64_t> lockstepLimitNs() const;
+    /** Lockstep exato: chamado pela worker do Scheduler ao fim de cada ciclo (sem o mutex dele).
+     * Entrega ao QEMU as entradas do instante atual e publica até onde o Core processou tudo e o
+     * próximo evento (o horizonte que o guest não pode passar sem sincronizar). `peersProvenNs`: o
+     * menor instante (timeline do Scheduler) provado pelos outros MCUs em lockstep. `scheduleNs`:
+     * Scheduler::realTimeScheduleNs(), para o QEMU acompanhar o tempo real. */
+    void publishLockstepTime(uint64_t nowNs, uint64_t nextEventNs, uint64_t nextHardEventNs,
+                             uint64_t peersProvenNs = UINT64_MAX,
+                             std::optional<uint64_t> scheduleNs = std::nullopt);
+    /** Lockstep em tempo real: esticamento do tempo de instrução aplicado pelo QEMU (1 = exato). */
+    double lockstepCpuDilation() const;
 
     /** Achado 2026-07-22 (indicador "MCU real-time ratio" sempre em 0%, mesmo com o MCU rodando
      * normalmente): `arena->qemuTime` NUNCA é escrito pelo fork QEMU real (confirmado lendo
@@ -388,6 +403,15 @@ private:
     // VNEXT_B: copia GPIO_IN/GPIO_IN1 do módulo para o snapshot que o QEMU lê em digitalRead()
     // (só quando mudou). Chamado com m_callbackState->mutex travado.
     void publishVnextBGpioInputsLocked();
+    /** Algum pino com interrupção de GPIO armada (registrador privado do adaptador). */
+    bool vnextBGpioInterruptArmedLocked() const;
+    // VNEXT_B, BATCH I2C que o fast path não atende: executa a transação eletricamente no motor do
+    // adaptador (bordas reais em SCL/SDA, ACK amostrado do barramento) e responde ao QEMU quando
+    // ela termina. Uma por vez; as demais esperam na fila. Chamados com m_callbackState->mutex.
+    void startOrQueueVnextBElectricalI2cLocked(uint32_t lane, uint64_t requestSeq, std::vector<uint8_t> op,
+                                               uint64_t nowNs);
+    void startVnextBElectricalI2cLocked(uint64_t nowNs);
+    void completeVnextBElectricalI2cIfDoneLocked();
     uint64_t electricalOutputFingerprint() const;
     void stampResetPin(MnaMatrixView& matrix, const Pin& pin);
     void resetModulesAndWakeups();
@@ -435,6 +459,21 @@ private:
     std::vector<Pin> m_pins;
     std::vector<std::unique_ptr<QemuModule>> m_modules;
     std::vector<QemuModule*> m_moduleByPin;
+    // Pinos de cada módulo dono, na ordem do pinMap: stamp() e electricalOutputFingerprint() leem o
+    // estado de todos com uma chamada por módulo (QemuModule::pinStates), e stamp() devolve as
+    // tensões de entrada do mesmo jeito (setInputVoltagesAt). Eram duas a três chamadas ao
+    // adaptador por pino a cada stamp e a cada evento do QEMU.
+    struct PinBatch {
+        QemuModule* module = nullptr;
+        std::vector<uint32_t> pinIndices;
+        std::vector<uint32_t> bitsOrLines;
+        std::vector<uint32_t> inputBits; // stamp(): pads não dirigidos desta rodada
+        std::vector<double> inputVoltages;
+    };
+    static constexpr uint32_t kNoPinBatch = UINT32_MAX;
+    std::vector<PinBatch> m_pinBatches;
+    std::vector<uint32_t> m_pinBatchByPin; // kNoPinBatch: sem módulo, ou pino de reset
+    std::vector<uint8_t> m_pinStates;      // stamp(): QemuModule::kPin* de cada pino
     std::vector<uint64_t> m_moduleWakeupDueNs;
     std::vector<uint64_t> m_moduleWakeupGeneration;
     // Dono real do processo QEMU + arena de memória compartilhada -- ver McuController.hpp. Eram
@@ -480,12 +519,36 @@ private:
     // electrical dispatch. See pollAndDispatchPendingEvents()'s VNEXT_B branch for the update
     // site and pacingPositionNs() for the read site.
     std::atomic<uint64_t> m_vnextBHeartbeatWatermarkNs{0};
+    // Lockstep: artifact_sync_seq lida ANTES das filas no último poll -- tudo que o QEMU publicou
+    // antes dela já foi despachado ou está agendado no Scheduler (ver publishLockstepTime()).
+    std::atomic<uint64_t> m_lockstepObservedSyncSeq{0};
+    // Lockstep: instante seguro lido pela thread da campainha (VnextBAttachment::lockstepSafeTimeNs)
+    // -- deixa o Core avançar no mesmo ciclo em que o pedido chega, sem esperar um poll observá-lo.
+    std::atomic<uint64_t> m_lockstepPrefetchNs{0};
+    uint64_t lockstepProvenNs() const;
+    uint64_t m_lockstepPublishedSeq = 0;
+    uint64_t m_lockstepPublishedTimeNs = UINT64_MAX;
+    uint64_t m_lockstepPublishedHorizonNs = UINT64_MAX;
+    uint64_t m_lockstepPublishedInputHorizonNs = UINT64_MAX;
     // Último GPIO_IN/GPIO_IN1 publicado no snapshot (ver publishVnextBGpioInputsLocked()).
     std::array<uint64_t, 2> m_vnextBPublishedGpioIn{};
     bool m_vnextBGpioInPublished = false;
+    // Último GPIO_IN/GPIO_IN1 entregue ao modelo de GPIO do QEMU como evento C2A (interrupção na borda).
+    std::array<uint64_t, 2> m_vnextBNotifiedGpioIn{};
+    std::array<bool, 2> m_vnextBNotifiedGpioInValid{};
     // true entre despachar uma mudança elétrica (VNEXT_B) e o próximo stamp() estampá-la: enquanto
     // isso stamp() não despacha outra, senão duas mudanças caem no mesmo solve e o pulso some.
     bool m_vnextBChangeAwaitingStamp = false;
+    // Transações I2C elétricas do VNEXT_B: `op` é o envelope BATCH original (bus, flags, tx...).
+    struct VnextBElectricalI2c {
+        uint32_t lane = 0;
+        uint64_t requestSeq = 0;
+        std::vector<uint8_t> op;
+        uint64_t moduleBase = 0;
+        bool start = false;
+    };
+    std::optional<VnextBElectricalI2c> m_vnextBElectricalI2c;
+    std::deque<VnextBElectricalI2c> m_vnextBQueuedI2c;
     std::atomic<uint64_t> m_vnextI2cCompletionCount{0};
     std::atomic<uint64_t> m_vnextI2cSubmissionCount{0};
     uint64_t m_stampCount = 0;

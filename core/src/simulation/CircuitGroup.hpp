@@ -36,20 +36,33 @@ public:
         std::vector<RhsStampEntry> rhs;
     };
 
-    void beginPendingStamp(uint32_t ownerId) {
+    /** A contribuição pendente devolvida segue válida até o commit: durante um stamp nenhum outro
+     * dono entra em m_pendingStamps (ComponentMatrixView a guarda e evita um hash por entrada). */
+    StampContribution& beginPendingStamp(uint32_t ownerId) {
         StampContribution& pending = m_pendingStamps[ownerId];
         pending.matrix.clear(); pending.rhs.clear();
         if (pending.matrix.capacity() < 16) pending.matrix.reserve(16);
         if (pending.rhs.capacity() < 8) pending.rhs.reserve(8);
+        return pending;
     }
     void addPendingMatrix(uint32_t ownerId, uint32_t row, uint32_t column, double value) {
-        auto& entries = m_pendingStamps[ownerId].matrix;
-        for (auto& entry : entries) if (entry.row == row && entry.column == column) { entry.value += value; return; }
-        entries.push_back({row, column, value});
+        addPendingMatrix(m_pendingStamps[ownerId], row, column, value);
     }
     void addPendingRhs(uint32_t ownerId, uint32_t row, double value, bool replace = false) {
-        auto& entries = m_pendingStamps[ownerId].rhs;
-        for (auto& entry : entries) if (entry.row == row) { entry.value = replace ? value : entry.value + value; return; }
+        addPendingRhs(m_pendingStamps[ownerId], row, value, replace);
+    }
+    // Do fim para o começo: a repetição típica é do mesmo pino, logo em seguida (condutância e
+    // corrente, pull, LeakageGuard).
+    static void addPendingMatrix(StampContribution& pending, uint32_t row, uint32_t column, double value) {
+        auto& entries = pending.matrix;
+        for (auto entry = entries.rbegin(); entry != entries.rend(); ++entry)
+            if (entry->row == row && entry->column == column) { entry->value += value; return; }
+        entries.push_back({row, column, value});
+    }
+    static void addPendingRhs(StampContribution& pending, uint32_t row, double value, bool replace = false) {
+        auto& entries = pending.rhs;
+        for (auto entry = entries.rbegin(); entry != entries.rend(); ++entry)
+            if (entry->row == row) { entry->value = replace ? value : entry->value + value; return; }
         entries.push_back({row, value});
     }
     void commitPendingStamp(uint32_t ownerId) {

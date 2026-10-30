@@ -501,10 +501,13 @@ int main() {
     plugins::PluginRuntime runtime(cache);
     const std::unique_ptr<IMcuAdapter> probeAdapter = runtime.createMcuAdapter("espressif.esp32");
     uint64_t gpioStart = 0;
+    uint64_t ioMuxStart = 0;
     for (const MemoryRegion& region : probeAdapter->memoryRegions()) {
         if (region.moduleKind == ModuleKind::Gpio && region.moduleIndex == 0) gpioStart = region.start;
+        if (region.moduleKind == ModuleKind::IoMux && region.moduleIndex == 0) ioMuxStart = region.start;
     }
     check(gpioStart != 0, "memoryRegions() do plugin declara uma faixa GPIO");
+    check(ioMuxStart != 0, "memoryRegions() do plugin declara uma faixa IOMUX");
 
     // Duas instâncias independentes -- mesmo raciocínio de McuMultipleControllersRealQemuTest: o
     // ponto de PERF-12 é que threads de poll dedicadas não podem serializar uma na outra nem
@@ -590,6 +593,20 @@ int main() {
     }
     check(allTogglesOk,
           "15 ciclos de escrita intercalada em 2 MCUs convergem via thread de poll dedicada, sem settleStep()/markDirty() manual");
+
+    // pinMode(INPUT_PULLUP/INPUT_PULLDOWN) num pino solto: so' o IO_MUX muda (FUN_PU/FUN_PD), e no
+    // chip o pad vai ao nivel do pull na hora. Antes o pull so' chegava ao circuito quando outra
+    // saida do MCU mudasse e ele fosse estampado de novo -- aqui nenhuma outra muda.
+    const auto ioMuxGpio4AndWait = [&](uint64_t value, auto settled) {
+        simulateQemuWrite(arenaB, ioMuxStart + 0x48, value); // IO_MUX_GPIO4_REG
+        return waitUntil([&] { return queueDrained(arenaB); }) &&
+               waitUntil([&] { return settled(tryReadVoltage(session, indexB, "GPIO4", -1.0)); });
+    };
+    check(ioMuxGpio4AndWait((2u << 12) | (1u << 8), [](double volts) { return volts > 3.2; }),
+          "INPUT_PULLUP num pino solto: o pull-up interno leva o pad a 3,3 V sem outra saida mudar");
+    check(ioMuxGpio4AndWait((2u << 12) | (1u << 7), [](double volts) { return volts >= 0.0 && volts < 0.1; }),
+          "INPUT_PULLDOWN no mesmo pad: o pull-down o leva a 0 V");
+    ioMuxGpio4AndWait(2u << 12, [](double volts) { return volts >= 0.0 && volts < 0.1; });
 
     check(mcuA->health() == PluginHealthStatus::Ok && mcuB->health() == PluginHealthStatus::Ok,
           "as duas instâncias continuam saudáveis depois da rajada de escritas concorrentes");

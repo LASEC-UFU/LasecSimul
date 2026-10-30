@@ -64,6 +64,8 @@ std::string safeName(std::string_view text) {
     return out.empty() ? "anonymous" : out;
 }
 
+constexpr uint32_t kC2aDepth = 64;
+
 uint64_t makeLayout(uint32_t lanes, uint32_t endpoints, uint32_t responses,
                     uint32_t snapshots, uint32_t laneDepth, uint32_t c2aDepth,
                     std::vector<uint64_t>& q2c) {
@@ -86,7 +88,8 @@ uint64_t makeLayout(uint32_t lanes, uint32_t endpoints, uint32_t responses,
 
 void buildContainer(uint8_t* base, uint64_t total, uint64_t executionId, uint32_t depth) {
     constexpr uint32_t lanes = 2, endpoints = 1, responses = 2, snapshots = 1;
-    constexpr uint32_t c2aDepth = 2;
+    // Uma sincronização do lockstep pode entregar de uma vez GPIO_IN, GPIO_IN1 e bytes de UART.
+    constexpr uint32_t c2aDepth = kC2aDepth;
     std::vector<uint64_t> q2c;
     uint64_t at = sizeof(lasec_at_control_page);
     auto add = [&](uint64_t bytes) { at = align64(at); uint64_t result = at; at += bytes; return result; };
@@ -210,7 +213,7 @@ void VnextBAttachment::prepare(QemuLaunchSpec spec, uint64_t executionId,
     try {
     std::vector<uint64_t> layoutScratch;
     const uint32_t laneDepth = configuredLaneDepth();
-    m_impl->size = makeLayout(2, 1, 2, 1, laneDepth, 2, layoutScratch);
+    m_impl->size = makeLayout(2, 1, 2, 1, laneDepth, kC2aDepth, layoutScratch);
     m_impl->mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE,
                                           DWORD(m_impl->size >> 32), DWORD(m_impl->size),
                                           std::wstring(m_mappingName.begin(), m_mappingName.end()).c_str());
@@ -666,6 +669,60 @@ bool VnextBAttachment::publishSnapshot(const uint8_t* data, size_t bytes) {
     (void)data; (void)bytes;
     return false;
 #endif
+}
+
+void VnextBAttachment::setLockstep(bool enabled, bool realtime) {
+    if (!m_view.control) return;
+    auto* control = const_cast<lasec_at_control_page*>(m_view.control);
+    std::atomic_ref<uint32_t>(control->lockstep_realtime).store(enabled && realtime ? 1u : 0u, std::memory_order_relaxed);
+    std::atomic_ref<uint32_t>(control->lockstep).store(enabled ? 1u : 0u, std::memory_order_release);
+}
+
+uint64_t VnextBAttachment::artifactSyncSeq() const {
+    if (!m_view.control) return 0;
+    return std::atomic_ref<const uint64_t>(m_view.control->artifact_sync_seq).load(std::memory_order_acquire);
+}
+
+double VnextBAttachment::artifactCpuDilation() const {
+    if (!m_view.control) return 1.0;
+    const uint32_t q16 = std::atomic_ref<const uint32_t>(m_view.control->artifact_cpu_dilation_q16)
+                             .load(std::memory_order_relaxed);
+    return q16 < 65536u ? 1.0 : static_cast<double>(q16) / 65536.0;
+}
+
+std::optional<uint64_t> VnextBAttachment::lockstepSafeTimeNs() const {
+#ifdef _WIN32
+    if (!m_impl || !m_impl->view || !m_view.control) return std::nullopt;
+    // O instante primeiro (acquire): todo evento com timestamp <= ele já está visível nas filas.
+    uint64_t safeNs = std::atomic_ref<const uint64_t>(m_view.control->artifact_virtual_time_ns)
+                          .load(std::memory_order_acquire);
+    for (uint32_t lane = 0; lane < m_view.control->lane_count; ++lane) {
+        const auto& d = m_view.lanes[lane];
+        auto* meta = reinterpret_cast<const lasec_at_ring_header*>(static_cast<const uint8_t*>(m_impl->view) + d.metadata.offset);
+        const uint64_t read = std::atomic_ref<const uint64_t>(meta->read_seq).load(std::memory_order_acquire);
+        const uint64_t write = std::atomic_ref<const uint64_t>(meta->write_seq).load(std::memory_order_acquire);
+        if (read == write) continue;
+        const auto* slot = reinterpret_cast<const lasec_at_event*>(static_cast<const uint8_t*>(m_impl->view) + d.events.offset) +
+                           (read & (d.depth - 1));
+        safeNs = (std::min)(safeNs, std::atomic_ref<const uint64_t>(slot->timestamp_ns).load(std::memory_order_relaxed));
+    }
+    return safeNs;
+#else
+    return std::nullopt;
+#endif
+}
+
+void VnextBAttachment::publishCoreTime(uint64_t syncSeq, uint64_t timeNs, uint64_t horizonNs,
+                                       uint64_t inputHorizonNs, uint64_t scheduleNs) {
+    if (!m_view.control) return;
+    auto* control = const_cast<lasec_at_control_page*>(m_view.control);
+    // Horizonte e tempo antes da sequência: quem vê a sequência (acquire) vê os dois.
+    std::atomic_ref<uint64_t>(control->core_realtime_schedule_ns).store(scheduleNs, std::memory_order_relaxed);
+    std::atomic_ref<uint64_t>(control->core_horizon_ns).store(horizonNs, std::memory_order_relaxed);
+    std::atomic_ref<uint64_t>(control->core_input_horizon_ns).store(inputHorizonNs, std::memory_order_relaxed);
+    std::atomic_ref<uint64_t>(control->core_time_ns).store(timeNs, std::memory_order_relaxed);
+    std::atomic_ref<uint64_t>(control->core_sync_seq).store(syncSeq, std::memory_order_release);
+    signalArtifactResume();
 }
 
 void VnextBAttachment::signalArtifactResume() {

@@ -7,10 +7,28 @@
 
 namespace lasecsimul::simulation {
 
-void Scheduler::pushEventLocked(uint64_t timeNs, uint32_t componentIndex, EventCallback callback) {
-    m_events.push({timeNs, componentIndex, m_nextSequence++, std::move(callback)});
+void Scheduler::pushEventLocked(uint64_t timeNs, uint32_t componentIndex, EventCallback callback, bool soft) {
+    m_events.push({timeNs, componentIndex, m_nextSequence++, std::move(callback), soft});
     m_pendingEventSnapshot.store(m_events.size(), std::memory_order_relaxed);
     m_nextEventSnapshotNs.store(m_events.top().timeNs, std::memory_order_release);
+    if (!soft) {
+        m_hardEventTimes.insert(timeNs);
+        publishNextHardEventLocked();
+    }
+}
+
+void Scheduler::publishNextHardEventLocked() {
+    m_nextHardEventSnapshotNs.store(m_hardEventTimes.empty() ? std::numeric_limits<uint64_t>::max()
+                                                             : *m_hardEventTimes.begin(),
+                                    std::memory_order_release);
+}
+
+void Scheduler::scheduleAt(uint64_t timeNs, EventCallback callback, bool soft) {
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        pushEventLocked(timeNs, kNoComponent, std::move(callback), soft);
+    }
+    signalWorkAvailable();
 }
 
 void Scheduler::scheduleAt(uint64_t timeNs, uint32_t componentIndex) {
@@ -157,6 +175,11 @@ bool Scheduler::processNextEventUntilLocked(std::unique_lock<std::mutex>& lock, 
 
     ScheduledEvent event = m_events.top();
     m_events.pop();
+    if (!event.soft) {
+        if (const auto hard = m_hardEventTimes.find(event.timeNs); hard != m_hardEventTimes.end())
+            m_hardEventTimes.erase(hard);
+        publishNextHardEventLocked();
+    }
     m_pendingEventSnapshot.store(m_events.size(), std::memory_order_relaxed);
     m_nextEventSnapshotNs.store(m_events.empty() ? std::numeric_limits<uint64_t>::max() : m_events.top().timeNs,
                                 std::memory_order_release);
@@ -352,6 +375,8 @@ void Scheduler::reset() {
         m_pendingDirty.clear();
     }
     m_events = {};
+    m_hardEventTimes.clear();
+    publishNextHardEventLocked();
     m_pendingEventSnapshot.store(0, std::memory_order_relaxed);
     m_nextEventSnapshotNs.store(std::numeric_limits<uint64_t>::max(), std::memory_order_release);
     m_resetGeneration.fetch_add(1, std::memory_order_release);
@@ -379,6 +404,11 @@ void Scheduler::start() {
         auto pacingWallOrigin = std::chrono::steady_clock::now();
         uint64_t pacingSimOriginNs = nowNs();
         double pacingRate = m_realTimeRate.load(std::memory_order_relaxed);
+        const auto publishPacingAnchor = [&] {
+            std::lock_guard<std::mutex> anchorLock(m_pacingAnchorMutex);
+            m_pacingAnchor = {pacingWallOrigin, pacingSimOriginNs, pacingCalibrated ? pacingRate : 0.0};
+        };
+        publishPacingAnchor();
 
         while (m_running.load()) {
             if (m_paused.load()) {
@@ -401,6 +431,7 @@ void Scheduler::start() {
                 // Paused wall time is deliberately outside the simulation clock.
                 pacingWallOrigin = std::chrono::steady_clock::now();
                 pacingSimOriginNs = nowNs();
+                publishPacingAnchor();
                 continue;
             }
 
@@ -429,7 +460,12 @@ void Scheduler::start() {
                 mergePendingDirtyLocked();
                 const uint64_t configuredStepNs = m_maximumTimeStepNs.load(std::memory_order_relaxed);
                 if (configuredStepNs == 0) {
-                    if (m_events.empty() && m_dirty.empty()) {
+                    // Lockstep: o artefato pode estar parado esperando o Core chegar ao instante que
+                    // publicou, mesmo sem nenhum evento na fila -- avance até lá.
+                    const std::optional<uint64_t> exactLimit =
+                        m_exactAdvanceLimit ? m_exactAdvanceLimit() : std::nullopt;
+                    const bool exactWork = exactLimit && *exactLimit > m_nowNs;
+                    if (m_events.empty() && m_dirty.empty() && !exactWork) {
                         // Drena ANTES de decidir se espera -- o `continue` logo abaixo volta pro topo
                         // do laço externo, não cai em runUntil(), então sem isto um comando pendente
                         // (predicado abaixo verdadeiro) faria o wait() retornar na hora (sem bloquear,
@@ -443,13 +479,39 @@ void Scheduler::start() {
                                 m_running.load(std::memory_order_acquire) &&
                                 !m_paused.load(std::memory_order_acquire) &&
                                 !(m_commandPending && m_commandPending());
+                            const uint64_t idleNowNs = m_nowNs;
                             lock.unlock();
-                            if (shouldWait)
+                            if (m_timeSettled)
+                                m_timeSettled(idleNowNs, m_nextEventSnapshotNs.load(std::memory_order_acquire),
+                                              m_nextHardEventSnapshotNs.load(std::memory_order_acquire));
+                            if (shouldWait && exactLimit) {
+                                // Lockstep: o teto exato também sobe sem trabalho novo nenhum (o
+                                // artefato publicou um instante adiante) -- acorda com ele. A geração
+                                // é a do início do ciclo, lida antes do teto: nada se perde no meio.
+                                m_workerTimedWait.store(true, std::memory_order_seq_cst);
+                                const auto idleStart = std::chrono::steady_clock::now();
+                                std::unique_lock<std::mutex> pacingLock(m_pacingMutex);
+                                m_pacingWake.wait(pacingLock, [&] {
+                                    return !m_running.load(std::memory_order_acquire) ||
+                                           m_paused.load(std::memory_order_acquire) ||
+                                           m_workGeneration.load(std::memory_order_acquire) != observedWork ||
+                                           m_advanceLimitGeneration.load(std::memory_order_acquire) != cycleAdvanceGen;
+                                });
+                                pacingLock.unlock();
+                                m_workerTimedWait.store(false, std::memory_order_relaxed);
+                                m_lockstepIdleWaitNanoseconds.fetch_add(
+                                    static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                        std::chrono::steady_clock::now() - idleStart).count()),
+                                    std::memory_order_relaxed);
+                            } else if (shouldWait) {
                                 m_workGeneration.wait(observedWork, std::memory_order_acquire);
+                            }
                         }
                         continue;
                     }
-                    targetTimeNs = m_events.empty() ? m_nowNs : m_events.top().timeNs;
+                    targetTimeNs = !m_events.empty() ? m_events.top().timeNs
+                                   : exactWork        ? *exactLimit
+                                                      : m_nowNs;
                 } else {
                     targetTimeNs = configuredStepNs > std::numeric_limits<uint64_t>::max() - m_nowNs
                         ? std::numeric_limits<uint64_t>::max() : m_nowNs + configuredStepNs;
@@ -480,12 +542,24 @@ void Scheduler::start() {
                     }
                 }
             }
+            bool lockstepCycle = false;
+            if (m_exactAdvanceLimit) {
+                const std::optional<uint64_t> exactLimit = m_exactAdvanceLimit();
+                lockstepCycle = exactLimit.has_value();
+                if (exactLimit && *exactLimit < targetTimeNs) {
+                    targetTimeNs = *exactLimit;
+                    advanceLimited = true;
+                }
+            }
 
             // Usa exatamente o mesmo caminho do modo síncrono: callbacks transientes, passo
             // adaptativo, eventos com timestamp, settle e aquisição de instrumentos. Sempre chamado
             // -- nunca pulado -- preserva o comportamento pré-existente do ramo configuredStepNs==0
             // (drena dirty/eventos pendentes mesmo sem avançar o tempo).
             runUntil(targetTimeNs);
+            if (m_timeSettled)
+                m_timeSettled(nowNs(), m_nextEventSnapshotNs.load(std::memory_order_acquire),
+                              m_nextHardEventSnapshotNs.load(std::memory_order_acquire));
 
             if (advanceLimited && nowNs() == cycleSimStartNs) {
                 // O teto de verdade impediu qualquer avanço neste ciclo (não uma falta de trabalho
@@ -524,6 +598,7 @@ void Scheduler::start() {
                 pacingRate = realTimeRate;
                 pacingWallOrigin = std::chrono::steady_clock::now();
                 pacingSimOriginNs = cycleSimEndNs;
+                publishPacingAnchor();
             }
             if (realTimeRate > 0.0 && cycleSimEndNs > cycleSimStartNs) {
                 if (!pacingCalibrated) {
@@ -540,13 +615,27 @@ void Scheduler::start() {
                     pacingCalibrated = true;
                     pacingWallOrigin = std::chrono::steady_clock::now();
                     pacingSimOriginNs = cycleSimEndNs;
+                    publishPacingAnchor();
                     continue;
                 }
                 const auto now = std::chrono::steady_clock::now();
                 const long double requiredWallNs = static_cast<long double>(cycleSimEndNs - pacingSimOriginNs) / realTimeRate;
                 const auto requiredElapsed = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
                     std::chrono::duration<long double, std::nano>(requiredWallNs));
-                const auto actualElapsed = now - pacingWallOrigin;
+                auto actualElapsed = now - pacingWallOrigin;
+                if (lockstepCycle) {
+                    // Lockstep: o relógio do guest fica parado esperando o Core, nada dele corre à
+                    // frente com o host (o motivo da âncora absoluta abaixo). Um atraso além do
+                    // recuperável desliza a âncora: a simulação segue no ritmo real a partir daqui.
+                    const auto maxLag = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                        std::chrono::duration<long double, std::nano>(
+                            static_cast<long double>(kLockstepMaxPacingLagNs) / realTimeRate));
+                    if (actualElapsed > requiredElapsed + maxLag) {
+                        pacingWallOrigin = now - requiredElapsed - maxLag;
+                        actualElapsed = requiredElapsed + maxLag;
+                        publishPacingAnchor();
+                    }
+                }
 
                 // Keep the absolute wall anchor when late. Re-anchoring here
                 // discarded every oversleep/boot delay while QEMU's host-paced
@@ -575,6 +664,7 @@ void Scheduler::start() {
                     // checagem behindHostPacedClock() acima e esta linha não pode se perder.
                     uint64_t observedAdvanceGen = cycleAdvanceGen;
                     m_workerTimedWait.store(true, std::memory_order_seq_cst);
+                    const auto sleepStart = std::chrono::steady_clock::now();
                     std::unique_lock<std::mutex> pacingLock(m_pacingMutex);
                     m_pacingWake.wait_until(pacingLock, deadline, [&] {
                         if (!m_running.load(std::memory_order_acquire) ||
@@ -592,6 +682,10 @@ void Scheduler::start() {
                     });
                     pacingLock.unlock();
                     m_workerTimedWait.store(false, std::memory_order_relaxed);
+                    m_pacingSleepNanoseconds.fetch_add(
+                        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            std::chrono::steady_clock::now() - sleepStart).count()),
+                        std::memory_order_relaxed);
                 }
             } else if (realTimeRate <= 0.0) {
                 pacingWallOrigin = std::chrono::steady_clock::now();
@@ -635,6 +729,27 @@ void Scheduler::stop() {
     // step()/runUntil() feitos depois deste stop() e antes do próximo start() (ex.: `setPauseCondition`
     // resolvendo topologia via `step(0)` enquanto a simulação está parada, ver comentário em Scheduler.hpp).
     m_stopRequested.store(false);
+}
+
+std::optional<uint64_t> Scheduler::realTimeScheduleNs() const {
+    if (!m_running.load(std::memory_order_acquire) || m_paused.load(std::memory_order_acquire)) return std::nullopt;
+    PacingAnchor anchor;
+    {
+        std::lock_guard<std::mutex> anchorLock(m_pacingAnchorMutex);
+        anchor = m_pacingAnchor;
+    }
+    if (anchor.rate <= 0.0) return std::nullopt;
+    const auto elapsed = std::chrono::steady_clock::now() - anchor.wall;
+    const long double elapsedNs = elapsed.count() <= 0 ? 0.0L
+        : static_cast<long double>(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count());
+    const long double scheduleNs = static_cast<long double>(anchor.simNs) + elapsedNs * anchor.rate;
+    // A worker só desliza a âncora no próximo ciclo que avança; até lá o atraso visível fica no
+    // mesmo limite que ela vai aplicar (kLockstepMaxPacingLagNs).
+    const uint64_t now = nowNs();
+    const uint64_t ceilingNs = now > std::numeric_limits<uint64_t>::max() - kLockstepMaxPacingLagNs
+        ? std::numeric_limits<uint64_t>::max() : now + kLockstepMaxPacingLagNs;
+    if (scheduleNs >= static_cast<long double>(ceilingNs)) return ceilingNs;
+    return static_cast<uint64_t>(scheduleNs);
 }
 
 } // namespace lasecsimul::simulation

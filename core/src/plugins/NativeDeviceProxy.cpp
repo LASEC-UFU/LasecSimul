@@ -117,6 +117,9 @@ LsdnMatrixView NativeDeviceProxy::toAbiView(void* context) {
 
 NativeDeviceProxy::~NativeDeviceProxy() {
     std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
+    // Antes do destroy: um post_step postado e ainda não iniciado nunca roda sobre um handle
+    // destruído.
+    m_postStepWatchdog.shutdown();
     if (m_module && m_handle) {
         m_module->deviceVTable()->destroy(m_handle);
     }
@@ -165,8 +168,11 @@ void NativeDeviceProxy::postStep(uint64_t timeNs) {
     std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
     if (m_health == PluginHealthStatus::Faulted) return;
 
-    const WatchdogOutcome outcome = PluginWatchdog::call(
-        m_meta.typeId, m_meta.stepTimeoutMs, [&] { m_module->deviceVTable()->post_step(m_handle, timeNs); });
+    // Tudo por valor: a chamada pode começar ou terminar na thread reservada depois de um TimedOut
+    // (ver PluginWatchdog). O módulo vai junto pra o binário continuar carregado até ela voltar.
+    const WatchdogOutcome outcome = m_postStepWatchdog.run(
+        m_meta.stepTimeoutMs,
+        [module = m_module, handle = m_handle, timeNs] { module->deviceVTable()->post_step(handle, timeNs); });
 
     switch (outcome) {
         case WatchdogOutcome::Completed:
@@ -177,14 +183,17 @@ void NativeDeviceProxy::postStep(uint64_t timeNs) {
             m_health = PluginHealthStatus::Faulted;
             break;
         case WatchdogOutcome::TimedOut:
-            // zero-order hold: o macropasso segue com o último valor conhecido do device (a thread
-            // travada é desanexada, nunca terminada à força -- ver PluginWatchdog/seção 13).
+            // zero-order hold: o macropasso segue com o último valor conhecido do device. A thread
+            // reservada continua na chamada (nunca terminada à força); as próximas esperam ela
+            // liberar em vez de entrar de novo no plugin -- ver PluginWatchdog/seção 13.
             m_consecutiveTimeouts++;
             m_health = m_consecutiveTimeouts >= kMaxConsecutiveTimeouts
                 ? PluginHealthStatus::Faulted
                 : PluginHealthStatus::Lagging;
             break;
     }
+    // Faulted nunca mais recebe post_step: libera a thread (presa, ela é desanexada -- item 3).
+    if (m_health == PluginHealthStatus::Faulted) m_postStepWatchdog.shutdown();
 }
 
 void NativeDeviceProxy::onEvent(const ComponentEvent& event) {
