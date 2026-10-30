@@ -49,8 +49,27 @@ int main() {
     const auto begin = std::chrono::steady_clock::now();
     for (uint64_t sample = 2; sample < 1026; ++sample) analyzer.onResolvedSignalSample(sample * 50'000, wide);
     const auto elapsedUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - begin).count();
+    // O anel já deu a volta: a próxima amostra cai num slot reaproveitado e tem de sair inteira, a
+    // última da serialização (timestamp + 32 canais de 8 bytes).
+    wide[5].elements[3] = 5.0;
+    const uint64_t lastNs = 1026 * 50'000;
+    analyzer.onResolvedSignalSample(lastNs, wide);
     const size_t loadedSize = analyzer.getState(state.data(), state.size());
     if (loadedSize > 300'000 || elapsedUs > 2'000'000) ++failures;
+    constexpr size_t kLastSampleBytes = sizeof(uint64_t) + 32 * sizeof(uint64_t);
+    if (loadedSize >= kLastSampleBytes + sizeof(uint32_t)) {
+        const uint8_t* last = state.data() + loadedSize - kLastSampleBytes;
+        uint32_t sampleCount = 0;
+        std::memcpy(&sampleCount, state.data() + loadedSize - LogicAnalyzer::kHistoryCapacity * kLastSampleBytes - sizeof(uint32_t), 4);
+        uint64_t timestampNs = 0;
+        std::memcpy(&timestampNs, last, 8);
+        if (sampleCount != LogicAnalyzer::kHistoryCapacity || timestampNs != lastNs) ++failures;
+        for (size_t channel = 0; channel < 32; ++channel) {
+            uint64_t value = 0;
+            std::memcpy(&value, last + 8 + channel * 8, 8);
+            if (value != (channel == 5 ? uint64_t{1} << 3 : 0)) ++failures;
+        }
+    } else ++failures;
     std::printf("Analyzer vector: %s, state=%zu bytes, acquire=%lld us\n", failures == 0 ? "OK" : "FALHOU", loadedSize, static_cast<long long>(elapsedUs));
     return failures == 0 ? 0 : 1;
 }

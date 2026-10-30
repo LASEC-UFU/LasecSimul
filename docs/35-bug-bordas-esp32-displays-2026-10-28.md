@@ -248,7 +248,7 @@ MIPS, blocos traduzidos, PCs das duas CPUs, atraso); `METRICS=1` no script agora
 - **Maiores custos restantes da thread do Scheduler** (mesmo perfil, % do tempo total da thread, que
   passa ~50% esperando o pacing):
   - `onStableStepUnlocked`, ~12%: `acquireSubscribedSignalsUnlocked` e `publishSnapshot`, com alocação
-    de heap a cada passo estável;
+    de heap a cada passo estável. Corrigido em "Passo estável sem alocação", adiante;
   - `MnaSolver::solve`, ~7%;
   - `NativeDeviceProxy::postStep`, ~3,6%: todo dispositivo com `limits.stepTimeoutMs` (AIP31068,
     HD44780 e outros) cria e destrói uma thread (`PluginWatchdog::call`) a cada `post_step`. Corrigido
@@ -351,6 +351,45 @@ com 8 sessões em `realtime`: 0,991–1,018×, LCD e Nokia corretos.
 O teste de escala passou a exigir 16 transações por sessão. Com `LASECSIMUL_SCALE_BUS_PROBE=1` ele põe
 uma ponta de prova e pull-ups de 4,7 kΩ no barramento e roda o caminho elétrico.
 `LASECSIMUL_I2C_DEVICE_TRACE=1` agora também imprime as bordas vistas pelo escravo do `simulide-logic`.
+
+### Passo estável sem alocação (2026-10-30)
+
+O Core passa por `onStableStepUnlocked` a cada borda de um MCU, dezenas de milhares de vezes por
+segundo, e a cada passagem alocava e liberava heap:
+
+- **`publishSnapshot`** criava três objetos: as tensões de nó, as correntes dos componentes e o
+  `NodeVoltageSnapshot`. Liberava também os três da publicação anterior. Os leitores (osciloscópio,
+  LasecPlot, `getComponentCurrent`, telemetria) leem na cadência da tela. Agora tensões e correntes
+  ficam no próprio snapshot, e um snapshot que só o pool da sessão referencia (`use_count() == 1`) é
+  reescrito no lugar. Um leitor que segura um snapshot nunca o vê mudar: ele não volta ao pool enquanto
+  houver referência. Na prática dois se alternam, mais um enquanto a telemetria guarda o seu. A semântica
+  não mudou: cada passo estável continua publicando.
+- **`acquireSubscribedSignalsUnlocked`** montava por amostra um vetor de `ResolvedSignal`, cada um com
+  três strings copiadas e um vetor de tensões. Agora reescreve um buffer da sessão, cujas strings e
+  vetores mantêm a capacidade.
+- **`LogicAnalyzer`** alocava o vetor de cada amostra e recriava as strings dos descritores. Agora
+  escreve no slot mais antigo do anel; depois da primeira volta, com 1024 amostras, nenhuma amostra aloca.
+
+Perfil por amostragem da thread do Scheduler, sketch da aula, comparado com o perfil anterior de ontem:
+
+| Medida | Antes | Depois |
+|---|---|---|
+| `onStableStepUnlocked`, % das amostras da thread | 9,2% | 3,4% |
+| `onStableStepUnlocked`, % do tempo ocupado da thread | 19,7% | 8,9% |
+| Alocador do heap (`RtlAllocateHeap`), inclusivo | 8,0% | 2,8% |
+| `acquireSubscribedSignalsUnlocked`, inclusivo | 5,0% | ~0,8% (soma das pilhas listadas; fora das 45 maiores) |
+| `publishSnapshot`, inclusivo | 3,6% | 1,9% (cópia das tensões e `current()` de cada componente) |
+
+Com 8 sketches da aula ao mesmo tempo: 0,999–1,014×, LCD e Nokia corretos. A CPU do Core por
+simulação deu 44,9% numa rodada e 52,5% noutra, com o mesmo binário; a CPU do processo inteiro oscila
+demais para medir esse efeito, por isso a comparação é pelo perfil. O que sobra de alocação na thread vem
+sobretudo de `CommandQueue::takeAll` (0,6%).
+
+Testes: `dense_hot_path` (200 passos estáveis com no máximo 3 snapshots distintos, o snapshot segurado
+por um leitor intacto, assinantes de 1 e 2 canais dividindo o mesmo buffer) e `logic_analyzer_vector`
+(a amostra gravada depois da volta do anel sai inteira na serialização), além de
+`simulation_plan_session`, `electrical_signal_bridge_live`, `simulide_sources_meters` e
+`core_bootstrap`.
 
 ## Atualização: com o transporte VNEXT_B (padrão da extensão) nada funciona
 

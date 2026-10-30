@@ -1141,11 +1141,19 @@ void SimulationSession::acquireSubscribedSignalsUnlocked(uint64_t timestampNs) {
     for (const simulation::SignalPlan::Subscriber& subscriber : m_runtimeState.resolvedSignalSubscribers) {
         IComponentModel* component = m_componentInstances[subscriber.componentIndex].get();
         if (!component->wantsResolvedSignalSample(timestampNs)) continue;
-        std::vector<ResolvedSignal> values;
-        values.reserve(subscriber.channels.size());
-        for (const simulation::SignalPlan::Route& route : subscriber.channels)
-            values.push_back(sampleSignalRouteUnlocked(route));
-        component->onResolvedSignalSample(timestampNs, values);
+        // Mesmo conteúdo de sampleSignalRouteUnlocked(), escrito por cima da amostra anterior: as
+        // atribuições reaproveitam a capacidade das strings e dos vetores, sem alocar por amostra.
+        if (m_signalSampleScratch.size() < subscriber.channels.size())
+            m_signalSampleScratch.resize(subscriber.channels.size());
+        for (size_t channel = 0; channel < subscriber.channels.size(); ++channel) {
+            const simulation::SignalPlan::Route& route = subscriber.channels[channel];
+            ResolvedSignal& value = m_signalSampleScratch[channel];
+            value.descriptor = route.descriptor;
+            value.elements.clear();
+            for (uint32_t node : route.nodeIndices) value.elements.push_back(m_nodeVoltages.at(node));
+        }
+        component->onResolvedSignalSample(
+            timestampNs, std::span<const ResolvedSignal>(m_signalSampleScratch.data(), subscriber.channels.size()));
     }
 }
 
@@ -1412,8 +1420,6 @@ void SimulationSession::publishSnapshot() {
     // m_publishedSnapshot em si não é). O trabalho caro (copiar tensões/mapeamento de pinos) fica
     // FORA das duas seções críticas abaixo, que só copiam ponteiros -- por isso duas seções curtas
     // em vez de segurar o mutex pelo tempo inteiro da função.
-    auto nodeVoltages = std::make_shared<const std::vector<double>>(m_nodeVoltages);
-
     std::shared_ptr<const std::vector<uint32_t>> slotToNode;
     std::shared_ptr<const std::vector<std::unordered_map<std::string, uint32_t>>> pinSlotsByComponent;
     bool needsTopologyCopy;
@@ -1433,16 +1439,31 @@ void SimulationSession::publishSnapshot() {
             m_netlist.componentPinSlotsCopy());
     }
 
+    // Um passo estável por borda de MCU: alocar três objetos por publicação (e liberar os da anterior)
+    // pesava mais que copiar as tensões. Reescreve um snapshot do pool que só o pool referencia.
+    std::shared_ptr<NodeVoltageSnapshot> snapshot;
+    for (const std::shared_ptr<NodeVoltageSnapshot>& candidate : m_snapshotPool) {
+        if (candidate.use_count() != 1) continue;
+        // O último leitor soltou a referência com um decremento atômico (release); esta barreira
+        // ordena as escritas abaixo depois das leituras que ele fez.
+        std::atomic_thread_fence(std::memory_order_acquire);
+        snapshot = candidate;
+        break;
+    }
+    if (!snapshot) {
+        snapshot = std::make_shared<NodeVoltageSnapshot>();
+        if (m_snapshotPool.size() < kSnapshotPoolCapacity) m_snapshotPool.push_back(snapshot);
+    }
+    snapshot->nodeVoltages.assign(m_nodeVoltages.begin(), m_nodeVoltages.end());
+    snapshot->slotToNode = std::move(slotToNode);
+    snapshot->pinSlotsByComponent = std::move(pinSlotsByComponent);
     // Correntes dos componentes no mesmo instante das tensões: getComponentCurrent lê daqui, sem
     // disputar o mutex do Scheduler (ver componentCurrent()).
-    auto componentCurrents = std::make_shared<std::vector<std::optional<double>>>(m_componentInstances.size());
+    snapshot->componentCurrents.resize(m_componentInstances.size());
     for (size_t index = 0; index < m_componentInstances.size(); ++index) {
-        if (m_componentInstances[index]) (*componentCurrents)[index] = m_componentInstances[index]->current();
+        snapshot->componentCurrents[index] =
+            m_componentInstances[index] ? m_componentInstances[index]->current() : std::nullopt;
     }
-
-    auto snapshot = std::make_shared<const NodeVoltageSnapshot>(
-        NodeVoltageSnapshot{std::move(nodeVoltages), std::move(slotToNode), std::move(pinSlotsByComponent),
-                            std::move(componentCurrents)});
 
     std::lock_guard<std::mutex> lock(m_snapshotMutex);
     m_publishedSnapshot = std::move(snapshot);
@@ -1457,8 +1478,8 @@ std::optional<double> resolveNodeVoltage(const NodeVoltageSnapshot& snapshot, ui
     if (slotIt == slots.end()) return std::nullopt;
     if (!snapshot.slotToNode || slotIt->second >= snapshot.slotToNode->size()) return std::nullopt;
     const uint32_t node = (*snapshot.slotToNode)[slotIt->second];
-    if (!snapshot.nodeVoltages || node >= snapshot.nodeVoltages->size()) return std::nullopt;
-    return (*snapshot.nodeVoltages)[node];
+    if (node >= snapshot.nodeVoltages.size()) return std::nullopt;
+    return snapshot.nodeVoltages[node];
 }
 
 void SimulationSession::connectWire(uint32_t componentA, const std::string& pinIdA, uint32_t componentB,
@@ -3554,8 +3575,8 @@ std::optional<double> SimulationSession::componentCurrent(uint32_t componentInde
     // corrente".
     if (m_scheduler.isRunning()) {
         const std::shared_ptr<const NodeVoltageSnapshot> snapshot = currentSnapshot();
-        if (snapshot && snapshot->componentCurrents && componentIndex < snapshot->componentCurrents->size()) {
-            return (*snapshot->componentCurrents)[componentIndex];
+        if (snapshot && componentIndex < snapshot->componentCurrents.size()) {
+            return snapshot->componentCurrents[componentIndex];
         }
     }
     // Sem worker (sessão síncrona, testes que chamam settleStep() direto) nenhum passo estável

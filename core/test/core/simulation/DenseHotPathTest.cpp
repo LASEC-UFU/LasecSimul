@@ -1,6 +1,10 @@
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstdio>
+#include <memory>
+#include <optional>
+#include <vector>
 
 #include "plugins/GlobalPluginCache.hpp"
 #include "session/SimulationSession.hpp"
@@ -63,6 +67,154 @@ private:
     std::array<Pin, 1> m_pins{Pin{"in"}};
 };
 
+/** Assinante de dois canais: divide com CountingObserver o buffer de amostra da sessão. */
+std::atomic<uint64_t> wideSamples{0};
+std::atomic<uint64_t> wrongSamples{0};
+
+class WideObserver final : public IComponentModel {
+public:
+    const char* typeId() const override { return "test.wide_observer"; }
+    std::span<Pin> pins() override { return m_pins; }
+    void stamp(MnaMatrixView&) override {}
+    void postStep(uint64_t) override {}
+    std::vector<SignalSubscription> signalSubscriptions() const override {
+        return {{"a", "@self.in", "A", SignalValueKind::Analog}, {"b", "@self.in2", "B", SignalValueKind::Analog}};
+    }
+    bool wantsResolvedSignalSample(uint64_t) const override { return true; }
+    void onResolvedSignalSample(uint64_t, std::span<const ResolvedSignal> values) override {
+        const bool ok = values.size() == 2 && values[0].descriptor.channelId == "a" &&
+                        values[1].descriptor.channelId == "b" && values[0].elements.size() == 1 &&
+                        values[1].elements.size() == 1;
+        (ok ? wideSamples : wrongSamples).fetch_add(1, std::memory_order_relaxed);
+    }
+    size_t getState(uint8_t*, size_t) const override { return 0; }
+    void setState(const uint8_t*, size_t) override {}
+
+private:
+    std::array<Pin, 2> m_pins{Pin{"in"}, Pin{"in2"}};
+};
+
+class NarrowObserver final : public IComponentModel {
+public:
+    const char* typeId() const override { return "test.narrow_observer"; }
+    std::span<Pin> pins() override { return m_pins; }
+    void stamp(MnaMatrixView&) override {}
+    void postStep(uint64_t) override {}
+    std::vector<SignalSubscription> signalSubscriptions() const override {
+        return {{"only", "@self.in", "Only", SignalValueKind::Analog}};
+    }
+    bool wantsResolvedSignalSample(uint64_t) const override { return true; }
+    void onResolvedSignalSample(uint64_t, std::span<const ResolvedSignal> values) override {
+        const bool ok = values.size() == 1 && values[0].descriptor.channelId == "only" && values[0].elements.size() == 1;
+        if (!ok) wrongSamples.fetch_add(1, std::memory_order_relaxed);
+    }
+    size_t getState(uint8_t*, size_t) const override { return 0; }
+    void setState(const uint8_t*, size_t) override {}
+
+private:
+    std::array<Pin, 1> m_pins{Pin{"in"}};
+};
+
+/** Corrente = número do último evento: cada passo estável publica um valor diferente. */
+std::atomic<int> currentStep{0};
+
+class SteppedCurrent final : public IComponentModel {
+public:
+    const char* typeId() const override { return "test.stepped_current"; }
+    std::span<Pin> pins() override { return m_pins; }
+    void stamp(MnaMatrixView&) override {}
+    void postStep(uint64_t) override {}
+    std::optional<double> current() const override { return currentStep.load(std::memory_order_relaxed); }
+    size_t getState(uint8_t*, size_t) const override { return 0; }
+    void setState(const uint8_t*, size_t) override {}
+
+private:
+    std::array<Pin, 0> m_pins{};
+};
+
+/** O snapshot publicado a cada passo estável é reescrito no lugar quando nenhum leitor o segura,
+ * e nunca enquanto um leitor o segura. */
+int testPublishedSnapshotsAreRecycledOnlyWhenReleased() {
+    plugins::GlobalPluginCache cache;
+    SimulationSession session(cache, 1024);
+    session.components().registerFactory("test.stepped_current", [](const ComponentParams&) {
+        return std::make_unique<SteppedCurrent>();
+    });
+    const uint32_t stepped = session.addComponent("test.stepped_current", {});
+
+    constexpr int kEvents = 200;
+    constexpr int kHeldAt = 10;
+    std::shared_ptr<const NodeVoltageSnapshot> held;
+    std::optional<double> heldCurrent;
+    std::vector<const NodeVoltageSnapshot*> seen;
+    int staleReads = 0;
+    currentStep.store(0, std::memory_order_relaxed);
+    for (int event = 1; event <= kEvents; ++event) {
+        session.scheduler().scheduleAt(static_cast<uint64_t>(event), [&, event] {
+            // Último snapshot publicado = passo estável depois do evento anterior (o primeiro evento
+            // pode chegar antes de qualquer publicação).
+            const std::shared_ptr<const NodeVoltageSnapshot> snapshot = session.currentSnapshot();
+            if (event > 1 && (!snapshot || stepped >= snapshot->componentCurrents.size() ||
+                              snapshot->componentCurrents[stepped] != std::optional<double>(event - 1)))
+                ++staleReads;
+            if (snapshot && std::find(seen.begin(), seen.end(), snapshot.get()) == seen.end())
+                seen.push_back(snapshot.get());
+            if (event == kHeldAt) {
+                held = snapshot;
+                heldCurrent = snapshot->componentCurrents[stepped];
+            }
+            currentStep.store(event, std::memory_order_relaxed);
+        });
+    }
+    session.scheduler().runUntil(kEvents + 1);
+
+    if (staleReads != 0) {
+        std::fprintf(stderr, "FALHOU: %d leituras viram um snapshot que nao era o do passo anterior\n", staleReads);
+        return 1;
+    }
+    if (!held || heldCurrent != std::optional<double>(kHeldAt - 1) ||
+        held->componentCurrents[stepped] != heldCurrent) {
+        std::fprintf(stderr, "FALHOU: snapshot segurado por um leitor foi reescrito\n");
+        return 1;
+    }
+    // Dois se alternam e um terceiro substitui o segurado: alocar a cada passo daria ~kEvents.
+    if (seen.size() > 3) {
+        std::fprintf(stderr, "FALHOU: %zu snapshots distintos em %d passos (esperado <= 3)\n", seen.size(), kEvents);
+        return 1;
+    }
+    std::printf("Snapshot: %d passos estaveis com %zu snapshots, o segurado intacto\n", kEvents, seen.size());
+    return 0;
+}
+
+/** Assinantes de larguras diferentes recebem cada um a própria amostra, mesmo com o buffer da
+ * sessão compartilhado entre eles. */
+int testSubscribersOfDifferentWidthsShareTheSampleBuffer() {
+    plugins::GlobalPluginCache cache;
+    SimulationSession session(cache, 1024);
+    session.components().registerFactory("test.wide_observer", [](const ComponentParams&) {
+        return std::make_unique<WideObserver>();
+    });
+    session.components().registerFactory("test.narrow_observer", [](const ComponentParams&) {
+        return std::make_unique<NarrowObserver>();
+    });
+    session.addComponent("test.narrow_observer", {});
+    session.addComponent("test.wide_observer", {});
+    session.addComponent("test.narrow_observer", {});
+    wideSamples.store(0, std::memory_order_relaxed);
+    wrongSamples.store(0, std::memory_order_relaxed);
+    for (uint64_t event = 1; event <= 20; ++event) session.scheduler().scheduleAt(event, [] {});
+    session.scheduler().runUntil(21);
+    if (wrongSamples.load(std::memory_order_relaxed) != 0 || wideSamples.load(std::memory_order_relaxed) < 20) {
+        std::fprintf(stderr, "FALHOU: amostra de assinante errada (%llu erradas, %llu largas)\n",
+                     static_cast<unsigned long long>(wrongSamples.load()),
+                     static_cast<unsigned long long>(wideSamples.load()));
+        return 1;
+    }
+    std::printf("Assinantes: 1 e 2 canais alternados, %llu amostras largas corretas\n",
+                static_cast<unsigned long long>(wideSamples.load()));
+    return 0;
+}
+
 int runTest() {
     plugins::GlobalPluginCache cache;
     SimulationSession session(cache, 1024);
@@ -110,4 +262,8 @@ int runTest() {
 
 } // namespace
 
-int main() { return runTest(); }
+int main() {
+    if (const int failed = runTest()) return failed;
+    if (const int failed = testPublishedSnapshotsAreRecycledOnlyWhenReleased()) return failed;
+    return testSubscribersOfDifferentWidthsShareTheSampleBuffer();
+}

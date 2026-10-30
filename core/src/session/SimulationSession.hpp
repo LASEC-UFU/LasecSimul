@@ -114,16 +114,18 @@ struct PauseConditionTriggered {
  * pelo tempo de copiar um `shared_ptr`, nunca pelo tempo de um settle inteiro). `slotToNode` e
  * `pinSlotsByComponent` só mudam quando a topologia muda de verdade (raro comparado a tensão, que
  * muda toda hora) -- publicações consecutivas reaproveitam o MESMO `shared_ptr` pra essas duas
- * partes quando a topologia não mudou desde a última publicação, então a maioria das publicações só
- * aloca um `vector<double>` novo pras tensões. */
+ * partes quando a topologia não mudou desde a última publicação. Tensões e correntes ficam no próprio
+ * snapshot: um passo estável acontece a cada borda de um MCU (dezenas de milhares por segundo) e o
+ * snapshot de que nenhum leitor precisa mais é reescrito no lugar (ver `publishSnapshot()`), sem
+ * alocar. */
 struct NodeVoltageSnapshot {
-    std::shared_ptr<const std::vector<double>> nodeVoltages;
+    std::vector<double> nodeVoltages;
     std::shared_ptr<const std::vector<uint32_t>> slotToNode; // por slot -> nó global
     // por componentIndex -> {pinId -> slot}; índice fora de faixa ou pinId ausente = componente/
     // pino não existente (removido ou nunca existiu) NESTE snapshot.
     std::shared_ptr<const std::vector<std::unordered_map<std::string, uint32_t>>> pinSlotsByComponent;
     // por componentIndex -> IComponentModel::current() no mesmo passo estável das tensões.
-    std::shared_ptr<const std::vector<std::optional<double>>> componentCurrents;
+    std::vector<std::optional<double>> componentCurrents;
 };
 
 /** Resolve a tensão do pino `pinId` de `component` dentro de `snapshot` -- `std::nullopt` se o
@@ -721,7 +723,8 @@ private:
      * tomado) -- publica um `NodeVoltageSnapshot` novo em `m_publishedSnapshot`, sob
      * `m_snapshotMutex` (mutex dedicado, NUNCA o do Scheduler -- ver doc-comment de
      * `NodeVoltageSnapshot`). Reaproveita `slotToNode`/`pinSlotsByComponent` da publicação anterior
-     * quando `m_snapshotTopologyStale` está falso (topologia não mudou desde a última publicação). */
+     * quando `m_snapshotTopologyStale` está falso (topologia não mudou desde a última publicação), e
+     * reescreve um snapshot de `m_snapshotPool` que nenhum leitor segura mais. */
     void publishSnapshot();
     void publishTelemetrySnapshotIfRequested(uint64_t timestampNs);
     void requestTelemetrySnapshotRefresh();
@@ -939,6 +942,9 @@ private:
     std::vector<uint32_t>& m_stampedNonlinearThisRound = m_runtimeState.stampedNonlinearThisRound;
     bool m_topologyDirty = true;
     bool m_signalRoutesDirty = true;
+    /** Amostra entregue a cada assinante em `acquireSubscribedSignalsUnlocked()`, reescrita no lugar
+     * (strings e vetores mantêm a capacidade): o analisador lógico pede uma a cada 50 µs simulados. */
+    std::vector<ResolvedSignal> m_signalSampleScratch;
     /** Verdadeiro somente enquanto a revisão pendente contém EXCLUSIVAMENTE adições de fios.
      * Qualquer operação capaz de separar/reindexar rede desabilita reuso de matrizes neste rebuild. */
     bool m_topologyReuseSafe = false;
@@ -969,6 +975,12 @@ private:
      * pelo tempo de um settle inteiro, então leitores nunca bloqueiam de verdade. */
     mutable std::mutex m_snapshotMutex;
     std::shared_ptr<const NodeVoltageSnapshot> m_publishedSnapshot;
+    /** Snapshots já alocados, só da thread do Scheduler. Um com `use_count() == 1` só é referenciado
+     * daqui: não é o publicado e nenhum leitor o segura -- nem pode passar a segurar, porque leitores
+     * só copiam `m_publishedSnapshot`. Na prática dois se alternam (o publicado e o anterior), mais um
+     * enquanto a telemetria guarda o seu. */
+    std::vector<std::shared_ptr<NodeVoltageSnapshot>> m_snapshotPool;
+    static constexpr size_t kSnapshotPoolCapacity = 4;
     /** `true` quando `slotToNode`/`pinSlotsByComponent` precisam ser recopiados na próxima
      * `publishSnapshot()` -- setado por `rebuildTopologyIfNeeded()` sempre que a topologia é
      * reconstruída de verdade; começa `true` pra garantir que a primeira publicação sempre copie. */

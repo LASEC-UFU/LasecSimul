@@ -47,9 +47,11 @@ public:
     void onResolvedSignalSample(uint64_t timestampNs, std::span<const ResolvedSignal> values) override {
         if (timestampNs - m_lastSampleNs < m_sampleIntervalNs || values.empty()) return;
         if (m_channelStates.size() != values.size()) m_channelStates.assign(values.size(), 0);
-        Sample sample;
+        // Escreve no slot mais antigo do anel, que mantém a capacidade do vetor: depois da primeira
+        // volta (kHistoryCapacity amostras) nenhuma amostra aloca.
+        Sample& sample = m_history[m_writeIndex];
         sample.timestampNs = timestampNs;
-        sample.values.reserve(values.size());
+        sample.values.clear();
         m_lastLevels = 0;
         for (size_t channel = 0; channel < values.size(); ++channel) {
             uint64_t packed = 0;
@@ -66,9 +68,10 @@ public:
             sample.values.push_back(packed);
             if (channel < 32 && (packed & 1u)) m_lastLevels |= uint32_t{1} << channel;
         }
-        m_descriptors.clear();
-        for (const ResolvedSignal& value : values) m_descriptors.push_back(value.descriptor);
-        m_history[m_writeIndex] = std::move(sample);
+        // Atribuição por cima dos descritores atuais (os mesmos a cada amostra até a topologia
+        // mudar): as strings reaproveitam a capacidade em vez de serem destruídas e recriadas.
+        m_descriptors.resize(values.size());
+        for (size_t channel = 0; channel < values.size(); ++channel) m_descriptors[channel] = values[channel].descriptor;
         m_lastSampleNs = timestampNs;
         m_writeIndex = (m_writeIndex + 1) % kHistoryCapacity;
         if (m_count < kHistoryCapacity) ++m_count;
