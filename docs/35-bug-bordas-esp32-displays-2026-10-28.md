@@ -304,6 +304,54 @@ chamada presa, crash sem perder a thread, `shutdown` sem esperar a thread presa)
 (`isDynamic` segue o manifesto, `post_step` sempre na mesma thread reservada) e `plugin_checksum`
 (no `devices/library.json` real, só servo, SSD1306 e SH1107 são dinâmicos).
 
+### Leitura I2C no lockstep e no barramento elétrico (2026-10-30)
+
+O release da v0.0.104 foi segurado por isto. No modo `realtime` (e no `exact`), toda leitura I2C do
+ESP32 recebia NACK: `Wire.requestFrom`, leitura de registrador de sensor, qualquer `i2c_master_read`.
+O `vnext_b_production_scale_test` passava assim mesmo, com 2 transações por sessão em 10 s, contra
+1276 em MTTCG, porque só exigia uma transação. Três defeitos independentes:
+
+- **A leitura trocava de caminho no meio (QEMU, patch 0015).** O ESP-IDF manda uma leitura em duas
+  listas de comandos: RSTART + WRITE(endereço|R) + END, depois READ… + STOP. A primeira não passava
+  pelo planejador de burst (direção de leitura sem READ na lista) e caía no executor byte a byte, que é
+  sempre elétrico. A segunda ia por BATCH. Num barramento de transferência direta o dispositivo via o
+  endereço pelo fio e os dados pela transferência. No MTTCG o ACK do fio era lido com o Core ainda
+  ocupado e assumido como ACK; no lockstep era lido de verdade, e era NACK (ver o item seguinte). Agora a
+  primeira lista vai ao Core como seleção do alvo (BATCH com START + endereço, nenhum byte, sem fim
+  lógico) e as listas de READ (uma ou mais READ, fechadas por STOP ou END) como continuação, sem START
+  e com o endereço só como metadado. A leitura inteira fica no caminho que o Core escolher para o
+  barramento: transferência direta ou motor elétrico do adaptador. O `simulide-complex` (displays, só
+  escrita) responde à seleção sem bytes com ACK em vez de NACK no "primeiro byte lido".
+- **O escravo elétrico do `simulide-logic` nunca dava ACK** (`logic.i2c_ram` e `logic.i2c_to_parallel`,
+  o PCF8574). Puxava o ACK na subida do 8º pulso, com SCL alto: um START no barramento, que o próprio
+  dispositivo via. E soltava o ACK na subida do 9º, antes de o mestre amostrar. Agora segue o chip: SDA
+  só muda com SCL baixo, o ACK entra na descida do 8º pulso e fica baixo durante todo o 9º, e cada bit
+  transmitido entra na descida anterior ao pulso em que o mestre o lê. O teste novo
+  `devices/simulide-logic/test/i2c_slave_timing_test.c` conduz o escravo borda a borda num barramento
+  wired-AND. O código antigo falha nas 13 verificações.
+- **SDA e SCL trocados quando o `pinCount` é passado.** O `init` do `simulide-logic` redeclarava os
+  pinos como `scl, sda, a0…`, o inverso do manifesto e do código elétrico (pino 0 = SDA). O fast path
+  procura `sda`/`scl` pelo nome e funcionava. No fio, o pino ligado como `sda` recebia as bordas de SCL.
+  Nenhum manifesto define `pinCount`, então só os testes que o passam (escala, LasecPlot, reinício)
+  montavam o barramento assim. A ordem agora é a do manifesto.
+
+Medido neste servidor, `vnext_b_production_scale_test` com 8 sessões por 20 s, transações por sessão:
+
+| Modo | Antes | Depois |
+|---|---|---|
+| `mttcg`, transferência direta | não medido com 8 (1 sessão por 10 s: 1276) | 18.734–20.934 |
+| `realtime`, transferência direta | 2 | 28.244–30.953 |
+| `exact`, transferência direta | não medido com 8 (1 sessão por 10 s: 2) | 26.245–27.864 |
+| `realtime`, ponta de prova e pull-ups no SDA (barramento elétrico) | todas NACK | 5.005–5.555, todas com ACK |
+
+Nenhuma perda, duplicação ou resposta trocada. O firmware de teste grava 0x5A no endereço 0 da RAM e
+depois lê em sequência. O 0x5A volta a cada 256 leituras, como deve, nos três modos. Projeto da aula
+com 8 sessões em `realtime`: 0,991–1,018×, LCD e Nokia corretos.
+
+O teste de escala passou a exigir 16 transações por sessão. Com `LASECSIMUL_SCALE_BUS_PROBE=1` ele põe
+uma ponta de prova e pull-ups de 4,7 kΩ no barramento e roda o caminho elétrico.
+`LASECSIMUL_I2C_DEVICE_TRACE=1` agora também imprime as bordas vistas pelo escravo do `simulide-logic`.
+
 ## Atualização: com o transporte VNEXT_B (padrão da extensão) nada funciona
 
 A extensão sobe o Core com `LASECSIMUL_MCU_TRANSPORT=VNEXT_B` e `LASECSIMUL_ESP32_EXECUTION_MODE=mttcg`

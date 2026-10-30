@@ -1241,8 +1241,9 @@ static uint32_t i2c_transfer(LsdnDevice* dev, const LsdnI2cTransfer* transfer,
     }
     if (transfer->read) {
         /* Os displays modelados são write-only nesta implementação. O endereço existe, mas o
-         * primeiro byte de leitura recebe NACK em vez de fabricar dados. */
-        result->first_nack = 0;
+         * primeiro byte de leitura recebe NACK em vez de fabricar dados. Só a seleção do endereço
+         * (a primeira fatia de uma leitura do ESP-IDF, sem bytes) é um ACK normal. */
+        if (transfer->rx_size) result->first_nack = 0;
         return 1;
     }
     if (transfer->start) {

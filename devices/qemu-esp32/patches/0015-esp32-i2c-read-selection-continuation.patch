@@ -1,0 +1,126 @@
+diff --git a/hw/i2c/esp32_i2c.c b/hw/i2c/esp32_i2c.c
+index c13ea02..32ebcd5 100644
+--- a/hw/i2c/esp32_i2c.c
++++ b/hw/i2c/esp32_i2c.c
+@@ -168,18 +168,27 @@ static bool esp32_i2c_try_burst(Esp32I2CState *s)
+     for (uint32_t i = 0; i < plan.txBytes; ++i) {
+         txbuf[i] = s->tx_fifo.data[(s->tx_fifo.head + i) % s->tx_fifo.capacity];
+     }
++    const uint8_t terminalOpcode = FIELD_EX32(s->cmd_reg[s->lastCMD +
++                                                          plan.writeCmdCount + plan.readCmdCount],
++                                               I2C_CMD, OPCODE);
++    /* Primeira fatia de uma leitura do ESP-IDF: RSTART, WRITE(endereço|R) e END -- os READ vêm na
++     * lista seguinte. Vai ao Core como seleção do alvo (START + endereço, nenhum byte, transação em
++     * aberto) e os READ seguem como continuação (esp32_i2c_try_read_burst): a leitura inteira fica
++     * no caminho que o Core escolher para o barramento. Antes esta fatia caía no executor byte a
++     * byte, sempre elétrico: num barramento de transferência direta o dispositivo recebia o
++     * endereço pelo fio e os dados pela transferência. */
++    const bool readSelection = vnext_b_active() && (txbuf[0] & 1u) && plan.txBytes == 1 &&
++                               plan.rxBytes == 0 && terminalOpcode == I2C_OPCODE_END;
+     /* A direção codificada no byte de endereço precisa concordar com a lista de comandos.
+      * Listas artesanais/inconsistentes devem conservar exatamente o comportamento elétrico. */
+-    if ((bool)(txbuf[0] & 1u) != (plan.rxBytes > 0)) return false;
++    if (!readSelection && (bool)(txbuf[0] & 1u) != (plan.rxBytes > 0)) return false;
+ 
+     /* The ESP32 command engine reports END_DETECT rather than STOP, but the
+      * Core-side device model needs a transaction boundary to commit a write
+      * (notably SSD1306 command/data streams).  Keep the guest-visible opcode
+-     * unchanged while advertising that boundary in the mailbox. */
+-    const uint8_t terminalOpcode = FIELD_EX32(s->cmd_reg[s->lastCMD +
+-                                                          plan.writeCmdCount + plan.readCmdCount],
+-                                               I2C_CMD, OPCODE);
+-    const bool logicalStop = plan.stop || terminalOpcode == I2C_OPCODE_END;
++     * unchanged while advertising that boundary in the mailbox. A read selection
++     * is not a boundary: its data follows in the next list. */
++    const bool logicalStop = !readSelection && (plan.stop || terminalOpcode == I2C_OPCODE_END);
+ 
+     I2cBurstRequest req = {0};
+     req.flags = 1u /* START */ | (plan.rxBytes ? 4u /* READ */ : 0u) | (logicalStop ? 2u : 0u);
+@@ -192,7 +201,7 @@ static bool esp32_i2c_try_burst(Esp32I2CState *s)
+         s->vnextBurstNs = s->period_ns + (uint64_t)(plan.txBytes + plan.rxBytes) * (9 * s->period_ns) +
+                           (plan.stop ? s->period_ns : 0);
+         s->vnextBurstSubmitNs = getQemu_ns();
+-        if (!vnext_b_i2c_submit(s->busIndex, 1u | (plan.rxBytes ? 4u : 0u) |
++        if (!vnext_b_i2c_submit(s->busIndex, 1u | (plan.rxBytes || readSelection ? 4u : 0u) |
+                                 (logicalStop ? 2u : 0u) | (plan.stop ? VNEXT_I2C_WIRE_STOP : 0u) |
+                                 (plan.rxBytes && plan.lastReadNack ? VNEXT_I2C_LAST_READ_NACK : 0u),
+                                 s->period_ns, txbuf,
+@@ -254,38 +263,56 @@ static bool esp32_i2c_try_burst(Esp32I2CState *s)
+     return true;
+ }
+ 
+-/* The ESP32 HAL also emits a compact read-only command list: the device
+- * address is placed in the TX FIFO and cmd[0] is READ, followed by END.  It
+- * does not pass through the RSTART/WRITE planner above, but it has the same
+- * causal BATCH semantics. */
++/* A corrida de READ de uma lista (ESP-IDF: READ n-1 com ACK + READ 1 com NACK) fechada por STOP ou
++ * END, como UM pedido BATCH. Duas formas:
++ *  - lista compacta do HAL: o endereço está no TX FIFO e cmd[0] é READ -- START + endereço aqui;
++ *  - continuação de uma leitura cujo endereço já foi selecionado (esp32_i2c_try_burst, ou a lista
++ *    anterior desta mesma leitura terminada em END): sem START, o endereço só identifica o alvo.
++ * Sem nenhuma das duas, a lista segue no executor elétrico byte a byte. */
+ static bool esp32_i2c_try_read_burst(Esp32I2CState *s)
+ {
+-    if (s->lastCMD >= ESP32_I2C_CMD_COUNT ||
+-        FIELD_EX32(s->cmd_reg[s->lastCMD], I2C_CMD, OPCODE) != I2C_OPCODE_READ) return false;
+-    const uint32_t rxBytes = s->cmd_reg[s->lastCMD] & 0xffu;
+-    if (!rxBytes || rxBytes > ESP32_I2C_FIFO_LENGTH || s->lastCMD + 1 >= ESP32_I2C_CMD_COUNT) return false;
+-    const uint32_t nextOpcode = FIELD_EX32(s->cmd_reg[s->lastCMD + 1], I2C_CMD, OPCODE);
+-    if (nextOpcode != I2C_OPCODE_STOP && !(nextOpcode == I2C_OPCODE_END && rxBytes == 1)) return false;
+-    uint8_t address = fifo8_num_used(&s->tx_fifo) ? fifo8_peek(&s->tx_fifo) :
+-                      (uint8_t)(s->burstAddressByte | 1u);
+-    if (!(address & 1u) || !vnext_b_active()) return false;
+-    s->vnextBurstNs = s->period_ns + (uint64_t)(1u + rxBytes) * (9 * s->period_ns) + s->period_ns;
++    if (!vnext_b_active()) return false;
++    uint32_t idx = s->lastCMD, rxBytes = 0, readCmds = 0;
++    bool lastReadNack = false;
++    while (idx < ESP32_I2C_CMD_COUNT &&
++           FIELD_EX32(s->cmd_reg[idx], I2C_CMD, OPCODE) == I2C_OPCODE_READ) {
++        rxBytes += s->cmd_reg[idx] & 0xffu;
++        lastReadNack = FIELD_EX32(s->cmd_reg[idx], I2C_CMD, ACK_VAL);
++        ++readCmds;
++        ++idx;
++    }
++    if (!readCmds || !rxBytes || rxBytes > ESP32_I2C_FIFO_LENGTH || idx >= ESP32_I2C_CMD_COUNT) return false;
++    if (fifo8_num_free(&s->rx_fifo) < rxBytes) return false;
++    const uint32_t terminalOpcode = FIELD_EX32(s->cmd_reg[idx], I2C_CMD, OPCODE);
++    if (terminalOpcode != I2C_OPCODE_STOP && terminalOpcode != I2C_OPCODE_END) return false;
++    const bool wireStop = terminalOpcode == I2C_OPCODE_STOP;
++
++    const bool start = fifo8_num_used(&s->tx_fifo) > 0;
++    uint8_t address;
++    if (start) address = fifo8_peek(&s->tx_fifo);
++    else if (s->burstAddressValid && (s->burstAddressByte & 1u)) address = s->burstAddressByte;
++    else return false;
++    if (!(address & 1u)) return false;
++
++    s->vnextBurstNs = (start ? s->period_ns + 9 * s->period_ns : 0) +
++                      (uint64_t)rxBytes * (9 * s->period_ns) + (wireStop ? s->period_ns : 0);
+     s->vnextBurstSubmitNs = getQemu_ns();
+-    const uint32_t wireFlags =
+-        (nextOpcode == I2C_OPCODE_STOP ? VNEXT_I2C_WIRE_STOP : 0u) |
+-        (FIELD_EX32(s->cmd_reg[s->lastCMD], I2C_CMD, ACK_VAL) ? VNEXT_I2C_LAST_READ_NACK : 0u);
+-    if (!vnext_b_i2c_submit(s->busIndex, 1u | 2u | 4u | wireFlags, s->period_ns,
+-                            &address, 1, rxBytes)) return false;
+-    if (fifo8_num_used(&s->tx_fifo)) fifo8_pop(&s->tx_fifo);
++    /* A lista compacta mantém o fim lógico que sempre teve; a continuação só o anuncia no STOP. */
++    const uint32_t flags = (start ? 1u | 2u : (wireStop ? 2u : 0u)) | 4u |
++                           (wireStop ? VNEXT_I2C_WIRE_STOP : 0u) |
++                           (lastReadNack ? VNEXT_I2C_LAST_READ_NACK : 0u);
++    if (!vnext_b_i2c_submit(s->busIndex, flags, s->period_ns, &address, 1, rxBytes)) return false;
++    if (start) fifo8_pop(&s->tx_fifo);
+     s->burstActive = true;
+     s->burstPartial = false;
+-    s->burstStop = true;
++    s->burstStop = wireStop;
+     s->burstAddressByte = address;
++    s->burstAddressValid = true;
+     s->burstAddressAck = false;
+     s->burstFirstNack = UINT32_MAX;
+     s->burstRxLen = 0;
+     s->burstWriteCmdCount = 0;
+-    s->burstReadCmdCount = 1;
++    s->burstReadCmdCount = readCmds;
+     return true;
+ }
+ 

@@ -63,7 +63,8 @@ typedef struct {
     uint8_t i2c_rw;
     uint8_t i2c_tx_byte;
     uint8_t i2c_tx_bit;
-    uint8_t i2c_reading_ack;
+    uint8_t i2c_ack_pending;  /* 8 bits recebidos: o ACK entra na próxima descida de SCL */
+    uint8_t i2c_master_ack;   /* ACK do mestre ao byte que o escravo transmitiu */
     uint8_t i2c_phase;
     uint8_t i2c_port_state;
     uint8_t i2c_output_state;
@@ -581,7 +582,8 @@ static void i2c_reset_frame(LogicDevice* s, uint8_t next_state) {
     s->i2c_ack = 0;
     s->i2c_rw = 0;
     s->i2c_tx_bit = 7;
-    s->i2c_reading_ack = 0;
+    s->i2c_ack_pending = 0;
+    s->i2c_master_ack = 0;
     s->bit_count = 0;
     s->rx_reg = 0;
     s->tx_drive_low = 0;
@@ -650,27 +652,22 @@ static void i2c_start_write(LogicDevice* s) {
     if (streq(s, "logic.i2c_ram")) s->i2c_phase = s->mem_size > 256 ? 0 : 1;
 }
 
+/* Escravo I2C como no chip: SDA só muda com SCL baixo. O mestre lê cada bit com SCL alto, então o
+ * ACK é puxado na descida do 8º pulso, fica baixo durante todo o 9º e é solto na descida dele; ao
+ * transmitir, cada bit entra na descida anterior ao pulso em que o mestre o lê. (Antes o ACK era
+ * puxado na SUBIDA do 8º pulso -- SDA caindo com SCL alto, um START que o próprio dispositivo via --
+ * e solto na subida do 9º, antes de o mestre amostrar: todo endereço recebia NACK no fio.) */
 static void i2c_scl_rising(LogicDevice* s) {
     const uint8_t sda = s->pin_level[0] ? 1u : 0u;
-    if (s->i2c_state == I2C_IDLE) return;
-
-    if (s->i2c_ack) {
-        s->i2c_ack = 0;
-        return;
-    }
+    /* 9º pulso de um byte recebido: o escravo está dirigindo o ACK, não há bit a ler. */
+    if (s->i2c_state == I2C_IDLE || s->i2c_ack) return;
 
     if (s->i2c_state == I2C_TX_ACK) {
-        if (!sda) {
-            s->i2c_state = I2C_TX;
-            i2c_prepare_tx_byte(s);
-        } else {
-            s->i2c_state = I2C_IDLE;
-            s->tx_drive_low = 0;
-        }
+        s->i2c_master_ack = !sda;
         return;
     }
 
-    if (s->i2c_state == I2C_TX) return;
+    if (s->i2c_state == I2C_TX) return; /* o mestre lê o bit que já está no barramento */
 
     s->rx_reg = (uint8_t)((s->rx_reg << 1) | sda);
     if (++s->bit_count < 8) return;
@@ -680,40 +677,58 @@ static void i2c_scl_rising(LogicDevice* s) {
         const uint8_t addr = byte >> 1;
         s->i2c_rw = byte & 1u;
         s->i2c_addressed = addr == i2c_address(s);
-        s->i2c_ack = s->i2c_addressed;
-        if (s->i2c_addressed) {
-            if (s->i2c_rw) {
-                s->i2c_state = I2C_TX;
-                i2c_prepare_tx_byte(s);
-            } else {
-                s->i2c_state = I2C_RX;
-                i2c_start_write(s);
-            }
-        } else {
-            s->i2c_state = I2C_IDLE;
-        }
+        if (s->i2c_addressed) s->i2c_ack_pending = 1;
+        else s->i2c_state = I2C_IDLE;
     } else if (s->i2c_state == I2C_RX && s->i2c_addressed) {
         i2c_accept_rx_byte(s, s->rx_reg);
-        s->i2c_ack = 1;
+        s->i2c_ack_pending = 1;
     }
     s->bit_count = 0;
     s->rx_reg = 0;
 }
 
 static void i2c_scl_falling(LogicDevice* s) {
-    if (s->i2c_ack) return;
-    if (s->i2c_state != I2C_TX || !s->i2c_addressed) return;
-    if (s->bit_count == 0) {
-        s->bit_count = 1;
+    if (s->i2c_state == I2C_IDLE || !s->i2c_addressed) return;
+
+    if (s->i2c_ack_pending) { /* fim do 8º pulso: ACK para o 9º */
+        s->i2c_ack_pending = 0;
+        s->i2c_ack = 1;
         return;
     }
-    if (s->i2c_tx_bit == 0) {
-        s->tx_drive_low = 0;
-        s->i2c_state = I2C_TX_ACK;
+    if (s->i2c_ack) { /* fim do 9º pulso: solta o ACK; depois do endereço, assume a direção pedida */
+        s->i2c_ack = 0;
+        if (s->i2c_state == I2C_ADDRESS) {
+            if (s->i2c_rw) {
+                s->i2c_state = I2C_TX;
+                i2c_prepare_tx_byte(s); /* já põe o bit 7 no barramento */
+            } else {
+                s->i2c_state = I2C_RX;
+                i2c_start_write(s);
+            }
+        }
         return;
     }
-    s->i2c_tx_bit--;
-    s->tx_drive_low = ((s->i2c_tx_byte >> s->i2c_tx_bit) & 1u) == 0;
+
+    if (s->i2c_state == I2C_TX) {
+        if (s->i2c_tx_bit == 0) { /* o mestre leu o bit 0: solta SDA para o ACK/NACK dele */
+            s->tx_drive_low = 0;
+            s->i2c_master_ack = 0;
+            s->i2c_state = I2C_TX_ACK;
+            return;
+        }
+        s->i2c_tx_bit--;
+        s->tx_drive_low = ((s->i2c_tx_byte >> s->i2c_tx_bit) & 1u) == 0;
+        return;
+    }
+
+    if (s->i2c_state == I2C_TX_ACK) { /* fim do 9º pulso do byte transmitido */
+        if (s->i2c_master_ack) {
+            s->i2c_state = I2C_TX;
+            i2c_prepare_tx_byte(s);
+        } else {
+            s->i2c_state = I2C_IDLE; /* NACK: o mestre encerra com STOP ou novo START */
+        }
+    }
 }
 
 static void stamp_i2c_to_parallel(LogicDevice* s, LsdnMatrixView* matrix) {
@@ -900,8 +915,10 @@ static void init(LsdnDevice* dev) {
     for (uint32_t i = 6; i < 14 && i < 32; ++i) s->pin_level[i] = 1;
     if (!s->api || !s->api->pin_declare) return;
     /* The manifest's canonical electrical names are part of the plugin contract:
-     * NativeDeviceProxy resolves I2C by sda/scl, not by visual pin position. */
-    static const char* const names[] = {"scl", "sda", "a0", "a1", "a2"};
+     * NativeDeviceProxy resolves I2C by sda/scl, not by visual pin position. Same order as
+     * i2c_ram.lsdevice and as the electrical code (pin 0 = SDA, 1 = SCL, 2..4 = A0..A2): with
+     * "scl" first, the pin wired as sda received SCL edges and every electrical transfer NACKed. */
+    static const char* const names[] = {"sda", "scl", "a0", "a1", "a2"};
     static const uint32_t kinds[] = {LSDN_PIN_DIGITAL_BIDIR, LSDN_PIN_DIGITAL_BIDIR,
                                      LSDN_PIN_DIGITAL_IN, LSDN_PIN_DIGITAL_IN,
                                      LSDN_PIN_DIGITAL_IN};
@@ -957,6 +974,21 @@ static void on_event(LsdnDevice* dev, const LsdnEvent* ev) {
     if (old == now) return;
 
     if (streq(s, "logic.i2c_ram") || streq(s, "logic.i2c_to_parallel")) {
+        /* LASECSIMUL_I2C_DEVICE_TRACE=1 (mesmo nome do simulide-complex): cada borda de SDA(0)/SCL(1)
+         * com o estado do escravo, para depurar a decodificação elétrica. */
+        static int trace_enabled = -1; /* lido uma vez: esta função roda a cada borda */
+        static unsigned trace_count;
+        if (trace_enabled < 0) {
+            const char* trace = getenv("LASECSIMUL_I2C_DEVICE_TRACE");
+            trace_enabled = trace && trace[0] && strcmp(trace, "0") != 0;
+        }
+        if (trace_enabled && trace_count++ < 4000) {
+            fprintf(stderr, "[I2C logic] %s=%u dt=%uns sda=%u scl=%u state=%u bits=%u rx=%02x addressed=%u ack=%u pending=%u tx=%u\n",
+                    ev->a == 0 ? "SDA" : ev->a == 1 ? "SCL" : "pin", now, ev->c, s->pin_level[0], s->pin_level[1],
+                    s->i2c_state, s->bit_count, s->rx_reg, s->i2c_addressed, s->i2c_ack, s->i2c_ack_pending,
+                    s->tx_drive_low);
+            fflush(stderr);
+        }
         if (ev->a == 0 && s->pin_level[1]) {
             if (old && !now) {
                 i2c_reset_frame(s, I2C_ADDRESS);

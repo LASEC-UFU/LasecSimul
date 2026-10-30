@@ -17,6 +17,9 @@
 #endif
 #include <windows.h>
 #endif
+#include "components/meters/Probe.hpp"
+#include "components/passive/Resistor.hpp"
+#include "components/sources/FixedVolt.hpp"
 #include "mcu/McuComponent.hpp"
 #include "mcu/qemu/DrainCutoffGate.hpp"
 #include "mcu/qemu/VnextBAttachment.hpp"
@@ -427,6 +430,28 @@ ScaleSession makeSession(plugins::GlobalPluginCache& cache, int index) {
     const uint32_t slave = session.addComponent("logic.i2c_ram", i2c);
     session.connectWire(result.mcuIndex, "GPIO21", slave, "sda");
     session.connectWire(result.mcuIndex, "GPIO22", slave, "scl");
+    // LASECSIMUL_SCALE_BUS_PROBE=1: uma ponta de prova no SDA tira o barramento do fast path -- cada
+    // transação roda no fio, pelo motor do adaptador, contra o escravo elétrico do i2c_ram. No fio
+    // o barramento precisa dos pull-ups, como no hardware (4,7 kΩ para 3,3 V em SDA e SCL).
+    if (const char* probe = std::getenv("LASECSIMUL_SCALE_BUS_PROBE"); probe && *probe && std::string(probe) != "0") {
+        session.components().registerFactory("meters.probe", [&session](const registry::ComponentParams&) {
+            return std::make_unique<components::Probe>(session.scheduler(), Pin{"pin-1"}, 2.5);
+        });
+        session.components().registerFactory("passive.resistor", [](const registry::ComponentParams&) {
+            return std::make_unique<components::Resistor>(std::array<Pin, 2>{Pin{"p1"}, Pin{"p2"}}, 4700.0);
+        });
+        session.components().registerFactory("sources.fixed_volt", [](const registry::ComponentParams&) {
+            return std::make_unique<components::FixedVolt>(Pin{"out"}, 3.3, true);
+        });
+        const uint32_t rail = session.addComponent("sources.fixed_volt", {});
+        for (const char* line : {"GPIO21", "GPIO22"}) {
+            const uint32_t pullUp = session.addComponent("passive.resistor", {});
+            session.connectWire(result.mcuIndex, line, pullUp, "p1");
+            session.connectWire(pullUp, "p2", rail, "out");
+        }
+        const uint32_t sdaProbe = session.addComponent("meters.probe", {});
+        session.connectWire(result.mcuIndex, "GPIO21", sdaProbe, "pin-1");
+    }
     result.arenaName = "lasecsimul-vnext-scale-" + std::to_string(index) + "-" +
                        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     return result;
@@ -934,7 +959,15 @@ int main() {
         // letting non-zero submissions/completions mask it.
         const bool artifactFatal = item.mcu && item.mcu->vnextArtifactFatal();
         submissions += submitted; completions += completed;
-        if (!idle && (submitted == 0 || !drainComplete || artifactFatal)) ++failures;
+        // O firmware escreve uma vez e depois lê a cada ~1 ms, sem parar: uma sessão que ficou nas
+        // primeiras transações travou (2026-10-30: no lockstep toda leitura recebia NACK e o teste
+        // passava com 2 transações por sessão contra ~9000 em 10 s depois da correção).
+        constexpr uint64_t kMinimumTransactionsPerSession = 16;
+        const bool stalled = !idle && submitted < kMinimumTransactionsPerSession;
+        if (stalled) std::fprintf(stderr, "SCALE session=%d STALLED submissions=%llu (< %llu)\n", i,
+                                  static_cast<unsigned long long>(submitted),
+                                  static_cast<unsigned long long>(kMinimumTransactionsPerSession));
+        if (!idle && (submitted == 0 || stalled || !drainComplete || artifactFatal)) ++failures;
         std::printf("SCALE session=%d executionId=%llu pid=%llu running=%s artifactFatal=%s submissions=%llu completions=%llu"
                     " drainComplete=%s drainTimeout=%s postCutSubmissions=%llu\n",
                     i, static_cast<unsigned long long>(item.executionId),

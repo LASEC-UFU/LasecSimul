@@ -1,7 +1,7 @@
 QEMU source: C:\SourceCode\qemu_lasecSimul-invalid-state (https://github.com/josuemoraisgh/qemu_lasecSimul)
-QEMU HEAD: 7ead728b3d6393c63ec414915a1962aa173232ee + devices/qemu-esp32/patches/0011 + 0012 + 0013 + 0014 (uncommitted working tree)
-Executable SHA-256: CA9B183F8E6404283166EE3F6DF0398817A3AA9E91AF01E10D9AE329380A0A94
+QEMU HEAD: 7ead728b3d6393c63ec414915a1962aa173232ee + devices/qemu-esp32/patches/0011 + 0012 + 0013 + 0014 + 0015 (uncommitted working tree)
+Executable SHA-256: C4282DD6D2C9932B59A1D7A94F19C0C8C587CD577A8CD78E0A4CE105E9ACADB3
 Build: MSYS2 UCRT64, ninja -j2 qemu-system-xtensa.exe (build-i2c-invalid-state), xtensa-softmmu, gcrypt, slirp
-Etapa: tempo real sincronizado (0014) -- lockstep_realtime (ABI 1.2): o Core publica onde a simulacao deveria estar pelo relogio real (core_realtime_schedule_ns) e o QEMU estica o tempo de cada instrucao (icount_set_time_dilation, ps/instrucao = periodo da CPU x fator >= 1) so quando a execucao do guest segura a simulacao (tempo medido em volta de tcg_cpus_exec, so a parte proporcional as instrucoes); volta a 1 ciclo/instrucao com folga; publica o fator em artifact_cpu_dilation_q16. Instrucao que fez I/O no meio de um bloco fica registrada (tb_io_insn_pc) e ganha bloco proprio com I/O permitido -- antes cpu_io_recompile saia do bloco por longjmp a cada leitura de periferico, em todos os modos (o MTTCG tambem: can_do_io comeca falso em todo bloco no 8.1)
-Anterior: CABBEA2015BF0F746ACB0E432230123DC2EFBC630BCBB7AA3746A7081EB6C863 (7ead728 + 0011 + 0012 + 0013)
+Etapa: leitura I2C pelo caminho do Core (0015) -- a primeira lista de uma leitura do ESP-IDF (RSTART, WRITE(endereco|R), END) vai ao Core como selecao do alvo (BATCH START + endereco, nenhum byte, sem fim logico) e as listas de READ seguintes (uma ou mais READ, fechadas por STOP ou END) como continuacao sem START. Antes a primeira lista caia no executor byte a byte, sempre eletrico: no lockstep (realtime/exact) o ACK do fio era lido de verdade e toda leitura recebia NACK; no fast path o dispositivo via o endereco pelo fio e os dados pela transferencia.
+Anterior: CA9B183F8E6404283166EE3F6DF0398817A3AA9E91AF01E10D9AE329380A0A94 (7ead728 + 0011 + 0012 + 0013 + 0014)
 Historical provenance preserved in BUILD-PROVENANCE.txt.
