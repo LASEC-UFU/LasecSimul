@@ -1063,8 +1063,8 @@ static void testGetPropertySchemasOverIpc() {
     TEST_ASSERT(serverResult == 0, "servidor encerrou com codigo 0 apos shutdown");
 }
 
-// Teste 4f: setProperty via IPC valida tipo/faixa/nome com built-in e reflete errorCode estÃ¡vel.
-// TambÃ©m cobre readOnly e requiresRestart via plugins reais/fixture quando os artefatos existem.
+// Teste 4f: setProperty via IPC valida tipo/faixa/nome com built-in e reflete errorCode estável.
+// Também cobre readOnly e requiresRestart via plugins reais/fixture quando os artefatos existem.
 static void testSetPropertyValidationOverIpc() {
     std::fprintf(stderr, "\n[T4f] 'setProperty' via IPC valida tipo/faixa/nome e retorna errorCode estavel\n");
 

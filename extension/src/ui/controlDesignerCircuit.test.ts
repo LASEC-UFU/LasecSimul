@@ -57,7 +57,7 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
     try { controllerToBlockProperties({ num: [1], den: [1, -2] }, "control.transfer_function"); } catch { unstableRejected = true; }
     assert(unstableRejected);
   });
-  await test("importa derivaÃ§Ãµes paralelas convergindo em um somador", () => {
+  await test("importa derivações paralelas convergindo em um somador", () => {
     const p=(componentId:string,pinId:string)=>({kind:"port" as const,componentId,pinId});
     const node=(nodeId:string)=>({kind:"node" as const,nodeId});
     const network:SeriesCircuitInput={selectedComponentIds:["a","b","sum"],components:[
@@ -67,12 +67,12 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
     const result=selectedSeriesNetworkToTransfer(network);
     assert(result!==undefined&&near(result.num[0]!/result.den[0]!,5),JSON.stringify(result));
   });
-  await test("resolve realimentaÃ§Ã£o negativa fechada com sonda na saÃ­da", () => {
+  await test("resolve realimentação negativa fechada com sonda na saída", () => {
     const p=(componentId:string,pinId:string)=>({kind:"port" as const,componentId,pinId});
     const network:SeriesCircuitInput={selectedComponentIds:["sum","forward","feedback","probe"],components:[
       {id:"sum",typeId:"control.sum",label:"Somador",properties:{inputs:["in0","in1"]}},
       {id:"forward",typeId:"control.gain",label:"C.G",properties:{gain:2}},{id:"feedback",typeId:"control.gain",label:"H",properties:{gain:-3}},
-      {id:"probe",typeId:"control.probe",label:"SaÃ­da",properties:{}},
+      {id:"probe",typeId:"control.probe",label:"Saída",properties:{}},
     ],conductors:[{from:p("sum","out"),to:p("forward","in")},{from:p("forward","out"),to:p("probe","in")},{from:p("forward","out"),to:p("feedback","in")},{from:p("feedback","out"),to:p("sum","in1")}]};
     const result=selectedSeriesNetworkToTransfer(network);
     assert(result!==undefined&&near(result.num[0]!/result.den[0]!,2/7),JSON.stringify(result));

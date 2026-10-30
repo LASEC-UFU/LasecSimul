@@ -3252,46 +3252,46 @@ que qualquer HART command neste projeto precisa (mapeamento linear
 ### F.14.1 -- Cluster Device Variables: Commands 33/34/53/54/79 -- IMPLEMENTADO
 
 O cluster foi implementado como StandardCore, usando `spec151r10.0.pdf`, sem
-toggle de perfil e sem fallback de eco. A aplicabilidade Ã© derivada da tabela
-numÃ©rica de Device Variables do plano; a DSL de fabricante nÃ£o define estes
+toggle de perfil e sem fallback de eco. A aplicabilidade é derivada da tabela
+numérica de Device Variables do plano; a DSL de fabricante não define estes
 comandos.
 
-| Comando | SemÃ¢ntica implementada | Golden/regressÃ£o |
+| Comando | Semântica implementada | Golden/regressão |
 |---|---|---|
-| 33 | lÃª atÃ© quatro slots `code + units + float32` | slot PV de 6 bytes e valor canÃ´nico |
-| 34 | grava/lÃª damping da PV como float32 | read-after-write |
+| 33 | lê até quatro slots `code + units + float32` | slot PV de 6 bytes e valor canônico |
+| 34 | grava/lê damping da PV como float32 | read-after-write |
 | 53 | grava unidades da Device Variable | altera o mesmo registro usado por 33/54/79 |
-| 54 | informa code, serial, units, limites, damping, span, classificaÃ§Ã£o, famÃ­lia, aquisiÃ§Ã£o e propriedades | registro de 34 bytes |
+| 54 | informa code, serial, units, limites, damping, span, classificação, família, aquisição e propriedades | registro de 34 bytes |
 | 79 | grava Device Variable com modo, unidades e status | mismatch de unidades rejeitado atomicamente |
 
-Os metadados numÃ©ricos sÃ£o preservados no `hartVariablesJson` durante
-save/reopen; o campo textual `unit` continua sendo apenas apresentaÃ§Ã£o. A
-validaÃ§Ã£o C++ de sintaxe passou e a suÃ­te completa TypeScript passou. O build
-executÃ¡vel C++ nÃ£o foi relinkado neste ambiente porque o checkout nÃ£o possui
-`ctest`/MSVC (`dotnet msbuild` tambÃ©m nÃ£o encontra `Microsoft.Cpp.Default.props`);
-isso Ã© limitaÃ§Ã£o de toolchain, nÃ£o erro de compilaÃ§Ã£o detectado no cÃ³digo.
+Os metadados numéricos são preservados no `hartVariablesJson` durante
+save/reopen; o campo textual `unit` continua sendo apenas apresentação. A
+validação C++ de sintaxe passou e a suíte completa TypeScript passou. O build
+executável C++ não foi relinkado neste ambiente porque o checkout não possui
+`ctest`/MSVC (`dotnet msbuild` também não encontra `Microsoft.Cpp.Default.props`);
+isso é limitação de toolchain, não erro de compilação detectado no código.
 
-### F.14.2 -- Auditoria de estado canÃ´nico StandardCore
+### F.14.2 -- Auditoria de estado canônico StandardCore
 
-Auditoria concluÃ­da nos comandos StandardCore existentes. Literais restantes
+Auditoria concluída nos comandos StandardCore existentes. Literais restantes
 de resposta foram classificados como constantes normativas HART ou como
-fallback explicitamente exigido quando o modelo declara que a capacidade nÃ£o
+fallback explicitamente exigido quando o modelo declara que a capacidade não
 existe (por exemplo, status adicional all-clear, Reserved=250 e campos
 Not-Used). Valores de PV, unidade, valor, limites, damping, serial,
-classificaÃ§Ã£o, famÃ­lia, status e propriedades passam pelo registro
+classificação, família, status e propriedades passam pelo registro
 `HartDevicePlan::VariableConfiguration`/`HartExecutionVariables::DeviceVariable`.
 
-| Propriedade | Armazenamento canÃ´nico | Identidade | InicializaÃ§Ã£o/escrita | Leitura |
+| Propriedade | Armazenamento canônico | Identidade | Inicialização/escrita | Leitura |
 |---|---|---|---|---|
 | Device Variable value | `VariableConfiguration::value` + cache runtime | `variableId`/code | authoring, Signal Graph e Command 79 quando writable | 9, 33, 54, 79 |
 | Device Variable units | `deviceVariableUnit` | code/variableId | authoring/profile e Command 53 | 9, 33, 54, 79 |
 | Device Variable damping | `dampingValue` | code/variableId | authoring e Command 34 | 15, 34, 54 |
-| limites/serial/classificaÃ§Ã£o/famÃ­lia/status/propriedades | campos da mesma `VariableConfiguration` | code/variableId | authoring/default normativo | 9, 33, 54, 79 |
+| limites/serial/classificação/família/status/propriedades | campos da mesma `VariableConfiguration` | code/variableId | authoring/default normativo | 9, 33, 54, 79 |
 
 Resultado do gate: `HARDCODED DEVICE DATA IN STANDARDCORE = 0` para dados
-variÃ¡veis do dispositivo; `DUPLICATE CANONICAL HART DEVICE STATE = 0` para o
-cluster. Constantes de protocolo (IDs, larguras, cÃ³digos Common Table,
-Reserved/Not-Used e fallbacks de capacidade nÃ£o modelada) permanecem no DSL
+variáveis do dispositivo; `DUPLICATE CANONICAL HART DEVICE STATE = 0` para o
+cluster. Constantes de protocolo (IDs, larguras, códigos Common Table,
+Reserved/Not-Used e fallbacks de capacidade não modelada) permanecem no DSL
 compilado como `NORMATIVE_PROTOCOL_CONSTANT`.
 
 Trabalho em andamento nesta sessão -- ver commits e histórico de teste
@@ -3569,7 +3569,7 @@ padrão correto "valor vivo" vs. "snapshot histórico imutável".
 
 ### F.15.4 -- `standardCoreNoProgram`: reconciliado, tratado como documentação auxiliar, não prioridade
 
-Conforme instruído: este booleano é apenas um atalho de despacho ("hÃ¡ um
+Conforme instruído: este booleano é apenas um atalho de despacho ("há um
 bloco `if` nativo abaixo para este id, não precisa do early-return"); a
 autoridade real sobre "implementado ou não" já é o próprio `if` nativo mais o
 guard final `it == programs->end()`. Uma tentativa anterior nesta sessão de

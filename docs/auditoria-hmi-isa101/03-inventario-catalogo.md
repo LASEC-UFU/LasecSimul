@@ -10,12 +10,12 @@ Fonte: `project/schema/component-catalog.json` (entrada atual no workspace). Ger
 | `graphics.arrow` | Grafico / Conexoes | 0 | sim |  | height, opacity, stroke, strokeWidth, width |
 | `graphics.check_valve` | Grafico / Valvulas | 0 | sim |  | fill, height, opacity, stroke, strokeWidth, tag, width |
 | `graphics.controller_faceplate` | Grafico / Instrumentos | 0 | sim | bindSource | barColor, bindChannel, bindDecimals, bindMax, bindMin, bindOffset, bindScale, bindSource, bindUnit, fill, height, opacity, setpoint, showValue, stroke, strokeWidth, tag, value, width |
-| `graphics.controller_station` | Grafico / SupervisÃ³rio Industrial | 0 | sim | bindSource | bindChannel, bindDecimals, bindMax, bindMin, bindOffset, bindScale, bindSource, bindUnit, fill, height, opacity, setpoint, showValue, stroke, strokeWidth, tag, value, width |
+| `graphics.controller_station` | Grafico / Supervisório Industrial | 0 | sim | bindSource | bindChannel, bindDecimals, bindMax, bindMin, bindOffset, bindScale, bindSource, bindUnit, fill, height, opacity, setpoint, showValue, stroke, strokeWidth, tag, value, width |
 | `graphics.conveyor` | Grafico / Equipamento de Processo | 0 | sim | bindSource | bindChannel, bindDecimals, bindInvert, bindMax, bindMin, bindOffset, bindScale, bindSource, bindThreshold, bindUnit, fill, height, opacity, stroke, strokeWidth, value, width |
 | `graphics.ellipse` | Grafico / Formas Basicas | 0 | primitiva |  |  |
 | `graphics.equipment` | Grafico / Equipamento de Processo | 0 | sim |  | fill, height, label, labelSize, opacity, showBorder, stroke, strokeWidth, width |
 | `graphics.flow_arrow` | Grafico / Elementos de Fluxo | 0 | sim |  | fill, height, opacity, stroke, strokeWidth, width |
-| `graphics.flow_transmitter` | Grafico / SupervisÃ³rio Industrial | 0 | sim | bindSource | bindChannel, bindDecimals, bindMax, bindMin, bindOffset, bindScale, bindSource, bindUnit, fill, height, opacity, showValue, stroke, strokeWidth, tag, value, width |
+| `graphics.flow_transmitter` | Grafico / Supervisório Industrial | 0 | sim | bindSource | bindChannel, bindDecimals, bindMax, bindMin, bindOffset, bindScale, bindSource, bindUnit, fill, height, opacity, showValue, stroke, strokeWidth, tag, value, width |
 | `graphics.gauge_bar` | Grafico / Controles/Indicadores | 0 | sim | bindSource | barColor, bindChannel, bindDecimals, bindMax, bindMin, bindOffset, bindScale, bindSource, bindUnit, fill, height, opacity, showValue, stroke, strokeWidth, value, width |
 | `graphics.group_box` | Grafico / Controles/Indicadores | 0 | sim |  | fill, height, maskFill, opacity, stroke, strokeWidth, title, titleSize, titleWidth, width |
 | `graphics.heat_exchanger` | Grafico / Tanques e Vasos | 0 | sim |  | fill, height, opacity, stroke, strokeWidth, width |
@@ -41,52 +41,52 @@ Fonte: `project/schema/component-catalog.json` (entrada atual no workspace). Ger
 | `graphics.line` | Grafico / Formas Basicas | 0 | primitiva |  |  |
 | `graphics.numeric_input` | Grafico / Controles/Indicadores | 0 | sim | bindSource, actionTarget | actionMax, actionMin, actionMode, actionProperty, actionReleaseValue, actionStep, actionTarget, actionValue, bindChannel, bindDecimals, bindMax, bindMin, bindOffset, bindScale, bindSource, bindUnit, fill, height, label, opacity, stroke, strokeWidth, value, width |
 | `graphics.orifice_plate` | Grafico / Elementos de Fluxo | 0 | sim |  | fill, height, opacity, stroke, strokeWidth, width |
-| `graphics.pid.acc_afr` | P&ID / AcessÃ³rios | 0 | sim |  | height, opacity, width |
-| `graphics.pid.acc_bimetal` | P&ID / AcessÃ³rios | 0 | sim |  | height, opacity, width |
-| `graphics.pid.acc_bulb` | P&ID / AcessÃ³rios | 0 | sim |  | height, opacity, width |
-| `graphics.pid.acc_floatcage` | P&ID / AcessÃ³rios | 0 | sim |  | height, opacity, width |
-| `graphics.pid.acc_lg` | P&ID / AcessÃ³rios | 0 | sim |  | height, opacity, width |
-| `graphics.pid.acc_loadcell` | P&ID / AcessÃ³rios | 0 | sim |  | height, opacity, width |
-| `graphics.pid.acc_pg` | P&ID / AcessÃ³rios | 0 | sim |  | height, opacity, width |
-| `graphics.pid.acc_radar` | P&ID / AcessÃ³rios | 0 | sim |  | height, opacity, width |
-| `graphics.pid.acc_seal` | P&ID / AcessÃ³rios | 0 | sim |  | height, opacity, width |
-| `graphics.pid.acc_siphon` | P&ID / AcessÃ³rios | 0 | sim |  | height, opacity, width |
-| `graphics.pid.acc_thermowell` | P&ID / AcessÃ³rios | 0 | sim |  | height, opacity, width |
-| `graphics.pid.agitator` | P&ID / MÃ¡quinas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.acc_afr` | P&ID / Acessórios | 0 | sim |  | height, opacity, width |
+| `graphics.pid.acc_bimetal` | P&ID / Acessórios | 0 | sim |  | height, opacity, width |
+| `graphics.pid.acc_bulb` | P&ID / Acessórios | 0 | sim |  | height, opacity, width |
+| `graphics.pid.acc_floatcage` | P&ID / Acessórios | 0 | sim |  | height, opacity, width |
+| `graphics.pid.acc_lg` | P&ID / Acessórios | 0 | sim |  | height, opacity, width |
+| `graphics.pid.acc_loadcell` | P&ID / Acessórios | 0 | sim |  | height, opacity, width |
+| `graphics.pid.acc_pg` | P&ID / Acessórios | 0 | sim |  | height, opacity, width |
+| `graphics.pid.acc_radar` | P&ID / Acessórios | 0 | sim |  | height, opacity, width |
+| `graphics.pid.acc_seal` | P&ID / Acessórios | 0 | sim |  | height, opacity, width |
+| `graphics.pid.acc_siphon` | P&ID / Acessórios | 0 | sim |  | height, opacity, width |
+| `graphics.pid.acc_thermowell` | P&ID / Acessórios | 0 | sim |  | height, opacity, width |
+| `graphics.pid.agitator` | P&ID / Máquinas | 0 | sim |  | height, opacity, width |
 | `graphics.pid.air_dryer` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
-| `graphics.pid.ann_arrow` | P&ID / AnotaÃ§Ã£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.ann_bl_flag` | P&ID / AnotaÃ§Ã£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.ann_cloud` | P&ID / AnotaÃ§Ã£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.ann_detail_flag` | P&ID / AnotaÃ§Ã£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.ann_equipstrip` | P&ID / AnotaÃ§Ã£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.ann_holds` | P&ID / AnotaÃ§Ã£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.ann_insulation` | P&ID / AnotaÃ§Ã£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.ann_matchline` | P&ID / AnotaÃ§Ã£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.ann_noteflag` | P&ID / AnotaÃ§Ã£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.ann_offpage` | P&ID / AnotaÃ§Ã£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.ann_onpage` | P&ID / AnotaÃ§Ã£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.ann_revtriangle` | P&ID / AnotaÃ§Ã£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.ann_slope` | P&ID / AnotaÃ§Ã£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.ann_text` | P&ID / AnotaÃ§Ã£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.ann_tiein` | P&ID / AnotaÃ§Ã£o | 0 | sim |  | height, opacity, width |
+| `graphics.pid.ann_arrow` | P&ID / Anotação | 0 | sim |  | height, opacity, width |
+| `graphics.pid.ann_bl_flag` | P&ID / Anotação | 0 | sim |  | height, opacity, width |
+| `graphics.pid.ann_cloud` | P&ID / Anotação | 0 | sim |  | height, opacity, width |
+| `graphics.pid.ann_detail_flag` | P&ID / Anotação | 0 | sim |  | height, opacity, width |
+| `graphics.pid.ann_equipstrip` | P&ID / Anotação | 0 | sim |  | height, opacity, width |
+| `graphics.pid.ann_holds` | P&ID / Anotação | 0 | sim |  | height, opacity, width |
+| `graphics.pid.ann_insulation` | P&ID / Anotação | 0 | sim |  | height, opacity, width |
+| `graphics.pid.ann_matchline` | P&ID / Anotação | 0 | sim |  | height, opacity, width |
+| `graphics.pid.ann_noteflag` | P&ID / Anotação | 0 | sim |  | height, opacity, width |
+| `graphics.pid.ann_offpage` | P&ID / Anotação | 0 | sim |  | height, opacity, width |
+| `graphics.pid.ann_onpage` | P&ID / Anotação | 0 | sim |  | height, opacity, width |
+| `graphics.pid.ann_revtriangle` | P&ID / Anotação | 0 | sim |  | height, opacity, width |
+| `graphics.pid.ann_slope` | P&ID / Anotação | 0 | sim |  | height, opacity, width |
+| `graphics.pid.ann_text` | P&ID / Anotação | 0 | sim |  | height, opacity, width |
+| `graphics.pid.ann_tiein` | P&ID / Anotação | 0 | sim |  | height, opacity, width |
 | `graphics.pid.bagfilter` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.bl_terminal` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.blender_ribbon` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
-| `graphics.pid.blower` | P&ID / MÃ¡quinas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.blower` | P&ID / Máquinas | 0 | sim |  | height, opacity, width |
 | `graphics.pid.boiler` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
-| `graphics.pid.bpcv` | P&ID / SeguranÃ§a | 0 | sim |  | height, opacity, width |
-| `graphics.pid.breather` | P&ID / SeguranÃ§a | 0 | sim |  | height, opacity, width |
+| `graphics.pid.bpcv` | P&ID / Segurança | 0 | sim |  | height, opacity, width |
+| `graphics.pid.breather` | P&ID / Segurança | 0 | sim |  | height, opacity, width |
 | `graphics.pid.bucket_elevator` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.centrifuge` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.chiller` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.clarifier` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.coalescer` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
-| `graphics.pid.comp_centrifugal` | P&ID / MÃ¡quinas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.comp_recip` | P&ID / MÃ¡quinas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.comp_screw` | P&ID / MÃ¡quinas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.comp_centrifugal` | P&ID / Máquinas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.comp_recip` | P&ID / Máquinas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.comp_screw` | P&ID / Máquinas | 0 | sim |  | height, opacity, width |
 | `graphics.pid.conveyor_belt` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.conveyor_screw` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
-| `graphics.pid.cooling_tower` | P&ID / Troca TÃ©rmica | 0 | sim |  | height, opacity, width |
+| `graphics.pid.cooling_tower` | P&ID / Troca Térmica | 0 | sim |  | height, opacity, width |
 | `graphics.pid.crusher` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.crystallizer` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.ctl_dcs` | P&ID / Controle | 0 | sim |  | height, opacity, width |
@@ -95,37 +95,37 @@ Fonte: `project/schema/component-catalog.json` (entrada atual no workspace). Ger
 | `graphics.pid.ctl_panel` | P&ID / Controle | 0 | sim |  | height, opacity, width |
 | `graphics.pid.ctl_plc` | P&ID / Controle | 0 | sim |  | height, opacity, width |
 | `graphics.pid.ctl_sis` | P&ID / Controle | 0 | sim |  | height, opacity, width |
-| `graphics.pid.cv_ball` | P&ID / VÃ¡lvulas de Controle | 0 | sim |  | actuator, fail, height, opacity, positioner, width |
-| `graphics.pid.cv_butterfly` | P&ID / VÃ¡lvulas de Controle | 0 | sim |  | actuator, fail, height, opacity, positioner, width |
-| `graphics.pid.cv_globe` | P&ID / VÃ¡lvulas de Controle | 0 | sim |  | actuator, fail, height, opacity, positioner, width |
+| `graphics.pid.cv_ball` | P&ID / Válvulas de Controle | 0 | sim |  | actuator, fail, height, opacity, positioner, width |
+| `graphics.pid.cv_butterfly` | P&ID / Válvulas de Controle | 0 | sim |  | actuator, fail, height, opacity, positioner, width |
+| `graphics.pid.cv_globe` | P&ID / Válvulas de Controle | 0 | sim |  | actuator, fail, height, opacity, positioner, width |
 | `graphics.pid.cyclone` | P&ID / Vasos | 0 | sim |  | height, opacity, width |
 | `graphics.pid.deaerator` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.demister` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.dryer_rotary` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.dryer_spray` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.dryer_tray` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
-| `graphics.pid.ejector` | P&ID / MÃ¡quinas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.ejector` | P&ID / Máquinas | 0 | sim |  | height, opacity, width |
 | `graphics.pid.elec_barrier` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.elec_mcc` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.elec_transformer` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.elec_ups` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.evaporator` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.extruder` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
-| `graphics.pid.fan` | P&ID / MÃ¡quinas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.fe_avgpitot` | P&ID / Elementos de VazÃ£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.fe_coriolis` | P&ID / Elementos de VazÃ£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.fe_magmeter` | P&ID / Elementos de VazÃ£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.fe_nozzle` | P&ID / Elementos de VazÃ£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.fe_orifice` | P&ID / Elementos de VazÃ£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.fe_pd` | P&ID / Elementos de VazÃ£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.fe_pitot` | P&ID / Elementos de VazÃ£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.fe_ro` | P&ID / Elementos de VazÃ£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.fe_rotameter` | P&ID / Elementos de VazÃ£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.fe_thermal` | P&ID / Elementos de VazÃ£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.fe_turbine` | P&ID / Elementos de VazÃ£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.fe_ultrasonic` | P&ID / Elementos de VazÃ£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.fe_venturi` | P&ID / Elementos de VazÃ£o | 0 | sim |  | height, opacity, width |
-| `graphics.pid.fe_vortex` | P&ID / Elementos de VazÃ£o | 0 | sim |  | height, opacity, width |
+| `graphics.pid.fan` | P&ID / Máquinas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.fe_avgpitot` | P&ID / Elementos de Vazão | 0 | sim |  | height, opacity, width |
+| `graphics.pid.fe_coriolis` | P&ID / Elementos de Vazão | 0 | sim |  | height, opacity, width |
+| `graphics.pid.fe_magmeter` | P&ID / Elementos de Vazão | 0 | sim |  | height, opacity, width |
+| `graphics.pid.fe_nozzle` | P&ID / Elementos de Vazão | 0 | sim |  | height, opacity, width |
+| `graphics.pid.fe_orifice` | P&ID / Elementos de Vazão | 0 | sim |  | height, opacity, width |
+| `graphics.pid.fe_pd` | P&ID / Elementos de Vazão | 0 | sim |  | height, opacity, width |
+| `graphics.pid.fe_pitot` | P&ID / Elementos de Vazão | 0 | sim |  | height, opacity, width |
+| `graphics.pid.fe_ro` | P&ID / Elementos de Vazão | 0 | sim |  | height, opacity, width |
+| `graphics.pid.fe_rotameter` | P&ID / Elementos de Vazão | 0 | sim |  | height, opacity, width |
+| `graphics.pid.fe_thermal` | P&ID / Elementos de Vazão | 0 | sim |  | height, opacity, width |
+| `graphics.pid.fe_turbine` | P&ID / Elementos de Vazão | 0 | sim |  | height, opacity, width |
+| `graphics.pid.fe_ultrasonic` | P&ID / Elementos de Vazão | 0 | sim |  | height, opacity, width |
+| `graphics.pid.fe_venturi` | P&ID / Elementos de Vazão | 0 | sim |  | height, opacity, width |
+| `graphics.pid.fe_vortex` | P&ID / Elementos de Vazão | 0 | sim |  | height, opacity, width |
 | `graphics.pid.feeder_rotary` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.filter_cartridge` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.filter_press` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
@@ -158,17 +158,17 @@ Fonte: `project/schema/component-catalog.json` (entrada atual no workspace). Ger
 | `graphics.pid.fit_trap_thermo` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.fit_union` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.fit_vent` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
-| `graphics.pid.flame_arrestor` | P&ID / SeguranÃ§a | 0 | sim |  | height, opacity, width |
+| `graphics.pid.flame_arrestor` | P&ID / Segurança | 0 | sim |  | height, opacity, width |
 | `graphics.pid.flare` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
-| `graphics.pid.heater_electric` | P&ID / Troca TÃ©rmica | 0 | sim |  | height, opacity, width |
-| `graphics.pid.heater_fired` | P&ID / Troca TÃ©rmica | 0 | sim |  | height, opacity, width |
-| `graphics.pid.hx_air_cooler` | P&ID / Troca TÃ©rmica | 0 | sim |  | height, opacity, width |
-| `graphics.pid.hx_coil` | P&ID / Troca TÃ©rmica | 0 | sim |  | height, opacity, width |
-| `graphics.pid.hx_condenser` | P&ID / Troca TÃ©rmica | 0 | sim |  | height, opacity, width |
-| `graphics.pid.hx_doublepipe` | P&ID / Troca TÃ©rmica | 0 | sim |  | height, opacity, width |
-| `graphics.pid.hx_kettle` | P&ID / Troca TÃ©rmica | 0 | sim |  | height, opacity, width |
-| `graphics.pid.hx_plate` | P&ID / Troca TÃ©rmica | 0 | sim |  | height, opacity, width |
-| `graphics.pid.hx_shell_tube` | P&ID / Troca TÃ©rmica | 0 | sim |  | height, opacity, width |
+| `graphics.pid.heater_electric` | P&ID / Troca Térmica | 0 | sim |  | height, opacity, width |
+| `graphics.pid.heater_fired` | P&ID / Troca Térmica | 0 | sim |  | height, opacity, width |
+| `graphics.pid.hx_air_cooler` | P&ID / Troca Térmica | 0 | sim |  | height, opacity, width |
+| `graphics.pid.hx_coil` | P&ID / Troca Térmica | 0 | sim |  | height, opacity, width |
+| `graphics.pid.hx_condenser` | P&ID / Troca Térmica | 0 | sim |  | height, opacity, width |
+| `graphics.pid.hx_doublepipe` | P&ID / Troca Térmica | 0 | sim |  | height, opacity, width |
+| `graphics.pid.hx_kettle` | P&ID / Troca Térmica | 0 | sim |  | height, opacity, width |
+| `graphics.pid.hx_plate` | P&ID / Troca Térmica | 0 | sim |  | height, opacity, width |
+| `graphics.pid.hx_shell_tube` | P&ID / Troca Térmica | 0 | sim |  | height, opacity, width |
 | `graphics.pid.hydrocyclone` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.instr_converter` | P&ID / Instrumentos | 0 | sim |  | conv, height, opacity, width |
 | `graphics.pid.logic_and` | P&ID / Controle | 0 | sim |  | height, opacity, width |
@@ -176,20 +176,20 @@ Fonte: `project/schema/component-catalog.json` (entrada atual no workspace). Ger
 | `graphics.pid.logic_or` | P&ID / Controle | 0 | sim |  | height, opacity, width |
 | `graphics.pid.mill_ball` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.mixer_static` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
-| `graphics.pid.motor` | P&ID / MÃ¡quinas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.motor` | P&ID / Máquinas | 0 | sim |  | height, opacity, width |
 | `graphics.pid.package_unit` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
-| `graphics.pid.pcv_self` | P&ID / SeguranÃ§a | 0 | sim |  | height, opacity, width |
-| `graphics.pid.pse` | P&ID / SeguranÃ§a | 0 | sim |  | height, opacity, width |
-| `graphics.pid.psv` | P&ID / SeguranÃ§a | 0 | sim |  | height, opacity, width |
-| `graphics.pid.psv_pilot` | P&ID / SeguranÃ§a | 0 | sim |  | height, opacity, width |
-| `graphics.pid.pump_centrifugal` | P&ID / MÃ¡quinas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.pump_diaphragm` | P&ID / MÃ¡quinas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.pump_gear` | P&ID / MÃ¡quinas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.pump_peristaltic` | P&ID / MÃ¡quinas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.pump_plunger` | P&ID / MÃ¡quinas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.pump_submersible` | P&ID / MÃ¡quinas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.pump_vacuum` | P&ID / MÃ¡quinas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.pvsv` | P&ID / SeguranÃ§a | 0 | sim |  | height, opacity, width |
+| `graphics.pid.pcv_self` | P&ID / Segurança | 0 | sim |  | height, opacity, width |
+| `graphics.pid.pse` | P&ID / Segurança | 0 | sim |  | height, opacity, width |
+| `graphics.pid.psv` | P&ID / Segurança | 0 | sim |  | height, opacity, width |
+| `graphics.pid.psv_pilot` | P&ID / Segurança | 0 | sim |  | height, opacity, width |
+| `graphics.pid.pump_centrifugal` | P&ID / Máquinas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.pump_diaphragm` | P&ID / Máquinas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.pump_gear` | P&ID / Máquinas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.pump_peristaltic` | P&ID / Máquinas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.pump_plunger` | P&ID / Máquinas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.pump_submersible` | P&ID / Máquinas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.pump_vacuum` | P&ID / Máquinas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.pvsv` | P&ID / Segurança | 0 | sim |  | height, opacity, width |
 | `graphics.pid.sample_cooler` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.screen_vibrating` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.scrubber` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
@@ -197,28 +197,28 @@ Fonte: `project/schema/component-catalog.json` (entrada atual no workspace). Ger
 | `graphics.pid.strainer_basket` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.strainer_cone` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
 | `graphics.pid.strainer_y` | P&ID / Em Linha | 0 | sim |  | height, opacity, width |
-| `graphics.pid.tcv_self` | P&ID / SeguranÃ§a | 0 | sim |  | height, opacity, width |
-| `graphics.pid.turbine_steam` | P&ID / MÃ¡quinas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.vacuum_breaker` | P&ID / SeguranÃ§a | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_angle` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_ball` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_ballcheck` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_butterfly` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_check` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_diaphragm` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_float` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_foot` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_fourway` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_gate` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_globe` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_knife` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_mov` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_needle` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_pinch` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_plug` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_solenoid` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_stopcheck` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
-| `graphics.pid.valve_threeway` | P&ID / VÃ¡lvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.tcv_self` | P&ID / Segurança | 0 | sim |  | height, opacity, width |
+| `graphics.pid.turbine_steam` | P&ID / Máquinas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.vacuum_breaker` | P&ID / Segurança | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_angle` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_ball` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_ballcheck` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_butterfly` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_check` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_diaphragm` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_float` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_foot` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_fourway` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_gate` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_globe` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_knife` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_mov` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_needle` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_pinch` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_plug` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_solenoid` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_stopcheck` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.valve_threeway` | P&ID / Válvulas | 0 | sim |  | height, opacity, width |
 | `graphics.pid.vessel_bullet` | P&ID / Vasos | 0 | sim |  | height, opacity, width |
 | `graphics.pid.vessel_column_packed` | P&ID / Vasos | 0 | sim |  | height, opacity, width |
 | `graphics.pid.vessel_column_tray` | P&ID / Vasos | 0 | sim |  | height, opacity, width |
@@ -233,7 +233,7 @@ Fonte: `project/schema/component-catalog.json` (entrada atual no workspace). Ger
 | `graphics.pid.vessel_sphere` | P&ID / Vasos | 0 | sim |  | height, opacity, width |
 | `graphics.pid.vessel_tank` | P&ID / Vasos | 0 | sim |  | height, opacity, width |
 | `graphics.pid.vessel_vertical` | P&ID / Vasos | 0 | sim |  | height, opacity, width |
-| `graphics.pid.vfd` | P&ID / MÃ¡quinas | 0 | sim |  | height, opacity, width |
+| `graphics.pid.vfd` | P&ID / Máquinas | 0 | sim |  | height, opacity, width |
 | `graphics.pipe` | Grafico / Tubulacao | 0 | sim | bindSource | bindChannel, bindDecimals, bindInvert, bindMax, bindMin, bindOffset, bindScale, bindSource, bindThreshold, bindUnit, fill, flowDirection, height, opacity, showFlanges, showFlow, stroke, strokeWidth, value, width |
 | `graphics.pipe_cross` | Grafico / Tubulacao | 0 | sim |  | fill, height, opacity, stroke, strokeWidth, width |
 | `graphics.pipe_elbow` | Grafico / Tubulacao | 0 | sim |  | fill, height, opacity, stroke, strokeWidth, width |

@@ -415,7 +415,7 @@ export class CoreClient {
   }
 
   /** Mesmo registro avulso, mas sem pedir ao Core o manifesto serializado de volta. Use quando o
-   * chamador jÃ¡ vai ler o `.lssubcircuit` localmente ou sÃ³ precisa garantir que o typeId estÃ¡ no
+   * chamador já vai ler o `.lssubcircuit` localmente ou só precisa garantir que o typeId está no
    * registry antes de `addComponent`/rebuild. */
   async registerAdhocSubcircuitDefinition(manifestPath: string, options: { replace?: boolean } = {}): Promise<void> {
     await this.request("registerAdhocSubcircuit", {

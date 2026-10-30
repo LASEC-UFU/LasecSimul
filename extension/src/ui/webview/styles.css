@@ -387,7 +387,7 @@ html, body {
 }
 
 /** Viewport fixo (`.canvas`) nunca se move/escala; este wrapper recebe `translate()`+`scale()` via JS
- * (zoom por scroll, ver `main.ts`) -- todo conteÃºdo do esquemÃ¡tico mora aqui, nÃ£o direto em `.canvas`. */
+ * (zoom por scroll, ver `main.ts`) -- todo conteúdo do esquemático mora aqui, não direto em `.canvas`. */
 .canvas-content {
   position: absolute;
   top: 0;
@@ -397,8 +397,8 @@ html, body {
   transform-origin: 0 0;
 }
 
-/** RetÃ¢ngulo de seleÃ§Ã£o por arrasto (marquee) -- overlay em coordenadas de TELA (relativas a
- * `.canvas`), nunca dentro de `.canvas-content` (nÃ£o deve escalar com o zoom). */
+/** Retângulo de seleção por arrasto (marquee) -- overlay em coordenadas de TELA (relativas a
+ * `.canvas`), nunca dentro de `.canvas-content` (não deve escalar com o zoom). */
 .marquee-rect {
   position: absolute;
   border: 1px dashed var(--accent);
@@ -1005,8 +1005,8 @@ rect.meter-expand-button:hover {
   outline: none;
 }
 
-/** Nome com Ã­ndice (ex: "Resistor-1") perto do sÃ­mbolo -- mesma convenÃ§Ã£o de cor do SimulIDE
- * (`Component::m_idLabel`, azul-escuro), mostrado sÃ³ quando `WebviewComponentModel.showId` Ã© true. */
+/** Nome com índice (ex: "Resistor-1") perto do símbolo -- mesma convenção de cor do SimulIDE
+ * (`Component::m_idLabel`, azul-escuro), mostrado só quando `WebviewComponentModel.showId` é true. */
 .component__id-label,
 .component-floating-label {
   position: absolute;
@@ -1025,9 +1025,9 @@ rect.meter-expand-button:hover {
   font-weight: 600;
 }
 
-/** Valor formatado da propriedade `showOnSymbol` (ex: "1 kÎ©") ou leitura ao vivo (ex: voltÃ­metro) --
- * mesma convenÃ§Ã£o de cor do SimulIDE (`Component::m_valLabel`, vermelho-escuro), mostrado quando
- * `WebviewComponentModel.showValue` Ã© true (default calculado, ver `findShowOnSymbolSchema`). */
+/** Valor formatado da propriedade `showOnSymbol` (ex: "1 kΩ") ou leitura ao vivo (ex: voltímetro) --
+ * mesma convenção de cor do SimulIDE (`Component::m_valLabel`, vermelho-escuro), mostrado quando
+ * `WebviewComponentModel.showValue` é true (default calculado, ver `findShowOnSymbolSchema`). */
 .component-floating-label--value {
   position: absolute;
   color: #c0594a;

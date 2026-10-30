@@ -1,6 +1,6 @@
 import { entryToWebview, resolveLocalizedItems, sanitizeStringArray, UnifiedCatalogItem, UnifiedCatalogTranslation } from "./UnifiedCatalog";
 
-// â”€â”€ utilitÃ¡rios de teste (mesmo padrÃ£o de ipc/CoreClient.test.ts) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── utilitários de teste (mesmo padrão de ipc/CoreClient.test.ts) ──────────────
 
 import { loadUnifiedCatalog } from "./UnifiedCatalog";
 
@@ -10,10 +10,10 @@ let failed = 0;
 function test(name: string, fn: () => void): void {
   try {
     fn();
-    console.log(`  âœ“ ${name}`);
+    console.log(`  ✓ ${name}`);
     passed++;
   } catch (e) {
-    console.error(`  âœ— ${name}: ${(e as Error).message}`);
+    console.error(`  ✗ ${name}: ${(e as Error).message}`);
     failed++;
   }
 }
@@ -22,9 +22,9 @@ function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);
 }
 
-// â”€â”€ suite de testes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// resolveLocalizedItems implementa o algoritmo de fallback de `lasecsimul.spec` seÃ§Ã£o 6.3.3
-// (idioma pedido -> idioma-base do catÃ¡logo -> item sem traduÃ§Ã£o cai pra base, nunca string vazia) --
+// ── suite de testes ─────────────────────────────────────────────────────────────
+// resolveLocalizedItems implementa o algoritmo de fallback de `lasecsimul.spec` seção 6.3.3
+// (idioma pedido -> idioma-base do catálogo -> item sem tradução cai pra base, nunca string vazia) --
 // mesmo algoritmo que `resolvePropertySchemaForLanguage` implementa em C++ no Core.
 
 const baseItems: UnifiedCatalogItem[] = [
@@ -40,16 +40,16 @@ const translations: Record<string, UnifiedCatalogTranslation> = {
   },
 };
 
-console.log("\nUnifiedCatalog â€” resolveLocalizedItems\n");
+console.log("\nUnifiedCatalog — resolveLocalizedItems\n");
 
-test("sem requestedLanguage devolve os itens originais sem cÃ³pia", () => {
+test("sem requestedLanguage devolve os itens originais sem cópia", () => {
   const resolved = resolveLocalizedItems(baseItems, undefined, "pt-BR", translations);
-  assert(resolved === baseItems, "caminho rÃ¡pido: mesma referÃªncia, sem alocaÃ§Ã£o");
+  assert(resolved === baseItems, "caminho rápido: mesma referência, sem alocação");
 });
 
-test("requestedLanguage igual Ã  base devolve os itens originais", () => {
+test("requestedLanguage igual à base devolve os itens originais", () => {
   const resolved = resolveLocalizedItems(baseItems, "pt-BR", "pt-BR", translations);
-  assert(resolved === baseItems, "lÃ­ngua pedida == lÃ­ngua-base: sem resoluÃ§Ã£o nenhuma");
+  assert(resolved === baseItems, "língua pedida == língua-base: sem resolução nenhuma");
 });
 
 test("sem translations no arquivo devolve os itens originais", () => {
@@ -57,24 +57,24 @@ test("sem translations no arquivo devolve os itens originais", () => {
   assert(resolved === baseItems, "sem bloco translations: cai pra base automaticamente");
 });
 
-test("item COM traduÃ§Ã£o pra a lÃ­ngua pedida resolve label/folderPath traduzidos", () => {
+test("item COM tradução pra a língua pedida resolve label/folderPath traduzidos", () => {
   const resolved = resolveLocalizedItems(baseItems, "en", "pt-BR", translations);
   const resistor = resolved.find((item) => item.typeId === "passive.resistor");
   assert(resistor?.label === "Resistor", "label traduzido (mesmo texto neste caso, mas resolvido)");
   assert(JSON.stringify(resistor?.folderPath) === JSON.stringify(["Passive", "Resistors"]), "folderPath traduzido");
 });
 
-test("item SEM traduÃ§Ã£o pra a lÃ­ngua pedida cai pra lÃ­ngua-base, nunca string vazia", () => {
+test("item SEM tradução pra a língua pedida cai pra língua-base, nunca string vazia", () => {
   const resolved = resolveLocalizedItems(baseItems, "en", "pt-BR", translations);
   const ground = resolved.find((item) => item.typeId === "other.ground");
-  assert(ground?.label === "Terra (0 V)", "ground nÃ£o tem traduÃ§Ã£o 'en' -- mantÃ©m o label da base");
+  assert(ground?.label === "Terra (0 V)", "ground não tem tradução 'en' -- mantém o label da base");
   assert(JSON.stringify(ground?.folderPath) === JSON.stringify(["Fontes"]), "folderPath da base preservado");
   assert(JSON.stringify(ground?.pinIds) === JSON.stringify(["pin"]), "pinIds reais devem sobreviver a resolucao de idioma");
 });
 
-test("lÃ­ngua pedida sem nenhuma traduÃ§Ã£o no arquivo (ex: 'fr') cai pra base inteira", () => {
+test("língua pedida sem nenhuma tradução no arquivo (ex: 'fr') cai pra base inteira", () => {
   const resolved = resolveLocalizedItems(baseItems, "fr", "pt-BR", translations);
-  assert(resolved === baseItems, "'fr' nÃ£o existe em translations -- devolve a base sem alteraÃ§Ã£o");
+  assert(resolved === baseItems, "'fr' não existe em translations -- devolve a base sem alteração");
 });
 
 // ── sanitizeStringArray/entryToWebview (PC-16, .spec/archive/legacy-v2/lasecsimul-native-devices.spec) ──────────────

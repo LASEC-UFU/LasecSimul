@@ -12,7 +12,7 @@ const assert = (ok: boolean, message = "falhou"): void => assertWithMessage(ok, 
 const near = (a: number, b: number, tol = 1e-5) => Math.abs(a - b) <= tol * Math.max(1, Math.abs(b));
 
 (async () => {
-  const { test, finish } = createTestRunner("Projeto de Controladores â€” nÃºcleo LTI");
+  const { test, finish } = createTestRunner("Projeto de Controladores — núcleo LTI");
   await test("exports current and stored controller designs as detached project snapshots", () => {
     const source={version:1,domain:"continuous",sampleTime:.1,F:{num:"1",den:"1"},C:{num:"2",den:"1"},G:{num:"1",den:"1, 1"},H:{num:"1",den:"1"},C2:{num:"3",den:"1"},H2:{num:"1",den:"1"},response:"output",requirements:[],alternatives:[{name:"Lead-á",color:"#fff",controller:{num:"8",den:"1"},prefilter:{num:"4",den:"1"},innerController:{num:"6",den:"1"},measurementDerivativeModel:{num:"5",den:"1"}}],activeAlternative:"Lead-á"} as unknown as import("./webview/controlDesigner/types").ControlDesignProject;
     const current=projectForExportDesign(source),stored=projectForExportDesign(source,"Lead-á");
@@ -387,11 +387,11 @@ const near = (a: number, b: number, tol = 1e-5) => Math.abs(a - b) <= tol * Math
     const unit=validateTf({num:[1],den:[1],domain:"continuous"}),plant=validateTf({num:[1],den:[1,1],domain:"continuous"}),analysis=closeLoop(unit,unit,plant,unit),weighted=tfAdd(tfScale(analysis.output,2),tfScale(analysis.measurementNoiseOutput,-.5)),expected=validateTf({num:[2.5],den:[1,2],domain:"continuous"}),actualSamples=timeResponse(weighted,"step",2,101).samples,expectedSamples=timeResponse(expected,"step",2,101).samples;
     assert(actualSamples.every((sample,index)=>near(sample.value,expectedSamples[index]!.value,1e-7)),"weighted sources do not match the linear superposition reference");
   });
-  await test("interconexÃ£o distinta de Y/R, U/R, S e T com F=H=1", () => {
+  await test("interconexão distinta de Y/R, U/R, S e T com F=H=1", () => {
     const tf = (num: number[], den: number[]): TransferFunction => ({ num, den, domain: "continuous" });
     const a = closeLoop(tf([1],[1]), tf([4],[1]), tf([1],[1,2,0]), tf([1],[1]));
     assert(JSON.stringify(a.output.num) === JSON.stringify([4]) && JSON.stringify(a.output.den) === JSON.stringify([1,2,4]), JSON.stringify(a));
-    assert(JSON.stringify(a.sensitivity.num) === JSON.stringify([1,2,0]) && JSON.stringify(a.complementary.num) === JSON.stringify([4]), "S e T nÃ£o foram distinguidas");
+    assert(JSON.stringify(a.sensitivity.num) === JSON.stringify([1,2,0]) && JSON.stringify(a.complementary.num) === JSON.stringify([4]), "S e T não foram distinguidas");
     assert(JSON.stringify(a.control.num) === JSON.stringify([4,8,0]), "U/R incorreta");
   });
   await test("abertura de realimentacao em H*y remove o fechamento", () => {
@@ -418,33 +418,33 @@ const near = (a: number, b: number, tol = 1e-5) => Math.abs(a - b) <= tol * Math
     assert(JSON.stringify(cascadePrefilter.output.num)==="[2]"&&JSON.stringify(cascadePrefilter.output.den)==="[1,3]","configuration 6 must apply prefilter F before the outer loop");
     assert(JSON.stringify(ignoredInnerSensor.output.num)==="[1]"&&JSON.stringify(ignoredInnerSensor.output.den)==="[1,3]","configuration 4 must use unity inner feedback and the single documented H sensor");
     assert(JSON.stringify(activeInnerSensor.output.num)==="[1]"&&JSON.stringify(activeInnerSensor.output.den)==="[1,4]","configuration 6 must retain the inner sensor H1/H2 dynamics");
-  });  await test("prÃ©-filtro, sensor nÃ£o unitÃ¡rio e perturbaÃ§Ãµes respeitam os pontos de injeÃ§Ã£o", () => {
+  });  await test("pré-filtro, sensor não unitário e perturbações respeitam os pontos de injeção", () => {
     const tf = (num: number[], den: number[]): TransferFunction => ({ num, den, domain: "continuous" });
     const a = closeLoop(tf([2],[1]),tf([3],[1]),tf([1],[1,1]),tf([4],[1]));
     assert(JSON.stringify(a.output.num)==="[6]"&&JSON.stringify(a.output.den)==="[1,13]",JSON.stringify(a.output));
-    assert(JSON.stringify(a.control.num)==="[6,6]"&&JSON.stringify(a.control.den)==="[1,13]","U/R com F nÃ£o unitÃ¡rio");
-    assert(JSON.stringify(a.sensitivity.num)==="[1,1]"&&JSON.stringify(a.complementary.num)==="[12]","S/T nÃ£o unitÃ¡rios");
-    assert(JSON.stringify(a.plantInputDisturbance.num)==="[1]"&&JSON.stringify(a.measurementNoiseOutput.num)==="[-12]","transferÃªncias de perturbaÃ§Ã£o");
-    assert(JSON.stringify(a.measurementNoiseControl.num)==="[-12,-12]"&&JSON.stringify(a.measurementNoiseControl.den)==="[1,13]","ruÃ­do de mediÃ§Ã£o na saÃ­da de controle");
+    assert(JSON.stringify(a.control.num)==="[6,6]"&&JSON.stringify(a.control.den)==="[1,13]","U/R com F não unitário");
+    assert(JSON.stringify(a.sensitivity.num)==="[1,1]"&&JSON.stringify(a.complementary.num)==="[12]","S/T não unitários");
+    assert(JSON.stringify(a.plantInputDisturbance.num)==="[1]"&&JSON.stringify(a.measurementNoiseOutput.num)==="[-12]","transferências de perturbação");
+    assert(JSON.stringify(a.measurementNoiseControl.num)==="[-12,-12]"&&JSON.stringify(a.measurementNoiseControl.den)==="[1,13]","ruído de medição na saída de controle");
   });
-  await test("estabilidade interna usa a equaÃ§Ã£o caracterÃ­stica mesmo com planta instÃ¡vel", () => {
+  await test("estabilidade interna usa a equação característica mesmo com planta instável", () => {
     const tf=(num:number[],den:number[]):TransferFunction=>({num,den,domain:"continuous"});
     const plant=tf([1],[1,-1]),closed=closeLoop(tf([1],[1]),tf([2],[1]),plant,tf([1],[1]));
-    assert(!isStable(plant),"planta instÃ¡vel nÃ£o foi reconhecida");
+    assert(!isStable(plant),"planta instável não foi reconhecida");
     assert(isStable(closed.sensitivity)&&isStable(closed.output),JSON.stringify({s:closed.sensitivity,output:closed.output}));
   });
-  await test("raÃ­zes complexas do exemplo analÃ­tico K=4", () => {
+  await test("raízes complexas do exemplo analítico K=4", () => {
     const roots = polynomialRoots([1,2,4]);
     assert(roots.length === 2 && roots.every(r => near(r.re,-1) && near(Math.abs(r.im),Math.sqrt(3))), JSON.stringify(roots));
   });
-  await test("raiz repetida Ã© resolvida e Bode retorna margem no cruzamento de ganho", () => {
+  await test("raiz repetida é resolvida e Bode retorna margem no cruzamento de ganho", () => {
     const repeated=polynomialRoots([1,2,1]);
     assert(repeated.length===2&&repeated.every(r=>near(r.re,-1,.002)&&Math.abs(r.im)<.002),JSON.stringify(repeated));
     const loop={num:[4],den:[1,2,0],domain:"continuous" as const},b=bode(loop,1200),m=margins(loop,b);
     assert(m.gainCrossovers.length===1&&near(m.gainCrossovers[0]!,Math.sqrt(-2+Math.sqrt(20)),.01),JSON.stringify(m));
     assert(m.phaseMargins.length===1&&near(m.phaseMargins[0]!,51.8,.02),JSON.stringify(m));
   });
-  await test("margens mÃºltiplas nÃ£o duplicam cruzamentos que caem exatamente em uma amostra", () => {
+  await test("margens múltiplas não duplicam cruzamentos que caem exatamente em uma amostra", () => {
     const points=[0,-180,-360,-540,-720].map((phaseDeg,index)=>({omega:10**index,magnitudeDb:3,phaseDeg}));
     const result=margins({num:[Math.SQRT2],den:[1],domain:"continuous"},points);
     assert(result.phaseCrossovers.length===2&&result.gainMarginsDb.length===2,JSON.stringify(result));
@@ -457,12 +457,12 @@ const near = (a: number, b: number, tol = 1e-5) => Math.abs(a - b) <= tol * Math
     assert(result.gainCrossovers.length===1&&near(result.gainCrossovers[0]!,Math.sqrt(3),1e-9),JSON.stringify(result));
     assert(result.phaseMargins.length===1&&near(result.phaseMargins[0]!,120,1e-9),JSON.stringify(result));
   });
-  await test("controladores P, PI, PD filtrado e PID usam convenÃ§Ãµes declaradas", () => {
+  await test("controladores P, PI, PD filtrado e PID usam convenções declaradas", () => {
     const p={kp:2,ki:3,kd:4,filterN:5,tau:2,alpha:.5};
     assert(JSON.stringify(controllerForm("PI",p).num)==="[2,3]"&&JSON.stringify(controllerForm("PI",p).den)==="[1,0]","PI");
     assert(JSON.stringify(controllerForm("PD",p).num)==="[22,10]"&&JSON.stringify(controllerForm("PD",p).den)==="[1,5]","PD");
     assert(JSON.stringify(controllerForm("PID",p).num)==="[22,13,15]"&&JSON.stringify(controllerForm("PID",p).den)==="[1,5,0]","PID filtrado");
-    assert(JSON.stringify(controllerForm("lead",p).num)==="[4,2]"&&JSON.stringify(controllerForm("lead",p).den)==="[1,1]","avanÃ§o");
+    assert(JSON.stringify(controllerForm("lead",p).num)==="[4,2]"&&JSON.stringify(controllerForm("lead",p).den)==="[1,1]","avanço");
     assert(JSON.stringify(controllerForm("lag",{...p,alpha:2}).den)==="[4,1]","atraso");
   });
   await test("entrada por polos e zeros preserva pares conjugados e ganho", () => {
@@ -472,13 +472,13 @@ const near = (a: number, b: number, tol = 1e-5) => Math.abs(a - b) <= tol * Math
     assert(JSON.stringify(staticGain.num)==="[3]"&&JSON.stringify(staticGain.den)==="[1]",JSON.stringify(staticGain));
     let bad=false;try{transferFromPolesZeros([], [{re:-1,im:1}],1,"continuous")}catch{bad=true}assert(bad,"par conjugado ausente aceito");
   });
-  await test("realizaÃ§Ã£o de espaÃ§o de estados converge ao mesmo modelo transferÃ­vel", () => {
+  await test("realização de espaço de estados converge ao mesmo modelo transferível", () => {
     const tf=stateSpaceToTf({A:[[-2]],B:[1],C:[1],D:0,domain:"continuous"});
     assert(JSON.stringify(tf.num)==="[1]"&&JSON.stringify(tf.den)==="[1,2]",JSON.stringify(tf));
     const second=stateSpaceToTf({A:[[0,1],[-4,-2]],B:[0,1],C:[4,0],D:0,domain:"continuous"});
     assert(JSON.stringify(second.num)==="[4]"&&JSON.stringify(second.den)==="[1,2,4]",JSON.stringify(second));
   });
-  await test("lugar das raÃ­zes inclui os polos corretos no ganho quatro", () => {
+  await test("lugar das raízes inclui os polos corretos no ganho quatro", () => {
     const series = rootLocus({num:[1],den:[1,2,0],domain:"continuous"},1,4,2);
     const roots = series.at(-1)!.roots;
     assert(roots.every(r => near(r.re,-1) && near(Math.abs(r.im),Math.sqrt(3))), JSON.stringify(series));
@@ -520,16 +520,16 @@ const near = (a: number, b: number, tol = 1e-5) => Math.abs(a - b) <= tol * Math
     assert(near(interpretation.principal!.im,Math.PI/.1)&&near(interpretation.branchSpacing,2*Math.PI/.1),JSON.stringify(interpretation));
     assert(interpretDiscretePole({re:0,im:0},.1).principal===undefined,"z=0 has no finite logarithm");
   });
-  await test("resposta ao degrau e mÃ©tricas do exemplo tÃªm valor final unitÃ¡rio", () => {
+  await test("resposta ao degrau e métricas do exemplo têm valor final unitário", () => {
     const response = timeResponse({num:[4],den:[1,2,4],domain:"continuous"},"step");
     const metrics = stepMetrics(response.samples);
     assert(response.stable && metrics.status === "settled" && near(metrics.finalValue!,1,.01), JSON.stringify(metrics));
     assert(near(metrics.overshootPercent!,16.3,.03), String(metrics.overshootPercent));
   });
-  await test("RK4 preserva resposta com polos lentos e rÃ¡pidos na mesma janela", () => {
+  await test("RK4 preserva resposta com polos lentos e rápidos na mesma janela", () => {
     const tf=transferFromPolesZeros([], [{re:-.027,im:1.002},{re:-.027,im:-1.002},{re:-2.24,im:0},{re:-39.7,im:0}], 1, "continuous");
     const response=timeResponse(tf,"step",100,800);
-    assert(response.converged&&response.samples.length===800&&response.samples.every(sample=>Number.isFinite(sample.value)),"integraÃ§Ã£o instÃ¡vel em escalas de tempo mistas");
+    assert(response.converged&&response.samples.length===800&&response.samples.every(sample=>Number.isFinite(sample.value)),"integração instável em escalas de tempo mistas");
   });
   await test("time response honors a nonuniform requested time vector", () => {
     const times=[0,.05,.2,.75,2],response=timeResponse({num:[1],den:[1,1],domain:"continuous"},"step",2,200,times);
@@ -545,22 +545,22 @@ const near = (a: number, b: number, tol = 1e-5) => Math.abs(a - b) <= tol * Math
     const metrics=stepMetrics(samples,1,{riseStartPercent:20,riseEndPercent:80,settlingPercent:5});
     assert(metrics.riseTime===1&&metrics.settlingTime===3,JSON.stringify(metrics));
   });
-  await test("discreto exige amostragem e a resposta usa recorrÃªncia", () => {
+  await test("discreto exige amostragem e a resposta usa recorrência", () => {
     let rejected=false; try { validateTf({num:[1],den:[1,-.5],domain:"discrete"}); } catch { rejected=true; }
     assert(rejected,"Ts ausente aceito");
     const r=timeResponse({num:[1],den:[1,-.5],domain:"discrete",sampleTime:.1},"step",5,50);
     assert(r.stable && near(r.samples.at(-1)!.value,2,1e-8),String(r.samples.at(-1)?.value));
-    assert(r.directFeedthrough===0,"resposta discreta estritamente prÃ³pria tem D=0");
+    assert(r.directFeedthrough===0,"resposta discreta estritamente própria tem D=0");
     const dBode=bode({num:[1],den:[1,-.5],domain:"discrete",sampleTime:.1},32);
     assert(near(dBode.at(-1)!.omega,Math.PI/.1,1e-8),"Bode discreto deve terminar em Nyquist");
     const direct=timeResponse({num:[2,1],den:[1,-.5],domain:"discrete",sampleTime:.1},"impulse",5,10);
     assert(direct.directFeedthrough===2&&near(direct.samples[0]!.value,2),"componente direta do impulso discreto");
   });
-  await test("modelo discreto de oitava ordem estÃ¡vel mantÃ©m polos e resposta finitos", () => {
+  await test("modelo discreto de oitava ordem estável mantém polos e resposta finitos", () => {
     const tf=transferFromPolesZeros([],Array.from({length:8},(_,index)=>({re:.1*(index+1),im:0})),.01,"discrete",.01);
     const roots=polynomialRoots(tf.den),response=timeResponse(tf,"step",.8,100);
     assert(roots.length===8&&Array.from({length:8},(_,index)=>.1*(index+1)).every(expected=>roots.some(root=>Math.abs(root.re-expected)<1e-5&&Math.abs(root.im)<1e-5)),JSON.stringify(roots));
-    assert(isStable(tf)&&response.converged&&response.samples.every(sample=>Number.isFinite(sample.value)),"modelo discreto estÃ¡vel nÃ£o convergiu");
+    assert(isStable(tf)&&response.converged&&response.samples.every(sample=>Number.isFinite(sample.value)),"modelo discreto estável não convergiu");
   });
   await test("solucionador preserva dez polos reais distintos", () => {
     const roots=Array.from({length:10},(_,i)=>({re:-(i+1),im:0}));
@@ -568,11 +568,11 @@ const near = (a: number, b: number, tol = 1e-5) => Math.abs(a - b) <= tol * Math
     assert(solved.length===10&&solved.every((root)=>Number.isFinite(root.re)&&Number.isFinite(root.im)),JSON.stringify(solved));
     for(const expected of roots)assert(solved.some((root)=>near(root.re,expected.re,1e-7)&&Math.abs(root.im)<1e-7),`polo ausente ${expected.re}: ${JSON.stringify(solved)}`);
   });
-  await test("polos com escalas separadas por seis ordens continuam identificÃ¡veis", () => {
+  await test("polos com escalas separadas por seis ordens continuam identificáveis", () => {
     const expected=[-1e-3,-1,-1e3],tf=transferFromPolesZeros([],expected.map((re)=>({re,im:0})),1,"continuous"),solved=poles(tf);
     for(const value of expected)assert(solved.some((root)=>near(root.re,value,1e-7)&&Math.abs(root.im)<1e-7),`polo ausente ${value}: ${JSON.stringify(solved)}`);
   });
-  await test("conversÃ£o bilinear declara Ts e mapeia polo contÃ­nuo para o interior do cÃ­rculo", () => {
+  await test("conversão bilinear declara Ts e mapeia polo contínuo para o interior do círculo", () => {
     const z=convertDomain({num:[1],den:[1,2],domain:"continuous"},"discrete",.1);
     assert(z.domain==="discrete"&&near(z.num[0]!,1/22)&&near(z.num[1]!,1/22)&&near(z.den[1]!,-18/22),JSON.stringify(z));
     const s=convertDomain(z,"continuous",.1);
@@ -675,19 +675,19 @@ const near = (a: number, b: number, tol = 1e-5) => Math.abs(a - b) <= tol * Math
   await test("ramos do lugar permanecem conjugados ao sair de polo repetido", () => {
     const series = rootLocus({num:[1],den:[1,2,0],domain:"continuous"},1e-3,1e3,121);
     const firstComplex = series.findIndex(row => row.roots.some(root => Math.abs(root.im) > 1e-4));
-    assert(firstComplex > 0, "nÃ£o encontrou o encontro dos ramos");
+    assert(firstComplex > 0, "não encontrou o encontro dos ramos");
     const branches = series.slice(firstComplex);
-    assert(branches.every(row => near(row.roots[0]!.re,row.roots[1]!.re,.01) && near(row.roots[0]!.im,-row.roots[1]!.im,.01)), "raÃ­zes deixaram de ser conjugadas");
+    assert(branches.every(row => near(row.roots[0]!.re,row.roots[1]!.re,.01) && near(row.roots[0]!.im,-row.roots[1]!.im,.01)), "raízes deixaram de ser conjugadas");
     const sign = Math.sign(branches[0]!.roots[0]!.im);
     assert(branches.slice(1).every(row => Math.sign(row.roots[0]!.im) === sign), "ramos trocaram de lado depois do encontro");
   });
-  await test("resposta natural em malha fechada usa x0 da realizaÃ§Ã£o sem descartar estados", () => {
+  await test("resposta natural em malha fechada usa x0 da realização sem descartar estados", () => {
     const plant={A:[[0,1],[-2,-3]],B:[0,1],C:[1,0],D:0};
     const result=closedLoopInitialStateResponse(plant,[1,0],{num:[2],den:[1],domain:"continuous"},{num:[1],den:[1],domain:"continuous"},2,401);
-    assert(result.samples[0]!.value===1,"saÃ­da inicial deve ser C*x0");
-    assert(result.stable&&result.samples.every(sample=>Number.isFinite(sample.value)),"resposta finita e estÃ¡vel esperada");
+    assert(result.samples[0]!.value===1,"saída inicial deve ser C*x0");
+    assert(result.stable&&result.samples.every(sample=>Number.isFinite(sample.value)),"resposta finita e estável esperada");
     let rejected=false;try{closedLoopInitialStateResponse(plant,[1],{num:[2],den:[1],domain:"continuous"},{num:[1],den:[1],domain:"continuous"})}catch{rejected=true}
-    assert(rejected,"vetor inicial com dimensÃ£o incorreta aceito");
+    assert(rejected,"vetor inicial com dimensão incorreta aceito");
   });
   await test("resposta natural aceita estados iniciais dinamicos em C e H", () => {
     const plant={A:[[-1]],B:[1],C:[1],D:0};

@@ -1116,7 +1116,7 @@ async function clickSvgAt(locator, x, y) {
     const initialViewBox = await keyboardPlot.getAttribute("viewBox");
     await keyboardPlot.focus();
     await keyboardPlot.press("ArrowRight");
-    if (await keyboardPlot.getAttribute("viewBox") === initialViewBox) throw new Error("gráfico não respondeu ÃƒÂ  navegação por teclado");
+    if (await keyboardPlot.getAttribute("viewBox") === initialViewBox) throw new Error("gráfico não respondeu à navegação por teclado");
     await keyboardPlot.press("Home");
     if (await keyboardPlot.getAttribute("viewBox") !== "0 0 640 330") throw new Error("Home não restaurou o enquadramento do gráfico");
     await designerFrame.locator("body").screenshot({ path: path.join(artifacts, "control-designer.png"), animations: "disabled" });
@@ -1905,7 +1905,7 @@ async function clickSvgAt(locator, x, y) {
     if (!instrumentFrame) throw new Error("Webview real não abriu a fixture determinística");
     await workbench.setViewportSize({ width: 1600, height: 1000 });
     await instrumentFrame.evaluate(() => document.fonts.ready);
-    // O painel de propriedades (posterior ÃƒÂ s imagens de referência) abre por padrão e cobre o lado
+    // O painel de propriedades (posterior às imagens de referência) abre por padrão e cobre o lado
     // direito das janelas de instrumento; recolhe para a captura mostrar a janela inteira.
     const propertyDockToggle = instrumentFrame.locator(".property-dock__header button").first();
     if (await propertyDockToggle.count()) await domClick(propertyDockToggle);

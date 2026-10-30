@@ -242,7 +242,7 @@ No `settings.json` do VS Code:
 Cada aluno deve ter um namespace exclusivo. Depois da alteração, execute
 `Developer: Reload Window`.
 
-O `lab-router` Ã© configurado no LasecSimul, nÃ£o no `platformio.ini`. No firmware,
+O `lab-router` é configurado no LasecSimul, não no `platformio.ini`. No firmware,
 mantenha `CONFIG_ETH_USE_OPENETH=y` e inicialize `esp_eth`/`esp_netif`; o instalador
 cria a TAP roteada e o gateway fornece DHCP no segmento privado.
 
