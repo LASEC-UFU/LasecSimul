@@ -81,6 +81,13 @@ public:
     virtual void setPinTransitionsObserved(uint32_t pinIndex, bool observed) {
         (void)pinIndex; (void)observed;
     }
+
+    /** Pares de pinos (clock, dado) cujos fios só ligam escravos SPI que aceitam bytes inteiros --
+     * ver `LsdnMcuVTable::set_spi_byte_pairs`. Substitui o conjunto anterior; vazio desliga.
+     * Default: ignora (o SPI continua bit a bit). */
+    virtual void setSpiBytePairs(std::span<const uint32_t> clockPins, std::span<const uint32_t> dataPins) {
+        (void)clockPins; (void)dataPins;
+    }
 };
 
 } // namespace lasecsimul

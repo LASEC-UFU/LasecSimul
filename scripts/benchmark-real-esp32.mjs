@@ -48,9 +48,9 @@ const pipeName = `lasecsimul-real-esp32-${process.pid}-${Date.now()}`;
 // effective environment is never ambiguous from its own output.
 const networkMode = process.env.LASECSIMUL_NETWORK_MODE ?? "isolated";
 const effectiveTransport = process.env.LASECSIMUL_MCU_TRANSPORT ?? "(unset -> LEGACY)";
-const effectiveExecutionMode = process.env.LASECSIMUL_ESP32_EXECUTION_MODE ?? "(unset -> mttcg default)";
+const effectiveTiming = process.env.LASECSIMUL_ESP32_TIMING ?? "(unset -> realtime)";
 console.error(`[benchmark-real-esp32] LASECSIMUL_NETWORK_MODE=${networkMode} ` +
-  `LASECSIMUL_MCU_TRANSPORT=${effectiveTransport} LASECSIMUL_ESP32_EXECUTION_MODE=${effectiveExecutionMode} ` +
+  `LASECSIMUL_MCU_TRANSPORT=${effectiveTransport} LASECSIMUL_ESP32_TIMING=${effectiveTiming} ` +
   `core=${corePath} qemu=${qemuPath} subcircuit=${subcircuitPath}`);
 const core = spawn(corePath, ["--pipe", pipeName], {
   cwd: repo,
@@ -503,7 +503,7 @@ async function main() {
   const result = {
     fixture: {
       projectPath, firmwarePath, boardProjectId, mcuId, durationMs, realTimeRate,
-      corePath, qemuPath, subcircuitPath, networkMode, effectiveTransport, effectiveExecutionMode,
+      corePath, qemuPath, subcircuitPath, networkMode, effectiveTransport, effectiveTiming,
       plotDisconnected,
     },
     rate: {

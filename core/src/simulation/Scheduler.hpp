@@ -108,11 +108,6 @@ public:
      * MCU -- um ciclo de realimentação estrutural). Um teto de POSIÇÃO absoluta não tem esse
      * problema: é uma comparação direta entre dois valores, sem janela nem suavização nenhuma. */
     using AdvanceLimitFn = std::function<std::optional<uint64_t>()>;
-    /** Posição (na timeline deste Scheduler) que um relógio externo acompanhando o relógio do host
-     * comprovadamente já alcançou -- hoje, o timestamp mais recente publicado por um QEMU em modo
-     * MTTCG/tempo real (ver `SimulationSession::computeHostPacedMcuPositionNs()`). Estar atrás dela
-     * significa estar atrás do tempo real, então o pacing não dorme; `std::nullopt` = sem referência. */
-    using HostPacedPositionFn = std::function<std::optional<uint64_t>()>;
     using BeforeExecutionFn = std::function<void()>;
     /** Lockstep exato: posição que um artefato com relógio contado por instrução (QEMU -icount)
      * provou ter alcançado. Diferente de `AdvanceLimitFn`, é um teto SEM folga -- o Core nunca passa
@@ -137,7 +132,6 @@ public:
     void setCommandDrainCallback(CommandDrainFn callback) { m_commandDrain = std::move(callback); }
     void setCommandPendingCallback(CommandPendingFn callback) { m_commandPending = std::move(callback); }
     void setAdvanceLimitCallback(AdvanceLimitFn callback) { m_advanceLimit = std::move(callback); }
-    void setHostPacedPositionCallback(HostPacedPositionFn callback) { m_hostPacedPosition = std::move(callback); }
     void setBeforeExecutionCallback(BeforeExecutionFn callback) { m_beforeExecution = std::move(callback); }
     void setExactAdvanceLimitCallback(ExactAdvanceLimitFn callback) { m_exactAdvanceLimit = std::move(callback); }
     void setTimeSettledCallback(TimeSettledFn callback) { m_timeSettled = std::move(callback); }
@@ -403,7 +397,6 @@ private:
     CommandDrainFn m_commandDrain;
     CommandPendingFn m_commandPending;
     AdvanceLimitFn m_advanceLimit;
-    HostPacedPositionFn m_hostPacedPosition;
     ExactAdvanceLimitFn m_exactAdvanceLimit;
     TimeSettledFn m_timeSettled;
     BeforeExecutionFn m_beforeExecution;

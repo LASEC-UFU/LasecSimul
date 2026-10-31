@@ -142,12 +142,6 @@ int main() {
         return 1;
     }
     std::fprintf(stderr, "%s\n", flashLine.c_str());
-    // No modo mttcg o relógio do guest segue o do host (limite documentado do modo): sem exigência.
-    const char* executionMode = std::getenv("LASECSIMUL_ESP32_EXECUTION_MODE");
-    if (executionMode && std::string(executionMode) == "mttcg") {
-        std::printf("Duas CPUs (mttcg, sem exigencia de tempo): %lld / %lld / %lld us\n", singleUs, bothCore1Us, bothCore0Us);
-        return 0;
-    }
     // 1% cobre a interrupção do tick e a troca de turno entre as vCPUs; o defeito antigo dava ~2x.
     const auto close = [](long long us, long long reference) {
         return us >= reference * 99 / 100 && us <= reference * 101 / 100;

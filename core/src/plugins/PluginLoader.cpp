@@ -61,7 +61,7 @@ std::shared_ptr<PluginModule> PluginLoader::createDeviceModuleFromExports(
         throw std::runtime_error("ABI incompativel em: " + binaryPath.string());
     }
 
-    return std::make_shared<PluginModule>(libraryHandle, vtable, binaryPath);
+    return std::make_shared<PluginModule>(libraryHandle, vtable, binaryPath, abiMinor);
 }
 
 std::shared_ptr<PluginModule> PluginLoader::createMcuModuleFromExports(

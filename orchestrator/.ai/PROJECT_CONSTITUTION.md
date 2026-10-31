@@ -61,7 +61,9 @@ Exactly two semantic doorbells per attachment:
 
 ## Current production launch intent
 
-- MTTCG / `thread=multi`
+- single-thread TCG with `-icount`, in lockstep with the Core
+  (`lasecsimul.mcu.esp32Timing`: `realtime` default, `exact`). MTTCG / `thread=multi`
+  was retired on 2026-10-30 (docs/35-bug-bordas-esp32-displays-2026-10-28.md, "MTTCG retirado").
 - `LASECSIMUL_QEMU_TB_SIZE=64`
 - effective `tb-size=64`
 - `LASECSIMUL_VNEXT_TRACE` OFF by default

@@ -482,6 +482,28 @@ function attachCoreClientNotifications(client: CoreClient): void {
   });
 }
 
+/** O valor "mttcg" de `lasecsimul.mcu.esp32Timing` foi retirado em 2026-10-30: com o relógio do ESP32
+ * preso ao do PC, o SPI de hardware, a UART no pino e a duração de um fade saíam errados. Quem o tinha
+ * salvo passa ao padrão ("realtime"), e o valor some do settings.json. */
+function retireEsp32MttcgTiming(): void {
+  const configuration = vscode.workspace.getConfiguration("lasecsimul.mcu");
+  const inspected = configuration.inspect<string>("esp32Timing");
+  const targets: Array<[string | undefined, vscode.ConfigurationTarget]> = [
+    [inspected?.globalValue, vscode.ConfigurationTarget.Global],
+    [inspected?.workspaceValue, vscode.ConfigurationTarget.Workspace],
+  ];
+  let retired = false;
+  for (const [value, target] of targets) {
+    if (value !== "mttcg") continue;
+    retired = true;
+    Promise.resolve(configuration.update("esp32Timing", undefined, target)).catch(() => undefined);
+  }
+  if (retired) {
+    void vscode.window.showInformationMessage(
+      "LasecSimul: a temporização \"mttcg\" do ESP32 foi retirada. O ESP32 passa a rodar em \"realtime\", em sincronia com o circuito.");
+  }
+}
+
 /** Resolve o binário, monta o ambiente e sobe um `CoreProcess` novo em `state.coreProc` -- usado na
  * ativação da extensão E por `ensureCoreConnected()` pra reiniciar depois que o processo morreu. */
 function launchCoreProcess(extensionPath: string): { corePath: string; pipeName: string } {
@@ -499,14 +521,13 @@ function launchCoreProcess(extensionPath: string): { corePath: string; pipeName:
   // "realtime" e "exact": QEMU com relógio contado por instrução (-icount) em lockstep com o Core -- o
   // guest nunca passa do instante do circuito nem o circuito do instante do guest. "realtime" ainda
   // estica o tempo de cada instrução quando o PC não executa o guest rápido o bastante para o ritmo
-  // real. "mttcg": o modo antigo, relógio do guest preso ao do host.
+  // real.
   const esp32Timing = vscode.workspace.getConfiguration("lasecsimul.mcu").get<string>("esp32Timing", "realtime");
   const coreEnv: NodeJS.ProcessEnv = {
     // Prevent shared-memory arena collisions between thin-client instances.
     LASECSIMUL_HOST_INSTANCE_ID: String(process.pid),
     // VNEXT-B is the certified event-driven transport for the ESP32 runtime.
     LASECSIMUL_MCU_TRANSPORT: "VNEXT_B",
-    LASECSIMUL_ESP32_EXECUTION_MODE: esp32Timing === "mttcg" ? "mttcg" : "deterministic",
     LASECSIMUL_ESP32_TIMING: esp32Timing === "exact" ? "exact" : "realtime",
     LASECSIMUL_NETWORK_MODE:
       networkMode.effectiveMode,
@@ -3488,6 +3509,7 @@ export function activate(context: vscode.ExtensionContext): LasecSimulInteropApi
   ]);
   state.schematicState.locale = currentLasecSimulLanguage();
 
+  retireEsp32MttcgTiming();
   const { pipeName } = launchCoreProcess(context.extensionPath);
 
   state.coreClient = new CoreClient(pipeName);

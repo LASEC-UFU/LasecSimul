@@ -738,6 +738,21 @@ private:
     bool mcuPinTransitionsObservedUnlocked(uint32_t mcuIndex, size_t localPinIndex) const;
     /** Há outro componente (que não um túnel) no nó do pino `localPinIndex` do MCU. */
     bool mcuPinConnectedUnlocked(uint32_t mcuIndex, size_t localPinIndex) const;
+    /** Barramento SPI em que o mestre pode mandar bytes inteiros: o fio de clock só liga o pino
+     * `clockPin` do MCU e os pinos de clock dos escravos `devices` (que aceitam bytes, ver
+     * `IComponentModel::spiInputPins`), o de dado só `dataPin` e os pinos de dado dos mesmos
+     * escravos; além deles, só túneis e resistores. Qualquer outra coisa (instrumento, LED, outro
+     * escravo sem suporte) precisa das bordas, e o par não entra. */
+    struct SpiBytePair {
+        uint32_t clockPin = 0;
+        uint32_t dataPin = 0;
+        std::vector<uint32_t> devices;
+    };
+    std::vector<SpiBytePair> mcuSpiBytePairsUnlocked(uint32_t mcuIndex) const;
+    /** No instante em que o SPI do MCU terminou um byte sem bordas: entrega aos escravos do par. */
+    void deliverSpiByteUnlocked(uint32_t mcuIndex, uint32_t clockPin, uint32_t dataPin, uint8_t byte);
+    /** Por MCU (índice do componente), os pares publicados ao adaptador. Muda só com a topologia. */
+    std::unordered_map<uint32_t, std::vector<SpiBytePair>> m_spiBytePairs;
     /** Reaproveita `CircuitGroup` (matriz/fatoração já estampada) de `previous` pra qualquer rede
      * cujo conjunto de componentes vivos E mapeamento pino->índice local não mudaram -- sem isso,
      * `Netlist::rebuildTopology()` sempre aloca `CircuitGroup` novo/vazio pra TUDO (deliberado,
@@ -1047,12 +1062,6 @@ private:
      * `m_componentInstances` já é funilada pela fila de comandos (`enqueueCommand`/
      * `drainCommandQueue`), nunca concorrente com a própria worker. */
     std::optional<uint64_t> computeSlowestMcuPositionNs();
-    /** Hook `Scheduler::HostPacedPositionFn`: a MAIOR posição publicada entre os MCUs cujo QEMU usa
-     * relógio virtual acompanhando o host (`McuComponent::hostPacedVirtualClock()`). Cada uma é um
-     * limite inferior do tempo real, então a maior também é; sem staleness aqui, porque uma posição
-     * antiga fica atrás do Scheduler e não dispensa espera nenhuma. Mesma convenção de thread de
-     * `computeSlowestMcuPositionNs()`: só lê atômicos de cada MCU. */
-    std::optional<uint64_t> computeHostPacedMcuPositionNs() const;
     /** Teto exato do Scheduler: o menor instante provado pelos MCUs em lockstep (QEMU -icount,
      * ver McuComponent::lockstepLimitNs()); `std::nullopt` se nenhum estiver em lockstep. */
     std::optional<uint64_t> computeLockstepMcuLimitNs() const;

@@ -134,6 +134,17 @@ public:
     /** true quando drainWireTapByte() é realmente suportado, sem consumir nada. */
     virtual bool hasWireTap() const { return false; }
 
+    /** Drena UM byte que um SPI mestre transmitiu sem bordas (ver
+     * `LsdnQemuModuleVTable::drain_spi_byte`): byte na ordem do fio e o par de pinos (espaço de
+     * `pinMap()`) por onde saiu. Default: nenhum. */
+    virtual bool drainSpiByte(uint8_t& /*outByte*/, uint32_t& /*outClockPin*/, uint32_t& /*outDataPin*/) {
+        return false;
+    }
+
+    /** Índice da USART cujo TX sai agora pela linha `bitOrLine` deste módulo (ver
+     * `LsdnQemuModuleVTable::uart_tx_on_line`), ou -1. Default: nenhuma. */
+    virtual int32_t uartTxOnLine(uint32_t /*bitOrLine*/) const { return -1; }
+
     /** Injeta `count` bytes como se tivessem chegado pela entrada real do periférico (ex: RX de
      * uma USART) -- bypassa qualquer temporização elétrica bit-a-bit de propósito (ferramenta de
      * monitor/dev, não simulação de fio: equivalente a digitar no SerialMonitor real do SimulIDE,

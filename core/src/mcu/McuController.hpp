@@ -75,14 +75,6 @@ public:
     qemu::QemuArenaBridge& arenaBridge() { return m_arenaBridge; }
     const qemu::QemuArenaBridge& arenaBridge() const { return m_arenaBridge; }
 
-    /** true quando o QEMU em execução usa um relógio virtual acompanhando o relógio do host
-     * (MTTCG ou TCG single, ambos sem `-icount`). Nesse modo um timestamp publicado pelo QEMU
-     * nunca está à frente do tempo real: o pacing do Scheduler pode alcançá-lo sem esperar.
-     * Falso no modo determinístico (`-icount`), cujo relógio pode correr à frente do host. Lido
-     * pela thread do Scheduler enquanto start()/stop() rodam em outra thread. */
-    bool hostPacedVirtualClock() const noexcept {
-        return m_hostPacedVirtualClock.load(std::memory_order_acquire);
-    }
     /** true quando o QEMU VNEXT_B roda com relógio contado por instrução (-icount) em lockstep
      * exato com o Core (ver lasec_at_control_page::lockstep). LASECSIMUL_ESP32_LOCKSTEP=0 desliga;
      * LASECSIMUL_ESP32_TIMING=exact tira o ajuste ao tempo real (lockstep_realtime). */
@@ -95,7 +87,6 @@ private:
     qemu::QemuArenaBridge m_arenaBridge;
     qemu::VnextBAttachment m_vnextB;
     bool m_vnextBAttached = false;
-    std::atomic<bool> m_hostPacedVirtualClock{false};
     std::atomic<bool> m_lockstep{false};
     RuntimeLaunchIdentity m_runtimeIdentity{};
 };

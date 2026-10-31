@@ -95,9 +95,9 @@ Core, preventing a response from racing ahead of the stop. A 180-second run of t
 through the end of the run. The previous packaged executable had four such errors in 70 seconds
 with the same fixture.
 
-As of 2026-10-30 the packaged executable is built from `7ead728` plus patches 0011-0016, applied in
+As of 2026-10-31 the packaged executable is built from `7ead728` plus patches 0011-0019, applied in
 order on the uncommitted working tree of `qemu_lasecSimul-invalid-state` (the chain re-applied
-reproduces that tree exactly; SHA-256 `61AA17DF...`, see `bin/BUILD-PROVENANCE-1H.txt`). 0011-0015
+reproduces that tree exactly; SHA-256 `5757302545...`, see `bin/BUILD-PROVENANCE-1H.txt`). 0011-0015
 are summarized in `orchestrator/.ai/QEMU_RUNTIME.json` (`promotion_note_v0104`). 0016:
 
 - `softmmu/icount.c`, `accel/tcg/tcg-accel-ops-icount.c`, `accel/tcg/tcg-accel-ops-rr.c`,
@@ -116,3 +116,28 @@ are summarized in `orchestrator/.ai/QEMU_RUNTIME.json` (`promotion_note_v0104`).
   the `DUTY_CHNG_END` interrupt wired to the interrupt matrix; `DUTY_R` reads the duty in effect.
 - `hw/i2c/esp32_i2c.c`: a STOP with no data list (the bus held after a transfer without STOP) goes to
   the Core as a STOP-only burst, so SDA/SCL return high as on the chip.
+
+0017 (`hw/ssi/esp32_spi.c`, `include/hw/misc/esp32_flash_enc.h`): a USR command on HSPI/VSPI no
+longer goes through the flash-encryption block (only the flash controllers SPI0/SPI1 do, as on the
+chip), and the flash-encryption device is resolved once instead of walking the whole QOM tree
+(`object_resolve_path_type`) on every command. In a byte-by-byte `SPI.transfer()` loop that lookup
+was 44.8% of the vCPU thread.
+
+0018 (`target/xtensa/helper.c`, `target/xtensa/cpu.c`, `target/xtensa/cpu.h`): RUNSTALL is a level on
+the core's input, and releasing it now lets the core go on as it was -- running, or still in WAITI
+until an interrupt. `xtensa_runstall()` halted the core with `CPU_INTERRUPT_HALT`; when the core did not
+execute during the stall (the single-threaded RR loop never runs a halted core, and the ESP32 flash-cache
+wait also holds it), that request was still pending at the release and halted it again, until an
+interrupt above PS.INTLEVEL arrived: about a tick late, or forever with interrupts masked. The release
+also ended a WAITI with no interrupt. The code came from upstream QEMU. Found by the rewritten
+`cache_wait_e2e_real_qemu` (RUNSTALL scenario: 100 of 100 runs failed before, 100 of 100 passed after).
+
+0019 (`softmmu/icount.c`): with per-vCPU clocks (0016) a vCPU that reached its quantum ahead of the
+other is flagged as waiting for it, and that flag blocks the icount warp. Whether it still waits was
+decided against `icount_global_ns`, which is recomputed only when a vCPU runs. A core flagged that way
+that then executed WAITI kept the flag; when an interrupt woke it while the other core stayed halted,
+the stale global clock still put it ahead, so both cores looked idle, the warp stayed blocked and
+nothing ran again. Now a vCPU waits only while another vCPU on the timeline is behind it and can run,
+decided from the vCPUs themselves; a vCPU halted with nothing to do waits for nobody. Seen as the class
+sketch (II1P06) freezing right after boot, both cores in `esp_pm_impl_waiti`, in 15 of 104 sessions run
+8 at a time on 0018 and 2 of 16 on 0017; 0 of 48 after the fix.

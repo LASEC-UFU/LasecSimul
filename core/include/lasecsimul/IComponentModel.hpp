@@ -172,6 +172,12 @@ public:
     virtual bool supportsI2cTransfer() const { return false; }
     virtual std::optional<uint32_t> i2cPinIndex(bool) const { return std::nullopt; }
     virtual I2cTransferResult transferI2c(const I2cTransfer&) { return {}; }
+    /** Escravo SPI que amostra o dado na borda de subida do clock: índices locais dos pinos de
+     * clock e de dado. `clockSpiByte` equivale a 8 bordas de subida com os bits de `byte` (MSB
+     * primeiro) -- usado só quando os dois fios não têm mais nada que dependa das bordas. */
+    struct SpiInputPins { uint32_t clock = 0; uint32_t data = 0; };
+    virtual std::optional<SpiInputPins> spiInputPins() const { return std::nullopt; }
+    virtual void clockSpiByte(uint8_t) {}
 
     virtual size_t getState(uint8_t* out, size_t cap) const = 0;
     /** Snapshot pequeno para telemetria periódica. Por padrão preserva a ABI/comportamento de

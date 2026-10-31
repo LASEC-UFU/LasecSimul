@@ -243,22 +243,6 @@ void setAccelProperty(QemuLaunchSpec& spec, std::string_view key, std::string va
     }
 }
 
-bool accelHasProperty(const QemuLaunchSpec& spec, std::string_view key, std::string_view value) {
-    const std::string property = std::string(key) + "=" + std::string(value);
-    for (size_t index = 0; index + 1 < spec.args.size(); ++index) {
-        if (spec.args[index] != "-accel") continue;
-        const std::string& accel = spec.args[index + 1];
-        size_t tokenStart = 0;
-        while (tokenStart <= accel.size()) {
-            const size_t tokenEnd = accel.find(',', tokenStart);
-            const size_t tokenSize = (tokenEnd == std::string::npos ? accel.size() : tokenEnd) - tokenStart;
-            if (accel.compare(tokenStart, tokenSize, property) == 0) return true;
-            if (tokenEnd == std::string::npos) break;
-            tokenStart = tokenEnd + 1;
-        }
-    }
-    return false;
-}
 
 } // namespace
 
@@ -283,21 +267,8 @@ QemuLaunchSpec McuController::buildLaunchSpec(const std::filesystem::path& firmw
             setAccelProperty(spec, "tb-size", std::to_string(mib));
         }
     }
-    // Host-only TCG scheduling experiment for high session counts. The normal VNEXT launch
-    // remains MTTCG; this opt-in serializes each QEMU's vCPUs without changing the wire ABI.
-    if (const char* tcgThread = std::getenv("LASECSIMUL_QEMU_TCG_THREAD");
-        tcgThread && std::string_view(tcgThread) == "single") {
-        setAccelProperty(spec, "thread", "single");
-    }
-    const bool mttcg = accelHasProperty(spec, "thread", "multi");
     const auto icountArgIt = std::find(spec.args.begin(), spec.args.end(), "-icount");
-    const bool icount = icountArgIt != spec.args.end();
-    if (mttcg) {
-        spec.diagnostics +=
-            "[LasecSimul] execution=mttcg-realtime "
-            "(default, one TCG thread per vCPU; rollback: "
-            "LASECSIMUL_ESP32_EXECUTION_MODE=deterministic)\n";
-    } else if (icount) {
+    if (icountArgIt != spec.args.end()) {
         // The shift value sits in the argument right after "-icount" (e.g.
         // "shift=4,align=off,sleep=off"); parse it out for the diagnostic line
         // rather than re-deriving it, since configuredIcountShift() lives in
@@ -314,12 +285,9 @@ QemuLaunchSpec McuController::buildLaunchSpec(const std::filesystem::path& firmw
         }
         spec.diagnostics += "[LasecSimul] execution=deterministic-icount shift=" + shift + "\n";
     } else {
-        // Neither tcg,thread=multi nor -icount: this is the LASECSIMUL_QEMU_TCG_THREAD=single
-        // override on top of MTTCG's default config -- single TCG thread, still real-time
-        // virtual clock. See McuController.cpp's tcgThread override above.
-        spec.diagnostics +=
-            "[LasecSimul] execution=single-realtime "
-            "(LASECSIMUL_QEMU_TCG_THREAD=single override, no -icount)\n";
+        // O adaptador ESP32 sempre pede -icount (o MTTCG foi retirado em 2026-10-30). Sem ele o
+        // relógio do guest segue o do host e não pode ser segurado: o lançamento roda sem lockstep.
+        spec.diagnostics += "[LasecSimul] execution=host-clock (no -icount, no lockstep)\n";
     }
     const qemu::QemuArenaProtocol arenaProtocol =
         qemu::QemuArenaBridge::configuredProtocol();
@@ -377,9 +345,8 @@ void McuController::start(const std::filesystem::path& firmwarePath, const std::
     m_runtimeIdentity = identity;
     QemuLaunchSpec spec = buildLaunchSpec(
         firmwarePath, arenaName, callSiteBinaryOverride, debug, identity);
-    m_hostPacedVirtualClock.store(
-        std::find(spec.args.begin(), spec.args.end(), "-icount") == spec.args.end(),
-        std::memory_order_release);
+    const bool instructionCountedClock =
+        std::find(spec.args.begin(), spec.args.end(), "-icount") != spec.args.end();
     const char* selectedTransport = std::getenv("LASECSIMUL_MCU_TRANSPORT");
     const bool useVnextBTransport =
         selectedTransport && std::string_view(selectedTransport) == "VNEXT_B";
@@ -411,10 +378,10 @@ void McuController::start(const std::filesystem::path& firmwarePath, const std::
         m_vnextB.prepare(std::move(spec), identity.sessionExecutionId, arenaName, m_adapter.chipId(),
                          std::move(notificationWake), [this] { return m_vnextBAttached; });
         m_vnextBAttached = true;
-        // Lockstep exato só com relógio contado por instrução: no MTTCG o relógio do QEMU segue o
+        // Lockstep exato só com relógio contado por instrução: sem -icount o relógio do QEMU segue o
         // do host e não pode ser segurado. Ligado antes de activate(), que libera o guest.
         const char* lockstepSetting = std::getenv("LASECSIMUL_ESP32_LOCKSTEP");
-        const bool lockstep = !m_hostPacedVirtualClock.load(std::memory_order_relaxed) &&
+        const bool lockstep = instructionCountedClock &&
                               !(lockstepSetting && std::string_view(lockstepSetting) == "0");
         // Padrão: tempo real -- quando o host não executa o guest rápido o bastante, o QEMU estica o
         // tempo de cada instrução em vez de a simulação inteira atrasar. "exact": sempre um ciclo por
@@ -480,7 +447,6 @@ void McuController::start(const std::filesystem::path& firmwarePath, const std::
 }
 
 void McuController::stop() {
-    m_hostPacedVirtualClock.store(false, std::memory_order_release);
     m_lockstep.store(false, std::memory_order_release);
     if (m_vnextBAttached) {
         m_vnextB.stop();

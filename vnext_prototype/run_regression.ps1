@@ -7,9 +7,10 @@
     that leaves cores free, inherited by every QEMU the tests spawn.
 
     Transport and execution mode are explicit (PLAN_MTTCG_VNEXT_B_CAUSALITY.md
-    section 7.1): every run materializes exactly one of the six
-    Transport x ExecutionMode cells, prints it in the header, and never lets a
-    result's transport/mode stay implicit.
+    section 7.1): every run prints both in the header and never lets a
+    result's transport/mode stay implicit.  The execution mode is always
+    ICOUNT: MTTCG and SINGLE_REALTIME were retired on 2026-10-30, and the
+    ESP32 adapter always launches QEMU with -icount.
 #>
 param(
     [int]$ReserveCores = 6,
@@ -18,8 +19,8 @@ param(
     [string]$BuildDir = '',
     [ValidateSet('LEGACY','VNEXT_B')]
     [string]$Transport = 'LEGACY',
-    [ValidateSet('MTTCG','SINGLE_REALTIME','ICOUNT')]
-    [string]$ExecutionMode = 'MTTCG',
+    [ValidateSet('ICOUNT')]
+    [string]$ExecutionMode = 'ICOUNT',
     [string]$RunId = '',
     # E118-AUDIT (EVIDENCE.md, 2026-09-05): lets a not-yet-promoted candidate be regression-tested
     # against the same 13-test set before it replaces the canonical runtime. Empty (default) keeps
@@ -57,12 +58,6 @@ $env:LASECSIMUL_TEST_FIRMWARE    = Join-Path $repo 'vnext_prototype\guest_i2c_wo
 $env:LASECSIMUL_TEST_QEMU_BINARY = if ($QemuBinary) { $QemuBinary } else { Join-Path $repo 'vnext_prototype\dev_qemu_runtime\qemu-system-xtensa.exe' }
 $env:LASECSIMUL_QEMU_TB_SIZE     = '64'
 
-# Materialize exactly one configuration per cell -- never leave transport/mode implicit.
-switch ($ExecutionMode) {
-    'MTTCG'           { $env:LASECSIMUL_ESP32_EXECUTION_MODE = 'mttcg' }
-    'SINGLE_REALTIME' { $env:LASECSIMUL_ESP32_EXECUTION_MODE = 'mttcg'; $env:LASECSIMUL_QEMU_TCG_THREAD = 'single' }
-    'ICOUNT'          { $env:LASECSIMUL_ESP32_EXECUTION_MODE = 'deterministic' }
-}
 if ($Transport -eq 'VNEXT_B') { $env:LASECSIMUL_MCU_TRANSPORT = 'VNEXT_B' }
 # LEGACY: LASECSIMUL_MCU_TRANSPORT stays absent -- that is the compatible current contract.
 

@@ -120,23 +120,16 @@ int main() {
                 "stay in a discarded overlay, never modifying the user's firmware .bin)");
     TEST_ASSERT(!containsArg(launch, "-nic"),
                 "adapter base launch is network-neutral; Core adds OpenETH only when explicitly enabled");
-    TEST_ASSERT(containsArgPair(launch, "-accel", "tcg,thread=multi"),
-                "default launch requests one host TCG thread per ESP32 vCPU");
-    TEST_ASSERT(!containsArg(launch, "-icount"),
-                "default MTTCG launch omits incompatible instruction-counted time");
+    TEST_ASSERT(containsArgPair(launch, "-accel", "tcg,thread=single") && containsArg(launch, "-icount"),
+                "launch uses one TCG thread and instruction-counted time (base of the lockstep)");
 
-    setExecutionMode("deterministic");
-    const QemuLaunchSpec deterministicLaunch = adapter->buildLaunchArgs("build/blink.bin");
-    TEST_ASSERT(containsArgPair(deterministicLaunch, "-accel", "tcg,thread=single"),
-                "explicit deterministic rollback keeps one TCG thread");
-    TEST_ASSERT(containsArg(deterministicLaunch, "-icount"),
-                "explicit deterministic rollback restores instruction-counted virtual time");
-
-    setExecutionMode("invalid-mode");
-    const QemuLaunchSpec invalidLaunch = adapter->buildLaunchArgs("build/blink.bin");
-    TEST_ASSERT(containsArgPair(invalidLaunch, "-accel", "tcg,thread=single") &&
-                    containsArg(invalidLaunch, "-icount"),
-                "unknown non-empty execution mode fails closed to deterministic");
+    // O modo MTTCG foi retirado em 2026-10-30: um ambiente antigo com a variável continua no
+    // relógio contado por instrução.
+    setExecutionMode("mttcg");
+    const QemuLaunchSpec retiredMttcgLaunch = adapter->buildLaunchArgs("build/blink.bin");
+    TEST_ASSERT(containsArgPair(retiredMttcgLaunch, "-accel", "tcg,thread=single") &&
+                    containsArg(retiredMttcgLaunch, "-icount"),
+                "LASECSIMUL_ESP32_EXECUTION_MODE=mttcg no longer selects a host-paced clock");
     setExecutionMode(nullptr);
 
     const auto regions = adapter->memoryRegions();
@@ -246,6 +239,23 @@ int main() {
         gpioModule->writeRegister(0x3FF44000 + 0x530 + 4, 14u);
         TEST_ASSERT(gpioModule->isOutputEnabled(1), "GPIO matrix habilita GPIO1 como saida do U0TXD");
         TEST_ASSERT(gpioModule->outputLevel(1), "GPIO matrix roteia U0TXD para GPIO1");
+
+        // mcu_abi.h 3.4: qual USART sai por uma linha de GPIO (o tap da UART no pino do chip).
+        TEST_ASSERT(gpioModule->uartTxOnLine(1) == 0, "GPIO1 pela matriz carrega o TX da UART0");
+        gpioModule->writeRegister(0x3FF44000 + 0x530 + 4, 0x100u); // GPIO1: GPIO puro
+        TEST_ASSERT(gpioModule->uartTxOnLine(1) == -1, "GPIO1 como GPIO puro nao carrega TX de UART");
+        if (ioMuxModule) ioMuxModule->writeRegister(0x3FF49000 + 0x88, 0);
+        TEST_ASSERT(gpioModule->uartTxOnLine(1) == 0, "GPIO1 na funcao 0 do IO_MUX e' o U0TXD");
+        if (ioMuxModule) {
+            const uint64_t gpio17IoMux = ioMuxModule->readRegister(0x3FF49000 + 0x50);
+            const uint64_t gpio17OutSel = gpioModule->readRegister(0x3FF44000 + 0x530 + 17u * 4u);
+            ioMuxModule->writeRegister(0x3FF49000 + 0x50, 2u << 12);
+            gpioModule->writeRegister(0x3FF44000 + 0x530 + 17u * 4u, 17u); // U1TXD
+            TEST_ASSERT(gpioModule->uartTxOnLine(17) == 1, "U1TXD pela matriz no GPIO17 e' o TX da UART1");
+            ioMuxModule->writeRegister(0x3FF49000 + 0x50, gpio17IoMux);
+            gpioModule->writeRegister(0x3FF44000 + 0x530 + 17u * 4u, gpio17OutSel);
+        }
+        TEST_ASSERT(gpioModule->uartTxOnLine(4) == -1, "GPIO4 sem funcao de UART nao carrega TX");
 
         if (ioMuxModule) ioMuxModule->writeRegister(0x3FF49000 + 0x88, 0);
         if (uart0Module) uart0Module->writeRegister(0x3FF40000 + 0x14, 5'000u);
@@ -815,6 +825,54 @@ int main() {
         TEST_ASSERT(!spiModule->isOutputEnabled(kCs0Line), "CS0_DIS desliga o CS0 de hardware");
         spiModule->writeRegisterAt(kSpiBase + 0x34, 0u, 0); // restaura CS0 habilitado
         TEST_ASSERT(spiModule->isOutputEnabled(kCs0Line), "limpar CS0_DIS reabilita o CS0 de hardware");
+
+        // ---- Bytes sem bordas (mcu_abi.h 3.3): HSPI CLK -> GPIO14 e MOSI -> GPIO13 pela GPIO matrix,
+        // par declarado pelo Core (fios so' com escravos que aceitam bytes inteiros). ----
+        ioMuxModule->writeRegister(0x3FF49000 + 0x30, 2u << 12); // IO_MUX_MTMS (GPIO14): funcao GPIO
+        ioMuxModule->writeRegister(0x3FF49000 + 0x38, 2u << 12); // IO_MUX_MTCK (GPIO13): funcao GPIO
+        gpioModule->writeRegister(0x3FF44000 + 0x530 + 14u * 4u, 8u);  // HSPICLK_out
+        gpioModule->writeRegister(0x3FF44000 + 0x530 + 13u * 4u, 10u); // HSPID_out (MOSI)
+        const std::vector<uint32_t> clockPins{14}, dataPins{13};
+        adapter->setSpiBytePairs(clockPins, dataPins);
+        uint64_t silentNow = 10'000;
+        spiModule->writeRegisterAt(kSpiBase + 0x80, 0xA5u, silentNow);
+        const uint64_t startNs = silentNow;
+        const bool clkLevel = gpioModule->outputLevel(14);
+        const bool mosiLevel = gpioModule->outputLevel(13);
+        TEST_ASSERT(gpioModule->isOutputEnabled(14) && gpioModule->isOutputEnabled(13),
+                    "par SPI sem bordas: GPIO14/GPIO13 dirigidos pelo HSPI");
+        int silentWakeups = 0;
+        bool padsMoved = false;
+        uint8_t tapByte = 0;
+        uint32_t tapClock = 0, tapData = 0;
+        uint64_t tapAtNs = 0;
+        silentNow = pumpWakeups(spiModule, silentNow, 20, [&](uint64_t at) {
+            ++silentWakeups;
+            if (gpioModule->outputLevel(14) != clkLevel || gpioModule->outputLevel(13) != mosiLevel) padsMoved = true;
+            if (!tapAtNs && spiModule->drainSpiByte(tapByte, tapClock, tapData)) tapAtNs = at;
+        });
+        TEST_ASSERT(!padsMoved, "par SPI sem bordas: nem SCLK nem MOSI mudam durante o byte");
+        TEST_ASSERT(silentWakeups == 2, "par SPI sem bordas: dois despertares por byte (8a subida e fim), nao 16");
+        TEST_ASSERT(tapByte == 0xA5 && tapClock == 14 && tapData == 13,
+                    "par SPI sem bordas: o byte sai da fila com o par de pinos por onde foi transmitido");
+        TEST_ASSERT(tapAtNs == startNs + 750 && silentNow == startNs + 800,
+                    "par SPI sem bordas: entregue no instante da 8a borda de subida (7,5 bits) e termina em 8 bits");
+        TEST_ASSERT(!spiModule->drainSpiByte(tapByte, tapClock, tapData), "par SPI sem bordas: um byte, uma entrega");
+
+        // Sem o par declarado, o mesmo roteamento volta ao caminho bit a bit.
+        adapter->setSpiBytePairs({}, {});
+        spiModule->writeRegisterAt(kSpiBase + 0x80, 0xA5u, silentNow);
+        int padRises = 0;
+        bool wasHigh = gpioModule->outputLevel(14);
+        pumpWakeups(spiModule, silentNow, 20, [&](uint64_t) {
+            const bool high = gpioModule->outputLevel(14);
+            if (!wasHigh && high) ++padRises;
+            wasHigh = high;
+        });
+        TEST_ASSERT(padRises == 8 && !spiModule->drainSpiByte(tapByte, tapClock, tapData),
+                    "sem par declarado: 8 pulsos de SCLK no pad e nada na fila de bytes");
+        gpioModule->writeRegister(0x3FF44000 + 0x530 + 14u * 4u, 0x100u);
+        gpioModule->writeRegister(0x3FF44000 + 0x530 + 13u * 4u, 0x100u);
     }
 
     // Transacao I2C comandada pelo Core (VNEXT_B, BATCH que o fast path nao atende): operacoes nos

@@ -98,12 +98,15 @@ int main() {
     const std::unique_ptr<IMcuAdapter> probeAdapter = runtime.createMcuAdapter("espressif.esp32");
     uint64_t ioMuxStart = 0;
     uint64_t uart0Start = 0;
+    uint64_t gpioStart = 0;
     for (const MemoryRegion& region : probeAdapter->memoryRegions()) {
         if (region.moduleKind == ModuleKind::IoMux && region.moduleIndex == 0) ioMuxStart = region.start;
         else if (region.moduleKind == ModuleKind::Usart && region.moduleIndex == 0) uart0Start = region.start;
+        else if (region.moduleKind == ModuleKind::Gpio && region.moduleIndex == 0) gpioStart = region.start;
     }
     check(ioMuxStart != 0, "memoryRegions() do plugin declara uma faixa IOMUX");
     check(uart0Start != 0, "memoryRegions() do plugin declara uma faixa UART0");
+    check(gpioStart != 0, "memoryRegions() do plugin declara uma faixa GPIO");
 
     mcu::McuComponent* mcuPtr = nullptr;
     session.components().registerFactory("mcu.esp32", [&mcuPtr, &session](const registry::ComponentParams&) {
@@ -124,21 +127,33 @@ int main() {
     plotParams.pinList = {{"tx", 0.0, 8.0}, {"rx", 0.0, 24.0}};
     const uint32_t plotIndex = session.addComponent("peripherals.lasecplot", plotParams);
     const uint32_t tappedPlotIndex = session.addComponent("peripherals.lasecplot", plotParams);
+    const uint32_t bitbangPlotIndex = session.addComponent("peripherals.lasecplot", plotParams);
     session.setProperty(plotIndex, "data_bits", PropertyValue{8.0});
     session.setProperty(plotIndex, "stop_bits", PropertyValue{1.0});
     session.setProperty(plotIndex, "parity", PropertyValue{std::string("none")});
     session.setProperty(tappedPlotIndex, "data_bits", PropertyValue{8.0});
     session.setProperty(tappedPlotIndex, "stop_bits", PropertyValue{1.0});
     session.setProperty(tappedPlotIndex, "parity", PropertyValue{std::string("none")});
+    session.setProperty(bitbangPlotIndex, "data_bits", PropertyValue{8.0});
+    session.setProperty(bitbangPlotIndex, "stop_bits", PropertyValue{1.0});
+    session.setProperty(bitbangPlotIndex, "parity", PropertyValue{std::string("none")});
     // Baud propositalmente diferente: o receptor ligado ao pino UART0_TX dedicado usa o wire tap
-    // byte-exato, portanto nao depende da amostragem eletrica. O primeiro plot, em GPIO1, continua
-    // provando separadamente o fallback eletrico legado nos baud rates corretos.
+    // byte-exato, portanto nao depende da amostragem eletrica. O plot no GPIO1 (o mesmo U0TXD, no
+    // pino do chip) tambem le o tap, e os dois recebem cada byte, como dois receptores no mesmo fio.
+    // O decodificador eletrico do LasecPlot e' provado pelo terceiro plot, num GPIO comum em
+    // bit-bang (como um SoftwareSerial), sem UART nem tap.
     session.setProperty(tappedPlotIndex, "baudrate", PropertyValue{57600.0});
     session.connectWire(mcuIndex, "GPIO1", plotIndex, "rx");
     session.connectWire(mcuIndex, "UART0_TX", tappedPlotIndex, "rx");
+    session.connectWire(mcuIndex, "GPIO2", bitbangPlotIndex, "rx");
 
     // Habilita GPIO1 como U0TXD (função IOMUX 0) -- mesma sequência de McuComponentTest.cpp.
     simulateQemuWrite(arena, ioMuxStart + 0x88, 0);
+    // GPIO2 como GPIO comum, saida em repouso alto (linha UART ociosa).
+    simulateQemuWrite(arena, ioMuxStart + 0x40, 2u << 12);
+    simulateQemuWrite(arena, gpioStart + 0x530 + 2u * 4u, 0x100u);
+    simulateQemuWrite(arena, gpioStart + 0x08, 1u << 2);
+    simulateQemuWrite(arena, gpioStart + 0x24, 1u << 2);
     session.scheduler().markDirty(mcuIndex);
     for (int i = 0; i < 5 && session.settleStep(); ++i) {}
 
@@ -150,6 +165,7 @@ int main() {
     std::string expectedMonitorHex;
     auto runBaudRateCase = [&](double baudRate) {
         session.setProperty(plotIndex, "baudrate", PropertyValue{baudRate});
+        session.setProperty(bitbangPlotIndex, "baudrate", PropertyValue{baudRate});
         // Configura o UART_CLKDIV_REG (offset 0x14) do UART0 do MCU pro MESMO baud rate --
         // `usartWriteClkDiv` (Esp32Adapter.cpp) aceita o bit-time em ns já convertido direto (sem o
         // marcador `kRawClkDivMarker`), o mesmo caminho que a produção real (qemu_simulide) usa.
@@ -187,8 +203,8 @@ int main() {
             char expectedHex[3];
             std::snprintf(expectedHex, sizeof(expectedHex), "%02x", static_cast<unsigned>(byteToSend));
             expectedMonitorHex += expectedHex;
-            const std::string label = "peripherals.lasecplot (dispositivo real) decodifica 0x" + std::string(expectedHex) +
-                " a " + std::to_string(static_cast<long>(baudRate)) + " baud, vindo de MCU ESP32 real (UART0 TX) -- recebido: '" +
+            const std::string label = "LasecPlot no GPIO1 (U0TXD) recebe 0x" + std::string(expectedHex) +
+                " a " + std::to_string(static_cast<long>(baudRate)) + " baud pelo tap da UART0 -- recebido: '" +
                 receivedHex + "'";
             check(receivedHex == expectedHex, label.c_str());
 
@@ -201,6 +217,29 @@ int main() {
                 "wire tap UART0_TX entrega o mesmo byte sem depender do baud eletrico -- recebido: '" +
                 tappedHex + "'";
             check(tappedHex == expectedHex, tappedLabel.c_str());
+
+            // Decodificador eletrico: o mesmo byte em bit-bang no GPIO2, so' bordas no fio.
+            const auto bitNs = static_cast<uint64_t>(1'000'000'000.0 / baudRate);
+            auto driveBit = [&](bool high) {
+                simulateQemuWrite(arena, gpioStart + (high ? 0x08u : 0x0Cu), 1u << 2);
+                session.scheduler().markDirty(mcuIndex);
+                for (int i = 0; i < 5 && session.settleStep(); ++i) {}
+                session.scheduler().step(bitNs);
+            };
+            driveBit(false); // start
+            for (int bit = 0; bit < 8; ++bit) driveBit(((byteToSend >> bit) & 1u) != 0);
+            driveBit(true);  // stop
+            session.scheduler().step(bitNs * 2);
+            for (int i = 0; i < 20 && session.settleStep(); ++i) {}
+            std::string bitbangHex;
+            for (int attempt = 0; attempt < 20 && bitbangHex.empty(); ++attempt) {
+                if (const auto snapshot = session.tryDrainUartRx(bitbangPlotIndex)) bitbangHex = snapshot->dataHex;
+                else std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+            const std::string bitbangLabel = "peripherals.lasecplot decodifica eletricamente 0x" + std::string(expectedHex) +
+                " a " + std::to_string(static_cast<long>(baudRate)) + " baud em bit-bang no GPIO2 -- recebido: '" +
+                bitbangHex + "'";
+            check(bitbangHex == expectedHex, bitbangLabel.c_str());
         }
 
         // Rajada contínua: os bytes seguintes entram no FIFO enquanto o primeiro frame ainda está
@@ -232,7 +271,7 @@ int main() {
         }
         expectedMonitorHex += burstExpectedHex;
         const std::string burstLabel =
-            "peripherals.lasecplot preserva rajada UART continua a " +
+            "LasecPlot no GPIO1 preserva rajada UART continua a " +
             std::to_string(static_cast<long>(baudRate)) + " baud -- recebido: '" +
             burstReceivedHex + "'";
         check(burstReceivedHex == burstExpectedHex, burstLabel.c_str());

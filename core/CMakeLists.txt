@@ -1639,27 +1639,13 @@ else()
     target_link_libraries(qemu_queue_stress_test PRIVATE dl)
 endif()
 add_test(NAME qemu_queue_stress COMMAND qemu_queue_stress_test)
-set_tests_properties(qemu_queue_stress PROPERTIES
-    ENVIRONMENT "LASECSIMUL_ESP32_EXECUTION_MODE=deterministic"
-)
-
-# Cobertura explícita do MTTCG padrão: o mesmo bombeamento sustentado da arena, sem -icount e com
-# uma thread TCG por vCPU. Uma janela curta valida relógio virtual não-zero, protocolo MPSC
-# serializado, duas threads reais e a linha de telemetria; o teste acima força o modo determinístico
-# para proteger também o caminho de rollback.
-add_test(NAME qemu_mttcg_smoke COMMAND qemu_queue_stress_test)
-set_tests_properties(qemu_mttcg_smoke PROPERTIES
-    ENVIRONMENT
-        "LASECSIMUL_ESP32_EXECUTION_MODE=mttcg;LASECSIMUL_QEMU_PROFILE=1;LASECSIMUL_STRESS_SECONDS=10"
-    TIMEOUT 30
-)
 
 # Rollback explícito do transporte: o mesmo binário novo deve continuar aceitando o mapping v3
 # puro enquanto a v4 negociada amadurece.
 add_test(NAME qemu_arena_v3_smoke COMMAND qemu_queue_stress_test)
 set_tests_properties(qemu_arena_v3_smoke PROPERTIES
     ENVIRONMENT
-        "LASECSIMUL_ESP32_EXECUTION_MODE=mttcg;LASECSIMUL_QEMU_ARENA_VERSION=3;LASECSIMUL_STRESS_SECONDS=5"
+        "LASECSIMUL_QEMU_ARENA_VERSION=3;LASECSIMUL_STRESS_SECONDS=5"
     TIMEOUT 30
 )
 
@@ -1965,11 +1951,10 @@ if(NOT WIN32)
 endif()
 add_test(NAME mcu_uart_to_lasecplot COMMAND mcu_uart_to_lasecplot_test)
 
-# Optional end-to-end com o firmware REAL do usuário (LASECSIMUL_TEST_FIRMWARE) + QEMU real +
-# peripherals.lasecplot real, Scheduler::start() ligado -- o firmware chama Serial.print() várias
-# vezes seguidas a cada 1ms (rajada quase sem gap ocioso entre bytes), padrão nunca exercitado por
-# mcu_uart_to_lasecplot (que sempre espera o frame completo antes do próximo byte). CI sem o
-# firmware específico pula.
+# Rajada de UART até o peripherals.lasecplot real com firmware ESP32 real
+# (LASECSIMUL_TEST_LASECPLOT_FIRMWARE, merged.bin de vnext_prototype/guest_lasecplot_burst): vários
+# Serial.print() seguidos a cada 1 ms, bytes colados sem intervalo ocioso, padrão que
+# mcu_uart_to_lasecplot (um byte por vez) não exercita. Sem o firmware o teste é pulado.
 add_executable(mcu_firmware_lasecplot_test
     test/core/mcu/McuFirmwareLasecPlotTest.cpp
     ${TEST_COMMON_SOURCES}
@@ -1987,7 +1972,7 @@ else()
     target_link_libraries(mcu_firmware_lasecplot_test PRIVATE dl)
 endif()
 add_test(NAME mcu_firmware_lasecplot COMMAND mcu_firmware_lasecplot_test)
-set_tests_properties(mcu_firmware_lasecplot PROPERTIES TIMEOUT 30)
+set_tests_properties(mcu_firmware_lasecplot PROPERTIES TIMEOUT 90)
 
 # UART RX no VNEXT_B com firmware de eco real (LASECSIMUL_TEST_UART_ECHO_FIRMWARE): os bytes do pino RX
 # e da caixa de envio do monitor chegam ao FIFO de RX do QEMU. Sem o firmware o teste é pulado.
@@ -2044,9 +2029,28 @@ endif()
 add_test(NAME mcu_dual_core_timing COMMAND mcu_dual_core_timing_test)
 set_tests_properties(mcu_dual_core_timing PROPERTIES TIMEOUT 120)
 
+add_executable(mcu_spi_byte_test
+    test/core/mcu/McuSpiByteTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_spi_byte_test PRIVATE include src)
+target_link_libraries(mcu_spi_byte_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_spi_byte_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_spi_byte_test PRIVATE dl)
+endif()
+add_test(NAME mcu_spi_byte COMMAND mcu_spi_byte_test)
+set_tests_properties(mcu_spi_byte PROPERTIES TIMEOUT 120)
+
+# Espera da CPU1 pelo cache da flash com firmware real (LASECSIMUL_TEST_CACHE_WAIT_FIRMWARE, merged.bin
+# de vnext_prototype/guest_cache_wait_e2e): seis cenários observados pelo próprio firmware. Sem o
+# firmware o teste é pulado.
 add_executable(cache_wait_e2e_real_qemu_test
     test/core/mcu/CacheWaitE2ERealQemuTest.cpp
-    ${CORE_SOURCES_NO_MAIN}
     ${TEST_COMMON_SOURCES}
 )
 target_include_directories(cache_wait_e2e_real_qemu_test PRIVATE include src)
@@ -2056,10 +2060,7 @@ target_compile_definitions(cache_wait_e2e_real_qemu_test PRIVATE
     QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
     REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
 )
-if (MSVC)
-    target_compile_definitions(cache_wait_e2e_real_qemu_test PRIVATE _CRT_SECURE_NO_WARNINGS)
-endif()
-if (UNIX AND NOT APPLE)
+if(NOT WIN32)
     target_link_libraries(cache_wait_e2e_real_qemu_test PRIVATE dl)
 endif()
 add_test(NAME cache_wait_e2e_real_qemu COMMAND cache_wait_e2e_real_qemu_test)
@@ -2127,21 +2128,7 @@ endif()
 add_test(NAME mcu_scheduler_pacing_sync_real_qemu COMMAND mcu_scheduler_pacing_sync_real_qemu_test)
 # 90s de janela de estresse + boot -- generoso mas não deveria travar (esse é exatamente o
 # comportamento que este teste existe para pegar, ver seu doc-comment de topo).
-set_tests_properties(mcu_scheduler_pacing_sync_real_qemu PROPERTIES
-    ENVIRONMENT "LASECSIMUL_ESP32_EXECUTION_MODE=deterministic"
-    TIMEOUT 150
-)
-
-# Mesmo caminho completo acima no modo MTTCG padrão. A janela reduzida valida que timestamps
-# baseados no relógio virtual normal continuam compatíveis com AdvanceLimitFn/Scheduler sem somar
-# outros 90s à suíte padrão.
-add_test(NAME mcu_scheduler_pacing_sync_real_qemu_mttcg
-    COMMAND mcu_scheduler_pacing_sync_real_qemu_test)
-set_tests_properties(mcu_scheduler_pacing_sync_real_qemu_mttcg PROPERTIES
-    ENVIRONMENT
-        "LASECSIMUL_ESP32_EXECUTION_MODE=mttcg;LASECSIMUL_QEMU_PROFILE=1;LASECSIMUL_STRESS_SECONDS=15"
-    TIMEOUT 45
-)
+set_tests_properties(mcu_scheduler_pacing_sync_real_qemu PROPERTIES TIMEOUT 150)
 
 # Detecção de borda digital + despacho de ComponentEvent{kPinChangeEventTag} (substitui
 # I2cBusModule/SpiBusModule -- removidos por nunca terem sido ligados a um SimulationSession real;
@@ -2244,12 +2231,12 @@ set(LASECSIMUL_EXTERNAL_GHDL_TESTS
     ghdl_lockstep_real_ghdl ghdl_backend_real_ghdl fpga_component_real_ghdl
 )
 set(LASECSIMUL_EXTERNAL_QEMU_TESTS
-    mcu_controller_real_qemu qemu_icount_calibrator qemu_queue_stress qemu_mttcg_smoke
+    mcu_controller_real_qemu qemu_icount_calibrator qemu_queue_stress
     qemu_arena_v3_smoke mcu_restart_stress session_restart_stress
     mcu_multiple_controllers_real_qemu mcu_blink_long_run mcu_firmware_lasecplot
-    mcu_scheduler_pacing_sync_real_qemu mcu_scheduler_pacing_sync_real_qemu_mttcg
+    mcu_scheduler_pacing_sync_real_qemu
     qemu_queue_full_timeout vnext_b_attachment vnext_b_production_scale cache_wait_e2e_real_qemu
-    mcu_uart_rx_vnext_b mcu_ledc_fade mcu_dual_core_timing
+    mcu_uart_rx_vnext_b mcu_ledc_fade mcu_dual_core_timing mcu_spi_byte
 )
 set(LASECSIMUL_EXTERNAL_PYTHON_TESTS
     python_runtime python_session python_program_execution python_program_numpy python_program_session_integration

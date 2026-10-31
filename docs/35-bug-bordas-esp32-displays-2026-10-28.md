@@ -101,7 +101,7 @@ hardware não mostra nada. Resolvido pelo modo exato abaixo, que passou a ser o 
 ## Cossimulação exata — lockstep (2026-10-29)
 
 Configuração `lasecsimul.mcu.esp32Timing`: `realtime` (padrão, ver a seção seguinte), `exact`, `mttcg`
-(o antigo). Nos dois primeiros o QEMU
+(o antigo, retirado em 2026-10-30). Nos dois primeiros o QEMU
 roda com `-icount` (TCG de uma thread), o tempo de cada instrução sai do clock da CPU (240 MHz → 1
 instrução/ciclo, `icount_set_ps_per_inst` chamado por `updtCpuFreqHz`) e guest e Core andam em passo
 travado pela página de controle (ABI 1.2, `lasec_at_control_page`, campos `artifact_sync_seq`,
@@ -473,13 +473,205 @@ por hardware trocam de ordem com os bytes (o Nokia não mostra nada). A UART no 
 e corrompe bytes: o guest vê o FIFO do QEMU esvaziar antes de a linha transmitir, e o adaptador recebe
 mais que os 128 bytes do seu FIFO (no lockstep o pico medido é 126, onde a ROM para de escrever). E a
 duração medida de um fade fica errada (descida em 327–334 ms em vez de 255 ms). Não há
-correção dentro do modo: a correção é o lockstep (`realtime`, padrão). Fica a decisão de retirar o modo
-ou mantê-lo como legado documentado.
+correção dentro do modo: a correção é o lockstep (`realtime`, padrão). O modo foi retirado; ver a seção
+"MTTCG retirado", mais abaixo.
 
-**Observado, não alterado.** `SPI.transfer()` byte a byte num laço apertado custa uma sincronização de
-lockstep por byte: o trace conta todas como motivo `write`, ~0,57 ms de host cada. Quadros de 504
-bytes a 4 MHz andam ~100× mais devagar que o real, igual com o binário anterior (mesmas 21 medidas em
-30 s). O projeto da aula, com o Nokia por SPI de hardware, roda a 0,99–1,01×.
+**SPI de hardware lento.** `SPI.transfer()` byte a byte andava ~100× mais devagar que o real, igual com
+o binário anterior. Atacado na seção seguinte, "SPI de hardware byte a byte".
+
+### SPI de hardware byte a byte (2026-10-30)
+
+Cada byte de SPI de hardware saía do adaptador como 16 bordas de clock e as mudanças do MOSI, e cada
+borda custava um solve do circuito: ~46 settles por byte, ~3.100 bytes por segundo de parede. Um
+quadro de display de 504 bytes levava ~0,16 s. Três correções:
+
+- **Bytes inteiros quando o fio não precisa das bordas (Core, adaptador e dispositivos;
+  `mcu_abi.h` 3.3, `device_abi.h` 4.1).** É a regra do fast path do I2C. Antes de cada Run, o Core
+  procura pares de pinos do MCU (clock, dado) cujo fio de clock só liga os pinos de clock de escravos
+  SPI e o fio de dado só os pinos de dado dos mesmos escravos, mais túneis e resistores. Os escravos
+  que entram declaram `spi_input`: o PCD8544, o MAX72xx e os TFTs do `simulide-complex`. Enquanto o
+  clock e o MOSI de um SPI do ESP32 saem por um desses pares, o adaptador transmite o byte sem as
+  bordas. A duração é a mesma, há um despertar no instante da 8ª borda de subida e outro no fim do
+  byte. O Core entrega o byte aos escravos nesse despertar (`spi_clock_byte`). O dispositivo passa as
+  8 bordas pelo mesmo caminho do fio, com CS e D/C no nível atual, inclusive um byte parcial já em
+  andamento. Com um instrumento ou qualquer outra carga nesses fios, o SPI continua bit a bit, como
+  no chip, e o bit-bang por GPIO nos mesmos pinos não muda. Diagnóstico:
+  `LASECSIMUL_SPI_BYTE_MODE=bit` força bit a bit.
+- **Busca na árvore de objetos do QEMU a cada comando SPI (patch 0017).** Todo comando USR passava por
+  `maybe_encrypt_data`, que procurava o dispositivo de criptografia da flash percorrendo a árvore
+  inteira de objetos (`object_resolve_path_type`). No laço de `SPI.transfer()` isso era 44,8% do
+  tempo da vCPU (perfil por amostragem). Agora o dispositivo é resolvido uma vez, e o HSPI/VSPI não
+  passa pelo bloco de criptografia, que no chip só vale para o controlador da flash.
+- **Medido e descartado:** ler `SPI_CMD` sem o BQL, como no TIMG, não mudou nada (199 contra 207
+  quadros). A raia de eventos mais funda ajuda pouco: com 8, 64 e 256 eventos, 292, 379 e 412
+  quadros. Ficou em 8, a profundidade da certificação.
+
+Medido neste servidor, `mcu_spi_byte_test` (ESP32 e PCD8544 reais, quadros de 504 bytes, 10 s de
+parede por modo):
+
+| Firmware | Bit a bit | Byte a byte |
+|---|---|---|
+| `SPI.transfer()` por byte, `realtime` | 46 quadros | 307 quadros (6,7×) |
+| O mesmo, `exact` | 44 | 312 (7,1×) |
+| `SPI.writeBytes()` de 504 bytes, `realtime` | 52 | 561 (10,8×) |
+
+O quadro no PCD8544 sai idêntico nos dois modos, e `spi_byte_equivalence_test` (no
+`simulide-complex`) confere o mesmo, estado por estado, para PCD8544, MAX72xx e ST7735.
+
+O que limita agora são as idas e voltas do lockstep, não o cálculo. As duas threads do Core e o
+QEMU passam a maior parte do tempo esperando um ao outro, e o QEMU sincroniza quando a raia de 8
+eventos enche (motivo `write`, ~0,11 ms por ida e volta). Uma tela redesenhada a 20–30 quadros por
+segundo cabe no tempo real; um laço que só manda quadros, não. Com 8 sketches da aula ao mesmo
+tempo: 1,000–1,013×, LCD e Nokia corretos, Core 33,8% e QEMU 28,5% de um núcleo por simulação.
+
+Testes novos: `mcu_spi_byte` (firmware `vnext_prototype/guest_spi_display`, com
+`LASECSIMUL_TEST_SPI_DISPLAY_FIRMWARE`) e o par sem bordas em `esp32_adapter_test`. Também
+`spi_byte_equivalence_test` no `simulide-complex`. Os 82 manifestos `.lsdevice` passaram a declarar
+ABI 4.1.
+
+### MTTCG retirado (2026-10-30)
+
+No modo `mttcg` o relógio do guest seguia o do PC. Com isso o SPI de hardware, a UART no pino e a
+duração de um fade saíam errados, e não havia correção dentro do modo (ver "Pendências fechadas"). A
+correção foi retirar o modo; o ESP32 roda sempre em lockstep com o Core:
+
+- **Adaptador.** O QEMU é lançado sempre com `-accel tcg,thread=single -icount`.
+  `LASECSIMUL_ESP32_EXECUTION_MODE` não é mais lida. Sem a variável, o padrão era o MTTCG, e por isso
+  os testes com QEMU real rodavam nesse modo. Agora rodam no modo da extensão.
+- **Core.** Saiu o caminho do relógio que segue o host: `HostPacedPositionFn` no Scheduler,
+  `computeHostPacedMcuPositionNs` na sessão e `hostPacedVirtualClock` no MCU. Também saiu o override
+  `LASECSIMUL_QEMU_TCG_THREAD`. O lockstep exige `-icount`. Um lançamento sem ele (só um adaptador
+  futuro) roda sem lockstep, com o diagnóstico `execution=host-clock`.
+- **Extensão.** `lasecsimul.mcu.esp32Timing` ficou só com `realtime` e `exact`. Quem tinha `mttcg`
+  salvo passa a `realtime`: o valor sai do settings.json e aparece um aviso.
+- **Testes.** Saíram `qemu_mttcg_smoke` e `mcu_scheduler_pacing_sync_real_qemu_mttcg`. Também saíram as
+  exceções de "modo mttcg" em `mcu_ledc_fade`, `mcu_dual_core_timing` e `mcu_uart_rx_vnext_b`.
+  `qemu_queue_stress` passou a exigir `deterministic-icount` com uma thread TCG. Novo firmware
+  `vnext_prototype/guest_blink_gpio13`, para `mcu_blink_long_run`, que nunca tinha firmware no
+  repositório.
+
+Medido neste servidor depois da mudança:
+
+| O que | Resultado |
+|---|---|
+| Fade do LEDC (`mcu_ledc_fade`) | subida 459,0 ms, descida 255,2 ms (chip: 459 / 255 ms); no `mttcg` a descida dava 327–334 ms |
+| UART pelos pads GPIO1/GPIO3 (`mcu_uart_rx_vnext_b`, `LASECSIMUL_TEST_UART_PINS=gpio`) | banner da ROM legível a 115200 e eco correto |
+| SPI de hardware no PCD8544 (`mcu_spi_byte`) | mesmo quadro; 344 quadros byte a byte e 58 bit a bit em 10 s |
+| `vnext_b_production_scale_test`, 8 sessões × 20 s, `realtime` | 35,5–37,6 mil transações por sessão; nenhuma perda, duplicação ou resposta trocada |
+| `mcu_blink_long_run` (transporte LEGACY) | 193 bordas em 15 s; Pause, Continue e Stop corretos |
+| 8 sketches da aula ao mesmo tempo, `realtime`, 25 s | 1,000–1,006×, LCD e Nokia corretos |
+
+Toda a bateria `external-qemu` passou, rodada um teste por vez. Ficaram de fora
+`mcu_firmware_lasecplot`, sem firmware, e `cache_wait_e2e_real_qemu` (E131), escrito para um QEMU de
+diagnóstico de outra árvore. Os dois foram refeitos na seção seguinte.
+
+### Os dois testes que faltavam (2026-10-31)
+
+**`cache_wait_e2e_real_qemu` (E131), reescrito.** O teste de 2026-09 lia contadores de um QEMU de
+diagnóstico (SHA 43542C43…) e escrevia marcas no `DPORT_DATE`, que no chip é só a data da versão. O
+novo firmware (`vnext_prototype/guest_cache_wait_e2e`, `LASECSIMUL_TEST_CACHE_WAIT_FIRMWARE`) roda os
+seis cenários num boot e prova tudo pelo próprio firmware:
+- a CPU1 chega ao acesso à flash e para ali: o contador dela congela e o comando não termina;
+- depois de religar o cache, ela termina com o valor certo, e a função na flash executa uma vez só;
+- RUNSTALL e CLKGATE continuam segurando a CPU1 depois de religar o cache;
+- SELF_ILLEGAL, com a CPU1 desligando o próprio cache, devolve 0xBAADBAAD;
+- no RESET_WAIT o acesso antigo nunca termina, e a CPU1 volta pela ROM no endereço de boot que a CPU0
+  definiu (`ets_set_appcpu_boot_addr`, como o ESP-IDF).
+
+Essa semântica (a CPU1 espera, em vez de ler 0xBAADBAAD) é a do modelo do QEMU desde E124/E129. Não foi
+conferida num chip.
+
+Dois achados no caminho:
+- **Firmware: a CPU1 precisa estacionar antes.** Com as interrupções ligadas, a CPU1 às vezes parava
+  na flash dentro do FreeRTOS. O `vTaskSwitchContext` compara o fim da pilha com um padrão guardado na
+  flash (`memcmp`), e faz isso segurando o `xTaskQueueMutex`. A CPU0 travava no tick esperando esse
+  lock. Aconteceu em 3 de 36 execuções; as duas CPUs foram lidas pelo stub GDB. No chip também
+  travaria, e é por isso que o ESP-IDF estaciona a outra CPU antes de mexer no cache dela. O firmware
+  faz o mesmo agora: a CPU1 desliga as interrupções (`rsil 3`), avisa e espera o comando na IRAM. O
+  firmware antigo tinha o mesmo defeito; no MTTCG a intercalação das CPUs o escondia.
+- **QEMU, patch 0018 (`target/xtensa`): soltar o RUNSTALL não soltava a CPU.** `xtensa_runstall()`
+  parava a CPU com `CPU_INTERRUPT_HALT`. Se ela não executasse nada durante o RUNSTALL, o pedido ficava
+  pendente. Isso acontece no laço de turnos de uma thread só, que nunca roda uma CPU parada, e aqui o
+  cache-wait também a segurava. Logo depois de soltar, o pedido velho a parava de novo, até chegar uma
+  interrupção acima do PS.INTLEVEL: cerca de um tick de atraso com as interrupções ligadas, para sempre
+  com elas mascaradas. Além disso, soltar o RUNSTALL encerrava um WAITI sem interrupção. Agora o pedido
+  é limpo ao soltar, e a CPU volta como estava: rodando, ou ainda em WAITI. Esse código vem do QEMU
+  original. Com o firmware estacionando a CPU1, o RUNSTALL falhou em 100 de 100 execuções antes do
+  0018. Com o 0018 passaram 100 de 100, 4 ao mesmo tempo (25 rodadas), sem nenhum travamento.
+
+Correção da seção anterior: a fase de gravação da flash do `mcu_dual_core_timing` não cobre essa
+espera. Durante a gravação o ESP-IDF estaciona a CPU1 na IRAM, e é a própria CPU1 que desliga o cache
+dela. Só este teste cobre a espera entre núcleos.
+
+**`mcu_firmware_lasecplot`, com firmware.** O teste esperava o firmware de um usuário que nunca entrou
+no repositório; sem ele, era sempre pulado. Firmware novo: `vnext_prototype/guest_lasecplot_burst`
+(`LASECSIMUL_TEST_LASECPLOT_FIRMWARE`). Ele faz a rajada do sketch de 2026-07:
+`>graf:<millis>:<sequência>|g` em cinco `Serial.print` a cada 1 ms, com a FIFO de TX sempre cheia.
+
+O teste roda em VNEXT_B a 1×, nas duas ligações do TX0, 20 s cada:
+- `UART0_TX`, o TX da placa DevKitC;
+- `GPIO1`, o mesmo U0TXD no pino do chip avulso.
+
+Ele ignora o texto do boot da ROM e exige três coisas: linhas inteiras, a sequência contínua desde 0 e
+11,52 bytes/ms do firmware, que é 115200 baud sem intervalo, com 1% de tolerância. O ramo antigo de
+I2C (fase P9) saiu: ele aprovava sem conferir linha nenhuma. O I2C com firmware real é coberto por
+`vnext_b_production_scale`.
+
+O teste achou dois defeitos.
+
+- **O TX no GPIO1 não usava o caminho de bytes da UART.** O tap byte-exato e os frames sem bordas de
+  2026-09-29 só reconheciam o pino dedicado `UART0_TX`. No GPIO1, cada bit virava bordas no fio e um
+  solve no decodificador do LasecPlot. Agora o adaptador diz qual USART sai por uma linha de GPIO, pelo
+  IO_MUX ou pela matriz (`mcu_abi.h` 3.4, `uart_tx_on_line`), e o Core reconhece o tap nesse pino
+  também. Com isso, dois receptores no mesmo TX passaram a disputar a fila única do tap. No chip os dois
+  veem os mesmos bytes, e agora também: o Core drena o tap uma vez e entrega cada byte a todos os
+  receptores do TX, cada um com a própria fila (`McuComponent::setUartTapReceivers`). O
+  `mcu_uart_to_lasecplot` ganhou um LasecPlot num GPIO comum, em bit-bang a 115200 e 921600 baud, para
+  o decodificador elétrico continuar coberto. Esse decodificador ainda serve, por exemplo, para um
+  SoftwareSerial.
+- **Custo do lockstep por byte (aberto).** Mesmo sem bordas, cada byte de TX vai do QEMU ao Core como
+  um evento na raia, de 8 de profundidade. Com 115200 contínuos, os dois lados passam a maior parte do
+  tempo esperando um pelo outro: no `UART0_TX` em `exact`, o QEMU 90% e o Core 68%. Por isso o `exact`
+  fica um pouco abaixo de 1×. No `realtime`, quando falta folga, o controle estica a CPU e o firmware
+  deixa buracos entre os bytes. Uma raia mais funda piora em vez de ajudar: com 64 e 256 eventos, o
+  `exact` caiu para 0,484× e 0,075×. Ficou em 8.
+
+Medido neste servidor, uma sessão, 20 s por ligação:
+
+| Ligação, modo | Antes | Depois |
+|---|---|---|
+| GPIO1, `exact` | 0,42×, 11,522 bytes/ms | 0,976×, 11,522 |
+| GPIO1, `realtime` | 0,70–0,75×, 5,7–7,4 bytes/ms (CPU esticada até 64×) | 1,000×, 11,52 |
+| UART0_TX, `exact` | 0,95×, 11,527 | 0,976×, 11,522 |
+| UART0_TX, `realtime` | 1,0×, 10,58–11,28 | 1,000×; 11,28–11,52 em 5 rodadas, 2 abaixo de 1% |
+
+No `realtime` o teste ainda falha de vez em quando: em 2 de 5 rodadas o `UART0_TX` saiu 2% abaixo do
+chip. Só fecha quando o custo por byte do lockstep cair.
+
+**Sketch da aula congelando logo depois do boot (QEMU, patch 0019).** Na verificação de 8 sessões do
+projeto II1P06, algumas paravam de vez, sempre perto de 3,6 s simulados, logo depois do primeiro
+"BUTTON High". Com o QEMU 0018 isso aconteceu em 15 de 104 sessões, e com o 0017 em 2 de 16. Não veio
+das mudanças de hoje no Core: com o registro dos receptores do tap desligado também congelava.
+
+O que se via no travamento:
+- pelo stub GDB do QEMU, as duas CPUs estavam em `esp_pm_impl_waiti`, na tarefa ociosa, esperando uma
+  interrupção;
+- dentro do processo do QEMU (build debug, `gdb` do MSYS2): lockstep sem hold e sem sync pendente;
+  `icount_cpu_waiting = {false, true}`; o relógio da CPU1 0,6 µs à frente do da CPU0.
+
+A causa está no relógio por vCPU (0016). Uma CPU que chega ao limite de 10 µs à frente da outra fica
+marcada como "esperando a outra alcançar", e essa marca bloqueia o warp do icount. Se ela ainda estava
+esperando era decidido contra `icount_global_ns`, que só é recalculado quando alguma vCPU roda. A CPU1
+ficou marcada e logo depois executou `waiti`. Quando uma interrupção a acordou com a CPU0 ainda
+parada, o relógio global velho continuava pondo a CPU1 à frente. As duas pareciam ociosas, o warp
+seguia bloqueado e nada mais rodava.
+
+Agora uma vCPU só espera enquanto outra vCPU na linha do tempo está atrás dela e pode rodar, e isso é
+decidido pelas próprias vCPUs. Uma vCPU parada sem nada a fazer não espera ninguém. Depois da
+correção: 0 de 48 sessões congeladas (6 rodadas de 8), ritmo entre 0,997× e 1,016×, LCD e Nokia
+corretos.
+
+O teste das 8 sessões é o que pega esse tipo de defeito; os testes de firmware isolados passavam.
 
 ## Atualização: com o transporte VNEXT_B (padrão da extensão) nada funciona
 
@@ -589,8 +781,8 @@ Em `C:\Prof_Josue\0II1\II1P06_SPI_I2C_UART\src\test.cpp`:
 ## Correção correta (a fazer)
 
 **Feito.** Item 1: no VNEXT_B em 2026-10-28 ("Correção no VNEXT_B") e no LEGACY em 2026-10-30
-("Pendências fechadas"). Item 2: lockstep, padrão desde a v0.0.104 (no `mttcg` continua, ver
-"Pendências fechadas"). Item 3: o caminho elétrico do I2C ficou correto em 2026-10-30, e um instrumento
+("Pendências fechadas"). Item 2: lockstep, padrão desde a v0.0.104 e único modo desde a retirada do
+`mttcg` ("MTTCG retirado"). Item 3: o caminho elétrico do I2C ficou correto em 2026-10-30, e um instrumento
 no barramento continua levando a transação para ele, como no chip. Item 4: as medições com 8 sessões
 do projeto da aula. Registro histórico:
 

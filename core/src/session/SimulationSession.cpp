@@ -172,7 +172,7 @@ SimulationSession::tryDrainUartRx(uint32_t component) const {
                         if (!source) continue;
                         bool sourceBusy = false;
                         const std::optional<std::string> tapped =
-                            source->tryDrainUartTxWireTap(ref.localPinIndex, sourceBusy);
+                            source->tryDrainUartTxWireTap(ref.localPinIndex, component, sourceBusy);
                         if (sourceBusy) {
                             // Nao drene o receptor eletrico: nenhum byte foi obtido do tap e o
                             // proximo poll deve repetir a tentativa integralmente.
@@ -291,7 +291,6 @@ SimulationSession::SimulationSession(plugins::GlobalPluginCache& globalCache, si
     m_scheduler.setCommandDrainCallback([this] { drainCommandQueue(); });
     m_scheduler.setCommandPendingCallback([this] { return m_commandQueue.hasPending(); });
     m_scheduler.setAdvanceLimitCallback([this] { return computeSlowestMcuPositionNs(); });
-    m_scheduler.setHostPacedPositionCallback([this] { return computeHostPacedMcuPositionNs(); });
     m_scheduler.setExactAdvanceLimitCallback([this] { return computeLockstepMcuLimitNs(); });
     m_scheduler.setTimeSettledCallback([this](uint64_t nowNs, uint64_t nextEventNs, uint64_t nextHardEventNs) {
         // Com mais de um MCU em lockstep, uma escrita de um pode mudar uma entrada do outro no mesmo
@@ -3845,9 +3844,88 @@ bool SimulationSession::mcuPinConnectedUnlocked(uint32_t mcuIndex, size_t localP
     return false;
 }
 
+std::vector<SimulationSession::SpiBytePair> SimulationSession::mcuSpiBytePairsUnlocked(uint32_t mcuIndex) const {
+    std::vector<SpiBytePair> pairs;
+    const auto nodeOf = [this](uint32_t componentIndex, size_t localPinIndex) -> std::optional<uint32_t> {
+        IComponentModel* component = m_componentInstances[componentIndex].get();
+        if (!component) return std::nullopt;
+        const std::span<Pin> pins = component->pins();
+        if (localPinIndex >= pins.size()) return std::nullopt;
+        const auto& slots = m_netlist.pinSlotsOf(componentIndex);
+        const auto slot = slots.find(pins[localPinIndex].id);
+        if (slot == slots.end() || slot->second >= m_topology.slotToNode.size()) return std::nullopt;
+        const uint32_t node = m_topology.slotToNode[slot->second];
+        if (node >= m_topology.pinRefsByNode.size()) return std::nullopt;
+        return node;
+    };
+    // Os outros pinos do nó: só túneis, resistores e o pino `role` (clock ou dado) de escravos SPI
+    // que aceitam bytes. Devolve esses escravos, ou nullopt se houver qualquer outra coisa.
+    const auto spiSlavesOn = [this](uint32_t node, uint32_t mcuIndex, size_t mcuPin, bool clockRole)
+        -> std::optional<std::vector<uint32_t>> {
+        std::vector<uint32_t> slaves;
+        for (const simulation::NodePinRef& ref : m_topology.pinRefsByNode[node]) {
+            if (ref.componentIndex == mcuIndex && ref.localPinIndex == mcuPin) continue;
+            IComponentModel* other = ref.componentIndex < m_componentInstances.size()
+                                         ? m_componentInstances[ref.componentIndex].get() : nullptr;
+            if (!other) return std::nullopt;
+            if (isI2cFastPathTransparentUnlocked(*other)) continue;
+            const std::optional<IComponentModel::SpiInputPins> spi = other->spiInputPins();
+            if (!spi || ref.localPinIndex != (clockRole ? spi->clock : spi->data)) return std::nullopt;
+            slaves.push_back(ref.componentIndex);
+        }
+        std::sort(slaves.begin(), slaves.end());
+        return slaves;
+    };
+    auto* mcu = static_cast<mcu::McuComponent*>(m_componentInstances[mcuIndex].get());
+    const size_t pinCount = mcu->pins().size();
+    for (size_t clockPin = 0; clockPin < pinCount; ++clockPin) {
+        const std::optional<uint32_t> clockNode = nodeOf(mcuIndex, clockPin);
+        if (!clockNode) continue;
+        const std::optional<std::vector<uint32_t>> slaves = spiSlavesOn(*clockNode, mcuIndex, clockPin, true);
+        if (!slaves || slaves->empty()) continue;
+        // Todos os escravos com o pino de dado num mesmo nó, que só liga um pino deste MCU e eles.
+        std::optional<uint32_t> dataNode;
+        bool sameDataNode = true;
+        for (uint32_t slave : *slaves) {
+            const std::optional<uint32_t> node = nodeOf(slave, m_componentInstances[slave]->spiInputPins()->data);
+            if (!node || (dataNode && *node != *dataNode)) { sameDataNode = false; break; }
+            dataNode = node;
+        }
+        if (!sameDataNode || !dataNode || *dataNode == *clockNode) continue;
+        std::optional<size_t> dataPin;
+        bool onlyOneMcuPin = true;
+        for (const simulation::NodePinRef& ref : m_topology.pinRefsByNode[*dataNode]) {
+            if (ref.componentIndex != mcuIndex) continue;
+            if (dataPin) { onlyOneMcuPin = false; break; }
+            dataPin = ref.localPinIndex;
+        }
+        if (!onlyOneMcuPin || !dataPin) continue;
+        const std::optional<std::vector<uint32_t>> dataSlaves = spiSlavesOn(*dataNode, mcuIndex, *dataPin, false);
+        if (!dataSlaves || *dataSlaves != *slaves) continue;
+        pairs.push_back(SpiBytePair{static_cast<uint32_t>(clockPin), static_cast<uint32_t>(*dataPin), *slaves});
+    }
+    return pairs;
+}
+
+void SimulationSession::deliverSpiByteUnlocked(uint32_t mcuIndex, uint32_t clockPin, uint32_t dataPin, uint8_t byte) {
+    const auto it = m_spiBytePairs.find(mcuIndex);
+    if (it == m_spiBytePairs.end()) return;
+    for (const SpiBytePair& pair : it->second) {
+        if (pair.clockPin != clockPin || pair.dataPin != dataPin) continue;
+        for (uint32_t slave : pair.devices)
+            if (slave < m_componentInstances.size() && m_componentInstances[slave])
+                m_componentInstances[slave]->clockSpiByte(byte);
+        return;
+    }
+}
+
 void SimulationSession::refreshMcuPinTransitionObserversUnlocked() {
     const char* mode = std::getenv("LASECSIMUL_UART_TX_FRAME_MODE");
     const bool forceBitLevel = mode && std::string_view(mode) == "bit";
+    // LASECSIMUL_SPI_BYTE_MODE=bit: todo SPI bit a bit, com bordas (diagnóstico).
+    const char* spiMode = std::getenv("LASECSIMUL_SPI_BYTE_MODE");
+    const bool spiBitLevel = spiMode && std::string_view(spiMode) == "bit";
+    m_spiBytePairs.clear();
     for (uint32_t mcuIndex : m_mcuComponentIndices) {
         auto* mcu = static_cast<mcu::McuComponent*>(m_componentInstances[mcuIndex].get());
         const size_t pinCount = mcu->pins().size();
@@ -3855,6 +3933,34 @@ void SimulationSession::refreshMcuPinTransitionObserversUnlocked() {
             mcu->setPinTransitionsObserved(pin, forceBitLevel || mcuPinTransitionsObservedUnlocked(mcuIndex, pin));
             mcu->setPinConnected(pin, mcuPinConnectedUnlocked(mcuIndex, pin));
         }
+        // Receptores UART deste MCU, pela mesma regra de tryDrainUartRx (o `rx` no nó de um pino
+        // dele): cada um recebe do tap a sua cópia de cada byte.
+        std::vector<std::pair<uint32_t, size_t>> uartReceivers;
+        for (uint32_t component = 0; component < m_componentInstances.size(); ++component) {
+            if (component == mcuIndex || !m_componentInstances[component]) continue;
+            const auto& slots = m_netlist.pinSlotsOf(component);
+            auto rxIt = slots.find("rx");
+            if (rxIt == slots.end()) rxIt = slots.find("RX");
+            if (rxIt == slots.end() || rxIt->second >= m_topology.slotToNode.size()) continue;
+            const uint32_t node = m_topology.slotToNode[rxIt->second];
+            if (node >= m_topology.pinRefsByNode.size()) continue;
+            for (const simulation::NodePinRef& ref : m_topology.pinRefsByNode[node]) {
+                if (ref.componentIndex == mcuIndex) uartReceivers.emplace_back(component, ref.localPinIndex);
+            }
+        }
+        mcu->setUartTapReceivers(uartReceivers);
+        std::vector<SpiBytePair> pairs = spiBitLevel ? std::vector<SpiBytePair>{} : mcuSpiBytePairsUnlocked(mcuIndex);
+        std::vector<uint32_t> clockPins, dataPins;
+        for (const SpiBytePair& pair : pairs) {
+            clockPins.push_back(pair.clockPin);
+            dataPins.push_back(pair.dataPin);
+        }
+        mcu->setSpiBytePairs(std::move(clockPins), std::move(dataPins));
+        // Na thread do Scheduler, no despertar do SPI (topologia imutável durante o Run).
+        mcu->setSpiByteHandler([this](uint32_t mcu, uint32_t clockPin, uint32_t dataPin, uint8_t byte) {
+            deliverSpiByteUnlocked(mcu, clockPin, dataPin, byte);
+        });
+        if (!pairs.empty()) m_spiBytePairs[mcuIndex] = std::move(pairs);
     }
 }
 
@@ -3866,17 +3972,6 @@ std::optional<uint64_t> SimulationSession::computeLockstepMcuLimitNs() const {
             limit = limit ? std::min(*limit, *position) : *position;
     }
     return limit;
-}
-
-std::optional<uint64_t> SimulationSession::computeHostPacedMcuPositionNs() const {
-    std::optional<uint64_t> latest;
-    for (uint32_t i : m_mcuComponentIndices) {
-        const auto* mcu = static_cast<const mcu::McuComponent*>(m_componentInstances[i].get());
-        if (!mcu->hostPacedVirtualClock()) continue;
-        if (const std::optional<uint64_t> position = mcu->pacingPositionNs())
-            latest = latest ? std::max(*latest, *position) : *position;
-    }
-    return latest;
 }
 
 bool SimulationSession::isI2cFastPathTransparentUnlocked(const IComponentModel& component) {

@@ -41,6 +41,10 @@ public:
      * monta o handler ANTES de `componentIndex` existir (só é atribuído depois, via
      * `onAssignedIndex`) -- ver `resolveI2cTransferUnlocked`. */
     using I2cTransferHandler = std::function<I2cTransferResult(uint32_t, uint32_t, const I2cTransfer&)>;
+    /** Um byte que um SPI mestre transmitiu sem bordas pelo par de pinos (clock, dado) -- ver
+     * `setSpiBytePairs`. Argumentos: índice do MCU, pino de clock, pino de dado (espaço de
+     * `pins()`), byte na ordem do fio. Chamado na thread do Scheduler, no instante do fim do byte. */
+    using SpiByteHandler = std::function<void(uint32_t, uint32_t, uint32_t, uint8_t)>;
     McuComponent(std::unique_ptr<IMcuAdapter> adapter, simulation::Scheduler& scheduler, std::span<const Pin> requestedPins = {});
     ~McuComponent() override;
 
@@ -72,15 +76,23 @@ public:
      * (`PropertySchemaHidden`). Vazio (`{}`) se o adaptador não declarar nenhum USART. */
     std::vector<PropertyDescriptor> propertyDescriptors() override;
 
-    /** Se `localPinIndex` identifica a linha TX de uma USART dedicada, drena a fila byte-exata
-     * separada que o adaptador reserva aos receptores UART ligados por fio e devolve hex lowercase.
+    /** Se `localPinIndex` carrega agora a linha TX de uma USART (o pino dedicado, ou uma linha de
+     * GPIO roteada para ela), devolve em hex lowercase os bytes da fila byte-exata que o adaptador
+     * reserva aos receptores UART ligados por fio que o `receiver` (índice do componente) ainda não
+     * leu. Cada receptor recebe todos os bytes (ver `setUartTapReceivers`).
      * `nullopt` significa "este pino nao e' TX de USART (ou o adaptador nao oferece wire tap)";
      * string vazia significa "e' um TX valido, mas nao ha byte novo". `busy=true` pede que o
      * chamador tente novamente sem consumir o receptor eletrico, evitando inversao de mutex entre
      * Scheduler e a thread/callback da MCU. */
-    std::optional<std::string> tryDrainUartTxWireTap(size_t localPinIndex, bool& busy) const;
-    /** Mesma condição de pino-fonte de `tryDrainUartTxWireTap()`, sem drenar nada: pino dedicado de
-     * TX de USART cujo módulo publica a cópia byte-exata consumida pelos receptores do circuito. */
+    std::optional<std::string> tryDrainUartTxWireTap(size_t localPinIndex, uint32_t receiver, bool& busy) const;
+    /** Pela sessão, antes de cada Run: os receptores UART (componente, pino deste MCU no nó do `rx`
+     * dele). Um byte do tap vai para todos os que estão num pino que carrega aquele TX, mesmo os que
+     * ainda não leram nada. */
+    void setUartTapReceivers(const std::vector<std::pair<uint32_t, size_t>>& receiverPins);
+    /** Mesma condição de pino-fonte de `tryDrainUartTxWireTap()`, sem drenar nada: pino que carrega
+     * agora o TX de uma USART cujo módulo publica a cópia byte-exata consumida pelos receptores do
+     * circuito -- o pino dedicado, ou uma linha de GPIO roteada para ele (no ESP32, o U0TXD no
+     * GPIO1). */
     bool pinHasUartTxWireTap(size_t localPinIndex) const;
     /** Repassa ao adaptador (ver `IMcuAdapter::setPinTransitionsObserved`). `SimulationSession`
      * chama isto ao publicar o plano, com a simulação parada. */
@@ -118,6 +130,10 @@ public:
     }
     uint64_t launchGenerationForTesting() const noexcept { return m_launchGeneration.load(std::memory_order_acquire); }
     void setI2cTransferHandler(I2cTransferHandler handler) { m_i2cTransferHandler = std::move(handler); }
+    void setSpiByteHandler(SpiByteHandler handler) { m_spiByteHandler = std::move(handler); }
+    /** Pela sessão, a cada topologia (simulação parada): pares de pinos (clock, dado) cujos fios só
+     * ligam escravos SPI que aceitam bytes inteiros -- ver `IMcuAdapter::setSpiBytePairs`. */
+    void setSpiBytePairs(std::vector<uint32_t> clockPins, std::vector<uint32_t> dataPins);
     /** Repassa pro adaptador concreto -- ver `IMcuAdapter::resolveI2cPinIndex`. `McuComponent`
      * continua neutro de chip (não interpreta o resultado, só repassa o índice de pino pra quem
      * chamou resolver a topologia -- `SimulationSession`). */
@@ -224,9 +240,6 @@ public:
     qemu::QemuArenaBridge& arenaBridge() { return m_controller.arenaBridge(); }
     /** Indica que esta instância usa o transporte VNEXT-B em vez da arena legada. */
     bool vnextBActive() const noexcept { return m_controller.vnextBActive(); }
-    /** Ver `McuController::hostPacedVirtualClock()`: `pacingPositionNs()` deste MCU é então um
-     * limite inferior do tempo real na timeline do Scheduler. */
-    bool hostPacedVirtualClock() const noexcept { return m_controller.hostPacedVirtualClock(); }
     /** Lockstep exato (QEMU VNEXT_B com -icount, ver lasec_at_control_page): teto SEM folga para o
      * Scheduler -- o instante que o QEMU provou ter alcançado, na timeline do Scheduler (a origem,
      * enquanto ele ainda não publicou nada). `std::nullopt` fora do lockstep. Só lê atômicos. */
@@ -500,6 +513,19 @@ private:
     uint32_t m_componentIndex = 0;
     std::atomic<uint64_t> m_launchGeneration{0};
     I2cTransferHandler m_i2cTransferHandler;
+    SpiByteHandler m_spiByteHandler;
+    /** Entrega ao `m_spiByteHandler` os bytes que `spi` transmitiu sem bordas. */
+    void deliverSpiBytesLocked(QemuModule& spi);
+    /** Módulo USART cujo TX sai agora pelo pino (dedicado ou GPIO roteado), ou nullptr. */
+    QemuModule* uartTxModuleOfPinLocked(size_t localPinIndex) const;
+    /** Receptor UART ligado a pinos deste MCU e os bytes do tap que ele ainda não leu (ver
+     * `tryDrainUartTxWireTap`). Com o mutex do callback. */
+    struct UartTapReceiver {
+        uint32_t component = 0;
+        std::vector<size_t> pins;
+        std::deque<uint8_t> pending;
+    };
+    mutable std::vector<UartTapReceiver> m_uartTapReceivers;
     std::atomic<bool> m_polling{false};
     // Identifica a sessão de polling à qual cada callback agendado pertence. Uma simples recarga
     // reutiliza o callback pendente; Scheduler::reset(), por outro lado, descarta a fila inteira e

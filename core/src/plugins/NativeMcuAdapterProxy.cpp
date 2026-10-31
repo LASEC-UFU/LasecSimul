@@ -136,6 +136,17 @@ void NativeMcuAdapterProxy::setPinTransitionsObserved(uint32_t pinIndex, bool ob
     if (!ok) m_health = PluginHealthStatus::Faulted;
 }
 
+void NativeMcuAdapterProxy::setSpiBytePairs(std::span<const uint32_t> clockPins, std::span<const uint32_t> dataPins) {
+    const LsdnMcuVTable* vt = m_module->mcuVTable();
+    // O slot só existe na vtable de um plugin de minor >= 3.
+    if (m_module->abiMinor() < 3 || !vt->set_spi_byte_pairs || m_health == PluginHealthStatus::Faulted) return;
+    const uint32_t count = static_cast<uint32_t>(std::min(clockPins.size(), dataPins.size()));
+    const bool ok = CrashGuard::call(m_chipId, [&] {
+        vt->set_spi_byte_pairs(m_handle, clockPins.data(), dataPins.data(), count);
+    });
+    if (!ok) m_health = PluginHealthStatus::Faulted;
+}
+
 std::optional<uint32_t> NativeMcuAdapterProxy::resolveI2cPinIndex(uint32_t bus, bool sda) const {
     const LsdnMcuVTable* vt = m_module->mcuVTable();
     if (!vt->resolve_i2c_pin || m_health == PluginHealthStatus::Faulted) return std::nullopt;

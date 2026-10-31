@@ -20,12 +20,14 @@ enum class PluginKind { Device, McuAdapter };
  */
 class PluginModule {
 public:
-    PluginModule(void* libraryHandle, const LsdnDeviceVTable* vtable, std::filesystem::path binaryPath)
+    PluginModule(void* libraryHandle, const LsdnDeviceVTable* vtable, std::filesystem::path binaryPath,
+                 uint32_t abiMinor = LSDN_ABI_VERSION_MINOR)
         : m_libraryHandle(libraryHandle), m_kind(PluginKind::Device), m_vtable(vtable),
-          m_binaryPath(std::move(binaryPath)) {}
+          m_binaryPath(std::move(binaryPath)), m_abiMinor(abiMinor) {}
 
-    /** `abiMinor`: o que `lsdn_get_mcu_vtable` declarou -- slots opcionais de um minor mais novo que
-     * o do plugin não existem na vtable dele (ver `QemuModuleProxy`). */
+    /** `abiMinor`: o que `lsdn_get_mcu_vtable`/`lsdn_get_vtable` declarou -- slots opcionais de um
+     * minor mais novo que o do plugin não existem na vtable dele (ver `QemuModuleProxy` e
+     * `NativeDeviceProxy::spiInputPins`). */
     PluginModule(void* libraryHandle, const LsdnMcuVTable* vtable, std::filesystem::path binaryPath,
                  uint32_t abiMinor = LSDN_MCU_ABI_VERSION_MINOR)
         : m_libraryHandle(libraryHandle), m_kind(PluginKind::McuAdapter), m_vtable(vtable),

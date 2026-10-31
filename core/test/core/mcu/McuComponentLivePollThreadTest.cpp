@@ -455,7 +455,7 @@ UartStreamResult runUartStreamWithI2c(simulation::Scheduler& scheduler, mcu::Mcu
     auto drainTapUntil = [&](uint32_t bytes) {
         return waitUntil([&] {
             bool busy = false;
-            if (const auto hex = mcu.tryDrainUartTxWireTap(uart0TxPin, busy)) out.bytesHex += *hex;
+            if (const auto hex = mcu.tryDrainUartTxWireTap(uart0TxPin, 0, busy)) out.bytesHex += *hex;
             return out.bytesHex.size() >= 2u * bytes;
         });
     };

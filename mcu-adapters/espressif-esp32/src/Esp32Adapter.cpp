@@ -90,28 +90,6 @@ int configuredIcountShift() {
     return static_cast<int>(parsed);
 }
 
-enum class Esp32ExecutionMode {
-    Deterministic,
-    Mttcg,
-};
-
-/**
- * MTTCG is the default after sustained validation with the real firmware:
- * one host TCG thread per ESP32 vCPU and no incompatible -icount timeline.
- * LASECSIMUL_ESP32_EXECUTION_MODE=deterministic is the explicit rollback to
- * single-thread TCG plus instruction-counted virtual time.
- *
- * Unknown non-empty values fail closed to deterministic mode.  This function
- * runs once per launch (like configuredIcountShift), so it must not cache the
- * environment: tests and a settings UI may switch modes between Stop -> Run.
- */
-Esp32ExecutionMode configuredExecutionMode() {
-    const std::string value =
-        processEnvironmentValue("LASECSIMUL_ESP32_EXECUTION_MODE");
-    if (value.empty() || value == "mttcg") return Esp32ExecutionMode::Mttcg;
-    return Esp32ExecutionMode::Deterministic;
-}
-
 constexpr uint64_t kUart0Start = 0x3FF40000;
 constexpr uint64_t kUart0End = 0x3FF40FFF;
 constexpr uint64_t kGpioStart = 0x3FF44000;
@@ -249,6 +227,17 @@ enum class SpiPhase : uint8_t {
     Idle,
     ClockHigh, // proximo passo sobe SCLK (escravo amostra MOSI agora)
     ClockLow,  // proximo passo desce SCLK e avanca pro bit seguinte/finaliza o byte
+    // Byte sem bordas (mcu_abi.h 3.3): no instante da 8a borda de subida o byte vai para a fila de
+    // entrega; no fim do 8o periodo o byte termina, como no caminho bit a bit.
+    SilentLastEdge,
+    SilentEnd,
+};
+
+/** Byte que o SPI transmitiu sem bordas, com o par de pinos por onde saiu (ver drain_spi_byte). */
+struct SpiTapByte {
+    uint8_t byte = 0;
+    uint32_t clockPin = 0;
+    uint32_t dataPin = 0;
 };
 
 /** Tamanho máximo dos buffers de MONITOR (`UsartState::txMonitor`/`rxMonitor`) -- bem maior que o
@@ -384,6 +373,11 @@ struct SpiState {
      * sem depender de nenhuma biblioteca especifica. */
     uint32_t pinReg = 0x6; // mesmo default real de esp32_spi_reset(): CS1_DIS|CS2_DIS, CS0 habilitado
     bool csAsserted = false;
+
+    // Byte em transmissao sem bordas: o par por onde sai, e os bytes que o Core ainda vai entregar.
+    uint32_t silentClockPin = 0;
+    uint32_t silentDataPin = 0;
+    std::deque<SpiTapByte> tap;
 };
 
 /* LED PWM (ESP32 TRM, LED_PWM chapter), modelado como o hardware: cada timer tem um contador que
@@ -451,6 +445,9 @@ struct Esp32SharedState {
         observed.fill(true);
         return observed;
     }();
+    // mcu_abi.h 3.3 (set_spi_byte_pairs): pares (clock, dado) de get_pin_map em que o SPI pode
+    // transmitir bytes sem bordas. Tambem descreve o circuito, fora dos resets de periferico.
+    std::vector<std::pair<uint32_t, uint32_t>> spiBytePairs;
 };
 
 SignalDesc makeRawGpio(uint32_t pin) { return SignalDesc{SignalKind::RawGpio, pin}; }
@@ -1270,11 +1267,22 @@ void gpioDestroy(LsdnQemuModule* module) {
     delete reinterpret_cast<GpioModuleState*>(module);
 }
 
+// mcu_abi.h 3.4: a USART cujo TX o pad `bit` carrega agora (IO_MUX ou matriz de GPIO), mesma
+// seleção de usartTxTransitionsUnobserved().
+uint32_t gpioUartTxOnLine(LsdnQemuModule* module, uint32_t bit) {
+    auto* s = reinterpret_cast<GpioModuleState*>(module);
+    if (bit >= 34) return 0;
+    const SignalDesc signal = selectedPinOutputSignal(*s->chip, bit);
+    return signal.kind == SignalKind::UartTx ? signal.index + 1u : 0u;
+}
+
 const LsdnQemuModuleVTable kGpioModuleVTable = {
     &gpioReset, &gpioWriteRegister, &gpioReadRegister, &gpioIsOutputEnabled, &gpioOutputLevel,
     &gpioSetInputLevel, &gpioDestroy, nullptr, nullptr, &gpioWriteRegisterAt, &gpioSetInputLevelAt, nullptr,
     &gpioSetInputVoltageAt, nullptr, nullptr, nullptr, &gpioGetPullState, nullptr,
     &gpioGetPinStates, &gpioSetInputVoltagesAt,
+    nullptr, // drain_spi_byte
+    &gpioUartTxOnLine,
 };
 
 void ioMuxReset(LsdnQemuModule* module) {
@@ -1929,7 +1937,12 @@ void spiUpdateCs0(SpiState& spi) {
     spi.cs0OutputLevel = spi.csAsserted ? activeHigh : !activeHigh;
 }
 
-void spiKick(SpiState& spi, uint64_t nowNs);
+void spiKick(Esp32SharedState& chip, uint32_t index, uint64_t nowNs);
+
+// mcu_abi.h 3.3: o SPI `index` transmite o byte sem bordas quando o clock e o MOSI dele saem, cada
+// um, por exatamente um pad dirigido (nem open-drain), e esse par foi declarado pelo Core (fios so'
+// com escravos que aceitam bytes inteiros). Reavaliado a cada byte: o roteamento muda em runtime.
+bool spiBytePairFor(const Esp32SharedState& chip, uint32_t index, uint32_t& clockPin, uint32_t& dataPin);
 
 // LASECSIMUL_SPI_ENGINE_TRACE=1: cada byte do motor SPI (chegada, início no fio) e o CS de hardware.
 bool spiEngineTraceEnabled() {
@@ -1963,10 +1976,45 @@ void spiAdvance(SpiState& spi, uint64_t nowNs) {
                 spi.dueNs = LSDN_QEMU_MODULE_NO_WAKEUP;
             }
             return;
+
+        case SpiPhase::SilentLastEdge:
+            // Instante da 8a borda de subida, quando o escravo fecharia o byte no fio.
+            spi.tap.push_back(SpiTapByte{spi.shiftByte, spi.silentClockPin, spi.silentDataPin});
+            spi.phase = SpiPhase::SilentEnd;
+            spi.dueNs = addDelayNs(nowNs, spi.bitPeriodNs / 2u);
+            return;
+
+        case SpiPhase::SilentEnd:
+            spi.phase = SpiPhase::Idle;
+            spi.dueNs = LSDN_QEMU_MODULE_NO_WAKEUP;
+            return;
     }
 }
 
-void spiKick(SpiState& spi, uint64_t nowNs) {
+bool spiBytePairFor(const Esp32SharedState& chip, uint32_t index, uint32_t& clockPin, uint32_t& dataPin) {
+    if (chip.spiBytePairs.empty()) return false;
+    int clockPads = 0, dataPads = 0;
+    for (uint32_t pin = 0; pin < 40; ++pin) {
+        const SignalDesc signal = selectedPinOutputSignal(chip, pin);
+        if (signal.index != index) continue;
+        if (signal.kind == SignalKind::SpiClk) {
+            clockPin = pin;
+            ++clockPads;
+        } else if (signal.kind == SignalKind::SpiMosi) {
+            dataPin = pin;
+            ++dataPads;
+        }
+    }
+    if (clockPads != 1 || dataPads != 1) return false;
+    for (const uint32_t pin : {clockPin, dataPin})
+        if (!gpioPadOutput(chip, pin).enabled || gpioIsPadDriverOpenDrain(chip, pin)) return false;
+    for (const auto& [clock, data] : chip.spiBytePairs)
+        if (clock == clockPin && data == dataPin) return true;
+    return false;
+}
+
+void spiKick(Esp32SharedState& chip, uint32_t index, uint64_t nowNs) {
+    SpiState& spi = chip.spis[index];
     if (spi.phase != SpiPhase::Idle || spi.dueNs != LSDN_QEMU_MODULE_NO_WAKEUP) return;
     if (spi.pendingBytes.empty()) return;
 
@@ -1979,6 +2027,13 @@ void spiKick(SpiState& spi, uint64_t nowNs) {
     spi.bitIndex = 0;
     spi.clkOutputEnabled = true;
     spi.mosiOutputEnabled = true;
+    if (spiBytePairFor(chip, index, spi.silentClockPin, spi.silentDataPin)) {
+        // Sem bordas: os pads ficam no nivel atual; 8a borda de subida em 15 meios periodos, como
+        // abaixo (meio periodo ate' a 1a, um periodo entre elas).
+        spi.phase = SpiPhase::SilentLastEdge;
+        spi.dueNs = addDelayNs(nowNs, 15u * (spi.bitPeriodNs / 2u));
+        return;
+    }
     spi.clkOutputLevel = false; // MODE0: SCLK ocioso em baixo
     spi.mosiOutputLevel = (spi.shiftByte & 0x80u) != 0; // MSB primeiro
     spi.phase = SpiPhase::ClockHigh;
@@ -2020,7 +2075,7 @@ void spiWriteRegisterAt(LsdnQemuModule* module, uint64_t address, uint64_t value
         // interno do proprio QEMU (esp32_spi_event) -- SPI0/SPI1 (flash/PSRAM onboard) nunca
         // chegam aqui, resolvidos 100% dentro do QEMU via ssi_transfer interno.
         if (spi.pendingBytes.size() < 64) spi.pendingBytes.push_back(static_cast<uint8_t>(value & 0xFFu));
-        spiKick(spi, nowNs);
+        spiKick(*s->chip, s->index, nowNs);
     }
 }
 
@@ -2045,7 +2100,7 @@ void spiOnWakeup(LsdnQemuModule* module, uint64_t nowNs) {
         spi.dueNs = LSDN_QEMU_MODULE_NO_WAKEUP;
         spiAdvance(spi, nowNs);
     }
-    spiKick(spi, nowNs);
+    spiKick(*s->chip, s->index, nowNs);
 }
 
 int32_t spiIsOutputEnabled(LsdnQemuModule* module, uint32_t line) {
@@ -2088,10 +2143,31 @@ void spiDestroy(LsdnQemuModule* module) {
     delete reinterpret_cast<SpiModuleState*>(module);
 }
 
+int32_t spiDrainSpiByte(LsdnQemuModule* module, uint8_t* outByte, uint32_t* outClockPin, uint32_t* outDataPin) {
+    auto* s = reinterpret_cast<SpiModuleState*>(module);
+    if (s->index >= s->chip->spis.size()) return 0;
+    std::deque<SpiTapByte>& tap = s->chip->spis[s->index].tap;
+    if (tap.empty() || !outByte || !outClockPin || !outDataPin) return 0;
+    *outByte = tap.front().byte;
+    *outClockPin = tap.front().clockPin;
+    *outDataPin = tap.front().dataPin;
+    tap.pop_front();
+    return 1;
+}
+
 const LsdnQemuModuleVTable kSpiModuleVTable = {
     &spiReset, &spiWriteRegister, &spiReadRegister, &spiIsOutputEnabled, &spiOutputLevel,
     &spiSetInputLevel, &spiDestroy, &spiNextWakeupDelayNs, &spiOnWakeup, &spiWriteRegisterAt,
     nullptr, &spiNextWakeupDelayNsAt,
+    nullptr, // set_input_voltage_at
+    nullptr, // drain_monitor_byte
+    nullptr, // monitor_dropped_count
+    nullptr, // inject_rx_bytes
+    nullptr, // get_pull_state
+    nullptr, // drain_wire_tap_byte
+    nullptr, // get_pin_states
+    nullptr, // set_input_voltages_at
+    &spiDrainSpiByte,
 };
 
 bool selectedAdcChannel(uint32_t value, uint8_t& channel) {
@@ -2523,7 +2599,6 @@ LsdnMcuAdapter* create(void* hostCtx, const LsdnMcuHostApi* api) {
 
 LsdnQemuLaunchSpec buildLaunchArgs(LsdnMcuAdapter* adapter, const char* firmwarePath) {
     auto* state = reinterpret_cast<Esp32AdapterState*>(adapter);
-    const Esp32ExecutionMode executionMode = configuredExecutionMode();
     state->launchArgStorage = {
         "qemu-system-xtensa",
         "-M",
@@ -2540,16 +2615,15 @@ LsdnQemuLaunchSpec buildLaunchArgs(LsdnMcuAdapter* adapter, const char* firmware
         "file=" + std::string(firmwarePath ? firmwarePath : "") +
             ",if=mtd,format=raw,snapshot=on",
     };
+    // Relógio contado por instrução, base do lockstep com o Core: o tempo do guest só anda com as
+    // instruções que ele executa, nunca com o relógio do PC. O modo MTTCG (uma thread TCG por vCPU,
+    // relógio do guest preso ao do host) foi retirado em 2026-10-30: nele o SPI de hardware, a UART
+    // no pino e a duração de um fade saíam errados por natureza (docs/35-bug-bordas-*.md).
     state->launchArgStorage.push_back("-accel");
+    state->launchArgStorage.push_back("tcg,thread=single");
+    state->launchArgStorage.push_back("-icount");
     state->launchArgStorage.push_back(
-        executionMode == Esp32ExecutionMode::Mttcg ? "tcg,thread=multi"
-                                                    : "tcg,thread=single");
-    if (executionMode == Esp32ExecutionMode::Deterministic) {
-        state->launchArgStorage.push_back("-icount");
-        state->launchArgStorage.push_back(
-            "shift=" + std::to_string(configuredIcountShift()) +
-            ",align=off,sleep=off");
-    }
+        "shift=" + std::to_string(configuredIcountShift()) + ",align=off,sleep=off");
     state->launchArgs.clear();
     state->launchArgs.reserve(state->launchArgStorage.size());
     for (const std::string& arg : state->launchArgStorage) state->launchArgs.push_back(arg.c_str());
@@ -2644,9 +2718,16 @@ void setPinTransitionsObserved(LsdnMcuAdapter* adapter, uint32_t pin, int32_t ob
     if (pin < state->chip.pinTransitionsObserved.size()) state->chip.pinTransitionsObserved[pin] = observed != 0;
 }
 
+void setSpiBytePairs(LsdnMcuAdapter* adapter, const uint32_t* clockPins, const uint32_t* dataPins, uint32_t count) {
+    auto* state = reinterpret_cast<Esp32AdapterState*>(adapter);
+    state->chip.spiBytePairs.clear();
+    for (uint32_t i = 0; clockPins && dataPins && i < count; ++i)
+        state->chip.spiBytePairs.emplace_back(clockPins[i], dataPins[i]);
+}
+
 const LsdnMcuVTable kVTable = {
     &create, &buildLaunchArgs, &getMemoryRegions, &getPinMap, &createModules, &destroy, &resolveI2cPin,
-    &setPinTransitionsObserved,
+    &setPinTransitionsObserved, &setSpiBytePairs,
 };
 
 } // namespace

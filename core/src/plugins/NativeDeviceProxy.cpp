@@ -258,6 +258,33 @@ I2cTransferResult NativeDeviceProxy::transferI2c(const I2cTransfer& transfer) {
     return result;
 }
 
+std::optional<IComponentModel::SpiInputPins> NativeDeviceProxy::spiInputPins() const {
+    std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
+    // Os slots de SPI só existem na vtable de um plugin de minor >= 1.
+    if (!m_module || m_module->abiMinor() < 1 || m_health == PluginHealthStatus::Faulted) return std::nullopt;
+    const LsdnDeviceVTable* vtable = m_module->deviceVTable();
+    if (!vtable->spi_input || !vtable->spi_clock_byte) return std::nullopt;
+    uint32_t clock = 0, data = 0;
+    uint32_t supported = 0;
+    const bool ok = CrashGuard::call(m_meta.typeId, [&] { supported = vtable->spi_input(m_handle, &clock, &data); });
+    if (!ok) {
+        m_health = PluginHealthStatus::Faulted;
+        return std::nullopt;
+    }
+    const size_t pinCount = m_hostContext->declaredPins.size();
+    if (!supported || clock >= pinCount || data >= pinCount || clock == data) return std::nullopt;
+    return SpiInputPins{clock, data};
+}
+
+void NativeDeviceProxy::clockSpiByte(uint8_t byte) {
+    std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
+    if (!m_module || m_module->abiMinor() < 1 || m_health == PluginHealthStatus::Faulted) return;
+    const LsdnDeviceVTable* vtable = m_module->deviceVTable();
+    if (!vtable->spi_clock_byte) return;
+    const bool ok = CrashGuard::call(m_meta.typeId, [&] { vtable->spi_clock_byte(m_handle, byte); });
+    if (!ok) m_health = PluginHealthStatus::Faulted;
+}
+
 size_t NativeDeviceProxy::getState(uint8_t* out, size_t cap) const {
     std::lock_guard<std::recursive_mutex> lock(m_deviceMutex);
     size_t result = 0;

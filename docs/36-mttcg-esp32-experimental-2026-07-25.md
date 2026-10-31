@@ -2,6 +2,12 @@
 
 Data: 2026-07-25.
 
+> **Retirado em 2026-10-30.** O ESP32 roda sempre com `-icount` em lockstep com o Core
+> (`lasecsimul.mcu.esp32Timing`: `realtime` ou `exact`). O adaptador não lança mais o QEMU com
+> `tcg,thread=multi`, e `LASECSIMUL_ESP32_EXECUTION_MODE` não tem mais efeito. Motivo e medidas:
+> `docs/35-bug-bordas-esp32-displays-2026-10-28.md`, seção "MTTCG retirado". Este documento fica como
+> registro histórico.
+
 ## Resultado
 
 Após a validação com o firmware real, o modo padrão passou a ser:

@@ -638,31 +638,15 @@ void Scheduler::start() {
                 }
 
                 // Keep the absolute wall anchor when late. Re-anchoring here
-                // discarded every oversleep/boot delay while QEMU's host-paced
-                // clock kept advancing: future MMIO events drifted ever farther
-                // ahead and returning ring credit became progressively slower.
-                // Catch-up still processes every event and respects advanceLimit.
-                // Achado 2026-09-28: a âncora de parede acima é do próprio Core e fica alguns ms
-                // atrás do relógio de um QEMU em tempo real. Dormir até ela deixava o elétrico
-                // atrás de escritas que o QEMU já publicou; como cada burst I2C espera a fila da
-                // arena drenar (e a fila só drena quando o Core alcança o timestamp de cada
-                // entrada), cada transação pagava esse atraso. Atrás do relógio do host não há
-                // o que esperar; e uma espera em curso termina assim que ele nos ultrapassa.
-                const auto behindHostPacedClock = [this](uint64_t simNs) {
-                    if (!m_hostPacedPosition) return false;
-                    const std::optional<uint64_t> position = m_hostPacedPosition();
-                    return position && *position > simNs;
-                };
-                if (requiredElapsed > actualElapsed && requiredElapsed - actualElapsed >= pacingQuantum &&
-                    !behindHostPacedClock(cycleSimEndNs)) {
+                // discarded every oversleep/boot delay: future MMIO events drifted
+                // ever farther ahead and returning ring credit became progressively
+                // slower. Catch-up still processes every event and respects advanceLimit.
+                if (requiredElapsed > actualElapsed && requiredElapsed - actualElapsed >= pacingQuantum) {
                     const auto deadline = pacingWallOrigin + requiredElapsed;
                     // The guard above already accumulates a host-sized quantum.
                     // Sleep that whole quantum. yield() is NOT a timed wait: spinning
                     // through the final quantum consumed a full CPU and competed with
                     // the artifact whose progress this worker is meant to follow.
-                    // Geração do início do ciclo: uma posição de referência publicada entre a
-                    // checagem behindHostPacedClock() acima e esta linha não pode se perder.
-                    uint64_t observedAdvanceGen = cycleAdvanceGen;
                     m_workerTimedWait.store(true, std::memory_order_seq_cst);
                     const auto sleepStart = std::chrono::steady_clock::now();
                     std::unique_lock<std::mutex> pacingLock(m_pacingMutex);
@@ -673,12 +657,8 @@ void Scheduler::start() {
                         // do MCU agenda a leitura de GPIO no instante publicado pelo QEMU) para um
                         // instante que este ciclo já passou ficava na fila até o prazo do pacing
                         // (dezenas de ms). Evento futuro continua esperando o pacing normal.
-                        if (m_workGeneration.load(std::memory_order_acquire) != cycleWorkGen &&
-                            m_nextEventSnapshotNs.load(std::memory_order_acquire) <= cycleSimEndNs) return true;
-                        const uint64_t generation = m_advanceLimitGeneration.load(std::memory_order_acquire);
-                        if (generation == observedAdvanceGen) return false;
-                        observedAdvanceGen = generation;
-                        return behindHostPacedClock(cycleSimEndNs);
+                        return m_workGeneration.load(std::memory_order_acquire) != cycleWorkGen &&
+                               m_nextEventSnapshotNs.load(std::memory_order_acquire) <= cycleSimEndNs;
                     });
                     pacingLock.unlock();
                     m_workerTimedWait.store(false, std::memory_order_relaxed);

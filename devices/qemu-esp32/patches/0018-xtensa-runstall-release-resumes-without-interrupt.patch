@@ -1,0 +1,58 @@
+diff --git a/target/xtensa/cpu.c b/target/xtensa/cpu.c
+index 123a654..801122c 100644
+--- a/target/xtensa/cpu.c
++++ b/target/xtensa/cpu.c
+@@ -207,6 +207,7 @@ static void xtensa_cpu_reset_hold(Object *obj)
+ #ifndef CONFIG_USER_ONLY
+     reset_mmu(env);
+     s->halted = env->runstall;
++    env->runstall_waiti = false;
+ #endif
+     set_no_signaling_nans(!dfpu, &env->fp_status);
+     set_use_first_nan(!dfpu, &env->fp_status);
+diff --git a/target/xtensa/cpu.h b/target/xtensa/cpu.h
+index 3d48cfe..a3952d8 100644
+--- a/target/xtensa/cpu.h
++++ b/target/xtensa/cpu.h
+@@ -530,6 +530,7 @@ struct CPUArchState {
+     xtensa_mpu_entry mpu_fg[MAX_MPU_FOREGROUND_SEGMENTS];
+     unsigned autorefill_idx;
+     bool runstall;
++    bool runstall_waiti; /* in WAITI when RUNSTALL rose: still waiting once it drops */
+     AddressSpace *address_space_er;
+     MemoryRegion *system_er;
+     int pending_irq_level; /* level of last raised IRQ */
+diff --git a/target/xtensa/helper.c b/target/xtensa/helper.c
+index 84fc93f..a7bb9e1 100644
+--- a/target/xtensa/helper.c
++++ b/target/xtensa/helper.c
+@@ -332,15 +332,28 @@ void xtensa_cpu_do_transaction_failed(CPUState *cs, hwaddr physaddr, vaddr addr,
+                                   addr);
+ }
+ 
++/* RUNSTALL is a level on the core's input: while it is high the core executes nothing, and once it
++ * drops the core goes on as it was -- running, or still in WAITI until an interrupt. Halting through
++ * CPU_INTERRUPT_HALT left that request pending when the core did not run during the stall (the
++ * single-threaded RR loop never runs a halted core; on the ESP32 the flash-cache wait also holds it),
++ * and it halted the core again right after the release, until an interrupt above PS.INTLEVEL: about
++ * a tick late, or forever with interrupts masked. And the release ended a WAITI with no interrupt. */
+ void xtensa_runstall(CPUXtensaState *env, bool runstall)
+ {
+     CPUState *cpu = env_cpu(env);
+ 
++    if (runstall == env->runstall) {
++        return;
++    }
+     env->runstall = runstall;
+-    cpu->halted = runstall;
+     if (runstall) {
++        env->runstall_waiti = cpu->halted;
++        cpu->halted = 1;
+         cpu_interrupt(cpu, CPU_INTERRUPT_HALT);
+     } else {
++        cpu_reset_interrupt(cpu, CPU_INTERRUPT_HALT);
++        cpu->halted = env->runstall_waiti;
++        env->runstall_waiti = false;
+         qemu_cpu_kick(cpu);
+     }
+ }

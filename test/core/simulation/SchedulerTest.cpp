@@ -337,57 +337,6 @@ void testRealTimeScheduleFollowsTheWallClockWithBoundedLag() {
     assert(caughtUpNs > 1'001'000'000 && caughtUpNs < 1'180'000'000);
 }
 
-// Achado 2026-09-28: um QEMU em tempo real (MTTCG) já esteve em cada timestamp que publica. Atrás
-// dessa posição o pacing não tem o que esperar; dormir até a âncora de parede do próprio Scheduler
-// deixava cada escrita do MCU (e cada burst I2C que espera a fila drenar) alguns ms atrasada.
-void testHostPacedPositionSkipsPacingSleep() {
-    Scheduler* schedulerPtr = nullptr;
-    Scheduler scheduler(2, [&schedulerPtr] {
-        schedulerPtr->dirtySet().clear();
-        return false;
-    });
-    schedulerPtr = &scheduler;
-    scheduler.setMaximumTimeStepNs(100'000);
-    scheduler.setRealTimeRate(1.0);
-    constexpr uint64_t kHostPacedNs = 200'000'000;
-    scheduler.setHostPacedPositionCallback([] { return std::optional<uint64_t>(kHostPacedNs); });
-
-    scheduler.start();
-    std::this_thread::sleep_for(std::chrono::milliseconds(60));
-    scheduler.stop();
-
-    // Sem a referência, 60ms de parede dariam ~60ms simulados. Depois de alcançá-la, o pacing
-    // normal volta a valer: nada de avanço ilimitado além dela.
-    assert(scheduler.nowNs() >= kHostPacedNs);
-    assert(scheduler.nowNs() < kHostPacedNs + 60'000'000);
-}
-
-void testPacingSleepEndsWhenHostPacedPositionMovesAhead() {
-    Scheduler* schedulerPtr = nullptr;
-    Scheduler scheduler(2, [&schedulerPtr] {
-        schedulerPtr->dirtySet().clear();
-        return false;
-    });
-    schedulerPtr = &scheduler;
-    scheduler.setMaximumTimeStepNs(100'000);
-    scheduler.setRealTimeRate(1.0);
-    std::atomic<uint64_t> hostPacedNs{0};
-    scheduler.setHostPacedPositionCallback([&hostPacedNs] {
-        const uint64_t value = hostPacedNs.load(std::memory_order_relaxed);
-        return value ? std::optional<uint64_t>(value) : std::nullopt;
-    });
-
-    scheduler.start();
-    std::this_thread::sleep_for(std::chrono::milliseconds(40)); // pacing normal, dormindo por quantum
-    const uint64_t target = scheduler.nowNs() + 300'000'000;
-    hostPacedNs.store(target, std::memory_order_relaxed);
-    scheduler.notifyAdvanceLimitChanged();
-    std::this_thread::sleep_for(std::chrono::milliseconds(40));
-    scheduler.stop();
-
-    assert(scheduler.nowNs() >= target);
-}
-
 // Achado 2026-09-29: as gerações observadas pela espera eram lidas DEPOIS de runUntil(). Uma posição
 // publicada entre a leitura do teto e o fim do ciclo (a thread de poll do MCU faz isso ao ver uma
 // leitura de GPIO do QEMU) entrava no valor "observado" e a espera dormia os 5 ms inteiros. Aqui o
@@ -454,23 +403,17 @@ void testLateEventEndsPacingSleepWithoutMovingTimeBack() {
         return false;
     });
     schedulerPtr = &scheduler;
-    scheduler.setMaximumTimeStepNs(100'000);
+    // Um passo de 400 ms simulados: o primeiro ciclo chega a 400 ms em poucos ms de parede e o
+    // pacing dorme até o relógio de parede alcançar.
+    scheduler.setMaximumTimeStepNs(400'000'000);
     scheduler.setRealTimeRate(1.0);
-    std::atomic<uint64_t> hostPacedNs{400'000'000};
-    scheduler.setHostPacedPositionCallback([&hostPacedNs] {
-        const uint64_t value = hostPacedNs.load(std::memory_order_relaxed);
-        return value ? std::optional<uint64_t>(value) : std::nullopt;
-    });
 
     const auto startedAt = std::chrono::steady_clock::now();
     scheduler.start();
-    // Corre até a referência (400 ms simulados em poucos ms de parede) e fica muito à frente da
-    // própria âncora de parede: sem a referência, o pacing dorme até o relógio de parede alcançar.
     const auto reachDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
     while (scheduler.nowNs() < 400'000'000 && std::chrono::steady_clock::now() < reachDeadline) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
-    hostPacedNs.store(0, std::memory_order_relaxed);
     std::this_thread::sleep_for(std::chrono::milliseconds(20)); // entra na espera de pacing
     const uint64_t nowBefore = scheduler.nowNs();
     assert(nowBefore >= 400'000'000);
@@ -846,8 +789,6 @@ int main() {
     testExactAdvanceLimitHasNoLeadAndAdvancesWithoutEvents();
     testSoftEventsStayOutOfTheHardHorizon();
     testRealTimeScheduleFollowsTheWallClockWithBoundedLag();
-    testHostPacedPositionSkipsPacingSleep();
-    testPacingSleepEndsWhenHostPacedPositionMovesAhead();
     testAdvanceLimitChangeDuringCycleIsNotLost();
     testLateEventEndsPacingSleepWithoutMovingTimeBack();
     testAdvanceLimitNulloptBehavesLikeNoHook();

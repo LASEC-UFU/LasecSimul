@@ -14,18 +14,11 @@ class FakeAdapter final : public IMcuAdapter {
 public:
     const char* chipId() const override { return "fake.cpu"; }
     QemuLaunchSpec buildLaunchArgs(std::string_view firmware) const override {
-        // Mirrors the real Esp32Adapter's contract (configuredExecutionMode()): MTTCG by default
-        // (-accel tcg,thread=multi, no -icount); any other LASECSIMUL_ESP32_EXECUTION_MODE value is
-        // the deterministic rollback (tcg,thread=single plus -icount). McuController's
-        // LASECSIMUL_QEMU_TCG_THREAD/TB_SIZE overrides and its execution= diagnostic then have
-        // something realistic to act on.
-        const char* mode = std::getenv("LASECSIMUL_ESP32_EXECUTION_MODE");
-        if (mode && *mode && std::string_view(mode) != "mttcg") {
-            return {"qemu-fake", {"qemu-fake", "-kernel", std::string(firmware), "-accel", "tcg,thread=single",
-                                  "-icount", "shift=4,align=off,sleep=off"}};
-        }
-        return {"qemu-fake",
-                {"qemu-fake", "-kernel", std::string(firmware), "-accel", "tcg,thread=multi"}};
+        // Mirrors the real Esp32Adapter: single-thread TCG plus instruction-counted time (the MTTCG
+        // mode was retired on 2026-10-30). McuController's LASECSIMUL_QEMU_TB_SIZE override and its
+        // execution= diagnostic then have something realistic to act on.
+        return {"qemu-fake", {"qemu-fake", "-kernel", std::string(firmware), "-accel", "tcg,thread=single",
+                              "-icount", "shift=4,align=off,sleep=off"}};
     }
     std::span<const MemoryRegion> memoryRegions() const override { return {}; }
     std::span<const PinMapping> pinMap() const override { return {}; }
@@ -117,121 +110,58 @@ int main() {
 
 #ifdef _WIN32
     _putenv_s("LASECSIMUL_QEMU_TB_SIZE", "");
-    _putenv_s("LASECSIMUL_QEMU_TCG_THREAD", "");
-    _putenv_s("LASECSIMUL_ESP32_EXECUTION_MODE", "");
 #else
     unsetenv("LASECSIMUL_QEMU_TB_SIZE");
-    unsetenv("LASECSIMUL_QEMU_TCG_THREAD");
-    unsetenv("LASECSIMUL_ESP32_EXECUTION_MODE");
-#endif
-    assert(accelArgument(controller.buildLaunchSpec("firmware.bin", "accel-multi")) == "tcg,thread=multi");
-#ifdef _WIN32
-    _putenv_s("LASECSIMUL_QEMU_TCG_THREAD", "single");
-#else
-    setenv("LASECSIMUL_QEMU_TCG_THREAD", "single", 1);
-#endif
-    assert(accelArgument(controller.buildLaunchSpec("firmware.bin", "accel-single")) == "tcg,thread=single");
-#ifdef _WIN32
-    _putenv_s("LASECSIMUL_QEMU_TB_SIZE", "64");
-    _putenv_s("LASECSIMUL_QEMU_TCG_THREAD", "");
-#else
-    setenv("LASECSIMUL_QEMU_TB_SIZE", "64", 1);
-    unsetenv("LASECSIMUL_QEMU_TCG_THREAD");
-#endif
-    assert(accelArgument(controller.buildLaunchSpec("firmware.bin", "accel-multi-tb")) == "tcg,thread=multi,tb-size=64");
-#ifdef _WIN32
-    _putenv_s("LASECSIMUL_QEMU_TCG_THREAD", "single");
-#else
-    setenv("LASECSIMUL_QEMU_TCG_THREAD", "single", 1);
-#endif
-    const QemuLaunchSpec singleTb = controller.buildLaunchSpec("firmware.bin", "accel-single-tb");
-    assert(accelArgument(singleTb) == "tcg,thread=single,tb-size=64");
-    assert(singleTb.diagnostics.find("execution=single-realtime") != std::string::npos);
-#ifdef _WIN32
-    _putenv_s("LASECSIMUL_QEMU_TCG_THREAD", "");
-    _putenv_s("LASECSIMUL_ESP32_EXECUTION_MODE", "deterministic");
-#else
-    unsetenv("LASECSIMUL_QEMU_TCG_THREAD");
-    setenv("LASECSIMUL_ESP32_EXECUTION_MODE", "deterministic", 1);
 #endif
     const QemuLaunchSpec icount = controller.buildLaunchSpec("firmware.bin", "accel-icount");
-    assert(accelArgument(icount) == "tcg,thread=single,tb-size=64");
+    assert(accelArgument(icount) == "tcg,thread=single");
     assert(std::find(icount.args.begin(), icount.args.end(), "-icount") != icount.args.end());
-    assert(icount.diagnostics.find("execution=deterministic-icount") != std::string::npos);
+    assert(icount.diagnostics.find("execution=deterministic-icount shift=4") != std::string::npos);
+#ifdef _WIN32
+    _putenv_s("LASECSIMUL_QEMU_TB_SIZE", "64");
+#else
+    setenv("LASECSIMUL_QEMU_TB_SIZE", "64", 1);
+#endif
+    const QemuLaunchSpec icountTb = controller.buildLaunchSpec("firmware.bin", "accel-icount-tb");
+    assert(accelArgument(icountTb) == "tcg,thread=single,tb-size=64");
+    assert(std::find(icountTb.args.begin(), icountTb.args.end(), "-icount") != icountTb.args.end());
 #ifdef _WIN32
     _putenv_s("LASECSIMUL_NETWORK_NAMESPACE", "");
     _putenv_s("LASECSIMUL_NETWORK_MODE", "");
     _putenv_s("LASECSIMUL_GATEWAY_PORT", "");
     _putenv_s("LASECSIMUL_QEMU_TB_SIZE", "");
-    _putenv_s("LASECSIMUL_QEMU_TCG_THREAD", "");
-    _putenv_s("LASECSIMUL_ESP32_EXECUTION_MODE", "");
+    _putenv_s("LASECSIMUL_MCU_TRANSPORT", "");
 #else
     unsetenv("LASECSIMUL_NETWORK_NAMESPACE");
     unsetenv("LASECSIMUL_NETWORK_MODE");
     unsetenv("LASECSIMUL_GATEWAY_PORT");
     unsetenv("LASECSIMUL_QEMU_TB_SIZE");
-    unsetenv("LASECSIMUL_QEMU_TCG_THREAD");
-    unsetenv("LASECSIMUL_ESP32_EXECUTION_MODE");
+    unsetenv("LASECSIMUL_MCU_TRANSPORT");
 #endif
     std::puts("OK: QEMU launch supports disabled, lab-router, lab-bridge and internal isolated fallback; debug args preserved.");
 
     // PLAN_MTTCG_VNEXT_B_CAUSALITY.md section 7.2: execution mode and transport must be
-    // unambiguous in the diagnostics, inspected via buildLaunchSpec()/args alone -- no real
-    // QEMU is started here. FakeAdapter's fixed MTTCG-shaped response (tcg,thread=multi, no
-    // -icount) lets this file exercise McuController's own LASECSIMUL_QEMU_TCG_THREAD override
-    // and the execution=/transport= diagnostic lines; the ICOUNT/MTTCG split coming from
-    // configuredExecutionMode() itself is covered against the real adapter in
-    // Esp32AdapterTest.cpp.
-    auto containsArg = [](const QemuLaunchSpec& spec, const std::string& value) {
-        return std::find(spec.args.begin(), spec.args.end(), value) != spec.args.end();
-    };
-    auto containsArgPair = [](const QemuLaunchSpec& spec, const std::string& option,
-                              const std::string& value) {
-        for (size_t i = 0; i + 1 < spec.args.size(); ++i) {
-            if (spec.args[i] == option && spec.args[i + 1] == value) return true;
-        }
-        return false;
-    };
-
+    // unambiguous in the diagnostics, inspected via buildLaunchSpec() alone -- no real QEMU is
+    // started here. The real adapter's launch arguments are covered in Esp32AdapterTest.cpp.
+    const QemuLaunchSpec legacy = controller.buildLaunchSpec("firmware.bin", "lasecsimul-mcu-1234-7");
+    assert(legacy.diagnostics.find("execution=deterministic-icount") != std::string::npos);
+    assert(legacy.diagnostics.find("transport=legacy") != std::string::npos);
+    assert(legacy.diagnostics.find("transport=vnext_b") == std::string::npos);
 #ifdef _WIN32
-    _putenv_s("LASECSIMUL_QEMU_TCG_THREAD", "");
+    _putenv_s("LASECSIMUL_MCU_TRANSPORT", "VNEXT_B");
+#else
+    setenv("LASECSIMUL_MCU_TRANSPORT", "VNEXT_B", 1);
+#endif
+    const QemuLaunchSpec vnextB = controller.buildLaunchSpec("firmware.bin", "lasecsimul-mcu-1234-7");
+    assert(vnextB.diagnostics.find("transport=vnext_b") != std::string::npos);
+    assert(vnextB.diagnostics.find("transport=legacy") == std::string::npos);
+#ifdef _WIN32
     _putenv_s("LASECSIMUL_MCU_TRANSPORT", "");
 #else
-    unsetenv("LASECSIMUL_QEMU_TCG_THREAD");
     unsetenv("LASECSIMUL_MCU_TRANSPORT");
 #endif
-    const QemuLaunchSpec mttcgDefault =
-        controller.buildLaunchSpec("firmware.bin", "lasecsimul-mcu-1234-7");
-    assert(containsArgPair(mttcgDefault, "-accel", "tcg,thread=multi"));
-    assert(!containsArg(mttcgDefault, "-icount"));
-    assert(mttcgDefault.diagnostics.find("execution=mttcg-realtime") != std::string::npos);
-
-#ifdef _WIN32
-    _putenv_s("LASECSIMUL_QEMU_TCG_THREAD", "single");
-#else
-    setenv("LASECSIMUL_QEMU_TCG_THREAD", "single", 1);
-#endif
-    const QemuLaunchSpec singleRealtime =
-        controller.buildLaunchSpec("firmware.bin", "lasecsimul-mcu-1234-7");
-    assert(containsArgPair(singleRealtime, "-accel", "tcg,thread=single"));
-    assert(!containsArg(singleRealtime, "-icount"));
-    // The invariant that must never be violated by any mode combination: MTTCG's
-    // thread=multi and -icount are mutually exclusive (QEMU itself refuses that pairing).
-    assert(!(containsArgPair(singleRealtime, "-accel", "tcg,thread=multi") &&
-             containsArg(singleRealtime, "-icount")));
-    assert(singleRealtime.diagnostics.find("execution=single-realtime") != std::string::npos);
-    assert(singleRealtime.diagnostics.find("execution=mttcg-realtime") == std::string::npos);
-#ifdef _WIN32
-    _putenv_s("LASECSIMUL_QEMU_TCG_THREAD", "");
-#else
-    unsetenv("LASECSIMUL_QEMU_TCG_THREAD");
-#endif
-
-    // transport= must be unambiguous in every launch, legacy or VNEXT_B.
-    assert(mttcgDefault.diagnostics.find("transport=legacy") != std::string::npos);
-    assert(mttcgDefault.diagnostics.find("transport=vnext_b") == std::string::npos);
     std::puts("OK: execution mode and transport are unambiguous in launch diagnostics "
-              "(mttcg-realtime default, single-realtime override, legacy transport).");
+              "(deterministic-icount, legacy and vnext_b transports).");
 
     return 0;
 }

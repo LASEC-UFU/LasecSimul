@@ -127,13 +127,9 @@ int main() {
     std::fprintf(stderr, "%s\n", line.c_str());
     // Período de 200 us: o primeiro passo espera o estouro seguinte (até 1 período) e a ISR acorda a
     // task logo depois -- 1 ms de folga cobre os dois sem aceitar um fade com a duração errada.
-    // No modo mttcg o relógio do guest segue o do host e não fica preso ao do circuito: o fade termina
-    // com o duty certo, mas a duração medida pelo firmware não é a do chip (limite documentado do modo).
-    const char* executionMode = std::getenv("LASECSIMUL_ESP32_EXECUTION_MODE");
-    const bool lockstepTiming = !(executionMode && std::string(executionMode) == "mttcg");
     int failures = 0;
-    if (lockstepTiming && (upUs < 459'000 || upUs > 460'000 + 1'000)) { std::fprintf(stderr, "FALHOU: subida %u us (chip: 459 ms)\n", upUs); ++failures; }
-    if (lockstepTiming && (downUs < 255'000 || downUs > 256'000 + 1'000)) { std::fprintf(stderr, "FALHOU: descida %u us (chip: 255 ms)\n", downUs); ++failures; }
+    if (upUs < 459'000 || upUs > 460'000 + 1'000) { std::fprintf(stderr, "FALHOU: subida %u us (chip: 459 ms)\n", upUs); ++failures; }
+    if (downUs < 255'000 || downUs > 256'000 + 1'000) { std::fprintf(stderr, "FALHOU: descida %u us (chip: 255 ms)\n", downUs); ++failures; }
     if (upDuty != 255 || downDuty != 0) { std::fprintf(stderr, "FALHOU: duty lido %u/%u (esperado 255/0)\n", upDuty, downDuty); ++failures; }
     if (failures) return 1;
     std::printf("LEDC fade: subida %u us, descida %u us, duty 255/0 -- como no chip\n", upUs, downUs);

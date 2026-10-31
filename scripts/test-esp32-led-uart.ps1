@@ -14,15 +14,13 @@ foreach ($file in @($Firmware, $QemuBinary, $test)) {
 }
 $settings = @{
     LASECSIMUL_MCU_TRANSPORT = 'VNEXT_B'
-    LASECSIMUL_ESP32_EXECUTION_MODE = 'mttcg'
-    LASECSIMUL_TEST_FIRMWARE = (Resolve-Path -LiteralPath $Firmware).Path
+    LASECSIMUL_TEST_LASECPLOT_FIRMWARE = (Resolve-Path -LiteralPath $Firmware).Path
     LASECSIMUL_TEST_QEMU_BINARY = (Resolve-Path -LiteralPath $QemuBinary).Path
     LASECSIMUL_TEST_EXPECTED_LINE = 'LED alternado'
     LASECSIMUL_TEST_DURATION_SECONDS = "$DurationSeconds"
     LASECSIMUL_TEST_GDB_PORT = $null
     LASECSIMUL_VNEXT_B_SYNTHETIC_MMIO = $null
     LASECSIMUL_VNEXT_TRACE = $null
-    LASECSIMUL_QEMU_TCG_THREAD = $null
     LASECSIMUL_BENCHMARK_EXPECTED_LINE = 'LED alternado'
     LASECSIMUL_BENCHMARK_PROBE_TRACE = '1'
     LASECSIMUL_BENCHMARK_COMPACT = '1'

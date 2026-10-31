@@ -1,0 +1,52 @@
+diff --git a/softmmu/icount.c b/softmmu/icount.c
+index b22377a..7601f12 100644
+--- a/softmmu/icount.c
++++ b/softmmu/icount.c
+@@ -233,22 +233,37 @@ int64_t icount_cpu_budget(CPUState *cpu, int64_t deadline_ns)
+     return left > 0.0 ? icount_round((int64_t)ceil(left)) : 0;
+ }
+ 
+-/* Live, not just the flag: once the slower vCPU halts or catches up, this one is the slowest and
+- * must run (a stale flag left the RR thread asleep with nothing able to wake it). */
+-static bool icount_cpu_index_waits(int index)
+-{
+-    return qatomic_read(&icount_cpu_waiting[index]) && icount_cpu_ns[index] > icount_global_ns;
+-}
+-
++/* Live, not just the flag: a vCPU on the timeline waits only while another one on the timeline is
++ * behind it and can run to catch up. Once the slower one halts with nothing to do or catches up, this
++ * one is the slowest and must run (a stale flag left the RR thread asleep with nothing able to wake
++ * it). Decided from the vCPUs themselves, not from icount_global_ns: that is recomputed only when a
++ * vCPU runs. A core that reached its quantum ahead of the other and then executed WAITI kept its flag;
++ * when an interrupt woke it with the other core halted, the stale global clock still put it ahead,
++ * both cores looked idle and the warp was blocked -- nothing ran again (the class sketch froze right
++ * after boot in about 1 of 5 sessions with 8 running). A vCPU halted with nothing to do waits for
++ * nobody: with every vCPU halted the warp moves the clock to the next timer. */
+ bool icount_cpu_waits(CPUState *cpu)
+ {
+-    return cpu->cpu_index >= 0 && cpu->cpu_index < ICOUNT_CPU_CLOCKS && icount_cpu_index_waits(cpu->cpu_index);
++    if (cpu->cpu_index < 0 || cpu->cpu_index >= ICOUNT_CPU_CLOCKS ||
++        !qatomic_read(&icount_cpu_waiting[cpu->cpu_index]) || !icount_cpu_on_timeline(cpu)) {
++        return false;
++    }
++    const double own = icount_cpu_ns[cpu->cpu_index];
++    CPUState *other;
++    CPU_FOREACH(other) {
++        if (other != cpu && icount_cpu_on_timeline(other) && *icount_cpu_clock(other) < own) {
++            return true;
++        }
++    }
++    return false;
+ }
+ 
+ static bool icount_any_cpu_waits(void)
+ {
+-    for (int i = 0; i < ICOUNT_CPU_CLOCKS; i++) {
+-        if (icount_cpu_index_waits(i)) {
++    CPUState *cpu;
++
++    CPU_FOREACH(cpu) {
++        if (icount_cpu_waits(cpu)) {
+             return true;
+         }
+     }

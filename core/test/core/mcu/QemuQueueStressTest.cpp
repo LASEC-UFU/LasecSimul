@@ -184,17 +184,14 @@ int main() {
     TEST_ASSERT(longestGap < kStallThreshold,
         "nenhum intervalo maior que o limiar de trava entre eventos consecutivos -- fila nunca parou de fluir");
 
-    const char* executionMode = std::getenv("LASECSIMUL_ESP32_EXECUTION_MODE");
-    if (executionMode && std::string(executionMode) == "mttcg") {
-        TEST_ASSERT(logs.find("execution mode: mttcg-realtime (vcpus=2, tcg_threads=2)") !=
-                        std::string::npos,
-                    "MTTCG real criou duas threads TCG para as duas vCPUs ESP32");
-    }
+    TEST_ASSERT(logs.find("execution mode: deterministic-icount (vcpus=2, tcg_threads=1)") !=
+                    std::string::npos,
+                "QEMU real roda as duas vCPUs ESP32 com relogio contado por instrucao numa thread TCG");
     const char* profileMode = std::getenv("LASECSIMUL_QEMU_PROFILE");
     if (profileMode && std::string(profileMode) != "0") {
-        TEST_ASSERT(logs.find("[LasecSimul][PROFILE] mode=mttcg-realtime") !=
+        TEST_ASSERT(logs.find("[LasecSimul][PROFILE] mode=deterministic-icount") !=
                         std::string::npos,
-                    "telemetria MTTCG publicou medidas reproduziveis de parede/tempo virtual/fila");
+                    "telemetria publicou medidas reproduziveis de parede/tempo virtual/fila");
     }
 
     const char* arenaVersion =

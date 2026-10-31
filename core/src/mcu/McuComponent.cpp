@@ -1160,6 +1160,7 @@ void McuComponent::scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool
         const uint64_t nowNs = self->m_scheduler.nowNs();
         const uint64_t before = self->electricalOutputFingerprint();
         self->m_modules[moduleIndex]->onWakeup(nowNs);
+        if (self->m_modules[moduleIndex]->kind() == ModuleKind::Spi) self->deliverSpiBytesLocked(*self->m_modules[moduleIndex]);
         if (self->m_controller.vnextBActive() && self->m_modules[moduleIndex]->kind() == ModuleKind::Usart)
             self->deliverVnextBUartRxLocked(*self->m_modules[moduleIndex]);
         if (self->m_controller.vnextBActive() && self->m_modules[moduleIndex]->kind() == ModuleKind::I2c) {
@@ -1214,6 +1215,7 @@ QemuModule* McuComponent::findModule(uint64_t address) const {
 namespace {
 constexpr int kUsartMonitorDrainGuard = 1 << 20; // ver doc-comment de drainUsartMonitorHex no .hpp
 constexpr char kHexDigits[] = "0123456789abcdef";
+constexpr size_t kUartTapReceiverCap = 8192; // o mesmo limite do tap no adaptador (kUsartMonitorCap)
 } // namespace
 
 std::string McuComponent::drainUsartMonitorHex(uint64_t regionStart, bool tx) const {
@@ -1235,14 +1237,43 @@ std::string McuComponent::drainUsartMonitorHex(uint64_t regionStart, bool tx) co
     return hex;
 }
 
-bool McuComponent::pinHasUartTxWireTap(size_t localPinIndex) const {
+// USART cujo TX sai agora pelo pino: o próprio módulo no pino dedicado, ou a USART que o adaptador
+// roteou para esta linha de GPIO (IO_MUX ou matriz). Com o mutex do callback tomado.
+QemuModule* McuComponent::uartTxModuleOfPinLocked(size_t localPinIndex) const {
     const std::span<const PinMapping> mappings = m_adapter->pinMap();
-    if (localPinIndex >= mappings.size() || localPinIndex >= m_moduleByPin.size()) return false;
+    if (localPinIndex >= mappings.size() || localPinIndex >= m_moduleByPin.size()) return nullptr;
     const PinMapping& mapping = mappings[localPinIndex];
     QemuModule* module = m_moduleByPin[localPinIndex];
+    if (!module) return nullptr;
+    if (mapping.moduleKind == ModuleKind::Usart) return module->isOutputEnabled(mapping.bitOrLine) ? module : nullptr;
+    const int32_t usart = module->uartTxOnLine(mapping.bitOrLine);
+    if (usart < 0) return nullptr;
+    for (const auto& candidate : m_modules) {
+        if (candidate->kind() == ModuleKind::Usart && candidate->index() == static_cast<uint32_t>(usart)) {
+            return candidate.get();
+        }
+    }
+    return nullptr;
+}
+
+bool McuComponent::pinHasUartTxWireTap(size_t localPinIndex) const {
     std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
-    return mapping.moduleKind == ModuleKind::Usart && module && module->hasWireTap() &&
-           module->isOutputEnabled(mapping.bitOrLine);
+    QemuModule* usart = uartTxModuleOfPinLocked(localPinIndex);
+    return usart && usart->hasWireTap();
+}
+
+void McuComponent::setSpiBytePairs(std::vector<uint32_t> clockPins, std::vector<uint32_t> dataPins) {
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    m_adapter->setSpiBytePairs(clockPins, dataPins);
+}
+
+void McuComponent::deliverSpiBytesLocked(QemuModule& spi) {
+    uint8_t byte = 0;
+    uint32_t clockPin = 0, dataPin = 0;
+    // Um despertar fecha no máximo um byte; o limite só protege de um adaptador defeituoso.
+    for (int guard = 0; guard < 64 && spi.drainSpiByte(byte, clockPin, dataPin); ++guard) {
+        if (m_spiByteHandler) m_spiByteHandler(m_componentIndex, clockPin, dataPin, byte);
+    }
 }
 
 void McuComponent::setPinConnected(size_t localPinIndex, bool connected) {
@@ -1258,13 +1289,24 @@ void McuComponent::setPinTransitionsObserved(size_t localPinIndex, bool observed
     }
 }
 
+void McuComponent::setUartTapReceivers(const std::vector<std::pair<uint32_t, size_t>>& receiverPins) {
+    std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
+    m_uartTapReceivers.clear();
+    for (const auto& [component, pin] : receiverPins) {
+        auto it = std::find_if(m_uartTapReceivers.begin(), m_uartTapReceivers.end(),
+                               [component = component](const UartTapReceiver& r) { return r.component == component; });
+        if (it == m_uartTapReceivers.end()) it = m_uartTapReceivers.insert(m_uartTapReceivers.end(), UartTapReceiver{component, {}, {}});
+        it->pins.push_back(pin);
+    }
+}
+
 std::optional<std::string>
-McuComponent::tryDrainUartTxWireTap(size_t localPinIndex, bool& busy) const {
+McuComponent::tryDrainUartTxWireTap(size_t localPinIndex, uint32_t receiver, bool& busy) const {
     busy = false;
     const std::span<const PinMapping> mappings = m_adapter->pinMap();
     if (localPinIndex >= mappings.size() || localPinIndex >= m_moduleByPin.size()) return std::nullopt;
-    const PinMapping& mapping = mappings[localPinIndex];
-    if (mapping.moduleKind != ModuleKind::Usart) return std::nullopt;
+    const ModuleKind kind = mappings[localPinIndex].moduleKind;
+    if (kind != ModuleKind::Usart && kind != ModuleKind::Gpio) return std::nullopt;
 
     // tryDrainUartRx() chama isto com Scheduler::m_mutex tomado. NUNCA espere aqui pelo mutex do
     // callback: um wakeup UART pode estar segurando-o e prestes a marcar o Scheduler dirty, ordem
@@ -1277,17 +1319,36 @@ McuComponent::tryDrainUartTxWireTap(size_t localPinIndex, bool& busy) const {
         return std::nullopt;
     }
 
-    QemuModule* module = m_moduleByPin[localPinIndex];
-    if (!module || !module->isOutputEnabled(mapping.bitOrLine)) {
-        return std::nullopt;
-    }
+    QemuModule* module = uartTxModuleOfPinLocked(localPinIndex);
+    if (!module) return std::nullopt;
 
-    std::string hex;
+    // No chip dois receptores no mesmo TX veem os mesmos bytes (o GPIO1 e o UART0_TX são o mesmo
+    // U0TXD): o tap do adaptador é drenado uma vez e cada byte vai para a fila de todo receptor cujo
+    // pino carrega agora este TX -- uma vez por receptor, mesmo com dois pinos dele no mesmo TX.
+    auto self = std::find_if(m_uartTapReceivers.begin(), m_uartTapReceivers.end(),
+                             [receiver](const UartTapReceiver& r) { return r.component == receiver; });
+    if (self == m_uartTapReceivers.end()) self = m_uartTapReceivers.insert(m_uartTapReceivers.end(), UartTapReceiver{receiver, {}, {}});
+    if (std::find(self->pins.begin(), self->pins.end(), localPinIndex) == self->pins.end()) self->pins.push_back(localPinIndex);
+    std::vector<UartTapReceiver*> targets;
+    for (UartTapReceiver& r : m_uartTapReceivers) {
+        if (std::any_of(r.pins.begin(), r.pins.end(), [&](size_t pin) { return uartTxModuleOfPinLocked(pin) == module; })) {
+            targets.push_back(&r);
+        }
+    }
     uint8_t byte = 0;
     for (int guard = 0; guard < kUsartMonitorDrainGuard && module->drainWireTapByte(byte); ++guard) {
-        hex.push_back(kHexDigits[byte >> 4]);
-        hex.push_back(kHexDigits[byte & 0x0Fu]);
+        for (UartTapReceiver* target : targets) {
+            if (target->pending.size() >= kUartTapReceiverCap) target->pending.pop_front();
+            target->pending.push_back(byte);
+        }
     }
+    std::string hex;
+    hex.reserve(self->pending.size() * 2);
+    for (const uint8_t b : self->pending) {
+        hex.push_back(kHexDigits[b >> 4]);
+        hex.push_back(kHexDigits[b & 0x0Fu]);
+    }
+    self->pending.clear();
     return hex;
 }
 
@@ -2131,6 +2192,7 @@ uint64_t McuComponent::peekAndResetMaxQueueOccupancyForTesting() {
 
 void McuComponent::resetModulesAndWakeups() {
     for (const std::unique_ptr<QemuModule>& m : m_modules) m->reset();
+    for (UartTapReceiver& r : m_uartTapReceivers) r.pending.clear();
     for (size_t i = 0; i < m_modules.size(); ++i) {
         ++m_moduleWakeupGeneration[i]; // invalida qualquer wakeup já agendado antes do reset
         m_moduleWakeupDueNs[i] = QemuModule::kNoWakeup;

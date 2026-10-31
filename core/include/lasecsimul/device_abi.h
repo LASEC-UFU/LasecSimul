@@ -33,7 +33,10 @@ extern "C" {
 #endif
 
 #define LSDN_ABI_VERSION_MAJOR 4
-#define LSDN_ABI_VERSION_MINOR 0
+#define LSDN_ABI_VERSION_MINOR 1
+/* Minor 1 (2026-10-30): entraram spi_input/spi_clock_byte (LsdnDeviceVTable) -- entrada de escravo
+ * SPI que recebe bytes inteiros em vez de 16 bordas por byte. O Core só lê estes slots de um plugin
+ * que declara minor >= 1 (a vtable de um plugin mais antigo termina antes deles). */
 /* O PluginLoader só checa MAJOR (minor é só informativo) -- sem plugin de terceiro nem
  * preocupação de compat aqui, todo device deste repo recompila a cada mudança de ABI via `npm run
  * build:devices`. Bump major sempre que mudar layout/semântica de algo em LsdnHostApi/
@@ -186,6 +189,15 @@ typedef struct LsdnDeviceVTable {
     /* ABI 4: opcional; NULL mantém o caminho elétrico bit-a-bit. */
     uint32_t    (*i2c_transfer)(LsdnDevice* dev, const LsdnI2cTransfer* transfer,
                                 LsdnI2cTransferResult* result);
+    /* ABI 4.1: opcionais; NULL mantém o caminho elétrico bit-a-bit. Escravo SPI que amostra o dado
+     * na borda de SUBIDA do clock (modos 0 e 3): `spi_input` devolve 1 e os índices dos pinos de
+     * clock e de dado. `spi_clock_byte` equivale a 8 bordas de subida do clock com os bits de `byte`
+     * no pino de dado, MSB primeiro (a ordem do fio) -- o mesmo efeito, inclusive um byte parcial já
+     * em andamento; CS, D/C e os outros pinos valem o nível atual. O Core só usa isto quando os fios
+     * de clock e de dado não têm mais nada que dependa das bordas (sem instrumento nem outra carga):
+     * nesse caso o MCU não gera as bordas desses dois fios. */
+    uint32_t    (*spi_input)(LsdnDevice* dev, uint32_t* clock_pin, uint32_t* data_pin);
+    void        (*spi_clock_byte)(LsdnDevice* dev, uint8_t byte);
 } LsdnDeviceVTable;
 
 /* Unico simbolo exportado por um plugin de dispositivo. */

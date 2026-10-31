@@ -133,12 +133,8 @@ int main() {
     } else {
         // O banner da ROM sai antes do app, com o divisor que a própria ROM calcula do cristal que
         // ela detecta (calibração RTC x eFuse CK8M_FREQ). Com o eFuse em branco ela caía em 26 MHz e
-        // o banner saía a 177 kbaud no pino: lixo no LasecPlot a 115200. No modo mttcg o relógio do
-        // guest não acompanha o do circuito e os bits pelo pad não são confiáveis (limite do modo).
-        const char* executionMode = std::getenv("LASECSIMUL_ESP32_EXECUTION_MODE");
-        const bool mttcg = executionMode && std::string(executionMode) == "mttcg";
-        if (!(mttcg && gpioPins) &&
-            received.find("ets Jul 29 2019 12:21:46\r\n\r\nrst:0x1 (POWERON_RESET),boot:0x12 (SPI_FAST_FLASH_BOOT)") ==
+        // o banner saía a 177 kbaud no pino: lixo no LasecPlot a 115200.
+        if (received.find("ets Jul 29 2019 12:21:46\r\n\r\nrst:0x1 (POWERON_RESET),boot:0x12 (SPI_FAST_FLASH_BOOT)") ==
                 std::string::npos) {
             std::fprintf(stderr, "FALHOU: banner da ROM ilegivel no LasecPlot a 115200 (cristal detectado errado?)\n");
             ++failures;

@@ -87,6 +87,8 @@ public:
     bool supportsI2cTransfer() const override;
     std::optional<uint32_t> i2cPinIndex(bool sda) const override;
     I2cTransferResult transferI2c(const I2cTransfer& transfer) override;
+    std::optional<SpiInputPins> spiInputPins() const override;
+    void clockSpiByte(uint8_t byte) override;
     size_t getState(uint8_t* out, size_t cap) const override;
     void setState(const uint8_t* in, size_t len) override;
     std::vector<PropertyDescriptor> propertyDescriptors() override;

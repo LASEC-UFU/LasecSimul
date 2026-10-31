@@ -6,9 +6,10 @@
 //   node scripts/diagnose-esp32-display-edges.mjs [projeto.lsproj] [merged.bin] [duracaoMs]
 // Variáveis: RTR=1 (tempo real, igual à extensão; padrão 0), DUMP=1 (desenha o último quadro não
 // vazio do PCD8544), PROBEALL=1 (lê a tensão de todos os fios a cada 33 ms, como a UI),
-// UARTLEN=n (quantos caracteres finais da UART0 mostrar), TOGGLE_BUTTON=1 (alterna a fonte do botão).
+// UARTLEN=n (quantos caracteres finais da UART0 mostrar), TOGGLE_BUTTON=1 (alterna a fonte do botão),
+// GDB_PORT=n (stub GDB do QEMU nessa porta, o firmware roda sem esperar o depurador).
 // Para reproduzir a extensão, rode também com LASECSIMUL_MCU_TRANSPORT=VNEXT_B,
-// LASECSIMUL_ESP32_EXECUTION_MODE=mttcg e LASECSIMUL_HOST_INSTANCE_ID=<pid> (mesmo coreEnv dela).
+// LASECSIMUL_ESP32_TIMING=realtime (ou exact) e LASECSIMUL_HOST_INSTANCE_ID=<pid> (mesmo coreEnv dela).
 // Os ids de componente (devkitC-46, Pcd8544-19, Aip31068_i2c-13, Led-87) são os desse projeto.
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -146,7 +147,8 @@ async function main() {
     maximumStepNs: 100000, relativeTolerance: 1e-4, absoluteTolerance: 1e-9,
   });
   await client.run();
-  await client.loadMcuFirmware(mcuId, firmwarePath, qemuPath);
+  const gdbPort = Number(process.env.GDB_PORT ?? 0);
+  await client.loadMcuFirmware(mcuId, firmwarePath, qemuPath, gdbPort > 0 ? { gdbPort, startPaused: false } : undefined);
   log("firmware carregado");
 
   const probes = [

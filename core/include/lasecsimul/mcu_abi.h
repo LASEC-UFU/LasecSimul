@@ -33,7 +33,22 @@ extern "C" {
 #endif
 
 #define LSDN_MCU_ABI_VERSION_MAJOR 3
-#define LSDN_MCU_ABI_VERSION_MINOR 2
+#define LSDN_MCU_ABI_VERSION_MINOR 4
+/* Minor 4 (2026-10-31): entrou uart_tx_on_line (LsdnQemuModuleVTable) -- qual USART sai agora por
+ * uma linha de GPIO. No ESP32 o U0TXD é o próprio GPIO1 (função do IO_MUX), e a matriz leva qualquer
+ * TX a outro pino; o tap byte-exato e os frames sem bordas (minor 1) só reconheciam o pino dedicado
+ * UART0_TX, e um LasecPlot no GPIO1 do chip avulso recebia cada bit como bordas (0,42x do tempo real
+ * a 115200 contínuos, contra 0,95x no UART0_TX). Opcional -- NULL mantém só o pino dedicado. O Core
+ * só lê este slot de um plugin com minor >= 4. */
+/* Minor 3 (2026-10-30): entraram set_spi_byte_pairs (LsdnMcuVTable) e drain_spi_byte
+ * (LsdnQemuModuleVTable) -- SPI mestre byte a byte. O Core informa, antes de cada Run, os pares de
+ * pinos (clock, dado) cujos fios só ligam escravos SPI que aceitam bytes inteiros (device_abi.h
+ * 4.1 spi_input/spi_clock_byte), mais túneis e resistores. Enquanto o clock e o MOSI de um SPI estão
+ * roteados exatamente para um desses pares, o adaptador transmite cada byte sem as 16 bordas
+ * (mesma duração, um despertar no fim) e guarda o byte; o Core o drena logo depois desse
+ * despertar e o entrega aos escravos. Cada borda custava um solve do circuito: um quadro de display
+ * por SPI de hardware andava ~100x mais devagar que o real. Opcional -- NULL, ou nenhum par, mantém
+ * o caminho elétrico bit-a-bit. O Core só lê estes slots de um plugin com minor >= 3. */
 /* Minor 2 (2026-10-29): entrou get_pin_states/set_input_voltages_at (LsdnQemuModuleVTable) --
  * leitura e escrita em lote dos pinos de um modulo. McuComponent::stamp() roda a cada solve do
  * circuito e consultava cada pino separadamente (is_output_enabled, output_level, get_pull_state,
@@ -213,6 +228,14 @@ typedef struct LsdnQemuModuleVTable {
      * NULL = uma chamada por linha. */
     void     (*set_input_voltages_at)(LsdnQemuModule* module, const uint32_t* bit_or_lines,
                                       const double* voltages, uint32_t count, uint64_t now_ns);
+    /* ABI 3.3: drena UM byte que um SPI mestre transmitiu sem bordas (ver minor 3): devolve 1 e
+     * preenche o byte (ordem do fio, MSB = primeiro bit) e o par de pinos (espaco de get_pin_map)
+     * por onde ele saiu; 0 com a fila vazia. Opcional -- NULL = nenhum byte assim. */
+    int32_t  (*drain_spi_byte)(LsdnQemuModule* module, uint8_t* out_byte, uint32_t* out_clock_pin,
+                               uint32_t* out_data_pin);
+    /* ABI 3.4: índice + 1 da USART cujo TX sai agora pela linha `bit_or_line` deste módulo de GPIO
+     * (função do IO_MUX ou matriz de GPIO), 0 se nenhuma (ver minor 4). Opcional -- NULL = nenhuma. */
+    uint32_t (*uart_tx_on_line)(LsdnQemuModule* module, uint32_t bit_or_line);
 } LsdnQemuModuleVTable;
 
 #define LSDN_PULL_NONE 0u
@@ -266,6 +289,11 @@ typedef struct LsdnMcuVTable {
      * componente do no' depende das bordas desse pino (ver comentario de LSDN_MCU_ABI_VERSION_MINOR).
      * O adaptador decide, frame a frame e com o roteamento atual, se pode omitir as bordas. */
     void (*set_pin_transitions_observed)(LsdnMcuAdapter* adapter, uint32_t pin, int32_t observed);
+
+    /* ABI 3.3: opcional. Substitui o conjunto inteiro de pares (clock_pins[i], data_pins[i]) em que
+     * um SPI mestre pode transmitir bytes sem bordas (ver minor 3); count=0 desliga. */
+    void (*set_spi_byte_pairs)(LsdnMcuAdapter* adapter, const uint32_t* clock_pins, const uint32_t* data_pins,
+                               uint32_t count);
 } LsdnMcuVTable;
 
 /* Simbolo exportado por um plugin de adaptador de MCU — distinto de lsdn_get_vtable (dispositivos)

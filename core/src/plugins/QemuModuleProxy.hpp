@@ -55,7 +55,9 @@ public:
         : QemuModule(toCoreModuleKind(handle.moduleKind), handle.moduleIndex, memStart, memEnd),
           m_handle(handle), m_label("qemu-module#" + std::to_string(handle.moduleIndex)),
           m_getPinStates(pluginAbiMinor >= 2 ? handle.vtable->get_pin_states : nullptr),
-          m_setInputVoltagesAt(pluginAbiMinor >= 2 ? handle.vtable->set_input_voltages_at : nullptr) {}
+          m_setInputVoltagesAt(pluginAbiMinor >= 2 ? handle.vtable->set_input_voltages_at : nullptr),
+          m_drainSpiByte(pluginAbiMinor >= 3 ? handle.vtable->drain_spi_byte : nullptr),
+          m_uartTxOnLine(pluginAbiMinor >= 4 ? handle.vtable->uart_tx_on_line : nullptr) {}
 
     ~QemuModuleProxy() override {
         if (m_handle.vtable && m_handle.vtable->destroy) {
@@ -196,6 +198,22 @@ public:
 
     bool hasWireTap() const override { return m_handle.vtable->drain_wire_tap_byte != nullptr; }
 
+    bool drainSpiByte(uint8_t& outByte, uint32_t& outClockPin, uint32_t& outDataPin) override {
+        if (!m_drainSpiByte) return false;
+        int32_t result = 0;
+        uint8_t byte = 0;
+        uint32_t clockPin = 0, dataPin = 0;
+        const bool ok = CrashGuard::call(m_label, [&] {
+            result = m_drainSpiByte(m_handle.module, &byte, &clockPin, &dataPin);
+        });
+        if (!ok) { m_health = PluginHealthStatus::Faulted; return false; }
+        if (!result) return false;
+        outByte = byte;
+        outClockPin = clockPin;
+        outDataPin = dataPin;
+        return true;
+    }
+
     bool drainWireTapByte(uint8_t& outByte) override {
         if (!m_handle.vtable->drain_wire_tap_byte) return false;
         bool result = false;
@@ -252,6 +270,14 @@ public:
         if (!ok) m_health = PluginHealthStatus::Faulted;
     }
 
+    int32_t uartTxOnLine(uint32_t bitOrLine) const override {
+        if (!m_uartTxOnLine) return -1;
+        uint32_t result = 0;
+        const bool ok = CrashGuard::call(m_label, [&] { result = m_uartTxOnLine(m_handle.module, bitOrLine); });
+        if (!ok) { m_health = PluginHealthStatus::Faulted; return -1; }
+        return result ? static_cast<int32_t>(result - 1u) : -1;
+    }
+
     size_t injectRxBytes(const uint8_t* bytes, size_t count) override {
         if (!m_handle.vtable->inject_rx_bytes) return 0;
         size_t result = 0;
@@ -269,6 +295,8 @@ private:
     std::string m_label;
     decltype(LsdnQemuModuleVTable::get_pin_states) m_getPinStates;
     decltype(LsdnQemuModuleVTable::set_input_voltages_at) m_setInputVoltagesAt;
+    decltype(LsdnQemuModuleVTable::drain_spi_byte) m_drainSpiByte;
+    decltype(LsdnQemuModuleVTable::uart_tx_on_line) m_uartTxOnLine;
     mutable PluginHealthStatus m_health = PluginHealthStatus::Ok;
 };
 

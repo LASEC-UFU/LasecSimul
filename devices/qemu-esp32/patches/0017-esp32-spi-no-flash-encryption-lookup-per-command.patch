@@ -1,0 +1,42 @@
+diff --git a/hw/ssi/esp32_spi.c b/hw/ssi/esp32_spi.c
+index ba19f9f..de6c5e2 100644
+--- a/hw/ssi/esp32_spi.c
++++ b/hw/ssi/esp32_spi.c
+@@ -321,7 +321,11 @@ static void esp32_spi_do_command( Esp32SpiState* s, uint32_t cmd_reg )
+         break;
+ 
+     case R_SPI_CMD_USR_MASK:
+-        maybe_encrypt_data(s);
++        /* Só o controlador da flash (SPI0/SPI1) passa pelo bloco de criptografia da flash; um
++         * comando USR do HSPI/VSPI leva os dados como estão. Antes todo SPI.transfer() fazia aqui
++         * uma busca na árvore de objetos do QEMU (esp32_flash_encryption_find): metade do tempo da
++         * vCPU num laço de SPI byte a byte. */
++        if( s->number < 2 ) maybe_encrypt_data(s);
+         if( FIELD_EX32(s->user_reg, SPI_USER, COMMAND) || FIELD_EX32(s->user2_reg, SPI_USER2, COMMAND_BITLEN)) {
+             t.cmd = FIELD_EX32(s->user2_reg, SPI_USER2, COMMAND_VALUE);
+             t.cmd_bytes = bitlen_to_bytes(FIELD_EX32(s->user2_reg, SPI_USER2, COMMAND_BITLEN));
+diff --git a/include/hw/misc/esp32_flash_enc.h b/include/hw/misc/esp32_flash_enc.h
+index 70de111..e7c3c12 100644
+--- a/include/hw/misc/esp32_flash_enc.h
++++ b/include/hw/misc/esp32_flash_enc.h
+@@ -32,11 +32,17 @@ typedef struct Esp32FlashEncryptionState {
+ 
+ } Esp32FlashEncryptionState;
+ 
+-/* returns NULL unless there is exactly one device */
++/* returns NULL unless there is exactly one device. The device is created with the machine and
++ * never goes away: resolve it once (object_resolve_path_type() walks the whole QOM tree, and the
++ * flash cache and SPI command paths call this per operation). */
+ static inline Esp32FlashEncryptionState *esp32_flash_encryption_find(void)
+ {
+-    Object *o = object_resolve_path_type("", TYPE_ESP32_FLASH_ENCRYPTION, NULL);
+-    return o ? ESP32_FLASH_ENCRYPTION(o) : NULL;
++    static Esp32FlashEncryptionState *found;
++    if (!found) {
++        Object *o = object_resolve_path_type("", TYPE_ESP32_FLASH_ENCRYPTION, NULL);
++        found = o ? ESP32_FLASH_ENCRYPTION(o) : NULL;
++    }
++    return found;
+ }
+ 
+ bool esp32_flash_encryption_enabled(struct Esp32FlashEncryptionState* s);

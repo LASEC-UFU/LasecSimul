@@ -1258,9 +1258,37 @@ static uint32_t i2c_transfer(LsdnDevice* dev, const LsdnI2cTransfer* transfer,
     return 1;
 }
 
+/* Escravos SPI deste plugin: todos amostram o dado na borda de subida do clock. */
+static uint32_t spi_input(LsdnDevice* dev, uint32_t* clock_pin, uint32_t* data_pin) {
+    SimDevice* s = (SimDevice*)dev;
+    if (!s || s->misconfigured || !clock_pin || !data_pin) return 0;
+    if (s->kind == KIND_PCD8544) { *clock_pin = 4; *data_pin = 3; return 1; }
+    if (s->kind == KIND_MAX72XX) { *clock_pin = 2; *data_pin = 1; return 1; }
+    if (s->kind == KIND_TFT) { *clock_pin = 3; *data_pin = 2; return 1; }
+    return 0;
+}
+
+/* As mesmas 8 bordas que chegariam pelo fio, pelo mesmo caminho (handle_pin_change): CS/CE, D/C e
+ * um byte parcial em andamento valem como no elétrico. Clock e dado voltam ao nível que têm no
+ * circuito -- nesse modo o MCU não os move. */
+static void spi_clock_byte(LsdnDevice* dev, uint8_t byte) {
+    SimDevice* s = (SimDevice*)dev;
+    uint32_t clock_pin = 0, data_pin = 0;
+    if (!spi_input(dev, &clock_pin, &data_pin)) return;
+    const uint8_t clock_level = s->pin_level[clock_pin];
+    const uint8_t data_level = s->pin_level[data_pin];
+    for (int bit = 7; bit >= 0; --bit) {
+        handle_pin_change(s, clock_pin, 0);
+        handle_pin_change(s, data_pin, (byte >> bit) & 1u);
+        handle_pin_change(s, clock_pin, 1);
+    }
+    handle_pin_change(s, clock_pin, clock_level);
+    handle_pin_change(s, data_pin, data_level);
+}
+
 static const LsdnDeviceVTable kVTable = {
     create, init, stamp, post_step, on_event, get_property, set_property, get_state, set_state,
-    destroy, i2c_transfer
+    destroy, i2c_transfer, spi_input, spi_clock_byte
 };
 
 LSDN_EXPORT
