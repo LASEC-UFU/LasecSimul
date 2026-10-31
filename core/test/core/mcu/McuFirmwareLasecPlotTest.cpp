@@ -240,10 +240,18 @@ int runBurst(plugins::GlobalPluginCache& cache, const std::filesystem::path& fir
         std::fprintf(stderr, "FALHOU: a primeira linha do grafico tem sequencia %llu (as anteriores se perderam)\n", sequence);
         ++failures;
     }
+    // Sem intervalo entre bytes a UART leva 10 bits por byte: 115200 / 10 = 11,52 bytes por ms.
+    constexpr double kLineRateBytesPerMs = 115200.0 / 10.0 / 1000.0;
     const unsigned long long firstMillis = millis;
     unsigned long long expectedSequence = sequence + 1, previousMillis = millis, lastMillis = millis;
     size_t bytesBeforeLast = 0;  // da primeira linha do gráfico até o início da última
     size_t graphLines = 1;
+    // Quanto o fluxo ficou atrás da linha a 11,52 bytes/ms, a cada 2 s do firmware: mostra onde a
+    // UART parou, se parou.
+    std::string drift;
+    unsigned long long nextDriftMs = firstMillis + 2000;
+    double previousLateMs = 0.0, largestStallMs = 0.0;
+    unsigned long long largestStallAtMs = 0;
     for (size_t i = first + 1; i < lines.size(); ++i) {
         unsigned long long lineMillis = 0, lineSequence = 0;
         if (!parseGraphLine(lines[i], lineMillis, lineSequence)) {
@@ -262,18 +270,31 @@ int runBurst(plugins::GlobalPluginCache& cache, const std::filesystem::path& fir
             ++failures;
         }
         bytesBeforeLast += lines[i - 1].size() + 2;
+        const double lateMs = static_cast<double>(lineMillis - firstMillis) -
+                              static_cast<double>(bytesBeforeLast) / kLineRateBytesPerMs;
+        if (lateMs - previousLateMs > largestStallMs) {
+            largestStallMs = lateMs - previousLateMs;
+            largestStallAtMs = previousMillis;
+        }
+        previousLateMs = lateMs;
         expectedSequence = lineSequence + 1;
         previousMillis = lastMillis = lineMillis;
         ++graphLines;
+        if (lineMillis >= nextDriftMs) {
+            char item[32];
+            std::snprintf(item, sizeof(item), " %.1f", lateMs);
+            drift += item;
+            nextDriftMs += 2000;
+        }
     }
 
-    // Sem intervalo entre bytes a UART leva 10 bits por byte: 115200 / 10 = 11,52 bytes por ms. O
-    // atraso da FIFO de TX entre o print e o fio é quase constante e se cancela na janela.
+    // O atraso da FIFO de TX entre o print e o fio é quase constante e se cancela na janela.
     const double spanMs = static_cast<double>(lastMillis - firstMillis);
     const double bytesPerMs = spanMs > 0 ? static_cast<double>(bytesBeforeLast) / spanMs : 0.0;
-    constexpr double kLineRateBytesPerMs = 115200.0 / 10.0 / 1000.0;
     std::fprintf(stderr, "Rajada: %zu linhas, %zu bytes em %.0f ms do firmware = %.3f bytes/ms (UART sem intervalo: %.2f); ritmo %.3fx\n",
                  graphLines, bytesBeforeLast, spanMs, bytesPerMs, kLineRateBytesPerMs, rate);
+    std::fprintf(stderr, "Atraso do fluxo sobre 11,52 bytes/ms, a cada 2 s do firmware (ms):%s; maior parada %.1f ms em millis=%llu (primeira linha em %llu)\n",
+                 drift.c_str(), largestStallMs, largestStallAtMs, firstMillis);
     if (graphLines < 1000) {
         std::fprintf(stderr, "FALHOU: so %zu linhas do grafico\n", graphLines);
         ++failures;

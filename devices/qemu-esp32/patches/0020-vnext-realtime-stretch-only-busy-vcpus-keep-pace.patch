@@ -1,0 +1,191 @@
+diff --git a/include/sysemu/cpu-timers.h b/include/sysemu/cpu-timers.h
+index ccaab7a..ce1a672 100644
+--- a/include/sysemu/cpu-timers.h
++++ b/include/sysemu/cpu-timers.h
+@@ -69,6 +69,9 @@ int64_t icount_cpu_budget(CPUState *cpu, int64_t deadline_ns);
+ bool icount_cpu_waits(CPUState *cpu);
+ /* LasecSimul: QEMU_CLOCK_VIRTUAL outside guest execution -- the slowest vCPU that is not halted. */
+ int64_t icount_get_global_ns(void);
++/* LasecSimul: per vCPU (cpu_index < max), the virtual ns spent executing and the instructions executed
++ * since the previous call, which resets them; NULL arrays only reset. Returns how many were filled. */
++int icount_take_cpu_activity(double *busy_ns, int64_t *insns, int max);
+ 
+ /* if the CPUs are idle, start accounting real time to virtual clock. */
+ void icount_start_warp_timer(void);
+diff --git a/softmmu/icount.c b/softmmu/icount.c
+index 7601f12..18cec89 100644
+--- a/softmmu/icount.c
++++ b/softmmu/icount.c
+@@ -127,6 +127,11 @@ static double icount_global_ns;
+  * reached on its own clock): idle until the others catch up (cpu_thread_is_idle), and the icount
+  * warp must not move the clock while it waits -- it would skip time this vCPU never executed. */
+ static bool icount_cpu_waiting[ICOUNT_CPU_CLOCKS];
++/* Virtual time each vCPU spent executing (its own instructions at the ps_per_inst in effect) and those
++ * instructions, since the last icount_take_cpu_activity(): vnext_b.c's real-time controller tells a vCPU
++ * busy the whole window from one that also sat in waiti. */
++static double icount_cpu_busy_ns[ICOUNT_CPU_CLOCKS];
++static int64_t icount_cpu_insns[ICOUNT_CPU_CLOCKS];
+ 
+ static double *icount_cpu_clock(CPUState *cpu)
+ {
+@@ -191,11 +196,35 @@ static void icount_update_locked(CPUState *cpu)
+     qatomic_set_i64(&timers_state.qemu_icount,
+                     timers_state.qemu_icount + executed);
+     if (executed > 0) {
+-        *icount_cpu_clock(cpu) += (double)executed * ps_per_inst / 1000.0;
++        const double ns = (double)executed * ps_per_inst / 1000.0;
++        *icount_cpu_clock(cpu) += ns;
++        if (cpu->cpu_index >= 0 && cpu->cpu_index < ICOUNT_CPU_CLOCKS) {
++            icount_cpu_busy_ns[cpu->cpu_index] += ns;
++            icount_cpu_insns[cpu->cpu_index] += executed;
++        }
+     }
+     icount_update_global_locked();
+ }
+ 
++int icount_take_cpu_activity(double *busy_ns, int64_t *insns, int max)
++{
++    const int count = max < ICOUNT_CPU_CLOCKS ? max : ICOUNT_CPU_CLOCKS;
++
++    seqlock_write_lock(&timers_state.vm_clock_seqlock, &timers_state.vm_clock_lock);
++    for (int i = 0; i < ICOUNT_CPU_CLOCKS; i++) {
++        if (i < count && busy_ns) {
++            busy_ns[i] = icount_cpu_busy_ns[i];
++        }
++        if (i < count && insns) {
++            insns[i] = icount_cpu_insns[i];
++        }
++        icount_cpu_busy_ns[i] = 0.0;
++        icount_cpu_insns[i] = 0;
++    }
++    seqlock_write_unlock(&timers_state.vm_clock_seqlock, &timers_state.vm_clock_lock);
++    return count;
++}
++
+ int64_t icount_cpu_budget(CPUState *cpu, int64_t deadline_ns)
+ {
+     CPUState *other;
+diff --git a/softmmu/vnext_b.c b/softmmu/vnext_b.c
+index 5f02c9d..3fd8d4f 100644
+--- a/softmmu/vnext_b.c
++++ b/softmmu/vnext_b.c
+@@ -232,21 +232,28 @@ static void vnext_lockstep_request(uint64_t now);
+  * simulation falling behind: the CPU behaves as if it had wait states, while timers, peripherals and
+  * every Core sync stay on the same timeline. Once per window of host time, always at a release (the
+  * vCPUs are held, so no instruction budget is in flight with the old rate), the stretch is set from
+- * the progress the window made: it grows only when executing guest code took a large share of the
+- * window (measured around each tcg_cpus_exec(); a vCPU stopped for an I2C reply or for lane credit
+- * is not executing -- and a slow circuit is not fixed by a slower CPU), and it returns to one
+- * instruction per CPU cycle as soon as there is slack. */
++ * the progress the window made. It grows only while the simulation loses pace (not to recover lag
++ * already accrued -- a slow boot, a host hiccup: that takes spare host time) and only by what the
++ * instructions of vCPUs busy the whole window can give back (measured around each tcg_cpus_exec(); a
++ * vCPU stopped for an I2C reply or for lane credit is not executing -- and a slow circuit is not
++ * fixed by a slower CPU). A vCPU that also sat in waiti runs event-driven code (UART, timers,
++ * interrupts) with a fixed amount of work per virtual second: a stretch only eats its idle time, and
++ * past that it falls behind its own work -- a Serial.print() burst got gaps at 115200 after the
++ * stretch, chasing a 1 s boot lag, reached 54x. It returns to one instruction per CPU cycle as soon
++ * as there is slack. */
+ #define VNEXT_RT_WINDOW_NS (10 * 1000 * 1000)   /* host time per controller step */
+ #define VNEXT_RT_STALE_NS (500 * 1000 * 1000)   /* a longer window (pause, reload) says nothing */
+ #define VNEXT_RT_LATE_NS (2 * 1000 * 1000)      /* behind the schedule by more than this = late */
+-#define VNEXT_RT_CATCHUP_NS (200 * 1000 * 1000) /* host time over which lag is recovered */
+ #define VNEXT_RT_MAX_STEP 4.0
+ #define VNEXT_RT_MAX_DILATION 64.0
++#define VNEXT_RT_CPUS 8
++#define VNEXT_RT_BUSY 0.9 /* share of the window's virtual time a vCPU executed = busy the whole window */
+ static bool vnext_rt;
+ static double vnext_rt_dilation = 1.0;
+ static int64_t vnext_rt_window_host_ns; /* 0 = no window open */
+ static int64_t vnext_rt_window_exec_ns;  /* added by the vCPU thread, taken by the main loop */
+ static uint64_t vnext_rt_window_schedule_ns, vnext_rt_window_core_ns;
++static int64_t vnext_rt_window_global_ns;
+ static uint64_t vnext_rt_windows;
+ /* Instructions per host second of straight guest code (peak with slow decay). Execution time beyond
+  * instructions / this -- translating new code, a device model doing host I/O -- does not shrink
+@@ -882,6 +889,8 @@ static void vnext_rt_open_window(int64_t host_now, uint64_t schedule, uint64_t c
+     vnext_rt_window_schedule_ns = schedule;
+     vnext_rt_window_core_ns = core;
+     vnext_rt_window_icount = icount_get_raw();
++    vnext_rt_window_global_ns = icount_get_global_ns();
++    icount_take_cpu_activity(NULL, NULL, 0);
+ }
+ 
+ void vnext_b_lockstep_account_exec(int64_t host_ns) {
+@@ -920,36 +929,46 @@ static void vnext_rt_step(int64_t host_now, uint64_t schedule, uint64_t core) {
+     const double exec = (double)MIN(qatomic_xchg(&vnext_rt_window_exec_ns, 0), wall);
+     const double instructions = (double)(icount_get_raw() - vnext_rt_window_icount);
+     const double lag = schedule > core ? (double)(schedule - core) : 0.0;
++    const double dg = (double)(icount_get_global_ns() - vnext_rt_window_global_ns);
++    double busy_ns[VNEXT_RT_CPUS];
++    int64_t cpu_insns[VNEXT_RT_CPUS];
++    const int cpus = icount_take_cpu_activity(busy_ns, cpu_insns, VNEXT_RT_CPUS);
++    double busy_insns = 0.0;
++    for (int i = 0; i < cpus; i++)
++        if (dg > 0 && busy_ns[i] >= VNEXT_RT_BUSY * dg) busy_insns += (double)cpu_insns[i];
+     vnext_rt_open_window(host_now, schedule, core);
+     vnext_rt_windows++;
+     if (ds <= 0) return;
+-    /* Host time the window's instructions took, at most its execution time: the part a stretch
+-     * shrinks. The peak follows the fastest straight code seen (a window mostly executing). */
++    /* Host time the window's instructions took, at most its execution time. The peak follows the
++     * fastest straight code seen (a window mostly executing). */
+     if (exec >= 0.05 * (double)wall && instructions > 0) {
+         const double ips = instructions * 1e9 / exec;
+         vnext_rt_peak_ips = ips > vnext_rt_peak_ips ? ips : MAX(20e6, vnext_rt_peak_ips * 0.995);
+     }
+     const double insn = MIN(exec, instructions * 1e9 / vnext_rt_peak_ips);
++    /* The part a stretch shrinks: the instructions of the vCPUs busy the whole window. */
++    const double elastic = instructions > 0 ? insn * MIN(busy_insns / instructions, 1.0) : 0.0;
+     double dilation = vnext_rt_dilation;
+-    if (lag > VNEXT_RT_LATE_NS) {
+-        /* Late: the window should have advanced the schedule plus a share of the lag. */
+-        const double want = ds + MIN(lag * (double)wall / VNEXT_RT_CATCHUP_NS, 0.25 * ds);
+-        if (dv < want) {
+-            if (insn >= 0.2 * (double)wall) {
+-                /* To first order only the instructions' time shrinks with the stretch: the window
+-                 * would have needed wall * dv / want of host time, all but `insn` of it unchanged. */
+-                const double budget = (double)wall * dv / want - ((double)wall - insn);
+-                double step = budget > 0 ? insn / budget : VNEXT_RT_MAX_STEP / 2;
++    if (lag > VNEXT_RT_LATE_NS && dv < ds) {
++        /* Late and losing more pace. */
++        if (elastic >= 0.2 * (double)wall) {
++            /* To first order only the busy vCPUs' instruction time shrinks with the stretch: keeping
++             * pace would have needed wall * dv / ds of host time, all but `elastic` of it unchanged.
++             * When even no instruction time at all would not have kept pace (budget <= 0), a stretch
++             * cannot: it is not raised. */
++            const double budget = (double)wall * dv / ds - ((double)wall - elastic);
++            if (budget > 0) {
++                double step = elastic / budget;
+                 if (step > VNEXT_RT_MAX_STEP) step = VNEXT_RT_MAX_STEP;
+                 if (step > 1.0) dilation *= step;
+-            } else {
+-                dilation *= 0.9; /* guest instructions are not what holds the simulation back */
+             }
++        } else {
++            dilation *= 0.9; /* guest instructions are not what holds the simulation back */
+         }
+     } else {
+-        /* On schedule: give exact instruction timing back -- at once when guest code barely ran,
+-         * probing gently while it is busy. */
+-        dilation *= insn < 0.1 * (double)wall ? 0.5 : 0.97;
++        /* On schedule, or keeping pace while the lag drains: give exact instruction timing back --
++         * at once when no vCPU was busy the whole window, probing gently while one is. */
++        dilation *= elastic < 0.1 * (double)wall ? 0.5 : 0.97;
+     }
+     const double before = vnext_rt_dilation;
+     vnext_rt_apply(dilation);
+@@ -958,9 +977,10 @@ static void vnext_rt_step(int64_t host_now, uint64_t schedule, uint64_t core) {
+         const int64_t slices = qatomic_xchg(&vnext_rt_trace_slices, 0);
+         const uint64_t tbs = lasec_tcg_tb_gen_count(false, NULL);
+         if (vnext_rt_dilation > before * 1.1 || vnext_rt_dilation < before / 1.1 || vnext_rt_windows % 100 == 0)
+-            fprintf(stderr, "[RT] d=%.1f x=%.2f i=%.2f mips=%.1f/%.0f sl=%" PRId64 " tb=%" PRIu64
+-                    " pc=%08" PRIx64 ",%08" PRIx64 " lag=%.0f p=%.2f g=%" PRIu64 "\n",
+-                    vnext_rt_dilation, exec / (double)wall, insn / (double)wall,
++            fprintf(stderr, "[RT] d=%.1f x=%.2f i=%.2f e=%.2f u=%.2f,%.2f mips=%.1f/%.0f sl=%" PRId64
++                    " tb=%" PRIu64 " pc=%08" PRIx64 ",%08" PRIx64 " lag=%.0f p=%.2f g=%" PRIu64 "\n",
++                    vnext_rt_dilation, exec / (double)wall, insn / (double)wall, elastic / (double)wall,
++                    cpus > 0 && dg > 0 ? busy_ns[0] / dg : 0.0, cpus > 1 && dg > 0 ? busy_ns[1] / dg : 0.0,
+                     exec > 0 ? instructions * 1000.0 / exec : 0.0, vnext_rt_peak_ips / 1e6, slices,
+                     tbs - last_tbs,
+                     vnext_cpus[0] ? (uint64_t)CPU_GET_CLASS(vnext_cpus[0])->get_pc(vnext_cpus[0]) : 0,

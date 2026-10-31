@@ -95,9 +95,9 @@ Core, preventing a response from racing ahead of the stop. A 180-second run of t
 through the end of the run. The previous packaged executable had four such errors in 70 seconds
 with the same fixture.
 
-As of 2026-10-31 the packaged executable is built from `7ead728` plus patches 0011-0019, applied in
+As of 2026-10-31 the packaged executable is built from `7ead728` plus patches 0011-0021, applied in
 order on the uncommitted working tree of `qemu_lasecSimul-invalid-state` (the chain re-applied
-reproduces that tree exactly; SHA-256 `5757302545...`, see `bin/BUILD-PROVENANCE-1H.txt`). 0011-0015
+reproduces that tree exactly; SHA-256 `AF7DAA07E6...`, see `bin/BUILD-PROVENANCE-1H.txt`). 0011-0015
 are summarized in `orchestrator/.ai/QEMU_RUNTIME.json` (`promotion_note_v0104`). 0016:
 
 - `softmmu/icount.c`, `accel/tcg/tcg-accel-ops-icount.c`, `accel/tcg/tcg-accel-ops-rr.c`,
@@ -141,3 +141,23 @@ nothing ran again. Now a vCPU waits only while another vCPU on the timeline is b
 decided from the vCPUs themselves; a vCPU halted with nothing to do waits for nobody. Seen as the class
 sketch (II1P06) freezing right after boot, both cores in `esp_pm_impl_waiti`, in 15 of 104 sessions run
 8 at a time on 0018 and 2 of 16 on 0017; 0 of 48 after the fix.
+
+0020 (`softmmu/vnext_b.c`, `softmmu/icount.c`, `include/sysemu/cpu-timers.h`): the real-time
+controller (`vnext_rt_step`) raises the instruction stretch only while the simulation loses pace,
+never to recover lag already accrued, and only by what the instructions of vCPUs busy the whole window
+(>= 90% of its virtual time executing, counted per vCPU by `icount_take_cpu_activity`) can give back.
+When even no instruction time would not keep pace, it no longer raises the factor. Before, a 1 s boot
+lag made it stretch an event-driven guest (95-99% in WAITI) to 54x, and a `Serial.print()` burst at
+115200 got gaps of up to 290 ms of firmware time.
+
+0021 (`hw/misc/esp32_dport.c`, `include/hw/misc/esp32_dport.h`, `hw/xtensa/esp32.c`,
+`target/xtensa/helper.c`, `target/xtensa/cpu.h`): the flash/PSRAM cache windows stay mapped; turning
+a core's cache off closes a gate, and that core's TLB fills for the window go to the region's
+illegal-access trap, now at `0x10000000` (reserved on the ESP32), through the new
+`xtensa_tlb_fill_paddr` hook. A gate change only flushes that core's TLB. Before, each change was
+`memory_region_set_enabled()`, a rebuild of the whole memory map (~2 ms of host time), and ESP-IDF
+toggles both caches around every flash operation. Each enable also invalidated the translated code of
+the whole 4 MB window; the cache sync now rewrites, and invalidates code of, only the pages whose bytes
+changed. NVS init at boot ran at 0.2-0.3 MIPS and left the simulation up to 1 s behind real time; the
+peak is now 145-163 ms. The cache-wait semantics are unchanged (same trap handler); the E131 test
+passes 100 of 100 with 4 at a time.

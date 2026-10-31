@@ -629,12 +629,11 @@ O teste achou dois defeitos.
   `mcu_uart_to_lasecplot` ganhou um LasecPlot num GPIO comum, em bit-bang a 115200 e 921600 baud, para
   o decodificador elétrico continuar coberto. Esse decodificador ainda serve, por exemplo, para um
   SoftwareSerial.
-- **Custo do lockstep por byte (aberto).** Mesmo sem bordas, cada byte de TX vai do QEMU ao Core como
-  um evento na raia, de 8 de profundidade. Com 115200 contínuos, os dois lados passam a maior parte do
-  tempo esperando um pelo outro: no `UART0_TX` em `exact`, o QEMU 90% e o Core 68%. Por isso o `exact`
-  fica um pouco abaixo de 1×. No `realtime`, quando falta folga, o controle estica a CPU e o firmware
-  deixa buracos entre os bytes. Uma raia mais funda piora em vez de ajudar: com 64 e 256 eventos, o
-  `exact` caiu para 0,484× e 0,075×. Ficou em 8.
+- **Custo do lockstep por byte (diagnóstico errado, ver a seção seguinte).** Mesmo sem bordas, cada byte
+  de TX vai do QEMU ao Core como um evento na raia, de 8 de profundidade, e os dois lados passam boa
+  parte do tempo esperando um pelo outro: no `UART0_TX` em `exact`, o QEMU 90% e o Core 68%. Mas essa
+  espera é quase toda o pacing do tempo real (o QEMU adiantado espera o relógio). Uma raia mais funda
+  piora em vez de ajudar: com 64 e 256 eventos, o `exact` caiu para 0,484× e 0,075×. Ficou em 8.
 
 Medido neste servidor, uma sessão, 20 s por ligação:
 
@@ -645,8 +644,8 @@ Medido neste servidor, uma sessão, 20 s por ligação:
 | UART0_TX, `exact` | 0,95×, 11,527 | 0,976×, 11,522 |
 | UART0_TX, `realtime` | 1,0×, 10,58–11,28 | 1,000×; 11,28–11,52 em 5 rodadas, 2 abaixo de 1% |
 
-No `realtime` o teste ainda falha de vez em quando: em 2 de 5 rodadas o `UART0_TX` saiu 2% abaixo do
-chip. Só fecha quando o custo por byte do lockstep cair.
+No `realtime` o teste ainda falhava de vez em quando: em 2 de 5 rodadas o `UART0_TX` saiu 2% abaixo do
+chip. A causa não era o custo por byte; está na seção "Buracos na UART do `realtime` e o boot lento".
 
 **Sketch da aula congelando logo depois do boot (QEMU, patch 0019).** Na verificação de 8 sessões do
 projeto II1P06, algumas paravam de vez, sempre perto de 3,6 s simulados, logo depois do primeiro
@@ -672,6 +671,68 @@ correção: 0 de 48 sessões congeladas (6 rodadas de 8), ritmo entre 0,997× e 
 corretos.
 
 O teste das 8 sessões é o que pega esse tipo de defeito; os testes de firmware isolados passavam.
+
+### Buracos na UART do `realtime` e o boot lento (2026-10-31)
+
+O item "custo do lockstep por byte" estava mal diagnosticado:
+- **No `exact`.** A rajada roda a 1,000× no regime. Os 0,976× eram o boot dentro da janela de 20 s.
+- **No `realtime`.** O fluxo não perdia um pouco a cada byte: parava **uma vez**, logo no começo do
+  app, por 35 a 290 ms do relógio do firmware. Depois seguia exato até o fim. O teste agora imprime o
+  atraso do fluxo a cada 2 s e a maior parada.
+
+A causa tem três partes.
+
+- **Boot lento (QEMU, patch 0021).** A inicialização do NVS do Arduino faz centenas de operações de
+  flash, e o ESP-IDF desliga e religa o cache em volta de cada uma. Cada troca custava caro de dois
+  jeitos:
+  - era `memory_region_set_enabled()`, que reconstrói o mapa de memória inteiro: ~2 ms de host por
+    troca, 161 trocas e 300 ms até 620 ms do guest;
+  - cada religada invalidava todo o código traduzido da janela de 4 MB da flash
+    (`memory_region_flush_rom_device` sobre a janela inteira, mesmo sem nenhuma página ter mudado).
+
+  Nesse trecho o guest rodava a 0,2–0,3 MIPS, e a simulação chegava a 1 s atrás do relógio real.
+- **Controle do `realtime` (QEMU, patch 0020).** Com esse atraso, o controle esticava a CPU para
+  recuperá-lo: 5,5×, depois 13,6× e 54×. O firmware da rajada, porém, passa 95 a 99% do tempo em
+  WAITI. O trabalho dele por segundo virtual é fixo, então esticar a CPU não economiza tempo de host
+  até ela saturar. Daí em diante ela deixa de dar conta da UART: a ~5 MHz, o `Serial.print` não
+  alimentava a FIFO.
+- **Escalada inútil.** Quando nem um estiramento infinito alcançaria a meta, o controle dobrava o fator
+  mesmo assim.
+
+Correções:
+- **0020 (`softmmu/vnext_b.c`, `softmmu/icount.c`).**
+  - O estiramento só cresce enquanto a simulação perde ritmo, nunca para recuperar atraso já acumulado
+    (um boot lento, um engasgo do host). Isso fica com a folga do host, sem deixar a CPU mais lenta.
+  - Ele cresce só pelo que as instruções das vCPUs ocupadas a janela inteira podem devolver; ocupada
+    é ≥ 90% do tempo virtual executando. Uma vCPU que também ficou em WAITI não conta.
+  - Quando nada alcançaria a meta, o fator não sobe.
+  - O `icount` conta, por vCPU, o tempo virtual executado e as instruções (`icount_take_cpu_activity`).
+    No trace `[RT]`, `e=` é a parte elástica e `u=` a ocupação de cada CPU.
+- **0021 (`hw/misc/esp32_dport.c`, `hw/xtensa/esp32.c`, `target/xtensa/helper.c`).**
+  - O cache virou um portão por núcleo. A região de cada janela fica sempre no mapa. Com o portão
+    fechado, o preenchimento da TLB daquele núcleo (gancho `xtensa_tlb_fill_paddr`) manda a página para
+    a região de acesso ilegal, que passou a ficar em 0x1000_0000, espaço reservado no ESP32.
+  - Abrir ou fechar o portão só esvazia a TLB daquele núcleo.
+  - A sincronização reescreve, e invalida o código traduzido de, só as páginas cujos bytes mudaram.
+  - A espera do E131 não muda: o acesso cai no mesmo tratador. O GDB lê o conteúdo da janela mesmo com
+    o cache desligado.
+
+Medido neste servidor:
+
+| O que | 0019 | 0020 + 0021 |
+|---|---|---|
+| Rajada `realtime`, 20 s, 5 rodadas por ligação | `UART0_TX` 2 de 5 abaixo de 1% | 10 de 10, 11,522–11,527 bytes/ms |
+| A mesma, com `LASECSIMUL_LOCKSTEP_TRACE` (8 s, 4 rodadas) | 4 de 4 falham, até 996 ms de atraso | 4 de 4 passam |
+| Rajada `exact`, 20 s com o boot dentro | 0,962–0,970× | 1,000× |
+| Pico de atraso no boot, `realtime` | 385–999 ms | 145–163 ms |
+| 8 rajadas `realtime` ao mesmo tempo | — | 8 de 8, 1,000×, 11,522–11,527 bytes/ms |
+| 8 cargas puras de CPU ao mesmo tempo, `realtime` | 1,000× | 1,000×; bloco de trabalho de 35 a 148 ms (~35 ms sem estiramento) |
+| `cache_wait_e2e_real_qemu`, 4 ao mesmo tempo | 100 de 100 | 100 de 100 |
+| 8 sketches da aula ao mesmo tempo, 6 rodadas | 0,997–1,016×, 0 de 48 congeladas | 1,000–1,010×, 0 de 48 congeladas |
+| Bateria `external-qemu`, um teste por vez | 18 de 18 | 18 de 18 |
+
+Com as 8 cargas de CPU e as 8 rajadas, o tempo simulado agora coincide com o de parede desde o boot
+(antes ficava ~0,5–0,9 s atrás). O QEMU implantado é `AF7DAA07…` (0011–0021).
 
 ## Atualização: com o transporte VNEXT_B (padrão da extensão) nada funciona
 

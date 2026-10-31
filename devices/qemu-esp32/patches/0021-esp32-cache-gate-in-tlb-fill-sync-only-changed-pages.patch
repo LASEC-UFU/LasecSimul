@@ -1,0 +1,354 @@
+diff --git a/hw/misc/esp32_dport.c b/hw/misc/esp32_dport.c
+index d46ffb7..6032da1 100644
+--- a/hw/misc/esp32_dport.c
++++ b/hw/misc/esp32_dport.c
+@@ -358,6 +358,12 @@ static void esp32_cache_data_sync(Esp32CacheRegionState* crs)
+     Esp32FlashEncryptionState * flash_enc = esp32_flash_encryption_find();
+     bool decrypt = (flash_enc != NULL && esp32_flash_decryption_enabled(flash_enc));
+ 
++    /* A page is rewritten, and its translated code dropped, only when its bytes change. Invalidating
++     * the whole window on every sync -- every cache enable, and ESP-IDF re-enables the cache after
++     * each flash operation -- threw away every translated flash function each time: the boot spent
++     * most of its NVS init retranslating (~1900 new blocks per 10 ms of host time). Runs under the
++     * BQL, so one staging page serves every call. */
++    static uint32_t page[ESP32_CACHE_PAGE_SIZE / sizeof(uint32_t)];
+     uint8_t* cache_data = (uint8_t*) memory_region_get_ram_ptr(&crs->mem);
+     for (int i = 0; i < ESP32_CACHE_PAGES_PER_REGION; ++i) {
+         uint32_t* cache_page = (uint32_t*) (cache_data + i * ESP32_CACHE_PAGE_SIZE);
+@@ -369,7 +375,7 @@ static void esp32_cache_data_sync(Esp32CacheRegionState* crs)
+         if (mmu_entry & ESP32_CACHE_MMU_INVALID_VAL) {
+             uint32_t fill_val = crs->illegal_access_retval;
+             for (int word = 0; word < ESP32_CACHE_PAGE_SIZE / sizeof(uint32_t); ++word) {
+-                cache_page[word] = fill_val;
++                page[word] = fill_val;
+             }
+         } else {
+             uint32_t phys_addr = mmu_entry * ESP32_CACHE_PAGE_SIZE;
+@@ -387,17 +393,21 @@ static void esp32_cache_data_sync(Esp32CacheRegionState* crs)
+              * ESP32_CACHE_MMU_ENTRY_CHANGED bit SET (see below) instead of being marked synced. */
+             Error *local_err = NULL;
+             if (!m25p80_read_array(dport->flash_dev, phys_addr, ESP32_CACHE_PAGE_SIZE,
+-                                   cache_page, &local_err)) {
++                                   page, &local_err)) {
+                 error_report_err(local_err);
+                 continue;
+             }
+             if (decrypt) {
+-                esp32_flash_decrypt_inplace(flash_enc, phys_addr, cache_page, ESP32_CACHE_PAGE_SIZE/4);
++                esp32_flash_decrypt_inplace(flash_enc, phys_addr, page, ESP32_CACHE_PAGE_SIZE/4);
+             }
+         }
++        if (memcmp(cache_page, page, ESP32_CACHE_PAGE_SIZE) != 0) {
++            memcpy(cache_page, page, ESP32_CACHE_PAGE_SIZE);
++            memory_region_flush_rom_device(&crs->mem, (hwaddr)i * ESP32_CACHE_PAGE_SIZE,
++                                           ESP32_CACHE_PAGE_SIZE);
++        }
+         crs->mmu_table[i] &= ~ESP32_CACHE_MMU_ENTRY_CHANGED;
+     }
+-    memory_region_flush_rom_device(&crs->mem, 0, ESP32_CACHE_REGION_SIZE);
+ }
+ 
+ static void esp32_cache_invalidate_all_entries(Esp32CacheRegionState* crs)
+@@ -503,7 +513,7 @@ static void esp32_cache_invalidate_all_entries(Esp32CacheRegionState* crs)
+  *     disable, that region could never read back as "enabled", so the stall could never release:
+  *     a real, provable permanent-stall bug. Replaced with a per-region bitmask
+  *     (appcpu_cache_race_stall_mask) that only ever gains a bit on an observed TRUE->FALSE
+- *     transition of that SPECIFIC region's own `mem.enabled`, caused by a different core, and
++ *     transition of that SPECIFIC region's own gate (`gate_open`), caused by a different core, and
+  *     only ever loses that bit when that SAME region is next observed enabled -- a sibling region
+  *     that was never enabled in the first place can never appear in the mask and can therefore
+  *     never block release.
+@@ -524,6 +534,21 @@ static void esp32_cache_invalidate_all_entries(Esp32CacheRegionState* crs)
+  * per-access interlock that replaced it: only an access that actually LANDS on a disabled region
+  * suspends (via cpu_stop_current(), not xtensa_runstall()), tracked in the separate
+  * appcpu_cache_wait_mask. */
++/* The cache gate: a region's `mem` stays mapped, and while the gate is closed this core's accesses to
++ * the window land on its illegal_access_trap_mem instead (hw/xtensa/esp32.c, esp32_cache_gate_paddr(),
++ * decided per TLB fill). Closing or opening it only flushes this core's TLB. It used to be
++ * memory_region_set_enabled(): every toggle rebuilt the whole memory map, ~2 ms of host time, and
++ * ESP-IDF turns both caches off and on around every flash operation -- ~0.3 s of each boot (NVS init)
++ * and of any later flash access, with the guest clock almost still. */
++static void esp32_cache_set_gate(Esp32CacheRegionState *crs, bool open)
++{
++    if (crs->gate_open == open) {
++        return;
++    }
++    crs->gate_open = open;
++    esp32_cache_gate_changed(crs->cache->core_id);
++}
++
+ static void esp32_cache_state_update(Esp32CacheState* cs)
+ {
+     bool cache_enabled = FIELD_EX32(cs->cache_ctrl_reg, DPORT_PRO_CACHE_CTRL, CACHE_ENA) != 0;
+@@ -552,26 +577,26 @@ static void esp32_cache_state_update(Esp32CacheState* cs)
+     if (cs->core_id == 1) {
+         Esp32DportState *dport = cs->dport;
+         dport->appcpu_cache_externally_disabled_mask |= esp32_cache_race_stall_gain(
+-            writer_core, cs->drom0.mem.enabled, drom0_enabled, cs->iram0.mem.enabled, iram0_enabled);
++            writer_core, cs->drom0.gate_open, drom0_enabled, cs->iram0.gate_open, iram0_enabled);
+     }
+ 
+     /* Phase B -- apply the actual region state (APP CPU is never blanket-held for this reason any
+      * more; only an access that actually lands on the disabled region suspends, in
+      * esp32_cache_ill_read()). */
+-    if (!cs->drom0.mem.enabled && drom0_enabled) {
++    if (!cs->drom0.gate_open && drom0_enabled) {
+         esp32_cache_data_sync(&cs->drom0);
+     }
+-    memory_region_set_enabled(&cs->drom0.mem, drom0_enabled);
++    esp32_cache_set_gate(&cs->drom0, drom0_enabled);
+ 
+-    if (!cs->iram0.mem.enabled && iram0_enabled) {
++    if (!cs->iram0.gate_open && iram0_enabled) {
+         esp32_cache_data_sync(&cs->iram0);
+     }
+-    memory_region_set_enabled(&cs->iram0.mem, iram0_enabled);
++    esp32_cache_set_gate(&cs->iram0, iram0_enabled);
+ 
+     if (cs->dport->has_psram) {
+         bool dram1_enabled = cache_enabled &&
+             FIELD_EX32(cs->cache_ctrl1_reg, DPORT_PRO_CACHE_CTRL1, MASK_DRAM1) == 0;
+-        memory_region_set_enabled(&cs->dram1.mem, dram1_enabled);
++        esp32_cache_set_gate(&cs->dram1, dram1_enabled);
+     }
+ 
+     /* Phase C -- release per-region, only after that SAME region is confirmed enabled again
+@@ -665,6 +690,16 @@ static bool esp32_cache_ill_accepts(void *opaque, hwaddr addr,
+     return !is_write;
+ }
+ 
++/* The trap sits at gated_base, in space reserved on the ESP32: only a core whose gate is closed is
++ * sent there, so with the gate open it answers like unmapped memory. */
++static bool esp32_cache_ill_trap_accepts(void *opaque, hwaddr addr,
++                                         unsigned size, bool is_write,
++                                         MemTxAttrs attrs)
++{
++    const Esp32CacheRegionState *crs = opaque;
++    return !crs->gate_open;
++}
++
+ void esp32_dport_clear_ill_trap_state(Esp32DportState* s)
+ {
+     s->cache_state[0].drom0.illegal_access_status = false;
+@@ -708,6 +743,7 @@ static const MemoryRegionOps esp32_cache_ops = {
+ static const MemoryRegionOps esp32_cache_ill_trap_ops = {
+     .read = esp32_cache_ill_read,
+     .write = esp32_cache_ill_write,
++    .valid.accepts = esp32_cache_ill_trap_accepts,
+ };
+ 
+ static void esp32_dport_reset(DeviceState *dev)
+@@ -727,12 +763,12 @@ static void esp32_dport_reset(DeviceState *dev)
+     s->core_rst_en_reg = 0;
+     /* E125 (EVIDENCE.md, 2026-09-05): esp32_cache_reset() below only ever touched the MMU
+      * CHANGED flags and illegal_access_trap_en -- it left cache_ctrl_reg/cache_ctrl1_reg (the raw
+-     * registers), each region's MemoryRegion.enabled, and illegal_access_status exactly as they
+-     * were before this reset, for both cores. On real hardware, POR/reset leaves the cache
++     * registers), each region's gate (then MemoryRegion.enabled), and illegal_access_status exactly
++     * as they were before this reset, for both cores. On real hardware, POR/reset leaves the cache
+      * subsystem disabled (CACHE_ENA=0) until firmware explicitly re-enables it -- this model must
+      * match that, both for its own sake and because esp32_cache_state_update()'s new
+      * appcpu_cache_externally_disabled_mask logic (E124/E125/E129) detects transitions by comparing this SAME
+-     * `mem.enabled` against the value a write is about to produce; leaving it stale here would
++     * `gate_open` against the value a write is about to produce; leaving it stale here would
+      * feed a wrong "old" state into the very first post-reset write's transition check.
+      *
+      * Deliberately NOT done by calling esp32_cache_state_update() from here: that function also
+@@ -740,15 +776,15 @@ static void esp32_dport_reset(DeviceState *dev)
+      * time (this device can be reset from the monitor, machine init, or a guest-triggered SoC
+      * reset processed on whichever vCPU requested it), and could spuriously add a bit that then
+      * needs unwinding. Instead: set the registers to their POR value (0) and drive the
+-     * MemoryRegions/status directly to match, then reset the stall mask/bool as their own,
++     * gates/status directly to match, then reset the stall mask/bool as their own,
+      * independent, unconditional step below -- no dependency on write-handler logic at all. */
+     for (int core = 0; core < ESP32_CPU_COUNT; ++core) {
+         s->cache_state[core].cache_ctrl_reg = 0;
+         s->cache_state[core].cache_ctrl1_reg = 0;
+-        memory_region_set_enabled(&s->cache_state[core].drom0.mem, false);
+-        memory_region_set_enabled(&s->cache_state[core].iram0.mem, false);
++        esp32_cache_set_gate(&s->cache_state[core].drom0, false);
++        esp32_cache_set_gate(&s->cache_state[core].iram0, false);
+         if (s->has_psram) {
+-            memory_region_set_enabled(&s->cache_state[core].dram1.mem, false);
++            esp32_cache_set_gate(&s->cache_state[core].dram1, false);
+         }
+     }
+     esp32_cache_reset(&s->cache_state[0]);
+@@ -797,6 +833,8 @@ static void esp32_cache_init_region(Esp32CacheState *cs,
+     crs->cache = cs;
+     crs->type = type;
+     crs->base = base;
++    crs->gated_base = ESP32_CACHE_GATED_BASE + (hwaddr)type * ESP32_CACHE_REGION_SIZE;
++    crs->gate_open = false;
+     crs->illegal_access_retval = illegal_access_retval;
+     snprintf(desc, sizeof(desc), "cpu%d-%s", cs->core_id, name);
+     if (type == ESP32_DCACHE_PSRAM) {
+diff --git a/hw/xtensa/esp32.c b/hw/xtensa/esp32.c
+index 0b4c651..c5ad683 100644
+--- a/hw/xtensa/esp32.c
++++ b/hw/xtensa/esp32.c
+@@ -352,6 +352,41 @@ uint32_t esp32_soc_get_cpu_freq(void)
+     return esp32_soc ? esp32_soc->cpu_clk_freq : 0;
+ }
+ 
++/* The cache gate (hw/misc/esp32_dport.c, esp32_cache_set_gate()): a core's cache window stays mapped,
++ * and while that core's gate for it is closed its TLB fills for the window go to the region's trap at
++ * gated_base -- only where the window shows through the system map (the IROM0 window starts past the
++ * ROM, IRAM and RTC memory that share its 4 MB). */
++static hwaddr esp32_cache_gate_paddr(CPUState *cs, hwaddr paddr)
++{
++    Esp32SocState *s = esp32_soc;
++    if (!s || cs->cpu_index < 0 || cs->cpu_index >= ESP32_CPU_COUNT) {
++        return paddr;
++    }
++    Esp32CacheState *cache = &s->dport.cache_state[cs->cpu_index];
++    Esp32CacheRegionState *regions[] = { &cache->drom0, &cache->iram0, s->dport.has_psram ? &cache->dram1 : NULL };
++    for (size_t i = 0; i < ARRAY_SIZE(regions); i++) {
++        Esp32CacheRegionState *crs = regions[i];
++        if (!crs || crs->gate_open || paddr < crs->base || paddr >= crs->base + ESP32_CACHE_REGION_SIZE) {
++            continue;
++        }
++        MemoryRegionSection section = memory_region_find(&s->cpu_specific_mem[cs->cpu_index], paddr, 1);
++        const bool window = section.mr == &crs->mem;
++        if (section.mr) {
++            memory_region_unref(section.mr);
++        }
++        return window ? crs->gated_base + (paddr - crs->base) : paddr;
++    }
++    return paddr;
++}
++
++void esp32_cache_gate_changed(int core_id)
++{
++    CPUState *cpu = qemu_get_cpu(core_id);
++    if (cpu) {
++        tlb_flush(cpu);
++    }
++}
++
+ static void esp32_clk_update( void* opaque, int n, int level )
+ {
+     //printf("Qemu: esp32_clk_update\n"); fflush( stdout );
+@@ -513,17 +548,19 @@ static void esp32_soc_realize( DeviceState *dev, Error **errp )
+      * (esp32_intmatrix_get_raw_status_bits()), em vez de sempre ler zero. */
+     s->dport.intmatrix_opaque = &s->intmatrix;
+ 
++    /* Each cache window stays mapped; with its gate closed the core's accesses reach the trap at
++     * gated_base (esp32_cache_gate_paddr()). */
+     bool init_cache_err = false;
+     if (s->dport.flash_blk)
+     {
+         for (int i = 0; i < ESP32_CPU_COUNT; ++i)
+         {
+             Esp32CacheRegionState *drom0 = &s->dport.cache_state[i].drom0;
+-            memory_region_add_subregion_overlap( &s->cpu_specific_mem[i], drom0->base, &drom0->illegal_access_trap_mem, -2);
++            memory_region_add_subregion_overlap( &s->cpu_specific_mem[i], drom0->gated_base, &drom0->illegal_access_trap_mem, -2);
+             memory_region_add_subregion_overlap( &s->cpu_specific_mem[i], drom0->base, &drom0->mem, -1);
+ 
+             Esp32CacheRegionState *iram0 = &s->dport.cache_state[i].iram0;
+-            memory_region_add_subregion_overlap( &s->cpu_specific_mem[i], iram0->base, &iram0->illegal_access_trap_mem, -2);
++            memory_region_add_subregion_overlap( &s->cpu_specific_mem[i], iram0->gated_base, &iram0->illegal_access_trap_mem, -2);
+             memory_region_add_subregion_overlap( &s->cpu_specific_mem[i], iram0->base, &iram0->mem, -1);
+         }
+         init_cache_err = true;
+@@ -533,11 +570,12 @@ static void esp32_soc_realize( DeviceState *dev, Error **errp )
+         for (int i = 0; i < ESP32_CPU_COUNT; ++i)
+         {
+             Esp32CacheRegionState *dram1 = &s->dport.cache_state[i].dram1;
+-            memory_region_add_subregion_overlap( &s->cpu_specific_mem[i], dram1->base, &dram1->illegal_access_trap_mem, -2);
++            memory_region_add_subregion_overlap( &s->cpu_specific_mem[i], dram1->gated_base, &dram1->illegal_access_trap_mem, -2);
+             memory_region_add_subregion_overlap( &s->cpu_specific_mem[i], dram1->base, &dram1->mem, -1);
+         }
+         init_cache_err = true;
+     }
++    xtensa_tlb_fill_paddr = esp32_cache_gate_paddr;
+     if (init_cache_err) {
+         qdev_connect_gpio_out_named( DEVICE(&s->dport), ESP32_DPORT_CACHE_ILL_IRQ_GPIO, 0,
+                                     qdev_get_gpio_in(DEVICE(&s->intmatrix), ETS_CACHE_IA_INTR_SOURCE));
+diff --git a/include/hw/misc/esp32_dport.h b/include/hw/misc/esp32_dport.h
+index 47e8176..63a59b1 100644
+--- a/include/hw/misc/esp32_dport.h
++++ b/include/hw/misc/esp32_dport.h
+@@ -28,6 +28,9 @@ typedef struct Esp32CacheState Esp32CacheState;
+ #define ESP32_CACHE_MMU_INVALID_VAL     0x100
+ #define ESP32_CACHE_MMU_ENTRY_CHANGED   0x200     /* not a hardware flag; used here to check if the page data needs to be updated */
+ #define ESP32_CACHE_MAX_PHYS_PAGES      0x100
++/* Where each region's illegal_access_trap_mem sits in the CPU address spaces (one window per
++ * Esp32CacheRegionType): 0x1000_0000 is reserved on the ESP32, nothing of the chip lives there. */
++#define ESP32_CACHE_GATED_BASE          0x10000000
+ 
+ typedef enum Esp32CacheRegionType {
+     ESP32_DCACHE_FLASH,
+@@ -41,6 +44,11 @@ typedef struct Esp32CacheRegionState {
+     MemoryRegion illegal_access_trap_mem;
+     Esp32CacheRegionType type;
+     hwaddr base;
++    /* The cache gate (CACHE_ENA and this region's MASK bit). `mem` stays mapped at `base`; while the
++     * gate is closed this core's TLB fills for the window go to gated_base, where
++     * illegal_access_trap_mem is (hw/xtensa/esp32.c, esp32_cache_gate_paddr()). */
++    bool gate_open;
++    hwaddr gated_base;
+     uint32_t illegal_access_retval;
+     bool illegal_access_trap_en;
+     bool illegal_access_status;
+@@ -105,7 +113,7 @@ typedef struct Esp32DportState {
+      * (via CACHE_CTRL1's own MASK_DROM0/MASK_IRAM0 bits) independent of this stall's own cause --
+      * a region that was never accessible in the first place must never gate the release. Each bit
+      * here is set ONLY on a true enabled-by-this-region's-own-history -> disabled-by-a-different-
+-     * core transition (esp32_cache_state_update() compares old vs. new `mem.enabled`, not just
++     * core transition (esp32_cache_state_update() compares old vs. new `gate_open`, not just
+      * the new value), and cleared the instant THAT SAME region is observed enabled again,
+      * regardless of who re-enabled it.
+      *
+@@ -152,6 +160,9 @@ typedef struct Esp32DportState {
+ 
+ void esp32_dport_clear_ill_trap_state(Esp32DportState* s);
+ void esp32_dport_clear_appcpu_cache_wait_on_reset(Esp32DportState *s);
++/* A gate of `core_id`'s cache opened or closed: drops that core's TLB (hw/xtensa/esp32.c -- this file
++ * is common code and cannot reach the TCG TLB). */
++void esp32_cache_gate_changed(int core_id);
+ 
+ /* E120 (EVIDENCE.md, 2026-09-05): links this DPORT instance to its machine's realized flash chip
+  * (hw/xtensa/esp32.c's esp32_machine_init_spi_flash(), called after DPORT itself is realized, so
+diff --git a/target/xtensa/cpu.h b/target/xtensa/cpu.h
+index a3952d8..bbdbac7 100644
+--- a/target/xtensa/cpu.h
++++ b/target/xtensa/cpu.h
+@@ -571,6 +571,9 @@ struct ArchCPU {
+ bool xtensa_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
+                          MMUAccessType access_type, int mmu_idx,
+                          bool probe, uintptr_t retaddr);
++/* LasecSimul: lets the machine send one CPU's accesses to a physical page elsewhere when it fills the
++ * TLB (the ESP32 cache gate, hw/xtensa/esp32.c). NULL = the page itself. */
++extern hwaddr (*xtensa_tlb_fill_paddr)(CPUState *cs, hwaddr paddr);
+ void xtensa_cpu_do_interrupt(CPUState *cpu);
+ bool xtensa_cpu_exec_interrupt(CPUState *cpu, int interrupt_request);
+ void xtensa_cpu_do_transaction_failed(CPUState *cs, hwaddr physaddr, vaddr addr,
+diff --git a/target/xtensa/helper.c b/target/xtensa/helper.c
+index a7bb9e1..47c41d9 100644
+--- a/target/xtensa/helper.c
++++ b/target/xtensa/helper.c
+@@ -286,6 +286,8 @@ void xtensa_cpu_do_unaligned_access(CPUState *cs,
+                                   addr);
+ }
+ 
++hwaddr (*xtensa_tlb_fill_paddr)(CPUState *cs, hwaddr paddr);
++
+ bool xtensa_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
+                          MMUAccessType access_type, int mmu_idx,
+                          bool probe, uintptr_t retaddr)
+@@ -303,9 +305,13 @@ bool xtensa_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
+                   __func__, address, access_type, mmu_idx, paddr, ret);
+ 
+     if (ret == 0) {
++        hwaddr page = paddr & TARGET_PAGE_MASK;
++        if (xtensa_tlb_fill_paddr) {
++            page = xtensa_tlb_fill_paddr(cs, page);
++        }
+         tlb_set_page(cs,
+                      address & TARGET_PAGE_MASK,
+-                     paddr & TARGET_PAGE_MASK,
++                     page,
+                      access, mmu_idx, page_size);
+         return true;
+     } else if (probe) {
