@@ -630,8 +630,19 @@ export function legacyMasksToVectorHistory(timestampsNs: number[], masks: number
 
 const instrumentHistoryRequestsInFlight = new Set<string>();
 
-export async function sendInstrumentHistory(componentId: string, sinceNs?: number): Promise<void> {
+function deliverInstrumentHistory(payload: InstrumentHistoryPayload): void {
+  if (ElectricalInstrumentPanel.has(payload.componentId)) ElectricalInstrumentPanel.update(payload);
+  state.schematicPanel?.postMessage({ version: 1, type: "instrumentHistory", ...payload });
+}
+
+/** Histórico real de um instrumento, para a tela pequena no canvas (`origin: "webview"`) e para a
+ * janela "Expande" (`origin: "panel"`). Igual ao SimulIDE, as duas telas mostram o mesmo buffer:
+ * com a janela aberta só ela pede (no ritmo dela, e a pausa dela congela as duas) e cada lote vai para
+ * as duas; fechada, a tela pequena pede o seu. Os dois lados juntam lotes sem repetir amostra
+ * (`mergeScopeHistory`), então pedidos cruzados nunca duplicam pontos. */
+export async function sendInstrumentHistory(componentId: string, sinceNs?: number, origin: "webview" | "panel" = "webview"): Promise<void> {
   if (!state.coreClient || !state.schematicPanel) return;
+  if (origin === "webview" && ElectricalInstrumentPanel.has(componentId)) return;
   // A Webview pede histórico a cada frame enquanto o popup está aberto. Se o snapshot anterior
   // ainda está atravessando Core -> Extension -> Webview, o próximo pedido seria redundante e
   // faria a fila crescer sem limite sob carga.
@@ -651,8 +662,7 @@ export async function sendInstrumentHistory(componentId: string, sinceNs?: numbe
         const channels = decodeInstrumentHistory(component.typeId, delta.state);
         if (channels) {
           const payload: InstrumentHistoryPayload = { componentId, append: true, oscope: channels as InstrumentHistoryPayload["oscope"] };
-          if (ElectricalInstrumentPanel.has(componentId)) ElectricalInstrumentPanel.update(payload);
-          else state.schematicPanel.postMessage({ version: 1, type: "instrumentHistory", ...payload });
+          deliverInstrumentHistory(payload);
         }
         return;
       }
@@ -668,8 +678,7 @@ export async function sendInstrumentHistory(componentId: string, sinceNs?: numbe
     const payload: InstrumentHistoryPayload = isChannelHistory
       ? { componentId, oscope: decoded as InstrumentHistoryPayload["oscope"] }
       : { componentId, logic: decoded as InstrumentHistoryPayload["logic"] };
-    if (ElectricalInstrumentPanel.has(componentId)) ElectricalInstrumentPanel.update(payload);
-    else state.schematicPanel.postMessage({ version: 1, type: "instrumentHistory", ...payload });
+    deliverInstrumentHistory(payload);
   } catch {
     // instância ainda não assentou ou foi removida -- ignora, a próxima tentativa (popup ainda aberto) cobre
   } finally {

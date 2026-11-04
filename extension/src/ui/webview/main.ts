@@ -44,6 +44,7 @@ import {
   wireCornerIndexNearSegmentPoint,
 } from "./wireGeometry.js";
 import { formatEngineeringValue, defaultSiPrefixFactor, SI_PREFIXES } from "./valueFormatting.js";
+import { mergeScopeHistory } from "./scopeMirror.js";
 import { ConnectionEndpoint, autoRoutedWirePoints, connectEndpointToNode, isJunctionVisible, movableTopologyNodeIds, normalizeWireGeometry, endpointScenePosition as resolveEndpointScenePosition, wirePolylinePoints as resolveWirePolylinePoints } from "./wireTopology.js";
 import { WireDraft, finishWireDraft, fixWireDraftCorner, moveWireDraft, simplifyWirePath, snapToDraftGrid, startWireDraft, translatePoints, undoWireDraftCorner, wireDraftPath } from "./wireRouting.js";
 import { assertTopologyInvariants } from "./topologyDocument.js";
@@ -643,22 +644,24 @@ let hmiTelemetryStale = false;
 /** Base64 do estado visual vivo, somente para packages que declaram `runtimeState`. */
 let visualStatesByComponentId: Record<string, string> = {};
 // Histórico APROXIMADO (1 amostra por poll de IPC, ~50 ms de parede com o padrão de 20 Hz, sem relação com o tempo
-// SIMULADO do circuito) -- só pra pré-visualização PEQUENA no canvas (`scopePanelSvg`/
-// `logicAnalyzerPanelSvg`), onde não compensa buscar o histórico real de alta resolução pra todo
-// instrumento do projeto a cada poll. A janela "Expande" usa `realScopeHistoryByComponentId`/
-// `realLogicHistoryByComponentId` abaixo (tempo SIMULADO de verdade, ver `requestInstrumentHistory`).
+// SIMULADO do circuito) -- só pra pré-visualização PEQUENA do analisador lógico e pros símbolos sem
+// package (`scopePanelSvg`/`logicAnalyzerPanelSvg`). A tela pequena do osciloscópio NÃO usa isto:
+// uma amostra a cada ~50 ms de parede cai numa fase qualquer de um sinal de 60 Hz e desenhava
+// zigue-zague. Ela usa o histórico real abaixo, igual à janela "Expande" (ver `scopeMirror.ts`).
 let scopeHistoryByComponentId: Record<string, number[][]> = {};
 let logicHistoryByComponentId: Record<string, number[]> = {};
 const INSTRUMENT_POLL_INTERVAL_MS = 300;
 const INSTRUMENT_HISTORY_DEPTH = 600;
 
 // Histórico REAL (tempo simulado de verdade, `Scheduler::nowNs()` do Core -- ver `core/src/
-// components/meters/Oscope.hpp`/`LogicAnalyzer.hpp`) -- buscado via `requestInstrumentHistory` só
-// pros componentes com janela "Expande" ABERTA (ver `toggleInstrumentPopup`/`updateReadoutHistories`),
-// nunca pra todo instrumento do projeto (histórico real pode ter centenas de amostras, desperdício
-// pra quem não abriu a janela). Resolve a limitação documentada antes desta data: o eixo de tempo
-// da janela "Expande" agora é de verdade, não uma aproximação sobre o intervalo de poll de IPC.
+// components/meters/Oscope.hpp`/`LogicAnalyzer.hpp`) -- buscado via `requestInstrumentHistory` por
+// deltas: pros popups abertos e, no osciloscópio, sempre (a tela pequena é a da janela "Expande",
+// ver `updateReadoutHistories`). Com a janela "Expande" aberta, o host repassa para cá os lotes que
+// ela pede, então as duas telas têm o mesmo histórico.
 const realScopeHistoryByComponentId = new Map<string, Array<{ timestampsNs: number[]; values: number[] }>>();
+/** Ritmo dos pedidos de histórico da tela pequena = `setInterval(req, 180)` da janela "Expande". */
+const SCOPE_MIRROR_REQUEST_INTERVAL_MS = 180;
+const scopeMirrorRequestedAtMs = new Map<string, number>();
 const realLogicHistoryByComponentId = new Map<string, AnalyzerVectorHistory>();
 let voltagesByWireId: Record<string, number> = {};
 /** Estado visual mecânico do motor. O SimulIDE integra o ângulo a partir da tensão dos terminais
@@ -8414,6 +8417,10 @@ function runtimeSymbolProperties(component: WebviewComponentModel): Record<strin
   const readout = readoutsByComponentId[runtimeComponentId];
   const scopeHistory = scopeHistoryByComponentId[runtimeComponentId];
   const logicHistory = logicHistoryByComponentId[runtimeComponentId];
+  // Histórico real (tempo simulado) para a tela pequena do osciloscópio -- ver `scopeMirror.ts`.
+  const scopeChannels = instrumentHistoryKind(component.typeId) === "channelHistory"
+    ? realScopeHistoryByComponentId.get(runtimeComponentId)
+    : undefined;
   const serialRuntime = component.typeId === "peripherals.lasecplot"
     ? lasecPlotRuntime.get(runtimeComponentId)
     : component.typeId === "peripherals.serialterm"
@@ -8447,7 +8454,7 @@ function runtimeSymbolProperties(component: WebviewComponentModel): Record<strin
     : {};
   const visualState = visualStatesByComponentId[runtimeComponentId];
   const runtimeVisualState = visualState ? { __runtime_state: visualState } : {};
-  if (readout === undefined && !scopeHistory && !logicHistory && Object.keys(serialState).length === 0 &&
+  if (readout === undefined && !scopeHistory && !logicHistory && !scopeChannels && Object.keys(serialState).length === 0 &&
       Object.keys(ledState).length === 0 && Object.keys(runtimeVisualState).length === 0) {
     return component.properties;
   }
@@ -8459,6 +8466,7 @@ function runtimeSymbolProperties(component: WebviewComponentModel): Record<strin
     ...(readout === undefined ? {} : { __readout: readout }),
     ...(scopeHistory ? { __history: scopeHistory } : {}),
     ...(logicHistory ? { __history: logicHistory } : {}),
+    ...(scopeChannels ? { __scopeChannels: scopeChannels } : {}),
   };
 }
 
@@ -8491,6 +8499,17 @@ function updateReadoutHistories(readouts: Record<string, ComponentReadoutValue>)
   // Mesmo ritmo do poll de telemetria pequena (~50 ms com o padrão de 20 Hz) -- só pros componentes com janela "Expande"
   // aberta agora, ver doc de `realScopeHistoryByComponentId` acima.
   for (const componentId of instrumentPopups.keys()) requestInstrumentHistoryRefresh(componentId);
+  // A tela pequena do osciloscópio desenha o histórico REAL, como a janela "Expande" (ver
+  // `scopeMirror.ts`), no mesmo ritmo de pedidos dela. Com a janela aberta o host ignora estes
+  // pedidos e repassa os lotes dela para cá.
+  const nowMs = Date.now();
+  for (const component of state.components) {
+    if (instrumentHistoryKind(component.typeId) !== "channelHistory" || instrumentPopups.has(component.id)) continue;
+    const runtimeId = runtimeComponentIdForSceneItem(component);
+    if (nowMs - (scopeMirrorRequestedAtMs.get(runtimeId) ?? 0) < SCOPE_MIRROR_REQUEST_INTERVAL_MS) continue;
+    scopeMirrorRequestedAtMs.set(runtimeId, nowMs);
+    requestInstrumentHistoryRefresh(runtimeId);
+  }
   // Telemetria é hot path: mantém janela/inputs/resize no DOM e troca somente o framebuffer SVG.
   // Reconstruir o popup inteiro a cada amostra perdia foco e tornava screenshots/interações
   // não-determinísticos quando vários canais estavam ativos.
@@ -8646,9 +8665,6 @@ function persistInstrumentPopup(popup: InstrumentPopupState): void {
     persistState();
   }, 180));
 }
-
-/** Capacidade do histórico do Oscope no Core (`Oscope::kHistoryCapacity`). */
-const SCOPE_HISTORY_CAPACITY = 512;
 
 function requestInstrumentHistoryRefresh(componentId: string): void {
   // Com histórico real já recebido, pede só o que vier depois da última amostra (deltas).
@@ -13672,17 +13688,21 @@ window.addEventListener("message", (event: MessageEvent<HostToWebviewMessage>) =
   }
 
   if (message.type === "instrumentHistory") {
-    const previous = realScopeHistoryByComponentId.get(message.componentId);
-    if (message.oscope && message.append && previous) { // deltas: anexa e mantém a janela do instrumento (512 amostras)
-      realScopeHistoryByComponentId.set(message.componentId, previous.map((channel, index) => {
-        const incoming = message.oscope!.channels[index] ?? { timestampsNs: [], values: [] };
-        const timestampsNs = [...channel.timestampsNs, ...incoming.timestampsNs], values = [...channel.values, ...incoming.values];
-        const drop = Math.max(0, timestampsNs.length - SCOPE_HISTORY_CAPACITY);
-        return { timestampsNs: timestampsNs.slice(drop), values: values.slice(drop) };
-      }));
-    } else if (message.oscope && !message.append) realScopeHistoryByComponentId.set(message.componentId, message.oscope.channels);
+    // Mesmo histórico e mesma profundidade da janela "Expande" (ver `scopeMirror.ts`): a tela
+    // pequena é aquela tela, só menor. Deltas entram sem repetir amostra.
+    if (message.oscope) {
+      const previous = realScopeHistoryByComponentId.get(message.componentId);
+      realScopeHistoryByComponentId.set(message.componentId, mergeScopeHistory(previous, message.oscope.channels, Boolean(message.append)));
+    }
     if (message.logic) realLogicHistoryByComponentId.set(message.componentId, message.logic);
     refreshInstrumentPopupPlots();
+    if (message.oscope && !isInteractiveGestureInProgress()) {
+      for (const component of subcircuitEditorMode === "hmi" ? activeSceneComponents() : state.components) {
+        if (runtimeComponentIdForSceneItem(component) !== message.componentId) continue;
+        const element = componentElementsById.get(component.id);
+        if (element) updateComponentElement(element, component);
+      }
+    }
   }
 
   if (message.type === "pauseConditionValidation") {

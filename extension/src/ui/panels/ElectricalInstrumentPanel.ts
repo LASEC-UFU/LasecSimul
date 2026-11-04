@@ -2,6 +2,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import type { InstrumentHistoryPayload } from "../webview/messages";
+import { mergeScopeHistory } from "../webview/scopeMirror";
 import { showInAuxiliaryWindow } from "./standaloneWebview";
 
 type InstrumentRecord = {
@@ -52,10 +53,7 @@ export class ElectricalInstrumentPanel {
     const record = panels.get(payload.componentId);
     if (!record) return;
     if (payload.append && payload.oscope && record.latest?.oscope) {
-      const channels = payload.oscope.channels.map((incoming, index) => {
-        const previous = record.latest!.oscope!.channels[index] ?? { timestampsNs: [], values: [] };
-        return { timestampsNs: [...previous.timestampsNs, ...incoming.timestampsNs].slice(-4096), values: [...previous.values, ...incoming.values].slice(-4096) };
-      });
+      const channels = mergeScopeHistory(record.latest.oscope.channels, payload.oscope.channels, true);
       record.latest = { componentId: payload.componentId, oscope: { channels } };
     } else record.latest = payload;
     void record.panel.webview.postMessage({ type: "history", payload });

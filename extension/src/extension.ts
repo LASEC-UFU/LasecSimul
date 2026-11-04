@@ -2089,14 +2089,14 @@ function handleWebviewMessage(message: WebviewToHostMessage): void {
       void exportInstrumentDataCommand(message.suggestedFileName, message.csvContent);
       return;
     case "requestInstrumentHistory":
-      void sendInstrumentHistory(message.componentId, message.sinceNs);
+      void sendInstrumentHistory(message.componentId, message.sinceNs, "webview");
       return;
     case "requestOpenElectricalInstrument": {
       const component = state.schematicState.components.find((item) => item.id === message.componentId);
       if (!component || (component.typeId !== "meters.oscope" && component.typeId !== "meters.logic_analyzer")) return;
       ElectricalInstrumentPanel.open(component.id, component.label,
         component.typeId === "meters.oscope" ? "scope" : "logic",
-        (sinceNs) => { void sendInstrumentHistory(component.id, sinceNs); },
+        (sinceNs) => { void sendInstrumentHistory(component.id, sinceNs, "panel"); },
         (name, content) => { void exportInstrumentDataCommand(name, content); },
         (name, value) => handleWebviewMessage({ version: 1, type: "requestUpdateProperty", componentId: component.id, name, value }),
         typeof component.properties.__ui_instrumentView === "string" ? component.properties.__ui_instrumentView : "{}",

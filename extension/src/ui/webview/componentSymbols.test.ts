@@ -268,6 +268,17 @@ import { PackageDescriptor, WebviewComponentModel } from "./model";
            `Oscope diferencial deveria rotular os bornes 1+/1−/2+/2− com a leitura do par: ${scopeDiff}`);
     assert(scopeDiff.includes(">DIFERENCIAL</text>") && !scopeSvg.includes("DIFERENCIAL"),
            `só o modo diferencial mostra o selo DIFERENCIAL na tela: ${scopeDiff}`);
+    // Tela pequena = janela "Expande": sem histórico real não há traço (nem a antiga linha de 0 V);
+    // com histórico, desenha só os canais visíveis da configuração salva, na cor do canal.
+    const scopeTraceCount = (markup: string) => (markup.match(/stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/g) ?? []).length;
+    assert(scopeTraceCount(scopeSvg) === 0, `sem histórico real a tela pequena fica vazia: ${scopeSvg}`);
+    const times = Array.from({ length: 200 }, (_, i) => 1e9 + i * 50_000);
+    const scopeLive = packageSymbolSvg("meters.oscope", {
+      __scopeChannels: [0, 1, 2, 3].map((channel) => ({ timestampsNs: times, values: times.map((_, i) => channel === 0 ? 1.7 + 1.7 * Math.sin(i / 5) : 0) })),
+      __ui_instrumentView: JSON.stringify({ timeDivMs: 1, hidden: [false, true, true, true], voltDiv: [0.5, 1, 1, 1], voltPos: [-1.7, 0, 0, 0], version: 2 }),
+    }, "scope-live") ?? "";
+    assert(scopeTraceCount(scopeLive) === 1 && scopeLive.includes('stroke="#f0f064"'),
+           `com histórico real a tela pequena desenha só o CH1 visível, em amarelo: ${scopeLive}`);
     assert(logicSvg.includes('width="219" height="153"') && logicSvg.includes('class="meter-channel-input"'), `Logic analyzer deveria renderizar DataLaWidget/PlotDisplay colapsado, markup: ${logicSvg}`);
     assert(scopeSvg.includes('data-instrument-channel="0"') && scopeSvg.includes('value="SINAL_A"'), `QLineEdit CH1 deveria exibir o túnel persistido: ${scopeSvg}`);
     assert(logicSvg.includes('value="CLK"') && logicSvg.includes('value="DATA"'), `QLineEdit digitais deveriam exibir os túneis persistidos: ${logicSvg}`);

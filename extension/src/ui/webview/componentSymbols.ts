@@ -14,6 +14,7 @@ import { ComponentViewSpec, JUNCTION_TYPE_ID, PackageDescriptor, PackageDynamicP
 import { simulidePaintToPackageShapes } from "./simulidePaint.js";
 import { MATH_DEFAULT_BOX, activityPlaceholderSvg, isMathTypeId, mathWidgetSvg, MATH_ACTIVITY_TYPE_ID } from "./mathWidgets.js";
 import { decodeSegmentLcd, segmentLcdSvg } from "./segmentLcd.js";
+import { parseScopeViewSettings, scopeTraces, type ScopeChannelHistory } from "./scopeMirror.js";
 import { blockPackage } from "./blockLibrary/blockSymbol.js";
 import type { BlockSpec } from "./blockLibrary/spec.js";
 
@@ -1593,7 +1594,38 @@ function qtTunnelInputSvg(x: number, y: number, width: number, height: number, c
   );
 }
 
-function plotDisplaySvg(x: number, y: number, w: number, h: number, channels: number, tracks: number, histories: number[][], logicHistory: number[], colors: string[], expanded: boolean): string {
+/** Cores dos canais do `PlotBase` do SimulIDE (`plotbase.cpp` m_color[0..3]), as mesmas da janela
+ * "Expande" (`electrical-instrument.html`). */
+const SCOPE_TRACE_COLORS = ["#f0f064", "#dcdcff", "#ffd25a", "#00f5a0"];
+
+function symbolScopeChannels(properties: Record<string, unknown>): ScopeChannelHistory[] | undefined {
+  const raw = properties.__scopeChannels;
+  if (!Array.isArray(raw)) return undefined;
+  return raw.map((channel) => {
+    const entry = channel as Partial<ScopeChannelHistory> | null;
+    return {
+      timestampsNs: Array.isArray(entry?.timestampsNs) ? entry.timestampsNs : [],
+      values: Array.isArray(entry?.values) ? entry.values : [],
+    };
+  });
+}
+
+/** Tela pequena do osciloscópio: o histórico REAL com as configurações da janela "Expande"
+ * (`__ui_instrumentView`), na mesma conta dela (`scopeMirror.ts`). Sem histórico ainda (simulação
+ * parada), a tela fica vazia, como o `PlotDisplay` do SimulIDE antes do primeiro dado. */
+function scopeMirrorTracesSvg(properties: Record<string, unknown>, x: number, y: number, width: number, height: number, channels: number): string {
+  const history = symbolScopeChannels(properties);
+  if (!history) return "";
+  const settings = parseScopeViewSettings(properties.__ui_instrumentView);
+  return scopeTraces(history, settings, { x, y, width, height }, channels)
+    .filter((trace) => trace.d)
+    .map((trace) => `<path d="${trace.d}" fill="none" stroke="${SCOPE_TRACE_COLORS[trace.channel % SCOPE_TRACE_COLORS.length]}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`)
+    .join("");
+}
+
+/** `analogTraces`: traços já desenhados no retângulo útil (margem 4 do `PlotDisplay` colapsado) --
+ * o osciloscópio usa `scopeMirror.ts` para a tela pequena ser a da janela "Expande". */
+function plotDisplaySvg(x: number, y: number, w: number, h: number, channels: number, tracks: number, histories: number[][], logicHistory: number[], colors: string[], expanded: boolean, analogTraces?: string): string {
   const marginX = expanded ? 30 : 4;
   const marginY = expanded ? 10 : 4;
   const ceroX = x + marginX;
@@ -1628,6 +1660,8 @@ function plotDisplaySvg(x: number, y: number, w: number, h: number, channels: nu
       }).join(" ");
       markup += `<path d="${points}" fill="none" stroke="${colors[channel % colors.length]}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
     }
+  } else if (analogTraces !== undefined) {
+    markup += analogTraces;
   } else {
     for (let channel = 0; channel < channels; channel += 1) {
       const history = histories[channel] ?? [];
@@ -1671,7 +1705,8 @@ function simulideQtWidgetSvg(widget: SimulideQtWidgetSpec, properties: Record<st
     // CH1 = 1+ − 1− e CH2 = 2+ − 2−; G não é usado. O rótulo de cada linha mostra a tensão lida
     // (V), não frequência -- o Core publica tensões por canal.
     const differential = isDifferentialOscope(properties);
-    const traceColors = ["#00c864", "#f6f65a", "#ffd06a", "#d9d7ff"];
+    // Cores dos canais do `PlotBase` (m_color[0..3]), as mesmas da janela "Expande".
+    const traceColors = SCOPE_TRACE_COLORS;
     for (let i = 0; i < 4; i += 1) {
       const y = widgetY + 18 + i * 29;
       const channel = differential ? Math.floor(i / 2) : i;
@@ -1693,7 +1728,8 @@ function simulideQtWidgetSvg(widget: SimulideQtWidgetSpec, properties: Record<st
       }
     }
     markup += qtButtonSvg(widgetX + 8, widgetY + 130, 60, 16, "Expande", `${scopeId}-scope`);
-    markup += plotDisplaySvg(displayX, displayY, displayW, displayH, differential ? 2 : 4, widget.tracks ?? 1, histories, [], traceColors, false);
+    markup += plotDisplaySvg(displayX, displayY, displayW, displayH, differential ? 2 : 4, widget.tracks ?? 1, histories, [], traceColors, false,
+      scopeMirrorTracesSvg(properties, displayX + 4, displayY + 4, displayW - 8, displayH - 8, differential ? 2 : 4));
     if (differential) {
       markup += `<text x="${displayX + displayW - 6}" y="${displayY + 12}" text-anchor="end" font-family="Segoe UI,Arial,sans-serif" font-size="8" font-weight="700" fill="#f6f65a">DIFERENCIAL</text>`;
       // G fica sem uso: um "×" sobre o borne deixa isso visível no próprio corpo.
