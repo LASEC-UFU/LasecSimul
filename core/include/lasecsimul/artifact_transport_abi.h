@@ -11,7 +11,12 @@
 #define LASEC_AT_MAX_RESPONSES 16u
 #define LASEC_AT_MAX_SNAPSHOTS 64u
 #define LASEC_AT_EVENT_PAYLOAD 64u
-#define LASEC_AT_SNAPSHOT_BYTES 64u
+/* 128 since 2026-11-01 (was 64): the ESP32 snapshot carries GPIO_IN/GPIO_IN1 [0,16), the 18 ADC pad
+ * voltages [16,52), the 8 PCNT counters [56,72), the 6 MCPWM timer status words [72,96) and the TWAI
+ * SR/TEC/REC [96,99) and, in byte 100, bit 0 = an interrupt of a Core-modeled peripheral is armed; the
+ * touch sensor's external capacitance per SENS channel (0.1 pF) [104,124) and its last finished probe
+ * [124,126). QEMU's VnextSnapshot (softmmu/vnext_b.c) matches. */
+#define LASEC_AT_SNAPSHOT_BYTES 128u
 #define LASEC_AT_BATCH_MAX_SEGMENTS 16u
 #define LASEC_AT_KIND_READ_REQUEST 3u
 #define LASEC_AT_KIND_WRITE 10u

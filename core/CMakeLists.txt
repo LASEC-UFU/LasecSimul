@@ -2046,6 +2046,418 @@ endif()
 add_test(NAME mcu_spi_byte COMMAND mcu_spi_byte_test)
 set_tests_properties(mcu_spi_byte PROPERTIES TIMEOUT 120)
 
+# SPI lendo o circuito (MISO) com firmware real (LASECSIMUL_TEST_SPI_MISO_FIRMWARE, merged.bin de
+# vnext_prototype/guest_spi_miso): um registrador de deslocamento no VSPI devolve o byte anterior.
+add_executable(mcu_spi_miso_test
+    test/core/mcu/McuSpiMisoTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_spi_miso_test PRIVATE include src)
+target_link_libraries(mcu_spi_miso_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_spi_miso_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_spi_miso_test PRIVATE dl)
+endif()
+add_test(NAME mcu_spi_miso COMMAND mcu_spi_miso_test)
+set_tests_properties(mcu_spi_miso PROPERTIES TIMEOUT 120)
+
+# ADC com firmware real (LASECSIMUL_TEST_ADC_FIRMWARE, merged.bin de vnext_prototype/guest_adc): as
+# leituras em cada atenuação e largura batem com um ESP32 típico (caracterização do ESP-IDF).
+add_executable(mcu_adc_test
+    test/core/mcu/McuAdcTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_adc_test PRIVATE include src)
+target_link_libraries(mcu_adc_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_adc_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_adc_test PRIVATE dl)
+endif()
+add_test(NAME mcu_adc COMMAND mcu_adc_test)
+set_tests_properties(mcu_adc PROPERTIES TIMEOUT 120)
+
+# RMT com firmware real (LASECSIMUL_TEST_RMT_FIRMWARE, merged.bin de vnext_prototype/guest_rmt): três
+# WS2812 decodificam as cores e a portadora de 38 kHz chega a um pino de entrada.
+add_executable(mcu_rmt_test
+    test/core/mcu/McuRmtTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_rmt_test PRIVATE include src)
+target_link_libraries(mcu_rmt_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_rmt_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_rmt_test PRIVATE dl)
+endif()
+add_test(NAME mcu_rmt COMMAND mcu_rmt_test)
+set_tests_properties(mcu_rmt PROPERTIES TIMEOUT 120)
+
+# PCNT com firmware real (LASECSIMUL_TEST_PCNT_FIRMWARE, merged.bin de vnext_prototype/guest_pcnt): conta
+# 1 kHz do LEDC nos dois sentidos, com limiar e limite alto.
+add_executable(mcu_pcnt_test
+    test/core/mcu/McuPcntTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_pcnt_test PRIVATE include src)
+target_link_libraries(mcu_pcnt_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_pcnt_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_pcnt_test PRIVATE dl)
+endif()
+add_test(NAME mcu_pcnt COMMAND mcu_pcnt_test)
+set_tests_properties(mcu_pcnt PROPERTIES TIMEOUT 120)
+
+# MCPWM com firmware real (LASECSIMUL_TEST_MCPWM_FIRMWARE, merged.bin de vnext_prototype/guest_mcpwm): PWM
+# complementar com dead time medido pela captura do próprio MCPWM.
+add_executable(mcu_mcpwm_test
+    test/core/mcu/McuMcpwmTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_mcpwm_test PRIVATE include src)
+target_link_libraries(mcu_mcpwm_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_mcpwm_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_mcpwm_test PRIVATE dl)
+endif()
+add_test(NAME mcu_mcpwm COMMAND mcu_mcpwm_test)
+set_tests_properties(mcu_mcpwm PROPERTIES TIMEOUT 120)
+
+# TWAI (CAN) com firmware real (LASECSIMUL_TEST_TWAI_FIRMWARE, merged.bin de vnext_prototype/guest_twai): o
+# quadro no fio decodificado pela captura do MCPWM e o TEC parado em 128 sem ACK.
+add_executable(mcu_twai_test
+    test/core/mcu/McuTwaiTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_twai_test PRIVATE include src)
+target_link_libraries(mcu_twai_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_twai_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_twai_test PRIVATE dl)
+endif()
+add_test(NAME mcu_twai COMMAND mcu_twai_test)
+set_tests_properties(mcu_twai PROPERTIES TIMEOUT 120)
+
+# Dois ESP32 no mesmo barramento CAN (LASECSIMUL_TEST_TWAI_NODE_FIRMWARE, merged.bin de
+# vnext_prototype/guest_twai_node): ACK do receptor, respostas e arbitragem.
+add_executable(mcu_twai_bus_test
+    test/core/mcu/McuTwaiBusTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_twai_bus_test PRIVATE include src)
+target_link_libraries(mcu_twai_bus_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_twai_bus_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_twai_bus_test PRIVATE dl)
+endif()
+add_test(NAME mcu_twai_bus COMMAND mcu_twai_bus_test)
+set_tests_properties(mcu_twai_bus PROPERTIES TIMEOUT 240)
+
+# SPI alem do MODE0 (LASECSIMUL_TEST_SPI_MODES_FIRMWARE, merged.bin de vnext_prototype/guest_spi_modes): os
+# quatro modos, 9 bits, fases de comando/endereco/dummy, interrupcao de fim de transacao e DMA.
+add_executable(mcu_spi_modes_test
+    test/core/mcu/McuSpiModesTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_spi_modes_test PRIVATE include src)
+target_link_libraries(mcu_spi_modes_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_spi_modes_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_spi_modes_test PRIVATE dl)
+endif()
+add_test(NAME mcu_spi_modes COMMAND mcu_spi_modes_test)
+set_tests_properties(mcu_spi_modes PROPERTIES TIMEOUT 120)
+
+# Reset de software (LASECSIMUL_TEST_SOC_RESET_FIRMWARE, merged.bin de vnext_prototype/guest_soc_reset): o
+# esp_restart() reinicia tambem os perifericos que o Core modela.
+add_executable(mcu_soc_reset_test
+    test/core/mcu/McuSocResetTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_soc_reset_test PRIVATE include src)
+target_link_libraries(mcu_soc_reset_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_soc_reset_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_soc_reset_test PRIVATE dl)
+endif()
+add_test(NAME mcu_soc_reset COMMAND mcu_soc_reset_test)
+set_tests_properties(mcu_soc_reset PROPERTIES TIMEOUT 120)
+
+# Deep sleep (LASECSIMUL_TEST_DEEP_SLEEP_FIRMWARE, merged.bin de vnext_prototype/guest_deep_sleep): acorda pelo
+# timer de RTC, pelo ext0 e pelo ext1, com a memoria de RTC preservada.
+add_executable(mcu_deep_sleep_test
+    test/core/mcu/McuDeepSleepTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_deep_sleep_test PRIVATE include src)
+target_link_libraries(mcu_deep_sleep_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_deep_sleep_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_deep_sleep_test PRIVATE dl)
+endif()
+add_test(NAME mcu_deep_sleep COMMAND mcu_deep_sleep_test)
+set_tests_properties(mcu_deep_sleep PROPERTIES TIMEOUT 120)
+
+# Light sleep (LASECSIMUL_TEST_LIGHT_SLEEP_FIRMWARE, merged.bin de vnext_prototype/guest_light_sleep): acorda
+# pelo timer, pelo ext0 e pelo GPIO; o CCOUNT e o TIMG nao contam o sono.
+add_executable(mcu_light_sleep_test
+    test/core/mcu/McuLightSleepTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_light_sleep_test PRIVATE include src)
+target_link_libraries(mcu_light_sleep_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_light_sleep_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_light_sleep_test PRIVATE dl)
+endif()
+add_test(NAME mcu_light_sleep COMMAND mcu_light_sleep_test)
+set_tests_properties(mcu_light_sleep PROPERTIES TIMEOUT 120)
+
+# Light sleep clock domains: APB LEDC, RTC8M LEDC and the PCNT filter/counting clock.
+add_executable(mcu_light_sleep_periph_test
+    test/core/mcu/McuLightSleepPeriphTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_light_sleep_periph_test PRIVATE include src)
+target_link_libraries(mcu_light_sleep_periph_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_light_sleep_periph_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_light_sleep_periph_test PRIVATE dl)
+endif()
+add_test(NAME mcu_light_sleep_periph COMMAND mcu_light_sleep_periph_test)
+set_tests_properties(mcu_light_sleep_periph PROPERTIES TIMEOUT 120)
+
+# Sensor de toque (LASECSIMUL_TEST_TOUCH_FIRMWARE, merged.bin de vnext_prototype/guest_touch): a contagem
+# cai com a capacitancia que o circuito poe no pad; a interrupcao do toque.
+add_executable(mcu_touch_test
+    test/core/mcu/McuTouchTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_touch_test PRIVATE include src)
+target_link_libraries(mcu_touch_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_touch_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_touch_test PRIVATE dl)
+endif()
+add_test(NAME mcu_touch COMMAND mcu_touch_test)
+set_tests_properties(mcu_touch PROPERTIES TIMEOUT 120)
+
+# DAC (LASECSIMUL_TEST_DAC_FIRMWARE, merged.bin de vnext_prototype/guest_dac): a tensao do DAC no pad, com e
+# sem carga, lida pelo ADC.
+add_executable(mcu_dac_test
+    test/core/mcu/McuDacTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_dac_test PRIVATE include src)
+target_link_libraries(mcu_dac_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_dac_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_dac_test PRIVATE dl)
+endif()
+add_test(NAME mcu_dac COMMAND mcu_dac_test)
+set_tests_properties(mcu_dac PROPERTIES TIMEOUT 120)
+
+# DAC cosine generator (LASECSIMUL_TEST_DAC_CW_FIRMWARE, guest_dac_cw): RTC_FAST frequency,
+# scale, DC offset and phase on both channels, sampled through ADC1.
+add_executable(mcu_dac_cw_test
+    test/core/mcu/McuDacCwTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_dac_cw_test PRIVATE include src)
+target_link_libraries(mcu_dac_cw_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_dac_cw_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_dac_cw_test PRIVATE dl)
+endif()
+add_test(NAME mcu_dac_cw COMMAND mcu_dac_cw_test)
+set_tests_properties(mcu_dac_cw PROPERTIES TIMEOUT 120)
+
+# Formato do quadro da UART (LASECSIMUL_TEST_UART_FORMAT_FIRMWARE, merged.bin de vnext_prototype/guest_uart_format):
+# paridade, 5..8 bits, 1/1,5/2 stops, inversao e os erros de recepcao, UART2 -> UART1.
+add_executable(mcu_uart_format_test
+    test/core/mcu/McuUartFormatTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_uart_format_test PRIVATE include src)
+target_link_libraries(mcu_uart_format_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_uart_format_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_uart_format_test PRIVATE dl)
+endif()
+add_test(NAME mcu_uart_format COMMAND mcu_uart_format_test)
+set_tests_properties(mcu_uart_format PROPERTIES TIMEOUT 120)
+
+# I2S (LASECSIMUL_TEST_I2S_FIRMWARE, merged.bin de vnext_prototype/guest_i2s): a DMA no tempo da taxa de
+# amostragem e o nivel do DIN.
+add_executable(mcu_i2s_test
+    test/core/mcu/McuI2sTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_i2s_test PRIVATE include src)
+target_link_libraries(mcu_i2s_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_i2s_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_i2s_test PRIVATE dl)
+endif()
+add_test(NAME mcu_i2s COMMAND mcu_i2s_test)
+set_tests_properties(mcu_i2s PROPERTIES TIMEOUT 120)
+
+# DAC pelo I2S0 (LASECSIMUL_TEST_I2S_DAC_FIRMWARE, merged.bin de vnext_prototype/guest_i2s_dac).
+add_executable(mcu_i2s_dac_test
+    test/core/mcu/McuI2sDacTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_i2s_dac_test PRIVATE include src)
+target_link_libraries(mcu_i2s_dac_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_i2s_dac_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_i2s_dac_test PRIVATE dl)
+endif()
+add_test(NAME mcu_i2s_dac COMMAND mcu_i2s_dac_test)
+set_tests_properties(mcu_i2s_dac PROPERTIES TIMEOUT 120)
+
+# ADC pelo I2S0 (LASECSIMUL_TEST_I2S_ADC_FIRMWARE, merged.bin de vnext_prototype/guest_i2s_adc).
+add_executable(mcu_i2s_adc_test
+    test/core/mcu/McuI2sAdcTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_i2s_adc_test PRIVATE include src)
+target_link_libraries(mcu_i2s_adc_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_i2s_adc_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_i2s_adc_test PRIVATE dl)
+endif()
+add_test(NAME mcu_i2s_adc COMMAND mcu_i2s_adc_test)
+set_tests_properties(mcu_i2s_adc PROPERTIES TIMEOUT 120)
+
+# I2C escravo entre dois ESP32 (LASECSIMUL_TEST_I2C_SLAVE_FIRMWARE, merged.bin de vnext_prototype/guest_i2c_slave).
+add_executable(mcu_i2c_slave_test
+    test/core/mcu/McuI2cSlaveTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_i2c_slave_test PRIVATE include src)
+target_link_libraries(mcu_i2c_slave_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_i2c_slave_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_i2c_slave_test PRIVATE dl)
+endif()
+add_test(NAME mcu_i2c_slave COMMAND mcu_i2c_slave_test)
+set_tests_properties(mcu_i2c_slave PROPERTIES TIMEOUT 200)
+
+# Frequencia da CPU (LASECSIMUL_TEST_CPU_FREQ_FIRMWARE, merged.bin de vnext_prototype/guest_cpu_freq).
+add_executable(mcu_cpu_freq_test
+    test/core/mcu/McuCpuFreqTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_cpu_freq_test PRIVATE include src)
+target_link_libraries(mcu_cpu_freq_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_cpu_freq_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_cpu_freq_test PRIVATE dl)
+endif()
+add_test(NAME mcu_cpu_freq COMMAND mcu_cpu_freq_test)
+set_tests_properties(mcu_cpu_freq PROPERTIES TIMEOUT 120)
+
+# Receptor do RMT (LASECSIMUL_TEST_RMT_RX_FIRMWARE, merged.bin de vnext_prototype/guest_rmt_rx).
+add_executable(mcu_rmt_rx_test
+    test/core/mcu/McuRmtRxTest.cpp
+    ${TEST_COMMON_SOURCES}
+)
+target_include_directories(mcu_rmt_rx_test PRIVATE include src)
+target_link_libraries(mcu_rmt_rx_test PRIVATE Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_compile_definitions(mcu_rmt_rx_test PRIVATE
+    ESP32_ADAPTER_DLL_PATH="${ESP32_ADAPTER_ARTIFACT}"
+    QEMU_REAL_BINARY_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/qemu-esp32/bin/qemu-system-xtensa.exe"
+    REAL_DEVICES_LIBRARY_JSON_PATH="${CMAKE_CURRENT_SOURCE_DIR}/../devices/library.json"
+)
+if(NOT WIN32)
+    target_link_libraries(mcu_rmt_rx_test PRIVATE dl)
+endif()
+add_test(NAME mcu_rmt_rx COMMAND mcu_rmt_rx_test)
+set_tests_properties(mcu_rmt_rx PROPERTIES TIMEOUT 120)
+
 # Espera da CPU1 pelo cache da flash com firmware real (LASECSIMUL_TEST_CACHE_WAIT_FIRMWARE, merged.bin
 # de vnext_prototype/guest_cache_wait_e2e): seis cenários observados pelo próprio firmware. Sem o
 # firmware o teste é pulado.
@@ -2236,7 +2648,7 @@ set(LASECSIMUL_EXTERNAL_QEMU_TESTS
     mcu_multiple_controllers_real_qemu mcu_blink_long_run mcu_firmware_lasecplot
     mcu_scheduler_pacing_sync_real_qemu
     qemu_queue_full_timeout vnext_b_attachment vnext_b_production_scale cache_wait_e2e_real_qemu
-    mcu_uart_rx_vnext_b mcu_ledc_fade mcu_dual_core_timing mcu_spi_byte
+    mcu_uart_rx_vnext_b mcu_ledc_fade mcu_dual_core_timing mcu_spi_byte mcu_spi_miso mcu_adc mcu_rmt mcu_pcnt mcu_mcpwm mcu_twai mcu_twai_bus mcu_spi_modes mcu_soc_reset mcu_deep_sleep mcu_light_sleep mcu_light_sleep_periph mcu_touch mcu_dac mcu_dac_cw mcu_uart_format mcu_i2s mcu_i2s_dac mcu_i2s_adc mcu_i2c_slave mcu_cpu_freq mcu_rmt_rx
 )
 set(LASECSIMUL_EXTERNAL_PYTHON_TESTS
     python_runtime python_session python_program_execution python_program_numpy python_program_session_integration

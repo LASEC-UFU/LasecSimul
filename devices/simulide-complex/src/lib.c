@@ -829,7 +829,10 @@ static void ws_edge(SimDevice* s, uint32_t level, uint32_t elapsed_ns) {
             s->data_acc = 0;
             s->ws_led = s->ws_byte = 0;
             s->ws_bit = 7;
-            s->ws_new_word = 0;
+            /* This rising edge starts the frame's first bit: the next rising edge saves it, like every
+             * bit but a LED's last (saved on its falling edge). With 0 here that first bit was dropped
+             * and the whole frame came out one bit late. */
+            s->ws_new_word = 1;
             if (s->api->pin_write) s->api->pin_write(s->host_ctx, 1, 1);
             return;
         }

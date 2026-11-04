@@ -1,0 +1,809 @@
+diff --git a/hw/char/esp32_uart.c b/hw/char/esp32_uart.c
+index 018de4b..7105884 100644
+--- a/hw/char/esp32_uart.c
++++ b/hw/char/esp32_uart.c
+@@ -92,16 +92,34 @@ void esp32_uart_set_rx_timeout(ESP32UARTState *s)
+  * published the bytes later than the guest wrote them while this side paced from the write, and the guest saw
+  * the UART idle with the Core still sending -- esp_restart() and deep sleep cut the end of the output.
+  *
+- * The frame: start bit, BIT_NUM + 5 data bits, one stop bit or two (STOP_BIT_NUM 3), each bit_ns long, the
+- * Core's own count. */
++ * The frame: start bit, BIT_NUM + 5 data bits, the parity bit (PARITY_EN), then the stop: 1, 1.5 or 2 bits
++ * (STOP_BIT_NUM 1/2/3) and one more for each of RS485_CONF DL0_EN/DL1_EN (ESP-IDF sends 2 stop bits as
++ * STOP_BIT_NUM 1 with DL1_EN, the chip's errata). Each bit is bit_ns long and the stop one interval of
++ * bit_ns * DL bits + bit_ns * half bits / 2: the Core's own integer count (usartStopNs). */
+ static unsigned uart_data_bits(const ESP32UARTState *s)
+ {
+     return 5 + ((s->reg[R_UART_CONF0] >> 2) & 3);
+ }
+ 
+-static unsigned uart_frame_bits(const ESP32UARTState *s)
++static unsigned uart_parity_bits(const ESP32UARTState *s)
+ {
+-    return 1 + uart_data_bits(s) + (((s->reg[R_UART_CONF0] >> 4) & 3) == 3 ? 2 : 1);
++    return (s->reg[R_UART_CONF0] >> 1) & 1;
++}
++
++static unsigned uart_stop_half_bits(const ESP32UARTState *s)
++{
++    const unsigned field = (s->reg[R_UART_CONF0] >> 4) & 3;
++    return field == 3 ? 4 : field == 2 ? 3 : 2;
++}
++
++static unsigned uart_dl_bits(const ESP32UARTState *s)
++{
++    return ((s->reg[R_UART_RS485_CONF] >> 1) & 1) + ((s->reg[R_UART_RS485_CONF] >> 2) & 1);
++}
++
++static uint64_t uart_stop_ns(const ESP32UARTState *s)
++{
++    return (uint64_t)s->bit_ns * s->tx_frame_dl + (uint64_t)s->bit_ns * s->tx_frame_stop_half / 2;
+ }
+ 
+ /* LASECSIMUL_UART_TRACE=1: every bit-time change and every frame of UART0 (on stderr). */
+@@ -119,26 +137,50 @@ static bool uart_trace(const ESP32UARTState *s)
+ static void uart_start_frame(ESP32UARTState *s, uint64_t at)
+ {
+     if (uart_trace(s))
+-        fprintf(stderr, "[UART] frame at=%" PRIu64 " now=%" PRIu64 " bit_ns=%u bits=%u queued=%u\n", at, getQemu_ns(),
+-                s->bit_ns, uart_frame_bits(s), fifo8_num_used(&s->tx_fifo));
++        fprintf(stderr, "[UART] frame at=%" PRIu64 " now=%" PRIu64 " bit_ns=%u data=%u parity=%u stop_half=%u dl=%u "
++                "queued=%u\n", at, getQemu_ns(), s->bit_ns, uart_data_bits(s), uart_parity_bits(s),
++                uart_stop_half_bits(s), uart_dl_bits(s), fifo8_num_used(&s->tx_fifo));
+     fifo8_pop(&s->tx_fifo);
+     s->tx_in_flight = true;
+-    s->tx_frame_bits = uart_frame_bits(s);
++    s->tx_frame_data = uart_data_bits(s);
++    s->tx_frame_parity = uart_parity_bits(s);
++    s->tx_frame_stop_half = uart_stop_half_bits(s);
++    s->tx_frame_dl = uart_dl_bits(s);
++    s->tx_frame_start_ns = at;
++    s->tx_frame_end_ns = at + (uint64_t)s->bit_ns * (1 + s->tx_frame_data + s->tx_frame_parity) + uart_stop_ns(s);
++    timer_mod_ns(&s->tx_timer, s->tx_frame_end_ns);
++}
++
++/* The break: with CONF0 TXD_BRK on, once the FIFO is empty the transmitter holds the line at 0 for TX_BRK_NUM
++ * bits, then raises TX_BRK_DONE (ESP-IDF uart_write_bytes_with_break() waits for it, and its ISR turns TXD_BRK
++ * off). The Core does the same at the same instant (usartStartBreak). */
++static void uart_start_break(ESP32UARTState *s, uint64_t at)
++{
++    s->tx_in_flight = true;
++    s->tx_break = true;
+     s->tx_frame_start_ns = at;
+-    s->tx_frame_end_ns = at + (uint64_t)s->bit_ns * s->tx_frame_bits;
++    s->tx_frame_end_ns = at + (uint64_t)s->bit_ns * FIELD_EX32(s->reg[R_UART_IDLE_CONF], UART_IDLE_CONF, TX_BRK_NUM);
+     timer_mod_ns(&s->tx_timer, s->tx_frame_end_ns);
+ }
+ 
+-/* UART_STATUS.ST_UTX_OUT: 0 idle, 1 start bit, 2.. data bits, 11/12 the stop bits. */
++/* UART_STATUS.ST_UTX_OUT: 0 idle, 1 start bit, 2..9 data bits, 10 parity, 11/12 the stop bits, 13/14 DL. The
++ * TRM lists no state for the break; it is not idle (uart_ll_is_tx_idle), so 15. */
+ static uint32_t uart_tx_state(const ESP32UARTState *s)
+ {
+-    if (!s->tx_in_flight) return 0;
++    if (!s->tx_in_flight || !s->bit_ns) return 0;
++    if (s->tx_break) return 15;
+     const uint64_t now = getQemu_ns();
+-    const uint64_t bit = now > s->tx_frame_start_ns && s->bit_ns ? (now - s->tx_frame_start_ns) / s->bit_ns : 0;
+-    const unsigned data = uart_data_bits(s);
++    const uint64_t t = now > s->tx_frame_start_ns ? now - s->tx_frame_start_ns : 0;
++    const uint64_t bit = t / s->bit_ns;
++    const unsigned data = s->tx_frame_data;
+     if (bit == 0) return 1;
+     if (bit <= data) return 1 + bit;
+-    return bit == data + 1 ? 11 : 12;
++    if (s->tx_frame_parity && bit == data + 1) return 10;
++    const uint64_t stop = t - (uint64_t)s->bit_ns * (1 + data + s->tx_frame_parity);
++    if (stop < s->bit_ns) return 11;
++    const uint64_t stop_ns = (uint64_t)s->bit_ns * s->tx_frame_stop_half / 2;
++    if (stop < stop_ns) return 12;
++    return stop - stop_ns < s->bit_ns ? 13 : 14;
+ }
+ 
+ static uint64_t uart_read(void *opaque, hwaddr addr, unsigned int size)
+@@ -262,6 +304,10 @@ static void uart_write(void *opaque, hwaddr addr, uint64_t value, unsigned int s
+ 
+     case A_UART_INT_CLR:
+         s->reg[R_UART_INT_ST] &= ~((uint32_t) value);
++        /* The latched receive errors (esp32_uart_vnext_rx_byte) and TX_BRK_DONE */
++        s->reg[R_UART_INT_RAW] &= ~((uint32_t) value & (R_UART_INT_RAW_PARITY_ERR_MASK | R_UART_INT_RAW_FRM_ERR_MASK |
++                                                        R_UART_INT_RAW_RXFIFO_OVF_MASK | R_UART_INT_RAW_BRK_DET_MASK |
++                                                        R_UART_INT_RAW_TX_BRK_DONE_MASK));
+         s->reg[addr / 4] = value;
+         if (value & R_UART_INT_CLR_RXFIFO_TOUT_MASK) {
+             s->rxfifo_tout = false;
+@@ -308,14 +354,27 @@ static void uart_write(void *opaque, hwaddr addr, uint64_t value, unsigned int s
+          * bit time if TICK_REF_ALWAYS_ON changed the clock): it may replay this store. */
+         writeReg( s->iomem.addr + A_UART_CONF0, value );
+         if( bit_ns != s->bit_ns ) writeReg( s->iomem.addr + A_UART_CLKDIV, bit_ns );
++        const bool brk_on = (value & (1u << 8)) && !(s->reg[addr / 4] & (1u << 8));
+         s->reg[addr / 4] = value;
+         s->use_apb = use_apb;
+         s->baud_rate = baud_rate;
+         s->bit_ns = bit_ns;
+         /* TXFIFO_RST empties the FIFO; the byte already in the shifter goes on, as in the Core. */
+         if( value & (1u << 18) ) fifo8_reset( &s->tx_fifo );
++        /* TXD_BRK turned on with nothing left to send: the break starts now (in the Core too). */
++        if( brk_on && !s->tx_in_flight && !fifo8_num_used( &s->tx_fifo ) ) uart_start_break( s, getQemu_ns() );
+         break;
+     }
++    case A_UART_IDLE_CONF:
++        /* TX_BRK_NUM: the next break's length, in the Core too. First: it may replay this store. */
++        if( (uint32_t) value != s->reg[addr / 4] ) writeReg( s->iomem.addr + A_UART_IDLE_CONF, value );
++        s->reg[addr / 4] = value;
++        break;
++    case A_UART_RS485_CONF:
++        /* DL0_EN/DL1_EN lengthen the stop from the next frame on, in the Core too. First: it may replay this store. */
++        if( (uint32_t) value != s->reg[addr / 4] ) writeReg( s->iomem.addr + A_UART_RS485_CONF, value );
++        s->reg[addr / 4] = value;
++        break;
+     case A_UART_CONF1:
+         s->reg[addr / 4] = value;
+         s->tx_empty_threshold = FIELD_EX32(s->reg[R_UART_CONF1], UART_CONF1, TXFIFO_EMPTY_THRD);
+@@ -381,11 +440,22 @@ void uart_receive(void *opaque, const uint8_t *buf, int size)
+     esp32_uart_update_irq(s);
+ }
+ 
+-void esp32_uart_vnext_rx_byte(uint32_t uart_index, uint8_t byte)
++/* The byte goes to the FIFO even with a parity or frame error, as on the ESP32 (it has no ERR_WR_MASK); the
++ * errors latch PARITY_ERR, FRM_ERR and BRK_DET until INT_CLR. A full FIFO drops it with RXFIFO_OVF. */
++void esp32_uart_vnext_rx_byte(uint32_t uart_index, uint8_t byte, uint8_t errors)
+ {
+     if (uart_index >= 3 || !vnext_uart_instances[uart_index]) return;
+     ESP32UARTState *s = vnext_uart_instances[uart_index];
+-    if (fifo8_num_free(&s->rx_fifo) == 0) return;
++    uint32_t raw = s->reg[R_UART_INT_RAW];
++    if (errors & ESP32_UART_RX_PARITY_ERR) raw = FIELD_DP32(raw, UART_INT_RAW, PARITY_ERR, 1);
++    if (errors & ESP32_UART_RX_FRAME_ERR) raw = FIELD_DP32(raw, UART_INT_RAW, FRM_ERR, 1);
++    if (errors & ESP32_UART_RX_BREAK) raw = FIELD_DP32(raw, UART_INT_RAW, BRK_DET, 1);
++    if (fifo8_num_free(&s->rx_fifo) == 0) raw = FIELD_DP32(raw, UART_INT_RAW, RXFIFO_OVF, 1);
++    s->reg[R_UART_INT_RAW] = raw;
++    if (fifo8_num_free(&s->rx_fifo) == 0) {
++        esp32_uart_update_irq(s);
++        return;
++    }
+     fifo8_push(&s->rx_fifo, byte);
+     esp32_uart_set_rx_timeout(s);
+     esp32_uart_update_irq(s);
+@@ -405,14 +475,22 @@ static void uart_tx_timer_cb(void* opaque)
+     ESP32UARTState *s = ESP32_UART(opaque);
+ 
+     /* The frame in the shifter ended: the next byte starts at that very instant, back to back as the
+-     * Core sends it; with none, the transmitter is done (TX_DONE). */
++     * Core sends it; with none, the transmitter is done (TX_DONE), and with TXD_BRK the break follows. */
+     if (uart_trace(s))
+-        fprintf(stderr, "[UART] end in_flight=%d end=%" PRIu64 " now=%" PRIu64 " queued=%u\n", s->tx_in_flight,
+-                s->tx_frame_end_ns, getQemu_ns(), fifo8_num_used(&s->tx_fifo));
++        fprintf(stderr, "[UART] end in_flight=%d break=%d end=%" PRIu64 " now=%" PRIu64 " queued=%u\n", s->tx_in_flight,
++                s->tx_break, s->tx_frame_end_ns, getQemu_ns(), fifo8_num_used(&s->tx_fifo));
+     if( !s->tx_in_flight ) return;
+     s->tx_in_flight = false;
+-    if( fifo8_num_used( &s->tx_fifo ) ) uart_start_frame( s, s->tx_frame_end_ns );
+-    else s->tx_done = true;
++    if( s->tx_break ) {
++        s->tx_break = false;
++        s->reg[R_UART_INT_RAW] = FIELD_DP32(s->reg[R_UART_INT_RAW], UART_INT_RAW, TX_BRK_DONE, 1);
++        if( fifo8_num_used( &s->tx_fifo ) ) uart_start_frame( s, s->tx_frame_end_ns );
++    } else if( fifo8_num_used( &s->tx_fifo ) ) {
++        uart_start_frame( s, s->tx_frame_end_ns );
++    } else {
++        s->tx_done = true;
++        if( s->reg[R_UART_CONF0] & (1u << 8) ) uart_start_break( s, s->tx_frame_end_ns );
++    }
+     esp32_uart_update_irq(s);
+ }
+ 
+@@ -445,6 +523,8 @@ static void esp32_uart_reset(DeviceState *dev)
+     /* The chip's CONF0 reset: TICK_REF_ALWAYS_ON, one stop bit, 8 data bits (the frames sent before the
+      * first CONF0 write, as in the Core). */
+     s->reg[R_UART_CONF0] = 0x0800001C;
++    /* IDLE_CONF reset: RX_IDLE_THRHD 0x100, TX_IDLE_NUM 0x100, TX_BRK_NUM 10 (the Core's usart too) */
++    s->reg[R_UART_IDLE_CONF] = 0x00A40100;
+ 
+     s->use_apb = 1;
+     s->clkdiv = 11104;
+@@ -466,6 +546,7 @@ static void esp32_uart_reset(DeviceState *dev)
+      * Corrigido cancelando tx_timer aqui tambem, mesmo padrao ja usado pra throttle_timer. */
+     timer_del(&s->tx_timer);
+     s->tx_in_flight = false;
++    s->tx_break = false;
+     s->tx_done = false;
+     timer_del(&s->throttle_timer);
+     s->throttle_rx = false;
+diff --git a/hw/misc/esp32_rtc_cntl.c b/hw/misc/esp32_rtc_cntl.c
+index 55902d2..f3545e2 100644
+--- a/hw/misc/esp32_rtc_cntl.c
++++ b/hw/misc/esp32_rtc_cntl.c
+@@ -24,6 +24,7 @@
+ #include "hw/nvram/esp32_efuse.h"
+ #include "hw/misc/esp32_rtcio.h"
+ #include "hw/gpio/esp32_gpio.h"
++#include "hw/misc/esp32_sens.h"
+ #include "../softmmu/simuliface.h"
+ 
+ 
+@@ -35,8 +36,10 @@ static void esp32_rtc_update_clk(Esp32RtcCntlState* s);
+ #define ESP32_RTC_EXT1_TRIG   BIT(1)
+ #define ESP32_RTC_GPIO_TRIG   BIT(2)
+ #define ESP32_RTC_TIMER_TRIG  BIT(3)
++#define ESP32_RTC_TOUCH_TRIG  BIT(8)
+ /* RTC_CNTL_INT_RAW */
+ #define ESP32_RTC_SLP_WAKEUP_INT BIT(0)
++#define ESP32_RTC_TOUCH_INT      BIT(6)
+ #define ESP32_RTC_MAIN_TIMER_INT BIT(8)
+ 
+ static Esp32RtcCntlState *esp32_rtc_cntl_device;
+@@ -129,6 +132,28 @@ void esp32_rtc_cntl_pads_changed(void)
+     if (esp32_rtc_cntl_device) esp32_rtc_check_pads(esp32_rtc_cntl_device);
+ }
+ 
++bool esp32_rtc_cntl_touch_timer_enabled(void)
++{
++    Esp32RtcCntlState *s = esp32_rtc_cntl_device;
++    return s && (*esp32_rtc_reg(s, A_RTC_CNTL_STATE0) & BIT(23));
++}
++
++uint32_t esp32_rtc_cntl_slow_clk_hz(void)
++{
++    Esp32RtcCntlState *s = esp32_rtc_cntl_device;
++    return s && s->rtc_slowclk_freq ? s->rtc_slowclk_freq : 150000;
++}
++
++void esp32_rtc_cntl_touch_interrupt(void)
++{
++    Esp32RtcCntlState *s = esp32_rtc_cntl_device;
++    if (!s) return;
++    s->int_raw |= ESP32_RTC_TOUCH_INT;
++    esp32_rtc_update_irq(s);
++    const uint32_t ena = FIELD_EX32(*esp32_rtc_reg(s, A_RTC_CNTL_WAKEUP_STATE), RTC_CNTL_WAKEUP_STATE, WAKEUP_ENA);
++    if (s->sleeping && (ena & ESP32_RTC_TOUCH_TRIG)) esp32_rtc_wake(s, ESP32_RTC_TOUCH_TRIG);
++}
++
+ static void esp32_rtc_sleep_timer_cb(void *opaque)
+ {
+     esp32_rtc_wake((Esp32RtcCntlState *)opaque, ESP32_RTC_TIMER_TRIG);
+@@ -307,6 +332,7 @@ static void esp32_rtc_cntl_write(void *opaque, hwaddr addr, uint64_t value,
+ 
+     case A_RTC_CNTL_STATE0:
+         *esp32_rtc_reg(s, addr) = value;
++        esp32_sens_touch_fsm_update(); /* TOUCH_SLP_TIMER_EN */
+         if (FIELD_EX32(value, RTC_CNTL_STATE0, SLEEP_EN)) esp32_rtc_sleep_start(s);
+         break;
+     case A_RTC_CNTL_WAKEUP_STATE: { /* WAKEUP_CAUSE is read-only */
+diff --git a/hw/misc/esp32_rtcio.c b/hw/misc/esp32_rtcio.c
+index 07cc64c..03dd309 100644
+--- a/hw/misc/esp32_rtcio.c
++++ b/hw/misc/esp32_rtcio.c
+@@ -10,6 +10,7 @@
+ #include "hw/hw.h"
+ #include "hw/sysbus.h"
+ #include "hw/misc/esp32_rtcio.h"
++#include "../softmmu/simuliface.h"
+ #include "../softmmu/vnext_b.h"
+ 
+ /* The registers keep what the firmware writes, from the reset values of ESP-IDF rtc_io_reg.h; the RTC
+@@ -25,12 +26,38 @@ int esp32_rtcio_gpio_of(unsigned rtc)
+     return rtc < ARRAY_SIZE(esp32_rtcio_gpio) ? esp32_rtcio_gpio[rtc] : -1;
+ }
+ 
++/* Each RTC pad's MUX_SEL (ESP-IDF rtc_io_reg.h): on, the pad belongs to the RTC domain and the digital
++ * output no longer reaches it. The pad registers (0x7C..0xB8) go to the Core, whose adapter applies that to
++ * the pads (mcu-adapters/espressif-esp32, kRtcPads). */
++static const struct { int8_t gpio; uint8_t offset, mux; } esp32_rtcio_mux[18] = {
++    {4, 0x94, 19}, {0, 0x98, 19}, {2, 0x9C, 19}, {15, 0xA0, 19}, {13, 0xA4, 19}, {12, 0xA8, 19}, {14, 0xAC, 19},
++    {27, 0xB0, 19}, {25, 0x84, 17}, {26, 0x88, 17}, {33, 0x8C, 18}, {32, 0x8C, 17}, {36, 0x7C, 27},
++    {37, 0x7C, 26}, {38, 0x7C, 25}, {39, 0x7C, 24}, {34, 0x80, 29}, {35, 0x80, 28},
++};
++#define ESP32_RTCIO_PADS_FIRST 0x7C
++#define ESP32_RTCIO_PADS_LAST  0xB8
++
++bool esp32_rtcio_pad_is_rtc(int gpio)
++{
++    Esp32RtcIoState *s = esp32_rtcio_device;
++    if (!s) return false;
++    for (unsigned i = 0; i < ARRAY_SIZE(esp32_rtcio_mux); i++)
++        if (esp32_rtcio_mux[i].gpio == gpio) return (s->regs[esp32_rtcio_mux[i].offset / 4] >> esp32_rtcio_mux[i].mux) & 1;
++    return false;
++}
++
+ unsigned esp32_rtcio_ext0_sel(void)
+ {
+     Esp32RtcIoState *s = esp32_rtcio_device;
+     return s ? FIELD_EX32(s->regs[A_RTC_IO_EXT_WAKEUP0 / 4], RTC_IO_EXT_WAKEUP0, SEL) : 0;
+ }
+ 
++uint32_t esp32_rtcio_read_reg(unsigned offset)
++{
++    Esp32RtcIoState *s = esp32_rtcio_device;
++    return s && offset / 4 < ESP32_RTCIO_REGS ? s->regs[offset / 4] : 0;
++}
++
+ /* Level of GPIO `gpio` at the pad, from the vNext-B snapshot (the Core sees the pads). */
+ bool esp32_rtcio_pad_level(int gpio)
+ {
+@@ -57,15 +84,24 @@ static void esp32_rtcio_write(void *opaque, hwaddr addr, uint64_t value, unsigne
+     Esp32RtcIoState *s = ESP32_RTCIO(opaque);
+     if (addr / 4 >= ESP32_RTCIO_REGS) return;
+     /* *_W1TS / *_W1TC of RTC_GPIO_OUT, _ENABLE and _STATUS (0x04/0x08, 0x10/0x14, 0x1C/0x20). */
++    hwaddr target = addr;
++    uint32_t v = value;
+     switch (addr) {
+     case 0x04: case 0x10: case 0x1C:
+-        s->regs[addr / 4 - 1] |= value;
+-        return;
++        target = addr - 4;
++        v = s->regs[target / 4] | (uint32_t)value;
++        break;
+     case 0x08: case 0x14: case 0x20:
+-        s->regs[addr / 4 - 2] &= ~value;
+-        return;
++        target = addr - 8;
++        v = s->regs[target / 4] & ~(uint32_t)value;
++        break;
+     }
+-    s->regs[addr / 4] = value;
++    /* RTC_GPIO_OUT, RTC_GPIO_ENABLE (the RTC GPIO outputs, rtc_gpio_set_level) and the pad registers drive the
++     * pads: the Core first (it may replay this store, vNext-B). */
++    const bool pads = target == 0x00 || target == 0x0C ||
++                      (target >= ESP32_RTCIO_PADS_FIRST && target <= ESP32_RTCIO_PADS_LAST);
++    if (pads && s->regs[target / 4] != v) writeReg(s->iomem.addr + target, v);
++    s->regs[target / 4] = v;
+ }
+ 
+ static const MemoryRegionOps esp32_rtcio_ops = {
+@@ -94,6 +130,8 @@ static void esp32_rtcio_init(Object *obj)
+     Esp32RtcIoState *s = ESP32_RTCIO(obj);
+     SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
+     memory_region_init_io(&s->iomem, obj, &esp32_rtcio_ops, s, TYPE_ESP32_RTCIO, 0x400);
++    /* writeReg() may replay the guest store (vNext-B backpressure), see hw/i2c/esp32_i2c.c. */
++    s->iomem.disable_reentrancy_guard = true;
+     sysbus_init_mmio(sbd, &s->iomem);
+     esp32_rtcio_device = s;
+ }
+diff --git a/hw/misc/esp32_sens.c b/hw/misc/esp32_sens.c
+index d9c9c39..1d5308d 100644
+--- a/hw/misc/esp32_sens.c
++++ b/hw/misc/esp32_sens.c
+@@ -16,6 +16,8 @@
+ #include "hw/hw.h"
+ #include "hw/sysbus.h"
+ #include "hw/misc/esp32_sens.h"
++#include "hw/misc/esp32_rtcio.h"
++#include "hw/misc/esp32_rtc_cntl.h"
+ #include "../softmmu/simuliface.h"
+ #include "../softmmu/vnext_b.h"
+ 
+@@ -27,6 +29,16 @@
+ #define SENS_SAR_MEAS_START1    0x54  /* DATA [15:0], DONE 16, START 17, START_FORCE 18, EN_PAD [30:19] */
+ #define SENS_SAR_READ_CTRL2     0x90  /* SAR2_DATA_INV bit 29 */
+ #define SENS_SAR_MEAS_START2    0x94
++/* Touch: MEAS_DELAY [15:0] and XPD_WAIT [23:16] in RTC_FAST (8 MHz) cycles, OUT_SEL 24, OUT_1EN 25. */
++#define SENS_SAR_TOUCH_CTRL1    0x58
++#define SENS_SAR_TOUCH_THRES1   0x5c  /* THRES1..5: channel 2k in [31:16], 2k+1 in [15:0] */
++#define SENS_SAR_TOUCH_OUT1     0x70  /* OUT1..5, the same layout */
++/* MEAS_EN [9:0] (the touched pads), MEAS_DONE 10, START_FSM_EN 11, START_EN 12, START_FORCE 13,
++ * SLEEP_CYCLES [29:14] (RTC slow clock), MEAS_EN_CLR 30. */
++#define SENS_SAR_TOUCH_CTRL2    0x84
++#define SENS_SAR_TOUCH_ENABLE   0x8c  /* WORKEN [9:0], OUTEN2 [19:10], OUTEN1 [29:20] */
++#define SENS_TOUCH_PROBE        0x380 /* the Core's touch probe (adapter TouchState), not a chip register */
++#define ESP32_RTC_FAST_HZ       8000000
+ 
+ static bool esp32_analog_trace_enabled(void)
+ {
+@@ -112,6 +124,152 @@ static uint32_t esp32_sens_vnext_meas(Esp32SensState *s, int unit)
+     return raw;
+ }
+ 
++/* Touch sensor (ESP32 TRM, Touch Sensor). Each pad's oscillator charges and discharges the pad between
++ * DREFL and DREFH with a current set by its slope (RTC_IO_TOUCH_PADn_DAC); the count of a measurement is
++ * the cycles in MEAS_DELAY: T * I / (2 C dV). C is the pad's own (20 pF, a DevKitC pad with its trace)
++ * plus what the circuit puts on it, which the Core measures at the start of each measurement (a finger
++ * as a capacitor through a button, a capacitor). I is 1.72 uA per slope step: with Arduino's settings
++ * (0x1000 cycles, 2.7 V/0.5 V/no attenuation, slope 7) touchRead() reads 70 on an untouched pad, a DevKitC's
++ * value, and ~14 with ~80 pF of finger. The SENS registers have channels 8 and 9 swapped against the pads
++ * (ESP-IDF touch_ll_num_wrap): SENS channel 8 is RTC_IO_TOUCH_PAD9 (GPIO32), 9 is PAD8 (GPIO33). A pad is
++ * measured with its WORKEN bit and on the RTC domain (its RTC pad's MUX_SEL, esp32_rtcio_pad_is_rtc): a GPIO
++ * in digital use is never touched. */
++enum { TOUCH_IDLE, TOUCH_SLEEP, TOUCH_XPD, TOUCH_MEASURE };
++
++static Esp32SensState *esp32_sens_device;
++
++static unsigned touch_rtcio_pad(unsigned ch)
++{
++    return ch == 8 ? 9 : ch == 9 ? 8 : ch;
++}
++
++static uint32_t touch_channels(Esp32SensState *s)
++{
++    static const int8_t gpio[10] = {4, 0, 2, 15, 13, 12, 14, 27, 32, 33};
++    const uint32_t worken = s->regs[SENS_SAR_TOUCH_ENABLE / 4] & 0x3ffu;
++    uint32_t mask = 0;
++    for (unsigned ch = 0; ch < 10; ch++)
++        if (((worken >> ch) & 1) && esp32_rtcio_pad_is_rtc(gpio[ch])) mask |= 1u << ch;
++    return mask;
++}
++
++static uint16_t touch_count(unsigned ch, int64_t meas_ns)
++{
++    static const double atten[4] = {1.5, 1.0, 0.5, 0.0}; /* DRANGE */
++    const uint32_t cfg = esp32_rtcio_read_reg(0x90);       /* RTC_IO_TOUCH_CFG */
++    const double high = 2.4 + 0.1 * ((cfg >> 29) & 3) - atten[(cfg >> 25) & 3];
++    const double low = 0.5 + 0.1 * ((cfg >> 27) & 3);
++    const double dv = MAX(high - low, 0.05);
++    const unsigned slope = (esp32_rtcio_read_reg(0x94 + 4 * touch_rtcio_pad(ch)) >> 23) & 7;
++    const double farads = 20e-12 + vnext_b_touch_cap_tenths_pf(ch) * 1e-13;
++    const double count = meas_ns * 1e-9 * slope * 1.72e-6 / (2.0 * farads * dv);
++    static int trace = -1;
++    if (trace < 0) {
++        const char *v = getenv("LASECSIMUL_TOUCH_TRACE");
++        trace = v && *v && v[0] != '0';
++    }
++    if (trace)
++        fprintf(stderr, "[TOUCH-QEMU] ch=%u cfg=%08x pad=%08x slope=%u dv=%.2f cap=%.1fpF meas=%" PRId64 "ns count=%.1f\n", ch,
++                cfg, esp32_rtcio_read_reg(0x94 + 4 * touch_rtcio_pad(ch)), slope, dv, vnext_b_touch_cap_tenths_pf(ch) / 10.0,
++                meas_ns, count);
++    return count >= 65535.0 ? 65535 : (uint16_t)count;
++}
++
++static bool touch_timer_mode(Esp32SensState *s)
++{
++    const uint32_t ctrl2 = s->regs[SENS_SAR_TOUCH_CTRL2 / 4];
++    return esp32_rtc_cntl_touch_timer_enabled() && (ctrl2 & BIT(11)) && !(ctrl2 & BIT(13));
++}
++
++/* A measurement: XPD_WAIT, then MEAS_DELAY. MEAS_DONE drops at its start. */
++static void touch_begin(Esp32SensState *s, int64_t now)
++{
++    const uint32_t ctrl1 = s->regs[SENS_SAR_TOUCH_CTRL1 / 4];
++    s->touch_meas_ns = (int64_t)(ctrl1 & 0xffff) * NANOSECONDS_PER_SECOND / ESP32_RTC_FAST_HZ;
++    s->touch_done = false;
++    s->touch_phase = TOUCH_XPD;
++    timer_mod_ns(&s->touch_timer, now + (int64_t)((ctrl1 >> 16) & 0xff) * NANOSECONDS_PER_SECOND / ESP32_RTC_FAST_HZ);
++}
++
++static void touch_sleep(Esp32SensState *s, int64_t now)
++{
++    const uint32_t cycles = (s->regs[SENS_SAR_TOUCH_CTRL2 / 4] >> 14) & 0xffff;
++    s->touch_phase = TOUCH_SLEEP;
++    timer_mod_ns(&s->touch_timer, now + (int64_t)cycles * NANOSECONDS_PER_SECOND / esp32_rtc_cntl_slow_clk_hz());
++}
++
++/* The end of a measurement: the counts, the touched pads (below the threshold, or above with OUT_SEL),
++ * MEAS_DONE, and the interrupt when SET1 is touched (OUT_1EN) or SET1 and SET2 both are. */
++static void touch_finish(Esp32SensState *s, int64_t now)
++{
++    const uint32_t ctrl1 = s->regs[SENS_SAR_TOUCH_CTRL1 / 4];
++    const bool above = (ctrl1 >> 24) & 1;
++    uint32_t touched = 0;
++    for (unsigned ch = 0; ch < 10; ch++) {
++        if (!((s->touch_mask >> ch) & 1)) continue;
++        s->touch_out[ch] = touch_count(ch, s->touch_meas_ns);
++        const uint32_t thres = s->regs[(SENS_SAR_TOUCH_THRES1 + 4 * (ch / 2)) / 4];
++        const uint16_t th = ch % 2 ? thres & 0xffff : thres >> 16;
++        if (above ? s->touch_out[ch] > th : s->touch_out[ch] < th) touched |= 1u << ch;
++    }
++    s->touch_status |= touched;
++    s->touch_done = true;
++    const uint32_t enable = s->regs[SENS_SAR_TOUCH_ENABLE / 4];
++    const uint32_t set1 = touched & (enable >> 20) & 0x3ff, set2 = touched & (enable >> 10) & 0x3ff;
++    if ((ctrl1 >> 25) & 1 ? set1 != 0 : set1 != 0 && set2 != 0) esp32_rtc_cntl_touch_interrupt();
++    if (touch_timer_mode(s)) touch_sleep(s, now);
++    else s->touch_phase = TOUCH_IDLE;
++}
++
++static void touch_timer_cb(void *opaque)
++{
++    Esp32SensState *s = opaque;
++    const int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    switch (s->touch_phase) {
++    case TOUCH_SLEEP:
++        touch_begin(s, now);
++        break;
++    case TOUCH_XPD:
++        /* The window opens: the Core measures the capacitance on the pads. A full lane: try again. */
++        s->touch_mask = touch_channels(s);
++        if (vnext_b_active()) {
++            const uint16_t seq = s->touch_seq + 1;
++            if (writeReg(s->iomem.addr + SENS_TOUCH_PROBE, ((uint64_t)seq << 16) | s->touch_mask) != VNEXT_PUBLISHED) {
++                timer_mod_ns(&s->touch_timer, now + 1000);
++                return;
++            }
++            s->touch_seq = seq;
++        }
++        s->touch_phase = TOUCH_MEASURE;
++        timer_mod_ns(&s->touch_timer, now + s->touch_meas_ns);
++        break;
++    case TOUCH_MEASURE:
++        /* The Core has not published this measurement's capacitance yet: hold the guest until it does. */
++        if (vnext_b_active() && vnext_b_touch_done_seq() != s->touch_seq) {
++            vnext_b_lockstep_hold_now();
++            timer_mod_ns(&s->touch_timer, now + 1000);
++            return;
++        }
++        touch_finish(s, now);
++        break;
++    default:
++        break;
++    }
++}
++
++void esp32_sens_touch_fsm_update(void)
++{
++    Esp32SensState *s = esp32_sens_device;
++    if (!s) return;
++    const bool timer = touch_timer_mode(s);
++    if (timer && s->touch_phase == TOUCH_IDLE) {
++        touch_sleep(s, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
++    } else if (!timer && s->touch_phase == TOUCH_SLEEP) {
++        timer_del(&s->touch_timer);
++        s->touch_phase = TOUCH_IDLE;
++    }
++}
++
+ static uint64_t esp32_sens_read(void *opaque, hwaddr addr, unsigned int size)
+ {
+     Esp32SensState *s = ESP32_SENS(opaque);
+@@ -129,18 +287,13 @@ static uint64_t esp32_sens_read(void *opaque, hwaddr addr, unsigned int size)
+         /* The conversion is complete when read (MEAS_DONE): its duration is not modeled. */
+         return (s->regs[addr / 4] & ~0x1FFFFu) | 0x10000u | (r & 0xFFFFu);
+     }
+-    case 0x84://SENS_SAR_TOUCH_CTRL2_REG
+-	return (1<<10);
++    case SENS_SAR_TOUCH_CTRL2:
++        return (s->regs[addr / 4] & ~0x7ffu) | (s->touch_status & 0x3ffu) | (s->touch_done ? BIT(10) : 0);
+     }
+-// 2=gpio2, 3=gpio15, 4=gpio14(13?), 5=gpio12, 7=gpio27, 8=gpio33, 9=gpio32
+-// land +/- 300: 2=12166,31743 15=13618,31585 13=15277,31743 12=16798,31743 27=18388,3071 33=13791,2993 32=12166,2914
+-// port	       : 2=1417,12132  15=1339,13791  13=1496,15312  12=1417,16694  27=30010,18388 33=30088,13860 32=30010,12201
+-    if(addr>=0x70 && addr<0x84) {
+-	int n1=((addr-0x70)/4)*2;
+-        return ((1500-s->touch_sensor[n1]+rand()%20)<<16) | (1500-s->touch_sensor[n1+1]+rand()%20);
++    if (addr >= SENS_SAR_TOUCH_OUT1 && addr < SENS_SAR_TOUCH_CTRL2) {
++        const unsigned ch = (addr - SENS_SAR_TOUCH_OUT1) / 2;
++        return ((uint32_t)s->touch_out[ch] << 16) | s->touch_out[ch + 1];
+     }
+-
+-//    qemu_guest_getrandom_nofail(&r, sizeof(r));
+     return addr < sizeof(s->regs) ? s->regs[addr / 4] : 0;
+ }
+ 
+@@ -174,6 +327,17 @@ static void esp32_sens_write(void *opaque, hwaddr addr, uint64_t value,
+     int cval;
+     Esp32SensState *s = ESP32_SENS(opaque);
+    // printf("esp32_sens_write 0x%lx 0x%lx\n",addr, value);
++    if (addr == SENS_SAR_TOUCH_CTRL2) {
++        /* MEAS_EN_CLR clears the touched pads; START_EN rising with START_FORCE starts one measurement. */
++        const uint32_t old = s->regs[addr / 4];
++        if (value & BIT(30)) s->touch_status = 0;
++        s->regs[addr / 4] = (uint32_t)value & ~BIT(30);
++        if ((value & BIT(13)) && (value & BIT(12)) && !(old & BIT(12)) &&
++            (s->touch_phase == TOUCH_IDLE || s->touch_phase == TOUCH_SLEEP))
++            touch_begin(s, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
++        esp32_sens_touch_fsm_update();
++        return;
++    }
+     if (addr < sizeof(s->regs)) s->regs[addr / 4] = (uint32_t)value;
+     switch(addr) {
+     case 0x54://SENS_MEAS1_START_SAR
+@@ -211,10 +375,11 @@ static void esp32_sens_init(Object *obj)
+     s->iomem.disable_reentrancy_guard = true;
+     sysbus_init_mmio(sbd, &s->iomem);
+ 
+-    memset(s->touch_sensor, 0, sizeof(s->touch_sensor));
+     memset(s->ADC_values, 0, sizeof(s->ADC_values));
+     s->channel1 = 0;
+     s->channel2 = 0;
++    timer_init_ns(&s->touch_timer, QEMU_CLOCK_VIRTUAL, touch_timer_cb, s);
++    esp32_sens_device = s;
+ }
+ 
+ /* Reset values of the SENS registers (every field's default in ESP-IDF sens_reg.h): among them 12-bit
+@@ -234,6 +399,12 @@ static void esp32_sens_reset(DeviceState *dev)
+     for (size_t i = 0; i < ARRAY_SIZE(resets); i++) s->regs[resets[i].offset / 4] = resets[i].value;
+     s->channel1 = 0;
+     s->channel2 = 0;
++    timer_del(&s->touch_timer);
++    s->touch_phase = TOUCH_IDLE;
++    s->touch_mask = 0;
++    memset(s->touch_out, 0, sizeof(s->touch_out));
++    s->touch_status = 0;
++    s->touch_done = false;
+ }
+ 
+ static void esp32_sens_class_init(ObjectClass *klass, void *data)
+diff --git a/hw/xtensa/esp32.c b/hw/xtensa/esp32.c
+index adb8a98..76aa3ca 100644
+--- a/hw/xtensa/esp32.c
++++ b/hw/xtensa/esp32.c
+@@ -334,7 +334,7 @@ static void esp32_soc_reset(DeviceState *dev)
+          * PCNT, MCPWM, TWAI engines) are reset with these: a software or watchdog reset left a PWM, a
+          * counter or a CAN transmission running in the Core while the CPU booted again. A private address
+          * no adapter module owns; without vNext-B (the first boot) writeReg() does nothing. */
+-        writeReg( 0x3FF48FFC, 1 );
++        writeReg( 0x3FF48FFC, 1 ); /* the Core's adapter resets its digital engines, not the RTC domain */
+     }
+     if (s->requested_reset & ESP32_SOC_RESET_PROCPU)
+     {
+diff --git a/include/hw/char/esp32_uart.h b/include/hw/char/esp32_uart.h
+index c965fee..abd2c48 100644
+--- a/include/hw/char/esp32_uart.h
++++ b/include/hw/char/esp32_uart.h
+@@ -17,8 +17,12 @@ REG32(UART_FIFO, 0x0)
+ REG32(UART_INT_RAW, 0x4)
+ FIELD(UART_INT_RAW, RXFIFO_FULL, 0, 1)
+ FIELD(UART_INT_RAW, TXFIFO_EMPTY, 1, 1)
++FIELD(UART_INT_RAW, PARITY_ERR, 2, 1)
++FIELD(UART_INT_RAW, FRM_ERR, 3, 1)
+ FIELD(UART_INT_RAW, RXFIFO_OVF, 4, 1)
++FIELD(UART_INT_RAW, BRK_DET, 7, 1)
+ FIELD(UART_INT_RAW, RXFIFO_TOUT, 8, 1)
++FIELD(UART_INT_RAW, TX_BRK_DONE, 12, 1)
+ FIELD(UART_INT_RAW, TX_DONE, 14, 1)
+ REG32(UART_INT_ST, 0x8)
+ FIELD(UART_INT_ST, RXFIFO_FULL, 0, 1)
+@@ -60,6 +64,9 @@ REG32(UART_RXD_CNT, 0x30)
+ /* TODO: implement */
+ REG32(UART_CONF0, 0x20)
+ REG32(UART_CONF1, 0x24)
++REG32(UART_IDLE_CONF, 0x40)
++FIELD(UART_IDLE_CONF, TX_BRK_NUM, 20, 8)
++REG32(UART_RS485_CONF, 0x44)
+ FIELD(UART_CONF1, TOUT_EN, 31, 1)
+ FIELD(UART_CONF1, TOUT_THRD, 24, 7)
+ FIELD(UART_CONF1, TXFIFO_EMPTY_THRD, 8, 7)
+@@ -91,10 +98,12 @@ typedef struct ESPUARTState {
+     bool rxfifo_tout;
+     /* The transmitter, as the Core's USART drives the TX pin (see esp32_uart.c): tx_fifo holds the bytes
+      * still waiting, the one being shifted out left it when its frame started (tx_frame_start_ns, ends at
+-     * tx_frame_end_ns, when tx_timer fires). tx_done latches UART_INT_RAW.TX_DONE. */
++     * tx_frame_end_ns, when tx_timer fires), in the format it had then (tx_frame_*: data bits, parity bit,
++     * stop half-bits, DL bits). tx_done latches UART_INT_RAW.TX_DONE. */
+     bool tx_in_flight;
++    bool tx_break; /* what is in flight is the break (CONF0 TXD_BRK, IDLE_CONF TX_BRK_NUM zero bits) */
+     bool tx_done;
+-    unsigned tx_frame_bits;
++    unsigned tx_frame_data, tx_frame_parity, tx_frame_stop_half, tx_frame_dl;
+     uint64_t tx_frame_start_ns;
+     uint64_t tx_frame_end_ns;
+     unsigned baud_rate;
+@@ -142,5 +151,9 @@ void esp32_uart_set_rx_timeout(ESP32UARTState *s);
+ void esp32_uart_update_irq(ESP32UARTState *s);
+ 
+ /* C2A delivery hook: the transport consumer injects an already framed byte into
+- * the guest-visible RX FIFO.  It does not perform a Core wait or a register read. */
+-void esp32_uart_vnext_rx_byte(uint32_t uart_index, uint8_t byte);
++ * the guest-visible RX FIFO.  It does not perform a Core wait or a register read.
++ * `errors`: what the Core's receiver saw in the frame (ESP32_UART_RX_*). */
++#define ESP32_UART_RX_PARITY_ERR 1u
++#define ESP32_UART_RX_FRAME_ERR  2u
++#define ESP32_UART_RX_BREAK      4u
++void esp32_uart_vnext_rx_byte(uint32_t uart_index, uint8_t byte, uint8_t errors);
+diff --git a/include/hw/misc/esp32_rtc_cntl.h b/include/hw/misc/esp32_rtc_cntl.h
+index 0e00fc5..bb0f327 100644
+--- a/include/hw/misc/esp32_rtc_cntl.h
++++ b/include/hw/misc/esp32_rtc_cntl.h
+@@ -170,3 +170,9 @@ REG32(RTC_CNTL_DATE,   0x13c)
+ 
+ /* A pad level changed (vNext-B, esp32_gpio_vnext_input): an ext0/ext1 wakeup may fire while asleep. */
+ void esp32_rtc_cntl_pads_changed(void);
++/* The touch sensor (hw/misc/esp32_sens.c): STATE0.TOUCH_SLP_TIMER_EN runs its timer FSM, on the RTC slow
++ * clock; a touch at the end of a measurement raises RTC_CNTL_TOUCH_INT and wakes a sleep that has
++ * WAKEUP_ENA.TOUCH. */
++bool esp32_rtc_cntl_touch_timer_enabled(void);
++uint32_t esp32_rtc_cntl_slow_clk_hz(void);
++void esp32_rtc_cntl_touch_interrupt(void);
+diff --git a/include/hw/misc/esp32_rtcio.h b/include/hw/misc/esp32_rtcio.h
+index 77d6c01..ff4e79e 100644
+--- a/include/hw/misc/esp32_rtcio.h
++++ b/include/hw/misc/esp32_rtcio.h
+@@ -26,3 +26,7 @@ int esp32_rtcio_gpio_of(unsigned rtc);
+ bool esp32_rtcio_pad_level(int gpio);
+ /* RTC GPIO selected for the ext0 wakeup (RTC_IO_EXT_WAKEUP0_REG.SEL). */
+ unsigned esp32_rtcio_ext0_sel(void);
++/* An RTC_IO register as the firmware left it (the touch configuration, TOUCH_CFG and TOUCH_PADn). */
++uint32_t esp32_rtcio_read_reg(unsigned offset);
++/* GPIO `gpio` is on the RTC domain (its RTC pad's MUX_SEL). */
++bool esp32_rtcio_pad_is_rtc(int gpio);
+diff --git a/include/hw/misc/esp32_sens.h b/include/hw/misc/esp32_sens.h
+index 0aa8ea8..c04efab 100644
+--- a/include/hw/misc/esp32_sens.h
++++ b/include/hw/misc/esp32_sens.h
+@@ -2,6 +2,7 @@
+ 
+ #include "hw/hw.h"
+ #include "hw/sysbus.h"
++#include "qemu/timer.h"
+ #include "hw/misc/esp32_reg.h"
+ 
+ 
+@@ -13,14 +14,26 @@
+ typedef struct Esp32SensState {
+     SysBusDevice parent_obj;
+     MemoryRegion iomem;
+-    int touch_sensor[10];
+     short ADC_values[32];
+     int channel1;
+     int channel2;
+     /* Every SENS register as last written: the firmware reads them back (ESP-IDF sets the attenuation
+      * of one channel with a read-modify-write of SENS_SAR_ATTENx). */
+     uint32_t regs[ESP32_SENS_REG_COUNT];
++    /* Touch sensor (ESP32 TRM, Touch Sensor): the measurement FSM (timer or software start), the last
++     * count of each SENS channel, the touched pads (SENS_TOUCH_MEAS_EN, until MEAS_EN_CLR) and MEAS_DONE.
++     * The Core measures the capacitance the circuit puts on each pad at the start of a measurement. */
++    QEMUTimer touch_timer;
++    int touch_phase;
++    int64_t touch_meas_ns;
++    uint32_t touch_mask;
++    uint16_t touch_seq;
++    uint16_t touch_out[10];
++    uint32_t touch_status;
++    bool touch_done;
+ } Esp32SensState;
+ 
+-//#define ESP32_RNG_BASE (DR_REG_WDEV_BASE + 0x144)
++/* TOUCH_SLP_TIMER_EN, START_FSM_EN or START_FORCE changed: start or stop the timer FSM. */
++void esp32_sens_touch_fsm_update(void);
+ 
++//#define ESP32_RNG_BASE (DR_REG_WDEV_BASE + 0x144)
+diff --git a/softmmu/vnext_b.c b/softmmu/vnext_b.c
+index 206d539..384fb3a 100644
+--- a/softmmu/vnext_b.c
++++ b/softmmu/vnext_b.c
+@@ -717,6 +717,24 @@ uint32_t vnext_b_twai_state(void) {
+     return value;
+ }
+ 
++/* Touch sensor: the capacitance the circuit puts on SENS channel `channel` (0.1 pF), bytes 104-123, and the
++ * last probe the Core finished, bytes 124-125 (hw/misc/esp32_sens.c). */
++uint32_t vnext_b_touch_cap_tenths_pf(unsigned channel) {
++    if (!vnext_b_active() || channel >= 10) return 0;
++    VnextSnapshot *s = (VnextSnapshot *)(vnext_base + vnext_control->snapshotOffset);
++    uint16_t value = 0;
++    memcpy(&value, s->data + 104 + 2 * channel, sizeof(value));
++    return value;
++}
++
++uint32_t vnext_b_touch_done_seq(void) {
++    if (!vnext_b_active()) return 0;
++    VnextSnapshot *s = (VnextSnapshot *)(vnext_base + vnext_control->snapshotOffset);
++    uint16_t value = 0;
++    memcpy(&value, s->data + 124, sizeof(value));
++    return value;
++}
++
+ static bool vnext_i2c_address(uint64_t address, unsigned *bus, bool *status) {
+     if (address >= UINT64_C(0x3FF53000) && address < UINT64_C(0x3FF53100)) {
+         *bus = 0; *status = address == UINT64_C(0x3FF53008); return true;
+@@ -840,7 +858,8 @@ static void vnext_consume_c2a(void) {
+         /* Generic C2A byte delivery: payload is deliberately opaque to the
+          * transport; the UART model owns its interpretation and FIFO state. */
+         if (event->kind == 2 && event->bytes >= 1)
+-            esp32_uart_vnext_rx_byte(event->bytes >= 2 ? event->payload[1] : 0, event->payload[0]);
++            esp32_uart_vnext_rx_byte(event->bytes >= 2 ? event->payload[1] : 0, event->payload[0],
++                                     event->bytes >= 3 ? event->payload[2] : 0);
+         if (event->kind == 10 && event->bytes >= sizeof(uint64_t) * 2) {
+             uint64_t address = 0, value = 0;
+             memcpy(&address, event->payload, sizeof(address));
+@@ -1462,6 +1481,8 @@ uint32_t vnext_b_adc_pad_tenths_mv(unsigned pad) { (void)pad; return 0; }
+ int32_t vnext_b_pcnt_count(unsigned unit) { (void)unit; return 0; }
+ uint32_t vnext_b_mcpwm_timer_status(unsigned index) { (void)index; return 0; }
+ uint32_t vnext_b_twai_state(void) { return 0x3c; }
++uint32_t vnext_b_touch_cap_tenths_pf(unsigned channel) { (void)channel; return 0; }
++uint32_t vnext_b_touch_done_seq(void) { return 0; }
+ void vnext_b_lockstep_sync_barrier(void) {}
+ void vnext_b_lockstep_hold_now(void) {}
+ bool vnext_b_lockstep_hold(void) { return false; }
+diff --git a/softmmu/vnext_b.h b/softmmu/vnext_b.h
+index c0fb65c..eb50e36 100644
+--- a/softmmu/vnext_b.h
++++ b/softmmu/vnext_b.h
+@@ -66,6 +66,9 @@ uint32_t vnext_b_mcpwm_timer_status(unsigned index);
+ /* TWAI controller state from the snapshot: SR bits TBS..BS | TEC << 8 | REC << 16 (0x3C without vNext-B:
+  * waiting for bus-free, there is no bus). */
+ uint32_t vnext_b_twai_state(void);
++/* Touch sensor: external capacitance of a SENS channel (0.1 pF) and the last probe the Core finished. */
++uint32_t vnext_b_touch_cap_tenths_pf(unsigned channel);
++uint32_t vnext_b_touch_done_seq(void);
+ bool vnext_b_i2c_submit(uint32_t bus, uint32_t flags, uint64_t period_ns,
+                         const uint8_t *tx, uint32_t tx_len, uint32_t rx_len);
+ uint64_t vnext_b_diag_lane0_exhaustion_count(void);

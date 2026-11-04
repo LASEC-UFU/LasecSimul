@@ -1,0 +1,165 @@
+diff --git a/hw/ssi/esp32_rmt.c b/hw/ssi/esp32_rmt.c
+index 0c7da16..dfa20ef 100644
+--- a/hw/ssi/esp32_rmt.c
++++ b/hw/ssi/esp32_rmt.c
+@@ -153,6 +153,39 @@ static void esp32_rmt_tx_start(Esp32RmtState *s, int n)
+     esp32_rmt_tx_item(s, n);
+ }
+ 
++/* Receiver (ESP32 TRM, RMT RX). The Core measures the input (RMT_SIG_INn): from the first edge, each level in
++ * channel ticks, pulses shorter than RX_FILTER_THRES APB cycles ignored, and the end after IDLE_THRES ticks
++ * without an edge. This side writes the words it records into the channel's RAM at the receiver's pointer
++ * (STATUS.MEM_WADDR_EX, what ESP-IDF reads at RX_END) and raises RX_END; past MEM_SIZE blocks, or with the RAM
++ * owned by the CPU (MEM_OWNER 0), the word is lost and ERR is raised. The RX settings go to the Core from the
++ * guest store that changes them (first: it may replay it). */
++static Esp32RmtState *esp32_rmt_device;
++
++static uint64_t esp32_rmt_rx_word(Esp32RmtState *s, int n)
++{
++    return (FIELD_EX32(s->conf1[n], RMT_CHnCONF1, RX_EN) ? 1u : 0u) |
++           (FIELD_EX32(s->conf1[n], RMT_CHnCONF1, RX_FILTER_EN) ? 2u : 0u) |
++           ((uint64_t)FIELD_EX32(s->conf1[n], RMT_CHnCONF1, RX_FILTER_THRES) << 2) |
++           ((uint64_t)FIELD_EX32(s->conf0[n], RMT_CHnCONF0, IDLE_THRES) << 10) |
++           (esp32_rmt_tick_ps(s, n) << 26);
++}
++
++void esp32_rmt_vnext_rx(uint64_t value)
++{
++    Esp32RmtState *s = esp32_rmt_device;
++    if (!s) return;
++    const int n = (value >> 32) & 7;
++    if ((value >> 36) & 1) {
++        s->int_raw |= 1u << (3 * n + 1); /* RX_END */
++    } else if (!FIELD_EX32(s->conf1[n], RMT_CHnCONF1, MEM_OWNER) || s->rx_wr[n] >= esp32_rmt_mem_words(s, n)) {
++        s->int_raw |= 1u << (3 * n + 2); /* ERR */
++    } else {
++        s->data[(n * ESP32_RMT_BLOCK_WORDS + s->rx_wr[n]) % ESP32_RMT_BUF_WORDS] = (uint32_t)value;
++        s->rx_wr[n]++;
++    }
++    esp32_rmt_update_irq(s);
++}
++
+ static uint64_t esp32_rmt_read(void *opaque, hwaddr addr, unsigned int size)
+ {
+     Esp32RmtState *s = ESP32_RMT(opaque);
+@@ -167,7 +200,7 @@ static uint64_t esp32_rmt_read(void *opaque, hwaddr addr, unsigned int size)
+         /* MEM_WADDR_EX [9:0], MEM_RADDR_EX [19:10], STATE [22:20] (1 = sending) */
+         const int n = (addr - A_RMT_CH0STATUS) / 4;
+         const uint32_t base = n * ESP32_RMT_BLOCK_WORDS;
+-        r = ((base + s->apb_wr[n]) & 0x3FFu) | (((base + s->tx[n].rd) & 0x3FFu) << 10) |
++        r = ((base + (s->rx_used[n] ? s->rx_wr[n] : s->apb_wr[n])) & 0x3FFu) | (((base + s->tx[n].rd) & 0x3FFu) << 10) |
+             ((s->tx[n].active ? 1u : 0u) << 20);
+         break;
+     }
+@@ -206,10 +239,30 @@ static void esp32_rmt_write(void *opaque, hwaddr addr, uint64_t value, unsigned
+     case A_RMT_CH0CONF0 ... A_RMT_CH0CONF0 + 8 * ESP32_RMT_CHANNELS - 4: {
+         const int n = (addr - A_RMT_CH0CONF0) / 8;
+         if ((addr & 0x4) == 0) {
++            const uint32_t old0 = s->conf0[n];
+             s->conf0[n] = value;
++            if (s->rx_cfg[n] & 1u) {
++                /* DIV_CNT or IDLE_THRES of a running receiver: the Core first (a replay redoes this store) */
++                const uint64_t cfg = esp32_rmt_rx_word(s, n);
++                s->conf0[n] = old0;
++                if (cfg != s->rx_cfg[n]) writeReg(s->iomem.addr + ESP32_RMT_CORE_RX + 8 * n, cfg);
++                s->conf0[n] = value;
++                s->rx_cfg[n] = cfg;
++            }
+             break;
+         }
++        {
++            /* RX_EN, the filter: the Core first (a replay redoes this store) */
++            const uint32_t old1 = s->conf1[n];
++            s->conf1[n] = value;
++            const uint64_t cfg = esp32_rmt_rx_word(s, n);
++            s->conf1[n] = old1;
++            if (cfg != s->rx_cfg[n] && ((cfg | s->rx_cfg[n]) & 1u)) writeReg(s->iomem.addr + ESP32_RMT_CORE_RX + 8 * n, cfg);
++            s->rx_cfg[n] = cfg;
++            if (cfg & 1u) s->rx_used[n] = true;
++        }
+         s->conf1[n] = value;
++        if (FIELD_EX32(value, RMT_CHnCONF1, MEM_WR_RST)) s->rx_wr[n] = 0;
+         /* MEM_RD_RST moves the reader back to the first item, also mid-transmission: ESP-IDF stops a
+          * channel by writing an end marker there and resetting the pointer. */
+         if (FIELD_EX32(value, RMT_CHnCONF1, MEM_RD_RST)) s->tx[n].rd = 0;
+@@ -258,6 +311,9 @@ static void esp32_rmt_reset(DeviceState *dev)
+         s->carrier_duty[n] = 0x00400040;
+         s->txlim[n] = 0x80;
+         s->apb_wr[n] = 0;
++        s->rx_wr[n] = 0;
++        s->rx_used[n] = false;
++        s->rx_cfg[n] = 0;
+     }
+     s->int_raw = 0;
+     s->int_en = 0;
+@@ -267,6 +323,7 @@ static void esp32_rmt_reset(DeviceState *dev)
+ 
+ static void esp32_rmt_realize(DeviceState *dev, Error **errp)
+ {
++    esp32_rmt_device = ESP32_RMT(dev);
+ }
+ 
+ static void esp32_rmt_init(Object *obj)
+diff --git a/include/hw/ssi/esp32_rmt.h b/include/hw/ssi/esp32_rmt.h
+index c1b4116..334e0c2 100644
+--- a/include/hw/ssi/esp32_rmt.h
++++ b/include/hw/ssi/esp32_rmt.h
+@@ -40,6 +40,9 @@ typedef struct Esp32RmtState {
+     uint32_t txlim[ESP32_RMT_CHANNELS];
+     uint32_t apb_conf;
+     uint32_t apb_wr[ESP32_RMT_CHANNELS]; /* FIFO-mode write pointer (APB_FIFO_MASK = 0) */
++    uint32_t rx_wr[ESP32_RMT_CHANNELS];  /* the receiver's write pointer (MEM_WR_RST) */
++    bool rx_used[ESP32_RMT_CHANNELS];    /* STATUS.MEM_WADDR_EX shows the receiver's pointer */
++    uint64_t rx_cfg[ESP32_RMT_CHANNELS]; /* what the Core's receiver was last told (esp32_rmt_rx_config) */
+     uint32_t data[ESP32_RMT_BUF_WORDS];
+     Esp32RmtTx tx[ESP32_RMT_CHANNELS];
+ } Esp32RmtState;
+@@ -50,11 +53,17 @@ REG32(RMT_CH0CONF0, 0x20)
+     FIELD(RMT_CHnCONF0, CARRIER_OUT_LV, 29, 1)
+     FIELD(RMT_CHnCONF0, CARRIER_EN, 28, 1)
+     FIELD(RMT_CHnCONF0, MEM_SIZE, 24, 4)
++    FIELD(RMT_CHnCONF0, IDLE_THRES, 8, 16)
+     FIELD(RMT_CHnCONF0, DIV_CNT, 0, 8)
+ REG32(RMT_CH0CONF1, 0x24)
+     FIELD(RMT_CHnCONF1, IDLE_OUT_EN, 19, 1)
+     FIELD(RMT_CHnCONF1, IDLE_OUT_LV, 18, 1)
+     FIELD(RMT_CHnCONF1, REF_ALWAYS_ON, 17, 1)
++    FIELD(RMT_CHnCONF1, RX_FILTER_THRES, 8, 8)
++    FIELD(RMT_CHnCONF1, RX_FILTER_EN, 7, 1)
++    FIELD(RMT_CHnCONF1, MEM_OWNER, 5, 1)
++    FIELD(RMT_CHnCONF1, RX_EN, 1, 1)
++    FIELD(RMT_CHnCONF1, MEM_WR_RST, 2, 1)
+     FIELD(RMT_CHnCONF1, TX_CONTI_MODE, 6, 1)
+     FIELD(RMT_CHnCONF1, APB_MEM_RST, 4, 1)
+     FIELD(RMT_CHnCONF1, MEM_RD_RST, 3, 1)
+@@ -81,3 +90,8 @@ REG32(RMT_DATA, 0x800)
+ #define ESP32_RMT_ITEM_SECOND   (1u << 2)  /* LEVEL1 starts FIRST_PS after LEVEL0 */
+ #define ESP32_RMT_ITEM_IDLE     (1u << 3)  /* not an item: the idle level, no carrier */
+ #define ESP32_RMT_ITEM_PS_SHIFT 8          /* [63:8] the first half's duration, in ps */
++#define ESP32_RMT_CORE_RX       0x480  /* + 8n: the receiver (esp32_rmt_rx_config) */
++
++/* vNext-B C2A (0x3FF56480): a word the Core's receiver recorded ([31:0], channel [34:32]) or, bit 36, the
++ * end of a reception (RX_END). */
++void esp32_rmt_vnext_rx(uint64_t value);
+diff --git a/softmmu/vnext_b.c b/softmmu/vnext_b.c
+index 3cfb0cd..231ba04 100644
+--- a/softmmu/vnext_b.c
++++ b/softmmu/vnext_b.c
+@@ -17,6 +17,7 @@
+ #include "hw/misc/esp32_mcpwm.h"
+ #include "hw/misc/esp32_twai.h"
+ #include "hw/misc/esp32_i2s.h"
++#include "hw/ssi/esp32_rmt.h"
+ #include "hw/timer/esp32_timg.h"
+ #include "softmmu/vnext_b_classify.h"
+ #include "vnext_b.h"
+@@ -889,6 +890,9 @@ static void vnext_consume_c2a(void) {
+             } else if (address >= UINT64_C(0x3FF6B000) && address < UINT64_C(0x3FF6B080)) {
+                 /* TWAI: an interrupt event, an ALC/ECC capture, bus off, or a received frame. */
+                 esp32_twai_vnext_event(address, value);
++            } else if (address == UINT64_C(0x3FF56480)) {
++                /* RMT RX: a word the Core's receiver recorded, or the end of the reception. */
++                esp32_rmt_vnext_rx(value);
+             } else if (address == UINT64_C(0x3FF4F0F0)) {
+                 /* I2S0 ADC mode: pad voltages the Core sampled at the sample instants. */
+                 esp32_i2s_vnext_adc(value);

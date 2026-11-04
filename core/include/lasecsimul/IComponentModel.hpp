@@ -177,6 +177,12 @@ public:
      * primeiro) -- usado só quando os dois fios não têm mais nada que dependa das bordas. */
     struct SpiInputPins { uint32_t clock = 0; uint32_t data = 0; };
     virtual std::optional<SpiInputPins> spiInputPins() const { return std::nullopt; }
+    virtual std::optional<uint32_t> spiOutputPin() const { return std::nullopt; }
+    virtual std::vector<uint32_t> spiOutputPins() const {
+        const auto miso = spiOutputPin();
+        return miso ? std::vector<uint32_t>{*miso} : std::vector<uint32_t>{};
+    }
+    virtual uint8_t exchangeSpiByte(uint8_t byte) { clockSpiByte(byte); return 0xFF; }
     virtual void clockSpiByte(uint8_t) {}
 
     virtual size_t getState(uint8_t* out, size_t cap) const = 0;

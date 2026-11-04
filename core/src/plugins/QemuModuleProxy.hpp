@@ -57,7 +57,8 @@ public:
           m_getPinStates(pluginAbiMinor >= 2 ? handle.vtable->get_pin_states : nullptr),
           m_setInputVoltagesAt(pluginAbiMinor >= 2 ? handle.vtable->set_input_voltages_at : nullptr),
           m_drainSpiByte(pluginAbiMinor >= 3 ? handle.vtable->drain_spi_byte : nullptr),
-          m_uartTxOnLine(pluginAbiMinor >= 4 ? handle.vtable->uart_tx_on_line : nullptr) {}
+          m_uartTxOnLine(pluginAbiMinor >= 4 ? handle.vtable->uart_tx_on_line : nullptr),
+          m_getPinAnalog(pluginAbiMinor >= 5 ? handle.vtable->get_pin_analog : nullptr) {}
 
     ~QemuModuleProxy() override {
         if (m_handle.vtable && m_handle.vtable->destroy) {
@@ -278,6 +279,14 @@ public:
         return result ? static_cast<int32_t>(result - 1u) : -1;
     }
 
+    bool pinAnalog(uint32_t bitOrLine, double& volts, double& ohms) const override {
+        if (!m_getPinAnalog) return false;
+        int32_t result = 0;
+        const bool ok = CrashGuard::call(m_label, [&] { result = m_getPinAnalog(m_handle.module, bitOrLine, &volts, &ohms); });
+        if (!ok) { m_health = PluginHealthStatus::Faulted; return false; }
+        return result != 0 && ohms > 0.0;
+    }
+
     size_t injectRxBytes(const uint8_t* bytes, size_t count) override {
         if (!m_handle.vtable->inject_rx_bytes) return 0;
         size_t result = 0;
@@ -297,6 +306,7 @@ private:
     decltype(LsdnQemuModuleVTable::set_input_voltages_at) m_setInputVoltagesAt;
     decltype(LsdnQemuModuleVTable::drain_spi_byte) m_drainSpiByte;
     decltype(LsdnQemuModuleVTable::uart_tx_on_line) m_uartTxOnLine;
+    decltype(LsdnQemuModuleVTable::get_pin_analog) m_getPinAnalog;
     mutable PluginHealthStatus m_health = PluginHealthStatus::Ok;
 };
 

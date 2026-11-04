@@ -180,20 +180,33 @@ int main() {
         dataAttachment.signalCoreRunningForTesting();
         dataAttachment.signalCoreRunningForTesting();
         std::this_thread::sleep_for(std::chrono::milliseconds(25));
+        // A restarted guest would publish the self-test writes (kind 1) again. The ROM's own register writes
+        // (kind 10) are the guest running: past the eFuse read (microseconds, as on the chip) it starts
+        // writing the UART, DPORT and RTC registers the Core models.
+        uint32_t replayed = 0, guestWrites = 0;
+        for (uint32_t lane = 0; lane < 2; ++lane) {
+            for (int guard = 0; guard < 4096; ++guard) {
+                const auto event = dataAttachment.consumeLane(lane);
+                if (!event) break;
+                if (event->kind == 1) ++replayed;
+                else ++guestWrites;
+            }
+        }
         if (dataAttachment.lifecycleStateForTesting() != VnextBLifecycleState::Running ||
-            !dataAttachment.running() || dataAttachment.isArtifactFatal() ||
-            dataAttachment.hasPendingLaneEvents() ||
+            !dataAttachment.running() || dataAttachment.isArtifactFatal() || replayed != 0 ||
             dataAttachment.heartbeatWatermarkForTesting() < heartbeatBeforeRepeat) {
             std::cerr << "FAIL: repeated Core RUNNING signal regressed the attachment's real state "
                          "(state=" << static_cast<int>(dataAttachment.lifecycleStateForTesting())
                       << " running=" << dataAttachment.running()
                       << " fatal=" << dataAttachment.isArtifactFatal()
                       << " fatalCode=" << dataAttachment.artifactFatalCode()
-                      << " pendingLane=" << dataAttachment.hasPendingLaneEvents()
+                      << " replayedSelfTestWrites=" << replayed
+                      << " guestWrites=" << guestWrites
                       << " hbBefore=" << heartbeatBeforeRepeat
                       << " hbAfter=" << dataAttachment.heartbeatWatermarkForTesting() << ")\n";
             return 1;
         }
+        std::cout << "P4_REPEATED_RUNNING PASS (guest writes after it: " << guestWrites << ")\n";
     }
     dataAttachment.stop();
     VnextBAttachment responseAttachment;

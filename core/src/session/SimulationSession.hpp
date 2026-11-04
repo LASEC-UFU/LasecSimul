@@ -746,11 +746,13 @@ private:
     struct SpiBytePair {
         uint32_t clockPin = 0;
         uint32_t dataPin = 0;
+        uint32_t misoPin = UINT32_MAX;
+        uint32_t misoNode = UINT32_MAX;
         std::vector<uint32_t> devices;
     };
     std::vector<SpiBytePair> mcuSpiBytePairsUnlocked(uint32_t mcuIndex) const;
     /** No instante em que o SPI do MCU terminou um byte sem bordas: entrega aos escravos do par. */
-    void deliverSpiByteUnlocked(uint32_t mcuIndex, uint32_t clockPin, uint32_t dataPin, uint8_t byte);
+    std::optional<uint8_t> deliverSpiByteUnlocked(uint32_t mcuIndex, uint32_t clockPin, uint32_t dataPin, uint8_t byte);
     /** Por MCU (índice do componente), os pares publicados ao adaptador. Muda só com a topologia. */
     std::unordered_map<uint32_t, std::vector<SpiBytePair>> m_spiBytePairs;
     /** Reaproveita `CircuitGroup` (matriz/fatoração já estampada) de `previous` pra qualquer rede

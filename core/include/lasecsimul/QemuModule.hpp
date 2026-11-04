@@ -81,6 +81,8 @@ public:
     static constexpr uint8_t kPinOutputHigh = 1u << 1;
     static constexpr uint8_t kPinPullUp = 1u << 2;
     static constexpr uint8_t kPinPullDown = 1u << 3;
+    /** A linha e' dirigida por uma fonte analogica (ver `pinAnalog`), nao pela saida digital. */
+    static constexpr uint8_t kPinAnalog = 1u << 4;
     virtual void pinStates(std::span<const uint32_t> bitsOrLines, std::span<uint8_t> out) const {
         for (size_t i = 0; i < bitsOrLines.size() && i < out.size(); ++i) {
             const uint32_t bitOrLine = bitsOrLines[i];
@@ -144,6 +146,10 @@ public:
     /** Índice da USART cujo TX sai agora pela linha `bitOrLine` deste módulo (ver
      * `LsdnQemuModuleVTable::uart_tx_on_line`), ou -1. Default: nenhuma. */
     virtual int32_t uartTxOnLine(uint32_t /*bitOrLine*/) const { return -1; }
+
+    /** A fonte analogica que dirige a linha (estado `kPinAnalog`): `volts` atras de `ohms`. Ver
+     * `LsdnQemuModuleVTable::get_pin_analog`. Default: nenhuma. */
+    virtual bool pinAnalog(uint32_t /*bitOrLine*/, double& /*volts*/, double& /*ohms*/) const { return false; }
 
     /** Injeta `count` bytes como se tivessem chegado pela entrada real do periférico (ex: RX de
      * uma USART) -- bypassa qualquer temporização elétrica bit-a-bit de propósito (ferramenta de

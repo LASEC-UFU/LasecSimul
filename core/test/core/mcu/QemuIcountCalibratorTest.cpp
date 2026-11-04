@@ -139,17 +139,20 @@ int main() {
 
     // --- 5. cache com fingerprint desatualizado (ex.: binario "trocou" de tamanho): recalibra em vez de confiar cegamente ---
     unsetEnv("LASECSIMUL_ESP32_ICOUNT_SHIFT");
+    // O shift do cache invalido e' o extremo oposto ao medido: uma recalibracao (estavel em +-1) nunca o
+    // reproduz, entao so' o uso cego do cache o devolveria.
+    const std::string stale = std::atoi(firstShift.c_str()) >= 5 ? "0" : "10";
     {
         std::ofstream corrupted(dataDir / "qemu-icount-calibration.json", std::ios::trunc);
         corrupted << "{\"logicVersion\":2,\"binaryPath\":\"" << qemuPath.string()
-                  << "\",\"binaryMtimeUnixMs\":0,\"binarySizeBytes\":1,\"shift\":9}";
+                  << "\",\"binaryMtimeUnixMs\":0,\"binarySizeBytes\":1,\"shift\":" << stale << "}";
     }
     logOutput.clear();
     mcu::qemu::ensureIcountShiftCalibrated(*adapter, qemuPath.string(), log);
     TEST_ASSERT(logOutput.find("cache=miss") != std::string::npos,
         "fingerprint desatualizado (tamanho errado) deveria forcar recalibracao, nao confiar no cache");
-    TEST_ASSERT(getEnv("LASECSIMUL_ESP32_ICOUNT_SHIFT") != "9",
-        "nao deveria ter usado cegamente o shift=9 de um cache com fingerprint invalido");
+    TEST_ASSERT(getEnv("LASECSIMUL_ESP32_ICOUNT_SHIFT") != stale,
+        "nao deveria ter usado cegamente o shift de um cache com fingerprint invalido");
 
     std::filesystem::remove_all(dataDir);
     unsetEnv("LASECSIMUL_CORE_DATA_DIR");

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -87,6 +88,14 @@ public:
      * Default: ignora (o SPI continua bit a bit). */
     virtual void setSpiBytePairs(std::span<const uint32_t> clockPins, std::span<const uint32_t> dataPins) {
         (void)clockPins; (void)dataPins;
+    }
+    virtual void setSpiBytePairsWithMiso(std::span<const uint32_t> clockPins, std::span<const uint32_t> dataPins,
+                                         std::span<const uint32_t> misoPins) {
+        std::vector<uint32_t> clocks, data;
+        for (size_t i = 0; i < std::min({clockPins.size(), dataPins.size(), misoPins.size()}); ++i) {
+            if (misoPins[i] == UINT32_MAX) { clocks.push_back(clockPins[i]); data.push_back(dataPins[i]); }
+        }
+        setSpiBytePairs(clocks, data);
     }
 };
 

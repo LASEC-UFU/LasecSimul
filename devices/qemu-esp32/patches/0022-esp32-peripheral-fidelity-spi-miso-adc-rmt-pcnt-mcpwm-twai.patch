@@ -1,0 +1,2481 @@
+diff --git a/hw/char/esp32_uart.c b/hw/char/esp32_uart.c
+index c07a733..f2a5fbf 100644
+--- a/hw/char/esp32_uart.c
++++ b/hw/char/esp32_uart.c
+@@ -651,11 +651,6 @@ int uart_can_receive(void *opaque)
+     return fifo8_num_free(&s->rx_fifo);
+ }
+ 
+-static void uart_event(void *opaque, QEMUChrEvent event)
+-{
+-    /* TODO: handle UART break */
+-}
+-
+ static void uart_tx_timer_cb(void* opaque)
+ {
+     ESP32UARTState *s = ESP32_UART(opaque);
+@@ -751,7 +746,7 @@ static void esp32_uart_realize(DeviceState *dev, Error **errp)
+     //ESP32UARTState *s = ESP32_UART(dev);
+     //s->id = uart_num++;
+     //qemu_chr_fe_set_handlers(&s->chr, uart_can_receive, uart_receive,
+-    //                         uart_event, NULL, s, g_main_context_default_l, true);
++    //                         NULL, NULL, s, g_main_context_default_l, true);
+ }
+ 
+ 
+diff --git a/hw/misc/esp32_dport.c b/hw/misc/esp32_dport.c
+index 6032da1..76d0775 100644
+--- a/hw/misc/esp32_dport.c
++++ b/hw/misc/esp32_dport.c
+@@ -20,6 +20,7 @@
+ #include "hw/boards.h"
+ #include "hw/misc/esp32_reg.h"
+ #include "hw/misc/esp32_dport.h"
++#include "hw/misc/esp32_twai.h"
+ #include "qemu/timer.h"
+ #include "hw/core/cpu.h"
+ #include "hw/misc/esp32_flash_enc.h"
+@@ -311,6 +312,9 @@ static void esp32_dport_write(void *opaque, hwaddr addr,
+         s->perip_clk_en_reg = value;
+         break;
+     case A_DPORT_PERIP_RST_EN:
++        /* TWAI_RST (bit 19) rising: the peripheral reset ESP-IDF pulses at install and in its TWAI errata
++         * workarounds. Before the register changes: the reset may replay this store (vNext-B). */
++        if ((value & BIT(19)) && !(s->perip_rst_en_reg & BIT(19))) esp32_twai_peripheral_reset();
+         s->perip_rst_en_reg = value;
+         break;
+     case A_DPORT_WIFI_CLK_EN:
+@@ -869,6 +873,9 @@ static void esp32_dport_init(Object *obj)
+     SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
+     memory_region_init_io(&s->iomem, obj, &esp32_dport_ops, s,
+                           TYPE_ESP32_DPORT, ESP32_DPORT_SIZE);
++    /* The TWAI peripheral reset (PERIP_RST_EN) reaches the Core through writeReg(), which may replay the
++     * guest store (vNext-B backpressure) -- same as hw/misc/esp32_twai.c. */
++    s->iomem.disable_reentrancy_guard = true;
+     sysbus_init_mmio(sbd, &s->iomem);
+ 
+     for (int i = 0; i < ESP32_CPU_COUNT; ++i) {
+diff --git a/hw/misc/esp32_mcpwm.c b/hw/misc/esp32_mcpwm.c
+new file mode 100644
+index 0000000..a4c7777
+--- /dev/null
++++ b/hw/misc/esp32_mcpwm.c
+@@ -0,0 +1,181 @@
++/*
++ * ESP32 motor-control PWM (MCPWM)
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 or
++ * (at your option) any later version.
++ */
++
++#include "qemu/osdep.h"
++#include "qemu/log.h"
++#include "qemu/timer.h"
++#include "hw/hw.h"
++#include "hw/sysbus.h"
++#include "hw/irq.h"
++#include "hw/qdev-properties.h"
++#include "hw/misc/esp32_mcpwm.h"
++#include "../softmmu/simuliface.h"
++#include "../softmmu/vnext_b.h"
++
++/* Timers, operators, dead time, faults and capture run in the Core, which owns the pins (Esp32Adapter
++ * MCPWM engine). Here: the register file with its reset values (ESP-IDF mcpwm_reg.h), every write
++ * mirrored to the Core, the timer status from the vNext-B snapshot (read after a sync, as GPIO_IN), and
++ * the Core's events latched into INT_RAW, CAPn_VALUE, CAP_STATUS, FH_STATUS and FAULT_DETECT. */
++
++#define MCPWM_CAP_TIMER_CFG 0x0e8
++#define MCPWM_CAP_CH0_CFG   0x0f0
++#define MCPWM_CAP_CH0       0x0fc
++#define MCPWM_CAP_STATUS    0x108
++#define MCPWM_FAULT_DETECT  0x0e4
++#define MCPWM_OP0_FH_STATUS 0x070  /* operator n at 0x03c + 0x38 n, FH_STATUS at +0x34 */
++
++static Esp32McpwmState *esp32_mcpwm_units[2];
++
++static void esp32_mcpwm_update_irq(Esp32McpwmState *s)
++{
++    qemu_set_irq(s->irq, (s->regs[A_MCPWM_INT_RAW / 4] & s->regs[A_MCPWM_INT_ENA / 4]) != 0);
++}
++
++void esp32_mcpwm_vnext_event(uint64_t address, uint64_t value)
++{
++    for (int n = 0; n < 2; n++) {
++        Esp32McpwmState *s = esp32_mcpwm_units[n];
++        if (!s || address < s->iomem.addr || address >= s->iomem.addr + ESP32_MCPWM_REG_BYTES) continue;
++        const hwaddr offset = address - s->iomem.addr;
++        if (offset == A_MCPWM_INT_RAW) {
++            s->regs[offset / 4] |= (uint32_t)value;
++            esp32_mcpwm_update_irq(s);
++        } else if (offset == MCPWM_FAULT_DETECT) {
++            /* event_f0..2 [8:6] are status, the rest is configuration */
++            s->regs[offset / 4] = (s->regs[offset / 4] & ~0x1C0u) | ((uint32_t)value & 0x1C0u);
++        } else {
++            s->regs[offset / 4] = (uint32_t)value; /* CAPn_VALUE, CAP_STATUS, FH_STATUS */
++        }
++        return;
++    }
++}
++
++static uint64_t esp32_mcpwm_read(void *opaque, hwaddr addr, unsigned int size)
++{
++    Esp32McpwmState *s = ESP32_MCPWM(opaque);
++    if (addr >= ESP32_MCPWM_REG_BYTES) return 0;
++    switch (addr) {
++    case A_MCPWM_TIMER0_STATUS:
++    case A_MCPWM_TIMER0_STATUS + 0x10:
++    case A_MCPWM_TIMER0_STATUS + 0x20: {
++        /* The count moves every tick, not only at Core events: sync at this very instant (once) so the
++         * Core latches the status of now, then replay the load. */
++        const int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++        if (vnext_b_active() && now != s->status_sync_ns) {
++            s->status_sync_ns = now;
++            vnext_b_lockstep_sync_barrier();
++        }
++        return vnext_b_mcpwm_timer_status(3 * s->unit + (addr - A_MCPWM_TIMER0_STATUS) / 0x10);
++    }
++    case A_MCPWM_INT_ST:
++        vnext_b_lockstep_input_barrier();
++        return s->regs[A_MCPWM_INT_RAW / 4] & s->regs[A_MCPWM_INT_ENA / 4];
++    case A_MCPWM_INT_RAW:
++    case MCPWM_CAP_CH0: case MCPWM_CAP_CH0 + 4: case MCPWM_CAP_CH0 + 8:
++    case MCPWM_CAP_STATUS:
++    case MCPWM_FAULT_DETECT:
++    case MCPWM_OP0_FH_STATUS: case MCPWM_OP0_FH_STATUS + 0x38: case MCPWM_OP0_FH_STATUS + 0x70:
++        vnext_b_lockstep_input_barrier();
++        return s->regs[addr / 4];
++    }
++    return s->regs[addr / 4];
++}
++
++static void esp32_mcpwm_write(void *opaque, hwaddr addr, uint64_t value, unsigned int size)
++{
++    Esp32McpwmState *s = ESP32_MCPWM(opaque);
++    if (addr >= ESP32_MCPWM_REG_BYTES) return;
++    switch (addr) {
++    case A_MCPWM_INT_CLR:
++        s->regs[A_MCPWM_INT_RAW / 4] &= ~(uint32_t)value;
++        esp32_mcpwm_update_irq(s);
++        return;
++    case A_MCPWM_INT_RAW:
++    case A_MCPWM_INT_ST:
++    case A_MCPWM_TIMER0_STATUS: case A_MCPWM_TIMER0_STATUS + 0x10: case A_MCPWM_TIMER0_STATUS + 0x20:
++    case MCPWM_CAP_CH0: case MCPWM_CAP_CH0 + 4: case MCPWM_CAP_CH0 + 8:
++    case MCPWM_CAP_STATUS:
++        return; /* read-only */
++    case A_MCPWM_INT_ENA:
++        s->regs[addr / 4] = value;
++        esp32_mcpwm_update_irq(s);
++        break;
++    default:
++        s->regs[addr / 4] = value;
++        break;
++    }
++    writeReg(s->iomem.addr + addr, value);
++    /* Self-clearing triggers: CAP_SYNC_SW (bit 5 of CAP_TIMER_CFG) and CAPn_SW (bit 12 of CAPn_CFG). */
++    if (addr == MCPWM_CAP_TIMER_CFG) s->regs[addr / 4] &= ~(1u << 5);
++    if (addr >= MCPWM_CAP_CH0_CFG && addr < MCPWM_CAP_CH0_CFG + 12) s->regs[addr / 4] &= ~(1u << 12);
++}
++
++static const MemoryRegionOps esp32_mcpwm_ops = {
++    .read = esp32_mcpwm_read,
++    .write = esp32_mcpwm_write,
++    .endianness = DEVICE_LITTLE_ENDIAN,
++};
++
++/* Reset values from ESP-IDF mcpwm_reg.h: period 255, dead time bypassed, shadow updates enabled. */
++static void esp32_mcpwm_reset(DeviceState *dev)
++{
++    static const struct { uint16_t offset; uint32_t value; } resets[] = {
++        {0x004, 0x0000ff00}, {0x014, 0x0000ff00}, {0x024, 0x0000ff00},
++        {0x04c, 0x00000020}, {0x058, 0x00018000}, {0x084, 0x00000020}, {0x090, 0x00018000},
++        {0x0bc, 0x00000020}, {0x0c8, 0x00018000}, {0x10c, 0x00000055}, {0x124, 0x02107230},
++    };
++    Esp32McpwmState *s = ESP32_MCPWM(dev);
++    memset(s->regs, 0, sizeof(s->regs));
++    for (size_t i = 0; i < ARRAY_SIZE(resets); i++) s->regs[resets[i].offset / 4] = resets[i].value;
++    qemu_irq_lower(s->irq);
++}
++
++static void esp32_mcpwm_realize(DeviceState *dev, Error **errp)
++{
++    Esp32McpwmState *s = ESP32_MCPWM(dev);
++    if (s->unit < ARRAY_SIZE(esp32_mcpwm_units)) esp32_mcpwm_units[s->unit] = s;
++}
++
++static void esp32_mcpwm_init(Object *obj)
++{
++    Esp32McpwmState *s = ESP32_MCPWM(obj);
++    SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
++    memory_region_init_io(&s->iomem, obj, &esp32_mcpwm_ops, s, TYPE_ESP32_MCPWM, 0x1000);
++    /* writeReg() may replay the guest store (vNext-B backpressure), see hw/i2c/esp32_i2c.c. */
++    s->iomem.disable_reentrancy_guard = true;
++    sysbus_init_mmio(sbd, &s->iomem);
++    sysbus_init_irq(sbd, &s->irq);
++}
++
++static Property esp32_mcpwm_properties[] = {
++    DEFINE_PROP_UINT32("unit", Esp32McpwmState, unit, 0),
++    DEFINE_PROP_END_OF_LIST(),
++};
++
++static void esp32_mcpwm_class_init(ObjectClass *klass, void *data)
++{
++    DeviceClass *dc = DEVICE_CLASS(klass);
++    dc->reset = esp32_mcpwm_reset;
++    dc->realize = esp32_mcpwm_realize;
++    device_class_set_props(dc, esp32_mcpwm_properties);
++}
++
++static const TypeInfo esp32_mcpwm_info = {
++    .name = TYPE_ESP32_MCPWM,
++    .parent = TYPE_SYS_BUS_DEVICE,
++    .instance_size = sizeof(Esp32McpwmState),
++    .instance_init = esp32_mcpwm_init,
++    .class_init = esp32_mcpwm_class_init,
++};
++
++static void esp32_mcpwm_register_types(void)
++{
++    type_register_static(&esp32_mcpwm_info);
++}
++
++type_init(esp32_mcpwm_register_types)
+diff --git a/hw/misc/esp32_pcnt.c b/hw/misc/esp32_pcnt.c
+new file mode 100644
+index 0000000..d992e5d
+--- /dev/null
++++ b/hw/misc/esp32_pcnt.c
+@@ -0,0 +1,164 @@
++/*
++ * ESP32 pulse counter (PCNT)
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 or
++ * (at your option) any later version.
++ */
++
++#include "qemu/osdep.h"
++#include "qemu/log.h"
++#include "hw/hw.h"
++#include "hw/sysbus.h"
++#include "hw/irq.h"
++#include "hw/misc/esp32_pcnt.h"
++#include "../softmmu/simuliface.h"
++#include "../softmmu/vnext_b.h"
++
++/* Counters, events and the glitch filter live in the Core, which sees every pad edge at its instant
++ * (Esp32Adapter PCNT engine). This model keeps the registers the firmware reads back, mirrors every
++ * configuration write to the Core, reads the counters from the vNext-B snapshot after syncing (as a
++ * GPIO_IN read) and latches the events the Core reports into STATUS_Un / INT_RAW. Without vNext-B there
++ * is no Core to count: the counters read 0, as a unit whose inputs never toggle. */
++
++static Esp32PcntState *esp32_pcnt_device;
++
++static void esp32_pcnt_update_irq(Esp32PcntState *s)
++{
++    qemu_set_irq(s->irq, (s->int_raw & s->int_ena) != 0);
++}
++
++void esp32_pcnt_vnext_event(uint64_t address, uint64_t value)
++{
++    Esp32PcntState *s = esp32_pcnt_device;
++    if (!s) return;
++    const hwaddr offset = address - s->iomem.addr;
++    if (offset < A_PCNT_U0_STATUS || offset >= A_PCNT_U0_STATUS + 4 * ESP32_PCNT_UNITS) return;
++    const int unit = (offset - A_PCNT_U0_STATUS) / 4;
++    s->status[unit] = (uint32_t)value;
++    s->int_raw |= 1u << unit;
++    esp32_pcnt_update_irq(s);
++}
++
++static uint64_t esp32_pcnt_read(void *opaque, hwaddr addr, unsigned int size)
++{
++    Esp32PcntState *s = ESP32_PCNT(opaque);
++    if (addr < A_PCNT_U0_CNT) {
++        const int unit = addr / 12;
++        switch (addr % 12) {
++        case 0: return s->conf0[unit];
++        case 4: return s->conf1[unit];
++        default: return s->conf2[unit];
++        }
++    }
++    switch (addr) {
++    case A_PCNT_U0_CNT ... A_PCNT_U0_CNT + 4 * ESP32_PCNT_UNITS - 4:
++        /* The count at this very instant: the barrier syncs the Core first. */
++        vnext_b_lockstep_input_barrier();
++        return vnext_b_pcnt_count((addr - A_PCNT_U0_CNT) / 4);
++    case A_PCNT_INT_RAW:
++        vnext_b_lockstep_input_barrier();
++        return s->int_raw;
++    case A_PCNT_INT_ST:
++        vnext_b_lockstep_input_barrier();
++        return s->int_raw & s->int_ena;
++    case A_PCNT_INT_ENA:
++        return s->int_ena;
++    case A_PCNT_U0_STATUS ... A_PCNT_U0_STATUS + 4 * ESP32_PCNT_UNITS - 4:
++        vnext_b_lockstep_input_barrier();
++        return s->status[(addr - A_PCNT_U0_STATUS) / 4];
++    case A_PCNT_CTRL:
++        return s->ctrl;
++    case A_PCNT_DATE:
++        return 0x14122600;
++    }
++    return 0;
++}
++
++static void esp32_pcnt_write(void *opaque, hwaddr addr, uint64_t value, unsigned int size)
++{
++    Esp32PcntState *s = ESP32_PCNT(opaque);
++    if (addr < A_PCNT_U0_CNT) {
++        const int unit = addr / 12;
++        switch (addr % 12) {
++        case 0: s->conf0[unit] = value; break;
++        case 4: s->conf1[unit] = value; break;
++        default: s->conf2[unit] = value; break;
++        }
++        writeReg(s->iomem.addr + addr, value);
++        return;
++    }
++    switch (addr) {
++    case A_PCNT_INT_ENA:
++        s->int_ena = value & 0xFFu;
++        writeReg(s->iomem.addr + addr, s->int_ena); /* the Core syncs every event while one is armed */
++        esp32_pcnt_update_irq(s);
++        break;
++    case A_PCNT_INT_CLR:
++        /* STATUS_Un keeps the events latched with the last interrupt (TRM, "_LAT"): ESP-IDF's service
++         * clears the interrupt before its handler reads them. */
++        s->int_raw &= ~value;
++        esp32_pcnt_update_irq(s);
++        break;
++    case A_PCNT_CTRL:
++        s->ctrl = value;
++        writeReg(s->iomem.addr + addr, value);
++        break;
++    }
++}
++
++static const MemoryRegionOps esp32_pcnt_ops = {
++    .read = esp32_pcnt_read,
++    .write = esp32_pcnt_write,
++    .endianness = DEVICE_LITTLE_ENDIAN,
++};
++
++/* Reset values from ESP-IDF pcnt_reg.h: filter on (16 APB cycles), zero / high / low limit events on,
++ * every unit held in reset (PCNT_CTRL 0x5555). */
++static void esp32_pcnt_reset(DeviceState *dev)
++{
++    Esp32PcntState *s = ESP32_PCNT(dev);
++    for (int unit = 0; unit < ESP32_PCNT_UNITS; unit++) {
++        s->conf0[unit] = 0x00003c10;
++        s->conf1[unit] = 0;
++        s->conf2[unit] = 0;
++        s->status[unit] = 0;
++    }
++    s->ctrl = 0x5555;
++    s->int_raw = 0;
++    s->int_ena = 0;
++    qemu_irq_lower(s->irq);
++}
++
++static void esp32_pcnt_init(Object *obj)
++{
++    Esp32PcntState *s = ESP32_PCNT(obj);
++    SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
++    memory_region_init_io(&s->iomem, obj, &esp32_pcnt_ops, s, TYPE_ESP32_PCNT, 0x100);
++    /* writeReg() may replay the guest store (vNext-B backpressure), see hw/i2c/esp32_i2c.c. */
++    s->iomem.disable_reentrancy_guard = true;
++    sysbus_init_mmio(sbd, &s->iomem);
++    sysbus_init_irq(sbd, &s->irq);
++    esp32_pcnt_device = s;
++}
++
++static void esp32_pcnt_class_init(ObjectClass *klass, void *data)
++{
++    DeviceClass *dc = DEVICE_CLASS(klass);
++    dc->reset = esp32_pcnt_reset;
++}
++
++static const TypeInfo esp32_pcnt_info = {
++    .name = TYPE_ESP32_PCNT,
++    .parent = TYPE_SYS_BUS_DEVICE,
++    .instance_size = sizeof(Esp32PcntState),
++    .instance_init = esp32_pcnt_init,
++    .class_init = esp32_pcnt_class_init,
++};
++
++static void esp32_pcnt_register_types(void)
++{
++    type_register_static(&esp32_pcnt_info);
++}
++
++type_init(esp32_pcnt_register_types)
+diff --git a/hw/misc/esp32_rtc_cntl.c b/hw/misc/esp32_rtc_cntl.c
+index 521de66..2b04df1 100644
+--- a/hw/misc/esp32_rtc_cntl.c
++++ b/hw/misc/esp32_rtc_cntl.c
+@@ -184,6 +184,13 @@ static void esp32_rtc_cntl_reset(DeviceState *dev)
+     Esp32RtcCntlState *s = ESP32_RTC_CNTL(dev);
+ 
+     s->time_base_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    /* RTC_CNTL_CLK_CONF reset values: SoC clock on XTAL, slow clock on the 150 kHz RC, fast clock
++     * on the 8 MHz RC. Propagated to the SoC (esp32_clk_update) so APB_CLK and the CPU clock are
++     * the reset ones, not 0 or whatever the firmware had switched to before this reset. */
++    s->rtc_slowclk = ESP32_SLOW_CLK_RC;
++    s->rtc_fastclk = ESP32_FAST_CLK_8M;
++    s->soc_clk = ESP32_SOC_CLK_XTAL;
++    esp32_rtc_update_clk(s);
+ }
+ 
+ static void esp32_rtc_cntl_realize(DeviceState *dev, Error **errp)
+diff --git a/hw/misc/esp32_sens.c b/hw/misc/esp32_sens.c
+index 9f0504d..d9c9c39 100644
+--- a/hw/misc/esp32_sens.c
++++ b/hw/misc/esp32_sens.c
+@@ -17,6 +17,16 @@
+ #include "hw/sysbus.h"
+ #include "hw/misc/esp32_sens.h"
+ #include "../softmmu/simuliface.h"
++#include "../softmmu/vnext_b.h"
++
++/* SENS register offsets and fields (ESP-IDF soc/esp32/register/soc/sens_reg.h). */
++#define SENS_SAR_READ_CTRL      0x00  /* SAR1_DATA_INV bit 28 */
++#define SENS_SAR_START_FORCE    0x2c  /* SAR1_BIT_WIDTH [1:0], SAR2_BIT_WIDTH [3:2] */
++#define SENS_SAR_ATTEN1         0x34  /* 2 bits per ADC1 channel */
++#define SENS_SAR_ATTEN2         0x38  /* 2 bits per ADC2 channel */
++#define SENS_SAR_MEAS_START1    0x54  /* DATA [15:0], DONE 16, START 17, START_FORCE 18, EN_PAD [30:19] */
++#define SENS_SAR_READ_CTRL2     0x90  /* SAR2_DATA_INV bit 29 */
++#define SENS_SAR_MEAS_START2    0x94
+ 
+ static bool esp32_analog_trace_enabled(void)
+ {
+@@ -24,6 +34,83 @@ static bool esp32_analog_trace_enabled(void)
+     return value && value[0] && strcmp(value, "0") != 0;
+ }
+ 
++/* The SAR ADC transfer function is the inverse of ESP-IDF's line-fitting characterization of a chip
++ * with the default 1100 mV reference (components/esp_adc/esp32/adc_cali_line_fitting.c, the curve
++ * analogReadMilliVolts() uses for a chip without eFuse calibration, like this one): per unit and
++ * attenuation a line raw -> mV, and at 11 dB a lookup table from raw 2880 on, where the real ADC
++ * bends and saturates near 3.1 V. A typical chip reads, for each pad voltage, the raw code whose
++ * characterized voltage is nearest. */
++#define ADC_VREF_MV          1100
++#define ADC_LUT_VREF_LOW     1000
++#define ADC_LUT_VREF_HIGH    1200
++#define ADC_LUT_STEP         64
++#define ADC_LUT_POINTS       20
++#define ADC_LUT_LOW_THRESH   2880
++#define ADC_LUT_HIGH_THRESH  (ADC_LUT_LOW_THRESH + ADC_LUT_STEP)
++
++static const uint32_t adc_vref_atten_scale[2][4] = {
++    {57431, 76236, 105481, 196602}, {57236, 76175, 105678, 197170} };
++static const uint32_t adc_vref_atten_offset[2][4] = { {75, 78, 107, 142}, {63, 66, 89, 128} };
++static const uint32_t adc_lut_low[2][ADC_LUT_POINTS] = {
++    {2240, 2297, 2352, 2405, 2457, 2512, 2564, 2616, 2664, 2709, 2754, 2795, 2832, 2868, 2903, 2937, 2969, 3000, 3030, 3060},
++    {2238, 2293, 2347, 2399, 2451, 2507, 2561, 2613, 2662, 2710, 2754, 2792, 2831, 2869, 2904, 2937, 2968, 2999, 3029, 3059} };
++static const uint32_t adc_lut_high[2][ADC_LUT_POINTS] = {
++    {2667, 2706, 2745, 2780, 2813, 2844, 2873, 2901, 2928, 2956, 2982, 3006, 3032, 3059, 3084, 3110, 3135, 3160, 3184, 3209},
++    {2657, 2698, 2738, 2774, 2807, 2838, 2867, 2894, 2921, 2946, 2971, 2996, 3020, 3043, 3067, 3092, 3116, 3139, 3162, 3185} };
++
++/* Characterized voltage (mV) at a real-valued 12-bit code `x` on ADC `unit` (0/1) at `atten`: IDF's
++ * cali_raw_to_voltage() without its integer rounding -- the line, and at 11 dB the blend into the
++ * lookup table over its first step and the table (bilinear in code and Vref) above it. */
++static double esp32_adc_curve_mv(int unit, int atten, double x)
++{
++    const double coeff_a = (double)((ADC_VREF_MV * adc_vref_atten_scale[unit][atten]) / 4096) / 65536.0;
++    const double linear = coeff_a * x + adc_vref_atten_offset[unit][atten];
++    if (atten != 3 || x < ADC_LUT_LOW_THRESH) return linear;
++    const double pos = (x - ADC_LUT_LOW_THRESH) / ADC_LUT_STEP;
++    const int i = MIN((int)pos, ADC_LUT_POINTS - 2);
++    const double f = pos - i;
++    const double t = (double)(ADC_VREF_MV - ADC_LUT_VREF_LOW) / (ADC_LUT_VREF_HIGH - ADC_LUT_VREF_LOW);
++    const double low = adc_lut_low[unit][i] + ((double)adc_lut_low[unit][i + 1] - adc_lut_low[unit][i]) * f;
++    const double high = adc_lut_high[unit][i] + ((double)adc_lut_high[unit][i + 1] - adc_lut_high[unit][i]) * f;
++    const double lut = low + (high - low) * t;
++    if (x > ADC_LUT_HIGH_THRESH) return lut;
++    return linear + (lut - linear) * (x - ADC_LUT_LOW_THRESH) / ADC_LUT_STEP;
++}
++
++/* Ideal 12-bit code (real-valued, 0..4096) a typical ESP32 has for `mv` on its pad: the curve's inverse,
++ * pinned at both ends -- below the offset the ADC reads 0, above full scale it saturates. */
++static double esp32_adc_ideal_code(int unit, int atten, double mv)
++{
++    double lo = 0.0, hi = 4096.0;
++    if (mv <= esp32_adc_curve_mv(unit, atten, lo)) return 0.0;
++    if (mv >= esp32_adc_curve_mv(unit, atten, hi)) return hi;
++    for (int k = 0; k < 48; k++) {
++        const double mid = 0.5 * (lo + hi);
++        if (esp32_adc_curve_mv(unit, atten, mid) < mv) lo = mid; else hi = mid;
++    }
++    return lo;
++}
++
++/* MEAS_START1/2 read through vNext-B: the conversion result of the channel selected by EN_PAD, at this
++ * very instant (the barrier syncs the Core first). A successive-approximation conversion of `width`
++ * bits (SARx_BIT_WIDTH, 9..12) keeps the code's top bits -- the floor of the ideal value at that width,
++ * up to the largest code -- and the SAR's native output is inverted unless SARx_DATA_INV is set, as
++ * ESP-IDF sets it. */
++static uint32_t esp32_sens_vnext_meas(Esp32SensState *s, int unit)
++{
++    vnext_b_lockstep_input_barrier();
++    const int channel = unit ? s->channel2 : s->channel1;
++    const uint32_t atten = (s->regs[(unit ? SENS_SAR_ATTEN2 : SENS_SAR_ATTEN1) / 4] >> (2 * channel)) & 3u;
++    const uint32_t width = 9 + ((s->regs[SENS_SAR_START_FORCE / 4] >> (unit ? 2 : 0)) & 3u);
++    const bool data_inv = unit ? (s->regs[SENS_SAR_READ_CTRL2 / 4] >> 29) & 1u
++                               : (s->regs[SENS_SAR_READ_CTRL / 4] >> 28) & 1u;
++    const double mv = vnext_b_adc_pad_tenths_mv((unit ? 8 : 0) + channel) / 10.0;
++    const uint32_t max = (1u << width) - 1u;
++    uint32_t raw = (uint32_t)(esp32_adc_ideal_code(unit, atten, mv) / (double)(1u << (12 - width)));
++    if (raw > max) raw = max;
++    if (!data_inv) raw = ~raw & max;
++    return raw;
++}
+ 
+ static uint64_t esp32_sens_read(void *opaque, hwaddr addr, unsigned int size)
+ {
+@@ -31,22 +118,19 @@ static uint64_t esp32_sens_read(void *opaque, hwaddr addr, unsigned int size)
+     uint32_t r = 0;
+     //printf("esp32_sens_read 0x%lx\n",addr);
+     switch(addr) {
+-    case 0x54://SENS_MEAS1_START_SAR
+-        r = readReg(s->iomem.addr + addr);
++    case SENS_SAR_MEAS_START1:
++    case SENS_SAR_MEAS_START2: {
++        const int unit = addr == SENS_SAR_MEAS_START2;
++        r = vnext_b_active() ? esp32_sens_vnext_meas(s, unit) : (uint32_t)readReg(s->iomem.addr + addr);
+         if (esp32_analog_trace_enabled()) {
+-            printf("[LasecSimul][ADC] read unit=1 channel=%d raw=%u\n", s->channel1, r);
++            printf("[LasecSimul][ADC] read unit=%d channel=%d raw=%u\n", unit + 1, unit ? s->channel2 : s->channel1, r);
+             fflush(stdout);
+         }
+-        return 0x10000 + r;
++        /* The conversion is complete when read (MEAS_DONE): its duration is not modeled. */
++        return (s->regs[addr / 4] & ~0x1FFFFu) | 0x10000u | (r & 0xFFFFu);
++    }
+     case 0x84://SENS_SAR_TOUCH_CTRL2_REG
+ 	return (1<<10);
+-    case 0x94://SENS_MEAS2_START_SAR
+-	r = readReg(s->iomem.addr + addr);
+-        if (esp32_analog_trace_enabled()) {
+-            printf("[LasecSimul][ADC] read unit=2 channel=%d raw=%u\n", s->channel2, r);
+-            fflush(stdout);
+-        }
+-	return 0x10000 + r;
+     }
+ // 2=gpio2, 3=gpio15, 4=gpio14(13?), 5=gpio12, 7=gpio27, 8=gpio33, 9=gpio32
+ // land +/- 300: 2=12166,31743 15=13618,31585 13=15277,31743 12=16798,31743 27=18388,3071 33=13791,2993 32=12166,2914
+@@ -57,7 +141,7 @@ static uint64_t esp32_sens_read(void *opaque, hwaddr addr, unsigned int size)
+     }
+ 
+ //    qemu_guest_getrandom_nofail(&r, sizeof(r));
+-    return r;
++    return addr < sizeof(s->regs) ? s->regs[addr / 4] : 0;
+ }
+ 
+ static int bitpos( int value )
+@@ -90,20 +174,22 @@ static void esp32_sens_write(void *opaque, hwaddr addr, uint64_t value,
+     int cval;
+     Esp32SensState *s = ESP32_SENS(opaque);
+    // printf("esp32_sens_write 0x%lx 0x%lx\n",addr, value);
++    if (addr < sizeof(s->regs)) s->regs[addr / 4] = (uint32_t)value;
+     switch(addr) {
+     case 0x54://SENS_MEAS1_START_SAR
+      cval = (value & 0x7FF80000) >> 19;
+      if(cval){
+        s->channel1 = bitpos(cval);
+      }
+-     writeReg(s->iomem.addr + addr, value);
+-    break; 
++     /* vNext-B converts here (esp32_sens_vnext_meas); only the legacy arena asks the Core. */
++     if (!vnext_b_active()) writeReg(s->iomem.addr + addr, value);
++    break;
+     case 0x94://SENS_MEAS2_START_SAR
+      cval = (value & 0x7FF80000) >> 19;
+      if(cval){
+        s->channel2 = bitpos(cval);
+      }
+-     writeReg(s->iomem.addr + addr, value);
++     if (!vnext_b_active()) writeReg(s->iomem.addr + addr, value);
+     break;
+     }
+ }
+@@ -131,12 +217,37 @@ static void esp32_sens_init(Object *obj)
+     s->channel2 = 0;
+ }
+ 
++/* Reset values of the SENS registers (every field's default in ESP-IDF sens_reg.h): among them 12-bit
++ * width, 11 dB on every pad and the SAR's native (inverted) output. */
++static void esp32_sens_reset(DeviceState *dev)
++{
++    static const struct { uint16_t offset; uint32_t value; } resets[] = {
++        {0x000, 0x00070902}, {0x008, 0x000a000a}, {0x00c, 0x0020000a}, {0x010, 0x0707338f},
++        {0x018, 0x000000c8}, {0x01c, 0x00000064}, {0x020, 0x00000032}, {0x024, 0x00000028},
++        {0x028, 0x00000014}, {0x02c, 0x0000000f}, {0x030, 0x00100200}, {0x034, 0xffffffff},
++        {0x038, 0xffffffff}, {0x04c, 0x00066002}, {0x058, 0x02041000}, {0x084, 0x00400800},
++        {0x08c, 0x3fffffff}, {0x090, 0x00070902}, {0x09c, 0x03000000}, {0x0a0, 0x00000003},
++        {0x0fc, 0x01605180},
++    };
++    Esp32SensState *s = ESP32_SENS(dev);
++    memset(s->regs, 0, sizeof(s->regs));
++    for (size_t i = 0; i < ARRAY_SIZE(resets); i++) s->regs[resets[i].offset / 4] = resets[i].value;
++    s->channel1 = 0;
++    s->channel2 = 0;
++}
++
++static void esp32_sens_class_init(ObjectClass *klass, void *data)
++{
++    DeviceClass *dc = DEVICE_CLASS(klass);
++    dc->reset = esp32_sens_reset;
++}
+ 
+ static const TypeInfo esp32_sens_info = {
+     .name = TYPE_ESP32_SENS,
+     .parent = TYPE_SYS_BUS_DEVICE,
+     .instance_size = sizeof(Esp32SensState),
+     .instance_init = esp32_sens_init,
++    .class_init = esp32_sens_class_init,
+ };
+ 
+ static void esp32_sens_register_types(void)
+diff --git a/hw/misc/esp32_twai.c b/hw/misc/esp32_twai.c
+new file mode 100644
+index 0000000..4c9d04b
+--- /dev/null
++++ b/hw/misc/esp32_twai.c
+@@ -0,0 +1,299 @@
++/*
++ * ESP32 TWAI (CAN 2.0B) controller
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 or
++ * (at your option) any later version.
++ */
++
++#include "qemu/osdep.h"
++#include "qemu/log.h"
++#include "hw/hw.h"
++#include "hw/sysbus.h"
++#include "hw/irq.h"
++#include "hw/misc/esp32_twai.h"
++#include "../softmmu/simuliface.h"
++#include "../softmmu/vnext_b.h"
++
++/* The bus side (bit timing, stuffing, CRC, ACK, arbitration, error frames, TEC/REC, bus off and its
++ * recovery, the acceptance filter) lives in the Core, which drives TWAI_TX and samples TWAI_RX at their
++ * instants (Esp32Adapter TWAI engine). Every register write is mirrored to it. What the CPU reads locally
++ * is what the controller keeps on the APB side: the RX FIFO (64 bytes, a message counter and an overrun
++ * flag per message, as in the OpenCores SJA1000 core the ESP-IDF errata describe), the interrupt register
++ * and the ALC/ECC captures. Without vNext-B there is no bus: the controller waits for bus-free forever. */
++
++static Esp32TwaiState *esp32_twai_device;
++
++static bool esp32_twai_in_reset(const Esp32TwaiState *s)
++{
++    return (s->mode & 1) != 0;
++}
++
++static void esp32_twai_update_irq(Esp32TwaiState *s)
++{
++    const bool ri = (s->ier & 1) && s->info_cnt > 0;
++    qemu_set_irq(s->irq, ri || s->ir != 0);
++}
++
++static void esp32_twai_fifo_clear(Esp32TwaiState *s)
++{
++    s->fifo_rd = s->fifo_cnt = 0;
++    s->info_rd = s->info_cnt = 0;
++    s->dos = false;
++}
++
++/* DOS follows the message at the head of the FIFO: set (with DOI) when it is one that overran, cleared by
++ * CDO. ESP-IDF reads the valid messages ahead of it and then releases the rest. */
++static void esp32_twai_dos_update(Esp32TwaiState *s)
++{
++    if (s->info_cnt && s->info_overrun[s->info_rd] && !s->dos) {
++        s->dos = true;
++        if (s->ier & 0x08) s->ir |= 0x08;
++    }
++}
++
++static void esp32_twai_commit(Esp32TwaiState *s, uint32_t len)
++{
++    /* RMC at 64: the FIFO the errata calls unrecoverable (TWAI_ERRATA_FIX_RX_FIFO_CORRUPT); ESP-IDF resets
++     * the peripheral before it gets there. */
++    if (s->info_cnt >= ESP32_TWAI_FIFO_FRAMES || len > 13) return;
++    const uint32_t slot = (s->info_rd + s->info_cnt) % ESP32_TWAI_FIFO_FRAMES;
++    if (len <= ESP32_TWAI_FIFO_BYTES - s->fifo_cnt) {
++        for (uint32_t i = 0; i < len; i++)
++            s->fifo[(s->fifo_rd + s->fifo_cnt + i) % ESP32_TWAI_FIFO_BYTES] = s->rx_frame[i];
++        s->fifo_cnt += len;
++        s->info_len[slot] = len;
++        s->info_overrun[slot] = false;
++    } else {
++        s->info_len[slot] = 0; /* no room: counted, flagged, its bytes lost */
++        s->info_overrun[slot] = true;
++    }
++    s->info_cnt++;
++    esp32_twai_dos_update(s);
++}
++
++static void esp32_twai_release(Esp32TwaiState *s)
++{
++    if (!s->info_cnt) return;
++    const uint32_t len = s->info_len[s->info_rd];
++    s->fifo_rd = (s->fifo_rd + len) % ESP32_TWAI_FIFO_BYTES;
++    s->fifo_cnt -= len;
++    s->info_rd = (s->info_rd + 1) % ESP32_TWAI_FIFO_FRAMES;
++    s->info_cnt--;
++    esp32_twai_dos_update(s);
++}
++
++void esp32_twai_vnext_event(uint64_t address, uint64_t value)
++{
++    Esp32TwaiState *s = esp32_twai_device;
++    if (!s) return;
++    const hwaddr offset = address - s->iomem.addr;
++    switch (offset) {
++    case A_TWAI_MODE: /* bus off: the controller entered reset mode by itself */
++        if (!esp32_twai_in_reset(s) && (value & 1)) esp32_twai_fifo_clear(s);
++        s->mode = value & 0x0f;
++        break;
++    case A_TWAI_INT_RAW:
++        s->ir |= value & 0xfe;
++        break;
++    case A_TWAI_ARB_LOST_CAP:
++        if (s->alc_armed) {
++            s->alc = value & 0x1f;
++            s->alc_armed = false;
++            if (s->ier & 0x40) s->ir |= 0x40;
++        }
++        break;
++    case A_TWAI_ERR_CODE_CAP:
++        if (s->ecc_armed) {
++            s->ecc = value & 0xff;
++            s->ecc_armed = false;
++            if (s->ier & 0x80) s->ir |= 0x80;
++        }
++        break;
++    case A_TWAI_DATA_0:
++    case A_TWAI_DATA_0 + 4:
++    case A_TWAI_DATA_0 + 8:
++    case A_TWAI_DATA_0 + 12:
++        for (int i = 0; i < 4; i++) s->rx_frame[(offset - A_TWAI_DATA_0) + i] = (uint8_t)(value >> (8 * i));
++        break;
++    case A_TWAI_RX_MESSAGE_CNT:
++        esp32_twai_commit(s, (uint32_t)value);
++        break;
++    }
++    esp32_twai_update_irq(s);
++}
++
++static uint32_t esp32_twai_engine(void)
++{
++    return vnext_b_twai_state();
++}
++
++static uint64_t esp32_twai_read(void *opaque, hwaddr addr, unsigned int size)
++{
++    Esp32TwaiState *s = ESP32_TWAI(opaque);
++    uint32_t value;
++    switch (addr) {
++    case A_TWAI_MODE:
++        vnext_b_lockstep_input_barrier(); /* bus off sets RM from the Core */
++        return s->mode;
++    case A_TWAI_STATUS:
++        vnext_b_lockstep_input_barrier();
++        value = esp32_twai_engine() & 0xfc;
++        if (s->info_cnt) value |= 0x01;
++        if (s->dos) value |= 0x02;
++        return value;
++    case A_TWAI_INT_RAW:
++        vnext_b_lockstep_input_barrier();
++        value = s->ir | (((s->ier & 1) && s->info_cnt) ? 1 : 0);
++        s->ir = 0; /* reading clears everything but RI */
++        esp32_twai_update_irq(s);
++        return value;
++    case A_TWAI_INT_ENA:
++        return s->ier;
++    case A_TWAI_BUS_TIMING_0:
++        return s->btr0;
++    case A_TWAI_BUS_TIMING_1:
++        return s->btr1;
++    case A_TWAI_ARB_LOST_CAP:
++        vnext_b_lockstep_input_barrier();
++        s->alc_armed = true;
++        return s->alc;
++    case A_TWAI_ERR_CODE_CAP:
++        vnext_b_lockstep_input_barrier();
++        s->ecc_armed = true;
++        return s->ecc;
++    case A_TWAI_ERR_WARNING_LIMIT:
++        return s->ewl;
++    case A_TWAI_RX_ERR_CNT:
++        vnext_b_lockstep_input_barrier();
++        return (esp32_twai_engine() >> 16) & 0xff;
++    case A_TWAI_TX_ERR_CNT:
++        vnext_b_lockstep_input_barrier();
++        return (esp32_twai_engine() >> 8) & 0xff;
++    case A_TWAI_RX_MESSAGE_CNT:
++        vnext_b_lockstep_input_barrier();
++        return s->info_cnt;
++    case A_TWAI_CLOCK_DIVIDER:
++        return s->cdr;
++    case A_TWAI_DATA_0 ... A_TWAI_DATA_12: {
++        const unsigned index = (addr - A_TWAI_DATA_0) / 4;
++        if (esp32_twai_in_reset(s)) return index < 4 ? s->acr[index] : index < 8 ? s->amr[index - 4] : 0;
++        vnext_b_lockstep_input_barrier();
++        return s->fifo[(s->fifo_rd + index) % ESP32_TWAI_FIFO_BYTES]; /* the RX buffer window */
++    }
++    }
++    return 0;
++}
++
++static void esp32_twai_write(void *opaque, hwaddr addr, uint64_t value, unsigned int size)
++{
++    Esp32TwaiState *s = ESP32_TWAI(opaque);
++    const bool reset = esp32_twai_in_reset(s);
++    value &= 0xff;
++    /* First: writeReg() may replay the guest store (vNext-B backpressure) before anything changed here. */
++    if (addr < 0x80) writeReg(s->iomem.addr + addr, value);
++    switch (addr) {
++    case A_TWAI_MODE: {
++        const uint32_t next = reset ? (value & 0x0f) : ((s->mode & 0x0e) | (value & 1));
++        if (!reset && (next & 1)) esp32_twai_fifo_clear(s); /* entering reset mode empties the RX FIFO */
++        s->mode = next;
++        break;
++    }
++    case A_TWAI_CMD:
++        if (reset) break;
++        if (value & 0x04) esp32_twai_release(s); /* RRB */
++        if (value & 0x08) { /* CDO */
++            s->dos = false;
++            esp32_twai_dos_update(s);
++        }
++        break;
++    case A_TWAI_INT_ENA:
++        s->ier = value;
++        break;
++    case A_TWAI_BUS_TIMING_0:
++        if (reset) s->btr0 = value;
++        break;
++    case A_TWAI_BUS_TIMING_1:
++        if (reset) s->btr1 = value;
++        break;
++    case A_TWAI_ERR_WARNING_LIMIT:
++        if (reset) s->ewl = value;
++        break;
++    case A_TWAI_CLOCK_DIVIDER:
++        s->cdr = value;
++        break;
++    case A_TWAI_DATA_0 ... A_TWAI_DATA_0 + 0x1c: {
++        const unsigned index = (addr - A_TWAI_DATA_0) / 4;
++        if (!reset) break; /* in operation the TX buffer is the Core's */
++        if (index < 4) s->acr[index] = value;
++        else s->amr[index - 4] = value;
++        break;
++    }
++    }
++    esp32_twai_update_irq(s);
++}
++
++static const MemoryRegionOps esp32_twai_ops = {
++    .read = esp32_twai_read,
++    .write = esp32_twai_write,
++    .endianness = DEVICE_LITTLE_ENDIAN,
++};
++
++/* SJA1000 / OpenCores reset state: reset mode, EWL 96, everything else 0, the FIFO empty. */
++static void esp32_twai_reset(DeviceState *dev)
++{
++    Esp32TwaiState *s = ESP32_TWAI(dev);
++    s->mode = 0x01;
++    s->ier = 0;
++    s->btr0 = s->btr1 = 0;
++    s->ewl = 96;
++    s->cdr = 0;
++    memset(s->acr, 0, sizeof(s->acr));
++    memset(s->amr, 0, sizeof(s->amr));
++    s->ir = 0;
++    s->alc = s->ecc = 0;
++    s->alc_armed = s->ecc_armed = true;
++    esp32_twai_fifo_clear(s);
++    qemu_irq_lower(s->irq);
++}
++
++void esp32_twai_peripheral_reset(void)
++{
++    Esp32TwaiState *s = esp32_twai_device;
++    if (!s) return;
++    writeReg(s->iomem.addr + 0x2fc, 1); /* the Core's controller too (first: may replay the store) */
++    esp32_twai_reset(DEVICE(s));
++}
++
++static void esp32_twai_init(Object *obj)
++{
++    Esp32TwaiState *s = ESP32_TWAI(obj);
++    SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
++    memory_region_init_io(&s->iomem, obj, &esp32_twai_ops, s, TYPE_ESP32_TWAI, 0x1000);
++    /* writeReg() may replay the guest store (vNext-B backpressure), see hw/i2c/esp32_i2c.c. */
++    s->iomem.disable_reentrancy_guard = true;
++    sysbus_init_mmio(sbd, &s->iomem);
++    sysbus_init_irq(sbd, &s->irq);
++    esp32_twai_device = s;
++}
++
++static void esp32_twai_class_init(ObjectClass *klass, void *data)
++{
++    DeviceClass *dc = DEVICE_CLASS(klass);
++    dc->reset = esp32_twai_reset;
++}
++
++static const TypeInfo esp32_twai_info = {
++    .name = TYPE_ESP32_TWAI,
++    .parent = TYPE_SYS_BUS_DEVICE,
++    .instance_size = sizeof(Esp32TwaiState),
++    .instance_init = esp32_twai_init,
++    .class_init = esp32_twai_class_init,
++};
++
++static void esp32_twai_register_types(void)
++{
++    type_register_static(&esp32_twai_info);
++}
++
++type_init(esp32_twai_register_types)
+diff --git a/hw/misc/meson.build b/hw/misc/meson.build
+index eea5e4b..9db9eaa 100644
+--- a/hw/misc/meson.build
++++ b/hw/misc/meson.build
+@@ -138,6 +138,9 @@ system_ss.add(when: 'CONFIG_XTENSA_ESP32', if_true: files(
+   'esp32_sha.c',
+   'esp32_aes.c',
+   'esp32_ledc.c',
++  'esp32_pcnt.c',
++  'esp32_mcpwm.c',
++  'esp32_twai.c',
+   'esp32_flash_enc.c',
+   'ssi_psram.c',
+   'esp32_sens.c',
+diff --git a/hw/ssi/esp32_rmt.c b/hw/ssi/esp32_rmt.c
+index 8851fdd..0c7da16 100644
+--- a/hw/ssi/esp32_rmt.c
++++ b/hw/ssi/esp32_rmt.c
+@@ -11,6 +11,7 @@
+ #include "qemu/osdep.h"
+ #include "qemu/log.h"
+ #include "qemu/module.h"
++#include "qemu/timer.h"
+ #include "sysemu/sysemu.h"
+ #include "hw/hw.h"
+ #include "hw/sysbus.h"
+@@ -19,161 +20,249 @@
+ #include "hw/qdev-properties.h"
+ #include "hw/ssi/ssi.h"
+ #include "hw/ssi/esp32_rmt.h"
++#include "hw/xtensa/esp32_clk.h"
++#include "../softmmu/simuliface.h"
+ 
+-#define DEBUG 0
++/* Transmitter (ESP32 TRM, Remote Control Peripheral). Each channel reads its items from its RAM blocks
++ * (MEM_SIZE blocks of 64 words from block n): a word is two halves {duration[14:0], level[15]}, the
++ * low half first, durations in channel ticks -- DIV_CNT (0 = 256) periods of APB_CLK (REF_ALWAYS_ON)
++ * or of the 1 MHz REF_TICK. A zero duration ends the transmission. The item is read when it starts:
++ * firmware refilling RAM behind the transmitter (wrap mode, MEM_TX_WRAP_EN, paced by the TX_THR event
++ * every TX_LIM items) races the real reader the same way. At the end comes TX_END and the idle level
++ * (IDLE_OUT_LV when IDLE_OUT_EN, else low); TX_CONTI_MODE starts over from the first item instead.
++ *
++ * The pin is driven by the Core (Esp32Adapter RMT engine): each item is mirrored when it starts, with
++ * both levels and the first half's duration in ps, and the carrier (CARRIER_EN, counted in base-clock
++ * cycles, applied to the CARRIER_OUT_LV level) when the transmission starts. */
++
++static uint64_t esp32_rmt_base_ps(Esp32RmtState *s, int n)
++{
++    if (FIELD_EX32(s->conf1[n], RMT_CHnCONF1, REF_ALWAYS_ON)) {
++        const uint64_t apb = esp32_soc_get_apb_freq();
++        return apb ? (UINT64_C(1000000000000) + apb / 2) / apb : 12500;
++    }
++    return 1000000; /* REF_TICK, 1 MHz */
++}
++
++static uint64_t esp32_rmt_tick_ps(Esp32RmtState *s, int n)
++{
++    const uint32_t div = FIELD_EX32(s->conf0[n], RMT_CHnCONF0, DIV_CNT);
++    return (div ? div : 256) * esp32_rmt_base_ps(s, n);
++}
++
++static uint32_t esp32_rmt_mem_words(Esp32RmtState *s, int n)
++{
++    return MAX(1u, FIELD_EX32(s->conf0[n], RMT_CHnCONF0, MEM_SIZE)) * ESP32_RMT_BLOCK_WORDS;
++}
++
++static void esp32_rmt_update_irq(Esp32RmtState *s)
++{
++    qemu_set_irq(s->irq, (s->int_raw & s->int_en) != 0);
++}
++
++static void esp32_rmt_emit_item(Esp32RmtState *s, int n, uint64_t value)
++{
++    writeReg(s->iomem.addr + ESP32_RMT_CORE_ITEM + 4 * n, value);
++}
+ 
+-static void restart_timer( Esp32RmtState *s, int channel ) {
+-    timer_mod_anticipate_ns( &s->rmt_timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL)+1250*s->txlim[channel] );
++static void esp32_rmt_emit_idle(Esp32RmtState *s, int n)
++{
++    const bool high = FIELD_EX32(s->conf1[n], RMT_CHnCONF1, IDLE_OUT_EN) &&
++                      FIELD_EX32(s->conf1[n], RMT_CHnCONF1, IDLE_OUT_LV);
++    esp32_rmt_emit_item(s, n, ESP32_RMT_ITEM_IDLE | (high ? ESP32_RMT_ITEM_LEVEL0 : 0));
+ }
+ 
+-// send txlim data values, stop if a value is 0
+-// set the correct raw int for tx_end or tx_thr_event
+-static void send_data( Esp32RmtState *s, int channel )
++static void esp32_rmt_tx_item(Esp32RmtState *s, int n);
++
++/* End of the last item: TX_END, then the idle level -- or, in continuous mode, the first item again. */
++static void esp32_rmt_tx_end(Esp32RmtState *s, int n)
+ {
+-    if(DEBUG) printf("send ch=%d limit=%d sent=%d \n",channel, s->txlim[channel], s->sent);
+-    BusState *b = BUS(s->rmt);
+-    BusChild *ch = QTAILQ_FIRST(&b->children);
+-    SSIPeripheral *slave = NULL;
+-    SSIPeripheralClass *ssc = NULL;
+-    if(ch){
+-       slave = SSI_PERIPHERAL(ch->child);
+-       ssc   = SSI_PERIPHERAL_GET_CLASS(slave);
++    Esp32RmtTx *tx = &s->tx[n];
++    s->int_raw |= 1u << (3 * n);
++    esp32_rmt_update_irq(s);
++    const uint32_t first = s->data[(n * ESP32_RMT_BLOCK_WORDS) % ESP32_RMT_BUF_WORDS];
++    if (FIELD_EX32(s->conf1[n], RMT_CHnCONF1, TX_CONTI_MODE) && (first & 0x7FFFu) != 0) {
++        tx->rd = 0;
++        tx->ending = false;
++        esp32_rmt_tx_item(s, n);
++        return;
+     }
+-    
+-    // don't send data when interrupt hasn't been handled
+-    // a real device can't do this but it's necessary because 
+-    // qemu can't always keep up. 
+-    if( s->int_raw & (1<<(channel+24) | (1<<(channel*3))) )
+-    {
+-        // send data when the interrupt is cleared
+-        s->unsent_data=true;
+-        if(DEBUG) printf("esp32_rmt_send_data waiting interrupt !!!!\n");
++    /* TX_START is a trigger the hardware clears when the transmission ends: a later read-modify-write
++     * of CONF1 must not start it again. */
++    s->conf1[n] &= ~R_RMT_CHnCONF1_TX_START_MASK;
++    tx->active = false;
++    tx->ending = false;
++    timer_del(&tx->timer);
++    esp32_rmt_emit_idle(s, n);
++}
++
++/* The transmitter reaches item `rd`, at tx->start_ns + elapsed_ps. */
++static void esp32_rmt_tx_item(Esp32RmtState *s, int n)
++{
++    Esp32RmtTx *tx = &s->tx[n];
++    const uint32_t word = s->data[(n * ESP32_RMT_BLOCK_WORDS + tx->rd) % ESP32_RMT_BUF_WORDS];
++    const uint32_t dur0 = word & 0x7FFFu, dur1 = (word >> 16) & 0x7FFFu;
++    if (dur0 == 0) {
++        esp32_rmt_tx_end(s, n);
+         return;
+     }
+-    else s->unsent_data=false;
+-    
+-    int memsize=((s->conf0[channel]>>24)&0xf)*64;
+-
+-    int size;
+-    if( s->apb_conf & R_RMT_APB_CONF_MEM_TX_WRAP_EN_MASK )
+-        size = memsize;
+-    else size = ESP32_RMT_BUF_WORDS;
+-
+-    for( int i=0; i<s->txlim[channel]; i++ )
+-    {
+-        int v = s->data[((i+s->sent)%memsize+channel*64)%size];
+-
+-        if( v == 0 )  // stop sending when we see a zero
+-        {
+-            s->int_raw |=   1<<(channel*3);   //set TX_END
+-            s->int_raw &= ~(1<<(channel+24)); //clearTHR
+-            s->sent = 0;
+-            s->conf1[channel] &= ~R_RMT_CHnCONF1_TX_START_MASK;
+-            if( s->int_en & (1<<(channel*3)) ) qemu_irq_raise(s->irq);
+-            return;
+-        }
+-        if( ssc ) ssc->transfer( slave, v );
+-        /// TODO: send
++    const uint64_t tick = esp32_rmt_tick_ps(s, n);
++    uint64_t value = ((uint64_t)dur0 * tick) << ESP32_RMT_ITEM_PS_SHIFT;
++    if ((word >> 15) & 1u) value |= ESP32_RMT_ITEM_LEVEL0;
++    if (dur1) value |= ESP32_RMT_ITEM_SECOND | ((word >> 31) ? ESP32_RMT_ITEM_LEVEL1 : 0);
++    esp32_rmt_emit_item(s, n, value);
++
++    bool last = dur1 == 0;
++    if (++tx->rd >= esp32_rmt_mem_words(s, n)) {
++        if (FIELD_EX32(s->apb_conf, RMT_APB_CONF, MEM_TX_WRAP_EN)) tx->rd = 0;
++        else last = true;
++    }
++    if (s->txlim[n] && ++tx->sent >= s->txlim[n]) {
++        tx->sent = 0;
++        s->int_raw |= 1u << (24 + n);
++        esp32_rmt_update_irq(s);
+     }
+-    s->sent += s->txlim[channel];
+-    s->int_raw |= 1<<(channel+24); //set THR
+-    if( s->int_en & (1<<(channel+24))) qemu_irq_raise(s->irq);
+-    restart_timer( s, channel );
++    tx->elapsed_ps += (uint64_t)(dur0 + dur1) * tick;
++    tx->ending = last;
++    timer_mod_ns(&tx->timer, tx->start_ns + (int64_t)((tx->elapsed_ps + 500) / 1000));
+ }
+ 
+-static void esp32_rmt_timer_cb( void *opaque )
++static void esp32_rmt_tx_timer_cb(void *opaque)
+ {
+-    Esp32RmtState *s = ESP32_RMT(opaque);
++    Esp32RmtTx *tx = opaque;
++    if (!tx->active) return;
++    if (tx->ending) esp32_rmt_tx_end(tx->owner, tx->channel);
++    else esp32_rmt_tx_item(tx->owner, tx->channel);
++}
+ 
+-    for( int i=0; i<8; i++ ) {
+-        if( s->conf1[i] & R_RMT_CHnCONF1_TX_START_MASK ) // send data for any enabled channels
+-            send_data(s,i);
+-    }
++static void esp32_rmt_tx_start(Esp32RmtState *s, int n)
++{
++    Esp32RmtTx *tx = &s->tx[n];
++    tx->active = true;
++    tx->ending = false;
++    tx->sent = 0;
++    tx->elapsed_ps = 0;
++    tx->start_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    const uint64_t base = esp32_rmt_base_ps(s, n);
++    const uint32_t high = s->carrier_duty[n] >> 16, low = s->carrier_duty[n] & 0xFFFFu;
++    const bool carrier = FIELD_EX32(s->conf0[n], RMT_CHnCONF0, CARRIER_EN) && high && low;
++    writeReg(s->iomem.addr + ESP32_RMT_CORE_CARRIER + 8 * n,
++             (carrier ? 1u : 0u) | (FIELD_EX32(s->conf0[n], RMT_CHnCONF0, CARRIER_OUT_LV) << 1) |
++             (((uint64_t)high * base) << ESP32_RMT_ITEM_PS_SHIFT));
++    writeReg(s->iomem.addr + ESP32_RMT_CORE_CARRIER + 8 * n + 4, (uint64_t)low * base);
++    esp32_rmt_tx_item(s, n);
+ }
+ 
+ static uint64_t esp32_rmt_read(void *opaque, hwaddr addr, unsigned int size)
+ {
+     Esp32RmtState *s = ESP32_RMT(opaque);
+     uint32_t r = 0;
+-    int channel=(addr-32)/8;
+     switch (addr) {
+-    case A_RMT_CH0CONF0 ... (A_RMT_CH0CONF0+8*8)-4:
+-        if( addr & 0x4 ) r = s->conf1[channel];
+-        else             r = s->conf0[channel];
++    case A_RMT_CH0CONF0 ... A_RMT_CH0CONF0 + 8 * ESP32_RMT_CHANNELS - 4: {
++        const int n = (addr - A_RMT_CH0CONF0) / 8;
++        r = (addr & 0x4) ? s->conf1[n] : s->conf0[n];
+         break;
+-    case A_RMT_INT_RAW: r = s->int_raw ; break;
++    }
++    case A_RMT_CH0STATUS ... A_RMT_CH0STATUS + 4 * ESP32_RMT_CHANNELS - 4: {
++        /* MEM_WADDR_EX [9:0], MEM_RADDR_EX [19:10], STATE [22:20] (1 = sending) */
++        const int n = (addr - A_RMT_CH0STATUS) / 4;
++        const uint32_t base = n * ESP32_RMT_BLOCK_WORDS;
++        r = ((base + s->apb_wr[n]) & 0x3FFu) | (((base + s->tx[n].rd) & 0x3FFu) << 10) |
++            ((s->tx[n].active ? 1u : 0u) << 20);
++        break;
++    }
++    case A_RMT_CH0ADDR ... A_RMT_CH0ADDR + 4 * ESP32_RMT_CHANNELS - 4:
++        r = s->apb_wr[(addr - A_RMT_CH0ADDR) / 4];
++        break;
++    case A_RMT_INT_RAW: r = s->int_raw; break;
+     case A_RMT_INT_ST:  r = s->int_raw & s->int_en; break;
+     case A_RMT_INT_ENA: r = s->int_en; break;
+-    case A_RMT_TX_LIM ... A_RMT_TX_LIM+7*4:
+-        channel=(addr-A_RMT_TX_LIM)/4;
+-        r = s->txlim[channel];
++    case A_RMT_CH0CARRIER_DUTY ... A_RMT_CH0CARRIER_DUTY + 4 * ESP32_RMT_CHANNELS - 4:
++        r = s->carrier_duty[(addr - A_RMT_CH0CARRIER_DUTY) / 4];
+         break;
+-    case A_RMT_DATA ... A_RMT_DATA+(ESP32_RMT_BUF_WORDS-1)* 4:
+-        r = s->data[(addr-A_RMT_DATA)/4];
++    case A_RMT_TX_LIM ... A_RMT_TX_LIM + 4 * ESP32_RMT_CHANNELS - 4:
++        r = s->txlim[(addr - A_RMT_TX_LIM) / 4];
+         break;
+     case A_RMT_APB_CONF: r = s->apb_conf; break;
++    case A_RMT_DATE: r = 0x16022600; break;
++    case A_RMT_DATA ... A_RMT_DATA + (ESP32_RMT_BUF_WORDS - 1) * 4:
++        r = s->data[(addr - A_RMT_DATA) / 4];
++        break;
+     }
+-    if(DEBUG) printf("esp32_rmt_read  0x%04lx= 0x%08x\n",(unsigned long) addr,r);
+     return r;
+ }
+ 
+-
+ static void esp32_rmt_write(void *opaque, hwaddr addr, uint64_t value, unsigned int size)
+ {
+     Esp32RmtState *s = ESP32_RMT(opaque);
+-
+-    if(DEBUG) printf("esp32_rmt_write 0x%04lx= 0x%08lx\n",(unsigned long) addr, (unsigned long) value);
+-
+-//    if(addr<A_RMT_DATA) printf("rmt write %ld %ld\n",addr,value);
+-
+-    int channel;
+     switch (addr) {
+-    case A_RMT_CH0CONF0 ...  (A_RMT_CH0CONF0+8*8)-4:
+-        channel=(addr-32)/8;
+-        if((addr & 0x4)==0) {
+-            s->conf0[channel] = value;
+-        } else {
+-            s->conf1[channel] = value;
+-            if( value & 0x8 )  s->sent = 0; /*R_RMT_CHnCONF1_MEM_RD_RST_MASK*/
+-            if( value & R_RMT_CHnCONF1_TX_START_MASK ) restart_timer( s, channel ); // start timer to send data
++    case A_RMT_CH0DATA ... A_RMT_CH0DATA + 4 * ESP32_RMT_CHANNELS - 4: {
++        /* FIFO access (APB_FIFO_MASK = 0): append to the channel's RAM. */
++        const int n = (addr - A_RMT_CH0DATA) / 4;
++        s->data[(n * ESP32_RMT_BLOCK_WORDS + s->apb_wr[n]) % ESP32_RMT_BUF_WORDS] = value;
++        s->apb_wr[n] = (s->apb_wr[n] + 1) % esp32_rmt_mem_words(s, n);
++        break;
++    }
++    case A_RMT_CH0CONF0 ... A_RMT_CH0CONF0 + 8 * ESP32_RMT_CHANNELS - 4: {
++        const int n = (addr - A_RMT_CH0CONF0) / 8;
++        if ((addr & 0x4) == 0) {
++            s->conf0[n] = value;
++            break;
+         }
++        s->conf1[n] = value;
++        /* MEM_RD_RST moves the reader back to the first item, also mid-transmission: ESP-IDF stops a
++         * channel by writing an end marker there and resetting the pointer. */
++        if (FIELD_EX32(value, RMT_CHnCONF1, MEM_RD_RST)) s->tx[n].rd = 0;
++        if (FIELD_EX32(value, RMT_CHnCONF1, APB_MEM_RST)) s->apb_wr[n] = 0;
++        if (FIELD_EX32(value, RMT_CHnCONF1, TX_START) && !s->tx[n].active) esp32_rmt_tx_start(s, n);
+         break;
+-    case A_RMT_TX_LIM ... A_RMT_TX_LIM+7*4:
+-        channel=(addr-A_RMT_TX_LIM)/4;
+-        s->txlim[channel] = value;
++    }
++    case A_RMT_INT_ENA:
++        s->int_en = value;
++        esp32_rmt_update_irq(s);
+         break;
+-    case A_RMT_INT_ENA: s->int_en = value; break;
+     case A_RMT_INT_CLR:
+-        s->int_raw&=(~value);
+-        if((s->int_raw & s->int_en ) == 0 ) qemu_irq_lower(s->irq);
+-        if( s->unsent_data ) esp32_rmt_timer_cb(s);
++        s->int_raw &= ~value;
++        esp32_rmt_update_irq(s);
+         break;
+-    case A_RMT_DATA ... A_RMT_DATA+(ESP32_RMT_BUF_WORDS-1)*4:
+-        s->data[(addr-A_RMT_DATA)/4] = value;
++    case A_RMT_CH0CARRIER_DUTY ... A_RMT_CH0CARRIER_DUTY + 4 * ESP32_RMT_CHANNELS - 4:
++        s->carrier_duty[(addr - A_RMT_CH0CARRIER_DUTY) / 4] = value;
++        break;
++    case A_RMT_TX_LIM ... A_RMT_TX_LIM + 4 * ESP32_RMT_CHANNELS - 4:
++        s->txlim[(addr - A_RMT_TX_LIM) / 4] = value & 0x1FFu;
+         break;
+     case A_RMT_APB_CONF: s->apb_conf = value; break;
++    case A_RMT_DATA ... A_RMT_DATA + (ESP32_RMT_BUF_WORDS - 1) * 4:
++        s->data[(addr - A_RMT_DATA) / 4] = value;
++        break;
+     }
+ }
+ 
+-
+ static const MemoryRegionOps esp32_rmt_ops = {
+     .read =  esp32_rmt_read,
+     .write = esp32_rmt_write,
+     .endianness = DEVICE_LITTLE_ENDIAN,
+ };
+ 
++/* Reset values from ESP-IDF rmt_reg.h (every field's default). */
+ static void esp32_rmt_reset(DeviceState *dev)
+ {
+     Esp32RmtState *s = ESP32_RMT(dev);
+-    s->int_raw=0;
+-    s->sent=0;
+-    s->int_en=0;
+-    qemu_irq_lower(s->irq);
+-    timer_del( &s->rmt_timer );
+-    for(int i=0;i<8;i++) {
+-        s->conf0[i]=0;
+-        s->conf1[i]=0;
++    for (int n = 0; n < ESP32_RMT_CHANNELS; n++) {
++        timer_del(&s->tx[n].timer);
++        s->tx[n].active = false;
++        s->tx[n].ending = false;
++        s->tx[n].rd = 0;
++        s->conf0[n] = 0x31100002;
++        s->conf1[n] = 0x00000f20;
++        s->carrier_duty[n] = 0x00400040;
++        s->txlim[n] = 0x80;
++        s->apb_wr[n] = 0;
+     }
++    s->int_raw = 0;
++    s->int_en = 0;
++    s->apb_conf = 0;
++    qemu_irq_lower(s->irq);
+ }
+ 
+ static void esp32_rmt_realize(DeviceState *dev, Error **errp)
+@@ -189,7 +278,11 @@ static void esp32_rmt_init(Object *obj)
+                           TYPE_ESP32_RMT, 0x1000);
+     sysbus_init_mmio(sbd, &s->iomem);
+     sysbus_init_irq(sbd, &s->irq);
+-    timer_init_ns( &s->rmt_timer, QEMU_CLOCK_VIRTUAL, esp32_rmt_timer_cb, s );
++    for (int n = 0; n < ESP32_RMT_CHANNELS; n++) {
++        s->tx[n].owner = s;
++        s->tx[n].channel = n;
++        timer_init_ns(&s->tx[n].timer, QEMU_CLOCK_VIRTUAL, esp32_rmt_tx_timer_cb, &s->tx[n]);
++    }
+     s->rmt = ssi_create_bus(DEVICE(s), "rmt");
+ }
+ 
+diff --git a/hw/ssi/esp32_spi.c b/hw/ssi/esp32_spi.c
+index de6c5e2..4612c94 100644
+--- a/hw/ssi/esp32_spi.c
++++ b/hw/ssi/esp32_spi.c
+@@ -23,6 +23,7 @@
+ #include "hw/xtensa/esp32_clk.h"
+ 
+ #include "../softmmu/simuliface.h"
++#include "../softmmu/vnext_b.h"
+ 
+ enum {
+     CMD_RES = 0xab,
+@@ -50,37 +51,99 @@ static void esp32_spi_do_command(Esp32SpiState* state, uint32_t cmd_reg);
+  * SPI engine always shifts MSB first, so an LSB-first byte is mirrored here. Sending
+  * data_reg[index] -- a whole word per byte, past W15 from the 17th byte on -- put the low byte of
+  * the wrong word on the wire: a PCD8544 driven by hardware SPI showed garbage. */
++static uint8_t esp32_spi_mirror_byte( uint8_t byte )
++{
++    uint8_t mirrored = 0;
++    for( int bit = 0; bit < 8; ++bit ) if( byte & (1u << bit) ) mirrored |= 0x80u >> bit;
++    return mirrored;
++}
++
+ static uint8_t esp32_spi_tx_byte( Esp32SpiState* s, uint32_t index )
+ {
+     const uint32_t word = s->data_reg[(index / 4) % ESP32_SPI_BUF_WORDS];
+     const unsigned lane = index % 4;
+-    const bool big_endian = (s->user_reg >> 11) & 1u;
++    const bool big_endian = FIELD_EX32(s->user_reg, SPI_USER, WR_BYTE_ORDER);
+     uint8_t byte = (uint8_t)(word >> (8 * (big_endian ? 3 - lane : lane)));
+-    if( (s->ctrl_reg >> 26) & 1u ){
+-        uint8_t mirrored = 0;
+-        for( int bit = 0; bit < 8; ++bit ) if( byte & (1u << bit) ) mirrored |= 0x80u >> bit;
+-        byte = mirrored;
+-    }
++    if( FIELD_EX32(s->ctrl_reg, SPI_CTRL, WR_BIT_ORDER) ) byte = esp32_spi_mirror_byte(byte);
+     return byte;
+ }
+ 
++/* The `k`-th byte of a USR transaction as mirrored to the Core: [7:0] what MOSI shifts out, bit 8 =
++ * sample MISO during it, [31:16] where the received byte goes in the buffer. Full duplex
++ * (SPI_USER.DOUTDIN) runs the MOSI and MISO phases together; half duplex sends the MOSI bytes and then
++ * reads the MISO ones (ESP32 TRM, SPI, half-duplex). The MOSI phase reads W0 on, or W8 on with
++ * USR_MOSI_HIGHPART. Outside its own bytes MOSI keeps the level of the last bit it shifted out. */
++static uint32_t esp32_spi_wire_value( Esp32SpiState* s, int k )
++{
++    int tx = -1, rx = -1;
++    if( s->fullDuplex ) {
++        if( k < s->txBytes ) tx = k;
++        if( k < s->rxBytes ) rx = k;
++    } else if( k < s->txBytes ) {
++        tx = k;
++    } else {
++        rx = k - s->txBytes;
++    }
++    uint32_t value = s->mosiHold;
++    if( tx >= 0 ) {
++        const uint8_t byte = esp32_spi_tx_byte( s, tx + (FIELD_EX32(s->user_reg, SPI_USER, MOSI_HIGHPART) ? 32 : 0) );
++        s->mosiHold = (byte & 1u) ? 0xFFu : 0x00u;
++        value = byte;
++    }
++    if( rx >= 0 ) value |= 0x100u | ((uint32_t)rx << 16);
++    return value;
++}
++
++static Esp32SpiState *esp32_spi_by_number[4];
++
++/* vNext-B: a byte the Core sampled on MISO (adapter SPI engine), pushed through C2A at the buffer's
++ * address -- [7:0] the byte, bit 8 valid, [31:16] its place in the receive buffer: W0 on, or W8 on
++ * with SPI_USER.USR_MISO_HIGHPART, in SPI_USER.RD_BYTE_ORDER / SPI_CTRL.RD_BIT_ORDER. */
++void esp32_spi_vnext_rx( uint64_t address, uint64_t value )
++{
++    for( int n = 2; n < ARRAY_SIZE(esp32_spi_by_number); ++n ) {
++        Esp32SpiState *s = esp32_spi_by_number[n];
++        if( !s || address != s->iomem.addr + A_SPI_W0 ) continue;
++        if( !(value & 0x100u) || s->rxDelivered >= s->rxExpected ) return;
++        uint8_t byte = (uint8_t)value;
++        if( FIELD_EX32(s->ctrl_reg, SPI_CTRL, RD_BIT_ORDER) ) byte = esp32_spi_mirror_byte(byte);
++        const uint32_t pos = ((value >> 16) & 0xFFFFu) + (FIELD_EX32(s->user_reg, SPI_USER, MISO_HIGHPART) ? 32 : 0);
++        const unsigned lane = pos % 4;
++        const unsigned shift = 8 * (FIELD_EX32(s->user_reg, SPI_USER, RD_BYTE_ORDER) ? 3 - lane : lane);
++        uint32_t *word = &s->data_reg[(pos / 4) % ESP32_SPI_BUF_WORDS];
++        *word = (*word & ~(0xFFu << shift)) | ((uint32_t)byte << shift);
++        s->rxDelivered++;
++        return;
++    }
++}
++
++/* MISO bytes the Core has sampled by `now_ns`: wire byte k ends at wireStartNs + (k + 1) * wireByteNs,
++ * and the received bytes are the first rxBytes (full duplex) or those after the MOSI phase. */
++static int esp32_spi_rx_due( Esp32SpiState* s, int64_t now_ns )
++{
++    if( s->rxExpected == 0 || s->wireByteNs <= 0 || now_ns < s->wireStartNs ) return 0;
++    const int64_t done = (now_ns - s->wireStartNs) / s->wireByteNs;
++    const int64_t rx = s->fullDuplex ? done : done - s->txBytes;
++    return (int)MAX( 0, MIN( rx, (int64_t)s->rxExpected ) );
++}
++
++/* Duracao de um byte no fio (8 periodos de SCK), em ns. */
++static int64_t esp32_spi_byte_ns( Esp32SpiState* s )
++{
++    return (int64_t)((s->period_ps * 8 + 500) / 1000);
++}
++
+ static void esp32_spi_event( void* opaque ) // Timer event
+ {
+     Esp32SpiState *s = ESP32_SPI(opaque);
+ 
+     s->dataBytes--;
+-    //if( s->dataBytes ) m_arena->regData = s->data_reg[s->bytesDone+1];
+-    //else               m_arena->regData = -1;
+-
+-    // Reading gets timed out in some cases, by now just write
+-    //s->data_reg[s->bytesDone] = readReg( (s->iomem.addr & 0x000FFFFF)+0x80 ); //SPI Data buffer
+     s->bytesDone++;
+ 
+-    int bits = 8;
+     if( s->dataBytes )
+     {
+-        writeReg( s->iomem.addr+0x80, esp32_spi_tx_byte( s, s->bytesDone ) );
+-        timer_mod_ns( &s->event_timer, getQemu_ns()+s->period*bits );
++        writeReg( s->iomem.addr+0x80, esp32_spi_wire_value( s, s->bytesDone ) );
++        timer_mod_ns( &s->event_timer, getQemu_ns()+esp32_spi_byte_ns( s ) );
+     }
+     else{
+         s->do_command = 0;
+@@ -96,21 +159,21 @@ static void esp32_spi_event( void* opaque ) // Timer event
+ 
+ static void write_clk_reg( Esp32SpiState* s, uint64_t value )
+ {
++    /* SPI_CLOCK_REG (TRM): com SPI_CLK_EQU_SYSCLK (bit 31) o SCK e' o proprio APB_CLK; senao
++     * APB_CLK/((CLKDIV_PRE+1)*(CLKCNT_N+1)). O periodo sai em ps direto do divisor: em ns
++     * inteiros, 12,5 ns (80 MHz) virava 12 e 37,5 ns (26,67 MHz) virava 37, um SCK 4% e 1,3%
++     * mais rapido que o real. */
+     uint32_t CLKDIV_PRE = (value & 0x7FFC0000) >> 18; // bits 18 to 30
+     uint32_t CLKCNT_N   = (value & 0x0003F000) >> 12; // bits 12 to 17
+-    uint32_t divider = (CLKDIV_PRE+1)*(CLKCNT_N+1);
+-    //if( period_ns == 0 ) return;
++    const uint64_t divider = (value & 0x80000000u) ? 1 : (uint64_t)(CLKDIV_PRE+1)*(CLKCNT_N+1);
++    const uint64_t apb_freq = esp32_soc_get_apb_freq();
++    if( apb_freq == 0 ) return; /* no SoC clock (never after the RTC reset, see esp32_rtc_cntl_reset) */
+ 
+-    uint32_t apb_freq = esp32_soc_get_apb_freq();
+-    uint32_t spi_freq = esp32_soc_get_apb_freq()/divider;
++    const uint64_t period_ps = (divider * 1000000000000ull + apb_freq / 2) / apb_freq;
+ 
+-    uint32_t period_ns = 1e9/spi_freq;
+-    //if( period_ns < 500 ) period_ns = 500;
+-
+-    if( s->period == period_ns ) return;
+-    s->period = period_ns;
+-    //printf("write_clk_reg %i %i %i %i\n", CLKDIV_PRE, CLKCNT_N, apb_freq, period_ns);
+-    writeReg( s->iomem.addr+0x18, period_ns*1000 );
++    if( s->period_ps == period_ps ) return;
++    s->period_ps = period_ps;
++    writeReg( s->iomem.addr+0x18, period_ps );
+ }
+ 
+ static uint64_t esp32_spi_read(void *opaque, hwaddr addr, unsigned int size)
+@@ -138,6 +201,20 @@ static uint64_t esp32_spi_read(void *opaque, hwaddr addr, unsigned int size)
+         r = BIT(R_SPI_SLAVE_TRANS_DONE_SHIFT) | BIT(R_SPI_SLAVE_TRANS_INTEN_SHIFT);
+         break;
+     case A_SPI_W0 ... A_SPI_W0 + (ESP32_SPI_BUF_WORDS - 1) * sizeof(uint32_t):
++        /* A MISO byte reaches the buffer through C2A once the Core passes the instant it was sampled.
++         * A read after that instant waits for it: sync (and replay this load) while fewer bytes have
++         * arrived than the wire has finished -- the C2A ring may not have held them all at once. */
++        if( s->rxDelivered < s->rxExpected ) {
++            const int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++            /* A sync at this same instant that brought nothing new means the byte never reached the
++             * Core: do not spin on it. */
++            const bool stalled = now == s->rxSyncNs && s->rxDelivered == s->rxSyncDelivered;
++            if( !stalled && s->rxDelivered < esp32_spi_rx_due( s, now ) ) {
++                s->rxSyncNs = now;
++                s->rxSyncDelivered = s->rxDelivered;
++                vnext_b_lockstep_sync_barrier();
++            }
++        }
+         r = s->data_reg[(addr - A_SPI_W0) / sizeof(uint32_t)];
+         break;
+         //case A_SPI_EXT2: r = 0; break;
+@@ -350,10 +427,18 @@ static void esp32_spi_do_command( Esp32SpiState* s, uint32_t cmd_reg )
+     }
+     if( s->number < 2 ) esp32_spi_transaction( s, &t );
+     else{
+-        s->dataBytes = MAX( t.data_tx_bytes, t.data_rx_bytes );
++        s->fullDuplex = FIELD_EX32(s->user_reg, SPI_USER, DOUTDIN);
++        s->txBytes = t.data_tx_bytes;
++        s->rxBytes = t.data_rx_bytes;
++        s->dataBytes = s->fullDuplex ? MAX( s->txBytes, s->rxBytes ) : s->txBytes + s->rxBytes;
+         if( s->dataBytes == 0 ) return;
+-
+-        //printf("\nesp32_spi_cmd %i %i %i\n", s->number, s->bytesDone, s->dataBytes ); fflush( stdout );
++        /* Only the Core can sample MISO (vNext-B); without it the buffer keeps what was written. */
++        s->rxExpected = vnext_b_active() ? s->rxBytes : 0;
++        s->rxDelivered = 0;
++        s->rxSyncNs = -1;
++        s->wireStartNs = getQemu_ns();
++        s->wireByteNs = esp32_spi_byte_ns( s );
++        s->mosiHold = 0;
+ 
+         s->bytesDone = 0;
+         // Inicio real da transacao (numero>=2, HSPI/VSPI): ativa CS0 automaticamente ANTES do
+@@ -361,9 +446,8 @@ static void esp32_spi_do_command( Esp32SpiState* s, uint32_t cmd_reg )
+         // -- ver o fim espelhado em esp32_spi_event() acima. Nenhum firmware/biblioteca especifica
+         // e' assumida: isto vale pra qualquer transacao SPI, USR ou nao, que chegue por este caminho.
+         writeReg( s->iomem.addr+A_SPI_CMD, 1 );
+-        writeReg( s->iomem.addr+0x80, esp32_spi_tx_byte( s, 0 ) );
+-        int bits = 8;
+-        timer_mod_ns( &s->event_timer, getQemu_ns()+s->period*bits);
++        writeReg( s->iomem.addr+0x80, esp32_spi_wire_value( s, 0 ) );
++        timer_mod_ns( &s->event_timer, getQemu_ns()+esp32_spi_byte_ns( s ) );
+     }
+ }
+ 
+@@ -383,6 +467,9 @@ static void esp32_spi_reset(DeviceState *dev)
+     s->user2_reg = FIELD_DP32(s->user2_reg, SPI_USER2, COMMAND_VALUE, 0);
+     s->status_reg = 0;
+     s->do_command = 0;
++    s->rxExpected = 0;
++    s->rxDelivered = 0;
++    if( s->number >= 0 && s->number < ARRAY_SIZE(esp32_spi_by_number) ) esp32_spi_by_number[s->number] = s;
+ }
+ 
+ static void esp32_spi_realize(DeviceState *dev, Error **errp)
+diff --git a/hw/timer/esp32_frc_timer.c b/hw/timer/esp32_frc_timer.c
+index 7bfc4a1..10f1e85 100644
+--- a/hw/timer/esp32_frc_timer.c
++++ b/hw/timer/esp32_frc_timer.c
+@@ -211,7 +211,7 @@ static void esp32_frc_timer_init(Object *obj)
+ 
+     timer_init_ns(&s->alarm_timer, QEMU_CLOCK_VIRTUAL, esp32_frc_timer_cb, s);
+ 
+-    s->apb_freq = 80000000;
++    s->apb_freq = 40000000; /* reset APB (XTAL); esp32_clk_update moves it when the PLL comes on */
+     s->count_mask = UINT32_MAX;
+     s->has_alarm = true;
+ }
+diff --git a/hw/timer/esp32_timg.c b/hw/timer/esp32_timg.c
+index a8e65f6..ebdb211 100644
+--- a/hw/timer/esp32_timg.c
++++ b/hw/timer/esp32_timg.c
+@@ -30,7 +30,6 @@
+  * TCG despachar direto nesta região: com 0x100, a página virava um subpage e todo acesso passava
+  * por subpage_read()/prepare_mmio_access(), que tomam o BQL mesmo com lockless_io. */
+ #define TIMG_REGFILE_SIZE 0x1000
+-#define TIMG_INTERRUPT_WDT_REALTIME_SCALE_DEFAULT 100
+ #define TIMG_INTERRUPT_WDT_SCALE_MAX 100
+ 
+ static Esp32TimgState *esp32_timg_tg0;
+@@ -614,7 +613,6 @@ static void esp32_timg_wdt_arm(Esp32TimgWdtState *ws, uint64_t ns_now)
+                                               (uint32_t)ws->prescale,
+                                               ws->parent->apb_freq_hz,
+                                               ws->parent->wdt_time_scale);
+-    uint64_t ns_to_timeout = deadline.remaining_ns;
+     /*
+      * Em mttcg-realtime, QEMU_CLOCK_VIRTUAL acompanha o relógio de parede, mas uma vCPU Xtensa
+      * emulada não executa as instruções de uma seção crítica na velocidade do ESP32 real. O
+@@ -627,7 +625,7 @@ static void esp32_timg_wdt_arm(Esp32TimgWdtState *ws, uint64_t ns_now)
+      */
+     TIMG_DEBUG_LOG("%s: TG%d ns=0x%08llx stage %d count=0x%08llx count_to_timeout=0x%08llx ns_to_timeout=0x%08llx\n",
+                    __func__, ws->parent->id, ns_now, ws->cur_stage, cur_count,
+-                   deadline.remaining_ticks, ns_to_timeout);
++                   deadline.remaining_ticks, deadline.remaining_ns);
+     timer_mod_anticipate_ns(&ws->stage_timer, (int64_t)deadline.deadline_ns);
+ }
+ 
+@@ -759,13 +757,15 @@ static void esp32_timg_wdt_cb(void *opaque)
+ static void esp32_timg_realize(DeviceState *dev, Error **errp)
+ {
+     Esp32TimgState *s = ESP32_TIMG(dev);
+-    const char *execution_mode = getenv("LASECSIMUL_ESP32_EXECUTION_MODE");
+-    const bool deterministic =
+-        execution_mode && !strcmp(execution_mode, "deterministic");
++    /* Both MWDTs time out on the chip's own clock. The ESP32 always runs in lockstep with -icount,
++     * where QEMU_CLOCK_VIRTUAL is the guest's time; the x100 budget only made sense under MTTCG,
++     * whose virtual clock followed the host. That mode is gone, and since the adapter stopped
++     * setting LASECSIMUL_ESP32_EXECUTION_MODE the x100 applied to every session: an interrupt WDT
++     * of 300 ms fired after 30 s and a task WDT of 5 s after 500 s. LASECSIMUL_ESP32_WDT_SCALE is
++     * kept as an explicit diagnostic override only. */
+     const char *scale_env = getenv("LASECSIMUL_ESP32_WDT_SCALE");
+     const bool explicit_scale = scale_env && *scale_env;
+-    unsigned scale = deterministic
+-        ? 1 : TIMG_INTERRUPT_WDT_REALTIME_SCALE_DEFAULT;
++    unsigned scale = 1;
+ 
+     if (explicit_scale) {
+         unsigned parsed = 0;
+@@ -777,29 +777,16 @@ static void esp32_timg_realize(DeviceState *dev, Error **errp)
+             scale = parsed;
+         }
+     }
+-    /* In MTTCG realtime both timer-group watchdogs use QEMU_CLOCK_VIRTUAL,
+-     * which follows host time while a vCPU can be descheduled. Keep both
+-     * watchdogs enabled, but apply the measured emulation-time budget. */
+-    s->wdt_time_scale = deterministic ? 1 : scale;
++    s->wdt_time_scale = scale;
+     if (s->id == 0) {
+         esp32_timg_tg0 = s;
+     }
+-    /*
+-     * No modo realtime, o relogio do watchdog segue o host enquanto a vCPU emulada pode deixar
+-     * de progredir por agendamento, solver eletrico e IPC. O mesmo orçamento escalado agora se
+-     * aplica aos dois MWDTs; eles continuam ativos e LASECSIMUL_ESP32_WDT_SCALE permite o valor
+-     * explícito para diagnostico.
+-     */
+     if (s->id == 1) {
+         if (s->wdt_disable) {
+-            fprintf(stderr,
+-                    "[LasecSimul] interrupt-wdt disabled (mttcg-realtime; enable:"
+-                    " LASECSIMUL_ESP32_WDT_SCALE=1)\n");
++            fprintf(stderr, "[LasecSimul] interrupt-wdt disabled (wdt_disable property)\n");
+         } else {
+-            fprintf(stderr,
+-                    "[LasecSimul] interrupt-wdt scale=%u (%s)\n",
+-                    s->wdt_time_scale,
+-                    deterministic ? "deterministic" : "explicit realtime override");
++            fprintf(stderr, "[LasecSimul] interrupt-wdt scale=%u (%s)\n", s->wdt_time_scale,
++                    explicit_scale ? "LASECSIMUL_ESP32_WDT_SCALE" : "chip timing");
+         }
+         fflush(stderr);
+     }
+diff --git a/hw/xtensa/esp32.c b/hw/xtensa/esp32.c
+index c5ad683..8fe9172 100644
+--- a/hw/xtensa/esp32.c
++++ b/hw/xtensa/esp32.c
+@@ -270,6 +270,8 @@ static void esp32_soc_reset(DeviceState *dev)
+     esp32_log_reset(s, s->requested_reset,
+                     s->requested_reset_source ? s->requested_reset_source : "OTHER");
+ 
++    /* The RTC reset also puts the SoC clock back on XTAL and propagates it (esp32_clk_update): until
++     * then APB_CLK read 0 and the boot ROM's SPI_CLOCK_REG write divided by it. */
+     if( s->requested_reset & ESP32_SOC_RESET_RTC ) device_cold_reset( DEVICE(&s->rtc_cntl) );
+ 
+     if( s->requested_reset & ESP32_SOC_RESET_PERIPH )
+@@ -416,9 +418,16 @@ static void esp32_clk_update( void* opaque, int n, int level )
+         new_apb_clk_freq = s->rtc_cntl.xtal_apb_freq;
+         new_cpu_clk_freq = new_apb_clk_freq;
+     }
++    /* Only a real change reaches the clock consumers. The SoC starts on the reset clock (XTAL, see
++     * esp32_soc_init), so the RTC reset during machine creation -- inside qemu_init, before the
++     * timer and vCPU machinery may be touched -- changes nothing here; a later RTC reset after the
++     * PLL was on does move CPU and APB back to XTAL. */
++    if( new_apb_clk_freq == s->apb_clk_freq && new_cpu_clk_freq == s->cpu_clk_freq ) return;
+     s->apb_clk_freq = new_apb_clk_freq;
+     s->cpu_clk_freq = new_cpu_clk_freq;
+-    qdev_prop_set_int32( DEVICE(&s->frc_timer), "apb_freq", s->apb_clk_freq );
++    for (int i = 0; i < ESP32_FRC_COUNT; ++i) {
++        qdev_prop_set_int32( DEVICE(&s->frc_timer[i]), "apb_freq", s->apb_clk_freq );
++    }
+     qdev_prop_set_int32( DEVICE(&s->timg[0])  , "apb_freq", s->apb_clk_freq );
+     qdev_prop_set_int32( DEVICE(&s->timg[1])  , "apb_freq", s->apb_clk_freq );
+ 
+@@ -605,6 +614,22 @@ static void esp32_soc_realize( DeviceState *dev, Error **errp )
+     qdev_realize( DEVICE(&s->ledc), &s->periph_bus, &error_fatal);
+     esp32_soc_add_periph_device( sys_mem, &s->ledc, DR_REG_LEDC_BASE);
+ 
++    /* PCNT was unmapped: the first access raised LoadStorePIFAddrError (Guru Meditation). */
++    qdev_realize( DEVICE(&s->pcnt), &s->periph_bus, &error_fatal);
++    esp32_soc_add_periph_device( sys_mem, &s->pcnt, DR_REG_PCNT_BASE);
++
++    /* MCPWM0/1 were unmapped too (Guru Meditation on the first access). */
++    for (int i = 0; i < 2; ++i) {
++        const hwaddr mcpwm_base[] = { DR_REG_PWM_BASE, DR_REG_PWM1_BASE };
++        qdev_prop_set_uint32( DEVICE(&s->mcpwm[i]), "unit", i );
++        qdev_realize( DEVICE(&s->mcpwm[i]), &s->periph_bus, &error_fatal);
++        esp32_soc_add_periph_device( sys_mem, &s->mcpwm[i], mcpwm_base[i]);
++    }
++
++    /* TWAI (CAN) was unmapped as well. */
++    qdev_realize( DEVICE(&s->twai), &s->periph_bus, &error_fatal);
++    esp32_soc_add_periph_device( sys_mem, &s->twai, DR_REG_CAN_BASE);
++
+     qdev_realize( DEVICE(&s->rtc_cntl), &s->rtc_bus, &error_fatal);
+     esp32_soc_add_periph_device( sys_mem, &s->rtc_cntl, DR_REG_RTCCNTL_BASE);
+ 
+@@ -623,6 +648,10 @@ static void esp32_soc_realize( DeviceState *dev, Error **errp )
+     esp32_gpio_vnext_bind( &s->gpio );
+     /* LEDC: DUTY_CHNG_END of a fade (ledc_fade_start waits for it). */
+     sysbus_connect_irq( SYS_BUS_DEVICE(&s->ledc), 0, qdev_get_gpio_in(intmatrix_dev, ETS_LEDC_INTR_SOURCE));
++    sysbus_connect_irq( SYS_BUS_DEVICE(&s->pcnt), 0, qdev_get_gpio_in(intmatrix_dev, ETS_PCNT_INTR_SOURCE));
++    sysbus_connect_irq( SYS_BUS_DEVICE(&s->mcpwm[0]), 0, qdev_get_gpio_in(intmatrix_dev, ETS_PWM0_INTR_SOURCE));
++    sysbus_connect_irq( SYS_BUS_DEVICE(&s->mcpwm[1]), 0, qdev_get_gpio_in(intmatrix_dev, ETS_PWM1_INTR_SOURCE));
++    sysbus_connect_irq( SYS_BUS_DEVICE(&s->twai), 0, qdev_get_gpio_in(intmatrix_dev, ETS_CAN_INTR_SOURCE));
+ 
+     for (int i = 0; i < ESP32_UART_COUNT; ++i)
+     {
+@@ -796,6 +825,10 @@ static void esp32_soc_init(Object *obj)
+     object_initialize_child( obj, "intmatrix"    , &s->intmatrix    , TYPE_ESP32_INTMATRIX );
+     object_initialize_child( obj, "crosscore_int", &s->crosscore_int, TYPE_ESP32_CROSSCORE_INT );
+     object_initialize_child( obj, "rtc_cntl"     , &s->rtc_cntl     , TYPE_ESP32_RTC_CNTL );
++    /* Reset clock: XTAL, CPU = APB = 40 MHz -- the frequency the CPU cores (clock_freq_khz) and the
++     * timers (their apb_freq default) already start on. */
++    s->apb_clk_freq = s->rtc_cntl.xtal_apb_freq;
++    s->cpu_clk_freq = s->rtc_cntl.xtal_apb_freq;
+ 
+     for( int i=0; i<ESP32_FRC_COUNT; ++i) {
+         snprintf(name, sizeof(name), "frc%d", i);
+@@ -821,6 +854,10 @@ static void esp32_soc_init(Object *obj)
+     object_initialize_child( obj, "sha" , &s->sha , TYPE_ESP32_SHA);
+     object_initialize_child( obj, "aes" , &s->aes , TYPE_ESP32_AES);
+     object_initialize_child( obj, "ledc", &s->ledc, TYPE_ESP32_LEDC);
++    object_initialize_child( obj, "pcnt", &s->pcnt, TYPE_ESP32_PCNT);
++    object_initialize_child( obj, "mcpwm0", &s->mcpwm[0], TYPE_ESP32_MCPWM);
++    object_initialize_child( obj, "mcpwm1", &s->mcpwm[1], TYPE_ESP32_MCPWM);
++    object_initialize_child( obj, "twai", &s->twai, TYPE_ESP32_TWAI);
+     object_initialize_child( obj, "rsa" , &s->rsa , TYPE_ESP32_RSA);
+     object_initialize_child( obj, "sens", &s->sens, TYPE_ESP32_SENS);
+     object_initialize_child( obj, "ana" , &s->ana , TYPE_ESP32_ANA);
+diff --git a/hw/xtensa/esp32_intc.c b/hw/xtensa/esp32_intc.c
+index 90570d8..7756a99 100644
+--- a/hw/xtensa/esp32_intc.c
++++ b/hw/xtensa/esp32_intc.c
+@@ -24,29 +24,48 @@
+ 
+ #define IRQ_MAP(cpu, input) s->irq_map[cpu][input]
+ 
++/* A CPU interrupt input is the OR of every source the matrix maps to it on that CPU (TRM, Interrupt
++ * Matrix): a shared interrupt (ESP_INTR_FLAG_SHARED) stays up while any of its sources is up. The
++ * line is driven only when that OR changes, so one source dropping while another holds an
++ * edge-triggered interrupt is no new edge. CPU interrupts that are not external inputs (timers,
++ * software, profiling, and 6 = "not mapped") have no line. */
++static void esp32_intmatrix_update_line(Esp32IntMatrixState *s, int cpu, int out_index)
++{
++    if (s->outputs[cpu] == NULL || out_index < 0 || out_index >= 32) {
++        return;
++    }
++    const XtensaConfig *config = s->cpu[cpu]->env.config;
++    for (int int_index = 0; int_index < config->nextint; ++int_index) {
++        if (config->extint[int_index] != out_index) {
++            continue;
++        }
++        bool level = false;
++        for (int n = 0; n < ESP32_INT_MATRIX_INPUTS && !level; ++n) {
++            level = IRQ_MAP(cpu, n) == out_index && s->irq_raw[n];
++        }
++        const uint32_t bit = 1u << out_index;
++        if (level != ((s->line_level[cpu] & bit) != 0)) {
++            s->line_level[cpu] ^= bit;
++            qemu_set_irq(s->outputs[cpu][int_index], level);
++        }
++        return;
++    }
++}
++
+ static void esp32_intmatrix_irq_handler(void *opaque, int n, int level)
+ {
+     Esp32IntMatrixState *s = ESP32_INTMATRIX(opaque);
+ 
+-    s->irq_raw[n] = level;
++    s->irq_raw[n] = level != 0;
+     for (int i = 0; i < ESP32_CPU_COUNT; ++i) {
+-        if (s->outputs[i] == NULL) {
+-            continue;
+-        }
+-        int out_index = IRQ_MAP(i, n);
+-        for (int int_index = 0; int_index < s->cpu[i]->env.config->nextint; ++int_index) {
+-            if (s->cpu[i]->env.config->extint[int_index] == out_index) {
+-                qemu_set_irq(s->outputs[i][int_index], level);
+-                break;
+-            }
+-        }
++        esp32_intmatrix_update_line(s, i, IRQ_MAP(i, n));
+     }
+ }
+ 
+ static inline uint8_t* get_map_entry(Esp32IntMatrixState* s, hwaddr addr)
+ {
+     int source_index = addr / sizeof(uint32_t);
+-    if (source_index > ESP32_INT_MATRIX_INPUTS * ESP32_CPU_COUNT) {
++    if (source_index >= ESP32_INT_MATRIX_INPUTS * ESP32_CPU_COUNT) {
+         error_report("%s: source_index %d out of range", __func__, source_index);
+         return NULL;
+     }
+@@ -65,20 +84,17 @@ static uint64_t esp32_intmatrix_read(void* opaque, hwaddr addr, unsigned int siz
+ static void esp32_intmatrix_write(void* opaque, hwaddr addr, uint64_t value, unsigned int size)
+ {
+     Esp32IntMatrixState *s = ESP32_INTMATRIX(opaque);
+-    int source_index = (addr / sizeof(uint32_t)) % ESP32_INT_MATRIX_INPUTS;
+     int cpu_index = (addr / sizeof(uint32_t)) / ESP32_INT_MATRIX_INPUTS;
+     uint8_t* map_entry = get_map_entry(s, addr);
+-    if (value == INTMATRIX_UNINT_VALUE) {
+-        int si = s->irq_raw[source_index];
+-        esp32_intmatrix_irq_handler(s, source_index, 0);
+-        s->irq_raw[source_index] = si;
+-    }
+-    if (map_entry != NULL) {
+-        *map_entry = value & 0x1f;
+-    }
+-    if (value != INTMATRIX_UNINT_VALUE && s->irq_raw[source_index]) {
+-        esp32_intmatrix_irq_handler(s, source_index, 1);
++    if (map_entry == NULL) {
++        return;
+     }
++    /* Remapping a source moves it from one interrupt input of this CPU to another: both lines are
++     * recomputed, and the other CPU's mapping of the same source is untouched. */
++    const int old_index = *map_entry;
++    *map_entry = value & 0x1f;
++    esp32_intmatrix_update_line(s, cpu_index, old_index);
++    esp32_intmatrix_update_line(s, cpu_index, *map_entry);
+ }
+ 
+ /* Ver .spec 32.5.16 -- expoe o estado bruto ("raw", antes de roteamento) das fontes de interrupcao
+@@ -112,6 +128,7 @@ static void esp32_intmatrix_reset(DeviceState *dev)
+     Esp32IntMatrixState *s = ESP32_INTMATRIX(dev);
+     memset(s->irq_raw, 0, sizeof(s->irq_raw));
+     memset(s->irq_map, INTMATRIX_UNINT_VALUE, sizeof(s->irq_map));
++    memset(s->line_level, 0, sizeof(s->line_level));
+     for (int i = 0; i < ESP32_CPU_COUNT; ++i) {
+         if (s->outputs[i] == NULL) {
+             continue;
+diff --git a/include/hw/misc/esp32_mcpwm.h b/include/hw/misc/esp32_mcpwm.h
+new file mode 100644
+index 0000000..95a4b54
+--- /dev/null
++++ b/include/hw/misc/esp32_mcpwm.h
+@@ -0,0 +1,32 @@
++#pragma once
++
++#include "hw/hw.h"
++#include "hw/sysbus.h"
++#include "hw/registerfields.h"
++
++#define TYPE_ESP32_MCPWM "misc.esp32.mcpwm"
++#define ESP32_MCPWM(obj) OBJECT_CHECK(Esp32McpwmState, (obj), TYPE_ESP32_MCPWM)
++
++#define ESP32_MCPWM_REG_BYTES 0x128
++
++/* Motor-control PWM (ESP32 TRM, MCPWM), one instance per unit. The Core generates the waveforms and
++ * captures the inputs (Esp32Adapter MCPWM engine); this model keeps the register file, mirrors every
++ * write to the Core, and takes from the Core the timer status (vNext-B snapshot) and the events that
++ * set INT_RAW, the capture values and the fault status (esp32_mcpwm_vnext_event). */
++typedef struct Esp32McpwmState {
++    SysBusDevice parent_obj;
++    MemoryRegion iomem;
++    qemu_irq irq;
++    uint32_t unit;
++    uint32_t regs[ESP32_MCPWM_REG_BYTES / 4];
++    int64_t status_sync_ns; /* last instant a TIMERn_STATUS read synced the Core */
++} Esp32McpwmState;
++
++REG32(MCPWM_TIMER0_STATUS, 0x010)
++REG32(MCPWM_INT_ENA, 0x110)
++REG32(MCPWM_INT_RAW, 0x114)
++REG32(MCPWM_INT_ST, 0x118)
++REG32(MCPWM_INT_CLR, 0x11c)
++
++/* vNext-B: an MCPWM register the Core updated (INT_RAW bits to set, a capture value, a status). */
++void esp32_mcpwm_vnext_event(uint64_t address, uint64_t value);
+diff --git a/include/hw/misc/esp32_pcnt.h b/include/hw/misc/esp32_pcnt.h
+new file mode 100644
+index 0000000..a2e9a8f
+--- /dev/null
++++ b/include/hw/misc/esp32_pcnt.h
+@@ -0,0 +1,39 @@
++#pragma once
++
++#include "hw/hw.h"
++#include "hw/sysbus.h"
++#include "hw/registerfields.h"
++
++#define TYPE_ESP32_PCNT "misc.esp32.pcnt"
++#define ESP32_PCNT(obj) OBJECT_CHECK(Esp32PcntState, (obj), TYPE_ESP32_PCNT)
++
++#define ESP32_PCNT_UNITS 8
++
++/* Pulse counter (ESP32 TRM, PCNT). The Core counts the edges (Esp32Adapter PCNT engine, which sees every
++ * pad edge at its instant); this model keeps the registers, reads the counters from the vNext-B
++ * snapshot and raises the interrupt when the Core reports an event (esp32_pcnt_vnext_event). */
++typedef struct Esp32PcntState {
++    SysBusDevice parent_obj;
++    MemoryRegion iomem;
++    qemu_irq irq;
++    uint32_t conf0[ESP32_PCNT_UNITS];
++    uint32_t conf1[ESP32_PCNT_UNITS];
++    uint32_t conf2[ESP32_PCNT_UNITS];
++    uint32_t status[ESP32_PCNT_UNITS];
++    uint32_t ctrl;
++    uint32_t int_raw;
++    uint32_t int_ena;
++} Esp32PcntState;
++
++REG32(PCNT_U0_CONF0, 0x00)
++REG32(PCNT_U0_CNT, 0x60)
++REG32(PCNT_INT_RAW, 0x80)
++REG32(PCNT_INT_ST, 0x84)
++REG32(PCNT_INT_ENA, 0x88)
++REG32(PCNT_INT_CLR, 0x8c)
++REG32(PCNT_U0_STATUS, 0x90)
++REG32(PCNT_CTRL, 0xb0)
++REG32(PCNT_DATE, 0xfc)
++
++/* vNext-B: an event the Core latched for unit `unit` (STATUS_Un value), pushed through C2A. */
++void esp32_pcnt_vnext_event(uint64_t address, uint64_t value);
+diff --git a/include/hw/misc/esp32_sens.h b/include/hw/misc/esp32_sens.h
+index a2f7ed5..0aa8ea8 100644
+--- a/include/hw/misc/esp32_sens.h
++++ b/include/hw/misc/esp32_sens.h
+@@ -8,6 +8,8 @@
+ #define TYPE_ESP32_SENS "misc.esp32.sens"
+ #define ESP32_SENS(obj) OBJECT_CHECK(Esp32SensState, (obj), TYPE_ESP32_SENS)
+ 
++#define ESP32_SENS_REG_COUNT (0x400 / 4)
++
+ typedef struct Esp32SensState {
+     SysBusDevice parent_obj;
+     MemoryRegion iomem;
+@@ -15,6 +17,9 @@ typedef struct Esp32SensState {
+     short ADC_values[32];
+     int channel1;
+     int channel2;
++    /* Every SENS register as last written: the firmware reads them back (ESP-IDF sets the attenuation
++     * of one channel with a read-modify-write of SENS_SAR_ATTENx). */
++    uint32_t regs[ESP32_SENS_REG_COUNT];
+ } Esp32SensState;
+ 
+ //#define ESP32_RNG_BASE (DR_REG_WDEV_BASE + 0x144)
+diff --git a/include/hw/misc/esp32_twai.h b/include/hw/misc/esp32_twai.h
+new file mode 100644
+index 0000000..bdd06bf
+--- /dev/null
++++ b/include/hw/misc/esp32_twai.h
+@@ -0,0 +1,59 @@
++#pragma once
++
++#include "hw/hw.h"
++#include "hw/sysbus.h"
++#include "hw/registerfields.h"
++
++#define TYPE_ESP32_TWAI "misc.esp32.twai"
++#define ESP32_TWAI(obj) OBJECT_CHECK(Esp32TwaiState, (obj), TYPE_ESP32_TWAI)
++
++#define ESP32_TWAI_FIFO_BYTES 64
++#define ESP32_TWAI_FIFO_FRAMES 64
++
++/* TWAI (ESP32 TRM, CAN 2.0B; SJA1000 PeliCAN register set). The CAN protocol runs in the Core, bit by bit
++ * on the TWAI_TX/TWAI_RX pads (Esp32Adapter TWAI engine). This model keeps the registers, the 64-byte RX
++ * FIFO with its per-message overrun flags and the interrupt register; SR/TEC/REC come from the vNext-B
++ * snapshot and the Core pushes received frames and interrupt events through C2A
++ * (esp32_twai_vnext_event). */
++typedef struct Esp32TwaiState {
++    SysBusDevice parent_obj;
++    MemoryRegion iomem;
++    qemu_irq irq;
++    uint32_t mode;      /* MOD: RM 0, LOM 1, STM 2, AFM 3 */
++    uint32_t ier;       /* IER (bit 4 = BRP_DIV) */
++    uint32_t btr0, btr1, ewl, cdr;
++    uint8_t acr[4], amr[4];
++    uint32_t ir;        /* latched interrupts; RI follows the FIFO */
++    uint32_t alc, ecc;
++    bool alc_armed, ecc_armed; /* reading ALC/ECC re-arms the capture and ALI/BEI */
++    uint8_t fifo[ESP32_TWAI_FIFO_BYTES];
++    uint32_t fifo_rd, fifo_cnt;
++    uint8_t info_len[ESP32_TWAI_FIFO_FRAMES];
++    bool info_overrun[ESP32_TWAI_FIFO_FRAMES];
++    uint32_t info_rd, info_cnt; /* info_cnt = RMC */
++    bool dos;
++    uint8_t rx_frame[16];       /* the frame the Core is delivering, word by word */
++} Esp32TwaiState;
++
++REG32(TWAI_MODE, 0x00)
++REG32(TWAI_CMD, 0x04)
++REG32(TWAI_STATUS, 0x08)
++REG32(TWAI_INT_RAW, 0x0c)
++REG32(TWAI_INT_ENA, 0x10)
++REG32(TWAI_BUS_TIMING_0, 0x18)
++REG32(TWAI_BUS_TIMING_1, 0x1c)
++REG32(TWAI_ARB_LOST_CAP, 0x2c)
++REG32(TWAI_ERR_CODE_CAP, 0x30)
++REG32(TWAI_ERR_WARNING_LIMIT, 0x34)
++REG32(TWAI_RX_ERR_CNT, 0x38)
++REG32(TWAI_TX_ERR_CNT, 0x3c)
++REG32(TWAI_DATA_0, 0x40)
++REG32(TWAI_DATA_12, 0x70)
++REG32(TWAI_RX_MESSAGE_CNT, 0x74)
++REG32(TWAI_RX_BUF_START, 0x78)
++REG32(TWAI_CLOCK_DIVIDER, 0x7c)
++
++/* vNext-B: an event the Core's controller produced (IR bits, ALC, ECC, MOD on bus off, a received frame). */
++void esp32_twai_vnext_event(uint64_t address, uint64_t value);
++/* DPORT_PERIP_RST_EN.TWAI_RST: the peripheral reset ESP-IDF uses at install and in its errata workarounds. */
++void esp32_twai_peripheral_reset(void);
+diff --git a/include/hw/ssi/esp32_rmt.h b/include/hw/ssi/esp32_rmt.h
+index c16a489..c1b4116 100644
+--- a/include/hw/ssi/esp32_rmt.h
++++ b/include/hw/ssi/esp32_rmt.h
+@@ -7,7 +7,24 @@
+ #define TYPE_ESP32_RMT "ssi.esp32.rmt"
+ #define ESP32_RMT(obj) OBJECT_CHECK(Esp32RmtState, (obj), TYPE_ESP32_RMT)
+ 
++#define ESP32_RMT_CHANNELS      8
+ #define ESP32_RMT_BUF_WORDS     512
++#define ESP32_RMT_BLOCK_WORDS   64
++
++struct Esp32RmtState;
++
++/* Transmitter of one channel (see esp32_rmt.c). */
++typedef struct Esp32RmtTx {
++    struct Esp32RmtState *owner;
++    int channel;
++    QEMUTimer timer;
++    bool active;
++    uint32_t rd;          /* next item, in words from the channel's first memory block */
++    uint32_t sent;        /* items sent since the last TX_THR event */
++    uint64_t elapsed_ps;  /* start of the next item, from the start of the transmission */
++    int64_t start_ns;     /* virtual time the transmission started */
++    bool ending;          /* the timer is the end of the last item, not the start of a new one */
++} Esp32RmtTx;
+ 
+ typedef struct Esp32RmtState {
+     SysBusDevice parent_obj;
+@@ -15,36 +32,52 @@ typedef struct Esp32RmtState {
+     qemu_irq irq;
+     int num_cs;
+     SSIBus *rmt;
+-    uint32_t conf0[8];
+-    uint32_t conf1[8];
++    uint32_t conf0[ESP32_RMT_CHANNELS];
++    uint32_t conf1[ESP32_RMT_CHANNELS];
++    uint32_t carrier_duty[ESP32_RMT_CHANNELS];
+     uint32_t int_raw;
+     uint32_t int_en;
+-    uint32_t txlim[8];
++    uint32_t txlim[ESP32_RMT_CHANNELS];
+     uint32_t apb_conf;
+-    int sent;
+-    bool unsent_data;
++    uint32_t apb_wr[ESP32_RMT_CHANNELS]; /* FIFO-mode write pointer (APB_FIFO_MASK = 0) */
+     uint32_t data[ESP32_RMT_BUF_WORDS];
+-    QEMUTimer rmt_timer;
++    Esp32RmtTx tx[ESP32_RMT_CHANNELS];
+ } Esp32RmtState;
+ 
+-
++REG32(RMT_CH0DATA, 0x00)
+ REG32(RMT_CH0CONF0, 0x20)
++    FIELD(RMT_CHnCONF0, CLK_EN, 31, 1)
++    FIELD(RMT_CHnCONF0, CARRIER_OUT_LV, 29, 1)
++    FIELD(RMT_CHnCONF0, CARRIER_EN, 28, 1)
+     FIELD(RMT_CHnCONF0, MEM_SIZE, 24, 4)
+     FIELD(RMT_CHnCONF0, DIV_CNT, 0, 8)
+ REG32(RMT_CH0CONF1, 0x24)
++    FIELD(RMT_CHnCONF1, IDLE_OUT_EN, 19, 1)
++    FIELD(RMT_CHnCONF1, IDLE_OUT_LV, 18, 1)
++    FIELD(RMT_CHnCONF1, REF_ALWAYS_ON, 17, 1)
++    FIELD(RMT_CHnCONF1, TX_CONTI_MODE, 6, 1)
++    FIELD(RMT_CHnCONF1, APB_MEM_RST, 4, 1)
+     FIELD(RMT_CHnCONF1, MEM_RD_RST, 3, 1)
+     FIELD(RMT_CHnCONF1, TX_START, 0, 1)
++REG32(RMT_CH0STATUS, 0x60)
++REG32(RMT_CH0ADDR, 0x80)
+ REG32(RMT_INT_RAW, 0xa0)
+ REG32(RMT_INT_ST, 0xa4)
+ REG32(RMT_INT_ENA, 0xa8)
+ REG32(RMT_INT_CLR, 0xac)
+-REG32(RMT_DATA, 0x800)
+-REG32(RMT_TX_LIM,0xd0)
+-REG32(RMT_APB_CONF,0xf0)
++REG32(RMT_CH0CARRIER_DUTY, 0xb0)
++REG32(RMT_TX_LIM, 0xd0)
++REG32(RMT_APB_CONF, 0xf0)
+     FIELD(RMT_APB_CONF, MEM_TX_WRAP_EN, 1, 1)
+-    FIELD(RMT_APB_CONF, MEM_ACCESS_EN, 0 , 1)
+-
+-
+-
+-
++    FIELD(RMT_APB_CONF, MEM_ACCESS_EN, 0, 1)
++REG32(RMT_DATE, 0xfc)
++REG32(RMT_DATA, 0x800)
+ 
++/* Private offsets the model mirrors to the Core (vNext-B lane writes), one per channel. */
++#define ESP32_RMT_CORE_ITEM     0x400  /* + 4n: an item starts now, see esp32_rmt_emit_item() */
++#define ESP32_RMT_CORE_CARRIER  0x440  /* + 8n: carrier high (flags), + 8n + 4: carrier low */
++#define ESP32_RMT_ITEM_LEVEL0   (1u << 0)
++#define ESP32_RMT_ITEM_LEVEL1   (1u << 1)
++#define ESP32_RMT_ITEM_SECOND   (1u << 2)  /* LEVEL1 starts FIRST_PS after LEVEL0 */
++#define ESP32_RMT_ITEM_IDLE     (1u << 3)  /* not an item: the idle level, no carrier */
++#define ESP32_RMT_ITEM_PS_SHIFT 8          /* [63:8] the first half's duration, in ps */
+diff --git a/include/hw/ssi/esp32_spi.h b/include/hw/ssi/esp32_spi.h
+index 3305357..41821bb 100644
+--- a/include/hw/ssi/esp32_spi.h
++++ b/include/hw/ssi/esp32_spi.h
+@@ -22,10 +22,21 @@ typedef struct Esp32SpiState {
+ 
+     QEMUTimer event_timer;
+ 
+-    uint32_t period;
++    uint64_t period_ps; /* um periodo de SCK, em ps (ver write_clk_reg) */
+     int bytesDone;
+     int dataBytes;
+     int number;
++    /* USR transaction on the wire (HSPI/VSPI), see esp32_spi_wire_value() */
++    int txBytes;
++    int rxBytes;
++    bool fullDuplex;
++    uint8_t mosiHold;
++    int rxExpected;    /* MISO bytes of the transaction the Core samples (vNext-B), see esp32_spi_vnext_rx */
++    int rxDelivered;   /* ... and how many of them arrived */
++    int64_t wireStartNs; /* virtual time the transaction's first byte started on the wire */
++    int64_t wireByteNs;  /* duration of one byte on the wire */
++    int64_t rxSyncNs;    /* last sync a buffer read forced for MISO bytes, and what had arrived then */
++    int rxSyncDelivered;
+ 
+     //bool use_cs;
+ 
+@@ -65,6 +76,8 @@ FIELD(SPI_CMD, PER, 16, 1)
+ 
+ REG32(SPI_ADDR, 0x04)
+ REG32(SPI_CTRL, 0x08)
++FIELD(SPI_CTRL, WR_BIT_ORDER, 26, 1)
++FIELD(SPI_CTRL, RD_BIT_ORDER, 25, 1)
+ REG32(SPI_STATUS, 0x10)
+ FIELD(SPI_STATUS, STATUS, 0, 16)
+ 
+@@ -76,7 +89,11 @@ FIELD(SPI_USER, ADDR, 30, 1)
+ FIELD(SPI_USER, DUMMY, 29, 1)
+ FIELD(SPI_USER, MISO, 28, 1)
+ FIELD(SPI_USER, MOSI, 27, 1)
++FIELD(SPI_USER, MOSI_HIGHPART, 25, 1)
++FIELD(SPI_USER, MISO_HIGHPART, 24, 1)
+ FIELD(SPI_USER, SIO, 16, 1)
++FIELD(SPI_USER, WR_BYTE_ORDER, 11, 1)
++FIELD(SPI_USER, RD_BYTE_ORDER, 10, 1)
+ FIELD(SPI_USER, DOUTDIN, 0, 1)
+ 
+ REG32(SPI_USER1, 0x20)
+@@ -102,4 +119,7 @@ REG32(SPI_EXT1, 0xF4)
+ REG32(SPI_EXT2, 0xF8)
+ REG32(SPI_EXT3, 0xFC)
+ 
++/* vNext-B: a byte the Core sampled on MISO, pushed through C2A at the buffer's address (A_SPI_W0). */
++void esp32_spi_vnext_rx(uint64_t address, uint64_t value);
++
+ 
+diff --git a/include/hw/xtensa/esp32.h b/include/hw/xtensa/esp32.h
+index ceebbfe..a13ae45 100644
+--- a/include/hw/xtensa/esp32.h
++++ b/include/hw/xtensa/esp32.h
+@@ -13,6 +13,9 @@
+ #include "hw/misc/esp32_sha.h"
+ #include "hw/misc/esp32_aes.h"
+ #include "hw/misc/esp32_ledc.h"
++#include "hw/misc/esp32_pcnt.h"
++#include "hw/misc/esp32_mcpwm.h"
++#include "hw/misc/esp32_twai.h"
+ #include "hw/misc/esp32_rsa.h"
+ #include "hw/timer/esp32_frc_timer.h"
+ #include "hw/timer/esp32_timg.h"
+@@ -53,6 +56,9 @@ typedef struct Esp32SocState {
+     Esp32AesState aes;
+     Esp32RsaState rsa;
+     Esp32LEDCState ledc;
++    Esp32PcntState pcnt;
++    Esp32McpwmState mcpwm[2];
++    Esp32TwaiState twai;
+     Esp32EfuseState efuse;
+     ESPRgbState rgb;
+     Esp32AnaState ana;
+diff --git a/include/hw/xtensa/esp32_intc.h b/include/hw/xtensa/esp32_intc.h
+index 7df26d4..34cc62f 100644
+--- a/include/hw/xtensa/esp32_intc.h
++++ b/include/hw/xtensa/esp32_intc.h
+@@ -35,6 +35,9 @@ typedef struct Esp32IntMatrixState {
+     qemu_irq *outputs[ESP32_CPU_COUNT];
+     uint8_t irq_map[ESP32_CPU_COUNT][ESP32_INT_MATRIX_INPUTS];
+     uint8_t irq_raw[ESP32_INT_MATRIX_INPUTS];
++    /* Level driven on each CPU interrupt input (bit n = CPU interrupt n), see
++     * esp32_intmatrix_update_line(). */
++    uint32_t line_level[ESP32_CPU_COUNT];
+     /* properties */
+     XtensaCPU *cpu[ESP32_CPU_COUNT];
+ } Esp32IntMatrixState;
+diff --git a/include/qemu/main-loop.h b/include/qemu/main-loop.h
+index e28c73a..6147bcd 100644
+--- a/include/qemu/main-loop.h
++++ b/include/qemu/main-loop.h
+@@ -91,6 +91,11 @@ int qemu_init_main_loop(Error **errp);
+  */
+ void main_loop_wait(int nonblocking);
+ void main_loop_timeout( int64_t timeout_ns );
++/* Defined in util/main-loop.c. vNext-B sets main_loop_precise_idle_can_block so the precise idle
++ * wait of main_loop_timeout() may block on the loop's wait objects; the legacy arena registers
++ * main_loop_idle_wake_hook so that wait ends early when Core raises an IRQ or ends the Run. */
++extern bool main_loop_precise_idle_can_block;
++extern bool (*main_loop_idle_wake_hook)(void);
+ 
+ /**
+  * qemu_get_aio_context: Return the main loop's AioContext
+diff --git a/softmmu/runstate.c b/softmmu/runstate.c
+index 171fddc..f1875cd 100644
+--- a/softmmu/runstate.c
++++ b/softmmu/runstate.c
+@@ -739,7 +739,6 @@ int qemu_main_loop(void)
+          * Use the same precise, BQL-free idle wait as the legacy transport; the Core's
+          * response still wakes the loop through its wait object. */
+         if (vnext_b_active()) {
+-            extern bool main_loop_precise_idle_can_block;
+             main_loop_precise_idle_can_block = true;
+             while (!main_loop_should_exit(&status)) {
+                 main_loop_timeout(1000);
+diff --git a/softmmu/simuliface.c b/softmmu/simuliface.c
+index a6b7727..c4aaf26 100644
+--- a/softmmu/simuliface.c
++++ b/softmmu/simuliface.c
+@@ -7,28 +7,19 @@
+  * (at your option) any later version.
+  */
+ 
+-#include <sys/stat.h>
+-#include <stdlib.h>
+-#include <fcntl.h>
+-#include <unistd.h>
+-#include <stdio.h>
+-#include <errno.h>
+-#include <stdint.h>
+-#ifdef _WIN32
+-#include <windows.h>
+-#endif
++/* qemu/osdep.h first, as in every QEMU source: on Windows it includes winsock2.h before
++ * windows.h (the reverse order makes winsock2.h warn), and it already brings the C/POSIX
++ * headers (stdio, stdlib, stdint, errno, fcntl, unistd, sys/stat) this file uses. */
++#include "qemu/osdep.h"
+ 
+ #ifdef __linux__
+ #include <sys/mman.h>
+ #include <sys/shm.h>
+-//#elif defined(_WIN32)
+-//#include <windows.h>
+ #endif
+ 
+ #include "simuliface.h"
+ #include "vnext_b.h"
+ 
+-#include "qemu/osdep.h"
+ #include "qemu-main.h"
+ #include "qemu/timer.h"
+ #include "qemu/main-loop.h"
+@@ -414,12 +405,7 @@ static void pushQueueEntry( uint64_t addr, uint64_t data, uint64_t action, uint6
+ static bool publishQueueEntry( uint64_t addr, uint64_t data, uint64_t action,
+                                bool serializeDeviceMmio )
+ {
+-    const uint64_t entryHostNs = get_clock();
+-    const uint64_t entryVirtualNs = simuClockNs();
+     ArenaTransaction transaction = arenaTransactionBegin(serializeDeviceMmio);
+-    const uint64_t bqlReacquireHostNs = get_clock();
+-    const bool willBackpressureWait = m_arena &&
+-        (m_arena->queueWriteIndex - qatomic_load_acquire(&m_arena->queueReadIndex) >= QEMU_ARENA_QUEUE_DEPTH);
+     if (!waitForSynch()) {
+         arenaTransactionEnd(transaction);
+         return false;
+@@ -532,9 +518,7 @@ uint64_t readReg( uint64_t addr )
+     /* Every read is synchronous guest MMIO dispatch.  Keep the originating
+      * MemoryRegion serialized while waiting for Core, matching the protected
+      * I2C burst mailbox path. */
+-    const uint64_t entryHostNs = get_clock();
+     ArenaTransaction transaction = arenaTransactionBegin(true);
+-    const uint64_t bqlReacquireHostNs = get_clock();
+     uint64_t now = simuClockNs();
+     ++m_profileReadTransactions;
+     m_lastQemuTime = now;
+@@ -641,10 +625,7 @@ bool i2cBurstTransfer( uint32_t bus, const I2cBurstRequest* req, I2cBurstRespons
+     /* Called synchronously from esp32.i2c MMIO.  Reacquire the BQL only after
+      * the arena lock so another MTTCG vCPU cannot re-enter this device while
+      * the mailbox request is in flight. */
+-    const uint64_t entryHostNs = get_clock();
+-    const uint64_t entryVirtualNs = simuClockNs();
+     ArenaTransaction transaction = arenaTransactionBegin(true);
+-    const uint64_t bqlReacquireHostNs = get_clock();
+ 
+     /* Mantém ordem total com GPIO-matrix/IOMUX e demais writes já publicados. Sem esta barreira o
+      * Core poderia resolver o burst antes de aplicar o roteamento de SDA/SCL que o precedeu. */
+@@ -747,10 +728,6 @@ uint64_t getQemu_ps(void)
+     return simuClockNs()*1000;
+ }
+ 
+-/* Definido em util/main-loop.c: consultado pela espera ociosa sem BQL de main_loop_timeout()
+- * (Windows) para acordar antes do próximo timer. */
+-extern bool (*main_loop_idle_wake_hook)(void);
+-
+ /* Registrado em main_loop_idle_wake_hook: a espera ociosa sem BQL do laço principal acorda antes
+  * do próximo timer quando o Core pede uma IRQ ou encerra o Run (ver qemu_main_loop()). */
+ static bool simuMainLoopWakeRequested(void)
+diff --git a/softmmu/vnext_b.c b/softmmu/vnext_b.c
+index 3fd8d4f..ee9adb6 100644
+--- a/softmmu/vnext_b.c
++++ b/softmmu/vnext_b.c
+@@ -12,6 +12,10 @@
+ #include "hw/char/esp32_uart.h"
+ #include "hw/gpio/esp32_gpio.h"
+ #include "hw/i2c/esp32_i2c.h"
++#include "hw/ssi/esp32_spi.h"
++#include "hw/misc/esp32_pcnt.h"
++#include "hw/misc/esp32_mcpwm.h"
++#include "hw/misc/esp32_twai.h"
+ #include "hw/timer/esp32_timg.h"
+ #include "softmmu/vnext_b_classify.h"
+ #include "vnext_b.h"
+@@ -30,7 +34,9 @@ typedef struct VnextEvent { uint64_t timestamp, sequence; uint32_t kind, flags,
+ typedef struct VnextRegion { uint64_t offset, bytes; uint32_t stride, count; } VnextRegion;
+ typedef struct VnextEndpoint { uint32_t id, kind; uint64_t q2c, c2a, snapshot; uint32_t depth, stride, limit, reserved; } VnextEndpoint;
+ typedef struct VnextLane { VnextRegion metadata, events; uint32_t depth, stride; } VnextLane;
+-typedef struct VnextSnapshot { uint64_t publishSeq; uint8_t data[64]; } VnextSnapshot;
++/* data: GPIO_IN [0,8), GPIO_IN1 [8,16), ADC pad voltages [16,52), PCNT counters [56,72), MCPWM timer
++ * status [72,96), TWAI SR/TEC/REC [96,99) -- byte-identical to lasec_at_snapshot (LASEC_AT_SNAPSHOT_BYTES). */
++typedef struct VnextSnapshot { uint64_t publishSeq; uint8_t data[128]; } VnextSnapshot;
+ typedef struct VnextResponse { uint64_t requestSeq, responseSeq; int32_t status; uint32_t bytes; uint8_t payload[64]; } VnextResponse;
+ typedef struct VnextControl {
+     uint64_t magic; uint32_t major, minor; uint64_t bytes, execution;
+@@ -213,7 +219,13 @@ static bool vnext_lockstep_soft_address(uint64_t address) {
+            (address >= UINT64_C(0x3FF50000) && address < UINT64_C(0x3FF51000)) || /* UART1 */
+            (address >= UINT64_C(0x3FF6E000) && address < UINT64_C(0x3FF6F000)) || /* UART2 */
+            (address >= UINT64_C(0x3FF64000) && address < UINT64_C(0x3FF66000)) || /* SPI2, SPI3 */
+-           (address >= UINT64_C(0x3FF59000) && address < UINT64_C(0x3FF5A000));   /* LEDC */
++           (address >= UINT64_C(0x3FF59000) && address < UINT64_C(0x3FF5A000)) || /* LEDC */
++           (address >= UINT64_C(0x3FF56000) && address < UINT64_C(0x3FF57000)) || /* RMT (output items) */
++           /* TWAI configuration and TX buffer: nothing answers them; MOD, CMR, IER and the error counters
++            * do (a transmission, bus off, an interrupt), and hold. */
++           (address >= UINT64_C(0x3FF6B018) && address < UINT64_C(0x3FF6B020)) ||
++           address == UINT64_C(0x3FF6B034) || address == UINT64_C(0x3FF6B07C) ||
++           (address >= UINT64_C(0x3FF6B040) && address < UINT64_C(0x3FF6B074));
+ }
+ static QEMUTimer *vnext_lockstep_timer;
+ static uint64_t vnext_lockstep_sync_count;
+@@ -662,6 +674,45 @@ uint64_t vnext_b_gpio_read(uint64_t address) {
+     return value;
+ }
+ 
++/* Voltage on ADC pad `pad` (0..7 = ADC1_CH0..7, 8..17 = ADC2_CH0..9) in tenths of mV, from bytes 16-51
++ * of the snapshot the Core publishes with GPIO_IN (McuComponent::publishVnextBGpioInputsLocked). The
++ * caller syncs first (vnext_b_lockstep_input_barrier), exactly as for a GPIO_IN read. */
++uint32_t vnext_b_adc_pad_tenths_mv(unsigned pad) {
++    if (!vnext_b_active() || pad >= 18) return 0;
++    VnextSnapshot *s = (VnextSnapshot *)(vnext_base + vnext_control->snapshotOffset);
++    uint16_t value = 0;
++    memcpy(&value, s->data + 16 + 2 * pad, sizeof(value));
++    return value;
++}
++
++/* Counter of PCNT unit `unit` (signed 16 bits), bytes 56-71 of the snapshot. Same sync rule as above. */
++int32_t vnext_b_pcnt_count(unsigned unit) {
++    if (!vnext_b_active() || unit >= 8) return 0;
++    VnextSnapshot *s = (VnextSnapshot *)(vnext_base + vnext_control->snapshotOffset);
++    int16_t value = 0;
++    memcpy(&value, s->data + 56 + 2 * unit, sizeof(value));
++    return value;
++}
++
++/* MCPWM timer status (TIMERn_STATUS: value [15:0], direction 16) of timer `index` (unit * 3 + timer),
++ * bytes 72-95 of the snapshot. Same sync rule as above. */
++uint32_t vnext_b_mcpwm_timer_status(unsigned index) {
++    if (!vnext_b_active() || index >= 6) return 0;
++    VnextSnapshot *s = (VnextSnapshot *)(vnext_base + vnext_control->snapshotOffset);
++    uint32_t value = 0;
++    memcpy(&value, s->data + 72 + 4 * index, sizeof(value));
++    return value;
++}
++
++/* TWAI SR (TBS..BS) | TEC << 8 | REC << 16, bytes 96-99 of the snapshot. Same sync rule as above. */
++uint32_t vnext_b_twai_state(void) {
++    if (!vnext_b_active()) return 0x3c;
++    VnextSnapshot *s = (VnextSnapshot *)(vnext_base + vnext_control->snapshotOffset);
++    uint32_t value = 0;
++    memcpy(&value, s->data + 96, sizeof(value));
++    return value;
++}
++
+ static bool vnext_i2c_address(uint64_t address, unsigned *bus, bool *status) {
+     if (address >= UINT64_C(0x3FF53000) && address < UINT64_C(0x3FF53100)) {
+         *bus = 0; *status = address == UINT64_C(0x3FF53008); return true;
+@@ -798,6 +849,19 @@ static void vnext_consume_c2a(void) {
+                 /* Pad level change pushed by the Core: edge interrupts fire now, not on the
+                  * guest's next GPIO_IN poll (the snapshot stays the synchronous read path). */
+                 esp32_gpio_vnext_input(address, value);
++            } else if (address == UINT64_C(0x3FF64080) || address == UINT64_C(0x3FF65080)) {
++                /* HSPI/VSPI A_SPI_W0: a byte the Core sampled on MISO. */
++                esp32_spi_vnext_rx(address, value);
++            } else if (address >= UINT64_C(0x3FF57090) && address < UINT64_C(0x3FF570B0)) {
++                /* PCNT_Un_STATUS: an event the Core's counter latched. */
++                esp32_pcnt_vnext_event(address, value);
++            } else if ((address >= UINT64_C(0x3FF5E000) && address < UINT64_C(0x3FF5E128)) ||
++                       (address >= UINT64_C(0x3FF6C000) && address < UINT64_C(0x3FF6C128))) {
++                /* MCPWM: an interrupt event, a capture value or a fault status from the Core. */
++                esp32_mcpwm_vnext_event(address, value);
++            } else if (address >= UINT64_C(0x3FF6B000) && address < UINT64_C(0x3FF6B080)) {
++                /* TWAI: an interrupt event, an ALC/ECC capture, bus off, or a received frame. */
++                esp32_twai_vnext_event(address, value);
+             }
+         }
+         qatomic_fetch_add(&vnext_control->artifactProgress, 1);
+@@ -1078,6 +1142,21 @@ void vnext_b_lockstep_input_barrier(void) {
+     cpu_loop_exit_restore(cpu, cpu->mem_io_pc);
+ }
+ 
++/* MMIO read of something the Core already produced but QEMU has not received yet (vCPU context, BQL
++ * held): sync at this instant even when the snapshot would count as exact, and replay the load once the
++ * Core caught up -- its C2A is consumed before the release. Each round drains the C2A ring, so a caller
++ * that only asks for what was produced up to now converges. */
++void vnext_b_lockstep_sync_barrier(void) {
++    CPUState *cpu = vnext_exec_cpu();
++    if (!vnext_lockstep || !cpu) return;
++    if (!qatomic_read(&vnext_lockstep_holding)) {
++        vnext_lockstep_reason_count[0]++;
++        vnext_lockstep_request(qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
++    }
++    cpu_exit(cpu);
++    cpu_loop_exit_restore(cpu, cpu->mem_io_pc);
++}
++
+ static void vnext_resume(void *opaque) {
+     (void)opaque;
+     if (vnext_provenance_enabled()) {
+@@ -1367,6 +1446,11 @@ int vnext_b_main(int argc, char **argv) {
+ }
+ #else
+ int vnext_b_main(int argc, char **argv) { (void)argc; (void)argv; return 1; }
++uint32_t vnext_b_adc_pad_tenths_mv(unsigned pad) { (void)pad; return 0; }
++int32_t vnext_b_pcnt_count(unsigned unit) { (void)unit; return 0; }
++uint32_t vnext_b_mcpwm_timer_status(unsigned index) { (void)index; return 0; }
++uint32_t vnext_b_twai_state(void) { return 0x3c; }
++void vnext_b_lockstep_sync_barrier(void) {}
+ bool vnext_b_lockstep_hold(void) { return false; }
+ void vnext_b_lockstep_input_barrier(void) {}
+ void vnext_b_lockstep_account_exec(int64_t host_ns) { (void)host_ns; }
+diff --git a/softmmu/vnext_b.h b/softmmu/vnext_b.h
+index 8c3db3b..5ef9659 100644
+--- a/softmmu/vnext_b.h
++++ b/softmmu/vnext_b.h
+@@ -53,6 +53,17 @@ uint64_t lasec_tcg_tb_gen_count(bool one_shot, uint64_t *last_one_shot_pc);
+ VnextPublishResult vnext_b_gpio_write(uint64_t address, uint64_t value);
+ uint64_t vnext_b_gpio_read(uint64_t address);
+ uint64_t vnext_b_register_read(uint64_t address);
++/* MMIO read of something the Core already produced but QEMU has not received yet: sync now and replay. */
++void vnext_b_lockstep_sync_barrier(void);
++/* Voltage on an ADC pad (0..7 = ADC1_CH0..7, 8..17 = ADC2_CH0..9) in tenths of mV, from the snapshot. */
++uint32_t vnext_b_adc_pad_tenths_mv(unsigned pad);
++/* Counter of PCNT unit 0..7 (signed 16 bits), from the snapshot. */
++int32_t vnext_b_pcnt_count(unsigned unit);
++/* MCPWM TIMERn_STATUS of timer unit * 3 + n, from the snapshot. */
++uint32_t vnext_b_mcpwm_timer_status(unsigned index);
++/* TWAI controller state from the snapshot: SR bits TBS..BS | TEC << 8 | REC << 16 (0x3C without vNext-B:
++ * waiting for bus-free, there is no bus). */
++uint32_t vnext_b_twai_state(void);
+ bool vnext_b_i2c_submit(uint32_t bus, uint32_t flags, uint64_t period_ns,
+                         const uint8_t *tx, uint32_t tx_len, uint32_t rx_len);
+ uint64_t vnext_b_diag_lane0_exhaustion_count(void);

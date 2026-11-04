@@ -5,7 +5,7 @@
   "language": "pt-BR",
   "abiVersion": {
     "major": 4,
-    "minor": 1
+    "minor": 3
   },
   "nativeEntry": {
     "win32-x64": "build/win-x64/device.dll",

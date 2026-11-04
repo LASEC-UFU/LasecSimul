@@ -3902,21 +3902,88 @@ std::vector<SimulationSession::SpiBytePair> SimulationSession::mcuSpiBytePairsUn
         if (!onlyOneMcuPin || !dataPin) continue;
         const std::optional<std::vector<uint32_t>> dataSlaves = spiSlavesOn(*dataNode, mcuIndex, *dataPin, false);
         if (!dataSlaves || *dataSlaves != *slaves) continue;
-        pairs.push_back(SpiBytePair{static_cast<uint32_t>(clockPin), static_cast<uint32_t>(*dataPin), *slaves});
+
+        // Se os escravos expõem MISO, o nó precisa ser exatamente o MISO do mesmo barramento e
+        // não pode ter instrumento/carga funcional: o fast path não produz as oito bordas q7.
+        std::optional<uint32_t> misoNode;
+        uint32_t misoPinIndex = UINT32_MAX;
+        bool anyMiso = false, allMiso = true;
+        std::vector<std::pair<uint32_t, uint32_t>> misoOutputs;
+        struct SpiObservedOutput { uint32_t device; uint32_t pin; uint32_t node; };
+        std::vector<SpiObservedOutput> observedOutputs;
+        for (uint32_t slave : *slaves) {
+            const auto output = m_componentInstances[slave]->spiOutputPin();
+            if (!output) { allMiso = false; continue; }
+            anyMiso = true;
+            const auto node = nodeOf(slave, *output);
+            if (!node) { allMiso = false; break; }
+            misoOutputs.emplace_back(slave, *node);
+            for (uint32_t outputPin : m_componentInstances[slave]->spiOutputPins()) {
+                const auto outputNode = nodeOf(slave, outputPin);
+                if (!outputNode) { allMiso = false; break; }
+                observedOutputs.push_back(SpiObservedOutput{slave, outputPin, *outputNode});
+            }
+            if (!allMiso) break;
+        }
+        if (anyMiso && !allMiso) continue;
+        if (anyMiso) {
+            std::optional<size_t> misoPin;
+            bool oneMcuPin = true;
+            for (const simulation::NodePinRef& ref : m_topology.pinRefsByNode[misoOutputs.front().second]) {
+                if (ref.componentIndex != mcuIndex) continue;
+                if (misoPin) { oneMcuPin = false; break; }
+                misoPin = ref.localPinIndex;
+            }
+            if (!oneMcuPin || !misoPin) continue;
+            misoPinIndex = static_cast<uint32_t>(*misoPin);
+            misoNode = nodeOf(mcuIndex, *misoPin);
+            if (!misoNode) continue;
+            bool eligible = true;
+            for (const auto& [slave, node] : misoOutputs) {
+                (void)slave;
+                if (node != *misoNode) { eligible = false; break; }
+            }
+            for (const SpiObservedOutput& output : observedOutputs) {
+                for (const simulation::NodePinRef& ref : m_topology.pinRefsByNode[output.node]) {
+                    if (ref.componentIndex == output.device && ref.localPinIndex == output.pin) continue;
+                    if (output.node == *misoNode && ref.componentIndex == mcuIndex && ref.localPinIndex == *misoPin)
+                        continue;
+                    IComponentModel* other = ref.componentIndex < m_componentInstances.size()
+                                                 ? m_componentInstances[ref.componentIndex].get() : nullptr;
+                    if (!other) { eligible = false; break; }
+                    const std::string_view type = other->typeId();
+                    if (type != "passive.resistor" && type != "connectors.tunnel") { eligible = false; break; }
+                }
+                if (!eligible) break;
+            }
+            if (!eligible) continue;
+        }
+        pairs.push_back(SpiBytePair{static_cast<uint32_t>(clockPin), static_cast<uint32_t>(*dataPin),
+                                    misoPinIndex,
+                                    misoNode.value_or(UINT32_MAX), *slaves});
     }
     return pairs;
 }
 
-void SimulationSession::deliverSpiByteUnlocked(uint32_t mcuIndex, uint32_t clockPin, uint32_t dataPin, uint8_t byte) {
+std::optional<uint8_t> SimulationSession::deliverSpiByteUnlocked(uint32_t mcuIndex, uint32_t clockPin,
+                                                                  uint32_t dataPin, uint8_t byte) {
     const auto it = m_spiBytePairs.find(mcuIndex);
-    if (it == m_spiBytePairs.end()) return;
+    if (it == m_spiBytePairs.end()) return std::nullopt;
     for (const SpiBytePair& pair : it->second) {
         if (pair.clockPin != clockPin || pair.dataPin != dataPin) continue;
-        for (uint32_t slave : pair.devices)
-            if (slave < m_componentInstances.size() && m_componentInstances[slave])
-                m_componentInstances[slave]->clockSpiByte(byte);
-        return;
+        uint8_t miso = 0xFF;
+        bool hasMiso = false;
+        for (uint32_t slave : pair.devices) {
+            if (slave >= m_componentInstances.size() || !m_componentInstances[slave]) continue;
+            IComponentModel* device = m_componentInstances[slave].get();
+            const std::optional<uint32_t> output = device->spiOutputPin();
+            const uint8_t response = device->exchangeSpiByte(byte);
+            if (output) { miso &= response; hasMiso = true; }
+            m_scheduler.markDirty(slave);
+        }
+        return hasMiso ? std::optional<uint8_t>(miso) : std::nullopt;
     }
+    return std::nullopt;
 }
 
 void SimulationSession::refreshMcuPinTransitionObserversUnlocked() {
@@ -3950,15 +4017,16 @@ void SimulationSession::refreshMcuPinTransitionObserversUnlocked() {
         }
         mcu->setUartTapReceivers(uartReceivers);
         std::vector<SpiBytePair> pairs = spiBitLevel ? std::vector<SpiBytePair>{} : mcuSpiBytePairsUnlocked(mcuIndex);
-        std::vector<uint32_t> clockPins, dataPins;
+        std::vector<uint32_t> clockPins, dataPins, misoPins;
         for (const SpiBytePair& pair : pairs) {
             clockPins.push_back(pair.clockPin);
             dataPins.push_back(pair.dataPin);
+            misoPins.push_back(pair.misoPin);
         }
-        mcu->setSpiBytePairs(std::move(clockPins), std::move(dataPins));
+        mcu->setSpiBytePairs(std::move(clockPins), std::move(dataPins), std::move(misoPins));
         // Na thread do Scheduler, no despertar do SPI (topologia imutável durante o Run).
         mcu->setSpiByteHandler([this](uint32_t mcu, uint32_t clockPin, uint32_t dataPin, uint8_t byte) {
-            deliverSpiByteUnlocked(mcu, clockPin, dataPin, byte);
+            return deliverSpiByteUnlocked(mcu, clockPin, dataPin, byte);
         });
         if (!pairs.empty()) m_spiBytePairs[mcuIndex] = std::move(pairs);
     }

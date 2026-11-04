@@ -108,8 +108,9 @@ public:
     bool publishC2A(uint64_t value);
     bool publishRegisterResult(uint64_t address, uint64_t value);
     /** Byte que a USART `uart` recebeu pelo pino (ou pela caixa de envio do monitor): o FIFO de RX
-     * é do modelo de UART do QEMU, que o firmware lê sem passar pelo Core. */
-    bool publishUartRxByte(uint32_t uart, uint8_t byte);
+     * é do modelo de UART do QEMU, que o firmware lê sem passar pelo Core. `errors`: bit 0 paridade,
+     * 1 quadro, 2 break -- o QEMU os leva ao UART_INT_RAW. */
+    bool publishUartRxByte(uint32_t uart, uint8_t byte, uint8_t errors = 0);
     /** O anel C2A não aceita mais nada agora (o QEMU ainda não consumiu). */
     bool c2aFull() const;
     bool respondToRequest(uint32_t lane, uint64_t responseValue);

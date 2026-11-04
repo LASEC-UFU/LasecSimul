@@ -1,0 +1,2809 @@
+diff --git a/hw/char/esp32_uart.c b/hw/char/esp32_uart.c
+index f2a5fbf..018de4b 100644
+--- a/hw/char/esp32_uart.c
++++ b/hw/char/esp32_uart.c
+@@ -26,73 +26,8 @@
+ #include "hw/qdev-properties-system.h"
+ #include "hw/char/esp32_uart.h"
+ 
+-/* E118-AUDIT (EVIDENCE.md, 2026-09-05): same ad-hoc extern declaration vnext_b.c already uses --
+- * no header exposes this without pulling in exec/exec-all.h's much larger dependency surface into
+- * common device code. */
+-G_NORETURN void cpu_loop_exit_restore(CPUState *cpu, uintptr_t pc);
+-
+ static ESP32UARTState *vnext_uart_instances[3];
+ static unsigned vnext_uart_instance_count;
+-
+-/* E147-G (EVIDENCE.md, 2026-09-10): bounded, opt-in (LASECSIMUL_SETTLE_PROVENANCE=1 -- same gate
+- * vnext_b.c's own provenance counters use; a plain local getenv() check here rather than a
+- * cross-file dependency, to keep this device model's own instrumentation self-contained). Proves
+- * or refutes H147-G's lost-wake hypothesis directly on the real UART config-publish path:
+- * CLKDIV/CONF0/byte publish attempts and outcomes, and the FINAL state of tx_effect_count/
+- * pending_config at process exit -- a non-zero pending count at exit is the smoking gun (work
+- * that was queued but never delivered because nothing ever rescheduled the BH again). */
+-static uint64_t vnext_uart_clkdiv_attempts, vnext_uart_clkdiv_published;
+-static uint64_t vnext_uart_conf0_attempts, vnext_uart_conf0_published;
+-static uint64_t vnext_uart_byte_attempts, vnext_uart_byte_published;
+-static uint64_t vnext_uart_would_block_total;
+-static uint64_t vnext_uart_config_would_block;
+-static uint64_t vnext_uart_byte_would_block;
+-static uint64_t vnext_uart_bh_entries;
+-static uint64_t vnext_uart_credit_available_calls;
+-static uint64_t vnext_uart_backlog_full_stops;
+-static uint64_t vnext_uart_backlog_wakes;
+-static bool vnext_uart_provenance_checked, vnext_uart_provenance_enabled_cached;
+-
+-static bool vnext_uart_is_power_of_two(uint64_t value) {
+-    return value != 0 && (value & (value - 1)) == 0;
+-}
+-
+-static void vnext_uart_provenance_print_summary(void);
+-
+-static bool vnext_uart_provenance_enabled(void) {
+-    if (!vnext_uart_provenance_checked) {
+-        vnext_uart_provenance_checked = true;
+-        const char *v = getenv("LASECSIMUL_SETTLE_PROVENANCE");
+-        vnext_uart_provenance_enabled_cached = v && *v && v[0] != '0';
+-        if (vnext_uart_provenance_enabled_cached) atexit(vnext_uart_provenance_print_summary);
+-    }
+-    return vnext_uart_provenance_enabled_cached;
+-}
+-
+-static void vnext_uart_provenance_print_summary(void) {
+-    fprintf(stderr, "[SETTLE_PROVENANCE_UART] clkdivAttempts=%llu clkdivPublished=%llu "
+-            "conf0Attempts=%llu conf0Published=%llu byteAttempts=%llu bytePublished=%llu "
+-            "wouldBlockTotal=%llu configWouldBlock=%llu byteWouldBlock=%llu "
+-            "bhEntries=%llu creditAvailableCalls=%llu backlogFullStops=%llu backlogWakes=%llu\n",
+-            (unsigned long long)vnext_uart_clkdiv_attempts, (unsigned long long)vnext_uart_clkdiv_published,
+-            (unsigned long long)vnext_uart_conf0_attempts, (unsigned long long)vnext_uart_conf0_published,
+-            (unsigned long long)vnext_uart_byte_attempts, (unsigned long long)vnext_uart_byte_published,
+-            (unsigned long long)vnext_uart_would_block_total,
+-            (unsigned long long)vnext_uart_config_would_block,
+-            (unsigned long long)vnext_uart_byte_would_block,
+-            (unsigned long long)vnext_uart_bh_entries,
+-            (unsigned long long)vnext_uart_credit_available_calls,
+-            (unsigned long long)vnext_uart_backlog_full_stops,
+-            (unsigned long long)vnext_uart_backlog_wakes);
+-    for (unsigned i = 0; i < vnext_uart_instance_count; ++i) {
+-        ESP32UARTState *s = vnext_uart_instances[i];
+-        if (!s) continue;
+-        fprintf(stderr, "[SETTLE_PROVENANCE_UART] instance=%u tx_effect_count(final)=%u "
+-                "pending.clkdivDirty=%d pending.conf0StateDirty=%d\n",
+-                i, s->tx_effect_count, (int)s->pending_config.clkdivDirty,
+-                (int)s->pending_config.conf0StateDirty);
+-    }
+-}
+ #include "hw/xtensa/esp32_clk.h"
+ #include "qemu/main-loop.h"
+ #include "trace.h"
+@@ -112,7 +47,7 @@ void esp32_uart_update_irq(ESP32UARTState *s)
+ 
+     uint32_t tx_empty_raw = (fifo8_num_used(&s->tx_fifo) <= s->tx_empty_threshold);
+     uint32_t rx_full_raw = (fifo8_num_used(&s->rx_fifo) >= s->rx_full_threshold);
+-    uint32_t tx_done_raw = (fifo8_num_used(&s->tx_fifo) != 0);
++    uint32_t tx_done_raw = s->tx_done; /* latched when the last stop bit went out, cleared by INT_CLR */
+     uint32_t rxfifo_tout_raw = (s->rxfifo_tout) ? 1 : 0;
+ 
+     uint32_t int_raw = s->reg[R_UART_INT_RAW];
+@@ -149,200 +84,61 @@ void esp32_uart_set_rx_timeout(ESP32UARTState *s)
+ }
+ 
+ 
+-/* [FIX] TG0WDT_SYS_RESET investigation (2026-08-27/28) -- writeReg() used to be a Core-backed
+- * synchronous round-trip called from here. Before this fix, the FIRST byte of a fresh TX burst
+- * called this function synchronously from within uart_write()'s A_UART_FIFO case -- i.e. from
+- * inside an active esp_soc.uart MemoryRegion dispatch. arenaTransactionBegin()'s BQL-release
+- * window (needed to acquire m_arenaOrderLock without violating the arena->BQL lock order, see
+- * softmmu/simuliface.c) then let the OTHER vCPU dispatch into the SAME MemoryRegion (observed: a
+- * UART_STATUS poll) and get rejected -- "Blocked re-entrant IO", a genuine dropped guest register
+- * access, source-confirmed to freeze the guest's virtual-time progress afterward.
+- *
+- * (2026-08-28) Core notification moved out of this function entirely, into tx_effect_bh (see
+- * below), which drains it back-to-back and independently of frame_time_ns -- this function is now
+- * LOCAL pacing only (tx_in_flight/tx_timer govern guest-visible FIFO occupancy/UART_STATUS/IRQ,
+- * nothing Core-facing). */
+-static void uart_send_next(void* opaque)
+-{
+-    ESP32UARTState *s = ESP32_UART(opaque);
+-    s->tx_in_flight = true;
+-    timer_mod_ns( &s->tx_timer, getQemu_ns()+s->frame_time_ns);
+-}
+-
+-static void uart_config_summary_clear(UartConfigSummary *cfg)
+-{
+-    memset(cfg, 0, sizeof(*cfg));
+-}
+-
+-/* Sends, at most, one Core notification per dirty register (CLKDIV, CONF0) for one config
+- * summary snapshot -- never more than that regardless of how many guest writes were coalesced
+- * into it. TXFIFO_RST/RXFIFO_RST are OR-accumulated separately from the raw CONF0 value (see
+- * uart_write()'s A_UART_CONF0 case) and re-applied onto whatever CONF0 value is sent, so a clear
+- * pulse from an earlier write in the same segment is never lost even if a later write in the same
+- * segment doesn't have that bit set.
++/* The transmitter as the Core's USART drives the TX pin (mcu-adapters/espressif-esp32, usartStartTx): every
++ * byte, CLKDIV (as the bit time in ns) and CONF0 goes to the Core from the guest store itself, so the Core has
++ * them at the store's instant, in guest order; it sends each byte back to back from there. This side keeps the
++ * same frames, so what the guest reads (TXFIFO_CNT, ST_UTX_OUT, TXFIFO_EMPTY, TX_DONE) is the wire: a flush
++ * returns when the last stop bit is out, and a reset or a sleep right after cuts nothing. Before, a bottom half
++ * published the bytes later than the guest wrote them while this side paced from the write, and the guest saw
++ * the UART idle with the Core still sending -- esp_restart() and deep sleep cut the end of the output.
+  *
+- * The caller supplies a detached snapshot (2026-08-28 fix, see uart_tx_effect_bh()): writeReg()
+- * internally releases the BQL for a bounded window (arenaTransactionBegin() dropping it to
+- * acquire the arena order lock, softmmu/simuliface.c), during which a concurrent uart_write() on
+- * the other vCPU can run to completion. A caller that read live pending fields, called writeReg(),
+- * and only cleared them afterward could have a concurrently-merged contribution wiped out by that
+- * trailing clear without ever sending it. Operating on a value copy (already fully detached from
+- * shared state by the time any writeReg() here can release the BQL) closes that window -- see each
+- * call site for how the copy/clear ordering is arranged. */
+-/* Preserve partial progress across credit stalls. Replaying accepted configuration
+- * can consume every newly returned slot and starve the pending byte indefinitely;
+- * replaying CONF0 reset pulses can also erase bytes already accepted by Core.
+- * Clear each pending operation only after its publish succeeds. */
+-static VnextPublishResult uart_apply_config_summary(ESP32UARTState *s, UartConfigSummary *remaining)
++ * The frame: start bit, BIT_NUM + 5 data bits, one stop bit or two (STOP_BIT_NUM 3), each bit_ns long, the
++ * Core's own count. */
++static unsigned uart_data_bits(const ESP32UARTState *s)
+ {
+-    UartConfigSummary cfg = *remaining;
+-    const bool trace = vnext_uart_provenance_enabled();
+-    if (cfg.clkdivDirty) {
+-        if (trace) vnext_uart_clkdiv_attempts++;
+-        const VnextPublishResult r = writeReg( s->iomem.addr+A_UART_CLKDIV, cfg.clkdivValue );
+-        if (r != VNEXT_PUBLISHED) {
+-            if (trace && r == VNEXT_WOULD_BLOCK) { vnext_uart_would_block_total++; vnext_uart_config_would_block++; }
+-            return r;
+-        }
+-        if (trace) vnext_uart_clkdiv_published++;
+-        remaining->clkdivDirty = false;
+-    }
+-    if (cfg.conf0StateDirty || cfg.txFifoReset || cfg.rxFifoReset) {
+-        uint32_t value = cfg.conf0StateValue;
+-        if (cfg.txFifoReset) value |= (1u << 18);
+-        if (cfg.rxFifoReset) value |= (1u << 17);
+-        if (trace) vnext_uart_conf0_attempts++;
+-        const VnextPublishResult r = writeReg( s->iomem.addr+A_UART_CONF0, value );
+-        if (r != VNEXT_PUBLISHED) {
+-            if (trace && r == VNEXT_WOULD_BLOCK) { vnext_uart_would_block_total++; vnext_uart_config_would_block++; }
+-            return r;
+-        }
+-        if (trace) vnext_uart_conf0_published++;
+-        remaining->conf0StateDirty = false;
+-        remaining->txFifoReset = false;
+-        remaining->rxFifoReset = false;
+-    }
+-    return VNEXT_PUBLISHED;
++    return 5 + ((s->reg[R_UART_CONF0] >> 2) & 3);
+ }
+ 
+-/* Drains tx_effects/pending_config back-to-back, in guest write order, decoupled from
+- * tx_timer/frame_time_ns on purpose (see UartConfigSummary comment in esp32_uart.h): Core's own
+- * TX bit-clock needs zero pacing from QEMU, and pacing this delivery by frame_time_ns would let
+- * Core finish transmitting an earlier byte -- and start the next one -- before a trailing
+- * TXFIFO_RST meant to catch it had even been applied, silently reintroducing the ordering bug
+- * this design closes.
+- *
+- * Only ever invoked by aio_bh_poll() under BQL (same convention as this device's existing
+- * timers); uart_write() only ever runs under BQL too -- but each writeReg() call below releases
+- * the BQL internally for a bounded window (see uart_apply_config_summary() comment), so a
+- * concurrent uart_write() CAN interleave between (and even within) the writeReg() calls made
+- * here. Per-event ev->configBefore is immune to this (a value-copy taken at push time, and the
+- * fixed-size, never-reallocated tx_effects array means a concurrent append at a higher index
+- * can't disturb an index already claimed by this loop) -- but the trailing pending_config is
+- * live, shared state, so it is copied and cleared as two adjacent plain statements (no writeReg()
+- * between them, hence no BQL release in between) before being applied, exactly mirroring how the
+- * per-event snapshot in uart_write()'s A_UART_FIFO case already avoids the same race. */
+-/* E118-AUDIT (EVIDENCE.md, 2026-09-05): wakes any real vCPU parked in uart_write()'s A_UART_FIFO
+- * case waiting for backlog space (tx_backlog_waiter[], NOT VNEXT_B ring credit -- see that call
+- * site). Called only when at least one backlog slot was actually freed this pass. Each waiter is
+- * resumed exactly once and cleared immediately, so a slower-draining BH pass cannot double-resume
+- * the same CPUState. Safe to call with zero waiters (both slots NULL): a no-op. */
+-static void uart_wake_backlog_waiters(ESP32UARTState *s)
++static unsigned uart_frame_bits(const ESP32UARTState *s)
+ {
+-    for (unsigned i = 0; i < 2; ++i) {
+-        CPUState *waiter = s->tx_backlog_waiter[i];
+-        if (!waiter) continue;
+-        s->tx_backlog_waiter[i] = NULL;
+-        if (vnext_uart_provenance_enabled()) vnext_uart_backlog_wakes++;
+-        cpu_resume(waiter);
+-    }
++    return 1 + uart_data_bits(s) + (((s->reg[R_UART_CONF0] >> 4) & 3) == 3 ? 2 : 1);
+ }
+ 
+-
+-/* E118 (EVIDENCE.md, 2026-09-05): stops at the first VNEXT_WOULD_BLOCK instead of treating "ring
+- * full" as fatal or silently dropping the rest of the batch. Unsent tx_effects are compacted to
+- * the front and left in place -- this BH does NOT reschedule itself (that would busy-loop with no
+- * credit); vnext_b.c's vnext_resume() sweep calls esp32_uart_vnext_credit_available() once lane 0
+- * regains credit, which reschedules exactly the peripherals that actually have a backlog. This
+- * function never touches any CPU and never blocks on the BQL waiting for Core -- current_cpu is
+- * NULL here (main-loop BH), so there is no vCPU to block in the first place (the ONE exception is
+- * uart_wake_backlog_waiters() below, which only ever calls cpu_resume() -- never cpu_stop -- on a
+- * vCPU that is not this thread). */
+-static void uart_tx_effect_bh(void *opaque)
++/* LASECSIMUL_UART_TRACE=1: every bit-time change and every frame of UART0 (on stderr). */
++static bool uart_trace(const ESP32UARTState *s)
+ {
+-    ESP32UARTState *s = ESP32_UART(opaque);
+-    const bool trace = vnext_uart_provenance_enabled();
+-    if (trace) {
+-        vnext_uart_bh_entries++;
+-        if (vnext_uart_is_power_of_two(vnext_uart_bh_entries)) vnext_uart_provenance_print_summary();
+-    }
+-    unsigned sent = 0;
+-    for (; sent < s->tx_effect_count; sent++) {
+-        UartTxEffect *ev = &s->tx_effects[sent];
+-        UartConfigSummary remainingConfig = ev->configBefore;
+-        const VnextPublishResult configResult = uart_apply_config_summary(s, &remainingConfig);
+-        ev->configBefore = remainingConfig;
+-        if (configResult == VNEXT_FATAL) return;
+-        if (configResult == VNEXT_WOULD_BLOCK) break;
+-        if (trace) vnext_uart_byte_attempts++;
+-        const VnextPublishResult byteResult = writeReg( s->iomem.addr, ev->byte );
+-        if (byteResult == VNEXT_FATAL) return;
+-        if (byteResult == VNEXT_WOULD_BLOCK) {
+-            if (trace) { vnext_uart_would_block_total++; vnext_uart_byte_would_block++; }
+-            break;
+-        }
+-        if (trace) vnext_uart_byte_published++;
+-    }
+-    if (sent < s->tx_effect_count) {
+-        const unsigned remaining = s->tx_effect_count - sent;
+-        memmove(s->tx_effects, s->tx_effects + sent, remaining * sizeof(UartTxEffect));
+-        s->tx_effect_count = remaining;
+-        /* E118-AUDIT: even a partial drain (sent > 0) freed backlog slots at the front -- wake
+-         * any waiter now so a blocked vCPU does not sit parked until the backlog fully clears. */
+-        if (sent > 0) uart_wake_backlog_waiters(s);
+-        vnext_b_note_nonvcpu_backlog(0);
+-        return;
+-    }
+-    s->tx_effect_count = 0;
+-    uart_wake_backlog_waiters(s);
+-
+-    UartConfigSummary trailing = s->pending_config;
+-    uart_config_summary_clear(&s->pending_config);
+-    const VnextPublishResult trailingResult = uart_apply_config_summary(s, &trailing);
+-    if (trailingResult != VNEXT_PUBLISHED) {
+-        /* The byte backlog drained cleanly but the trailing config summary itself blocked --
+-         * put it back so the next drain (triggered by the credit-available notify) applies it
+-         * instead of losing a CLKDIV/CONF0 change. */
+-        s->pending_config = trailing;
+-        if (trailingResult == VNEXT_WOULD_BLOCK) vnext_b_note_nonvcpu_backlog(0);
++    static int enabled = -1;
++    if (enabled < 0) {
++        const char *v = getenv("LASECSIMUL_UART_TRACE");
++        enabled = v && *v && v[0] != '0';
+     }
++    return enabled && s->iomem.addr == 0x3ff40000;
+ }
+ 
+-/* E118 (EVIDENCE.md, 2026-09-05): called from vnext_b.c once lane 0 regains credit after this (or
+- * any) UART instance observed VNEXT_WOULD_BLOCK there. Reschedules exactly the instances that
+- * actually have something queued (a backlogged tx_effect_count, or a pending trailing config with
+- * nothing else to carry it) -- never all of them unconditionally, and never a bare poll/retry loop
+- * of its own; qemu_bh_schedule() itself is a single, cheap "run once on the next main-loop pass"
+- * request, not a busy-loop. */
+-static void esp32_uart_vnext_credit_available_impl(void);
+-
+-void esp32_uart_vnext_credit_available(void)
++/* The next byte leaves the FIFO for the shifter at `at`, as on the chip. */
++static void uart_start_frame(ESP32UARTState *s, uint64_t at)
+ {
+-    if (vnext_uart_provenance_enabled()) vnext_uart_credit_available_calls++;
+-    esp32_uart_vnext_credit_available_impl();
++    if (uart_trace(s))
++        fprintf(stderr, "[UART] frame at=%" PRIu64 " now=%" PRIu64 " bit_ns=%u bits=%u queued=%u\n", at, getQemu_ns(),
++                s->bit_ns, uart_frame_bits(s), fifo8_num_used(&s->tx_fifo));
++    fifo8_pop(&s->tx_fifo);
++    s->tx_in_flight = true;
++    s->tx_frame_bits = uart_frame_bits(s);
++    s->tx_frame_start_ns = at;
++    s->tx_frame_end_ns = at + (uint64_t)s->bit_ns * s->tx_frame_bits;
++    timer_mod_ns(&s->tx_timer, s->tx_frame_end_ns);
+ }
+ 
+-static void esp32_uart_vnext_credit_available_impl(void)
++/* UART_STATUS.ST_UTX_OUT: 0 idle, 1 start bit, 2.. data bits, 11/12 the stop bits. */
++static uint32_t uart_tx_state(const ESP32UARTState *s)
+ {
+-    for (unsigned i = 0; i < vnext_uart_instance_count; ++i) {
+-        ESP32UARTState *s = vnext_uart_instances[i];
+-        if (!s || !s->tx_effect_bh) continue;
+-        if (s->tx_effect_count > 0 || s->pending_config.clkdivDirty ||
+-            s->pending_config.conf0StateDirty || s->pending_config.txFifoReset ||
+-            s->pending_config.rxFifoReset) {
+-            qemu_bh_schedule(s->tx_effect_bh);
+-        }
+-    }
++    if (!s->tx_in_flight) return 0;
++    const uint64_t now = getQemu_ns();
++    const uint64_t bit = now > s->tx_frame_start_ns && s->bit_ns ? (now - s->tx_frame_start_ns) / s->bit_ns : 0;
++    const unsigned data = uart_data_bits(s);
++    if (bit == 0) return 1;
++    if (bit <= data) return 1 + bit;
++    return bit == data + 1 ? 11 : 12;
+ }
+ 
+ static uint64_t uart_read(void *opaque, hwaddr addr, unsigned int size)
+@@ -365,6 +161,7 @@ static uint64_t uart_read(void *opaque, hwaddr addr, unsigned int size)
+     case A_UART_STATUS:
+         r = FIELD_DP32(r, UART_STATUS, RXFIFO_CNT, fifo8_num_used(&s->rx_fifo));
+         r = FIELD_DP32(r, UART_STATUS, TXFIFO_CNT, fifo8_num_used(&s->tx_fifo));
++        r = FIELD_DP32(r, UART_STATUS, ST_UTX_OUT, uart_tx_state(s));
+         break;
+ 
+     case A_UART_LOWPULSE:
+@@ -413,25 +210,14 @@ static uint64_t uart_read(void *opaque, hwaddr addr, unsigned int size)
+ //    return baud_rate;
+ //}
+ 
+-static void updateBaud( ESP32UARTState *s )
++/* The baud rate for CLKDIV and the clock CONF0.TICK_REF_ALWAYS_ON selects (APB or REF_TICK). */
++static uint32_t uart_baud(uint32_t clkdiv, bool use_apb)
+ {
+     uint32_t baud_rate = 115273;
+-    uint32_t freq = s->use_apb ? esp32_soc_get_apb_freq() : 1000000;
++    uint32_t freq = use_apb ? esp32_soc_get_apb_freq() : 1000000;
+     if( freq == 0 ) freq = 40000001;
+-    if( s->clkdiv ) baud_rate = (freq << 4) / s->clkdiv;
+-
+-    uint32_t bitTime = 1e9/baud_rate;
+-    s->frame_time_ns = bitTime*10;  /// TODO: this depends on frame size
+-    if( s->baud_rate != baud_rate ){
+-        s->baud_rate = baud_rate;
+-        //printf("Qemu: baudrate %i %i %i %lu\n", baud_rate, s->clkdiv, freq, s->frame_time_ns ); fflush( stdout );
+-        /* [FIX] deferred -- see uart_apply_config_summary()/uart_tx_effect_bh(); do not
+-         * writeReg() synchronously from inside a guest MMIO dispatch (CLKDIV write, or a CONF0
+-         * write that toggles use_apb -- both call into this function). */
+-        s->pending_config.clkdivDirty = true;
+-        s->pending_config.clkdivValue = bitTime;
+-        qemu_bh_schedule( s->tx_effect_bh );
+-    }
++    if( clkdiv ) baud_rate = (freq << 4) / clkdiv;
++    return baud_rate;
+ }
+ 
+ 
+@@ -463,53 +249,14 @@ static void uart_write(void *opaque, hwaddr addr, uint64_t value, unsigned int s
+     case A_UART_FIFO:
+         if (fifo8_num_free(&s->tx_fifo) == 0) {
+             error_report("esp_uart: write to UART FIFO while it is full");
+-        } else if (s->tx_effect_count >= UART_FIFO_LENGTH) {
+-            /* E118-AUDIT (EVIDENCE.md, 2026-09-05): the backlog (tx_effects[]/tx_effect_count) can
+-             * now genuinely stay at capacity while tx_fifo keeps draining independently at its own
+-             * baud-rate pace (see the struct comment on tx_backlog_waiter[] in esp32_uart.h) --
+-             * tx_fifo having room is no longer proof the backlog does too. Block the calling vCPU
+-             * BEFORE fifo8_push() (nothing guest-visible has happened yet for this byte) and replay
+-             * the whole write once tx_effect_bh() frees a backlog slot, instead of accepting the
+-             * byte into tx_fifo and silently never recording its effect. This is backlog capacity,
+-             * NOT VNEXT_B ring credit -- a different resource; see uart_tx_effect_bh(). */
+-            CPUState *cpu = current_cpu;
+-            if (cpu && cpu->cpu_index < 2) {
+-                if (vnext_uart_provenance_enabled()) vnext_uart_backlog_full_stops++;
+-                s->tx_backlog_waiter[cpu->cpu_index] = cpu;
+-                cpu_stop_current();
+-                cpu_loop_exit_restore(cpu, cpu->mem_io_pc);
+-            }
+-            /* No real vCPU to block (should not happen for a genuine guest MMIO write) -- fall
+-             * back to the pre-existing, honest error report rather than silently dropping. */
+-            error_report("esp_uart: TX backlog full with no vCPU to block (current_cpu=NULL)");
+         } else {
+-            //printf("Qemu: uart_write, %lu\n", value ); fflush( stdout );
++            /* The Core first, at this store's instant: from a guest store it may replay (vNext-B
++             * backpressure), so nothing changes here before it. */
++            const uint64_t now = getQemu_ns();
++            writeReg( s->iomem.addr, (uint8_t) value );
+             fifo8_push( &s->tx_fifo, value );
+             uart_mirror_tx( s, (uint8_t) value );
+-            /* [FIX] ordered Core-notification path -- snapshot whatever config accumulated since
+-             * the last accepted byte (or since reset) as THIS byte's configBefore, then reset the
+-             * pending summary for the next segment. Bounded at UART_FIFO_LENGTH via the backlog
+-             * capacity check above (E118-AUDIT) -- no longer identical to tx_fifo's own gate, see
+-             * that check's comment. */
+-            {
+-                UartTxEffect *ev = &s->tx_effects[s->tx_effect_count++];
+-                ev->byte = (uint8_t) value;
+-                ev->configBefore = s->pending_config;
+-                uart_config_summary_clear( &s->pending_config );
+-            }
+-            qemu_bh_schedule( s->tx_effect_bh );
+-            /* [FIX] TG0WDT_SYS_RESET investigation -- do NOT call uart_send_next()
+-             * (Core-backed writeReg()) synchronously from inside this MMIO dispatch; see the
+-             * comment on uart_send_next() above. Only arm the existing tx_timer for "now" (fires
+-             * on the next main-loop timer pass, outside this dispatch) if the TX pipeline is
+-             * genuinely idle -- neither a byte in flight nor a start already scheduled -- so
+-             * repeated guest writes while a start is pending don't re-arm redundantly. This timer
+-             * is LOCAL pacing only now (FIFO pop/UART_STATUS/IRQ) -- unrelated to Core
+-             * notification, which tx_effect_bh handles independently, back-to-back. */
+-            if( !s->tx_in_flight && !timer_pending(&s->tx_timer) ) {
+-                timer_mod_ns( &s->tx_timer, getQemu_ns() );
+-            }
+-            //uart_transmit(NULL, G_IO_OUT, s);
++            if( !s->tx_in_flight ) uart_start_frame( s, now );
+         }
+         break;
+ 
+@@ -519,21 +266,25 @@ static void uart_write(void *opaque, hwaddr addr, uint64_t value, unsigned int s
+         if (value & R_UART_INT_CLR_RXFIFO_TOUT_MASK) {
+             s->rxfifo_tout = false;
+         }
++        if (value & R_UART_INT_CLR_TX_DONE_MASK) {
++            s->tx_done = false;
++        }
+         break;
+ 
+     case A_UART_INT_ENA: s->reg[addr / 4] = value; break;
+     case A_UART_CLKDIV: {
++        const uint32_t clkdiv = ((value & 0x000FFFFF) << 4) | ((value & 0x00F00000) >> 20);
++        const uint32_t baud_rate = uart_baud( clkdiv, s->use_apb );
++        const uint32_t bit_ns = 1e9 / baud_rate;
++        if (uart_trace(s))
++            fprintf(stderr, "[UART] clkdiv=%u apb=%u use_apb=%u bit_ns=%u now=%" PRIu64 "\n", clkdiv,
++                    esp32_soc_get_apb_freq(), s->use_apb, bit_ns, getQemu_ns());
++        /* The Core takes the bit time in ns. First: it may replay this store. */
++        if( bit_ns != s->bit_ns ) writeReg( s->iomem.addr + A_UART_CLKDIV, bit_ns );
+         s->reg[addr / 4] = value;
+-
+-        uint32_t clkFra = (value & 0x00F00000) >> 20;
+-        uint32_t clkInt = (value & 0x000FFFFF) << 4 ;
+-        uint32_t clkdiv = clkInt | clkFra;
+-        if( s->clkdiv != clkdiv ){
+-            s->clkdiv = clkdiv;
+-            updateBaud( s );
+-        }
+-        //unsigned clkdiv = (FIELD_EX32( value, UART_CLKDIV, CLKDIV) << 4)
+-        //                 + FIELD_EX32( value, UART_CLKDIV, CLKDIV_FRAG);
++        s->clkdiv = clkdiv;
++        s->baud_rate = baud_rate;
++        s->bit_ns = bit_ns;
+         break;
+     }
+     case A_UART_AUTOBAUD:
+@@ -549,24 +300,22 @@ static void uart_write(void *opaque, hwaddr addr, uint64_t value, unsigned int s
+     case A_UART_INT_RAW:
+     case A_UART_INT_ST:
+     case A_UART_STATUS: /* no-op */ break;
+-    case A_UART_CONF0:
++    case A_UART_CONF0: {
++        const uint8_t use_apb = (value & 1<<27)? 1 : 0;
++        const uint32_t baud_rate = uart_baud( s->clkdiv, use_apb );
++        const uint32_t bit_ns = 1e9 / baud_rate;
++        /* The Core first (data and stop bits from the next frame on, the TXFIFO_RST/RXFIFO_RST pulses, the
++         * bit time if TICK_REF_ALWAYS_ON changed the clock): it may replay this store. */
++        writeReg( s->iomem.addr + A_UART_CONF0, value );
++        if( bit_ns != s->bit_ns ) writeReg( s->iomem.addr + A_UART_CLKDIV, bit_ns );
+         s->reg[addr / 4] = value;
+-        uint8_t use_apb = (value & 1<<27)? 1 : 0;
+-        if( s->use_apb != use_apb ){
+-            s->use_apb = use_apb;
+-            updateBaud( s );
+-        }
+-        //printf("Qemu: CONF0 %lu\n", value ); fflush( stdout );
+-        /* [FIX] deferred -- see uart_apply_config_summary()/uart_tx_effect_bh(). State bits
+-         * (dataBits/stopBits) last-write-wins via conf0StateValue; TXFIFO_RST/RXFIFO_RST
+-         * OR-accumulate separately so a clear pulse from an earlier write in this segment is
+-         * never lost even if this write's own value doesn't carry that bit. */
+-        s->pending_config.conf0StateDirty = true;
+-        s->pending_config.conf0StateValue = value;
+-        if( value & (1u << 18) ) s->pending_config.txFifoReset = true;
+-        if( value & (1u << 17) ) s->pending_config.rxFifoReset = true;
+-        qemu_bh_schedule( s->tx_effect_bh );
++        s->use_apb = use_apb;
++        s->baud_rate = baud_rate;
++        s->bit_ns = bit_ns;
++        /* TXFIFO_RST empties the FIFO; the byte already in the shifter goes on, as in the Core. */
++        if( value & (1u << 18) ) fifo8_reset( &s->tx_fifo );
+         break;
++    }
+     case A_UART_CONF1:
+         s->reg[addr / 4] = value;
+         s->tx_empty_threshold = FIELD_EX32(s->reg[R_UART_CONF1], UART_CONF1, TXFIFO_EMPTY_THRD);
+@@ -655,16 +404,15 @@ static void uart_tx_timer_cb(void* opaque)
+ {
+     ESP32UARTState *s = ESP32_UART(opaque);
+ 
+-    /* [FIX] TG0WDT_SYS_RESET investigation -- this callback now services two distinct firings of
+-     * the same tx_timer: a FINISH (a byte uart_send_next() started frame_time_ns ago -- pop it,
+-     * exactly as before) and a START (armed directly by uart_write(), see A_UART_FIFO case above,
+-     * for the first byte of a fresh burst -- nothing to pop yet, tx_in_flight is still false). */
+-    if( s->tx_in_flight ) {
+-        fifo8_pop( &s->tx_fifo );
+-        s->tx_in_flight = false;
+-    }
+-    if( fifo8_num_used( &s->tx_fifo ) ) uart_send_next( s );
+-    //printf("uart_tx_timer %lu\n", getQemu_ps() );fflush( stdout );
++    /* The frame in the shifter ended: the next byte starts at that very instant, back to back as the
++     * Core sends it; with none, the transmitter is done (TX_DONE). */
++    if (uart_trace(s))
++        fprintf(stderr, "[UART] end in_flight=%d end=%" PRIu64 " now=%" PRIu64 " queued=%u\n", s->tx_in_flight,
++                s->tx_frame_end_ns, getQemu_ns(), fifo8_num_used(&s->tx_fifo));
++    if( !s->tx_in_flight ) return;
++    s->tx_in_flight = false;
++    if( fifo8_num_used( &s->tx_fifo ) ) uart_start_frame( s, s->tx_frame_end_ns );
++    else s->tx_done = true;
+     esp32_uart_update_irq(s);
+ }
+ 
+@@ -694,13 +442,14 @@ static void esp32_uart_reset(DeviceState *dev)
+     s->reg[R_UART_AUTOBAUD] = 0;
+     /* Default baud rate divider after reset */
+     s->reg[R_UART_CLKDIV] = FIELD_DP32(0, UART_CLKDIV, CLKDIV, 0x2B6);
+-    //s->reg[R_UART_CONF0] = FIELD_DP32(0 , UART_CONF0, TICK_REF_ALWAYS_ON, 1);
+-    //s->reg[R_UART_CONF0] = FIELD_DP32(s->reg[R_UART_CONF0] , UART_CONF0, STOP_BIT_NUM, 1);
+-    //s->reg[R_UART_CONF0] = FIELD_DP32(s->reg[R_UART_CONF0] , UART_CONF0, BIT_NUM, 3);
++    /* The chip's CONF0 reset: TICK_REF_ALWAYS_ON, one stop bit, 8 data bits (the frames sent before the
++     * first CONF0 write, as in the Core). */
++    s->reg[R_UART_CONF0] = 0x0800001C;
+ 
+     s->use_apb = 1;
+     s->clkdiv = 11104;
+     s->baud_rate = 115273;
++    s->bit_ns = 8680; /* the Core's USART after its reset (115200 baud), until a CLKDIV changes it */
+     fifo8_reset(&s->tx_fifo);
+     fifo8_reset(&s->rx_fifo);
+     if (s->tx_watch_handle) {
+@@ -717,18 +466,7 @@ static void esp32_uart_reset(DeviceState *dev)
+      * Corrigido cancelando tx_timer aqui tambem, mesmo padrao ja usado pra throttle_timer. */
+     timer_del(&s->tx_timer);
+     s->tx_in_flight = false;
+-    /* [FIX] deferred Core-notification state -- cancel any pending drain and discard whatever
+-     * was accumulated; matches the tx_timer/tx_in_flight reset immediately above. */
+-    qemu_bh_cancel(s->tx_effect_bh);
+-    uart_config_summary_clear(&s->pending_config);
+-    s->tx_effect_count = 0;
+-    /* E118-AUDIT (EVIDENCE.md, 2026-09-05): a vCPU can be parked in uart_write() waiting for
+-     * backlog space (see tx_backlog_waiter[] in esp32_uart.h) at the exact moment of a reset.
+-     * Discarding the backlog without waking it would leave that vCPU stopped forever -- resume it
+-     * now (the reset above already guarantees the retry will find space) rather than merely
+-     * forgetting the pointer. This reset discards only this device generation's own pending
+-     * events; the resumed vCPU replays its write against the post-reset state, not stale data. */
+-    uart_wake_backlog_waiters(s);
++    s->tx_done = false;
+     timer_del(&s->throttle_timer);
+     s->throttle_rx = false;
+     s->rx_tout_ena = false;
+@@ -766,14 +504,12 @@ static void esp32_uart_init(Object *obj)
+ 
+     memory_region_init_io(&s->iomem, obj, &s->uart_ops, s,
+                           TYPE_ESP32_UART, UART_REG_CNT * sizeof(uint32_t));
+-    /* E118-AUDIT-2 (EVIDENCE.md, 2026-09-05): the E118-AUDIT backlog fix in uart_write()'s
+-     * A_UART_FIFO case calls cpu_stop_current() + cpu_loop_exit_restore() DIRECTLY from within
+-     * THIS device's own .write callback when the backlog is full. That siglongjmp skips
+-     * softmmu/memory.c's normal-return clear of mem_reentrancy_guard.engaged_in_io (set on entry
+-     * to this dispatch), permanently wedging every later access to this UART with "Blocked
+-     * re-entrant IO" -- root-caused via that exact warning preceding the E118-AUDIT gate's storm.
+-     * Same reasoning as hw/i2c/esp32_i2c.c's matching comment: safe to disable because this retry
+-     * path never drops the BQL. */
++    /* E118-AUDIT-2 (EVIDENCE.md, 2026-09-05): the writeReg() of a FIFO, CLKDIV or CONF0 store may replay
++     * it under vNext-B backpressure (cpu_stop_current() + cpu_loop_exit_restore() from within this
++     * device's own .write callback). That siglongjmp skips softmmu/memory.c's normal-return clear of
++     * mem_reentrancy_guard.engaged_in_io, permanently wedging every later access to this UART with
++     * "Blocked re-entrant IO". Same reasoning as hw/i2c/esp32_i2c.c's matching comment: safe to disable
++     * because this retry path never drops the BQL. */
+     s->iomem.disable_reentrancy_guard = true;
+     sysbus_init_mmio(sbd, &s->iomem);
+     sysbus_init_irq(sbd, &s->irq);
+@@ -782,7 +518,6 @@ static void esp32_uart_init(Object *obj)
+     timer_init_ns(&s->throttle_timer, QEMU_CLOCK_VIRTUAL, uart_throttle_timer_cb, s);
+     timer_init_ns(&s->rx_timeout_timer, QEMU_CLOCK_VIRTUAL, uart_rx_timeout_timer_cb, s);
+     timer_init_ns( &s->tx_timer, QEMU_CLOCK_VIRTUAL, uart_tx_timer_cb, s);
+-    s->tx_effect_bh = qemu_bh_new( uart_tx_effect_bh, s );
+ }
+ 
+ 
+diff --git a/hw/gpio/esp32_gpio.c b/hw/gpio/esp32_gpio.c
+index 355967a..2a0a8b9 100644
+--- a/hw/gpio/esp32_gpio.c
++++ b/hw/gpio/esp32_gpio.c
+@@ -19,6 +19,7 @@
+ #include "hw/irq.h"
+ #include "hw/qdev-properties.h"
+ #include "hw/gpio/esp32_gpio.h"
++#include "hw/misc/esp32_rtc_cntl.h"
+ 
+ #include "../softmmu/simuliface.h"
+ #include "../softmmu/vnext_b.h"
+@@ -121,6 +122,22 @@ void esp32_gpio_vnext_bind( Esp32GpioState *s )
+     vnext_gpio_instance = s;
+ }
+ 
++/* Light-sleep GPIO wakeup (esp_sleep_enable_gpio_wakeup + gpio_wakeup_enable): a pin with
++ * GPIO_PINn_REG.WAKEUP_ENABLE (bit 10) whose pad is at its INT_TYPE level (low or high). */
++#define GPIO_PIN_WAKEUP_ENABLE (1u << 10)
++bool esp32_gpio_wakeup_pending( void )
++{
++    if( !vnext_gpio_instance ) return false;
++    for( int pin = 0; pin < 40; ++pin ){
++        const uint32_t conf = vnext_gpio_instance->gpio_pin[pin];
++        if( !(conf & GPIO_PIN_WAKEUP_ENABLE) ) continue;
++        const int type = GPIO_PIN_INT_TYPE( conf );
++        const bool level = gpio_pin_level( vnext_gpio_instance, pin );
++        if( (type == GPIO_INT_LOW_LEVEL && !level) || (type == GPIO_INT_HIGH_LEVEL && level) ) return true;
++    }
++    return false;
++}
++
+ bool esp32_gpio_vnext_irq_armed( void )
+ {
+     if( !vnext_gpio_instance ) return false;
+@@ -138,6 +155,8 @@ void esp32_gpio_vnext_input( uint64_t address, uint64_t value )
+     if( !vnext_gpio_instance ) return;
+     if( address == GPIO_OFFSET + 0x3C )      esp32_gpio_set_input( vnext_gpio_instance, 0, (uint32_t)value );
+     else if( address == GPIO_OFFSET + 0x40 ) esp32_gpio_set_input( vnext_gpio_instance, 1, (uint32_t)value );
++    /* A sleeping chip may wake on this pad (ext0/ext1, RTC_CNTL). */
++    esp32_rtc_cntl_pads_changed();
+ }
+ 
+ static uint64_t esp32_gpio_read( void *opaque, hwaddr addr, unsigned int size )
+diff --git a/hw/misc/esp32_dport.c b/hw/misc/esp32_dport.c
+index 76d0775..ba8659b 100644
+--- a/hw/misc/esp32_dport.c
++++ b/hw/misc/esp32_dport.c
+@@ -20,7 +20,6 @@
+ #include "hw/boards.h"
+ #include "hw/misc/esp32_reg.h"
+ #include "hw/misc/esp32_dport.h"
+-#include "hw/misc/esp32_twai.h"
+ #include "qemu/timer.h"
+ #include "hw/core/cpu.h"
+ #include "hw/misc/esp32_flash_enc.h"
+@@ -37,6 +36,7 @@
+  * declared by hw/core/cpu.h (included above), which esp32_dport.c already includes and which has
+  * no target-specific dependency. */
+ #include "../softmmu/vnext_b.h"
++#include "../softmmu/simuliface.h"
+ 
+ #define ESP32_DPORT_SIZE        (DR_REG_DPORT_APB_BASE - DR_REG_DPORT_BASE)
+ 
+@@ -311,12 +311,22 @@ static void esp32_dport_write(void *opaque, hwaddr addr,
+     case A_DPORT_PERIP_CLK_EN:
+         s->perip_clk_en_reg = value;
+         break;
+-    case A_DPORT_PERIP_RST_EN:
+-        /* TWAI_RST (bit 19) rising: the peripheral reset ESP-IDF pulses at install and in its TWAI errata
+-         * workarounds. Before the register changes: the reset may replay this store (vNext-B). */
+-        if ((value & BIT(19)) && !(s->perip_rst_en_reg & BIT(19))) esp32_twai_peripheral_reset();
++    case A_DPORT_PERIP_RST_EN: {
++        /* A peripheral is held in reset while its bit is 1: ESP-IDF pulses it in periph_module_reset()
++         * (RMT, UART1/2, TWAI at install), esp_restart() pulses TIMERS/SPI01/UARTs and the startup holds the
++         * unused ones until periph_module_enable(). The Core's engines for the pads (adapter module at this
++         * address) first, as it may replay this store (vNext-B); then the lines, whose edges reset the
++         * devices (hw/xtensa/esp32.c). */
++        const uint32_t changed = (uint32_t)value ^ s->perip_rst_en_reg;
++        if (changed) {
++            writeReg(DR_REG_DPORT_BASE + A_DPORT_PERIP_RST_EN, value);
++            for (int bit = 0; bit < 32; ++bit) {
++                if (changed & BIT(bit)) qemu_set_irq(s->perip_rst[bit], (value >> bit) & 1);
++            }
++        }
+         s->perip_rst_en_reg = value;
+         break;
++    }
+     case A_DPORT_WIFI_CLK_EN:
+         s->wifi_clk_en_reg = value;
+         break;
+@@ -873,8 +883,8 @@ static void esp32_dport_init(Object *obj)
+     SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
+     memory_region_init_io(&s->iomem, obj, &esp32_dport_ops, s,
+                           TYPE_ESP32_DPORT, ESP32_DPORT_SIZE);
+-    /* The TWAI peripheral reset (PERIP_RST_EN) reaches the Core through writeReg(), which may replay the
+-     * guest store (vNext-B backpressure) -- same as hw/misc/esp32_twai.c. */
++    /* The peripheral resets (PERIP_RST_EN) reach the Core through writeReg(), which may replay the guest
++     * store (vNext-B backpressure) -- same as hw/misc/esp32_twai.c. */
+     s->iomem.disable_reentrancy_guard = true;
+     sysbus_init_mmio(sbd, &s->iomem);
+ 
+@@ -896,6 +906,7 @@ static void esp32_dport_init(Object *obj)
+     qdev_init_gpio_out_named(DEVICE(sbd), &s->cache_ill_irq, ESP32_DPORT_CACHE_ILL_IRQ_GPIO, 1);
+     qdev_init_gpio_out_named(DEVICE(sbd), &s->flash_enc_en_gpio, ESP32_DPORT_FLASH_ENC_EN_GPIO, 1);
+     qdev_init_gpio_out_named(DEVICE(sbd), &s->flash_dec_en_gpio, ESP32_DPORT_FLASH_DEC_EN_GPIO, 1);
++    qdev_init_gpio_out_named(DEVICE(sbd), s->perip_rst, ESP32_DPORT_PERIP_RST_GPIO, 32);
+ }
+ 
+ 
+diff --git a/hw/misc/esp32_rtc_cntl.c b/hw/misc/esp32_rtc_cntl.c
+index 2b04df1..55902d2 100644
+--- a/hw/misc/esp32_rtc_cntl.c
++++ b/hw/misc/esp32_rtc_cntl.c
+@@ -12,6 +12,7 @@
+ #include "qemu/log.h"
+ #include "qemu/module.h"
+ #include "qemu/timer.h"
++#include "qemu/crc32c.h"
+ #include "qapi/error.h"
+ #include "qemu/error-report.h"
+ #include "hw/hw.h"
+@@ -21,11 +22,156 @@
+ #include "hw/misc/esp32_reg.h"
+ #include "hw/misc/esp32_rtc_cntl.h"
+ #include "hw/nvram/esp32_efuse.h"
++#include "hw/misc/esp32_rtcio.h"
++#include "hw/gpio/esp32_gpio.h"
++#include "../softmmu/simuliface.h"
+ 
+ 
+ static void esp32_rtc_update_cpu_stall(Esp32RtcCntlState* s);
+ static void esp32_rtc_update_clk(Esp32RtcCntlState* s);
+ 
++/* Wakeup sources (ESP-IDF soc/rtc.h, RTC_*_TRIG_EN): the same bits in WAKEUP_ENA and WAKEUP_CAUSE. */
++#define ESP32_RTC_EXT0_TRIG   BIT(0)
++#define ESP32_RTC_EXT1_TRIG   BIT(1)
++#define ESP32_RTC_GPIO_TRIG   BIT(2)
++#define ESP32_RTC_TIMER_TRIG  BIT(3)
++/* RTC_CNTL_INT_RAW */
++#define ESP32_RTC_SLP_WAKEUP_INT BIT(0)
++#define ESP32_RTC_MAIN_TIMER_INT BIT(8)
++
++static Esp32RtcCntlState *esp32_rtc_cntl_device;
++
++static uint32_t *esp32_rtc_reg(Esp32RtcCntlState *s, hwaddr addr)
++{
++    return &s->regs[addr / 4];
++}
++
++static uint64_t esp32_rtc_now_ticks(Esp32RtcCntlState *s)
++{
++    return muldiv64(qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) - s->time_base_ns, s->rtc_slowclk_freq, NANOSECONDS_PER_SECOND);
++}
++
++static void esp32_rtc_update_irq(Esp32RtcCntlState *s)
++{
++    qemu_set_irq(s->irq, (s->int_raw & *esp32_rtc_reg(s, A_RTC_CNTL_INT_ENA)) != 0);
++}
++
++/* LASECSIMUL_RTC_TRACE=1: sleep entries and wakeups (stderr). */
++static bool esp32_rtc_trace(void)
++{
++    static int enabled = -1;
++    if (enabled < 0) {
++        const char *v = getenv("LASECSIMUL_RTC_TRACE");
++        enabled = v && *v && v[0] != '0';
++    }
++    return enabled;
++}
++
++static void esp32_rtc_wake(Esp32RtcCntlState *s, uint32_t cause)
++{
++    if (esp32_rtc_trace())
++        fprintf(stderr, "[RTC] wake cause=0x%x sleeping=%d deep=%d now=%" PRId64 "\n", cause, s->sleeping,
++                s->sleep_deep, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
++    if (!s->sleeping) return;
++    s->sleeping = false;
++    timer_del(&s->sleep_timer);
++    uint32_t *wakeup = esp32_rtc_reg(s, A_RTC_CNTL_WAKEUP_STATE);
++    *wakeup = FIELD_DP32(*wakeup, RTC_CNTL_WAKEUP_STATE, WAKEUP_CAUSE, cause);
++    uint32_t *state0 = esp32_rtc_reg(s, A_RTC_CNTL_STATE0);
++    *state0 = FIELD_DP32(*state0, RTC_CNTL_STATE0, SLEEP_EN, 0);
++    if (cause & ESP32_RTC_TIMER_TRIG) s->int_raw |= ESP32_RTC_MAIN_TIMER_INT;
++    if (s->sleep_deep) {
++        /* Deep sleep ends in a digital reset (the boot ROM prints rst:0x5 (DEEPSLEEP_RESET)); the RTC
++         * domain, RTC memory and these registers stay. */
++        s->reset_cause[0] = ESP32_DEEPSLEEP_RESET;
++        s->reset_cause[1] = ESP32_DEEPSLEEP_RESET;
++        qemu_set_irq(s->dig_power_down, 0);
++        esp32_rtc_update_cpu_stall(s);
++        qemu_irq_pulse(s->dig_reset_req);
++        return;
++    }
++    s->int_raw |= ESP32_RTC_SLP_WAKEUP_INT;
++    qemu_set_irq(s->dig_clock_gate, 0); /* the clocks first, then the cores run */
++    esp32_rtc_update_irq(s);
++    esp32_rtc_update_cpu_stall(s);
++}
++
++/* ext0: one RTC GPIO (RTC_IO_EXT_WAKEUP0.SEL) at EXT_WAKEUP0_LV; ext1: the RTC GPIOs of EXT_WAKEUP1.SEL,
++ * any high (EXT_WAKEUP1_LV 1) or all low (0); GPIO (light sleep only, the digital GPIO stays powered): a pin
++ * with GPIO_PINn.WAKEUP_ENABLE at its INT_TYPE level. All are level wakeups. */
++static void esp32_rtc_check_pads(Esp32RtcCntlState *s)
++{
++    if (!s->sleeping) return;
++    const uint32_t ena = FIELD_EX32(*esp32_rtc_reg(s, A_RTC_CNTL_WAKEUP_STATE), RTC_CNTL_WAKEUP_STATE, WAKEUP_ENA);
++    const uint32_t conf = *esp32_rtc_reg(s, A_RTC_CNTL_EXT_WAKEUP_CONF);
++    uint32_t cause = 0;
++    if (ena & ESP32_RTC_EXT0_TRIG) {
++        const bool level = esp32_rtcio_pad_level(esp32_rtcio_gpio_of(esp32_rtcio_ext0_sel()));
++        if (level == FIELD_EX32(conf, RTC_CNTL_EXT_WAKEUP_CONF, EXT_WAKEUP0_LV)) cause |= ESP32_RTC_EXT0_TRIG;
++    }
++    if (ena & ESP32_RTC_EXT1_TRIG) {
++        const uint32_t sel = FIELD_EX32(*esp32_rtc_reg(s, A_RTC_CNTL_EXT_WAKEUP1), RTC_CNTL_EXT_WAKEUP1, SEL);
++        uint32_t high = 0;
++        for (unsigned rtc = 0; rtc < 18; rtc++)
++            if (((sel >> rtc) & 1) && esp32_rtcio_pad_level(esp32_rtcio_gpio_of(rtc))) high |= 1u << rtc;
++        const bool any_high = FIELD_EX32(conf, RTC_CNTL_EXT_WAKEUP_CONF, EXT_WAKEUP1_LV);
++        if (sel && (any_high ? high != 0 : high == 0)) {
++            cause |= ESP32_RTC_EXT1_TRIG;
++            *esp32_rtc_reg(s, A_RTC_CNTL_EXT_WAKEUP1_STATUS) |= any_high ? high : sel;
++        }
++    }
++    if ((ena & ESP32_RTC_GPIO_TRIG) && !s->sleep_deep && esp32_gpio_wakeup_pending()) cause |= ESP32_RTC_GPIO_TRIG;
++    if (cause) esp32_rtc_wake(s, cause);
++}
++
++void esp32_rtc_cntl_pads_changed(void)
++{
++    if (esp32_rtc_cntl_device) esp32_rtc_check_pads(esp32_rtc_cntl_device);
++}
++
++static void esp32_rtc_sleep_timer_cb(void *opaque)
++{
++    esp32_rtc_wake((Esp32RtcCntlState *)opaque, ESP32_RTC_TIMER_TRIG);
++}
++
++/* SLEEP_EN: both cores stall until an enabled wakeup source fires. The RTC timer wakeup at SLP_VAL (48
++ * bits of RTC slow clock ticks); ext0/ext1 at a pad level, checked now and at every
++ * pad change. Deep sleep turns the digital domain off: the peripherals the Core models at the pads stop
++ * driving them (the same signal as their reset, see esp32_soc_reset) and nothing digital counts -- the
++ * timer-group watchdogs would otherwise end the sleep in a TGnWDT_SYS_RESET (dig-power-down). */
++static void esp32_rtc_sleep_start(Esp32RtcCntlState *s)
++{
++    if (s->sleeping) return;
++    s->sleep_deep = FIELD_EX32(*esp32_rtc_reg(s, A_RTC_CNTL_DIG_PWC), RTC_CNTL_DIG_PWC, DG_WRAP_PD_EN);
++    if (s->sleep_deep) writeReg(0x3FF48FFC, 1); /* first: may replay this store (vNext-B) */
++    if (s->sleep_deep) qemu_set_irq(s->dig_power_down, 1);
++    s->sleeping = true;
++    for (int i = 0; i < ESP32_CPU_COUNT; ++i) qemu_set_irq(s->cpu_stall_req[i], 1);
++    /* Light sleep gates the CPU and APB clocks: CCOUNT and the digital timers stop (dig-clock-gate). */
++    if (!s->sleep_deep) qemu_set_irq(s->dig_clock_gate, 1);
++    const uint32_t ena = FIELD_EX32(*esp32_rtc_reg(s, A_RTC_CNTL_WAKEUP_STATE), RTC_CNTL_WAKEUP_STATE, WAKEUP_ENA);
++    const uint32_t timer1 = *esp32_rtc_reg(s, A_RTC_CNTL_SLP_TIMER1);
++    /* The timer wakes the chip by WAKEUP_ENA alone: ESP-IDF's rtc_sleep_set_wakeup_time() only writes SLP_VAL
++     * (MAIN_TIMER_ALARM_EN is the main timer's interrupt while awake). */
++    if (ena & ESP32_RTC_TIMER_TRIG) {
++        const uint64_t target = ((uint64_t)FIELD_EX32(timer1, RTC_CNTL_SLP_TIMER1, SLP_VAL_HI) << 32) |
++                                *esp32_rtc_reg(s, A_RTC_CNTL_SLP_TIMER0);
++        const uint64_t now_ticks = esp32_rtc_now_ticks(s);
++        const int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++        const int64_t at = target > now_ticks
++                               ? now + (int64_t)muldiv64(target - now_ticks, NANOSECONDS_PER_SECOND, s->rtc_slowclk_freq)
++                               : now;
++        if (esp32_rtc_trace())
++            fprintf(stderr, "[RTC] sleep timer target=%" PRIu64 " now_ticks=%" PRIu64 " slow_hz=%u at=%" PRId64
++                    " now=%" PRId64 "\n", target, now_ticks, s->rtc_slowclk_freq, at, now);
++        timer_mod_ns(&s->sleep_timer, at);
++    }
++    if (esp32_rtc_trace())
++        fprintf(stderr, "[RTC] sleep deep=%d ena=0x%x timer1=0x%x ext_conf=0x%x\n", s->sleep_deep, ena, timer1,
++                *esp32_rtc_reg(s, A_RTC_CNTL_EXT_WAKEUP_CONF));
++    esp32_rtc_check_pads(s);
++}
++
+ static uint64_t esp32_rtc_cntl_read(void *opaque, hwaddr addr, unsigned int size)
+ {
+     Esp32RtcCntlState *s = ESP32_RTC_CNTL(opaque);
+@@ -74,6 +220,20 @@ static uint64_t esp32_rtc_cntl_read(void *opaque, hwaddr addr, unsigned int size
+     case A_RTC_CNTL_STORE7:
+         r = s->scratch_reg[(addr - A_RTC_CNTL_STORE4) / 4 + 4];
+         break;
++
++    case A_RTC_CNTL_INT_RAW:
++        r = s->int_raw;
++        break;
++    case A_RTC_CNTL_INT_ST:
++        r = s->int_raw & *esp32_rtc_reg(s, A_RTC_CNTL_INT_ENA);
++        break;
++    case A_RTC_CNTL_INT_CLR:
++        r = 0;
++        break;
++
++    default:
++        if (addr < sizeof(s->regs)) r = s->regs[addr / 4];
++        break;
+     }
+     return r;
+ }
+@@ -144,6 +304,52 @@ static void esp32_rtc_cntl_write(void *opaque, hwaddr addr, uint64_t value,
+     case A_RTC_CNTL_STORE7:
+         s->scratch_reg[(addr - A_RTC_CNTL_STORE4) / 4 + 4] = value;
+         break;
++
++    case A_RTC_CNTL_STATE0:
++        *esp32_rtc_reg(s, addr) = value;
++        if (FIELD_EX32(value, RTC_CNTL_STATE0, SLEEP_EN)) esp32_rtc_sleep_start(s);
++        break;
++    case A_RTC_CNTL_WAKEUP_STATE: { /* WAKEUP_CAUSE is read-only */
++        uint32_t *reg = esp32_rtc_reg(s, addr);
++        *reg = (*reg & R_RTC_CNTL_WAKEUP_STATE_WAKEUP_CAUSE_MASK) | (value & ~R_RTC_CNTL_WAKEUP_STATE_WAKEUP_CAUSE_MASK);
++        break;
++    }
++    case A_RTC_CNTL_INT_ENA:
++        *esp32_rtc_reg(s, addr) = value;
++        esp32_rtc_update_irq(s);
++        break;
++    case A_RTC_CNTL_INT_CLR:
++        s->int_raw &= ~value;
++        esp32_rtc_update_irq(s);
++        break;
++    case A_RTC_CNTL_EXT_WAKEUP1:
++        if (FIELD_EX32(value, RTC_CNTL_EXT_WAKEUP1, STATUS_CLR)) *esp32_rtc_reg(s, A_RTC_CNTL_EXT_WAKEUP1_STATUS) = 0;
++        *esp32_rtc_reg(s, addr) = value & R_RTC_CNTL_EXT_WAKEUP1_SEL_MASK;
++        break;
++    case A_RTC_CNTL_EXT_WAKEUP1_STATUS:
++        break;
++    case A_RTC_CNTL_MEM_CRC: {
++        /* START runs the CRC of words [ADDR, ADDR + LEN] of RTC FAST memory; FINISH follows START. The
++         * engine's polynomial is not documented: the ROM only compares its own results (before the deep
++         * sleep and at the wakeup), so a fixed CRC of the same words behaves the same. Without it the ROM
++         * waited for FINISH forever and esp_deep_sleep_start() never slept. */
++        uint32_t v = value & ~R_RTC_CNTL_MEM_CRC_FINISH_MASK;
++        if (FIELD_EX32(v, RTC_CNTL_MEM_CRC, START)) {
++            const uint32_t first = FIELD_EX32(v, RTC_CNTL_MEM_CRC, ADDR);
++            const uint32_t words = MIN(FIELD_EX32(v, RTC_CNTL_MEM_CRC, LEN) + 1, 2048 - first);
++            *esp32_rtc_reg(s, A_RTC_CNTL_MEM_CRC_RES) =
++                s->rtc_fast_ram ? crc32c(0xffffffff, s->rtc_fast_ram + first * 4, words * 4) : 0;
++            v |= R_RTC_CNTL_MEM_CRC_FINISH_MASK;
++        }
++        *esp32_rtc_reg(s, addr) = v;
++        break;
++    }
++    case A_RTC_CNTL_MEM_CRC_RES:
++        break;
++
++    default:
++        if (addr < sizeof(s->regs)) s->regs[addr / 4] = value;
++        break;
+     }
+ }
+ 
+@@ -157,8 +363,8 @@ static void esp32_rtc_update_cpu_stall(Esp32RtcCntlState* s)
+ 
+     const uint32_t stall_magic_val = 0x86;
+ 
+-    s->cpu_stall_state[0] = procpu_stall == stall_magic_val;
+-    s->cpu_stall_state[1] = appcpu_stall == stall_magic_val;
++    s->cpu_stall_state[0] = procpu_stall == stall_magic_val || s->sleeping;
++    s->cpu_stall_state[1] = appcpu_stall == stall_magic_val || s->sleeping;
+ 
+     qemu_set_irq(s->cpu_stall_req[0], s->cpu_stall_state[0]);
+     qemu_set_irq(s->cpu_stall_req[1], s->cpu_stall_state[1]);
+@@ -184,6 +390,20 @@ static void esp32_rtc_cntl_reset(DeviceState *dev)
+     Esp32RtcCntlState *s = ESP32_RTC_CNTL(dev);
+ 
+     s->time_base_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    /* ESP-IDF rtc_cntl_reg.h reset values of the registers without a field of their own here */
++    static const struct { uint16_t offset; uint32_t value; } defaults[] = {
++        {0x018, 0x00300000}, {0x01c, 0x28140403}, {0x020, 0x01080000}, {0x024, 0x14160a08},
++        {0x028, 0x10200a08}, {0x02c, 0x12148001}, {0x030, 0x00800000}, {0x038, 0x00006000},
++        {0x074, 0x02a00000}, {0x07c, 0xa9002400}, {0x080, 0x00012925}, {0x084, 0x00155550},
++        {0x088, 0xaaaa5000}, {0x08c, 0x00004c80}, {0x090, 0x0001f400}, {0x094, 0x00013880},
++        {0x098, 0x00000fff}, {0x09c, 0x00000fff}, {0x0a4, 0x50d83aa1}, {0x0d4, 0x13ff0000},
++        {0x13c, 0x01604280},
++    };
++    memset(s->regs, 0, sizeof(s->regs));
++    for (size_t i = 0; i < ARRAY_SIZE(defaults); ++i) s->regs[defaults[i].offset / 4] = defaults[i].value;
++    s->int_raw = 0;
++    s->sleeping = false;
++    timer_del(&s->sleep_timer);
+     /* RTC_CNTL_CLK_CONF reset values: SoC clock on XTAL, slow clock on the 150 kHz RC, fast clock
+      * on the 8 MHz RC. Propagated to the SoC (esp32_clk_update) so APB_CLK and the CPU clock are
+      * the reset ones, not 0 or whatever the firmware had switched to before this reset. */
+@@ -210,6 +430,10 @@ static void esp32_rtc_cntl_init(Object *obj)
+     qdev_init_gpio_out_named(DEVICE(sbd), &s->cpu_reset_req[0], ESP32_RTC_CPU_RESET_GPIO, ESP32_CPU_COUNT);
+     qdev_init_gpio_out_named(DEVICE(sbd), &s->cpu_stall_req[0], ESP32_RTC_CPU_STALL_GPIO, ESP32_CPU_COUNT);
+     qdev_init_gpio_out_named(DEVICE(sbd), &s->clk_update, ESP32_RTC_CLK_UPDATE_GPIO, 1);
++    qdev_init_gpio_out_named(DEVICE(sbd), &s->dig_power_down, ESP32_RTC_DIG_PD_GPIO, 1);
++    qdev_init_gpio_out_named(DEVICE(sbd), &s->dig_clock_gate, ESP32_RTC_DIG_CLK_GATE_GPIO, 1);
++    timer_init_ns(&s->sleep_timer, QEMU_CLOCK_VIRTUAL, esp32_rtc_sleep_timer_cb, s);
++    esp32_rtc_cntl_device = s;
+ 
+     for (int i = 0; i < ESP32_CPU_COUNT; ++i) {
+         s->reset_cause[i] = ESP32_POWERON_RESET;
+diff --git a/hw/misc/esp32_rtcio.c b/hw/misc/esp32_rtcio.c
+new file mode 100644
+index 0000000..07cc64c
+--- /dev/null
++++ b/hw/misc/esp32_rtcio.c
+@@ -0,0 +1,120 @@
++/*
++ * ESP32 RTC IO MUX
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 or
++ * (at your option) any later version.
++ */
++
++#include "qemu/osdep.h"
++#include "hw/hw.h"
++#include "hw/sysbus.h"
++#include "hw/misc/esp32_rtcio.h"
++#include "../softmmu/vnext_b.h"
++
++/* The registers keep what the firmware writes, from the reset values of ESP-IDF rtc_io_reg.h; the RTC
++ * domain reads its selections from here (the ext0 wakeup pin for RTC_CNTL). */
++
++static Esp32RtcIoState *esp32_rtcio_device;
++
++/* RTC GPIO n -> GPIO (ESP32 TRM, RTC_MUX pin list). */
++static const int8_t esp32_rtcio_gpio[18] = { 36, 37, 38, 39, 34, 35, 25, 26, 33, 32, 4, 0, 2, 15, 13, 12, 14, 27 };
++
++int esp32_rtcio_gpio_of(unsigned rtc)
++{
++    return rtc < ARRAY_SIZE(esp32_rtcio_gpio) ? esp32_rtcio_gpio[rtc] : -1;
++}
++
++unsigned esp32_rtcio_ext0_sel(void)
++{
++    Esp32RtcIoState *s = esp32_rtcio_device;
++    return s ? FIELD_EX32(s->regs[A_RTC_IO_EXT_WAKEUP0 / 4], RTC_IO_EXT_WAKEUP0, SEL) : 0;
++}
++
++/* Level of GPIO `gpio` at the pad, from the vNext-B snapshot (the Core sees the pads). */
++bool esp32_rtcio_pad_level(int gpio)
++{
++    if (gpio < 0 || gpio > 39) return false;
++    const uint64_t in = vnext_b_gpio_read(gpio < 32 ? 0x3FF4403C : 0x3FF44040);
++    return (in >> (gpio % 32)) & 1;
++}
++
++static uint64_t esp32_rtcio_read(void *opaque, hwaddr addr, unsigned int size)
++{
++    Esp32RtcIoState *s = ESP32_RTCIO(opaque);
++    if (addr == 0x24) { /* RTC_GPIO_IN: NEXT [31:14], one bit per RTC GPIO, the level at the pad now */
++        vnext_b_lockstep_input_barrier();
++        uint32_t value = 0;
++        for (unsigned rtc = 0; rtc < ARRAY_SIZE(esp32_rtcio_gpio); rtc++)
++            if (esp32_rtcio_pad_level(esp32_rtcio_gpio[rtc])) value |= 1u << (14 + rtc);
++        return value;
++    }
++    return addr / 4 < ESP32_RTCIO_REGS ? s->regs[addr / 4] : 0;
++}
++
++static void esp32_rtcio_write(void *opaque, hwaddr addr, uint64_t value, unsigned int size)
++{
++    Esp32RtcIoState *s = ESP32_RTCIO(opaque);
++    if (addr / 4 >= ESP32_RTCIO_REGS) return;
++    /* *_W1TS / *_W1TC of RTC_GPIO_OUT, _ENABLE and _STATUS (0x04/0x08, 0x10/0x14, 0x1C/0x20). */
++    switch (addr) {
++    case 0x04: case 0x10: case 0x1C:
++        s->regs[addr / 4 - 1] |= value;
++        return;
++    case 0x08: case 0x14: case 0x20:
++        s->regs[addr / 4 - 2] &= ~value;
++        return;
++    }
++    s->regs[addr / 4] = value;
++}
++
++static const MemoryRegionOps esp32_rtcio_ops = {
++    .read = esp32_rtcio_read,
++    .write = esp32_rtcio_write,
++    .endianness = DEVICE_LITTLE_ENDIAN,
++};
++
++static void esp32_rtcio_reset(DeviceState *dev)
++{
++    Esp32RtcIoState *s = ESP32_RTCIO(dev);
++    memset(s->regs, 0, sizeof(s->regs));
++    /* ESP-IDF rtc_io_reg.h defaults */
++    s->regs[0x84 / 4] = 0x80000000; /* PAD_DAC1 */
++    s->regs[0x88 / 4] = 0x80000000; /* PAD_DAC2 */
++    s->regs[0x8C / 4] = 0x84100010; /* XTAL_32K_PAD */
++    s->regs[0x90 / 4] = 0x66000000; /* TOUCH_CFG */
++    static const uint32_t touch_pad[10] = { 0x52000000, 0x4a000000, 0x52000000, 0x4a000000, 0x52000000,
++                                            0x52000000, 0x4a000000, 0x42000000, 0x02000000, 0x02000000 };
++    for (int i = 0; i < 10; i++) s->regs[(0x94 + 4 * i) / 4] = touch_pad[i];
++    s->regs[0xC8 / 4] = 0x01603160; /* DATE */
++}
++
++static void esp32_rtcio_init(Object *obj)
++{
++    Esp32RtcIoState *s = ESP32_RTCIO(obj);
++    SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
++    memory_region_init_io(&s->iomem, obj, &esp32_rtcio_ops, s, TYPE_ESP32_RTCIO, 0x400);
++    sysbus_init_mmio(sbd, &s->iomem);
++    esp32_rtcio_device = s;
++}
++
++static void esp32_rtcio_class_init(ObjectClass *klass, void *data)
++{
++    DeviceClass *dc = DEVICE_CLASS(klass);
++    dc->reset = esp32_rtcio_reset;
++}
++
++static const TypeInfo esp32_rtcio_info = {
++    .name = TYPE_ESP32_RTCIO,
++    .parent = TYPE_SYS_BUS_DEVICE,
++    .instance_size = sizeof(Esp32RtcIoState),
++    .instance_init = esp32_rtcio_init,
++    .class_init = esp32_rtcio_class_init,
++};
++
++static void esp32_rtcio_register_types(void)
++{
++    type_register_static(&esp32_rtcio_info);
++}
++
++type_init(esp32_rtcio_register_types)
+diff --git a/hw/misc/esp32_twai.c b/hw/misc/esp32_twai.c
+index 4c9d04b..2129f27 100644
+--- a/hw/misc/esp32_twai.c
++++ b/hw/misc/esp32_twai.c
+@@ -257,14 +257,6 @@ static void esp32_twai_reset(DeviceState *dev)
+     qemu_irq_lower(s->irq);
+ }
+ 
+-void esp32_twai_peripheral_reset(void)
+-{
+-    Esp32TwaiState *s = esp32_twai_device;
+-    if (!s) return;
+-    writeReg(s->iomem.addr + 0x2fc, 1); /* the Core's controller too (first: may replay the store) */
+-    esp32_twai_reset(DEVICE(s));
+-}
+-
+ static void esp32_twai_init(Object *obj)
+ {
+     Esp32TwaiState *s = ESP32_TWAI(obj);
+diff --git a/hw/misc/meson.build b/hw/misc/meson.build
+index 9db9eaa..b909ff5 100644
+--- a/hw/misc/meson.build
++++ b/hw/misc/meson.build
+@@ -141,6 +141,7 @@ system_ss.add(when: 'CONFIG_XTENSA_ESP32', if_true: files(
+   'esp32_pcnt.c',
+   'esp32_mcpwm.c',
+   'esp32_twai.c',
++  'esp32_rtcio.c',
+   'esp32_flash_enc.c',
+   'ssi_psram.c',
+   'esp32_sens.c',
+diff --git a/hw/nvram/esp32_efuse.c b/hw/nvram/esp32_efuse.c
+index b1b5643..fa9d8d7 100644
+--- a/hw/nvram/esp32_efuse.c
++++ b/hw/nvram/esp32_efuse.c
+@@ -237,7 +237,13 @@ static void esp32_efuse_update_irq(Esp32EfuseState *s)
+ static void esp32_efuse_op_timer_start(Esp32EfuseState *s, uint32_t command)
+ {
+     int64_t ns_now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+-    int64_t interval_ns = 100000000; /* 100 ms; TODO: derive from EFUSE_CLK / validated ESP32 timing source. */
++    /* A read loads the 31 eFuse words into the registers; each access is a few APB cycles of setup, read
++     * pulse and hold (the eFuse-Read Timing table of the controller: TSUR_A 2, TRD 4, THR_A 2 at 80 MHz),
++     * so the whole read is microseconds. With 100 ms the chip spent 300 ms in the ROM before its first
++     * print (the reset's read and the two of _reload_efuses_and_check), and after a core reset, still on
++     * the PLL (APB 80 MHz), the 325 ms flash-boot watchdog of TG0 fired inside the 2nd-stage bootloader.
++     * Programming keeps the old placeholder (no boot path burns eFuses). TODO: derive it from EFUSE_CLK. */
++    int64_t interval_ns = command == EFUSE_READ ? 10000 : 100000000;
+     int64_t deadline_ns = ns_now + interval_ns;
+     s->cmd_reg = command;
+     esp32_efuse_operation_begin(&s->operation, command, deadline_ns);
+diff --git a/hw/ssi/esp32_spi.c b/hw/ssi/esp32_spi.c
+index 4612c94..a614910 100644
+--- a/hw/ssi/esp32_spi.c
++++ b/hw/ssi/esp32_spi.c
+@@ -21,6 +21,8 @@
+ #include "hw/ssi/esp32_spi.h"
+ #include "hw/misc/esp32_flash_enc.h"
+ #include "hw/xtensa/esp32_clk.h"
++#include "exec/address-spaces.h"
++#include "qemu/bswap.h"
+ 
+ #include "../softmmu/simuliface.h"
+ #include "../softmmu/vnext_b.h"
+@@ -68,37 +70,260 @@ static uint8_t esp32_spi_tx_byte( Esp32SpiState* s, uint32_t index )
+     return byte;
+ }
+ 
+-/* The `k`-th byte of a USR transaction as mirrored to the Core: [7:0] what MOSI shifts out, bit 8 =
+- * sample MISO during it, [31:16] where the received byte goes in the buffer. Full duplex
+- * (SPI_USER.DOUTDIN) runs the MOSI and MISO phases together; half duplex sends the MOSI bytes and then
+- * reads the MISO ones (ESP32 TRM, SPI, half-duplex). The MOSI phase reads W0 on, or W8 on with
+- * USR_MOSI_HIGHPART. Outside its own bytes MOSI keeps the level of the last bit it shifted out. */
+-static uint32_t esp32_spi_wire_value( Esp32SpiState* s, int k )
+-{
+-    int tx = -1, rx = -1;
+-    if( s->fullDuplex ) {
+-        if( k < s->txBytes ) tx = k;
+-        if( k < s->rxBytes ) rx = k;
+-    } else if( k < s->txBytes ) {
+-        tx = k;
+-    } else {
+-        rx = k - s->txBytes;
++/* Phases of a USR transaction on HSPI/VSPI (ESP32 TRM, SPI): command, address, dummy, then the data --
++ * MOSI and MISO together (full duplex, SPI_USER.DOUTDIN) or MOSI then MISO (half duplex). */
++enum { ESP32_SPI_PH_CMD, ESP32_SPI_PH_ADDR, ESP32_SPI_PH_DUMMY, ESP32_SPI_PH_DATA, ESP32_SPI_PH_DIN,
++       ESP32_SPI_PH_DONE };
++
++/* lldesc_t addresses are 20-bit offsets on the data bus (ESP-IDF spi_dma_ll_*_start: addr & 0xFFFFF). */
++#define ESP32_SPI_DMA_BUS 0x3FF00000u
++
++static Esp32SpiState *esp32_spi_by_number[4];
++
++static void esp32_spi_update_irq( Esp32SpiState* s )
++{
++    /* SPI_SLAVE: the done bits [4:0] (TRANS_DONE 4) with their enables [9:5] (TRANS_INTEN 9). */
++    qemu_set_irq( s->irq, (s->slave_reg & (s->slave_reg >> 5) & 0x1Fu) != 0 );
++    qemu_set_irq( s->dma_irq, (s->dma_int_raw_reg & s->dma_int_ena_reg) != 0 );
++}
++
++static int64_t esp32_spi_bits_ns( Esp32SpiState* s, uint64_t bits )
++{
++    return (int64_t)((bits * s->period_ps + 500) / 1000);
++}
++
++/* lldesc_t (ESP-IDF rom/lldesc.h): word 0 = size [11:0], length [23:12], eof 30, owner 31 (1 = the DMA);
++ * word 1 = buffer; word 2 = next descriptor. */
++static bool esp32_spi_desc_read( uint32_t addr, uint32_t w[3] )
++{
++    if( address_space_read( &address_space_memory, addr, MEMTXATTRS_UNSPECIFIED, w, 12 ) != MEMTX_OK ) return false;
++    for( int i = 0; i < 3; ++i ) w[i] = le32_to_cpu( w[i] );
++    return true;
++}
++
++/* The next MOSI data byte from the outlink chain: each descriptor gives `length` bytes, up to the one
++ * with eof. A descriptor the DMA does not own stops the chain (OUTLINK_DSCR_ERROR). */
++static uint8_t esp32_spi_dma_out_byte( Esp32SpiState* s )
++{
++    while( !s->outDone && s->outOff >= s->outLen ) {
++        uint32_t w[3];
++        if( s->outEof || !s->outNext ) { s->outDone = true; break; }
++        if( !esp32_spi_desc_read( s->outNext, w ) || !(w[0] >> 31) ) {
++            s->dma_int_raw_reg |= BIT(1);
++            s->outDone = true;
++            break;
++        }
++        s->outDesc = s->outNext;
++        s->outBuf = w[1];
++        s->outLen = (w[0] >> 12) & 0xFFFu;
++        s->outOff = 0;
++        s->outEof = (w[0] >> 30) & 1u;
++        s->outNext = w[2];
+     }
+-    uint32_t value = s->mosiHold;
+-    if( tx >= 0 ) {
+-        const uint8_t byte = esp32_spi_tx_byte( s, tx + (FIELD_EX32(s->user_reg, SPI_USER, MOSI_HIGHPART) ? 32 : 0) );
+-        s->mosiHold = (byte & 1u) ? 0xFFu : 0x00u;
+-        value = byte;
++    uint8_t byte = 0;
++    if( s->outDone ) return byte;
++    address_space_read( &address_space_memory, s->outBuf + s->outOff, MEMTXATTRS_UNSPECIFIED, &byte, 1 );
++    s->outOff++;
++    return byte;
++}
++
++/* Hand a filled inlink descriptor back to the CPU: length, eof, owner 0. */
++static void esp32_spi_desc_close( uint32_t addr, uint32_t length, bool eof )
++{
++    uint32_t w[3];
++    if( !esp32_spi_desc_read( addr, w ) ) return;
++    const uint32_t word = cpu_to_le32( (w[0] & 0xFFFu) | ((length & 0xFFFu) << 12) | (eof ? BIT(30) : 0) );
++    address_space_write( &address_space_memory, addr, MEMTXATTRS_UNSPECIFIED, &word, 4 );
++}
++
++/* Received byte `index` of the transaction into the inlink chain (each descriptor holds `size` bytes). */
++static void esp32_spi_dma_in_byte( Esp32SpiState* s, uint32_t index, uint8_t byte )
++{
++    while( !s->inDone && index >= s->inBase + s->inSize ) {
++        uint32_t w[3];
++        const uint32_t end = s->inBase + s->inSize;
++        if( s->inDesc ) esp32_spi_desc_close( s->inDesc, s->inSize, false );
++        if( !s->inNext || !esp32_spi_desc_read( s->inNext, w ) || !(w[0] >> 31) ) {
++            s->dma_int_raw_reg |= BIT(2); /* INLINK_DSCR_ERROR */
++            s->inDone = true;
++            break;
++        }
++        s->inDesc = s->inNext;
++        s->inBuf = w[1];
++        s->inSize = w[0] & 0xFFFu;
++        s->inNext = w[2];
++        s->inBase = end;
++        s->inFill = 0;
+     }
+-    if( rx >= 0 ) value |= 0x100u | ((uint32_t)rx << 16);
+-    return value;
++    if( s->inDone ) return;
++    address_space_write( &address_space_memory, s->inBuf + (index - s->inBase), MEMTXATTRS_UNSPECIFIED, &byte, 1 );
++    s->inFill = MAX( s->inFill, index - s->inBase + 1 );
+ }
+ 
+-static Esp32SpiState *esp32_spi_by_number[4];
++/* MOSI data byte `index`: from W0-W15 (W8 on with MOSI_HIGHPART) or from the outlink DMA. */
++static uint8_t esp32_spi_data_byte( Esp32SpiState* s, uint32_t index )
++{
++    if( !s->dmaOut ) return esp32_spi_tx_byte( s, index + (FIELD_EX32(s->user_reg, SPI_USER, MOSI_HIGHPART) ? 32 : 0) );
++    uint8_t byte = esp32_spi_dma_out_byte( s );
++    if( FIELD_EX32(s->ctrl_reg, SPI_CTRL, WR_BIT_ORDER) ) byte = esp32_spi_mirror_byte(byte);
++    return byte;
++}
++
++static void esp32_spi_set_phase( Esp32SpiState* s, int ph )
++{
++    s->ph = ph;
++    s->phPos = 0;
++    switch( ph ) {
++    case ESP32_SPI_PH_CMD:
++        s->phBits = FIELD_EX32(s->user_reg, SPI_USER, COMMAND) ? FIELD_EX32(s->user2_reg, SPI_USER2, COMMAND_BITLEN) + 1 : 0;
++        break;
++    case ESP32_SPI_PH_ADDR:
++        s->phBits = FIELD_EX32(s->user_reg, SPI_USER, ADDR) ? FIELD_EX32(s->user1_reg, SPI_USER1, ADDR_BITLEN) + 1 : 0;
++        break;
++    case ESP32_SPI_PH_DUMMY:
++        s->phBits = FIELD_EX32(s->user_reg, SPI_USER, DUMMY) ? FIELD_EX32(s->user1_reg, SPI_USER1, DUMMY_CYCLELEN) + 1 : 0;
++        break;
++    case ESP32_SPI_PH_DATA:
++        s->phBits = s->fullDuplex ? MAX( s->doutBits, s->dinBits ) : s->doutBits;
++        break;
++    case ESP32_SPI_PH_DIN:
++        s->phBits = s->fullDuplex ? 0 : s->dinBits;
++        break;
++    default:
++        s->phBits = 0;
++        break;
++    }
++}
++
++/* The next piece of the transaction, up to 8 bits of one phase, as mirrored to the Core (adapter SPI
++ * engine): [7:0] the MOSI bits, the first one in bit 7; bit 8 sample MISO; [11:9] 8 - bits; bit 13 no
++ * clock (dummy with USR_DUMMY_IDLE); bit 14 CPHA = CK_OUT_EDGE xor CK_IDLE_EDGE; [31:16] where the
++ * received byte goes. Command and address go out byte by byte in SPI_CTRL.WR_BIT_ORDER: the command from
++ * bit 7 of COMMAND_VALUE (or bit 0), the address from bit 31 of SPI_ADDR on into SLV_WR_STATUS. MOSI keeps
++ * the level of the last bit it shifted out. Returns 0 at the end of the transaction. */
++static int esp32_spi_next_chunk( Esp32SpiState* s, uint32_t* value )
++{
++    while( s->ph < ESP32_SPI_PH_DONE && s->phPos >= s->phBits ) esp32_spi_set_phase( s, s->ph + 1 );
++    if( s->ph >= ESP32_SPI_PH_DONE ) return 0;
++    const bool lsb = FIELD_EX32(s->ctrl_reg, SPI_CTRL, WR_BIT_ORDER);
++    uint32_t n = MIN( 8u, s->phBits - s->phPos );
++    bool capture = s->ph == ESP32_SPI_PH_DIN;
++    int dataByte = -1;
++    if( s->ph == ESP32_SPI_PH_DATA ) {
++        if( s->phPos < s->doutBits ) {
++            n = MIN( n, s->doutBits - s->phPos );
++            dataByte = esp32_spi_data_byte( s, s->phPos / 8 );
++        }
++        if( s->fullDuplex && s->phPos < s->dinBits ) {
++            n = MIN( n, s->dinBits - s->phPos );
++            capture = true;
++        }
++    }
++    uint32_t bits = 0;
++    for( uint32_t i = 0; i < n; ++i ) {
++        const uint32_t k = s->phPos + i;
++        const uint32_t bit = lsb ? k % 8 : 7 - k % 8;
++        int level = -1;
++        if( s->ph == ESP32_SPI_PH_CMD ) {
++            level = (FIELD_EX32(s->user2_reg, SPI_USER2, COMMAND_VALUE) >> (8 * (k / 8) + bit)) & 1;
++        } else if( s->ph == ESP32_SPI_PH_ADDR ) {
++            const uint64_t addr = ((uint64_t)s->addr_reg << 32) | s->slv_wr_status_reg;
++            level = (addr >> (56 - 8 * (k / 8) + bit)) & 1;
++        } else if( dataByte >= 0 ) {
++            level = (dataByte >> (7 - k % 8)) & 1; /* esp32_spi_data_byte already put it in wire order */
++        }
++        if( level < 0 ) level = s->mosiHold & 1;
++        else s->mosiHold = level ? 0xFFu : 0x00u;
++        bits |= (uint32_t)level << (7 - i);
++    }
++    const bool noClock = s->ph == ESP32_SPI_PH_DUMMY && FIELD_EX32(s->user_reg, SPI_USER, DUMMY_IDLE);
++    const bool cpha = FIELD_EX32(s->user_reg, SPI_USER, CK_OUT_EDGE) != FIELD_EX32(s->pin_reg, SPI_PIN, CK_IDLE_EDGE);
++    *value = bits | (capture ? 0x100u : 0) | ((8u - n) << 9) | (noClock ? BIT(13) : 0) | (cpha ? BIT(14) : 0) |
++             (capture ? (s->phPos / 8) << 16 : 0);
++    s->phPos += n;
++    s->wireBits += n;
++    return n;
++}
++
++/* The transaction is over (CS already inactive): TRANS_DONE, the DMA descriptors and interrupts. */
++static void esp32_spi_complete( Esp32SpiState* s )
++{
++    s->donePending = false;
++    s->do_command = 0;
++    if( s->dmaIn ) {
++        if( s->inDesc ) esp32_spi_desc_close( s->inDesc, s->inFill, true );
++        s->dma_in_suc_eof_des_addr = s->inDesc;
++        s->dma_int_raw_reg |= BIT(3) | BIT(5); /* IN_DONE, IN_SUC_EOF */
++    }
++    if( s->dmaOut ) {
++        s->dma_out_eof_des_addr = s->outDesc;
++        s->dma_out_eof_bfr_des_addr = s->outBuf;
++        s->dma_int_raw_reg |= BIT(6) | BIT(7) | BIT(8); /* OUT_DONE, OUT_EOF, OUT_TOTAL_EOF */
++    }
++    s->dmaIn = s->dmaOut = false;
++    s->slave_reg |= R_SPI_SLAVE_TRANS_DONE_MASK;
++    esp32_spi_update_irq( s );
++}
++
++/* End of the wire. The MISO bytes the Core sampled may still be on their way (C2A): hold the vCPUs at this
++ * instant until they arrive -- the CPU sees the transaction done (CMD.USR, TRANS_DONE, the DMA buffer)
++ * only with every byte in place, as on the chip. A hold that brought nothing more gives up on them. */
++static void esp32_spi_finish( Esp32SpiState* s )
++{
++    if( s->dmaIn && s->rxDelivered < s->rxExpected ) {
++        const int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++        if( now != s->rxSyncNs || s->rxDelivered != s->rxSyncDelivered ) {
++            s->donePending = true;
++            s->rxSyncNs = now;
++            s->rxSyncDelivered = s->rxDelivered;
++            vnext_b_lockstep_hold_now();
++            timer_mod_ns( &s->event_timer, now );
++            return;
++        }
++    }
++    esp32_spi_complete( s );
++}
++
++/* The wire goes out from the timer only: there a full lane is VNEXT_WOULD_BLOCK (the piece waits and goes
++ * again), never a replayed guest store. */
++static void esp32_spi_step( Esp32SpiState* s )
++{
++    const int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    if( !s->chunkReady && !s->wireDone ) {
++        s->chunkReady = esp32_spi_next_chunk( s, &s->chunkValue ) != 0;
++        s->wireDone = !s->chunkReady;
++    }
++    if( s->chunkReady ) {
++        if( writeReg( s->iomem.addr+0x80, s->chunkValue ) == VNEXT_WOULD_BLOCK ) {
++            timer_mod_ns( &s->event_timer, now + 1000 );
++            return;
++        }
++        s->chunkReady = false;
++        timer_mod_ns( &s->event_timer, MAX( now, s->wireStartNs + s->setupNs + esp32_spi_bits_ns( s, s->wireBits ) ) );
++        return;
++    }
++    if( !s->holdDone ) {
++        s->holdDone = true;
++        if( FIELD_EX32(s->user_reg, SPI_USER, CS_HOLD) ) {
++            /* CS_HOLD: CS stays active HOLD_TIME + 1 SCK cycles after the last bit (SPI_CTRL2 [7:4]). */
++            timer_mod_ns( &s->event_timer, s->wireStartNs + s->setupNs +
++                          esp32_spi_bits_ns( s, s->wireBits + ((s->ctrl2_reg >> 4) & 0xFu) + 1 ) );
++            return;
++        }
++    }
++    /* Real end of the transaction (HSPI/VSPI): CS0 goes inactive, the same automatic bracket the chip puts
++     * around any USR command (see the start in esp32_spi_usr_start). */
++    if( writeReg( s->iomem.addr+A_SPI_CMD, 0 ) == VNEXT_WOULD_BLOCK ) {
++        timer_mod_ns( &s->event_timer, now + 1000 );
++        return;
++    }
++    esp32_spi_finish( s );
++}
+ 
+ /* vNext-B: a byte the Core sampled on MISO (adapter SPI engine), pushed through C2A at the buffer's
+- * address -- [7:0] the byte, bit 8 valid, [31:16] its place in the receive buffer: W0 on, or W8 on
+- * with SPI_USER.USR_MISO_HIGHPART, in SPI_USER.RD_BYTE_ORDER / SPI_CTRL.RD_BIT_ORDER. */
++ * address -- [7:0] the bits (the first one in bit 7), bit 8 valid, [31:16] its place among the received
++ * bytes. In W0-W15 (W8 on with SPI_USER.USR_MISO_HIGHPART, in RD_BYTE_ORDER) or through the inlink DMA,
++ * in SPI_CTRL.RD_BIT_ORDER. */
+ void esp32_spi_vnext_rx( uint64_t address, uint64_t value )
+ {
+     for( int n = 2; n < ARRAY_SIZE(esp32_spi_by_number); ++n ) {
+@@ -107,73 +332,124 @@ void esp32_spi_vnext_rx( uint64_t address, uint64_t value )
+         if( !(value & 0x100u) || s->rxDelivered >= s->rxExpected ) return;
+         uint8_t byte = (uint8_t)value;
+         if( FIELD_EX32(s->ctrl_reg, SPI_CTRL, RD_BIT_ORDER) ) byte = esp32_spi_mirror_byte(byte);
+-        const uint32_t pos = ((value >> 16) & 0xFFFFu) + (FIELD_EX32(s->user_reg, SPI_USER, MISO_HIGHPART) ? 32 : 0);
+-        const unsigned lane = pos % 4;
+-        const unsigned shift = 8 * (FIELD_EX32(s->user_reg, SPI_USER, RD_BYTE_ORDER) ? 3 - lane : lane);
+-        uint32_t *word = &s->data_reg[(pos / 4) % ESP32_SPI_BUF_WORDS];
+-        *word = (*word & ~(0xFFu << shift)) | ((uint32_t)byte << shift);
++        const uint32_t index = (value >> 16) & 0xFFFFu;
++        if( s->dmaIn ) {
++            esp32_spi_dma_in_byte( s, index, byte );
++        } else {
++            const uint32_t pos = index + (FIELD_EX32(s->user_reg, SPI_USER, MISO_HIGHPART) ? 32 : 0);
++            const unsigned lane = pos % 4;
++            const unsigned shift = 8 * (FIELD_EX32(s->user_reg, SPI_USER, RD_BYTE_ORDER) ? 3 - lane : lane);
++            uint32_t *word = &s->data_reg[(pos / 4) % ESP32_SPI_BUF_WORDS];
++            *word = (*word & ~(0xFFu << shift)) | ((uint32_t)byte << shift);
++        }
+         s->rxDelivered++;
++        if( s->donePending && s->rxDelivered >= s->rxExpected ) esp32_spi_complete( s );
+         return;
+     }
+ }
+ 
+-/* MISO bytes the Core has sampled by `now_ns`: wire byte k ends at wireStartNs + (k + 1) * wireByteNs,
+- * and the received bytes are the first rxBytes (full duplex) or those after the MOSI phase. */
++/* MISO bytes the Core has sampled by `now_ns`: received byte r ends 8 (r + 1) wire bits after the MISO
++ * data starts, the last one with the data. */
+ static int esp32_spi_rx_due( Esp32SpiState* s, int64_t now_ns )
+ {
+-    if( s->rxExpected == 0 || s->wireByteNs <= 0 || now_ns < s->wireStartNs ) return 0;
+-    const int64_t done = (now_ns - s->wireStartNs) / s->wireByteNs;
+-    const int64_t rx = s->fullDuplex ? done : done - s->txBytes;
+-    return (int)MAX( 0, MIN( rx, (int64_t)s->rxExpected ) );
+-}
+-
+-/* Duracao de um byte no fio (8 periodos de SCK), em ns. */
+-static int64_t esp32_spi_byte_ns( Esp32SpiState* s )
+-{
+-    return (int64_t)((s->period_ps * 8 + 500) / 1000);
++    const int64_t t = now_ns - s->wireStartNs - s->setupNs;
++    if( s->rxExpected == 0 || s->period_ps == 0 || t <= 0 ) return 0;
++    const uint64_t bits = (uint64_t)t * 1000u / s->period_ps;
++    if( bits < s->rxStartBit ) return 0;
++    const uint64_t in = bits - s->rxStartBit;
++    const uint64_t done = in >= s->dinBits ? (s->dinBits + 7) / 8 : in / 8;
++    return (int)MIN( done, (uint64_t)s->rxExpected );
+ }
+ 
+ static void esp32_spi_event( void* opaque ) // Timer event
+ {
+     Esp32SpiState *s = ESP32_SPI(opaque);
++    if( !s->do_command ) return;
++    if( s->donePending ) esp32_spi_finish( s );
++    else esp32_spi_step( s );
++}
+ 
+-    s->dataBytes--;
+-    s->bytesDone++;
++/* SPI_CLOCK_REG (TRM): with SPI_CLK_EQU_SYSCLK (bit 31, set at reset) the SCK is APB_CLK itself, else
++ * APB_CLK / ((CLKDIV_PRE + 1) (CLKCNT_N + 1)) -- from the APB of this moment, as the divider on the chip. The
++ * period in ps straight from the divider: in whole ns, 12.5 ns (80 MHz) became 12 and 37.5 ns (26.67 MHz) 37. */
++static void esp32_spi_update_period( Esp32SpiState* s )
++{
++    const uint32_t value = s->clock_reg;
++    const uint64_t divider = (value & 0x80000000u) ? 1 : (uint64_t)(((value >> 18) & 0x1FFFu) + 1) * (((value >> 12) & 0x3Fu) + 1);
++    const uint64_t apb_freq = esp32_soc_get_apb_freq();
++    if( apb_freq == 0 ) return; /* no SoC clock (never after the RTC reset, see esp32_rtc_cntl_reset) */
++    s->period_ps = (divider * 1000000000000ull + apb_freq / 2) / apb_freq;
++}
+ 
+-    if( s->dataBytes )
+-    {
+-        writeReg( s->iomem.addr+0x80, esp32_spi_wire_value( s, s->bytesDone ) );
+-        timer_mod_ns( &s->event_timer, getQemu_ns()+esp32_spi_byte_ns( s ) );
++/* A USR command on HSPI/VSPI (number >= 2): CS active, the CS_SETUP time (SETUP_TIME + 1 SCK cycles,
++ * SPI_CTRL2 [3:0]), then the phases piece by piece on the Core's pins at the SCK period. MOSI data comes
++ * from the outlink DMA when SPI_DMA_OUT_LINK.START was set, MISO data goes to the inlink one with
++ * SPI_DMA_IN_LINK.START; each START is used by one transaction. */
++static void esp32_spi_usr_start( Esp32SpiState* s )
++{
++    /* The transaction is rebuilt from the registers on every attempt: the writeReg()s below may replay this
++     * store (vNext-B backpressure), and only after them is anything changed that a replay would not rebuild
++     * (do_command, the DMA START bits). */
++    esp32_spi_update_period( s );
++    s->fullDuplex = FIELD_EX32(s->user_reg, SPI_USER, DOUTDIN);
++    s->doutBits = FIELD_EX32(s->user_reg, SPI_USER, MOSI) ? (s->mosi_dlen_reg & 0xFFFFFFu) + 1 : 0;
++    s->dinBits = FIELD_EX32(s->user_reg, SPI_USER, MISO) ? (s->miso_dlen_reg & 0xFFFFFFu) + 1 : 0;
++    uint32_t before = 0;
++    for( int ph = ESP32_SPI_PH_CMD; ph <= ESP32_SPI_PH_DUMMY; ++ph ) {
++        esp32_spi_set_phase( s, ph );
++        before += s->phBits;
+     }
+-    else{
+-        s->do_command = 0;
+-        // Fim real da transacao (numero>=2, HSPI/VSPI -- SPI0/SPI1 usam esp32_spi_cs_set() via
+-        // qemu_irq interno, nunca chegam aqui): desativa CS0 automaticamente, mesmo bracket que o
+-        // hardware real aplica ao redor de QUALQUER comando USR, sem exigir nenhum firmware/
+-        // biblioteca especifica -- ver A_SPI_CMD tambem espelhado no inicio da transacao abaixo.
+-        writeReg( s->iomem.addr+A_SPI_CMD, 0 );
++    s->rxStartBit = before + (s->fullDuplex ? 0 : s->doutBits);
++    /* Only the Core can sample MISO (vNext-B); without it the buffer keeps what was written. */
++    s->rxExpected = vnext_b_active() ? (int)((s->dinBits + 7) / 8) : 0;
++    s->rxDelivered = 0;
++    s->rxSyncNs = -1;
++    s->rxSyncDelivered = 0;
++    s->donePending = false;
++    s->holdDone = false;
++    s->wireBits = 0;
++    s->dmaOut = s->doutBits && (s->dma_out_link_reg & BIT(29));
++    s->dmaIn = s->dinBits && (s->dma_in_link_reg & BIT(29));
++    if( s->dmaOut ) {
++        s->outNext = ESP32_SPI_DMA_BUS | (s->dma_out_link_reg & 0xFFFFFu);
++        s->outDesc = s->outBuf = s->outLen = s->outOff = 0;
++        s->outEof = s->outDone = false;
+     }
+-
+-    //printf("esp32_spi_event %i %i %i %lu\n", s->number, s->bytesDone, s->dataBytes, getQemu_ps() ); fflush( stdout );
++    if( s->dmaIn ) {
++        s->inNext = ESP32_SPI_DMA_BUS | (s->dma_in_link_reg & 0xFFFFFu);
++        s->inDesc = s->inBuf = s->inSize = s->inBase = s->inFill = 0;
++        s->inDone = false;
++    }
++    s->setupNs = FIELD_EX32(s->user_reg, SPI_USER, CS_SETUP) ? esp32_spi_bits_ns( s, (s->ctrl2_reg & 0xFu) + 1 ) : 0;
++    s->wireStartNs = getQemu_ns();
++    s->chunkReady = s->wireDone = false;
++    esp32_spi_set_phase( s, ESP32_SPI_PH_CMD );
++    /* On this vCPU's lane, in this order: the SCK period (the APB may have changed since SPI_CLOCK was
++     * written, or it never was: the reset value runs at APB), CS0 going active -- the real start of the
++     * transaction, the same automatic bracket the chip puts around any USR command (the end is in
++     * esp32_spi_step()) -- and the first piece of the wire. The rest goes out from the timer. */
++    if( s->period_ps != s->mirrored_period_ps ) {
++        writeReg( s->iomem.addr+0x18, s->period_ps );
++        s->mirrored_period_ps = s->period_ps;
++    }
++    writeReg( s->iomem.addr+A_SPI_CMD, 1 );
++    if( !s->setupNs ) {
++        s->wireDone = esp32_spi_next_chunk( s, &s->chunkValue ) == 0;
++        if( !s->wireDone ) writeReg( s->iomem.addr+0x80, s->chunkValue );
++    }
++    s->do_command = R_SPI_CMD_USR_MASK;
++    if( s->dmaOut ) s->dma_out_link_reg &= ~BIT(29); /* each START is used by one transaction */
++    if( s->dmaIn ) s->dma_in_link_reg &= ~BIT(29);
++    timer_mod_ns( &s->event_timer, s->wireStartNs + s->setupNs + esp32_spi_bits_ns( s, s->wireBits ) );
+ }
+ 
+ static void write_clk_reg( Esp32SpiState* s, uint64_t value )
+ {
+-    /* SPI_CLOCK_REG (TRM): com SPI_CLK_EQU_SYSCLK (bit 31) o SCK e' o proprio APB_CLK; senao
+-     * APB_CLK/((CLKDIV_PRE+1)*(CLKCNT_N+1)). O periodo sai em ps direto do divisor: em ns
+-     * inteiros, 12,5 ns (80 MHz) virava 12 e 37,5 ns (26,67 MHz) virava 37, um SCK 4% e 1,3%
+-     * mais rapido que o real. */
+-    uint32_t CLKDIV_PRE = (value & 0x7FFC0000) >> 18; // bits 18 to 30
+-    uint32_t CLKCNT_N   = (value & 0x0003F000) >> 12; // bits 12 to 17
+-    const uint64_t divider = (value & 0x80000000u) ? 1 : (uint64_t)(CLKDIV_PRE+1)*(CLKCNT_N+1);
+-    const uint64_t apb_freq = esp32_soc_get_apb_freq();
+-    if( apb_freq == 0 ) return; /* no SoC clock (never after the RTC reset, see esp32_rtc_cntl_reset) */
+-
+-    const uint64_t period_ps = (divider * 1000000000000ull + apb_freq / 2) / apb_freq;
+-
+-    if( s->period_ps == period_ps ) return;
+-    s->period_ps = period_ps;
+-    writeReg( s->iomem.addr+0x18, period_ps );
++    s->clock_reg = (uint32_t)value;
++    esp32_spi_update_period( s );
++    if( s->number < 2 || s->period_ps == s->mirrored_period_ps ) return;
++    writeReg( s->iomem.addr+0x18, s->period_ps ); /* first: may replay this store (vNext-B) */
++    s->mirrored_period_ps = s->period_ps;
+ }
+ 
+ static uint64_t esp32_spi_read(void *opaque, hwaddr addr, unsigned int size)
+@@ -191,15 +467,28 @@ static uint64_t esp32_spi_read(void *opaque, hwaddr addr, unsigned int size)
+     case A_SPI_STATUS:    r = s->status_reg; break;
+     case A_SPI_CTRL1:     r = s->ctrl1_reg; break;
+     case A_SPI_CTRL2:     r = s->ctrl2_reg; break;
++    case 0x18:            r = s->clock_reg; break; //SPI_CLOCK_REG
+     case A_SPI_USER:      r = s->user_reg; break;
+     case A_SPI_USER1:     r = s->user1_reg; break;
+     case A_SPI_USER2:     r = s->user2_reg; break;
+     case A_SPI_MOSI_DLEN: r = s->mosi_dlen_reg; break;
+     case A_SPI_MISO_DLEN: r = s->miso_dlen_reg; break;
+     case A_SPI_PIN:       r = s->pin_reg; break;
++    case A_SPI_SLV_WR_STATUS: r = s->slv_wr_status_reg; break;
+     case A_SPI_SLAVE:
+-        r = BIT(R_SPI_SLAVE_TRANS_DONE_SHIFT) | BIT(R_SPI_SLAVE_TRANS_INTEN_SHIFT);
++        /* SPI0/SPI1 (flash) keep the constant their code has always seen; HSPI/VSPI the real register. */
++        r = s->number >= 2 ? s->slave_reg : BIT(R_SPI_SLAVE_TRANS_DONE_SHIFT) | BIT(R_SPI_SLAVE_TRANS_INTEN_SHIFT);
+         break;
++    case A_SPI_DMA_CONF:     r = s->dma_conf_reg; break;
++    case A_SPI_DMA_OUT_LINK: r = s->dma_out_link_reg; break;
++    case A_SPI_DMA_IN_LINK:  r = s->dma_in_link_reg; break;
++    case A_SPI_DMA_STATUS:   r = (s->do_command && s->dmaIn ? 1 : 0) | (s->do_command && s->dmaOut ? 2 : 0); break;
++    case A_SPI_DMA_INT_ENA:  r = s->dma_int_ena_reg; break;
++    case A_SPI_DMA_INT_RAW:  r = s->dma_int_raw_reg; break;
++    case A_SPI_DMA_INT_ST:   r = s->dma_int_raw_reg & s->dma_int_ena_reg; break;
++    case A_SPI_IN_SUC_EOF_DES_ADDR: r = s->dma_in_suc_eof_des_addr; break;
++    case A_SPI_OUT_EOF_BFR_DES_ADDR: r = s->dma_out_eof_bfr_des_addr; break;
++    case A_SPI_OUT_EOF_DES_ADDR: r = s->dma_out_eof_des_addr; break;
+     case A_SPI_W0 ... A_SPI_W0 + (ESP32_SPI_BUF_WORDS - 1) * sizeof(uint32_t):
+         /* A MISO byte reaches the buffer through C2A once the Core passes the instant it was sampled.
+          * A read after that instant waits for it: sync (and replay this load) while fewer bytes have
+@@ -240,13 +529,28 @@ static void esp32_spi_write(void *opaque, hwaddr addr, uint64_t value, unsigned
+     case A_SPI_MOSI_DLEN: s->mosi_dlen_reg = value; break;
+     case A_SPI_MISO_DLEN: s->miso_dlen_reg = value; break;
+     case A_SPI_PIN:
+-        s->pin_reg = value;
+         // Espelha CS0_DIS/CS0_POL (e os demais CS, ainda que so' CS0 seja roteado pro Core hoje --
+-        // ver Esp32Adapter.cpp) pro lado que de fato pilota o pino eletrico em HSPI/VSPI.
++        // ver Esp32Adapter.cpp) e CK_IDLE_EDGE (o nivel ocioso do SCK) pro lado que de fato pilota os
++        // pinos eletricos em HSPI/VSPI. Primeiro: writeReg() pode repetir o store (vNext-B).
+         writeReg( s->iomem.addr+A_SPI_PIN, value );
++        s->pin_reg = value;
+         break;
++    case A_SPI_SLV_WR_STATUS: s->slv_wr_status_reg = value; break;
+     case A_SPI_SLAVE:
+         writeReg( s->iomem.addr+A_SPI_SLAVE, value );
++        s->slave_reg = value;
++        esp32_spi_update_irq( s );
++        break;
++    case A_SPI_DMA_CONF:     s->dma_conf_reg = value; break;
++    case A_SPI_DMA_OUT_LINK: s->dma_out_link_reg = value; break;
++    case A_SPI_DMA_IN_LINK:  s->dma_in_link_reg = value; break;
++    case A_SPI_DMA_INT_ENA:
++        s->dma_int_ena_reg = value & 0x1FFu;
++        esp32_spi_update_irq( s );
++        break;
++    case A_SPI_DMA_INT_CLR:
++        s->dma_int_raw_reg &= ~value;
++        esp32_spi_update_irq( s );
+         break;
+     case A_SPI_W0 ... A_SPI_W0 + (ESP32_SPI_BUF_WORDS - 1) * sizeof(uint32_t):
+         s->data_reg[(addr - A_SPI_W0) / sizeof(uint32_t)] = value;
+@@ -317,7 +621,10 @@ static void esp32_spi_do_command( Esp32SpiState* s, uint32_t cmd_reg )
+      * with SPI_FLASH_WREN (bit 30), and dropping it left WEL clear, so every flash
+      * erase/write (NVS, PHY calibration, Wi-Fi init) failed with ESP_ERR_NOT_FOUND. */
+     if( s->number >= 2 ) {
+-        if( (cmd_reg & R_SPI_CMD_USR_MASK) == 0 ) return;
++        /* A new USR while one is on the wire is not taken, as on the chip (CMD.USR still reads 1). */
++        if( (cmd_reg & R_SPI_CMD_USR_MASK) == 0 || s->do_command ) return;
++        esp32_spi_usr_start( s );
++        return;
+     } else if( cmd_reg == 0 ) {
+         return;
+     }
+@@ -425,30 +732,7 @@ static void esp32_spi_do_command( Esp32SpiState* s, uint32_t cmd_reg )
+     default:
+         return;
+     }
+-    if( s->number < 2 ) esp32_spi_transaction( s, &t );
+-    else{
+-        s->fullDuplex = FIELD_EX32(s->user_reg, SPI_USER, DOUTDIN);
+-        s->txBytes = t.data_tx_bytes;
+-        s->rxBytes = t.data_rx_bytes;
+-        s->dataBytes = s->fullDuplex ? MAX( s->txBytes, s->rxBytes ) : s->txBytes + s->rxBytes;
+-        if( s->dataBytes == 0 ) return;
+-        /* Only the Core can sample MISO (vNext-B); without it the buffer keeps what was written. */
+-        s->rxExpected = vnext_b_active() ? s->rxBytes : 0;
+-        s->rxDelivered = 0;
+-        s->rxSyncNs = -1;
+-        s->wireStartNs = getQemu_ns();
+-        s->wireByteNs = esp32_spi_byte_ns( s );
+-        s->mosiHold = 0;
+-
+-        s->bytesDone = 0;
+-        // Inicio real da transacao (numero>=2, HSPI/VSPI): ativa CS0 automaticamente ANTES do
+-        // primeiro byte, mesmo bracket que o hardware real aplica ao redor de qualquer comando USR
+-        // -- ver o fim espelhado em esp32_spi_event() acima. Nenhum firmware/biblioteca especifica
+-        // e' assumida: isto vale pra qualquer transacao SPI, USR ou nao, que chegue por este caminho.
+-        writeReg( s->iomem.addr+A_SPI_CMD, 1 );
+-        writeReg( s->iomem.addr+0x80, esp32_spi_wire_value( s, 0 ) );
+-        timer_mod_ns( &s->event_timer, getQemu_ns()+esp32_spi_byte_ns( s ) );
+-    }
++    esp32_spi_transaction( s, &t );
+ }
+ 
+ static const MemoryRegionOps esp32_spi_ops = {
+@@ -469,7 +753,31 @@ static void esp32_spi_reset(DeviceState *dev)
+     s->do_command = 0;
+     s->rxExpected = 0;
+     s->rxDelivered = 0;
++    s->donePending = false;
++    s->ph = ESP32_SPI_PH_DONE;
++    s->mosiHold = 0;
++    s->slv_wr_status_reg = 0;
++    s->dma_conf_reg = 0x200; /* OUT_EOF_MODE */
++    s->dma_out_link_reg = s->dma_in_link_reg = 0;
++    s->dma_int_ena_reg = s->dma_int_raw_reg = 0;
++    s->dma_in_suc_eof_des_addr = s->dma_out_eof_des_addr = s->dma_out_eof_bfr_des_addr = 0;
++    s->dmaIn = s->dmaOut = false;
++    s->slave_reg = 0x200; /* TRANS_INTEN */
++    s->clock_reg = 0x80003043; /* SPI_CLK_EQU_SYSCLK: SCK = APB until the firmware divides it */
++    s->period_ps = 0;
++    s->mirrored_period_ps = 0;
++    s->chunkReady = s->wireDone = false;
++    if( s->number >= 2 ) {
++        /* HSPI/VSPI reset values (ESP-IDF spi_reg.h): an 8-bit command phase (USR_COMMAND, COMMAND_BITLEN 7)
++         * and CK_I_EDGE; SETUP_TIME/HOLD_TIME 1. A driver that writes the registers it uses never sees
++         * them; one that does not gets the chip's command byte. SPI0/SPI1 keep the flash model's values. */
++        s->user_reg = 0x80000040;
++        s->user2_reg = 0x70000000;
++        s->ctrl2_reg = 0x11;
++    }
++    timer_del( &s->event_timer );
+     if( s->number >= 0 && s->number < ARRAY_SIZE(esp32_spi_by_number) ) esp32_spi_by_number[s->number] = s;
++    esp32_spi_update_irq( s );
+ }
+ 
+ static void esp32_spi_realize(DeviceState *dev, Error **errp)
+@@ -490,6 +798,7 @@ static void esp32_spi_init(Object *obj)
+     s->iomem.disable_reentrancy_guard = true;
+     sysbus_init_mmio(sbd, &s->iomem);
+     sysbus_init_irq(sbd, &s->irq);
++    sysbus_init_irq(sbd, &s->dma_irq); /* SPI DMA interrupt (ETS_SPIn_DMA_INTR_SOURCE) */
+ 
+     s->spi = ssi_create_bus(DEVICE(s), "spi");
+     qdev_init_gpio_out_named(DEVICE(s), &s->cs_gpio[0], SSI_GPIO_CS, ESP32_SPI_CS_COUNT);
+diff --git a/hw/timer/esp32_frc_timer.c b/hw/timer/esp32_frc_timer.c
+index 10f1e85..3b6bd88 100644
+--- a/hw/timer/esp32_frc_timer.c
++++ b/hw/timer/esp32_frc_timer.c
+@@ -24,7 +24,7 @@
+ 
+ static uint64_t esp32_frc_timer_get_count(Esp32FrcTimerState *s, uint64_t ns_now)
+ {
+-    if (!s->enable) {
++    if (!s->enable || s->clock_gated) {
+         return s->count_base;
+     }
+     uint64_t ns_from_base = ns_now - s->ns_base;
+@@ -68,6 +68,22 @@ static void esp32_frc_timer_cb(void *opaque)
+     }
+ }
+ 
++/* Light sleep: the count holds from the gate to the ungate (the time base restarts there) and so does the
++ * alarm. */
++void esp32_frc_timer_clock_gate(Esp32FrcTimerState *s, bool gated)
++{
++    if (s->clock_gated == gated) return;
++    const uint64_t ns_now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    s->count_base = esp32_frc_timer_get_count(s, ns_now);
++    s->ns_base = ns_now;
++    s->clock_gated = gated;
++    if (gated || !s->enable) {
++        timer_del(&s->alarm_timer);
++    } else {
++        esp32_frc_timer_update_alarm(s, s->alarm_reg, s->count_base, ns_now);
++    }
++}
++
+ static void esp32_frc_timer_update_config(Esp32FrcTimerState *s,
+                                           bool enable, bool level_int, bool autoload, int prescaler)
+ {
+@@ -171,8 +187,21 @@ static void esp32_frc_timer_set_apb_freq(Object *obj, Visitor *v,
+                                   Error **errp)
+ {
+     Esp32FrcTimerState *s = ESP32_FRC_TIMER(opaque);
+-    visit_type_uint32(v, name, &s->apb_freq, errp);
+-
++    uint32_t freq;
++    if (!visit_type_uint32(v, name, &freq, errp) || freq == s->apb_freq) {
++        return;
++    }
++    /* The new APB clock changes the rate from now on; the count up to here stays at the old one (see
++     * esp32_timg_set_apb_freq). */
++    const uint64_t ns_now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    if (s->apb_freq) {
++        s->count_base = esp32_frc_timer_get_count(s, ns_now);
++    }
++    s->ns_base = ns_now;
++    s->apb_freq = freq;
++    if (s->enable && !s->clock_gated) {
++        esp32_frc_timer_update_alarm(s, s->alarm_reg, s->count_base, ns_now);
++    }
+ }
+ 
+ static const MemoryRegionOps esp32_frc_timer_ops = {
+@@ -186,6 +215,7 @@ static void esp32_frc_timer_reset(DeviceState *dev)
+     Esp32FrcTimerState *s = ESP32_FRC_TIMER(dev);
+ 
+     s->prescaler = 1;
++    s->clock_gated = false;
+ }
+ 
+ static void esp32_frc_timer_realize(DeviceState *dev, Error **errp)
+diff --git a/hw/timer/esp32_timg.c b/hw/timer/esp32_timg.c
+index ebdb211..ce86f1e 100644
+--- a/hw/timer/esp32_timg.c
++++ b/hw/timer/esp32_timg.c
+@@ -326,6 +326,8 @@ static void esp32_timg_wdt_reset(Esp32TimgWdtState* ws)
+ static void esp32_timg_reset(DeviceState *dev)
+ {
+     Esp32TimgState *s = ESP32_TIMG(dev);
++    s->dig_powered_down = false;
++    s->clock_gated = false;
+     qatomic_set(&s->transport_pause_active, false);
+     qatomic_set(&s->transport_pause_pending, false);
+     qatomic_set(&s->transport_pause_start_host_ns, 0);
+@@ -351,7 +353,26 @@ static void esp32_timg_set_apb_freq(Object *obj, Visitor *v,
+                                   Error **errp)
+ {
+     Esp32TimgState *s = ESP32_TIMG(opaque);
+-    visit_type_uint32(v, name, &s->apb_freq_hz, errp);
++    uint32_t freq;
++    if (!visit_type_uint32(v, name, &freq, errp) || freq == s->apb_freq_hz) {
++        return;
++    }
++    /* A new APB clock (the CPU going to XTAL and back, around a light sleep or a frequency change) changes
++     * the rate from now on: the counts up to here stay at the old one. Without this every counter jumped,
++     * as the whole time since its base was recounted at the new rate. */
++    const uint64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    Esp32TimgTimerState *timers[] = { &s->t0, &s->t1, &s->lact };
++    for (int i = 0; i < ARRAY_SIZE(timers); i++) {
++        qemu_mutex_lock(&timers[i]->latch_lock);
++        timers[i]->count_base = esp32_timg_timer_get_count(timers[i], now);
++        timers[i]->ns_base = now;
++        qemu_mutex_unlock(&timers[i]->latch_lock);
++    }
++    s->wdt.count_base = esp32_timg_wdt_get_count(&s->wdt, now);
++    s->wdt.ns_base = now;
++    s->apb_freq_hz = freq;
++    for (int i = 0; i < ARRAY_SIZE(timers); i++) esp32_timg_timer_update_alarm(timers[i], now);
++    esp32_timg_wdt_arm(&s->wdt, now);
+     TIMG_DEBUG_LOG("%s: TG%d apb_freq_hz=%d\n", __func__, s->id, s->apb_freq_hz);
+ }
+ 
+@@ -434,7 +455,7 @@ static int esp32_timg_timer_direction(Esp32TimgTimerState *s)
+ 
+ static uint64_t esp32_timg_timer_get_count(Esp32TimgTimerState *s, uint64_t ns_now)
+ {
+-    if (!s->en) {
++    if (!s->en || s->parent->clock_gated) {
+         return s->count_base;
+     }
+     uint64_t ns_from_base = ns_now - s->ns_base;
+@@ -507,7 +528,7 @@ static void esp32_timg_timer_reload(Esp32TimgTimerState *ts, uint64_t ns_now)
+ 
+ static void esp32_timg_timer_update_alarm(Esp32TimgTimerState *ts, uint64_t ns_now)
+ {
+-    if (!ts->en || !ts->alarm) {
++    if (!ts->en || !ts->alarm || ts->parent->clock_gated) {
+         timer_del(&ts->alarm_timer);
+         return;
+     }
+@@ -535,7 +556,7 @@ static bool esp32_timg_wdt_protected(Esp32TimgWdtState *ws)
+ 
+ static uint64_t esp32_timg_wdt_get_count(Esp32TimgWdtState *ws, uint64_t ns_now)
+ {
+-    if (!ws->en) {
++    if (!ws->en || ws->parent->clock_gated) {
+         return ws->count_base;
+     }
+     /* E114 (EVIDENCE.md, 2026-09-04): defensive backstop, NOT the fix -- see
+@@ -601,7 +622,8 @@ static void esp32_timg_wdt_arm(Esp32TimgWdtState *ws, uint64_t ns_now)
+ {
+     timer_del(&ws->stage_timer);
+ 
+-    if (ws->parent->wdt_disable || !(ws->en || (ws->flashboot_en && ws->parent->flash_boot_mode))) {
++    if (ws->parent->wdt_disable || ws->parent->dig_powered_down || ws->parent->clock_gated ||
++        !(ws->en || (ws->flashboot_en && ws->parent->flash_boot_mode))) {
+         return;
+     }
+ 
+@@ -716,6 +738,34 @@ void esp32_timg_transport_pause(unsigned cpu_index, bool active)
+     qemu_bh_schedule(s->transport_pause_bh);
+ }
+ 
++void esp32_timg_dig_power_down(Esp32TimgState *s)
++{
++    s->dig_powered_down = true;
++    timer_del(&s->wdt.stage_timer);
++}
++
++/* Each counter is count_base + the time since ns_base: latching the count at the gate and restarting the
++ * time base at the ungate leaves out exactly the gated interval; the alarms and the watchdog stage are
++ * re-armed from the held counts. */
++void esp32_timg_clock_gate(Esp32TimgState *s, bool gated)
++{
++    if (s->clock_gated == gated) return;
++    const uint64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    Esp32TimgTimerState *timers[] = { &s->t0, &s->t1, &s->lact };
++    for (int i = 0; i < ARRAY_SIZE(timers); i++) {
++        Esp32TimgTimerState *ts = timers[i];
++        qemu_mutex_lock(&ts->latch_lock);
++        ts->count_base = esp32_timg_timer_get_count(ts, now);
++        ts->ns_base = now;
++        qemu_mutex_unlock(&ts->latch_lock);
++    }
++    s->wdt.count_base = esp32_timg_wdt_get_count(&s->wdt, now);
++    s->wdt.ns_base = now;
++    s->clock_gated = gated;
++    for (int i = 0; i < ARRAY_SIZE(timers); i++) esp32_timg_timer_update_alarm(timers[i], now);
++    esp32_timg_wdt_arm(&s->wdt, now); /* gated: only stops the stage timer */
++}
++
+ static void esp32_timg_wdt_cb(void *opaque)
+ {
+     Esp32TimgWdtState *ws = (Esp32TimgWdtState*) opaque;
+diff --git a/hw/xtensa/esp32.c b/hw/xtensa/esp32.c
+index 8fe9172..adb8a98 100644
+--- a/hw/xtensa/esp32.c
++++ b/hw/xtensa/esp32.c
+@@ -250,9 +250,31 @@ static void esp32_timg_sys_reset(void* opaque, int n, int level)
+     qemu_system_reset_request(SHUTDOWN_CAUSE_GUEST_RESET);
+ }
+ 
++/* LASECSIMUL_PC_SAMPLE=1: both CPUs' PC every 2 ms of virtual time for 400 ms after each reset (stderr); a
++ * number above 1 is the count of samples. */
++static QEMUTimer *esp32_pc_sample_timer;
++static int esp32_pc_sample_left;
++static void esp32_pc_sample_cb(void *opaque)
++{
++    Esp32SocState *s = opaque;
++    fprintf(stderr, "[PC] t=%" PRId64 " pc0=0x%08x pc1=0x%08x\n", qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL),
++            (uint32_t)s->cpu[0].env.pc, (uint32_t)s->cpu[1].env.pc);
++    if (--esp32_pc_sample_left > 0)
++        timer_mod_ns(esp32_pc_sample_timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + 2000000);
++}
++static void esp32_pc_sample_start(Esp32SocState *s)
++{
++    const char *v = getenv("LASECSIMUL_PC_SAMPLE");
++    if (!v || !*v || v[0] == '0') return;
++    if (!esp32_pc_sample_timer) esp32_pc_sample_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, esp32_pc_sample_cb, s);
++    esp32_pc_sample_left = atoi(v) > 1 ? atoi(v) : 200;
++    timer_mod_ns(esp32_pc_sample_timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + 2000000);
++}
++
+ static void esp32_soc_reset(DeviceState *dev)
+ {
+     Esp32SocState *s = ESP32_SOC(dev);
++    esp32_pc_sample_start(s);
+ 
+     //printf("\nesp32_soc_reset %i \n\n", s->requested_reset );
+ 
+@@ -272,10 +294,14 @@ static void esp32_soc_reset(DeviceState *dev)
+ 
+     /* The RTC reset also puts the SoC clock back on XTAL and propagates it (esp32_clk_update): until
+      * then APB_CLK read 0 and the boot ROM's SPI_CLOCK_REG write divided by it. */
+-    if( s->requested_reset & ESP32_SOC_RESET_RTC ) device_cold_reset( DEVICE(&s->rtc_cntl) );
++    if( s->requested_reset & ESP32_SOC_RESET_RTC ) {
++        device_cold_reset( DEVICE(&s->rtc_cntl) );
++        device_cold_reset( DEVICE(&s->sens) ); /* SENS (SAR ADC, touch) is in the RTC domain */
++    }
+ 
+     if( s->requested_reset & ESP32_SOC_RESET_PERIPH )
+     {
++        s->dig_clock_gated = false; /* the timer resets below drop their own gates */
+         device_cold_reset( DEVICE(&s->dport) );
+         device_cold_reset( DEVICE(&s->intmatrix) );
+         device_cold_reset( DEVICE(&s->aes) );
+@@ -299,6 +325,16 @@ static void esp32_soc_reset(DeviceState *dev)
+ 
+         device_cold_reset( DEVICE(&s->rmt) );
+         device_cold_reset( DEVICE(&s->rgb) );
++        device_cold_reset( DEVICE(&s->ledc) );
++        device_cold_reset( DEVICE(&s->pcnt) );
++        device_cold_reset( DEVICE(&s->mcpwm[0]) );
++        device_cold_reset( DEVICE(&s->mcpwm[1]) );
++        device_cold_reset( DEVICE(&s->twai) );
++        /* The digital peripherals the Core models at the pads (GPIO/IO_MUX, UART, I2C, SPI, LEDC, RMT,
++         * PCNT, MCPWM, TWAI engines) are reset with these: a software or watchdog reset left a PWM, a
++         * counter or a CAN transmission running in the Core while the CPU booted again. A private address
++         * no adapter module owns; without vNext-B (the first boot) writeReg() does nothing. */
++        writeReg( 0x3FF48FFC, 1 );
+     }
+     if (s->requested_reset & ESP32_SOC_RESET_PROCPU)
+     {
+@@ -319,6 +355,76 @@ static void esp32_soc_reset(DeviceState *dev)
+     s->requested_reset_source = NULL;
+ }
+ 
++/* DPORT_PERIP_RST_EN bit n (hw/misc/esp32_dport.c): the peripheral resets on both edges. Held at 1 it is
++ * in reset on the chip, so the state after the release is the reset one whatever was written meanwhile.
++ * The Core's engines for the pads have already been reset by the adapter module at the register. */
++static void esp32_perip_reset(void *opaque, int n, int level)
++{
++    Esp32SocState *s = ESP32_SOC(opaque);
++    switch (n) {
++    case 0: /* TIMERS_RST: the legacy FRC timers */
++        for (int i = 0; i < ESP32_FRC_COUNT; ++i) device_cold_reset(DEVICE(&s->frc_timer[i]));
++        break;
++    case 1: device_cold_reset(DEVICE(&s->spi[0])); device_cold_reset(DEVICE(&s->spi[1])); break;
++    case 2: device_cold_reset(DEVICE(&s->uart[0])); break;
++    case 5: device_cold_reset(DEVICE(&s->uart[1])); break;
++    case 23: device_cold_reset(DEVICE(&s->uart[2])); break;
++    case 6: device_cold_reset(DEVICE(&s->spi[2])); break;
++    case 16: device_cold_reset(DEVICE(&s->spi[3])); break;
++    case 7: device_cold_reset(DEVICE(&s->i2c[0])); break;
++    case 18: device_cold_reset(DEVICE(&s->i2c[1])); break;
++    case 9: device_cold_reset(DEVICE(&s->rmt)); break;
++    case 10: device_cold_reset(DEVICE(&s->pcnt)); break;
++    case 11: device_cold_reset(DEVICE(&s->ledc)); break;
++    case 13: device_cold_reset(DEVICE(&s->timg[0])); break; /* keeps flash_boot_mode (the strap) */
++    case 15: device_cold_reset(DEVICE(&s->timg[1])); break;
++    case 17: device_cold_reset(DEVICE(&s->mcpwm[0])); break;
++    case 19: device_cold_reset(DEVICE(&s->twai)); break;
++    case 20: device_cold_reset(DEVICE(&s->mcpwm[1])); break;
++    default: break;
++    }
++}
++
++/* RTC_CNTL dig-power-down: deep sleep has the digital domain off, so the timer groups stop counting (their
++ * watchdogs included) until the wake's digital reset. */
++static void esp32_dig_power_down(void *opaque, int n, int level)
++{
++    Esp32SocState *s = ESP32_SOC(opaque);
++    if (!level) return;
++    for (int i = 0; i < ESP32_TIMG_COUNT; ++i) esp32_timg_dig_power_down(&s->timg[i]);
++}
++
++/* RTC_CNTL dig-clock-gate: light sleep stops the CPU and APB clocks, so CCOUNT (and the CCOMPARE timers),
++ * the timer groups and the FRC timers hold from the sleep to the wakeup; the RTC timer, in the RTC domain,
++ * keeps counting. CCOUNT is ccount_base + the time since time_base: moving time_base by the sleep leaves it
++ * out. The CPUs are stalled across both edges. */
++static void esp32_dig_clock_gate(void *opaque, int n, int level)
++{
++    Esp32SocState *s = ESP32_SOC(opaque);
++    const bool gated = level != 0;
++    if (gated == s->dig_clock_gated) return;
++    const uint64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
++    for (int i = 0; i < ESP32_CPU_COUNT; ++i) {
++        XtensaCPU *cpu = &s->cpu[i];
++        CPUXtensaState *env = &cpu->env;
++        if (gated) {
++            for (int c = 0; c < env->config->nccompare; ++c) timer_del(env->ccompare[c].timer);
++            continue;
++        }
++        env->time_base += now - s->dig_clock_gate_ns;
++        env->ccount_time = now;
++        env->sregs[CCOUNT] = env->ccount_base + (uint32_t)clock_ns_to_ticks(cpu->clock, now - env->time_base);
++        for (int c = 0; c < env->config->nccompare; ++c) {
++            const uint64_t dcc = (uint64_t)(env->sregs[CCOMPARE + c] - env->sregs[CCOUNT] - 1) + 1;
++            timer_mod(env->ccompare[c].timer, now + clock_ticks_to_ns(cpu->clock, dcc));
++        }
++    }
++    for (int i = 0; i < ESP32_TIMG_COUNT; ++i) esp32_timg_clock_gate(&s->timg[i], gated);
++    for (int i = 0; i < ESP32_FRC_COUNT; ++i) esp32_frc_timer_clock_gate(&s->frc_timer[i], gated);
++    s->dig_clock_gated = gated;
++    s->dig_clock_gate_ns = now;
++}
++
+ static void esp32_cpu_stall(void* opaque, int n, int level)
+ {
+     Esp32SocState *s = ESP32_SOC(opaque);
+@@ -528,9 +634,16 @@ static void esp32_soc_realize( DeviceState *dev, Error **errp )
+ 
+     memory_region_init_ram(rtcfast_i, NULL, "esp32.rtcfast_i", memmap[ESP32_MEMREGION_RTCSLOW].size, &error_fatal);
+     memory_region_add_subregion(&s->cpu_specific_mem[0], memmap[ESP32_MEMREGION_RTCFAST_I].base, rtcfast_i);
++    s->rtc_cntl.rtc_fast_ram = memory_region_get_ram_ptr(rtcfast_i); /* its memory CRC engine */
+ 
+     memory_region_init_alias(rtcfast_d, NULL, "esp32.rtcfast_d", rtcfast_i, 0, memmap[ESP32_MEMREGION_RTCFAST_D].size);
+     memory_region_add_subregion(&s->cpu_specific_mem[0], memmap[ESP32_MEMREGION_RTCFAST_D].base, rtcfast_d);
++    /* The data view reaches the APP CPU too: ESP-IDF keeps RTC_FAST_ATTR data that esp_sleep_start() reads
++     * on whichever core enters sleep (s_adc_tsen_enabled), and Arduino sleeps from setup() on core 1 -- on
++     * the chip that works; here it was a LoadStorePIFAddrError. */
++    MemoryRegion *rtcfast_d_app = g_new(MemoryRegion, 1);
++    memory_region_init_alias(rtcfast_d_app, NULL, "esp32.rtcfast_d_app", rtcfast_i, 0, memmap[ESP32_MEMREGION_RTCFAST_D].size);
++    memory_region_add_subregion(&s->cpu_specific_mem[1], memmap[ESP32_MEMREGION_RTCFAST_D].base, rtcfast_d_app);
+ 
+     for (int i = 0; i < ms->smp.cpus; ++i)
+         qdev_realize( DEVICE(&s->cpu[i]), NULL, &error_fatal);
+@@ -542,6 +655,10 @@ static void esp32_soc_realize( DeviceState *dev, Error **errp )
+     qdev_connect_gpio_out_named( DEVICE(&s->dport)   , ESP32_DPORT_APPCPU_RESET_GPIO, 0, qdev_get_gpio_in_named( dev, ESP32_RTC_CPU_RESET_GPIO, 1));
+     qdev_connect_gpio_out_named( DEVICE(&s->dport)   , ESP32_DPORT_APPCPU_STALL_GPIO, 0, qdev_get_gpio_in_named( dev, ESP32_RTC_CPU_STALL_GPIO, 1));
+     qdev_connect_gpio_out_named( DEVICE(&s->rtc_cntl), ESP32_DPORT_CLK_UPDATE_GPIO  , 0, qdev_get_gpio_in_named( dev, ESP32_RTC_CLK_UPDATE_GPIO, 0));
++    for (int i = 0; i < 32; ++i)
++        qdev_connect_gpio_out_named( DEVICE(&s->dport), ESP32_DPORT_PERIP_RST_GPIO, i, qemu_allocate_irq(esp32_perip_reset, s, i));
++    qdev_connect_gpio_out_named( DEVICE(&s->rtc_cntl), ESP32_RTC_DIG_PD_GPIO, 0, qemu_allocate_irq(esp32_dig_power_down, s, 0));
++    qdev_connect_gpio_out_named( DEVICE(&s->rtc_cntl), ESP32_RTC_DIG_CLK_GATE_GPIO, 0, qemu_allocate_irq(esp32_dig_clock_gate, s, 0));
+ 
+     for (int i = 0; i < ESP32_CPU_COUNT; ++i)
+     {
+@@ -632,6 +749,11 @@ static void esp32_soc_realize( DeviceState *dev, Error **errp )
+ 
+     qdev_realize( DEVICE(&s->rtc_cntl), &s->rtc_bus, &error_fatal);
+     esp32_soc_add_periph_device( sys_mem, &s->rtc_cntl, DR_REG_RTCCNTL_BASE);
++    /* RTC_CNTL interrupt (RTC_CNTL_INT_*: sleep, timer, touch, brownout) was not wired. */
++    sysbus_connect_irq( SYS_BUS_DEVICE(&s->rtc_cntl), 0, qdev_get_gpio_in(intmatrix_dev, ETS_RTC_CORE_INTR_SOURCE));
++    /* RTC IO MUX was an unimplemented stub: the ext0 wakeup pin, RTC_GPIO_IN, the DAC and touch pads. */
++    qdev_realize( DEVICE(&s->rtcio), &s->rtc_bus, &error_fatal);
++    esp32_soc_add_periph_device( sys_mem, &s->rtcio, DR_REG_RTCIO_BASE);
+ 
+     qdev_connect_gpio_out_named( DEVICE(&s->rtc_cntl), ESP32_RTC_DIG_RESET_GPIO , 0, qdev_get_gpio_in_named( dev, ESP32_RTC_DIG_RESET_GPIO, 0));
+     qdev_connect_gpio_out_named( DEVICE(&s->rtc_cntl), ESP32_RTC_CLK_UPDATE_GPIO, 0, qdev_get_gpio_in_named( dev, ESP32_RTC_CLK_UPDATE_GPIO, 0));
+@@ -703,6 +825,8 @@ static void esp32_soc_realize( DeviceState *dev, Error **errp )
+         qdev_realize( DEVICE(&s->spi[i]), &s->periph_bus, &error_fatal);
+         esp32_soc_add_periph_device( sys_mem, &s->spi[i], spi_base[i]);
+         sysbus_connect_irq( SYS_BUS_DEVICE(&s->spi[i]), 0, qdev_get_gpio_in(intmatrix_dev, ETS_SPI0_INTR_SOURCE + i));
++        if( i >= 1 ) /* SPI1..3 have a DMA interrupt (52-54); SPI0 has none */
++            sysbus_connect_irq( SYS_BUS_DEVICE(&s->spi[i]), 1, qdev_get_gpio_in(intmatrix_dev, ETS_SPI1_DMA_INTR_SOURCE + i - 1));
+         s->spi[i].number = i;
+     }
+ 
+@@ -759,7 +883,6 @@ static void esp32_soc_realize( DeviceState *dev, Error **errp )
+     esp32_soc_add_periph_device( sys_mem, &s->rgb, DR_REG_FRAMEBUF_BASE);
+     memory_region_add_subregion_overlap(sys_mem, esp32_memmap[ESP32_MEMREGION_FRAMEBUF].base, &s->rgb.vram, 0);
+ 
+-    esp32_soc_add_unimp_device( sys_mem, "esp32.rtcio"        , DR_REG_RTCIO_BASE   , 0x400 , 0);
+     esp32_soc_add_unimp_device( sys_mem, "esp32.hinf"         , DR_REG_HINF_BASE    , 0x1000, 0);
+     esp32_soc_add_unimp_device( sys_mem, "esp32.slc"          , DR_REG_SLC_BASE     , 0x1000, 0);
+     esp32_soc_add_unimp_device( sys_mem, "esp32.slchost"      , DR_REG_SLCHOST_BASE , 0x1000, 0);
+@@ -858,6 +981,7 @@ static void esp32_soc_init(Object *obj)
+     object_initialize_child( obj, "mcpwm0", &s->mcpwm[0], TYPE_ESP32_MCPWM);
+     object_initialize_child( obj, "mcpwm1", &s->mcpwm[1], TYPE_ESP32_MCPWM);
+     object_initialize_child( obj, "twai", &s->twai, TYPE_ESP32_TWAI);
++    object_initialize_child( obj, "rtcio", &s->rtcio, TYPE_ESP32_RTCIO);
+     object_initialize_child( obj, "rsa" , &s->rsa , TYPE_ESP32_RSA);
+     object_initialize_child( obj, "sens", &s->sens, TYPE_ESP32_SENS);
+     object_initialize_child( obj, "ana" , &s->ana , TYPE_ESP32_ANA);
+diff --git a/include/hw/char/esp32_uart.h b/include/hw/char/esp32_uart.h
+index 7b0bfad..c965fee 100644
+--- a/include/hw/char/esp32_uart.h
++++ b/include/hw/char/esp32_uart.h
+@@ -77,32 +77,6 @@ REG32(UART_DATE, 0x78)
+ #define UART_REG_CNT (R_UART_DATE + 1)
+ 
+ 
+-/* [FIX] TG0WDT_SYS_RESET investigation (2026-08-28) -- CLKDIV/CONF0 Core notifications
+- * (writeReg()) used to fire synchronously from inside uart_write(), while TX-byte notifications
+- * are deferred (see tx_effect_bh below); that split allowed a config write issued after a TX byte
+- * but before the byte's own deferred notification to reach Core BEFORE the byte, inverting guest
+- * write order (confirmed: this made TXFIFO_RST a guaranteed no-op against not-yet-notified bytes).
+- * UartConfigSummary/UartTxEffect close that gap: every CLKDIV/CONF0 write merges into a pending
+- * summary instead of notifying immediately; every accepted TX byte snapshots that summary as its
+- * own "configBefore" and resets it, so config effects stay correctly interleaved with the TX byte
+- * they preceded, in guest write order, without an unbounded queue (bounded by the same 128-byte
+- * capacity s->tx_fifo already enforces -- see uart_write()'s A_UART_FIFO case). */
+-typedef struct UartConfigSummary {
+-    bool clkdivDirty;
+-    uint32_t clkdivValue;
+-
+-    bool conf0StateDirty;
+-    uint32_t conf0StateValue;
+-
+-    bool txFifoReset;
+-    bool rxFifoReset;
+-} UartConfigSummary;
+-
+-typedef struct UartTxEffect {
+-    uint8_t byte;
+-    UartConfigSummary configBefore;
+-} UartTxEffect;
+-
+ typedef struct ESPUARTState {
+     SysBusDevice parent_obj;
+ 
+@@ -115,31 +89,16 @@ typedef struct ESPUARTState {
+     QEMUTimer tx_timer;
+     bool throttle_rx;
+     bool rxfifo_tout;
+-    /* [FIX] TG0WDT_SYS_RESET investigation -- distinguishes tx_timer's two firings (START a byte
+-     * vs FINISH one already in flight) now that the first byte of a burst also goes through this
+-     * timer instead of a synchronous call from uart_write(); see uart_send_next()/uart_tx_timer_cb()
+-     * in esp32_uart.c. tx_timer/tx_in_flight/frame_time_ns are LOCAL pacing only (guest-visible
+-     * FIFO occupancy, UART_STATUS, IRQ) -- they no longer have any role in Core notification
+-     * ordering, see tx_effect_bh below. */
++    /* The transmitter, as the Core's USART drives the TX pin (see esp32_uart.c): tx_fifo holds the bytes
++     * still waiting, the one being shifted out left it when its frame started (tx_frame_start_ns, ends at
++     * tx_frame_end_ns, when tx_timer fires). tx_done latches UART_INT_RAW.TX_DONE. */
+     bool tx_in_flight;
++    bool tx_done;
++    unsigned tx_frame_bits;
++    uint64_t tx_frame_start_ns;
++    uint64_t tx_frame_end_ns;
+     unsigned baud_rate;
+-    uint64_t frame_time_ns;
+-
+-    /* Deferred, ordered Core-notification path -- decoupled from tx_timer/frame_time_ns on
+-     * purpose (see comment above UartConfigSummary). Drained back-to-back by tx_effect_bh,
+-     * scheduled via QEMU's existing (idempotent) qemu_bh_schedule(), never by a new mechanism. */
+-    QEMUBH *tx_effect_bh;
+-    UartConfigSummary pending_config;
+-    UartTxEffect tx_effects[UART_FIFO_LENGTH];
+-    unsigned tx_effect_count;
+-    /* E118-AUDIT (EVIDENCE.md, 2026-09-05): post-E118, tx_effect_bh() can leave a genuine backlog
+-     * (VNEXT_B lane 0 under WOULD_BLOCK) instead of always fully draining every call -- tx_fifo
+-     * keeps draining independently, at its own baud-rate pace, regardless of that backlog, so
+-     * tx_effect_count reaching UART_FIFO_LENGTH no longer implies tx_fifo is also full. Indexed by
+-     * cpu->cpu_index (0/1): the real vCPU blocked in uart_write()'s A_UART_FIFO case, waiting for a
+-     * backlog slot (NOT for VNEXT_B ring credit -- a different resource, see esp32_uart.c). NULL
+-     * when that core is not waiting. */
+-    struct CPUState *tx_backlog_waiter[2];
++    uint32_t bit_ns; /* the bit time the Core has (CLKDIV is sent to it in ns) */
+ 
+     uint8_t use_apb;
+     uint32_t clkdiv;
+@@ -185,9 +144,3 @@ void esp32_uart_update_irq(ESP32UARTState *s);
+ /* C2A delivery hook: the transport consumer injects an already framed byte into
+  * the guest-visible RX FIFO.  It does not perform a Core wait or a register read. */
+ void esp32_uart_vnext_rx_byte(uint32_t uart_index, uint8_t byte);
+-
+-/* E118 (EVIDENCE.md, 2026-09-05): called from vnext_b.c's vnext_resume() sweep once lane 0
+- * regains credit after this UART's TX BH observed VNEXT_WOULD_BLOCK there. Reschedules the BH
+- * (qemu_bh_schedule) for every bound instance that actually has a backlog (tx_effect_count > 0);
+- * a no-op otherwise. Never touches any CPU, never blocks. */
+-void esp32_uart_vnext_credit_available(void);
+diff --git a/include/hw/gpio/esp32_gpio.h b/include/hw/gpio/esp32_gpio.h
+index 59523e6..e1421db 100644
+--- a/include/hw/gpio/esp32_gpio.h
++++ b/include/hw/gpio/esp32_gpio.h
+@@ -50,3 +50,5 @@ void esp32_gpio_vnext_input(uint64_t address, uint64_t value);
+ /* True when some pin has a GPIO interrupt armed (INT_TYPE set and an INT_ENA bit), i.e. the guest
+  * can see a pad edge without reading GPIO_IN. Used by the VNEXT_B exact lockstep. */
+ bool esp32_gpio_vnext_irq_armed(void);
++/* Light sleep: some pin with WAKEUP_ENABLE is at its INT_TYPE level (RTC_CNTL GPIO wakeup). */
++bool esp32_gpio_wakeup_pending(void);
+diff --git a/include/hw/misc/esp32_dport.h b/include/hw/misc/esp32_dport.h
+index 63a59b1..93c9c7f 100644
+--- a/include/hw/misc/esp32_dport.h
++++ b/include/hw/misc/esp32_dport.h
+@@ -93,6 +93,8 @@ typedef struct Esp32DportState {
+     qemu_irq cache_ill_irq;
+     qemu_irq flash_enc_en_gpio;
+     qemu_irq flash_dec_en_gpio;
++    /* PERIP_RST_EN, one line per bit: the level is the bit (1 = held in reset), see esp32_dport.c. */
++    qemu_irq perip_rst[32];
+ 
+     bool appcpu_reset_state;
+     bool appcpu_reset_pending;
+@@ -187,6 +189,7 @@ uint32_t esp32_intmatrix_get_raw_status_bits(void *opaque, int start_bit, int co
+ #define ESP32_DPORT_CACHE_ILL_IRQ_GPIO  "cache-ill-irq"
+ #define ESP32_DPORT_FLASH_ENC_EN_GPIO   "flash-enc-en"
+ #define ESP32_DPORT_FLASH_DEC_EN_GPIO   "flash-dec-en"
++#define ESP32_DPORT_PERIP_RST_GPIO      "perip-rst"
+ 
+ 
+ REG32(DPORT_APPCPU_RESET, 0x2c)
+diff --git a/include/hw/misc/esp32_rtc_cntl.h b/include/hw/misc/esp32_rtc_cntl.h
+index f40f7b4..0e00fc5 100644
+--- a/include/hw/misc/esp32_rtc_cntl.h
++++ b/include/hw/misc/esp32_rtc_cntl.h
+@@ -3,6 +3,7 @@
+ #include "hw/hw.h"
+ #include "hw/sysbus.h"
+ #include "hw/registerfields.h"
++#include "qemu/timer.h"
+ 
+ #include "hw/misc/esp32_reg.h"
+ #define TYPE_ESP32_RTC_CNTL "misc.esp32.rtc_cntl"
+@@ -12,6 +13,8 @@
+ #define ESP32_RTC_CPU_RESET_GPIO    "cpu-reset"
+ #define ESP32_RTC_CPU_STALL_GPIO    "cpu-stall"
+ #define ESP32_RTC_CLK_UPDATE_GPIO   "clk-update"
++#define ESP32_RTC_DIG_PD_GPIO       "dig-power-down" /* 1 while deep sleep has the digital domain off */
++#define ESP32_RTC_DIG_CLK_GATE_GPIO "dig-clock-gate" /* 1 while light sleep has the CPU/APB clocks off */
+ 
+ typedef enum Esp32ResetCause {
+     ESP32_POWERON_RESET = 1,
+@@ -57,6 +60,8 @@ typedef struct Esp32RtcCntlState {
+     qemu_irq cpu_reset_req[ESP32_CPU_COUNT];
+     qemu_irq cpu_stall_req[ESP32_CPU_COUNT];
+     qemu_irq clk_update;
++    qemu_irq dig_power_down;
++    qemu_irq dig_clock_gate;
+     bool cpu_stall_state[ESP32_CPU_COUNT];
+ 
+     uint32_t xtal_apb_freq;
+@@ -75,8 +80,31 @@ typedef struct Esp32RtcCntlState {
+     Esp32ResetCause reset_cause[ESP32_CPU_COUNT];
+     bool stat_vector_sel[ESP32_CPU_COUNT];
+     uint64_t cpu0_boot_epoch;
++    /* Every register without a field of its own keeps what the firmware wrote, from the ESP-IDF
++     * rtc_cntl_reg.h reset values (it read 0 and lost writes). */
++    uint32_t regs[0x140 / 4];
++    uint32_t int_raw;
++    /* Sleep (ESP32 TRM, Low-power management): SLEEP_EN stalls both cores until a wakeup source fires.
++     * Deep sleep (DG_WRAP_PD_EN) powers the digital domain down -- the wakeup is a digital reset with
++     * DEEPSLEEP_RESET, the RTC domain (these registers, RTC memory, the RTC timer) kept; light sleep
++     * resumes the cores with SLP_WAKEUP_INT_RAW. */
++    QEMUTimer sleep_timer;
++    bool sleeping;
++    bool sleep_deep;
++    /* RTC FAST memory (8 KB, set by the SoC) for the memory CRC engine (RTC_CNTL_MEM_CRC). */
++    uint8_t *rtc_fast_ram;
+ } Esp32RtcCntlState;
+ 
++/* The RTC memory CRC engine the boot ROM uses (cacl_rtc_memory_crc): esp_deep_sleep_start() has it CRC the
++ * RTC FAST memory into STORE7, and the ROM checks it on the wakeup before jumping to the wake stub. ADDR and
++ * LEN in 32-bit words of RTC FAST memory; FINISH is read-only. Not in rtc_cntl_reg.h. */
++REG32(RTC_CNTL_MEM_CRC, 0x100)
++    FIELD(RTC_CNTL_MEM_CRC, START, 8, 1)
++    FIELD(RTC_CNTL_MEM_CRC, ADDR, 9, 11)
++    FIELD(RTC_CNTL_MEM_CRC, LEN, 20, 11)
++    FIELD(RTC_CNTL_MEM_CRC, FINISH, 31, 1)
++REG32(RTC_CNTL_MEM_CRC_RES, 0x104)
++
+ REG32(RTC_CNTL_OPTIONS0, 0x00)
+     FIELD(RTC_CNTL_OPTIONS0, SW_SYS_RESET, 31, 1)
+     FIELD(RTC_CNTL_OPTIONS0, SW_PROCPU_RESET, 5, 1)
+@@ -84,28 +112,46 @@ REG32(RTC_CNTL_OPTIONS0, 0x00)
+     FIELD(RTC_CNTL_OPTIONS0, SW_STALL_PROCPU_C0, 2, 2)
+     FIELD(RTC_CNTL_OPTIONS0, SW_STALL_APPCPU_C0, 0, 2)
+ 
++REG32(RTC_CNTL_SLP_TIMER0, 0x4)
++REG32(RTC_CNTL_SLP_TIMER1, 0x8)
++    FIELD(RTC_CNTL_SLP_TIMER1, MAIN_TIMER_ALARM_EN, 16, 1)
++    FIELD(RTC_CNTL_SLP_TIMER1, SLP_VAL_HI, 0, 16)
+ REG32(RTC_CNTL_TIME_UPDATE, 0xc)
+     FIELD(RTC_CNTL_TIME_UPDATE, UPDATE, 31, 1)
+     FIELD(RTC_CNTL_TIME_UPDATE, VALID, 30, 1)
+ REG32(RTC_CNTL_TIME0, 0x10)
+ REG32(RTC_CNTL_TIME1, 0x14)
+ 
++REG32(RTC_CNTL_STATE0, 0x18)
++    FIELD(RTC_CNTL_STATE0, SLEEP_EN, 31, 1)
+ REG32(RTC_CNTL_RESET_STATE, 0x34)
+     FIELD(RTC_CNTL_RESET_STATE, PROCPU_STAT_VECTOR_SEL, 13, 1)
+     FIELD(RTC_CNTL_RESET_STATE, APPCPU_STAT_VECTOR_SEL, 12, 1)
+     FIELD(RTC_CNTL_RESET_STATE, RESET_CAUSE_APPCPU, 6, 6)
+     FIELD(RTC_CNTL_RESET_STATE, RESET_CAUSE_PROCPU, 0, 6)
+ 
++REG32(RTC_CNTL_WAKEUP_STATE, 0x38)
++    FIELD(RTC_CNTL_WAKEUP_STATE, WAKEUP_ENA, 11, 11)
++    FIELD(RTC_CNTL_WAKEUP_STATE, WAKEUP_CAUSE, 0, 11)
++REG32(RTC_CNTL_INT_ENA, 0x3c)
++REG32(RTC_CNTL_INT_RAW, 0x40)
++REG32(RTC_CNTL_INT_ST, 0x44)
++REG32(RTC_CNTL_INT_CLR, 0x48)
+ REG32(RTC_CNTL_STORE0, 0x4c)
+ REG32(RTC_CNTL_STORE1, 0x50)
+ REG32(RTC_CNTL_STORE2, 0x54)
+ REG32(RTC_CNTL_STORE3, 0x58)
+ 
++REG32(RTC_CNTL_EXT_WAKEUP_CONF, 0x60)
++    FIELD(RTC_CNTL_EXT_WAKEUP_CONF, EXT_WAKEUP1_LV, 31, 1)
++    FIELD(RTC_CNTL_EXT_WAKEUP_CONF, EXT_WAKEUP0_LV, 30, 1)
+ REG32(RTC_CNTL_CLK_CONF, 0x70)
+     FIELD(RTC_CNTL_CLK_CONF, ANA_CLK_RTC_SEL, 30, 2)
+     FIELD(RTC_CNTL_CLK_CONF, FAST_CLK_RTC_SEL, 29, 1)
+     FIELD(RTC_CNTL_CLK_CONF, SOC_CLK_SEL, 27, 2)
+ 
++REG32(RTC_CNTL_DIG_PWC, 0x84)
++    FIELD(RTC_CNTL_DIG_PWC, DG_WRAP_PD_EN, 31, 1)
+ REG32(RTC_CNTL_SW_CPU_STALL, 0xac)
+     FIELD(RTC_CNTL_SW_CPU_STALL, PROCPU_C1, 26, 6)
+     FIELD(RTC_CNTL_SW_CPU_STALL, APPCPU_C1, 20, 6)
+@@ -114,6 +160,13 @@ REG32(RTC_CNTL_STORE4, 0xb0)
+ REG32(RTC_CNTL_STORE5, 0xb4)
+ REG32(RTC_CNTL_STORE6, 0xb8)
+ REG32(RTC_CNTL_STORE7, 0xbc)
++REG32(RTC_CNTL_EXT_WAKEUP1, 0xcc)
++    FIELD(RTC_CNTL_EXT_WAKEUP1, STATUS_CLR, 18, 1)
++    FIELD(RTC_CNTL_EXT_WAKEUP1, SEL, 0, 18)
++REG32(RTC_CNTL_EXT_WAKEUP1_STATUS, 0xd0)
+ REG32(RTC_CNTL_DATE,   0x13c)
+ 
+ #define ESP32_RTC_CNTL_SIZE (A_RTC_CNTL_DATE + 4)
++
++/* A pad level changed (vNext-B, esp32_gpio_vnext_input): an ext0/ext1 wakeup may fire while asleep. */
++void esp32_rtc_cntl_pads_changed(void);
+diff --git a/include/hw/misc/esp32_rtcio.h b/include/hw/misc/esp32_rtcio.h
+new file mode 100644
+index 0000000..77d6c01
+--- /dev/null
++++ b/include/hw/misc/esp32_rtcio.h
+@@ -0,0 +1,28 @@
++#pragma once
++
++#include "hw/hw.h"
++#include "hw/sysbus.h"
++#include "hw/registerfields.h"
++
++#define TYPE_ESP32_RTCIO "misc.esp32.rtcio"
++#define ESP32_RTCIO(obj) OBJECT_CHECK(Esp32RtcIoState, (obj), TYPE_ESP32_RTCIO)
++
++#define ESP32_RTCIO_REGS (0xCC / 4)
++
++/* RTC IO MUX (ESP32 TRM, RTC_IO): the RTC domain's view of the 18 RTC GPIOs -- pads, the ext0 wakeup
++ * selection, the DAC and touch pads. It was an unimplemented stub (writes lost, reads 0). */
++typedef struct Esp32RtcIoState {
++    SysBusDevice parent_obj;
++    MemoryRegion iomem;
++    uint32_t regs[ESP32_RTCIO_REGS];
++} Esp32RtcIoState;
++
++REG32(RTC_IO_EXT_WAKEUP0, 0xBC)
++    FIELD(RTC_IO_EXT_WAKEUP0, SEL, 27, 5)
++
++/* GPIO number of RTC GPIO `rtc` (0..17), -1 out of range. */
++int esp32_rtcio_gpio_of(unsigned rtc);
++/* Level of GPIO `gpio` at the pad (vNext-B snapshot). The caller syncs first in vCPU context. */
++bool esp32_rtcio_pad_level(int gpio);
++/* RTC GPIO selected for the ext0 wakeup (RTC_IO_EXT_WAKEUP0_REG.SEL). */
++unsigned esp32_rtcio_ext0_sel(void);
+diff --git a/include/hw/misc/esp32_twai.h b/include/hw/misc/esp32_twai.h
+index bdd06bf..bf59053 100644
+--- a/include/hw/misc/esp32_twai.h
++++ b/include/hw/misc/esp32_twai.h
+@@ -55,5 +55,3 @@ REG32(TWAI_CLOCK_DIVIDER, 0x7c)
+ 
+ /* vNext-B: an event the Core's controller produced (IR bits, ALC, ECC, MOD on bus off, a received frame). */
+ void esp32_twai_vnext_event(uint64_t address, uint64_t value);
+-/* DPORT_PERIP_RST_EN.TWAI_RST: the peripheral reset ESP-IDF uses at install and in its errata workarounds. */
+-void esp32_twai_peripheral_reset(void);
+diff --git a/include/hw/ssi/esp32_spi.h b/include/hw/ssi/esp32_spi.h
+index 41821bb..74eac8f 100644
+--- a/include/hw/ssi/esp32_spi.h
++++ b/include/hw/ssi/esp32_spi.h
+@@ -22,21 +22,41 @@ typedef struct Esp32SpiState {
+ 
+     QEMUTimer event_timer;
+ 
++    qemu_irq dma_irq;
++
+     uint64_t period_ps; /* um periodo de SCK, em ps (ver write_clk_reg) */
+-    int bytesDone;
+-    int dataBytes;
++    uint32_t clock_reg;           /* SPI_CLOCK_REG; the SCK follows the APB it divides */
++    uint64_t mirrored_period_ps;  /* the period the Core's engine has */
++    uint32_t chunkValue;          /* the piece waiting for room in the lane (chunkReady) */
++    bool chunkReady;
++    bool wireDone;
+     int number;
+-    /* USR transaction on the wire (HSPI/VSPI), see esp32_spi_wire_value() */
+-    int txBytes;
+-    int rxBytes;
++    /* USR transaction on the wire (HSPI/VSPI), put out piece by piece (esp32_spi_next_chunk): the
++     * command, address and dummy phases, then the data -- MOSI and MISO together (full duplex) or MOSI
++     * then MISO (half duplex). */
++    int ph;              /* current phase (ESP32_SPI_PH_*) */
++    uint32_t phBits;     /* bits (dummy: SCK cycles) of the phase */
++    uint32_t phPos;      /* ... already on the wire */
++    uint32_t doutBits, dinBits;
++    uint32_t rxStartBit; /* wire bit where the MISO data starts */
++    uint64_t wireBits;   /* bits on the wire so far */
+     bool fullDuplex;
+-    uint8_t mosiHold;
++    uint8_t mosiHold;    /* MOSI keeps the level of the last bit it shifted out */
++    bool holdDone;       /* CS_HOLD time already waited */
++    bool donePending;    /* the wire is over, waiting for the last MISO bytes from the Core */
++    int64_t setupNs;     /* CS_SETUP time before the first bit */
+     int rxExpected;    /* MISO bytes of the transaction the Core samples (vNext-B), see esp32_spi_vnext_rx */
+     int rxDelivered;   /* ... and how many of them arrived */
+-    int64_t wireStartNs; /* virtual time the transaction's first byte started on the wire */
+-    int64_t wireByteNs;  /* duration of one byte on the wire */
+-    int64_t rxSyncNs;    /* last sync a buffer read forced for MISO bytes, and what had arrived then */
++    int64_t wireStartNs; /* virtual time CS went active for the transaction */
++    int64_t rxSyncNs;    /* last sync a read forced for MISO bytes, and what had arrived then */
+     int rxSyncDelivered;
++    /* SPI DMA (ESP32 TRM, SPI DMA): this transaction's MOSI data from the outlink descriptors, its MISO
++     * data into the inlink ones. */
++    bool dmaOut, dmaIn;
++    uint32_t outNext, outDesc, outBuf, outLen, outOff;
++    bool outEof, outDone;
++    uint32_t inNext, inDesc, inBuf, inSize, inBase, inFill;
++    bool inDone;
+ 
+     //bool use_cs;
+ 
+@@ -52,6 +72,10 @@ typedef struct Esp32SpiState {
+     uint32_t mosi_dlen_reg;
+     uint32_t miso_dlen_reg;
+     uint32_t pin_reg;
++    uint32_t slave_reg;
++    uint32_t slv_wr_status_reg;
++    uint32_t dma_conf_reg, dma_out_link_reg, dma_in_link_reg, dma_int_ena_reg, dma_int_raw_reg;
++    uint32_t dma_in_suc_eof_des_addr, dma_out_eof_des_addr, dma_out_eof_bfr_des_addr;
+     uint32_t data_reg[ESP32_SPI_BUF_WORDS];
+ } Esp32SpiState;
+ 
+@@ -89,11 +113,15 @@ FIELD(SPI_USER, ADDR, 30, 1)
+ FIELD(SPI_USER, DUMMY, 29, 1)
+ FIELD(SPI_USER, MISO, 28, 1)
+ FIELD(SPI_USER, MOSI, 27, 1)
++FIELD(SPI_USER, DUMMY_IDLE, 26, 1)
+ FIELD(SPI_USER, MOSI_HIGHPART, 25, 1)
+ FIELD(SPI_USER, MISO_HIGHPART, 24, 1)
+ FIELD(SPI_USER, SIO, 16, 1)
+ FIELD(SPI_USER, WR_BYTE_ORDER, 11, 1)
+ FIELD(SPI_USER, RD_BYTE_ORDER, 10, 1)
++FIELD(SPI_USER, CK_OUT_EDGE, 7, 1)
++FIELD(SPI_USER, CS_SETUP, 5, 1)
++FIELD(SPI_USER, CS_HOLD, 4, 1)
+ FIELD(SPI_USER, DOUTDIN, 0, 1)
+ 
+ REG32(SPI_USER1, 0x20)
+@@ -106,7 +134,9 @@ FIELD(SPI_USER2, COMMAND_VALUE, 0, 16)
+ 
+ REG32(SPI_MOSI_DLEN, 0x28)
+ REG32(SPI_MISO_DLEN, 0x2c)
++REG32(SPI_SLV_WR_STATUS, 0x30)
+ REG32(SPI_PIN, 0x34)
++FIELD(SPI_PIN, CK_IDLE_EDGE, 29, 1)
+ REG32(SPI_SLAVE, 0x38)
+ FIELD(SPI_SLAVE, TRANS_DONE, 4, 1)
+ FIELD(SPI_SLAVE, TRANS_INTEN, 9, 1)
+@@ -118,8 +148,20 @@ REG32(SPI_EXT0, 0xF0)
+ REG32(SPI_EXT1, 0xF4)
+ REG32(SPI_EXT2, 0xF8)
+ REG32(SPI_EXT3, 0xFC)
+-
+-/* vNext-B: a byte the Core sampled on MISO, pushed through C2A at the buffer's address (A_SPI_W0). */
++REG32(SPI_DMA_CONF, 0x100)
++REG32(SPI_DMA_OUT_LINK, 0x104)
++REG32(SPI_DMA_IN_LINK, 0x108)
++REG32(SPI_DMA_STATUS, 0x10C)
++REG32(SPI_DMA_INT_ENA, 0x110)
++REG32(SPI_DMA_INT_RAW, 0x114)
++REG32(SPI_DMA_INT_ST, 0x118)
++REG32(SPI_DMA_INT_CLR, 0x11C)
++REG32(SPI_IN_SUC_EOF_DES_ADDR, 0x124)
++REG32(SPI_OUT_EOF_BFR_DES_ADDR, 0x134)
++REG32(SPI_OUT_EOF_DES_ADDR, 0x138)
++
++/* vNext-B: a byte the Core sampled on MISO, pushed through C2A at the buffer's address (A_SPI_W0). It goes to
++ * W0-W15, or through the inlink DMA to RAM. */
+ void esp32_spi_vnext_rx(uint64_t address, uint64_t value);
+ 
+ 
+diff --git a/include/hw/timer/esp32_frc_timer.h b/include/hw/timer/esp32_frc_timer.h
+index cdb09b4..999c38d 100644
+--- a/include/hw/timer/esp32_frc_timer.h
++++ b/include/hw/timer/esp32_frc_timer.h
+@@ -25,6 +25,7 @@ typedef struct Esp32FrcTimerState {
+     uint32_t count_base;
+     uint64_t ns_base;
+     bool level_int_status;
++    bool clock_gated; /* light sleep: no APB clock, the count holds (esp32_frc_timer_clock_gate) */
+ 
+     /* registers */
+     uint32_t load_reg;
+@@ -47,3 +48,5 @@ REG32(FRC_TIMER_INT_CLR, 0x0c)
+ REG32(FRC_TIMER_ALARM, 0x10)
+ 
+ #define ESP32_FRC_TIMER_STRIDE  0x20
++
++void esp32_frc_timer_clock_gate(Esp32FrcTimerState *s, bool gated);
+diff --git a/include/hw/timer/esp32_timg.h b/include/hw/timer/esp32_timg.h
+index c806f0f..9cc1515 100644
+--- a/include/hw/timer/esp32_timg.h
++++ b/include/hw/timer/esp32_timg.h
+@@ -100,6 +100,12 @@ typedef struct Esp32TimgState {
+     bool flash_boot_mode;
+     bool wdt_en_at_reset;
+     bool wdt_disable;
++    /* Deep sleep turned the digital domain off (esp32_timg_dig_power_down): the watchdog does not count
++     * until the wake reset brings the group back from reset. */
++    bool dig_powered_down;
++    /* Light sleep gates the APB clock (esp32_timg_clock_gate): the timers and the watchdog hold their
++     * counts and alarms until it comes back. */
++    bool clock_gated;
+     /** Fator de dilatação do Interrupt WDT (TIMER_GROUP1) no modo MTTCG em tempo real.
+      * O relógio virtual desse modo segue o host, enquanto as vCPUs emuladas não executam
+      * instruções na velocidade do silício; sem compensação, seções críticas legítimas de poucos
+@@ -125,6 +131,10 @@ typedef struct Esp32TimgState {
+ } Esp32TimgState;
+ 
+ void esp32_timg_transport_pause(unsigned cpu_index, bool active);
++/* Deep sleep entry: the timer group loses power with the digital domain; its reset clears this. */
++void esp32_timg_dig_power_down(Esp32TimgState *s);
++/* Light sleep: no APB clock between gated and ungated, so nothing in the group counts. */
++void esp32_timg_clock_gate(Esp32TimgState *s, bool gated);
+ 
+ 
+ #define ESP32_TIMG_WDT_CPU_RESET_GPIO   "mwdt-cpu-reset"
+diff --git a/include/hw/xtensa/esp32.h b/include/hw/xtensa/esp32.h
+index a13ae45..d216d7d 100644
+--- a/include/hw/xtensa/esp32.h
++++ b/include/hw/xtensa/esp32.h
+@@ -16,6 +16,7 @@
+ #include "hw/misc/esp32_pcnt.h"
+ #include "hw/misc/esp32_mcpwm.h"
+ #include "hw/misc/esp32_twai.h"
++#include "hw/misc/esp32_rtcio.h"
+ #include "hw/misc/esp32_rsa.h"
+ #include "hw/timer/esp32_frc_timer.h"
+ #include "hw/timer/esp32_timg.h"
+@@ -59,6 +60,7 @@ typedef struct Esp32SocState {
+     Esp32PcntState pcnt;
+     Esp32McpwmState mcpwm[2];
+     Esp32TwaiState twai;
++    Esp32RtcIoState rtcio;
+     Esp32EfuseState efuse;
+     ESPRgbState rgb;
+     Esp32AnaState ana;
+@@ -88,6 +90,9 @@ typedef struct Esp32SocState {
+ 
+     uint32_t apb_clk_freq;
+     uint32_t cpu_clk_freq;
++    /* Light sleep has the CPU and APB clocks gated since dig_clock_gate_ns (esp32_dig_clock_gate). */
++    bool dig_clock_gated;
++    uint64_t dig_clock_gate_ns;
+ 
+     /* [XTENSA-PC-SAMPLER] ver .spec 32.5.17 -- timer periodico (nao ligado a nenhum evento do guest)
+      * que amostra o PC dos dois nucleos continuamente, pra determinar se um nucleo fica genuinamente
+diff --git a/softmmu/simuliface.c b/softmmu/simuliface.c
+index c4aaf26..d95b2be 100644
+--- a/softmmu/simuliface.c
++++ b/softmmu/simuliface.c
+@@ -583,7 +583,10 @@ VnextPublishResult writeReg( uint64_t addr, uint64_t value )
+     if (vnext_b_active()) {
+         return vnext_b_gpio_write(addr, value);
+     }
+-    if (!m_arena) {
++    /* Inside qemu_init() (the machine's power-on reset, e.g. esp32_soc_reset's 0x3FF48FFC) nothing goes
++     * to the Core: it starts every firmware load from its own reset, and the ordering lock only exists
++     * after qemu_init(). */
++    if (!m_arena || !m_arenaOrderLockInitialized) {
+         return VNEXT_PUBLISHED;
+     }
+     //printf("Qemu: esp32_gpio_write\n"); fflush( stdout );
+diff --git a/softmmu/simuliface.h b/softmmu/simuliface.h
+index c2257ad..2ea12bd 100644
+--- a/softmmu/simuliface.h
++++ b/softmmu/simuliface.h
+@@ -160,7 +160,7 @@ uint64_t readReg( uint64_t addr );
+  * prior behavior unchanged: a real vCPU caller never actually observes VNEXT_WOULD_BLOCK (see
+  * vnext_b_gpio_write()), so ignoring the result there is exactly as safe as before. Callers that
+  * CAN be invoked with current_cpu==NULL (a BH or timer callback) MUST check it -- see
+- * esp32_uart.c's uart_tx_effect_bh() for the reference implementation. */
++ * hw/ssi/esp32_spi.c's esp32_spi_step() for the reference implementation. */
+ VnextPublishResult writeReg( uint64_t addr, uint64_t value );
+ void writeSimEvent( uint64_t addr, uint64_t value, uint64_t action );
+ 
+diff --git a/softmmu/vnext_b.c b/softmmu/vnext_b.c
+index ee9adb6..206d539 100644
+--- a/softmmu/vnext_b.c
++++ b/softmmu/vnext_b.c
+@@ -35,7 +35,7 @@ typedef struct VnextRegion { uint64_t offset, bytes; uint32_t stride, count; } V
+ typedef struct VnextEndpoint { uint32_t id, kind; uint64_t q2c, c2a, snapshot; uint32_t depth, stride, limit, reserved; } VnextEndpoint;
+ typedef struct VnextLane { VnextRegion metadata, events; uint32_t depth, stride; } VnextLane;
+ /* data: GPIO_IN [0,8), GPIO_IN1 [8,16), ADC pad voltages [16,52), PCNT counters [56,72), MCPWM timer
+- * status [72,96), TWAI SR/TEC/REC [96,99) -- byte-identical to lasec_at_snapshot (LASEC_AT_SNAPSHOT_BYTES). */
++ * status [72,96), TWAI SR/TEC/REC [96,99), Core interrupt armed [100] -- byte-identical to lasec_at_snapshot (LASEC_AT_SNAPSHOT_BYTES). */
+ typedef struct VnextSnapshot { uint64_t publishSeq; uint8_t data[128]; } VnextSnapshot;
+ typedef struct VnextResponse { uint64_t requestSeq, responseSeq; int32_t status; uint32_t bytes; uint8_t payload[64]; } VnextResponse;
+ typedef struct VnextControl {
+@@ -80,7 +80,7 @@ static bool vnext_provenance_checked;
+ /* E147-G (EVIDENCE.md, 2026-09-10): H147-G -- vnext_block_producer_on_lane(lane, NULL)'s
+  * immediate recheck of vnext_lane_credit() can observe credit that returned in the window
+  * between the caller's WOULD_BLOCK classification and this call, and clears
+- * vnext_lane_producer_backlog[lane] right there -- BEFORE the caller (e.g. uart_tx_effect_bh())
++ * vnext_lane_producer_backlog[lane] right there -- BEFORE the caller (then the UART TX BH)
+  * has actually preserved its own pending work. If that happens, vnext_resume()'s sweep sees no
+  * backlog for this lane on its next pass and never calls vnext_notify_lane_backlog_cleared(),
+  * so the peripheral's own BH -- which does not reschedule itself by design -- never gets called
+@@ -227,6 +227,14 @@ static bool vnext_lockstep_soft_address(uint64_t address) {
+            address == UINT64_C(0x3FF6B034) || address == UINT64_C(0x3FF6B07C) ||
+            (address >= UINT64_C(0x3FF6B040) && address < UINT64_C(0x3FF6B074));
+ }
++/* An interrupt of a peripheral the Core models (PCNT, MCPWM, a GPIO it routes) is armed: snapshot byte 100,
++ * bit 0 (McuComponent::publishVnextBGpioInputsLocked). Then, as with an armed GPIO interrupt here, any edge
++ * a write produces may reach it through the circuit -- even a "soft" write must hold. */
++static bool vnext_core_irq_armed(void) {
++    if (!vnext_control) return false;
++    const VnextSnapshot *s = (const VnextSnapshot *)(vnext_base + vnext_control->snapshotOffset);
++    return (s->data[100] & 1u) != 0;
++}
+ static QEMUTimer *vnext_lockstep_timer;
+ static uint64_t vnext_lockstep_sync_count;
+ /* LASECSIMUL_LOCKSTEP_TRACE=1: syncs, host time spent held, and why each sync happened. */
+@@ -531,17 +539,14 @@ void vnext_b_note_nonvcpu_backlog(uint32_t lane)
+ 
+ /* E118 (EVIDENCE.md, 2026-09-05): dispatches to every peripheral that might have a non-vCPU
+  * backlog on this lane. Lane 0 is the fixed landing lane for any current_cpu==NULL producer
+- * (UART's TX BH, and rarely a mid-transaction I2C timer continuation), so more than one producer
+- * can legitimately be waiting on the same lane; each hook below is a safe no-op when that
+- * specific peripheral has nothing queued. */
++ * (a mid-transaction I2C timer continuation); the hook is a safe no-op when that peripheral has
++ * nothing queued. The UART TX no longer publishes from a BH: each byte goes to the Core from the
++ * guest store itself (hw/char/esp32_uart.c). */
+ static void vnext_notify_lane_backlog_cleared(uint32_t lane) {
+     if (lane == 0) {
+-        esp32_uart_vnext_credit_available();
+         /* E118-AUDIT (EVIDENCE.md, 2026-09-05): I2C's own current_cpu==NULL continuation (reached
+-         * via esp32_i2c_event()'s timer, not synchronously from a guest write) also defaults to
+-         * lane 0 and can be independently backlogged from UART -- see esp32_i2c.h's
+-         * vnextContinuationBacklogged. Both hooks are safe no-ops when their peripheral has
+-         * nothing queued. */
++         * via esp32_i2c_event()'s timer, not synchronously from a guest write) defaults to lane 0 --
++         * see esp32_i2c.h's vnextContinuationBacklogged. */
+         esp32_i2c_vnext_credit_available();
+     }
+ }
+@@ -550,10 +555,9 @@ static void vnext_notify_lane_backlog_cleared(uint32_t lane) {
+ VnextPublishResult vnext_b_gpio_write(uint64_t address, uint64_t value) {
+     if (!vnext_b_active()) return VNEXT_PUBLISHED;
+     CPUState *cpu = vnext_exec_cpu();
+-    /* UART TX effects are drained by a main-loop BH, where current_cpu is
+-     * intentionally NULL.  They still belong to the fixed producer lane 0;
+-     * use that lane's live CPU as the stop/resume owner instead of treating
+-     * NULL as a resumable CPU. */
++    /* A bottom half or a peripheral timer has current_cpu NULL. It belongs to
++     * the fixed producer lane 0; use that lane's live CPU as the stop/resume
++     * owner instead of treating NULL as a resumable CPU. */
+     const uint32_t lane = cpu ? cpu->cpu_index : 0;
+     /* vnext_control->laneCount is already validated <= VNEXT_LANES at mapping-accept time
+      * (vnext_validate_layout()), making this transitively safe -- but that invariant crosses
+@@ -618,7 +622,7 @@ VnextPublishResult vnext_b_gpio_write(uint64_t address, uint64_t value) {
+             /* Published during a hold (a bottom half, a peripheral timer): the release must wait
+              * for the Core to see it too. */
+             vnext_lockstep_request(event->timestamp);
+-        } else if (esp32_gpio_vnext_irq_armed() || !vnext_lockstep_soft_address(address) ||
++        } else if (esp32_gpio_vnext_irq_armed() || vnext_core_irq_armed() || !vnext_lockstep_soft_address(address) ||
+                    vnext_lane_credit(lane) <= 2) {
+             /* The Core may answer at this very instant with something the guest sees without
+              * reading GPIO_IN (an armed GPIO interrupt reached through the circuit, a peripheral
+@@ -1110,6 +1114,14 @@ static void vnext_lockstep_horizon_cb(void *opaque) {
+     vnext_lockstep_request(qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
+ }
+ 
++/* A device timer (no vCPU context) needs what the Core produced up to this instant -- an SPI transaction
++ * whose last MISO bytes are still in the Core: hold the vCPUs here until the Core caught up; its C2A is
++ * consumed before the release, with the clock still at this instant. */
++void vnext_b_lockstep_hold_now(void) {
++    if (!vnext_lockstep || qatomic_read(&vnext_lockstep_holding)) return;
++    vnext_lockstep_request(qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
++}
++
+ void vnext_b_lockstep_sync_poll(void) {
+     if (!vnext_lockstep || qatomic_read(&vnext_lockstep_holding)) return;
+     uint64_t earliest = 0;
+@@ -1451,6 +1463,7 @@ int32_t vnext_b_pcnt_count(unsigned unit) { (void)unit; return 0; }
+ uint32_t vnext_b_mcpwm_timer_status(unsigned index) { (void)index; return 0; }
+ uint32_t vnext_b_twai_state(void) { return 0x3c; }
+ void vnext_b_lockstep_sync_barrier(void) {}
++void vnext_b_lockstep_hold_now(void) {}
+ bool vnext_b_lockstep_hold(void) { return false; }
+ void vnext_b_lockstep_input_barrier(void) {}
+ void vnext_b_lockstep_account_exec(int64_t host_ns) { (void)host_ns; }
+diff --git a/softmmu/vnext_b.h b/softmmu/vnext_b.h
+index 5ef9659..c0fb65c 100644
+--- a/softmmu/vnext_b.h
++++ b/softmmu/vnext_b.h
+@@ -55,6 +55,8 @@ uint64_t vnext_b_gpio_read(uint64_t address);
+ uint64_t vnext_b_register_read(uint64_t address);
+ /* MMIO read of something the Core already produced but QEMU has not received yet: sync now and replay. */
+ void vnext_b_lockstep_sync_barrier(void);
++/* A device timer needs what the Core produced up to now: hold the vCPUs at this instant until it caught up. */
++void vnext_b_lockstep_hold_now(void);
+ /* Voltage on an ADC pad (0..7 = ADC1_CH0..7, 8..17 = ADC2_CH0..9) in tenths of mV, from the snapshot. */
+ uint32_t vnext_b_adc_pad_tenths_mv(unsigned pad);
+ /* Counter of PCNT unit 0..7 (signed 16 bits), from the snapshot. */
+@@ -70,8 +72,8 @@ uint64_t vnext_b_diag_lane0_exhaustion_count(void);
+ uint64_t vnext_b_diag_lane0_last_exhaustion_virtual_ns(void);
+ /* True once lane 0 has credit again after a non-vCPU producer observed VNEXT_WOULD_BLOCK there
+  * (LASECSIMUL_VNEXT_B_LANE_DEPTH-friendly: works at any configured depth). A backlogged producer
+- * (e.g. ESP32 UART's TX BH) may poll this from its own retry entry point in addition to being
+- * notified via esp32_uart_vnext_credit_available(); it is cheap (one load, no lock). */
++ * (e.g. the ESP32 I2C continuation timer) may poll this from its own retry entry point in addition to
++ * being notified via esp32_i2c_vnext_credit_available(); it is cheap (one load, no lock). */
+ bool vnext_b_lane_has_credit(uint32_t lane);
+ void vnext_b_note_nonvcpu_backlog(uint32_t lane);
+ 

@@ -50,6 +50,8 @@ public:
     std::optional<uint32_t> resolveI2cPinIndex(uint32_t bus, bool sda) const override;
     void setPinTransitionsObserved(uint32_t pinIndex, bool observed) override;
     void setSpiBytePairs(std::span<const uint32_t> clockPins, std::span<const uint32_t> dataPins) override;
+    void setSpiBytePairsWithMiso(std::span<const uint32_t> clockPins, std::span<const uint32_t> dataPins,
+                                 std::span<const uint32_t> misoPins) override;
 
 private:
     static MemoryRegion toCoreRegion(const LsdnMemoryRegion& region);

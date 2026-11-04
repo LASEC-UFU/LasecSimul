@@ -1,0 +1,258 @@
+diff --git a/hw/char/esp32_uart.c b/hw/char/esp32_uart.c
+index 7105884..1c79bbf 100644
+--- a/hw/char/esp32_uart.c
++++ b/hw/char/esp32_uart.c
+@@ -325,8 +325,10 @@ static void uart_write(void *opaque, hwaddr addr, uint64_t value, unsigned int s
+         if (uart_trace(s))
+             fprintf(stderr, "[UART] clkdiv=%u apb=%u use_apb=%u bit_ns=%u now=%" PRIu64 "\n", clkdiv,
+                     esp32_soc_get_apb_freq(), s->use_apb, bit_ns, getQemu_ns());
+-        /* The Core takes the bit time in ns. First: it may replay this store. */
++        /* The Core takes the bit time in ns, and the divider itself (0xF10) to follow an APB change the
++         * way esp32_uart_apb_changed does here. First: it may replay this store. */
+         if( bit_ns != s->bit_ns ) writeReg( s->iomem.addr + A_UART_CLKDIV, bit_ns );
++        if( clkdiv != s->clkdiv ) writeReg( s->iomem.addr + 0xF10, clkdiv );
+         s->reg[addr / 4] = value;
+         s->clkdiv = clkdiv;
+         s->baud_rate = baud_rate;
+@@ -440,6 +442,19 @@ void uart_receive(void *opaque, const uint8_t *buf, int size)
+     esp32_uart_update_irq(s);
+ }
+ 
++/* APB_CLK changed (esp32_clk_update): a UART on APB (TICK_REF_ALWAYS_ON) runs at the new rate from the next
++ * frame, as on the chip -- ESP-IDF and Arduino set the divider again themselves when they mean to keep the
++ * baud rate. The Core's adapter computes the same bit time from the divider (0xF10) and the APB it is told. */
++void esp32_uart_apb_changed(void)
++{
++    for (unsigned i = 0; i < 3; ++i) {
++        ESP32UARTState *s = vnext_uart_instances[i];
++        if (!s || !s->use_apb) continue;
++        s->baud_rate = uart_baud(s->clkdiv, true);
++        s->bit_ns = 1e9 / s->baud_rate;
++    }
++}
++
+ /* The byte goes to the FIFO even with a parity or frame error, as on the ESP32 (it has no ERR_WR_MASK); the
+  * errors latch PARITY_ERR, FRM_ERR and BRK_DET until INT_CLR. A full FIFO drops it with RXFIFO_OVF. */
+ void esp32_uart_vnext_rx_byte(uint32_t uart_index, uint8_t byte, uint8_t errors)
+diff --git a/hw/i2c/esp32_i2c.c b/hw/i2c/esp32_i2c.c
+index cfbbd9d..db04517 100644
+--- a/hw/i2c/esp32_i2c.c
++++ b/hw/i2c/esp32_i2c.c
+@@ -876,18 +876,30 @@ static uint32_t esp32_i2c_get_status_reg(Esp32I2CState* s)
+     return res;
+ }
+ 
+-static void esp32_i2c_updt_frequency( Esp32I2CState* s )
++/* The SCL period: LOW_PERIOD + 1 + HIGH_PERIOD + 7 cycles of APB_CLK. The Core gets the period and the
++ * cycles ([63:32]) to follow an APB change (esp32_i2c_apb_changed). First: it may replay this store -- the
++ * period was stored before, and a replayed store never sent it. */
++static uint64_t esp32_i2c_cycles( Esp32I2CState* s )
+ {
+-    uint64_t fAPB = esp32_soc_get_apb_freq();
+-    uint64_t period_ns = s->low_period_reg+1 + s->high_period_reg+7;
+-    period_ns = period_ns*1000000000/fAPB;
+-    //uint32_t fSCL = fAPB / (s->low_period_reg + s->high_period_reg );
++    return (uint64_t)s->low_period_reg + 1 + s->high_period_reg + 7;
++}
+ 
++static void esp32_i2c_updt_frequency( Esp32I2CState* s )
++{
++    const uint64_t fAPB = esp32_soc_get_apb_freq();
++    const uint64_t cycles = esp32_i2c_cycles( s );
++    const uint64_t period_ns = cycles*1000000000/fAPB;
+     if( s->period_ns == period_ns ) return;
++    writeReg( s->iomem.addr+A_I2C_LOW_PERIOD, period_ns | (cycles << 32) );
+     s->period_ns = period_ns;
++}
+ 
+-    //printf("Qemu: esp32_i2c_updt_frequency: %i %lu, using %s %lu MHz\n", (s->low_period_reg + s->high_period_reg ), period_ns, "APB Clock", fAPB/1000000 );  fflush( stdout );
+-    writeReg( s->iomem.addr+A_I2C_LOW_PERIOD, period_ns );
++void esp32_i2c_apb_changed(void)
++{
++    const uint64_t fAPB = esp32_soc_get_apb_freq();
++    for (unsigned i = 0; i < 2 && fAPB; ++i) {
++        if (vnext_i2c_instances[i]) vnext_i2c_instances[i]->period_ns = esp32_i2c_cycles( vnext_i2c_instances[i] )*1000000000/fAPB;
++    }
+ }
+ 
+ static uint64_t esp32_i2c_read(void * opaque, hwaddr addr, unsigned int size)
+diff --git a/hw/misc/esp32_apbctrl.c b/hw/misc/esp32_apbctrl.c
+index 98797b2..14ca797 100644
+--- a/hw/misc/esp32_apbctrl.c
++++ b/hw/misc/esp32_apbctrl.c
+@@ -9,7 +9,9 @@
+ #include "qemu/osdep.h"
+ #include "hw/hw.h"
+ #include "hw/sysbus.h"
++#include "hw/irq.h"
+ #include "hw/misc/esp32_apbctrl.h"
++#include "hw/misc/esp32_rtc_cntl.h"
+ 
+ static Esp32ApbCtrlState *esp32_apbctrl_device;
+ 
+@@ -31,6 +33,11 @@ void esp32_apbctrl_saradc(Esp32SaradcDig *out)
+     for (unsigned i = 0; i < 16; ++i) out->pattern[i] = (s->regs[tab + i / 4] >> (24 - 8 * (i % 4))) & 0xFF;
+ }
+ 
++uint32_t esp32_apbctrl_pre_div(void)
++{
++    return esp32_apbctrl_device ? FIELD_EX32(esp32_apbctrl_device->regs[R_APBCTRL_SYSCLK_CONF], APBCTRL_SYSCLK_CONF, PRE_DIV_CNT) : 0;
++}
++
+ static uint64_t esp32_apbctrl_read(void *opaque, hwaddr addr, unsigned int size)
+ {
+     Esp32ApbCtrlState *s = ESP32_APBCTRL(opaque);
+@@ -41,7 +48,11 @@ static void esp32_apbctrl_write(void *opaque, hwaddr addr, uint64_t value, unsig
+ {
+     Esp32ApbCtrlState *s = ESP32_APBCTRL(opaque);
+     if (addr / 4 >= ESP32_APBCTRL_REGS || addr == A_APBCTRL_DATE) return;
++    const uint32_t old = s->regs[addr / 4];
+     s->regs[addr / 4] = value;
++    if (addr == A_APBCTRL_SYSCLK_CONF && FIELD_EX32(old ^ (uint32_t)value, APBCTRL_SYSCLK_CONF, PRE_DIV_CNT)) {
++        qemu_irq_pulse(s->clk_update); /* rtc_clk_cpu_freq_to_xtal(): the divider of XTAL/RC_FAST */
++    }
+ }
+ 
+ static const MemoryRegionOps esp32_apbctrl_ops = {
+@@ -75,6 +86,7 @@ static void esp32_apbctrl_init(Object *obj)
+     SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
+     memory_region_init_io(&s->iomem, obj, &esp32_apbctrl_ops, s, TYPE_ESP32_APBCTRL, 0x1000);
+     sysbus_init_mmio(sbd, &s->iomem);
++    qdev_init_gpio_out_named(DEVICE(obj), &s->clk_update, ESP32_RTC_CLK_UPDATE_GPIO, 1);
+     esp32_apbctrl_device = s;
+ }
+ 
+diff --git a/hw/xtensa/esp32.c b/hw/xtensa/esp32.c
+index 3470885..c0218be 100644
+--- a/hw/xtensa/esp32.c
++++ b/hw/xtensa/esp32.c
+@@ -24,6 +24,7 @@
+ #include "hw/irq.h"
+ #include "hw/qdev-properties.h"
+ #include "hw/xtensa/esp32.h"
++#include "hw/misc/esp32_ana.h"
+ #include "hw/xtensa/esp32_clk.h"
+ #include "hw/misc/ssi_psram.h"
+ #include "hw/misc/esp32_wifi.h"
+@@ -500,6 +501,21 @@ void esp32_cache_gate_changed(int core_id)
+     }
+ }
+ 
++/* The APB frequency the Core's adapter uses; retried while the lane is full (only outside a vCPU). */
++static void esp32_apb_report_timer_cb( void *opaque )
++{
++    Esp32SocState *s = ESP32_SOC(opaque);
++    if( s->apb_report_pending && writeReg( 0x3FF48FF8, s->apb_report_hz ) == VNEXT_PUBLISHED ) s->apb_report_pending = false;
++    if( s->apb_report_pending ) timer_mod_ns( &s->apb_report_timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + 1000 );
++}
++
++static void esp32_apb_report( Esp32SocState *s, uint32_t hz )
++{
++    s->apb_report_hz = hz;
++    s->apb_report_pending = writeReg( 0x3FF48FF8, hz ) != VNEXT_PUBLISHED;
++    if( s->apb_report_pending ) timer_mod_ns( &s->apb_report_timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + 1000 );
++}
++
+ static void esp32_clk_update( void* opaque, int n, int level )
+ {
+     //printf("Qemu: esp32_clk_update\n"); fflush( stdout );
+@@ -525,8 +541,19 @@ static void esp32_clk_update( void* opaque, int n, int level )
+         new_apb_clk_freq = s->rtc_cntl.pll_apb_freq;
+         new_cpu_clk_freq =
+             cpu_clk_mul[s->dport.cpuperiod_sel] * new_apb_clk_freq;
++    } else if( s->rtc_cntl.soc_clk == ESP32_SOC_CLK_APLL ) {
++        /* APLL: CPUPERIOD_SEL 0 = APLL / 4, 1 = APLL / 2; APB = CPU / 2 (ESP32 TRM, CPU clock) */
++        uint32_t sdm = 0, o_div = 0;
++        esp32_ana_apll(&sdm, &o_div);
++        const uint64_t apll = (uint64_t)s->rtc_cntl.xtal_apb_freq * sdm / 65536 / (2 * (o_div + 2));
++        if (!apll || s->dport.cpuperiod_sel > 1) return;
++        new_cpu_clk_freq = (uint32_t)(apll / (s->dport.cpuperiod_sel ? 2 : 4));
++        new_apb_clk_freq = new_cpu_clk_freq / 2;
+     } else {
+-        new_apb_clk_freq = s->rtc_cntl.xtal_apb_freq;
++        /* XTAL or RC_FAST (8 MHz, as esp32_timg models it), divided by SYSCLK_CONF.PRE_DIV_CNT + 1: the
++         * 40/20/10 MHz of setCpuFrequencyMhz() below 80. The divider was ignored. */
++        const uint32_t src = s->rtc_cntl.soc_clk == ESP32_SOC_CLK_8M ? 8000000u : s->rtc_cntl.xtal_apb_freq;
++        new_apb_clk_freq = src / (esp32_apbctrl_pre_div() + 1);
+         new_cpu_clk_freq = new_apb_clk_freq;
+     }
+     /* Only a real change reaches the clock consumers. The SoC starts on the reset clock (XTAL, see
+@@ -534,8 +561,14 @@ static void esp32_clk_update( void* opaque, int n, int level )
+      * timer and vCPU machinery may be touched -- changes nothing here; a later RTC reset after the
+      * PLL was on does move CPU and APB back to XTAL. */
+     if( new_apb_clk_freq == s->apb_clk_freq && new_cpu_clk_freq == s->cpu_clk_freq ) return;
++    /* The Core's peripherals on APB_CLK (LEDC, the PCNT filter, MCPWM capture, TWAI, the UART and I2C bit
++     * times) take the new frequency from here (adapter Soc module, 0x3FF48FF8). First: from a guest store it
++     * may replay it; outside a vCPU (a reset) a full lane is retried by the timer. */
++    if( new_apb_clk_freq != s->apb_clk_freq ) esp32_apb_report( s, new_apb_clk_freq );
+     s->apb_clk_freq = new_apb_clk_freq;
+     s->cpu_clk_freq = new_cpu_clk_freq;
++    esp32_uart_apb_changed();
++    esp32_i2c_apb_changed();
+     for (int i = 0; i < ESP32_FRC_COUNT; ++i) {
+         qdev_prop_set_int32( DEVICE(&s->frc_timer[i]), "apb_freq", s->apb_clk_freq );
+     }
+@@ -764,6 +797,8 @@ static void esp32_soc_realize( DeviceState *dev, Error **errp )
+     esp32_soc_add_periph_device( sys_mem, &s->rtc_cntl, DR_REG_RTCCNTL_BASE);
+     /* RTC_CNTL interrupt (RTC_CNTL_INT_*: sleep, timer, touch, brownout) was not wired. */
+     sysbus_connect_irq( SYS_BUS_DEVICE(&s->rtc_cntl), 0, qdev_get_gpio_in(intmatrix_dev, ETS_RTC_CORE_INTR_SOURCE));
++    qdev_connect_gpio_out_named( DEVICE(&s->apbctrl), ESP32_RTC_CLK_UPDATE_GPIO, 0, qdev_get_gpio_in_named( dev, ESP32_RTC_CLK_UPDATE_GPIO, 0));
++    timer_init_ns( &s->apb_report_timer, QEMU_CLOCK_VIRTUAL, esp32_apb_report_timer_cb, s );
+     /* RTC IO MUX was an unimplemented stub: the ext0 wakeup pin, RTC_GPIO_IN, the DAC and touch pads. */
+     qdev_realize( DEVICE(&s->rtcio), &s->rtc_bus, &error_fatal);
+     esp32_soc_add_periph_device( sys_mem, &s->rtcio, DR_REG_RTCIO_BASE);
+diff --git a/include/hw/char/esp32_uart.h b/include/hw/char/esp32_uart.h
+index abd2c48..ac67d2f 100644
+--- a/include/hw/char/esp32_uart.h
++++ b/include/hw/char/esp32_uart.h
+@@ -157,3 +157,5 @@ void esp32_uart_update_irq(ESP32UARTState *s);
+ #define ESP32_UART_RX_FRAME_ERR  2u
+ #define ESP32_UART_RX_BREAK      4u
+ void esp32_uart_vnext_rx_byte(uint32_t uart_index, uint8_t byte, uint8_t errors);
++/* APB_CLK changed: the UARTs on APB take the new bit time (esp32_clk_update). */
++void esp32_uart_apb_changed(void);
+diff --git a/include/hw/i2c/esp32_i2c.h b/include/hw/i2c/esp32_i2c.h
+index c327391..21ee303 100644
+--- a/include/hw/i2c/esp32_i2c.h
++++ b/include/hw/i2c/esp32_i2c.h
+@@ -106,6 +106,8 @@ void esp32_i2c_vnext_credit_available(void);
+  * [7:0] byte, [11:8] event (1 byte received, 2 addressed, 3 STOP, 4 a TX FIFO byte went out), bit 12 the
+  * address byte's R/W, [15:13] the main state machine's last state at the STOP. */
+ void esp32_i2c_vnext_slave(uint32_t bus, uint64_t value);
++/* APB_CLK changed: the SCL period follows it (esp32_clk_update). */
++void esp32_i2c_apb_changed(void);
+ 
+ 
+ REG32(I2C_CTR, 0x04);
+diff --git a/include/hw/misc/esp32_apbctrl.h b/include/hw/misc/esp32_apbctrl.h
+index ff58192..6ebdf08 100644
+--- a/include/hw/misc/esp32_apbctrl.h
++++ b/include/hw/misc/esp32_apbctrl.h
+@@ -35,9 +35,13 @@ REG32(APBCTRL_DATE, 0x7c)
+ typedef struct Esp32ApbCtrlState {
+     SysBusDevice parent_obj;
+     MemoryRegion iomem;
++    qemu_irq clk_update;    /* "clk-update": SYSCLK_CONF changed the CPU/APB divider (esp32_clk_update) */
+     uint32_t regs[ESP32_APBCTRL_REGS];
+ } Esp32ApbCtrlState;
+ 
++/* SYSCLK_CONF.PRE_DIV_CNT: CPU_CLK = XTAL (or RC_FAST) / (PRE_DIV_CNT + 1), and APB_CLK with it. */
++uint32_t esp32_apbctrl_pre_div(void);
++
+ /* The SAR ADC digital controller as I2S0's ADC mode reads it: DATA_TO_I2S, the unit (SAR_SEL), the
+  * pattern table of that unit (each entry: channel [7:4], bit width [3:2], attenuation [1:0]) and its
+  * length, the output format (DATA_SAR_SEL) and the inversion. */
+diff --git a/include/hw/xtensa/esp32.h b/include/hw/xtensa/esp32.h
+index 21e84b7..3faad54 100644
+--- a/include/hw/xtensa/esp32.h
++++ b/include/hw/xtensa/esp32.h
+@@ -64,6 +64,9 @@ typedef struct Esp32SocState {
+     Esp32TwaiState twai;
+     Esp32I2sState i2s[2];
+     Esp32ApbCtrlState apbctrl;
++    QEMUTimer apb_report_timer;
++    uint32_t apb_report_hz;
++    bool apb_report_pending;
+     Esp32RtcIoState rtcio;
+     Esp32EfuseState efuse;
+     ESPRgbState rgb;

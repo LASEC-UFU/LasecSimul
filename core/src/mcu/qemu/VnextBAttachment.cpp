@@ -526,9 +526,10 @@ bool VnextBAttachment::publishC2A(uint64_t value) {
     return publishC2aEvent(2, &value, sizeof(value));
 }
 
-bool VnextBAttachment::publishUartRxByte(uint32_t uart, uint8_t byte) {
-    // C2A tipo 2: [0] byte recebido, [1] UART (o QEMU antigo só lia [0] e entregava na UART0).
-    const uint8_t payload[2] = {byte, static_cast<uint8_t>(uart)};
+bool VnextBAttachment::publishUartRxByte(uint32_t uart, uint8_t byte, uint8_t errors) {
+    // C2A tipo 2: [0] byte recebido, [1] UART (o QEMU antigo só lia [0] e entregava na UART0), [2] os erros
+    // que o receptor viu no quadro (bit 0 paridade, 1 quadro, 2 break).
+    const uint8_t payload[3] = {byte, static_cast<uint8_t>(uart), errors};
     return publishC2aEvent(2, payload, sizeof(payload));
 }
 

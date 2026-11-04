@@ -23,6 +23,7 @@ extern "C" {
 #include "freertos/task.h"
 #include "soc/dport_reg.h"
 #include "soc/soc.h"
+#include "soc/timer_group_reg.h"
 void ets_set_appcpu_boot_addr(uint32_t start);
 }
 
@@ -186,10 +187,31 @@ static bool check(uint32_t scenario, const char *name, bool ok, uint32_t observe
     return ok;
 }
 
+// O chip e' um ESP32 ECO3 (revisao 3): o ESP-IDF encurta o primeiro estagio do watchdog de interrupcao para
+// 20 ms (300 ms / 15) e o seu tratador (highint_hdl.S, handle_livelock_int) espera as duas CPUs entrarem nele.
+// Com a CPU1 presa de proposito -- interrupcoes ate' o nivel 3 desligadas e parada no cache, sem atender
+// interrupcao nenhuma -- num chip de verdade o reset do TG1 viria; enquanto isso a CPU0 alimenta o TG1.
+static void IRAM_ATTR feed_int_wdt(void)
+{
+    WRITE_PERI_REG(TIMG_WDTWPROTECT_REG(1), TIMG_WDT_WKEY_VALUE);
+    WRITE_PERI_REG(TIMG_WDTFEED_REG(1), 1);
+    WRITE_PERI_REG(TIMG_WDTWPROTECT_REG(1), 0);
+}
+
+static void hold_ms(uint32_t ms)
+{
+    const uint32_t start = millis();
+    while (millis() - start < ms) {
+        feed_int_wdt();
+        delay(1);
+    }
+}
+
 static bool wait_for(volatile uint32_t &field, uint32_t value, uint32_t timeout_ms)
 {
     const uint32_t start = millis();
     while (field != value && millis() - start < timeout_ms) {
+        feed_int_wdt();
         delay(1);
     }
     return field == value;
@@ -202,7 +224,7 @@ static bool held_at_access(uint32_t scenario)
         return false;
     }
     const uint32_t alive = e131_alive;
-    delay(20);
+    hold_ms(20);
     bool ok = check(scenario, "cpu1_stopped", e131_alive == alive, e131_alive, alive);
     ok = check(scenario, "not_finished", e131_done != scenario, e131_done, kIdle) && ok;
     ok = check(scenario, "no_value_yet", e131_value == 0, e131_value, 0) && ok;
@@ -258,7 +280,7 @@ static void run_hold_release(uint32_t scenario, uint32_t hold_reg, uint32_t hold
     e131_app_cache_enable(1);
     if (held) {
         const uint32_t alive = e131_alive;
-        delay(50);
+        hold_ms(50);
         check(scenario, "held_after_release", e131_done != scenario && e131_alive == alive, e131_done, kIdle);
         check(scenario, "no_effect_while_held", *effects == 0, *effects, 0);
     }
@@ -299,12 +321,12 @@ static void run_reset_wait(void)
     const bool held = held_at_access(kResetWait);
     ets_set_appcpu_boot_addr((uint32_t)&e131_reset_entry);
     e131_mmio_write(DPORT_APPCPU_CTRL_A_REG, DPORT_APPCPU_RESETTING);
-    delay(2);
+    hold_ms(2);
     e131_mmio_write(DPORT_APPCPU_CTRL_A_REG, 0);
     e131_app_cache_enable(1);
     if (held && check(kResetWait, "cpu1_rebooted", wait_for(e131_reset_entries, 1, 1000), e131_reset_entries, 1)) {
         const uint32_t alive = e131_alive;
-        delay(60);
+        hold_ms(60);
         check(kResetWait, "cpu1_running", e131_alive != alive, e131_alive, alive);
         check(kResetWait, "rebooted_once", e131_reset_entries == 1, e131_reset_entries, 1);
         check(kResetWait, "old_access_cancelled", e131_reset_old_path_effects == 0 && e131_value == 0,
@@ -332,7 +354,7 @@ static void controller_task(void *)
         run_reset_wait();  // por último: depois dele a CPU1 fica fora do FreeRTOS
     }
     Serial.printf("E131_DONE %s failures=%lu\n", s_failures == 0 ? "PASS" : "FAIL", (unsigned long)s_failures);
-    vTaskDelete(nullptr);
+    for (;;) hold_ms(1000); // a CPU1 nao volta ao FreeRTOS: o TG1 so' e' alimentado daqui
 }
 
 void setup()

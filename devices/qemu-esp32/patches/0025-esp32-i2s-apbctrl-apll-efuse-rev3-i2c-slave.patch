@@ -1,0 +1,1823 @@
+diff --git a/hw/gpio/esp32_gpio.c b/hw/gpio/esp32_gpio.c
+index 2a0a8b9..1448896 100644
+--- a/hw/gpio/esp32_gpio.c
++++ b/hw/gpio/esp32_gpio.c
+@@ -122,6 +122,22 @@ void esp32_gpio_vnext_bind( Esp32GpioState *s )
+     vnext_gpio_instance = s;
+ }
+ 
++/* The level a peripheral input signal sees through the GPIO matrix (GPIO_FUNCy_IN_SEL_CFG: IN_SEL [5:0],
++ * 0x30 constant 1 and 0x38 constant 0, IN_INV_SEL bit 6, SIG_IN_SEL bit 7 -- through the matrix). */
++bool esp32_gpio_in_signal_level( unsigned signal )
++{
++    Esp32GpioState *s = vnext_gpio_instance;
++    if( !s || signal >= 256 ) return false;
++    const uint32_t cfg = s->gpio_in_sel[signal];
++    const unsigned sel = cfg & 0x3Fu;
++    bool level = false;
++    if( !(cfg & (1u << 7)) ) level = false;       /* the IO_MUX path: no pad has this function */
++    else if( sel == 0x30 ) level = true;
++    else if( sel == 0x38 || sel >= 40 ) level = false;
++    else level = gpio_pin_level( s, (int)sel );
++    return level != ((cfg >> 6) & 1u);
++}
++
+ /* Light-sleep GPIO wakeup (esp_sleep_enable_gpio_wakeup + gpio_wakeup_enable): a pin with
+  * GPIO_PINn_REG.WAKEUP_ENABLE (bit 10) whose pad is at its INT_TYPE level (low or high). */
+ #define GPIO_PIN_WAKEUP_ENABLE (1u << 10)
+diff --git a/hw/i2c/esp32_i2c.c b/hw/i2c/esp32_i2c.c
+index bb51ede..cfbbd9d 100644
+--- a/hw/i2c/esp32_i2c.c
++++ b/hw/i2c/esp32_i2c.c
+@@ -813,6 +813,58 @@ static void esp32_i2c_write_CTR( Esp32I2CState* s, uint16_t newCTR )
+     s->ctr_reg = newCTR;
+ }
+ 
++/* Slave mode (ESP32 TRM, I2C slave). The bus is the Core's (Esp32Adapter, i2cSlaveEdge): the address, the
++ * slave address (SLAVE_ADDR), SDA_HOLD and each TX FIFO byte go there from the guest store; the received
++ * bytes, the address match and the STOP come back here. INT_RAW: RXFIFO_FULL (0) at RXFIFO_FULL_THRHD,
++ * TXFIFO_EMPTY (1) at TXFIFO_EMPTY_THRHD, RXFIFO_OVF (2), SLAVE_TRAN_COMP (4) each byte, TRANS_COMPLETE (7)
++ * at the STOP, TRANS_START (9) when addressed; STATUS: SLAVE_RW (1), BUS_BUSY (4), SLAVE_ADDRESSED (5),
++ * SCL_MAIN_STATE_LAST [26:24] -- what Arduino's slave ISR reads (esp32-hal-i2c-slave.c). The original ESP32
++ * does not stretch SCL: an empty TX FIFO sends 0xFF. */
++
++static bool esp32_i2c_slave_mode(Esp32I2CState *s)
++{
++    return !FIELD_EX32(s->ctr_reg, I2C_CTR, MS_MODE);
++}
++
++void esp32_i2c_vnext_slave(uint32_t bus, uint64_t value)
++{
++    if (bus >= 2 || !vnext_i2c_instances[bus]) return;
++    Esp32I2CState *s = vnext_i2c_instances[bus];
++    const unsigned event = (value >> 8) & 0xF;
++    const uint8_t byte = value & 0xFF;
++    switch (event) {
++    case 1: /* a byte received and ACKed */
++        if (fifo8_num_free(&s->rx_fifo) == 0) {
++            s->int_raw_reg |= BIT(2);
++        } else {
++            fifo8_push(&s->rx_fifo, byte);
++            if (fifo8_num_used(&s->rx_fifo) >= FIELD_EX32(s->fifo_conf_reg, I2C_FIFO_CONF, RXFIFO_FULL_THRHD))
++                s->int_raw_reg |= BIT(0);
++        }
++        s->sr_reg |= BIT(6);
++        s->int_raw_reg |= BIT(4);
++        break;
++    case 2: /* addressed */
++        s->sr_reg = (s->sr_reg & ~BIT(1)) | ((value >> 12) & 1 ? BIT(1) : 0) | BIT(4) | BIT(5);
++        s->int_raw_reg |= BIT(9);
++        break;
++    case 3: /* STOP */
++        s->sr_reg = (s->sr_reg & ~(BIT(4) | BIT(5) | (7u << 24))) | ((uint32_t)((value >> 13) & 7) << 24);
++        s->int_raw_reg |= BIT(7);
++        break;
++    case 4: /* a TX FIFO byte went out on the bus */
++        if (fifo8_num_used(&s->tx_fifo)) fifo8_pop(&s->tx_fifo);
++        s->sr_reg |= BIT(6);
++        s->int_raw_reg |= BIT(4);
++        if (fifo8_num_used(&s->tx_fifo) <= FIELD_EX32(s->fifo_conf_reg, I2C_FIFO_CONF, TXFIFO_EMPTY_THRHD))
++            s->int_raw_reg |= BIT(1);
++        break;
++    default:
++        return;
++    }
++    esp32_i2c_update_irq(s);
++}
++
+ static uint32_t esp32_i2c_get_status_reg(Esp32I2CState* s)
+ {
+     //uint32_t res = 0;
+@@ -847,6 +899,8 @@ static uint64_t esp32_i2c_read(void * opaque, hwaddr addr, unsigned int size)
+     case A_I2C_CTR:          return s->ctr_reg;
+     case A_I2C_STATUS:       return esp32_i2c_get_status_reg(s);
+     case A_I2C_TIMEOUT:      return s->timeout_reg;
++    case A_I2C_SLAVE_ADDR:   return s->slave_addr_reg;
++    case A_I2C_FIFO_CONF:    return s->fifo_conf_reg;
+     case A_I2C_FIFO_DATA: {
+         if( fifo8_num_used(&s->rx_fifo) == 0) {
+             /* Bounded, not silenced: 20,154 of these in one 60 s 16-session run
+@@ -885,7 +939,15 @@ static void esp32_i2c_write(void * opaque, hwaddr addr, uint64_t value, unsigned
+     case A_I2C_LOW_PERIOD:   s->low_period_reg   = value; esp32_i2c_updt_frequency( s ); break;
+     case A_I2C_CTR:          esp32_i2c_write_CTR( s, value ); break;
+     case A_I2C_TIMEOUT:      s->timeout_reg      = value; break;
++    case A_I2C_SLAVE_ADDR:
++        /* the Core's slave answers this address. First: it may replay this store. */
++        if( (uint32_t)value != s->slave_addr_reg ) writeReg( s->iomem.addr + A_I2C_SLAVE_ADDR, value );
++        s->slave_addr_reg = value;
++        break;
+     case A_I2C_FIFO_CONF:
++        /* TX_FIFO_RST also empties the slave's TX FIFO in the Core. First: it may replay this store. */
++        if( FIELD_EX32(value, I2C_FIFO_CONF, TX_FIFO_RST) ) writeReg( s->iomem.addr + A_I2C_FIFO_CONF, value );
++        s->fifo_conf_reg = value & ~(R_I2C_FIFO_CONF_RX_FIFO_RST_MASK | R_I2C_FIFO_CONF_TX_FIFO_RST_MASK);
+         if( FIELD_EX32(value, I2C_FIFO_CONF, NONFIFO_EN) ) error_report("esp32_i2c: APB mode not implemented");
+         if( FIELD_EX32(value, I2C_FIFO_CONF, RX_FIFO_RST)) fifo8_reset(&s->rx_fifo);
+         if( FIELD_EX32(value, I2C_FIFO_CONF, TX_FIFO_RST)) {
+@@ -905,6 +967,8 @@ static void esp32_i2c_write(void * opaque, hwaddr addr, uint64_t value, unsigned
+     case A_I2C_FIFO_DATA:
+         if( fifo8_num_free(&s->tx_fifo) == 0) error_report("esp32_i2c: write to I2C TX FIFO while it is full");
+         else {
++            /* slave: the byte waits for the master's read in the Core. First: it may replay this store. */
++            if( esp32_i2c_slave_mode(s) ) writeReg( s->iomem.addr + A_I2C_FIFO_DATA, value & 0xFF );
+             fifo8_push(&s->tx_fifo, value);
+             //printf("fifo8_push %lu\n", value);
+         }
+@@ -914,7 +978,11 @@ static void esp32_i2c_write(void * opaque, hwaddr addr, uint64_t value, unsigned
+     case A_I2C_CMD ... (A_I2C_CMD + ESP32_I2C_CMD_COUNT * 4):
+         s->cmd_reg[(addr - A_I2C_CMD) / 4] = value;
+         break;
+-    case A_I2C_SDA_HOLD:     s->sda_hold_reg     = value; break;
++    case A_I2C_SDA_HOLD:
++        /* how long the Core's slave waits after SCL falls to change SDA. First: it may replay this store. */
++        if( (uint32_t)value != s->sda_hold_reg ) writeReg( s->iomem.addr + A_I2C_SDA_HOLD, value );
++        s->sda_hold_reg = value;
++        break;
+     case A_I2C_SDA_SAMPLE:   s->sda_sample_reg   = value; break;
+     case A_I2C_HIGH_PERIOD:  s->high_period_reg  = value; esp32_i2c_updt_frequency( s ); break;
+     case A_I2C_START_HOLD:   s->start_hold_reg   = value; break;
+@@ -1015,7 +1083,9 @@ static void esp32_i2c_reset(DeviceState * dev)
+     s->burstAddressValid = false;
+     s->electricalBusOpen = false;
+     s->trans_ongoing = false;
+-    s->ctr_reg = 0;
++    s->ctr_reg = 0x3; /* ESP32 TRM reset: SCL/SDA_FORCE_OUT, MS_MODE 0 (slave) */
++    s->slave_addr_reg = 0;
++    s->fifo_conf_reg = 0x01554000; /* NONFIFO_TX/RX_THRES 0x15 (ESP32 TRM) */
+     s->timeout_reg = 0;
+     s->int_ena_reg = 0;
+     s->int_raw_reg = 0;
+diff --git a/hw/misc/esp32_ana.c b/hw/misc/esp32_ana.c
+index 37124ac..f936321 100644
+--- a/hw/misc/esp32_ana.c
++++ b/hw/misc/esp32_ana.c
+@@ -11,6 +11,23 @@
+ 
+ int esp32_wifi_channel=0;
+ 
++/* The analog I2C master's host 3 register (+0x0C, ESP-IDF regi2c: I2C_APLL_HOSTID 3), through which the
++ * ROM's rom_i2c_writeReg/readReg reach the APLL (block 0x6D): [7:0] block, [15:8] register, [23:16] data,
++ * bit 24 write, bit 25 busy. A read gets the register's value back in [23:16]. The APLL's coefficients set
++ * its frequency (esp32_ana_apll) and its calibration reads as done (OR_CAL_END, register 3 bit 7) -- before,
++ * the readback was the command itself and rtc_clk_apll_coeff_set() waited forever (I2S use_apll). */
++#define ESP32_ANA_APLL_HOST 0x0C
++#define ESP32_ANA_APLL_BLOCK 0x6D
++static uint8_t esp32_ana_apll_regs[256];
++
++bool esp32_ana_apll(uint32_t *sdm, uint32_t *o_div)
++{
++    const uint8_t *r = esp32_ana_apll_regs;
++    *sdm = ((4u + (r[7] & 0x3Fu)) << 16) | ((uint32_t)r[8] << 8) | r[9];
++    *o_div = r[4] & 0x1Fu;
++    return true;
++}
++
+ static uint64_t esp32_ana_read(void *opaque, hwaddr addr, unsigned int size)
+ {
+     Esp32AnaState *s = ESP32_ANA(opaque);
+@@ -35,7 +52,20 @@ static void esp32_ana_write(void *opaque, hwaddr addr, uint64_t value,
+     Esp32AnaState *s = ESP32_ANA(opaque);
+ 
+     if(DEBUG) printf("esp32_ana_write 0x%04lx= 0x%08lx\n",(unsigned long) addr, (unsigned long) value);
++    {
++        static int trace = -1;
++        if (trace < 0) { const char *v = getenv("LASECSIMUL_ANA_TRACE"); trace = v && *v && v[0] != '0'; }
++        if (trace) fprintf(stderr, "[ANA] w 0x%03lx = 0x%08lx\n", (unsigned long) addr, (unsigned long) value);
++    }
+ 
++    if (addr == ESP32_ANA_APLL_HOST && (value & 0xFF) == ESP32_ANA_APLL_BLOCK) {
++        const unsigned reg = (value >> 8) & 0xFF;
++        if (value & BIT(24)) esp32_ana_apll_regs[reg] = (value >> 16) & 0xFF;
++        uint8_t data = esp32_ana_apll_regs[reg];
++        if (reg == 3) data = (data & ~0x40u) | 0x80u; /* calibration done, no overflow */
++        s->mem[addr / 4] = ((uint32_t)value & 0x0100FFFFu) | ((uint32_t)data << 16);
++        return;
++    }
+     if(addr == 0xC4) {
+         //printf("wifi channel:%x %x\n",(int)value, (int)~value);
+         int v=value & 0xFF;
+diff --git a/hw/misc/esp32_apbctrl.c b/hw/misc/esp32_apbctrl.c
+new file mode 100644
+index 0000000..98797b2
+--- /dev/null
++++ b/hw/misc/esp32_apbctrl.c
+@@ -0,0 +1,100 @@
++/*
++ * ESP32 APB_CTRL (SYSCON)
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 or
++ * (at your option) any later version.
++ */
++
++#include "qemu/osdep.h"
++#include "hw/hw.h"
++#include "hw/sysbus.h"
++#include "hw/misc/esp32_apbctrl.h"
++
++static Esp32ApbCtrlState *esp32_apbctrl_device;
++
++void esp32_apbctrl_saradc(Esp32SaradcDig *out)
++{
++    memset(out, 0, sizeof(*out));
++    Esp32ApbCtrlState *s = esp32_apbctrl_device;
++    if (!s) return;
++    const uint32_t ctrl = s->regs[R_APBCTRL_SARADC_CTRL];
++    out->to_i2s = FIELD_EX32(ctrl, APBCTRL_SARADC_CTRL, DATA_TO_I2S);
++    out->unit = FIELD_EX32(ctrl, APBCTRL_SARADC_CTRL, SAR_SEL);
++    out->len = 1 + (out->unit ? FIELD_EX32(ctrl, APBCTRL_SARADC_CTRL, SAR2_PATT_LEN)
++                              : FIELD_EX32(ctrl, APBCTRL_SARADC_CTRL, SAR1_PATT_LEN));
++    out->format2 = FIELD_EX32(ctrl, APBCTRL_SARADC_CTRL, DATA_SAR_SEL);
++    out->inv = out->unit ? FIELD_EX32(s->regs[R_APBCTRL_SARADC_CTRL2], APBCTRL_SARADC_CTRL2, SAR2_INV)
++                         : FIELD_EX32(s->regs[R_APBCTRL_SARADC_CTRL2], APBCTRL_SARADC_CTRL2, SAR1_INV);
++    /* PATT_TAB1..4: the first entry in the top byte of TAB1 (ESP-IDF adc_ll_digi_set_pattern_table) */
++    const unsigned tab = out->unit ? R_APBCTRL_SARADC_SAR2_PATT_TAB1 : R_APBCTRL_SARADC_SAR1_PATT_TAB1;
++    for (unsigned i = 0; i < 16; ++i) out->pattern[i] = (s->regs[tab + i / 4] >> (24 - 8 * (i % 4))) & 0xFF;
++}
++
++static uint64_t esp32_apbctrl_read(void *opaque, hwaddr addr, unsigned int size)
++{
++    Esp32ApbCtrlState *s = ESP32_APBCTRL(opaque);
++    return addr / 4 < ESP32_APBCTRL_REGS ? s->regs[addr / 4] : 0;
++}
++
++static void esp32_apbctrl_write(void *opaque, hwaddr addr, uint64_t value, unsigned int size)
++{
++    Esp32ApbCtrlState *s = ESP32_APBCTRL(opaque);
++    if (addr / 4 >= ESP32_APBCTRL_REGS || addr == A_APBCTRL_DATE) return;
++    s->regs[addr / 4] = value;
++}
++
++static const MemoryRegionOps esp32_apbctrl_ops = {
++    .read = esp32_apbctrl_read,
++    .write = esp32_apbctrl_write,
++    .endianness = DEVICE_LITTLE_ENDIAN,
++};
++
++static void esp32_apbctrl_reset(DeviceState *dev)
++{
++    Esp32ApbCtrlState *s = ESP32_APBCTRL(dev);
++    memset(s->regs, 0, sizeof(s->regs));
++    /* ESP32 TRM reset values */
++    s->regs[R_APBCTRL_XTAL_TICK_CONF] = 39;
++    s->regs[R_APBCTRL_PLL_TICK_CONF] = 79;
++    s->regs[R_APBCTRL_CK8M_TICK_CONF] = 11;
++    s->regs[R_APBCTRL_SARADC_CTRL] = 0x007F8240;
++    s->regs[R_APBCTRL_SARADC_CTRL2] = 0x000001FE;
++    s->regs[R_APBCTRL_SARADC_FSM] = 0x0208FF08;
++    for (unsigned i = 0; i < 4; ++i) {
++        s->regs[R_APBCTRL_SARADC_SAR1_PATT_TAB1 + i] = 0x0F0F0F0F;
++        s->regs[R_APBCTRL_SARADC_SAR2_PATT_TAB1 + i] = 0x0F0F0F0F;
++    }
++    s->regs[R_APBCTRL_APLL_TICK_CONF] = 99;
++    s->regs[R_APBCTRL_DATE] = 0x16042000 | 0x80000000; /* the MSB marks ECO3 silicon (esp_efuse_get_chip_ver) */
++}
++
++static void esp32_apbctrl_init(Object *obj)
++{
++    Esp32ApbCtrlState *s = ESP32_APBCTRL(obj);
++    SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
++    memory_region_init_io(&s->iomem, obj, &esp32_apbctrl_ops, s, TYPE_ESP32_APBCTRL, 0x1000);
++    sysbus_init_mmio(sbd, &s->iomem);
++    esp32_apbctrl_device = s;
++}
++
++static void esp32_apbctrl_class_init(ObjectClass *klass, void *data)
++{
++    DeviceClass *dc = DEVICE_CLASS(klass);
++    dc->reset = esp32_apbctrl_reset;
++}
++
++static const TypeInfo esp32_apbctrl_info = {
++    .name = TYPE_ESP32_APBCTRL,
++    .parent = TYPE_SYS_BUS_DEVICE,
++    .instance_size = sizeof(Esp32ApbCtrlState),
++    .instance_init = esp32_apbctrl_init,
++    .class_init = esp32_apbctrl_class_init,
++};
++
++static void esp32_apbctrl_register_types(void)
++{
++    type_register_static(&esp32_apbctrl_info);
++}
++
++type_init(esp32_apbctrl_register_types)
+diff --git a/hw/misc/esp32_i2s.c b/hw/misc/esp32_i2s.c
+new file mode 100644
+index 0000000..b66ef04
+--- /dev/null
++++ b/hw/misc/esp32_i2s.c
+@@ -0,0 +1,992 @@
++/*
++ * ESP32 I2S0/I2S1 (ESP32 TRM, I2S Controller)
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 or
++ * (at your option) any later version.
++ */
++
++#include "qemu/osdep.h"
++#include "qemu/log.h"
++#include "hw/hw.h"
++#include "hw/irq.h"
++#include "hw/qdev-properties.h"
++#include "hw/sysbus.h"
++#include "exec/address-spaces.h"
++#include "hw/misc/esp32_i2s.h"
++#include "hw/gpio/esp32_gpio.h"
++#include "hw/misc/esp32_sens.h"
++#include "hw/misc/esp32_apbctrl.h"
++#include "hw/misc/esp32_ana.h"
++#include "../softmmu/vnext_b.h"
++#include "../softmmu/simuliface.h"
++
++/* Both I2S were unimplemented stubs: i2s_write()/i2s_read() waited forever for the DMA interrupts.
++ *
++ * The shifter moves one FIFO entry per entry period. I2S mode: a frame is 2 x TX_BITS_MOD BCK cycles, one
++ * entry per frame in FIFO modes 0, 1 and 3 (16-bit dual, 16-bit single, 32-bit single) and one per channel
++ * in mode 2 (32-bit dual). LCD mode (CONF2 LCD_EN; the built-in DAC and ADC): one entry per WS cycle, 2 BCK.
++ * BCK = I2Sn_CLK / M (BCK_DIV_NUM) and I2Sn_CLK = PLL_F160M / (N + b / a) (CLKM_CONF), so the period is an
++ * exact fraction of ns, kept as one (no drift over a long stream).
++ *
++ * TX DMA: the outlink descriptors (lldesc_t) go through the 64-entry FIFO. The DMA pushes as soon as the FIFO
++ * has room and the shifter pops: OUT_DONE when a descriptor has been read, OUT_EOF when its last entry has
++ * been sent (OUT_EOF_MODE 1, the reset value) or pushed (0), OUT_TOTAL_EOF at the end of the list.
++ * RX DMA: each entry is written to the inlink buffer as it is received; IN_DONE when a descriptor is full,
++ * IN_SUC_EOF every RXEOF_NUM words (ESP-IDF sets one descriptor), with the descriptor written back (length,
++ * eof, owner 0). DSCR_EN 0 is the CPU FIFO mode (FIFO_WR/FIFO_RD). */
++
++#define ESP32_I2S_DMA_BUS 0x3FF00000u
++#define ESP32_I2S_PLL_F160M 160000000ull
++
++static void esp32_i2s_update_irq(Esp32I2sState *s)
++{
++    s->regs[R_I2S_INT_ST] = s->regs[R_I2S_INT_RAW] & s->regs[R_I2S_INT_ENA];
++    qemu_set_irq(s->irq, s->regs[R_I2S_INT_ST] != 0);
++}
++
++static void esp32_i2s_raise(Esp32I2sState *s, uint32_t bits)
++{
++    s->regs[R_I2S_INT_RAW] |= bits;
++}
++
++static bool esp32_i2s_lcd(Esp32I2sState *s)
++{
++    return FIELD_EX32(s->regs[R_I2S_CONF2], I2S_CONF2, LCD_EN);
++}
++
++static unsigned esp32_i2s_fifo_mod(Esp32I2sState *s, bool tx)
++{
++    return tx ? FIELD_EX32(s->regs[R_I2S_FIFO_CONF], I2S_FIFO_CONF, TX_FIFO_MOD)
++              : FIELD_EX32(s->regs[R_I2S_FIFO_CONF], I2S_FIFO_CONF, RX_FIFO_MOD);
++}
++
++/* Memory bytes per FIFO entry: mode 1 splits each 32-bit word in two 16-bit entries. */
++static unsigned esp32_i2s_entry_bytes(Esp32I2sState *s, bool tx)
++{
++    return esp32_i2s_fifo_mod(s, tx) == 1 ? 2 : 4;
++}
++
++/* Master mode drives BCK/WS itself. A slave needs them from outside, and no device of the circuit is an I2S
++ * master (the pins are not modeled): it only runs off the other half of the same I2S through SIG_LOOPBACK
++ * (the ESP-IDF full-duplex setup: RX slave on TX's BCK/WS), while that half runs. */
++static bool esp32_i2s_slave(Esp32I2sState *s, bool tx)
++{
++    return tx ? FIELD_EX32(s->regs[R_I2S_CONF], I2S_CONF, TX_SLAVE_MOD) : FIELD_EX32(s->regs[R_I2S_CONF], I2S_CONF, RX_SLAVE_MOD);
++}
++
++static bool esp32_i2s_clock_on(Esp32I2sState *s, bool tx)
++{
++    const uint32_t conf = s->regs[R_I2S_CONF];
++    const bool start = tx ? FIELD_EX32(conf, I2S_CONF, TX_START) : FIELD_EX32(conf, I2S_CONF, RX_START);
++    if (!start) return false;
++    if (!esp32_i2s_slave(s, tx)) return true;
++    const bool other_start = tx ? FIELD_EX32(conf, I2S_CONF, RX_START) : FIELD_EX32(conf, I2S_CONF, TX_START);
++    return FIELD_EX32(conf, I2S_CONF, SIG_LOOPBACK) && !esp32_i2s_slave(s, !tx) && other_start;
++}
++
++static void esp32_i2s_entry_period(Esp32I2sState *s, bool tx, uint64_t *num, uint64_t *den)
++{
++    /* a slave on the other half's clock (SIG_LOOPBACK) takes that half's timing */
++    if (esp32_i2s_slave(s, tx) && FIELD_EX32(s->regs[R_I2S_CONF], I2S_CONF, SIG_LOOPBACK)) tx = !tx;
++    const uint32_t clkm = s->regs[R_I2S_CLKM_CONF];
++    const uint32_t rate = s->regs[R_I2S_SAMPLE_RATE_CONF];
++    uint64_t n = MAX(FIELD_EX32(clkm, I2S_CLKM_CONF, DIV_NUM), 2u);
++    uint64_t a = FIELD_EX32(clkm, I2S_CLKM_CONF, DIV_A);
++    uint64_t b = FIELD_EX32(clkm, I2S_CLKM_CONF, DIV_B);
++    if (a == 0) {
++        a = 1;
++        b = 0;
++    }
++    const uint64_t m = MAX(tx ? FIELD_EX32(rate, I2S_SAMPLE_RATE_CONF, TX_BCK_DIV_NUM)
++                              : FIELD_EX32(rate, I2S_SAMPLE_RATE_CONF, RX_BCK_DIV_NUM), 2u);
++    const uint64_t bits = MAX(tx ? FIELD_EX32(rate, I2S_SAMPLE_RATE_CONF, TX_BITS_MOD)
++                                 : FIELD_EX32(rate, I2S_SAMPLE_RATE_CONF, RX_BITS_MOD), 1u);
++    uint64_t bck;
++    if (esp32_i2s_lcd(s)) bck = 2;
++    else bck = esp32_i2s_fifo_mod(s, tx) == 2 ? bits : 2 * bits;
++    uint32_t sdm = 0, o_div = 0;
++    if (FIELD_EX32(clkm, I2S_CLKM_CONF, CLKA_ENA) && esp32_ana_apll(&sdm, &o_div) && sdm) {
++        /* APLL_CLK = 40 MHz * sdm / 65536 / (2 (o_div + 2)) (hw/misc/esp32_ana.c): 1e9 / 40e6 = 25 */
++        *num = bck * m * (n * a + b) * 25ull * 131072ull * (o_div + 2);
++        *den = a * sdm;
++        return;
++    }
++    *num = bck * m * (n * a + b) * 1000000000ull;
++    *den = a * ESP32_I2S_PLL_F160M;
++}
++
++/* Start time of entry `index` (rounded up, so that esp32_i2s_index() then counts every entry before it) /
++ * entries the shifter has finished by `now`. */
++static uint64_t esp32_i2s_time(Esp32I2sChan *c, uint64_t index)
++{
++    if (index <= c->base) return c->t0;
++    return c->t0 + (uint64_t)(((unsigned __int128)(index - c->base) * c->per_num + c->per_den - 1) / c->per_den);
++}
++
++static uint64_t esp32_i2s_index(Esp32I2sChan *c, uint64_t now)
++{
++    if (!c->clocked || now <= c->t0) return c->base;
++    return c->base + (uint64_t)(((unsigned __int128)(now - c->t0) * c->per_den) / c->per_num);
++}
++
++/* The shifter keeps its position and goes on from now at the current period (a new period, a start). */
++static void esp32_i2s_rebase(Esp32I2sState *s, Esp32I2sChan *c, bool tx, uint64_t now)
++{
++    c->base = esp32_i2s_index(c, now);
++    c->t0 = now;
++    esp32_i2s_entry_period(s, tx, &c->per_num, &c->per_den);
++}
++
++/* lldesc_t (ESP-IDF rom/lldesc.h): word 0 = size [11:0], length [23:12], eof 30, owner 31 (1 = the DMA);
++ * word 1 = buffer; word 2 = next descriptor. */
++static bool esp32_i2s_desc_read(uint32_t addr, uint32_t w[3])
++{
++    if (!addr || address_space_read(&address_space_memory, addr, MEMTXATTRS_UNSPECIFIED, w, 12) != MEMTX_OK) {
++        return false;
++    }
++    for (int i = 0; i < 3; ++i) w[i] = le32_to_cpu(w[i]);
++    return true;
++}
++
++static void esp32_i2s_desc_word0(uint32_t addr, uint32_t word0)
++{
++    const uint32_t w = cpu_to_le32(word0);
++    address_space_write(&address_space_memory, addr, MEMTXATTRS_UNSPECIFIED, &w, 4);
++}
++
++/* The level of the serial data input (I2SnI_Data_in[15] through the GPIO matrix). With no audio device on
++ * the circuit, what a receiver reads is that level on every bit. */
++static uint8_t esp32_i2s_rx_fill(Esp32I2sState *s)
++{
++    return esp32_gpio_in_signal_level(s->unit ? 181 : 155) ? 0xFF : 0x00;
++}
++
++/* ---- built-in DAC (I2S0 in LCD mode with SENS DAC_DIG_FORCE) ----
++ * ESP32 TRM, ADC/DAC mode: the DAC takes the upper 8 bits of each 16-bit sample, the right channel to DAC1
++ * (GPIO25) and the left to DAC2 (GPIO26). The Core drives the pads (adapter RtcIo module, 0x3FF484F0): each
++ * entry goes there with its own instant as the DMA reads it into the FIFO, ahead of the shifter. Only the
++ * timer sends (outside the vCPU: a full lane is kept here and retried, never a replayed guest store). */
++
++static bool esp32_i2s_dac_active(Esp32I2sState *s)
++{
++    return s->unit == 0 && esp32_i2s_lcd(s) && esp32_sens_dac_digital();
++}
++
++static void esp32_i2s_dac_queue(Esp32I2sState *s, uint64_t t, uint32_t codes, bool cut)
++{
++    if (s->dac_cnt == ESP32_I2S_DAC_PENDING) { /* the Core is far behind: the oldest goes */
++        s->dac_rd = (s->dac_rd + 1) % ESP32_I2S_DAC_PENDING;
++        s->dac_cnt--;
++    }
++    s->dac[(s->dac_rd + s->dac_cnt) % ESP32_I2S_DAC_PENDING] = (Esp32I2sDacSample){ t, codes, cut };
++    s->dac_cnt++;
++}
++
++/* Sends what is queued; false while the lane is full. The instant goes as a delay from the send. */
++static bool esp32_i2s_dac_flush(Esp32I2sState *s, uint64_t now)
++{
++    while (s->dac_cnt) {
++        const Esp32I2sDacSample *d = &s->dac[s->dac_rd];
++        const uint64_t delay = MIN(d->t > now ? d->t - now : 0, (UINT64_C(1) << 46) - 1);
++        const VnextPublishResult r = d->cut ? writeReg(0x3FF484F8, delay) : writeReg(0x3FF484F0, (delay << 18) | d->codes);
++        if (r != VNEXT_PUBLISHED) return false;
++        s->dac_rd = (s->dac_rd + 1) % ESP32_I2S_DAC_PENDING;
++        s->dac_cnt--;
++    }
++    return true;
++}
++
++/* DAC codes of TX entry `k` of the bytes `d` (`len` of them) read from the descriptor. */
++static uint32_t esp32_i2s_dac_codes(Esp32I2sState *s, const uint8_t *d, uint32_t len, uint64_t k)
++{
++    const unsigned mod = esp32_i2s_fifo_mod(s, true);
++    const bool msb_right = FIELD_EX32(s->regs[R_I2S_CONF], I2S_CONF, TX_MSB_RIGHT);
++    const unsigned chan = FIELD_EX32(s->regs[R_I2S_CONF_CHAN], I2S_CONF_CHAN, TX_CHAN_MOD);
++    const uint8_t single = (s->regs[R_I2S_CONF_SINGLE_DATA] >> 8) & 0xFF;
++    uint32_t right, left, mask = 3;
++    if (mod == 0) {
++        uint32_t w = 0;
++        if (k * 4 < len) memcpy(&w, d + k * 4, MIN(4u, len - (uint32_t)(k * 4)));
++        w = le32_to_cpu(w);
++        const uint32_t hi = (w >> 24) & 0xFF, lo = (w >> 8) & 0xFF;
++        right = msb_right ? hi : lo;
++        left = msb_right ? lo : hi;
++    } else {
++        uint32_t code;
++        if (mod == 1) {
++            /* 16-bit single: each word gives {D[31:16]} then {D[15:0]} */
++            uint16_t h = 0;
++            const uint32_t at = (uint32_t)(k / 2) * 4 + ((k & 1) ? 0 : 2);
++            if (at < len) memcpy(&h, d + at, MIN(2u, len - at));
++            code = (le16_to_cpu(h) >> 8) & 0xFF;
++        } else {
++            uint32_t w = 0;
++            if (k * 4 < len) memcpy(&w, d + k * 4, MIN(4u, len - (uint32_t)(k * 4)));
++            code = (le32_to_cpu(w) >> 24) & 0xFF;
++        }
++        right = left = code;
++        if (mod == 2) {
++            mask = ((k & 1) != msb_right) ? 1 : 2; /* 32-bit dual: one channel per entry */
++        } else if (chan == 3) {
++            if (msb_right) right = single; else left = single;
++        } else if (chan == 4) {
++            if (msb_right) left = single; else right = single;
++        }
++    }
++    return (mask << 16) | (left << 8) | right;
++}
++
++/* Entries [first, first + n) of the TX descriptor being read, the first of them at shifter index `index`. */
++static void esp32_i2s_dac_emit(Esp32I2sState *s, uint64_t first, uint64_t n, uint64_t index)
++{
++    Esp32I2sChan *c = &s->tx;
++    if (!esp32_i2s_dac_active(s)) return;
++    const unsigned eb = esp32_i2s_entry_bytes(s, true);
++    /* whole words: in mode 1 an entry pair shares one */
++    const uint64_t word_first = esp32_i2s_fifo_mod(s, true) == 1 ? first / 2 * 2 : first;
++    const uint32_t from = (uint32_t)(word_first * eb);
++    const uint32_t to = MIN((uint32_t)((first + n + 1) * eb), c->len);
++    uint8_t d[ESP32_I2S_FIFO_DEPTH * 4 + 8];
++    memset(d, 0, sizeof(d));
++    const uint32_t got = to > from ? MIN(to - from, (uint32_t)sizeof(d)) : 0;
++    if (got) address_space_read(&address_space_memory, c->buf + from, MEMTXATTRS_UNSPECIFIED, d, got);
++    for (uint64_t k = 0; k < n; ++k) {
++        esp32_i2s_dac_queue(s, esp32_i2s_time(c, index + k), esp32_i2s_dac_codes(s, d, got, first + k - word_first), false);
++    }
++}
++
++/* ---- built-in ADC (I2S0 RX in LCD mode with APB_SARADC DATA_TO_I2S) ----
++ * ESP32 TRM, DIG ADC controller: one conversion per entry, going through the pattern table; each 16-bit
++ * sample is the channel [15:12] and the data [11:0] (DATA_SAR_SEL 0) or the unit [15], channel [14:11] and
++ * 11 bits of data (1). The Core samples the pad voltage at each sample's instant (the same instants as
++ * here) and returns it through C2A before QEMU's time passes the instant; the RX timer holds the vCPUs
++ * when a descriptor closes before its samples arrived. */
++
++static Esp32I2sState *esp32_i2s_unit0;
++
++static bool esp32_i2s_adc_mode(Esp32I2sState *s)
++{
++    if (s->unit != 0 || !esp32_i2s_lcd(s)) return false;
++    Esp32SaradcDig dig;
++    esp32_apbctrl_saradc(&dig);
++    return dig.to_i2s;
++}
++
++/* The RX shifter (re)started or changed: sample 0 is its current entry. */
++static void esp32_i2s_adc_restart(Esp32I2sState *s)
++{
++    Esp32SaradcDig dig;
++    esp32_apbctrl_saradc(&dig);
++    s->adc_want = s->rx.clocked && esp32_i2s_adc_mode(s);
++    s->adc_base = s->rx.base;
++    s->adc_recv = 0;
++    s->adc_unit = dig.unit;
++    s->adc_len = MAX(dig.len, 1u);
++    memcpy(s->adc_pattern, dig.pattern, sizeof(s->adc_pattern));
++    s->adc_format2 = dig.format2;
++    s->adc_inv = dig.inv;
++    if (s->adc_want || s->adc_on) {
++        s->adc_pending = true;
++        s->adc_sent = 0;
++    }
++}
++
++/* From the RX timer (outside the vCPU): the configuration to the adapter, four writes, the commit last. */
++static bool esp32_i2s_adc_send(Esp32I2sState *s)
++{
++    if (!s->adc_pending) return true;
++    uint64_t pads = 0;
++    for (unsigned i = 0; i < 16; ++i) pads |= (uint64_t)(s->adc_pattern[i] >> 4) << (4 * i);
++    const uint64_t commit = (s->rx.per_den & ((UINT64_C(1) << 40) - 1)) | ((uint64_t)(s->adc_len - 1) << 56) |
++                            ((uint64_t)s->adc_unit << 60) | ((uint64_t)s->adc_want << 63);
++    const uint64_t t0 = esp32_i2s_time(&s->rx, s->adc_base);
++    const struct { uint64_t addr, value; } w[4] = {
++        { 0x3FF48BC0, t0 }, { 0x3FF48BC4, s->rx.per_num }, { 0x3FF48BCC, pads }, { 0x3FF48BC8, commit } };
++    while (s->adc_sent < 4) {
++        if (writeReg(w[s->adc_sent].addr, w[s->adc_sent].value) != VNEXT_PUBLISHED) return false;
++        s->adc_sent++;
++    }
++    s->adc_pending = false;
++    s->adc_on = s->adc_want;
++    return true;
++}
++
++void esp32_i2s_vnext_adc(uint64_t value)
++{
++    Esp32I2sState *s = esp32_i2s_unit0;
++    if (!s) return;
++    const unsigned n = MIN((unsigned)((value >> 48) & 7), 3u);
++    for (unsigned i = 0; i < n; ++i) {
++        s->adc_ring[s->adc_recv % ESP32_I2S_ADC_RING] = (value >> (16 * i)) & 0xFFFF;
++        s->adc_recv++;
++    }
++}
++
++/* The 16-bit sample of RX entry `entry`, or false while the Core has not delivered it. */
++static bool esp32_i2s_adc_sample(Esp32I2sState *s, uint64_t entry, uint16_t *out)
++{
++    if (entry < s->adc_base) {
++        *out = 0;
++        return true;
++    }
++    const uint64_t k = entry - s->adc_base;
++    if (k >= s->adc_recv) return false;
++    if (s->adc_recv - k > ESP32_I2S_ADC_RING) {
++        *out = 0; /* overwritten: the DMA fell that far behind */
++        return true;
++    }
++    const uint8_t p = s->adc_pattern[k % s->adc_len];
++    const unsigned channel = p >> 4, width = 9 + ((p >> 2) & 3), atten = p & 3;
++    const double mv = s->adc_ring[k % ESP32_I2S_ADC_RING] / 10.0;
++    uint32_t code = esp32_sens_adc_code((int)s->adc_unit, (int)atten, (int)width, mv, s->adc_inv);
++    if (s->adc_format2) {
++        if (width == 12) code >>= 1;
++        *out = (uint16_t)((s->adc_unit << 15) | ((channel & 0xF) << 11) | (code & 0x7FF));
++    } else {
++        *out = (uint16_t)(((channel & 0xF) << 12) | (code & 0xFFF));
++    }
++    return true;
++}
++
++/* ---- TX ---- */
++
++static void esp32_i2s_tx_schedule(Esp32I2sState *s);
++
++/* The descriptor whose last entry left the shifter. */
++static void esp32_i2s_tx_sent(Esp32I2sState *s, const Esp32I2sInflight *f)
++{
++    const bool eof_on_pop = FIELD_EX32(s->regs[R_I2S_LC_CONF], I2S_LC_CONF, OUT_EOF_MODE);
++    if (f->eof && eof_on_pop) {
++        s->regs[R_I2S_OUT_EOF_DES_ADDR] = f->desc;
++        s->regs[R_I2S_OUT_EOF_BFR_DES_ADDR] = f->buf;
++        esp32_i2s_raise(s, ESP32_I2S_INT_OUT_EOF);
++    }
++    if (!f->next && eof_on_pop) esp32_i2s_raise(s, ESP32_I2S_INT_OUT_TOTAL_EOF);
++}
++
++/* The DMA side: read the descriptors into the FIFO as it gets room (only while the shifter runs; what a
++ * stopped transmitter would prefetch is not modeled). */
++static void esp32_i2s_tx_dma(Esp32I2sState *s, uint64_t now)
++{
++    Esp32I2sChan *c = &s->tx;
++    const unsigned eb = esp32_i2s_entry_bytes(s, true);
++    if (!c->clocked) return;
++    while (c->link && c->inflight_cnt < ESP32_I2S_INFLIGHT) {
++        if (!c->have_desc) {
++            uint32_t w[3];
++            if (!esp32_i2s_desc_read(c->next, w) ||
++                (FIELD_EX32(s->regs[R_I2S_LC_CONF], I2S_LC_CONF, CHECK_OWNER) && !(w[0] >> 31))) {
++                esp32_i2s_raise(s, ESP32_I2S_INT_OUT_DSCR_ERR);
++                c->link = false;
++                break;
++            }
++            c->desc = c->next;
++            c->buf = w[1];
++            c->len = (w[0] >> 12) & 0xFFFu;
++            c->desc_eof = (w[0] >> 30) & 1u;
++            c->next = w[2];
++            c->have_desc = true;
++            c->desc_done = 0;
++            s->regs[R_I2S_OUTLINK_DSCR] = c->desc;
++            s->regs[R_I2S_OUTLINK_DSCR_BF0] = c->next;
++            s->regs[R_I2S_OUTLINK_DSCR_BF1] = c->buf;
++            /* The FIFO ran dry (or the shifter never started): the new data goes out from now. */
++            if (c->pushed <= esp32_i2s_index(c, now)) {
++                c->base = c->pushed;
++                c->t0 = now;
++            }
++        }
++        const uint64_t entries = (c->len + eb - 1) / eb;
++        const uint64_t popped = esp32_i2s_index(c, now);
++        const uint64_t room = popped + ESP32_I2S_FIFO_DEPTH > c->pushed ? popped + ESP32_I2S_FIFO_DEPTH - c->pushed : 0;
++        const uint64_t n = MIN(room, entries - c->desc_done);
++        if (n) {
++            esp32_i2s_dac_emit(s, c->desc_done, n, c->pushed);
++            c->pushed += n;
++            c->desc_done += n;
++        }
++        if (c->desc_done < entries) {
++            break; /* the FIFO is full: esp32_i2s_tx_schedule wakes when it has room again */
++        }
++        esp32_i2s_raise(s, ESP32_I2S_INT_OUT_DONE);
++        if (FIELD_EX32(s->regs[R_I2S_LC_CONF], I2S_LC_CONF, OUT_AUTO_WRBACK)) {
++            uint32_t w[3];
++            if (esp32_i2s_desc_read(c->desc, w)) esp32_i2s_desc_word0(c->desc, w[0] & ~BIT(31));
++        }
++        Esp32I2sInflight f = { .last = c->pushed ? c->pushed - 1 : 0, .desc = c->desc, .buf = c->buf,
++                               .next = c->next, .eof = c->desc_eof };
++        if (!FIELD_EX32(s->regs[R_I2S_LC_CONF], I2S_LC_CONF, OUT_EOF_MODE)) {
++            if (f.eof) {
++                s->regs[R_I2S_OUT_EOF_DES_ADDR] = f.desc;
++                s->regs[R_I2S_OUT_EOF_BFR_DES_ADDR] = f.buf;
++                esp32_i2s_raise(s, ESP32_I2S_INT_OUT_EOF);
++            }
++            if (!f.next) esp32_i2s_raise(s, ESP32_I2S_INT_OUT_TOTAL_EOF);
++        }
++        if (entries) {
++            c->inflight[(c->inflight_rd + c->inflight_cnt) % ESP32_I2S_INFLIGHT] = f;
++            c->inflight_cnt++;
++        } else {
++            esp32_i2s_tx_sent(s, &f);
++        }
++        c->have_desc = false;
++        if (!c->next) {
++            c->link = false;
++            c->chain_end = true;
++        }
++    }
++}
++
++/* The shifter side: descriptors whose last entry has been sent. */
++static void esp32_i2s_tx_pop(Esp32I2sState *s, uint64_t now)
++{
++    Esp32I2sChan *c = &s->tx;
++    const uint64_t popped = esp32_i2s_index(c, now);
++    while (c->inflight_cnt && c->inflight[c->inflight_rd].last < popped) {
++        esp32_i2s_tx_sent(s, &c->inflight[c->inflight_rd]);
++        c->inflight_rd = (c->inflight_rd + 1) % ESP32_I2S_INFLIGHT;
++        c->inflight_cnt--;
++        if (!c->inflight_cnt && !c->link) esp32_i2s_raise(s, ESP32_I2S_INT_TX_REMPTY);
++    }
++}
++
++/* CPU FIFO mode: entries the shifter took from FIFO_WR data. */
++static void esp32_i2s_tx_fifo_pop(Esp32I2sState *s, uint64_t now)
++{
++    Esp32I2sChan *c = &s->tx;
++    if (!c->clocked) return;
++    const uint64_t index = esp32_i2s_index(c, now);
++    while (c->fifo_cnt && c->fifo_popped < index) {
++        c->fifo_rd = (c->fifo_rd + 1) % ESP32_I2S_FIFO_DEPTH;
++        c->fifo_cnt--;
++        c->fifo_popped++;
++        if (c->fifo_cnt < FIELD_EX32(s->regs[R_I2S_FIFO_CONF], I2S_FIFO_CONF, TX_DATA_NUM)) {
++            esp32_i2s_raise(s, ESP32_I2S_INT_TX_PUT_DATA);
++        }
++        if (!c->fifo_cnt) esp32_i2s_raise(s, ESP32_I2S_INT_TX_REMPTY);
++    }
++}
++
++static void esp32_i2s_tx_run(Esp32I2sState *s, uint64_t now)
++{
++    if (FIELD_EX32(s->regs[R_I2S_FIFO_CONF], I2S_FIFO_CONF, DSCR_EN)) {
++        esp32_i2s_tx_pop(s, now);
++        esp32_i2s_tx_dma(s, now);
++        esp32_i2s_tx_pop(s, now);
++    } else {
++        esp32_i2s_tx_fifo_pop(s, now);
++    }
++    esp32_i2s_update_irq(s);
++    esp32_i2s_tx_schedule(s);
++}
++
++static void esp32_i2s_tx_schedule(Esp32I2sState *s)
++{
++    Esp32I2sChan *c = &s->tx;
++    uint64_t due = UINT64_MAX;
++    if (c->clocked) {
++        if (FIELD_EX32(s->regs[R_I2S_FIFO_CONF], I2S_FIFO_CONF, DSCR_EN)) {
++            if (c->inflight_cnt) due = esp32_i2s_time(c, c->inflight[c->inflight_rd].last + 1);
++            if (c->link && c->have_desc) {
++                /* room for the rest of the descriptor, or for half the FIFO */
++                const unsigned eb = esp32_i2s_entry_bytes(s, true);
++                const uint64_t left = (c->len + eb - 1) / eb - c->desc_done;
++                const uint64_t need = MIN(left, (uint64_t)ESP32_I2S_FIFO_DEPTH / 2);
++                const uint64_t at = c->pushed + need;
++                due = MIN(due, at > ESP32_I2S_FIFO_DEPTH ? esp32_i2s_time(c, at - ESP32_I2S_FIFO_DEPTH) : c->t0);
++            }
++        } else if (c->fifo_cnt) {
++            due = esp32_i2s_time(c, c->fifo_popped + 1);
++        }
++    }
++    if (s->dac_cnt) due = MIN(due, getQemu_ns() + (s->dac_blocked ? 2000 : 0)); /* samples for the Core */
++    if (due == UINT64_MAX) timer_del(&c->timer);
++    else timer_mod_ns(&c->timer, due);
++}
++
++static void esp32_i2s_tx_timer_cb(void *opaque)
++{
++    Esp32I2sState *s = ESP32_I2S(opaque);
++    const uint64_t now = getQemu_ns();
++    esp32_i2s_tx_run(s, now);
++    if (s->dac_cnt) {
++        s->dac_blocked = !esp32_i2s_dac_flush(s, now);
++        esp32_i2s_tx_schedule(s);
++    }
++}
++
++static void esp32_i2s_tx_reset_dma(Esp32I2sChan *c)
++{
++    c->link = false;
++    c->have_desc = false;
++    c->chain_end = false;
++    c->inflight_rd = c->inflight_cnt = 0;
++}
++
++/* ---- RX ---- */
++
++static void esp32_i2s_rx_schedule(Esp32I2sState *s);
++
++static bool esp32_i2s_rx_fetch(Esp32I2sState *s)
++{
++    Esp32I2sChan *c = &s->rx;
++    uint32_t w[3];
++    if (!c->next) {
++        esp32_i2s_raise(s, ESP32_I2S_INT_IN_DSCR_EMPTY);
++        c->link = false;
++        return false;
++    }
++    if (!esp32_i2s_desc_read(c->next, w) ||
++        (FIELD_EX32(s->regs[R_I2S_LC_CONF], I2S_LC_CONF, CHECK_OWNER) && !(w[0] >> 31))) {
++        esp32_i2s_raise(s, ESP32_I2S_INT_IN_DSCR_ERR);
++        c->link = false;
++        return false;
++    }
++    c->desc = c->next;
++    c->buf = w[1];
++    c->len = w[0] & 0xFFFu;
++    c->next = w[2];
++    c->off = 0;
++    c->have_desc = true;
++    s->regs[R_I2S_INLINK_DSCR] = c->desc;
++    s->regs[R_I2S_INLINK_DSCR_BF0] = c->next;
++    s->regs[R_I2S_INLINK_DSCR_BF1] = c->buf;
++    return true;
++}
++
++/* Hand a filled inlink descriptor back to the CPU: length, eof, owner 0. */
++static void esp32_i2s_rx_close(Esp32I2sChan *c, bool eof)
++{
++    uint32_t w[3];
++    if (!esp32_i2s_desc_read(c->desc, w)) return;
++    esp32_i2s_desc_word0(c->desc, (w[0] & 0xFFFu) | ((c->off & 0xFFFu) << 12) | (eof ? BIT(30) : 0));
++    c->have_desc = false;
++}
++
++/* The bytes of RX entries [first, first + n) at descriptor offset `off` (mode 1: two 16-bit entries per
++ * word, the first in the upper half -- the I2S moves the most significant half-word first). False while
++ * an ADC sample has not arrived. */
++static bool esp32_i2s_rx_data(Esp32I2sState *s, uint64_t first, uint64_t n, uint32_t off, uint8_t *out, uint32_t bytes)
++{
++    const unsigned eb = esp32_i2s_entry_bytes(s, false);
++    if (!s->adc_on || !esp32_i2s_adc_mode(s)) {
++        memset(out, esp32_i2s_rx_fill(s), bytes);
++        return true;
++    }
++    for (uint64_t k = 0; k < n; ++k) {
++        uint16_t v;
++        if (!esp32_i2s_adc_sample(s, first + k, &v)) return false;
++        const uint32_t at = (uint32_t)(k * eb);
++        if (eb == 2) {
++            const uint32_t pos = off + at;               /* this entry's place in the descriptor */
++            const uint32_t slot = (pos & ~3u) + ((pos & 2) ? 0 : 2) - off;
++            if (slot + 2 <= bytes) stw_le_p(out + slot, v);
++        } else if (at + 4 <= bytes) {
++            stl_le_p(out + at, ((uint32_t)v << 16) | v);
++        }
++    }
++    return true;
++}
++
++/* Entries received up to `now` go to the inlink buffers (DMA) or the RX FIFO (CPU mode). From the RX timer
++ * (`timer`) a descriptor whose ADC samples have not come yet holds the vCPUs here until they do. */
++static void esp32_i2s_rx_run_ex(Esp32I2sState *s, uint64_t now, bool timer)
++{
++    Esp32I2sChan *c = &s->rx;
++    const uint64_t received = esp32_i2s_index(c, now);
++    const unsigned eb = esp32_i2s_entry_bytes(s, false);
++    const bool dma = FIELD_EX32(s->regs[R_I2S_FIFO_CONF], I2S_FIFO_CONF, DSCR_EN);
++    const uint8_t fill = esp32_i2s_rx_fill(s);
++    bool waiting = false;
++    while (c->done < received) {
++        if (!dma) {
++            if (c->fifo_cnt < ESP32_I2S_FIFO_DEPTH) {
++                c->fifo[(c->fifo_rd + c->fifo_cnt) % ESP32_I2S_FIFO_DEPTH] = fill ? 0xFFFFFFFFu : 0;
++                c->fifo_cnt++;
++                if (c->fifo_cnt > FIELD_EX32(s->regs[R_I2S_FIFO_CONF], I2S_FIFO_CONF, RX_DATA_NUM)) {
++                    esp32_i2s_raise(s, ESP32_I2S_INT_RX_TAKE_DATA);
++                }
++                if (c->fifo_cnt == ESP32_I2S_FIFO_DEPTH) esp32_i2s_raise(s, ESP32_I2S_INT_RX_WFULL);
++            }
++            c->done++;
++            continue;
++        }
++        if (!c->link || (!c->have_desc && !esp32_i2s_rx_fetch(s))) {
++            c->done = received; /* nowhere to go: the FIFO overflows */
++            break;
++        }
++        /* Up to the descriptor end or the next EOF, whichever comes first. */
++        const uint32_t eof_num = MAX(s->regs[R_I2S_RXEOF_NUM], 1u);
++        const uint64_t to_full = (c->len - c->off + eb - 1) / eb;
++        const uint64_t to_eof = ((uint64_t)eof_num * 4 - MIN(c->eof_bytes, eof_num * 4) + eb - 1) / eb;
++        uint64_t n = MIN(MIN(to_full, to_eof), received - c->done);
++        if (n == 0) n = 1;
++        uint32_t bytes = MIN((uint32_t)(n * eb), c->len - c->off);
++        uint8_t chunk[256];
++        if (bytes > sizeof(chunk)) {
++            bytes = sizeof(chunk);
++            n = bytes / eb;
++        }
++        if (eb == 2 && ((c->off + bytes) & 3) && c->off + bytes < c->len) {
++            /* mode 1: the two entries of a word go together */
++            if (n == 1) break;
++            bytes -= 2;
++            n--;
++        }
++        if (!esp32_i2s_rx_data(s, c->done, n, c->off, chunk, bytes)) {
++            if (timer) vnext_b_lockstep_hold_now();
++            waiting = true;
++            break;
++        }
++        address_space_write(&address_space_memory, c->buf + c->off, MEMTXATTRS_UNSPECIFIED, chunk, bytes);
++        c->off += bytes;
++        c->done += n;
++        c->eof_bytes += bytes;
++        if (c->eof_bytes >= eof_num * 4) {
++            c->eof_bytes = 0;
++            s->regs[R_I2S_IN_EOF_DES_ADDR] = c->desc;
++            esp32_i2s_rx_close(c, true);
++            esp32_i2s_raise(s, ESP32_I2S_INT_IN_SUC_EOF | ESP32_I2S_INT_IN_DONE);
++        } else if (c->off >= c->len) {
++            esp32_i2s_rx_close(c, false);
++            esp32_i2s_raise(s, ESP32_I2S_INT_IN_DONE);
++        }
++    }
++    esp32_i2s_update_irq(s);
++    esp32_i2s_rx_schedule(s);
++    if (waiting) timer_mod_ns(&c->timer, now + 1000); /* the Core's samples: try again in 1 us */
++}
++
++static void esp32_i2s_rx_run(Esp32I2sState *s, uint64_t now)
++{
++    esp32_i2s_rx_run_ex(s, now, false);
++}
++
++static void esp32_i2s_rx_schedule(Esp32I2sState *s)
++{
++    Esp32I2sChan *c = &s->rx;
++    uint64_t due = UINT64_MAX;
++    if (c->clocked) {
++        if (FIELD_EX32(s->regs[R_I2S_FIFO_CONF], I2S_FIFO_CONF, DSCR_EN)) {
++            if (c->link) {
++                const unsigned eb = esp32_i2s_entry_bytes(s, false);
++                const uint32_t eof_num = MAX(s->regs[R_I2S_RXEOF_NUM], 1u);
++                uint64_t n = ((uint64_t)eof_num * 4 - MIN(c->eof_bytes, eof_num * 4) + eb - 1) / eb;
++                if (c->have_desc) n = MIN(n, (c->len - c->off + eb - 1) / eb);
++                due = esp32_i2s_time(c, c->done + MAX(n, 1u));
++            }
++        } else {
++            /* the next RX_TAKE_DATA / RX_WFULL */
++            const uint32_t thr = FIELD_EX32(s->regs[R_I2S_FIFO_CONF], I2S_FIFO_CONF, RX_DATA_NUM);
++            if (c->fifo_cnt < ESP32_I2S_FIFO_DEPTH) {
++                const uint64_t need = c->fifo_cnt <= thr ? thr + 1 - c->fifo_cnt : ESP32_I2S_FIFO_DEPTH - c->fifo_cnt;
++                due = esp32_i2s_time(c, c->done + need);
++            }
++        }
++    }
++    if (due == UINT64_MAX) timer_del(&c->timer);
++    else timer_mod_ns(&c->timer, due);
++}
++
++static void esp32_i2s_rx_timer_cb(void *opaque)
++{
++    Esp32I2sState *s = ESP32_I2S(opaque);
++    const uint64_t now = getQemu_ns();
++    if (!esp32_i2s_adc_send(s)) {
++        timer_mod_ns(&s->rx.timer, now + 2000); /* the lane is full: the configuration goes in 2 us */
++        return;
++    }
++    esp32_i2s_rx_run_ex(s, now, true);
++}
++
++static void esp32_i2s_rx_reset_dma(Esp32I2sChan *c)
++{
++    c->link = false;
++    c->have_desc = false;
++    c->eof_bytes = 0;
++}
++
++/* ---- registers ---- */
++
++static void esp32_i2s_reclock(Esp32I2sState *s, uint64_t now)
++{
++    esp32_i2s_tx_run(s, now);
++    esp32_i2s_rx_run(s, now);
++    esp32_i2s_rebase(s, &s->tx, true, now);
++    esp32_i2s_rebase(s, &s->rx, false, now);
++    s->rx.done = esp32_i2s_index(&s->rx, now);
++    esp32_i2s_adc_restart(s);
++    esp32_i2s_tx_schedule(s);
++    esp32_i2s_rx_schedule(s);
++    if (s->adc_pending) timer_mod_ns(&s->rx.timer, now);
++}
++
++static uint64_t esp32_i2s_read(void *opaque, hwaddr addr, unsigned int size)
++{
++    Esp32I2sState *s = ESP32_I2S(opaque);
++    const uint64_t now = getQemu_ns();
++    if (addr / 4 >= ESP32_I2S_REGS) return 0;
++    switch (addr) {
++    case A_I2S_FIFO_RD: {
++        esp32_i2s_rx_run(s, now);
++        Esp32I2sChan *c = &s->rx;
++        uint32_t v = 0;
++        if (c->fifo_cnt) {
++            v = c->fifo[c->fifo_rd];
++            c->fifo_rd = (c->fifo_rd + 1) % ESP32_I2S_FIFO_DEPTH;
++            c->fifo_cnt--;
++            if (!c->fifo_cnt) esp32_i2s_raise(s, ESP32_I2S_INT_RX_REMPTY);
++            esp32_i2s_update_irq(s);
++            esp32_i2s_rx_schedule(s);
++        }
++        return v;
++    }
++    case A_I2S_INT_RAW:
++    case A_I2S_INT_ST:
++        esp32_i2s_tx_run(s, now);
++        esp32_i2s_rx_run(s, now);
++        return s->regs[addr / 4];
++    case A_I2S_STATE: {
++        esp32_i2s_tx_run(s, now);
++        Esp32I2sChan *c = &s->tx;
++        const bool busy = c->clocked && (c->inflight_cnt || c->fifo_cnt || c->link);
++        return busy ? 0 : 1; /* TX_IDLE; the FIFO resets finish at once */
++    }
++    case A_I2S_DATE:
++        return 0x1604201;
++    default:
++        return s->regs[addr / 4];
++    }
++}
++
++static void esp32_i2s_write(void *opaque, hwaddr addr, uint64_t value, unsigned int size)
++{
++    Esp32I2sState *s = ESP32_I2S(opaque);
++    const uint64_t now = getQemu_ns();
++    const uint32_t v = value;
++    if (addr / 4 >= ESP32_I2S_REGS) return;
++    switch (addr) {
++    case A_I2S_FIFO_WR: {
++        Esp32I2sChan *c = &s->tx;
++        esp32_i2s_tx_fifo_pop(s, now);
++        const unsigned n = esp32_i2s_fifo_mod(s, true) == 1 ? 2 : 1;
++        for (unsigned i = 0; i < n; ++i) {
++            if (c->fifo_cnt >= ESP32_I2S_FIFO_DEPTH) break;
++            if (c->clocked && !c->fifo_cnt && c->fifo_popped <= esp32_i2s_index(c, now)) {
++                c->base = c->fifo_popped; /* the FIFO ran dry: the new data goes out from now */
++                c->t0 = now;
++            }
++            c->fifo[(c->fifo_rd + c->fifo_cnt) % ESP32_I2S_FIFO_DEPTH] = v;
++            c->fifo_cnt++;
++        }
++        if (c->fifo_cnt == ESP32_I2S_FIFO_DEPTH) esp32_i2s_raise(s, ESP32_I2S_INT_TX_WFULL);
++        esp32_i2s_update_irq(s);
++        esp32_i2s_tx_schedule(s);
++        return;
++    }
++    case A_I2S_CONF: {
++        esp32_i2s_tx_run(s, now);
++        esp32_i2s_rx_run(s, now);
++        s->regs[R_I2S_CONF] = v;
++        if (v & (R_I2S_CONF_TX_RESET_MASK | R_I2S_CONF_TX_FIFO_RESET_MASK)) {
++            /* what the FIFO held never goes out */
++            if (s->unit == 0 && s->tx.pushed > esp32_i2s_index(&s->tx, now)) esp32_i2s_dac_queue(s, now, 0, true);
++            s->tx.fifo_rd = s->tx.fifo_cnt = 0;
++            s->tx.inflight_rd = s->tx.inflight_cnt = 0;
++            s->tx.pushed = s->tx.fifo_popped = esp32_i2s_index(&s->tx, now);
++        }
++        if (v & (R_I2S_CONF_RX_RESET_MASK | R_I2S_CONF_RX_FIFO_RESET_MASK)) {
++            s->rx.fifo_rd = s->rx.fifo_cnt = 0;
++        }
++        const bool tx_on = esp32_i2s_clock_on(s, true), rx_on = esp32_i2s_clock_on(s, false);
++        if (tx_on != s->tx.clocked) {
++            if (!tx_on && s->unit == 0) esp32_i2s_dac_queue(s, now, 0, true); /* the shifter stops here */
++            esp32_i2s_rebase(s, &s->tx, true, now);
++            s->tx.clocked = tx_on;
++            /* the shifter starts with the oldest entry the FIFO holds (none sent while it ran dry) */
++            if (tx_on) s->tx.base = FIELD_EX32(s->regs[R_I2S_FIFO_CONF], I2S_FIFO_CONF, DSCR_EN)
++                                    ? MIN(s->tx.base, s->tx.pushed) : s->tx.fifo_popped;
++        }
++        if (rx_on != s->rx.clocked) {
++            esp32_i2s_rebase(s, &s->rx, false, now);
++            s->rx.clocked = rx_on;
++            s->rx.done = s->rx.base;
++            esp32_i2s_adc_restart(s);
++            if (s->adc_pending) timer_mod_ns(&s->rx.timer, now);
++        }
++        esp32_i2s_tx_run(s, now);
++        esp32_i2s_rx_run(s, now);
++        return;
++    }
++    case A_I2S_INT_RAW:
++    case A_I2S_INT_ST:
++        return;
++    case A_I2S_INT_ENA:
++        s->regs[R_I2S_INT_ENA] = v;
++        esp32_i2s_update_irq(s);
++        return;
++    case A_I2S_INT_CLR:
++        esp32_i2s_tx_run(s, now);
++        esp32_i2s_rx_run(s, now);
++        s->regs[R_I2S_INT_RAW] &= ~v;
++        esp32_i2s_update_irq(s);
++        return;
++    case A_I2S_OUT_LINK:
++        esp32_i2s_tx_run(s, now);
++        s->regs[R_I2S_OUT_LINK] = v & R_I2S_OUT_LINK_ADDR_MASK; /* START/STOP/RESTART act once */
++        if (FIELD_EX32(v, I2S_OUT_LINK, STOP)) s->tx.link = false;
++        if (FIELD_EX32(v, I2S_OUT_LINK, START)) {
++            s->tx.next = ESP32_I2S_DMA_BUS | FIELD_EX32(v, I2S_OUT_LINK, ADDR);
++            s->tx.have_desc = false;
++            s->tx.chain_end = false;
++            s->tx.link = true;
++        }
++        if (FIELD_EX32(v, I2S_OUT_LINK, RESTART) && !s->tx.link) s->tx.link = s->tx.next != 0;
++        esp32_i2s_tx_run(s, now);
++        return;
++    case A_I2S_IN_LINK:
++        esp32_i2s_rx_run(s, now);
++        s->regs[R_I2S_IN_LINK] = v & R_I2S_OUT_LINK_ADDR_MASK;
++        if (FIELD_EX32(v, I2S_OUT_LINK, STOP)) s->rx.link = false;
++        if (FIELD_EX32(v, I2S_OUT_LINK, START)) {
++            s->rx.next = ESP32_I2S_DMA_BUS | FIELD_EX32(v, I2S_OUT_LINK, ADDR);
++            s->rx.have_desc = false;
++            s->rx.link = true;
++        }
++        if (FIELD_EX32(v, I2S_OUT_LINK, RESTART) && !s->rx.link) s->rx.link = s->rx.next != 0;
++        esp32_i2s_rx_run(s, now);
++        return;
++    case A_I2S_LC_CONF:
++        esp32_i2s_tx_run(s, now);
++        esp32_i2s_rx_run(s, now);
++        s->regs[R_I2S_LC_CONF] = v;
++        if (FIELD_EX32(v, I2S_LC_CONF, OUT_RST)) esp32_i2s_tx_reset_dma(&s->tx);
++        if (FIELD_EX32(v, I2S_LC_CONF, IN_RST)) esp32_i2s_rx_reset_dma(&s->rx);
++        esp32_i2s_tx_schedule(s);
++        esp32_i2s_rx_schedule(s);
++        return;
++    case A_I2S_FIFO_CONF:
++    case A_I2S_CONF2:
++    case A_I2S_CLKM_CONF:
++    case A_I2S_SAMPLE_RATE_CONF:
++        if (s->regs[addr / 4] != v) {
++            esp32_i2s_tx_run(s, now);
++            esp32_i2s_rx_run(s, now);
++            s->regs[addr / 4] = v;
++            esp32_i2s_reclock(s, now);
++        }
++        return;
++    case A_I2S_OUT_EOF_DES_ADDR:
++    case A_I2S_IN_EOF_DES_ADDR:
++    case A_I2S_OUT_EOF_BFR_DES_ADDR:
++    case A_I2S_INLINK_DSCR:
++    case A_I2S_INLINK_DSCR_BF0:
++    case A_I2S_INLINK_DSCR_BF1:
++    case A_I2S_OUTLINK_DSCR:
++    case A_I2S_OUTLINK_DSCR_BF0:
++    case A_I2S_OUTLINK_DSCR_BF1:
++    case A_I2S_STATE:
++    case A_I2S_DATE:
++        return; /* read-only */
++    default:
++        s->regs[addr / 4] = v;
++        return;
++    }
++}
++
++static const MemoryRegionOps esp32_i2s_ops = {
++    .read = esp32_i2s_read,
++    .write = esp32_i2s_write,
++    .endianness = DEVICE_LITTLE_ENDIAN,
++};
++
++static void esp32_i2s_chan_reset(Esp32I2sChan *c)
++{
++    timer_del(&c->timer);
++    c->clocked = c->link = c->have_desc = c->desc_eof = c->chain_end = false;
++    c->t0 = c->base = 0;
++    c->desc = c->buf = c->len = c->next = c->off = 0;
++    c->pushed = c->done = c->fifo_popped = 0;
++    c->eof_bytes = 0;
++    c->inflight_rd = c->inflight_cnt = 0;
++    c->fifo_rd = c->fifo_cnt = 0;
++}
++
++static void esp32_i2s_reset(DeviceState *dev)
++{
++    Esp32I2sState *s = ESP32_I2S(dev);
++    memset(s->regs, 0, sizeof(s->regs));
++    /* ESP32 TRM, I2S register reset values */
++    s->regs[R_I2S_CONF] = 0x0000F000;
++    s->regs[R_I2S_FIFO_CONF] = 0x00001820;
++    s->regs[R_I2S_RXEOF_NUM] = 64;
++    s->regs[R_I2S_LC_CONF] = 0x00000100;
++    s->regs[R_I2S_LC_HUNG_CONF] = 0x00000810;
++    s->regs[R_I2S_CONF1] = 0x00000089;
++    s->regs[R_I2S_PD_CONF] = 0x0000000A;
++    s->regs[R_I2S_CONF2] = 0x00000020;
++    s->regs[R_I2S_CLKM_CONF] = 0x00000004;
++    s->regs[R_I2S_SAMPLE_RATE_CONF] = 0x00410186;
++    s->regs[R_I2S_PDM_CONF] = 0x0155002C;
++    s->regs[R_I2S_PDM_FREQ_CONF] = 0x000F01B9;
++    esp32_i2s_chan_reset(&s->tx);
++    esp32_i2s_chan_reset(&s->rx);
++    s->dac_rd = s->dac_cnt = 0;
++    s->dac_blocked = false;
++    s->adc_want = s->adc_pending = false;
++    s->adc_recv = s->adc_base = 0;
++    if (s->adc_on) { /* the Core stops sampling: from the timer, which a reset cannot do now */
++        s->adc_pending = true;
++        s->adc_sent = 0;
++        timer_mod_ns(&s->rx.timer, getQemu_ns());
++    }
++    esp32_i2s_entry_period(s, true, &s->tx.per_num, &s->tx.per_den);
++    esp32_i2s_entry_period(s, false, &s->rx.per_num, &s->rx.per_den);
++    qemu_set_irq(s->irq, 0);
++}
++
++static void esp32_i2s_init(Object *obj)
++{
++    Esp32I2sState *s = ESP32_I2S(obj);
++    SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
++    memory_region_init_io(&s->iomem, obj, &esp32_i2s_ops, s, TYPE_ESP32_I2S, 0x1000);
++    sysbus_init_mmio(sbd, &s->iomem);
++    sysbus_init_irq(sbd, &s->irq);
++    timer_init_ns(&s->tx.timer, QEMU_CLOCK_VIRTUAL, esp32_i2s_tx_timer_cb, s);
++    timer_init_ns(&s->rx.timer, QEMU_CLOCK_VIRTUAL, esp32_i2s_rx_timer_cb, s);
++}
++
++static void esp32_i2s_realize(DeviceState *dev, Error **errp)
++{
++    Esp32I2sState *s = ESP32_I2S(dev);
++    if (s->unit == 0) esp32_i2s_unit0 = s;
++}
++
++static Property esp32_i2s_properties[] = {
++    DEFINE_PROP_UINT32("unit", Esp32I2sState, unit, 0),
++    DEFINE_PROP_END_OF_LIST(),
++};
++
++static void esp32_i2s_class_init(ObjectClass *klass, void *data)
++{
++    DeviceClass *dc = DEVICE_CLASS(klass);
++    dc->reset = esp32_i2s_reset;
++    dc->realize = esp32_i2s_realize;
++    device_class_set_props(dc, esp32_i2s_properties);
++}
++
++static const TypeInfo esp32_i2s_info = {
++    .name = TYPE_ESP32_I2S,
++    .parent = TYPE_SYS_BUS_DEVICE,
++    .instance_size = sizeof(Esp32I2sState),
++    .instance_init = esp32_i2s_init,
++    .class_init = esp32_i2s_class_init,
++};
++
++static void esp32_i2s_register_types(void)
++{
++    type_register_static(&esp32_i2s_info);
++}
++
++type_init(esp32_i2s_register_types)
+diff --git a/hw/misc/esp32_sens.c b/hw/misc/esp32_sens.c
+index 1d5308d..9075d80 100644
+--- a/hw/misc/esp32_sens.c
++++ b/hw/misc/esp32_sens.c
+@@ -103,6 +103,17 @@ static double esp32_adc_ideal_code(int unit, int atten, double mv)
+     return lo;
+ }
+ 
++/* A conversion of `mv` on ADC `unit` at `atten` and `width` bits (9..12): the floor of the ideal code at
++ * that width; `inv` as SARx_DATA_INV / APB_SARADC_SARx_INV (the SAR's native output is inverted). */
++uint32_t esp32_sens_adc_code(int unit, int atten, int width, double mv, bool inv)
++{
++    const uint32_t max = (1u << width) - 1u;
++    uint32_t raw = (uint32_t)(esp32_adc_ideal_code(unit, atten, mv) / (double)(1u << (12 - width)));
++    if (raw > max) raw = max;
++    if (!inv) raw = ~raw & max;
++    return raw;
++}
++
+ /* MEAS_START1/2 read through vNext-B: the conversion result of the channel selected by EN_PAD, at this
+  * very instant (the barrier syncs the Core first). A successive-approximation conversion of `width`
+  * bits (SARx_BIT_WIDTH, 9..12) keeps the code's top bits -- the floor of the ideal value at that width,
+@@ -257,6 +268,11 @@ static void touch_timer_cb(void *opaque)
+     }
+ }
+ 
++bool esp32_sens_dac_digital(void)
++{
++    return esp32_sens_device && (esp32_sens_device->regs[0x98 / 4] & BIT(22));
++}
++
+ void esp32_sens_touch_fsm_update(void)
+ {
+     Esp32SensState *s = esp32_sens_device;
+@@ -338,6 +354,9 @@ static void esp32_sens_write(void *opaque, hwaddr addr, uint64_t value,
+         esp32_sens_touch_fsm_update();
+         return;
+     }
++    /* SAR_DAC_CTRL1.DAC_DIG_FORCE: the DACs take I2S0's samples (built-in DAC mode, hw/misc/esp32_i2s.c) instead
++     * of PDAC; the Core drives the pads (adapter RtcIo module). First: it may replay this store. */
++    if (addr == 0x98 && ((s->regs[0x98 / 4] ^ (uint32_t)value) & BIT(22))) writeReg(0x3FF484F4, (value >> 22) & 1);
+     if (addr < sizeof(s->regs)) s->regs[addr / 4] = (uint32_t)value;
+     switch(addr) {
+     case 0x54://SENS_MEAS1_START_SAR
+diff --git a/hw/misc/meson.build b/hw/misc/meson.build
+index b909ff5..920e524 100644
+--- a/hw/misc/meson.build
++++ b/hw/misc/meson.build
+@@ -142,6 +142,8 @@ system_ss.add(when: 'CONFIG_XTENSA_ESP32', if_true: files(
+   'esp32_mcpwm.c',
+   'esp32_twai.c',
+   'esp32_rtcio.c',
++  'esp32_i2s.c',
++  'esp32_apbctrl.c',
+   'esp32_flash_enc.c',
+   'ssi_psram.c',
+   'esp32_sens.c',
+diff --git a/hw/nvram/esp32_efuse.c b/hw/nvram/esp32_efuse.c
+index fa9d8d7..8b03933 100644
+--- a/hw/nvram/esp32_efuse.c
++++ b/hw/nvram/esp32_efuse.c
+@@ -182,6 +182,15 @@ static void esp32_efuse_read_op(Esp32EfuseState *s)
+     if ((s->efuse_rd.blk0[4] & 0xffu) == 0) {
+         s->efuse_rd.blk0[4] |= 80u;
+     }
++    /* Without an eFuse image, the factory fuses of the chip on a DevKitC (ESP32-D0WD-V3, the ECO3 that
++     * APB_CTRL_DATE already reports): CHIP_VER_REV1 (BLK0 word 3 bit 15), CHIP_VER_REV2 (word 5 bit 20) and
++     * the D0WD package (word 3 bits 11:9 = 1). Blank, ESP-IDF took the chip for revision 0 and ran its
++     * workarounds, e.g. the APLL without its fractional part (an I2S with use_apll 0.35% slow). */
++    if (s->blk == NULL) {
++        s->efuse_rd.blk0[3] |= BIT(15);
++        s->efuse_rd.blk0[5] |= BIT(20);
++        if (((s->efuse_rd.blk0[3] >> 9) & 7u) == 0 && !(s->efuse_rd.blk0[3] & BIT(2))) s->efuse_rd.blk0[3] |= 1u << 9;
++    }
+ 
+     memset(&s->efuse_rd_dis, 0, sizeof(s->efuse_rd_dis));
+     memset(&s->efuse_wr_dis, 0, sizeof(s->efuse_wr_dis));
+diff --git a/hw/xtensa/esp32.c b/hw/xtensa/esp32.c
+index 76aa3ca..3470885 100644
+--- a/hw/xtensa/esp32.c
++++ b/hw/xtensa/esp32.c
+@@ -330,6 +330,9 @@ static void esp32_soc_reset(DeviceState *dev)
+         device_cold_reset( DEVICE(&s->mcpwm[0]) );
+         device_cold_reset( DEVICE(&s->mcpwm[1]) );
+         device_cold_reset( DEVICE(&s->twai) );
++        device_cold_reset( DEVICE(&s->i2s[0]) );
++        device_cold_reset( DEVICE(&s->i2s[1]) );
++        device_cold_reset( DEVICE(&s->apbctrl) );
+         /* The digital peripherals the Core models at the pads (GPIO/IO_MUX, UART, I2C, SPI, LEDC, RMT,
+          * PCNT, MCPWM, TWAI engines) are reset with these: a software or watchdog reset left a PWM, a
+          * counter or a CAN transmission running in the Core while the CPU booted again. A private address
+@@ -367,6 +370,8 @@ static void esp32_perip_reset(void *opaque, int n, int level)
+         break;
+     case 1: device_cold_reset(DEVICE(&s->spi[0])); device_cold_reset(DEVICE(&s->spi[1])); break;
+     case 2: device_cold_reset(DEVICE(&s->uart[0])); break;
++    case 4: device_cold_reset(DEVICE(&s->i2s[0])); break;
++    case 21: device_cold_reset(DEVICE(&s->i2s[1])); break;
+     case 5: device_cold_reset(DEVICE(&s->uart[1])); break;
+     case 23: device_cold_reset(DEVICE(&s->uart[2])); break;
+     case 6: device_cold_reset(DEVICE(&s->spi[2])); break;
+@@ -747,6 +752,14 @@ static void esp32_soc_realize( DeviceState *dev, Error **errp )
+     qdev_realize( DEVICE(&s->twai), &s->periph_bus, &error_fatal);
+     esp32_soc_add_periph_device( sys_mem, &s->twai, DR_REG_CAN_BASE);
+ 
++    /* I2S0/I2S1 were unimplemented stubs (i2s_write()/i2s_read() waited forever for the DMA). */
++    for (int i = 0; i < 2; ++i) {
++        const hwaddr i2s_base[] = { DR_REG_I2S_BASE, DR_REG_I2S1_BASE };
++        qdev_prop_set_uint32( DEVICE(&s->i2s[i]), "unit", i );
++        qdev_realize( DEVICE(&s->i2s[i]), &s->periph_bus, &error_fatal);
++        esp32_soc_add_periph_device( sys_mem, &s->i2s[i], i2s_base[i]);
++    }
++
+     qdev_realize( DEVICE(&s->rtc_cntl), &s->rtc_bus, &error_fatal);
+     esp32_soc_add_periph_device( sys_mem, &s->rtc_cntl, DR_REG_RTCCNTL_BASE);
+     /* RTC_CNTL interrupt (RTC_CNTL_INT_*: sleep, timer, touch, brownout) was not wired. */
+@@ -774,6 +787,8 @@ static void esp32_soc_realize( DeviceState *dev, Error **errp )
+     sysbus_connect_irq( SYS_BUS_DEVICE(&s->mcpwm[0]), 0, qdev_get_gpio_in(intmatrix_dev, ETS_PWM0_INTR_SOURCE));
+     sysbus_connect_irq( SYS_BUS_DEVICE(&s->mcpwm[1]), 0, qdev_get_gpio_in(intmatrix_dev, ETS_PWM1_INTR_SOURCE));
+     sysbus_connect_irq( SYS_BUS_DEVICE(&s->twai), 0, qdev_get_gpio_in(intmatrix_dev, ETS_CAN_INTR_SOURCE));
++    sysbus_connect_irq( SYS_BUS_DEVICE(&s->i2s[0]), 0, qdev_get_gpio_in(intmatrix_dev, ETS_I2S0_INTR_SOURCE));
++    sysbus_connect_irq( SYS_BUS_DEVICE(&s->i2s[1]), 0, qdev_get_gpio_in(intmatrix_dev, ETS_I2S1_INTR_SOURCE));
+ 
+     for (int i = 0; i < ESP32_UART_COUNT; ++i)
+     {
+@@ -886,9 +901,6 @@ static void esp32_soc_realize( DeviceState *dev, Error **errp )
+     esp32_soc_add_unimp_device( sys_mem, "esp32.hinf"         , DR_REG_HINF_BASE    , 0x1000, 0);
+     esp32_soc_add_unimp_device( sys_mem, "esp32.slc"          , DR_REG_SLC_BASE     , 0x1000, 0);
+     esp32_soc_add_unimp_device( sys_mem, "esp32.slchost"      , DR_REG_SLCHOST_BASE , 0x1000, 0);
+-    esp32_soc_add_unimp_device( sys_mem, "esp32.apbctrl"      , DR_REG_APB_CTRL_BASE, 0x1000, 0);
+-    esp32_soc_add_unimp_device( sys_mem, "esp32.i2s0"         , DR_REG_I2S_BASE     , 0x1000, 0);
+-    esp32_soc_add_unimp_device( sys_mem, "esp32.i2s1"         , DR_REG_I2S1_BASE    , 0x1000, 0);
+     esp32_soc_add_unimp_device( sys_mem, "esp32.fe2"          , DR_REG_FE2_BASE     , 0x1000,-1);
+     esp32_soc_add_unimp_device( sys_mem, "esp32.chipv7_phy"   , DR_REG_PHY_BASE     , 0x1000,-1);
+     esp32_soc_add_unimp_device( sys_mem, "esp32.chipv7_phyb"  , DR_REG_WDEV_BASE    , 0x1000,0);
+@@ -896,12 +908,9 @@ static void esp32_soc_realize( DeviceState *dev, Error **errp )
+     esp32_soc_add_unimp_device( sys_mem, "esp32.unknown_wifi1", DR_REG_BB_BASE      , 0x1000,-1);
+     esp32_soc_add_unimp_device( sys_mem, "esp32.bluetooth"    , DR_REG_BT_BASE      , 0x1000,-1);
+ 
+-    const hwaddr apb_ctrl_date_reg = DR_REG_APB_CTRL_BASE + 0x7c;
+-    MemoryRegion *apbctrl_mem = g_new(MemoryRegion, 1);
+-    memory_region_init_ram( apbctrl_mem, NULL, "esp32.apbctrl_date_reg", 4 /* bytes */, &error_fatal);
+-    memory_region_add_subregion( sys_mem, apb_ctrl_date_reg, apbctrl_mem);
+-    uint32_t apb_ctrl_date_reg_val = 0x16042000 | 0x80000000;  /* MSB indicates ECO3 silicon revision */
+-    cpu_physical_memory_write( apb_ctrl_date_reg, &apb_ctrl_date_reg_val, 4 );
++    /* APB_CTRL (SYSCON) was an unimplemented stub with only DATE (the ECO3 marker, still there). */
++    qdev_realize( DEVICE(&s->apbctrl), &s->periph_bus, &error_fatal);
++    esp32_soc_add_periph_device( sys_mem, &s->apbctrl, DR_REG_APB_CTRL_BASE);
+ 
+     qemu_register_reset( (QEMUResetHandler*) esp32_soc_reset, dev );
+ }
+@@ -981,6 +990,9 @@ static void esp32_soc_init(Object *obj)
+     object_initialize_child( obj, "mcpwm0", &s->mcpwm[0], TYPE_ESP32_MCPWM);
+     object_initialize_child( obj, "mcpwm1", &s->mcpwm[1], TYPE_ESP32_MCPWM);
+     object_initialize_child( obj, "twai", &s->twai, TYPE_ESP32_TWAI);
++    object_initialize_child( obj, "apbctrl", &s->apbctrl, TYPE_ESP32_APBCTRL);
++    object_initialize_child( obj, "i2s0", &s->i2s[0], TYPE_ESP32_I2S);
++    object_initialize_child( obj, "i2s1", &s->i2s[1], TYPE_ESP32_I2S);
+     object_initialize_child( obj, "rtcio", &s->rtcio, TYPE_ESP32_RTCIO);
+     object_initialize_child( obj, "rsa" , &s->rsa , TYPE_ESP32_RSA);
+     object_initialize_child( obj, "sens", &s->sens, TYPE_ESP32_SENS);
+diff --git a/include/hw/gpio/esp32_gpio.h b/include/hw/gpio/esp32_gpio.h
+index e1421db..44b2bf7 100644
+--- a/include/hw/gpio/esp32_gpio.h
++++ b/include/hw/gpio/esp32_gpio.h
+@@ -52,3 +52,5 @@ void esp32_gpio_vnext_input(uint64_t address, uint64_t value);
+ bool esp32_gpio_vnext_irq_armed(void);
+ /* Light sleep: some pin with WAKEUP_ENABLE is at its INT_TYPE level (RTC_CNTL GPIO wakeup). */
+ bool esp32_gpio_wakeup_pending(void);
++/* The level peripheral input signal `signal` (gpio_sig_map.h) gets through the GPIO matrix. */
++bool esp32_gpio_in_signal_level(unsigned signal);
+diff --git a/include/hw/i2c/esp32_i2c.h b/include/hw/i2c/esp32_i2c.h
+index d90a02b..c327391 100644
+--- a/include/hw/i2c/esp32_i2c.h
++++ b/include/hw/i2c/esp32_i2c.h
+@@ -68,6 +68,8 @@ typedef struct Esp32I2CState {
+     uint32_t sr_reg;
+ 
+     uint32_t ctr_reg;
++    uint32_t slave_addr_reg;
++    uint32_t fifo_conf_reg;
+     uint32_t timeout_reg;
+     uint32_t int_ena_reg;
+     uint32_t int_raw_reg;
+@@ -100,6 +102,10 @@ void esp32_i2c_vnext_complete(uint32_t bus, uint32_t status, uint32_t first_nack
+  * instances with vnextContinuationBacklogged set; a no-op otherwise. Never touches a CPU (this
+  * continuation only ever runs with current_cpu==NULL in the first place). */
+ void esp32_i2c_vnext_credit_available(void);
++/* Slave mode (CTR.MS_MODE 0): what the Core's slave saw on the bus (vNext-B C2A at the I2C base + 0xF4):
++ * [7:0] byte, [11:8] event (1 byte received, 2 addressed, 3 STOP, 4 a TX FIFO byte went out), bit 12 the
++ * address byte's R/W, [15:13] the main state machine's last state at the STOP. */
++void esp32_i2c_vnext_slave(uint32_t bus, uint64_t value);
+ 
+ 
+ REG32(I2C_CTR, 0x04);
+@@ -113,7 +119,10 @@ FIELD(I2C_STATUS, TXFIFO_CNT, 18, 6);
+ 
+ REG32(I2C_TIMEOUT, 0x0c);
+ 
++REG32(I2C_SLAVE_ADDR, 0x10);
+ REG32(I2C_FIFO_CONF, 0x18);
++FIELD(I2C_FIFO_CONF, RXFIFO_FULL_THRHD, 0, 5);
++FIELD(I2C_FIFO_CONF, TXFIFO_EMPTY_THRHD, 5, 5);
+ FIELD(I2C_FIFO_CONF, NONFIFO_EN, 10, 1);
+ FIELD(I2C_FIFO_CONF, RX_FIFO_RST, 12, 1);
+ FIELD(I2C_FIFO_CONF, TX_FIFO_RST, 13, 1);
+diff --git a/include/hw/misc/esp32_ana.h b/include/hw/misc/esp32_ana.h
+index 47d4a6a..82f47ab 100644
+--- a/include/hw/misc/esp32_ana.h
++++ b/include/hw/misc/esp32_ana.h
+@@ -14,3 +14,7 @@ typedef struct Esp32AnaState {
+ } Esp32AnaState;
+ 
+ 
++
++/* The APLL coefficients the ROM's analog I2C writes left (hw/misc/esp32_ana.c): `sdm` = (4 + SDM2) << 16 |
++ * SDM1 << 8 | SDM0 and the output divider; APLL = XTAL * sdm / 65536 / (2 * (o_div + 2)). */
++bool esp32_ana_apll(uint32_t *sdm, uint32_t *o_div);
+diff --git a/include/hw/misc/esp32_apbctrl.h b/include/hw/misc/esp32_apbctrl.h
+new file mode 100644
+index 0000000..ff58192
+--- /dev/null
++++ b/include/hw/misc/esp32_apbctrl.h
+@@ -0,0 +1,52 @@
++#pragma once
++
++#include "hw/hw.h"
++#include "hw/sysbus.h"
++#include "hw/registerfields.h"
++
++#define TYPE_ESP32_APBCTRL "misc.esp32.apbctrl"
++#define ESP32_APBCTRL(obj) OBJECT_CHECK(Esp32ApbCtrlState, (obj), TYPE_ESP32_APBCTRL)
++
++#define ESP32_APBCTRL_REGS (0x80 / 4)
++
++REG32(APBCTRL_SYSCLK_CONF, 0x00)
++    FIELD(APBCTRL_SYSCLK_CONF, PRE_DIV_CNT, 0, 10)
++REG32(APBCTRL_XTAL_TICK_CONF, 0x04)
++REG32(APBCTRL_PLL_TICK_CONF, 0x08)
++REG32(APBCTRL_CK8M_TICK_CONF, 0x0c)
++REG32(APBCTRL_SARADC_CTRL, 0x10)
++    FIELD(APBCTRL_SARADC_CTRL, SAR_SEL, 5, 1)
++    FIELD(APBCTRL_SARADC_CTRL, SAR1_PATT_LEN, 15, 4)
++    FIELD(APBCTRL_SARADC_CTRL, SAR2_PATT_LEN, 19, 4)
++    FIELD(APBCTRL_SARADC_CTRL, DATA_SAR_SEL, 25, 1)
++    FIELD(APBCTRL_SARADC_CTRL, DATA_TO_I2S, 26, 1)
++REG32(APBCTRL_SARADC_CTRL2, 0x14)
++    FIELD(APBCTRL_SARADC_CTRL2, SAR1_INV, 9, 1)
++    FIELD(APBCTRL_SARADC_CTRL2, SAR2_INV, 10, 1)
++REG32(APBCTRL_SARADC_FSM, 0x18)
++REG32(APBCTRL_SARADC_SAR1_PATT_TAB1, 0x1c)
++REG32(APBCTRL_SARADC_SAR2_PATT_TAB1, 0x2c)
++REG32(APBCTRL_APLL_TICK_CONF, 0x3c)
++REG32(APBCTRL_DATE, 0x7c)
++
++/* APB_CTRL / SYSCON (ESP32 TRM, Reset and Clock; On-Chip Sensors, DIG ADC controller): the registers with
++ * their reset values. It was an unimplemented stub: the SAR ADC digital controller (the I2S0 ADC mode)
++ * and the SYSCLK divider were lost. */
++typedef struct Esp32ApbCtrlState {
++    SysBusDevice parent_obj;
++    MemoryRegion iomem;
++    uint32_t regs[ESP32_APBCTRL_REGS];
++} Esp32ApbCtrlState;
++
++/* The SAR ADC digital controller as I2S0's ADC mode reads it: DATA_TO_I2S, the unit (SAR_SEL), the
++ * pattern table of that unit (each entry: channel [7:4], bit width [3:2], attenuation [1:0]) and its
++ * length, the output format (DATA_SAR_SEL) and the inversion. */
++typedef struct Esp32SaradcDig {
++    bool to_i2s;
++    unsigned unit;
++    unsigned len;
++    uint8_t pattern[16];
++    bool format2;
++    bool inv;
++} Esp32SaradcDig;
++void esp32_apbctrl_saradc(Esp32SaradcDig *out);
+diff --git a/include/hw/misc/esp32_i2s.h b/include/hw/misc/esp32_i2s.h
+new file mode 100644
+index 0000000..ff9bd6b
+--- /dev/null
++++ b/include/hw/misc/esp32_i2s.h
+@@ -0,0 +1,171 @@
++#pragma once
++
++#include "hw/hw.h"
++#include "hw/sysbus.h"
++#include "hw/registerfields.h"
++#include "qemu/timer.h"
++
++#define TYPE_ESP32_I2S "misc.esp32.i2s"
++#define ESP32_I2S(obj) OBJECT_CHECK(Esp32I2sState, (obj), TYPE_ESP32_I2S)
++
++#define ESP32_I2S_REGS (0x100 / 4)
++#define ESP32_I2S_FIFO_DEPTH 64
++#define ESP32_I2S_INFLIGHT 128
++#define ESP32_I2S_DAC_PENDING 256
++#define ESP32_I2S_ADC_RING 1024
++
++REG32(I2S_FIFO_WR, 0x00)
++REG32(I2S_FIFO_RD, 0x04)
++REG32(I2S_CONF, 0x08)
++    FIELD(I2S_CONF, TX_RESET, 0, 1)
++    FIELD(I2S_CONF, RX_RESET, 1, 1)
++    FIELD(I2S_CONF, TX_FIFO_RESET, 2, 1)
++    FIELD(I2S_CONF, RX_FIFO_RESET, 3, 1)
++    FIELD(I2S_CONF, TX_START, 4, 1)
++    FIELD(I2S_CONF, RX_START, 5, 1)
++    FIELD(I2S_CONF, TX_SLAVE_MOD, 6, 1)
++    FIELD(I2S_CONF, RX_SLAVE_MOD, 7, 1)
++    FIELD(I2S_CONF, TX_RIGHT_FIRST, 8, 1)
++    FIELD(I2S_CONF, TX_MSB_RIGHT, 16, 1)
++    FIELD(I2S_CONF, SIG_LOOPBACK, 18, 1)
++REG32(I2S_INT_RAW, 0x0c)
++REG32(I2S_INT_ST, 0x10)
++REG32(I2S_INT_ENA, 0x14)
++REG32(I2S_INT_CLR, 0x18)
++REG32(I2S_FIFO_CONF, 0x20)
++    FIELD(I2S_FIFO_CONF, RX_DATA_NUM, 0, 6)
++    FIELD(I2S_FIFO_CONF, TX_DATA_NUM, 6, 6)
++    FIELD(I2S_FIFO_CONF, DSCR_EN, 12, 1)
++    FIELD(I2S_FIFO_CONF, TX_FIFO_MOD, 13, 3)
++    FIELD(I2S_FIFO_CONF, RX_FIFO_MOD, 16, 3)
++REG32(I2S_RXEOF_NUM, 0x24)
++REG32(I2S_CONF_SINGLE_DATA, 0x28)
++REG32(I2S_CONF_CHAN, 0x2c)
++    FIELD(I2S_CONF_CHAN, TX_CHAN_MOD, 0, 3)
++    FIELD(I2S_CONF_CHAN, RX_CHAN_MOD, 3, 2)
++REG32(I2S_OUT_LINK, 0x30)
++    FIELD(I2S_OUT_LINK, ADDR, 0, 20)
++    FIELD(I2S_OUT_LINK, STOP, 28, 1)
++    FIELD(I2S_OUT_LINK, START, 29, 1)
++    FIELD(I2S_OUT_LINK, RESTART, 30, 1)
++REG32(I2S_IN_LINK, 0x34)
++REG32(I2S_OUT_EOF_DES_ADDR, 0x38)
++REG32(I2S_IN_EOF_DES_ADDR, 0x3c)
++REG32(I2S_OUT_EOF_BFR_DES_ADDR, 0x40)
++REG32(I2S_INLINK_DSCR, 0x48)
++REG32(I2S_INLINK_DSCR_BF0, 0x4c)
++REG32(I2S_INLINK_DSCR_BF1, 0x50)
++REG32(I2S_OUTLINK_DSCR, 0x54)
++REG32(I2S_OUTLINK_DSCR_BF0, 0x58)
++REG32(I2S_OUTLINK_DSCR_BF1, 0x5c)
++REG32(I2S_LC_CONF, 0x60)
++    FIELD(I2S_LC_CONF, IN_RST, 0, 1)
++    FIELD(I2S_LC_CONF, OUT_RST, 1, 1)
++    FIELD(I2S_LC_CONF, OUT_AUTO_WRBACK, 6, 1)
++    FIELD(I2S_LC_CONF, OUT_EOF_MODE, 8, 1)
++    FIELD(I2S_LC_CONF, CHECK_OWNER, 12, 1)
++REG32(I2S_LC_HUNG_CONF, 0x74)
++REG32(I2S_CONF1, 0xa0)
++REG32(I2S_PD_CONF, 0xa4)
++REG32(I2S_CONF2, 0xa8)
++    FIELD(I2S_CONF2, LCD_EN, 5, 1)
++REG32(I2S_CLKM_CONF, 0xac)
++    FIELD(I2S_CLKM_CONF, DIV_NUM, 0, 8)
++    FIELD(I2S_CLKM_CONF, DIV_B, 8, 6)
++    FIELD(I2S_CLKM_CONF, DIV_A, 14, 6)
++    FIELD(I2S_CLKM_CONF, CLKA_ENA, 21, 1)
++REG32(I2S_SAMPLE_RATE_CONF, 0xb0)
++    FIELD(I2S_SAMPLE_RATE_CONF, TX_BCK_DIV_NUM, 0, 6)
++    FIELD(I2S_SAMPLE_RATE_CONF, RX_BCK_DIV_NUM, 6, 6)
++    FIELD(I2S_SAMPLE_RATE_CONF, TX_BITS_MOD, 12, 6)
++    FIELD(I2S_SAMPLE_RATE_CONF, RX_BITS_MOD, 18, 6)
++REG32(I2S_PDM_CONF, 0xb4)
++REG32(I2S_PDM_FREQ_CONF, 0xb8)
++REG32(I2S_STATE, 0xbc)
++REG32(I2S_DATE, 0xfc)
++
++/* INT_RAW bits (ESP32 TRM, I2S interrupts) */
++#define ESP32_I2S_INT_RX_TAKE_DATA  BIT(0)
++#define ESP32_I2S_INT_TX_PUT_DATA   BIT(1)
++#define ESP32_I2S_INT_RX_WFULL      BIT(2)
++#define ESP32_I2S_INT_RX_REMPTY     BIT(3)
++#define ESP32_I2S_INT_TX_WFULL      BIT(4)
++#define ESP32_I2S_INT_TX_REMPTY     BIT(5)
++#define ESP32_I2S_INT_IN_DONE       BIT(8)
++#define ESP32_I2S_INT_IN_SUC_EOF    BIT(9)
++#define ESP32_I2S_INT_OUT_DONE      BIT(11)
++#define ESP32_I2S_INT_OUT_EOF       BIT(12)
++#define ESP32_I2S_INT_IN_DSCR_ERR   BIT(13)
++#define ESP32_I2S_INT_OUT_DSCR_ERR  BIT(14)
++#define ESP32_I2S_INT_IN_DSCR_EMPTY BIT(15)
++#define ESP32_I2S_INT_OUT_TOTAL_EOF BIT(16)
++
++/* A descriptor the TX DMA has read into the FIFO and the shifter has not finished: its last entry pops at
++ * index `last` (OUT_EOF in OUT_EOF_MODE 1). */
++typedef struct Esp32I2sInflight {
++    uint64_t last;
++    uint32_t desc, buf, next;
++    bool eof;
++} Esp32I2sInflight;
++
++/* One direction (TX or RX). The shifter moves one FIFO entry every `per_num / per_den` ns from `t0` (entry
++ * `base` at t0); the entry period follows CLKM_CONF and SAMPLE_RATE_CONF (esp32_i2s_entry_period). */
++typedef struct Esp32I2sChan {
++    QEMUTimer timer;
++    bool clocked;          /* TX_START / RX_START: the shifter runs */
++    bool link;             /* the DMA link runs (OUTLINK/INLINK START) */
++    uint64_t t0;
++    uint64_t base;
++    uint64_t per_num, per_den;
++    /* DMA: the descriptor being read (TX) or filled (RX) */
++    uint32_t desc, buf, len, next;
++    bool desc_eof, have_desc;
++    uint32_t off;           /* RX: bytes of it filled */
++    uint64_t desc_done;     /* TX: entries of it pushed into the FIFO */
++    uint64_t pushed;        /* TX: FIFO entries the DMA has pushed (index of the next one) */
++    uint64_t done;          /* RX: entries written to memory */
++    uint32_t eof_bytes;     /* RX: bytes since the last IN_SUC_EOF (RXEOF_NUM counts words) */
++    /* TX: descriptors in the FIFO */
++    Esp32I2sInflight inflight[ESP32_I2S_INFLIGHT];
++    unsigned inflight_rd, inflight_cnt;
++    bool chain_end;         /* the DMA reached the end of the list */
++    /* CPU FIFO mode (DSCR_EN 0) */
++    uint32_t fifo[ESP32_I2S_FIFO_DEPTH];
++    unsigned fifo_rd, fifo_cnt;
++    uint64_t fifo_popped;   /* TX: entries popped from the CPU FIFO */
++} Esp32I2sChan;
++
++/* Built-in DAC mode: a sample for the Core (DAC1 [7:0], DAC2 [15:8], channels [17:16]) at instant `t`, or
++ * (cut) the end of the stream at `t`. */
++typedef struct Esp32I2sDacSample {
++    uint64_t t;
++    uint32_t codes;
++    bool cut;
++} Esp32I2sDacSample;
++
++typedef struct Esp32I2sState {
++    SysBusDevice parent_obj;
++    MemoryRegion iomem;
++    qemu_irq irq;
++    uint32_t unit;
++    uint32_t regs[ESP32_I2S_REGS];
++    Esp32I2sChan tx, rx;
++    Esp32I2sDacSample dac[ESP32_I2S_DAC_PENDING];
++    unsigned dac_rd, dac_cnt;
++    bool dac_blocked;       /* the last send found the lane full: retry in 2 us */
++    /* Built-in ADC mode (I2S0 RX in LCD mode with APB_SARADC DATA_TO_I2S): the Core samples the pattern's
++     * pads at the sample instants (adapter ADC module 0x3FF48BC0) and returns the voltages (0.1 mV). */
++    bool adc_on;            /* the Core is sampling (what adc_send last told it) */
++    bool adc_want;          /* what it should be doing */
++    bool adc_pending;       /* the configuration still has to reach the Core */
++    unsigned adc_sent;      /* writes of it already accepted */
++    uint64_t adc_base;      /* RX entry of sample 0 */
++    uint64_t adc_recv;      /* samples received */
++    uint16_t adc_ring[ESP32_I2S_ADC_RING];
++    bool adc_format2, adc_inv;
++    unsigned adc_unit, adc_len;
++    uint8_t adc_pattern[16];
++} Esp32I2sState;
++
++/* vNext-B C2A (0x3FF4F0F0): up to three voltages [15:0], [31:16], [47:32], their count [50:48]. */
++void esp32_i2s_vnext_adc(uint64_t value);
+diff --git a/include/hw/misc/esp32_sens.h b/include/hw/misc/esp32_sens.h
+index c04efab..e1cae30 100644
+--- a/include/hw/misc/esp32_sens.h
++++ b/include/hw/misc/esp32_sens.h
+@@ -35,5 +35,9 @@ typedef struct Esp32SensState {
+ 
+ /* TOUCH_SLP_TIMER_EN, START_FSM_EN or START_FORCE changed: start or stop the timer FSM. */
+ void esp32_sens_touch_fsm_update(void);
++/* SAR_DAC_CTRL1.DAC_DIG_FORCE: the DACs are fed by I2S0 (built-in DAC mode). */
++bool esp32_sens_dac_digital(void);
++/* One SAR ADC conversion (esp32_sens.c): `mv` on ADC `unit` (0/1) at `atten` (0..3) and `width` bits. */
++uint32_t esp32_sens_adc_code(int unit, int atten, int width, double mv, bool inv);
+ 
+ //#define ESP32_RNG_BASE (DR_REG_WDEV_BASE + 0x144)
+diff --git a/include/hw/xtensa/esp32.h b/include/hw/xtensa/esp32.h
+index d216d7d..21e84b7 100644
+--- a/include/hw/xtensa/esp32.h
++++ b/include/hw/xtensa/esp32.h
+@@ -16,6 +16,8 @@
+ #include "hw/misc/esp32_pcnt.h"
+ #include "hw/misc/esp32_mcpwm.h"
+ #include "hw/misc/esp32_twai.h"
++#include "hw/misc/esp32_i2s.h"
++#include "hw/misc/esp32_apbctrl.h"
+ #include "hw/misc/esp32_rtcio.h"
+ #include "hw/misc/esp32_rsa.h"
+ #include "hw/timer/esp32_frc_timer.h"
+@@ -60,6 +62,8 @@ typedef struct Esp32SocState {
+     Esp32PcntState pcnt;
+     Esp32McpwmState mcpwm[2];
+     Esp32TwaiState twai;
++    Esp32I2sState i2s[2];
++    Esp32ApbCtrlState apbctrl;
+     Esp32RtcIoState rtcio;
+     Esp32EfuseState efuse;
+     ESPRgbState rgb;
+diff --git a/softmmu/vnext_b.c b/softmmu/vnext_b.c
+index 384fb3a..3cfb0cd 100644
+--- a/softmmu/vnext_b.c
++++ b/softmmu/vnext_b.c
+@@ -16,6 +16,7 @@
+ #include "hw/misc/esp32_pcnt.h"
+ #include "hw/misc/esp32_mcpwm.h"
+ #include "hw/misc/esp32_twai.h"
++#include "hw/misc/esp32_i2s.h"
+ #include "hw/timer/esp32_timg.h"
+ #include "softmmu/vnext_b_classify.h"
+ #include "vnext_b.h"
+@@ -865,7 +866,10 @@ static void vnext_consume_c2a(void) {
+             memcpy(&address, event->payload, sizeof(address));
+             memcpy(&value, event->payload + sizeof(address), sizeof(value));
+             unsigned bus = 0; bool status = false;
+-            if (vnext_i2c_address(address, &bus, &status)) {
++            if (address == UINT64_C(0x3FF530F4) || address == UINT64_C(0x3FF670F4)) {
++                /* I2C slave: what the Core's slave saw on the bus. */
++                esp32_i2c_vnext_slave(address == UINT64_C(0x3FF530F4) ? 0 : 1, value);
++            } else if (vnext_i2c_address(address, &bus, &status)) {
+                 if (status) vnext_i2c_status[bus] = value;
+                 else vnext_i2c_cmd[bus] = value;
+             } else if (address == UINT64_C(0x3FF4403C) || address == UINT64_C(0x3FF44040)) {
+@@ -885,6 +889,9 @@ static void vnext_consume_c2a(void) {
+             } else if (address >= UINT64_C(0x3FF6B000) && address < UINT64_C(0x3FF6B080)) {
+                 /* TWAI: an interrupt event, an ALC/ECC capture, bus off, or a received frame. */
+                 esp32_twai_vnext_event(address, value);
++            } else if (address == UINT64_C(0x3FF4F0F0)) {
++                /* I2S0 ADC mode: pad voltages the Core sampled at the sample instants. */
++                esp32_i2s_vnext_adc(value);
+             }
+         }
+         qatomic_fetch_add(&vnext_control->artifactProgress, 1);

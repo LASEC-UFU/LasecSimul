@@ -161,3 +161,181 @@ the whole 4 MB window; the cache sync now rewrites, and invalidates code of, onl
 changed. NVS init at boot ran at 0.2-0.3 MIPS and left the simulation up to 1 s behind real time; the
 peak is now 145-163 ms. The cache-wait semantics are unchanged (same trap handler); the E131 test
 passes 100 of 100 with 4 at a time.
+
+As of 2026-11-01 the packaged executable adds patch 0022 (chain 0011-0022 re-applied reproduces the
+working tree exactly; SHA-256 `9D3DC29908...`, see `bin/BUILD-PROVENANCE-1H.txt`). It is the first
+batch of the ESP32 peripheral-fidelity audit:
+
+- Peripherals that were unmapped -- the first access raised LoadStorePIFAddrError (Guru Meditation) --
+  now exist: PCNT (`hw/misc/esp32_pcnt.c`, irq 48), MCPWM0/1 (`hw/misc/esp32_mcpwm.c`, irq 39/40) and
+  TWAI/CAN (`hw/misc/esp32_twai.c`, irq 45). The counting, the waveforms and the CAN protocol run in the
+  Core's ESP32 adapter, at the pads; these models keep the registers, read the Core's state from the
+  vNext-B snapshot (now 128 bytes: PCNT counts, MCPWM timer status, TWAI SR/TEC/REC) and take its events
+  through C2A. TWAI keeps the 64-byte RX FIFO with a per-message overrun flag, the IR and the ALC/ECC
+  arming, and `DPORT_PERIP_RST_EN.TWAI_RST` resets it (ESP-IDF pulses it at install and in its errata
+  workarounds).
+- `hw/ssi/esp32_spi.c`: HSPI/VSPI receive. MISO was never read: the bytes the Core samples now land in
+  W0-W15 (half and full duplex, `USR_MISO_HIGHPART`, `RD_BYTE_ORDER`, `RD_BIT_ORDER`), and a W read waits
+  for the bytes the wire has already finished. The SCK period is computed in ps (12.5 ns at 80 MHz
+  rounded to 12 ns before, a 4% fast clock).
+- `hw/misc/esp32_sens.c`: `analogRead()` returned 0 in VNEXT_B. SENS keeps its registers with their
+  reset values, and MEAS1/MEAS2 return the inverse of ESP-IDF's line-fitting curve (Vref 1100 mV, the
+  11 dB lookup table) for the pad voltage in the snapshot, at the configured width and attenuation.
+- `hw/ssi/esp32_rmt.c`: RMT TX rewritten per channel (items read at their start, wrap with TX_THR,
+  TX_END, continuous mode, carrier); the items go to the Core, which drives the pads. Before they went
+  to an internal SSI device at a fixed 1250 ns per item and never reached a pin.
+- `hw/xtensa/esp32_intc.c`: each CPU interrupt line is the OR of every source mapped to it.
+- `hw/timer/esp32_timg.c`: the watchdog scale defaults to 1 (it was x100 in every session once the
+  adapter stopped setting the execution mode); `LASECSIMUL_ESP32_WDT_SCALE` still overrides it.
+- `hw/misc/esp32_rtc_cntl.c`, `hw/xtensa/esp32.c`, `hw/timer/esp32_frc_timer.c`: the SoC starts on the
+  XTAL clock and the RTC reset restores it; every FRC timer gets the APB frequency (only the first did).
+- No ESP32-specific build warnings remain (`softmmu/simuliface.c`, `softmmu/runstate.c`,
+  `include/qemu/main-loop.h`, the UART/TIMG/INTC models).
+
+Measured on `9D3DC29908`: the external-QEMU battery 28 of 28, one at a time, including the new
+`mcu_spi_miso`, `mcu_adc`, `mcu_rmt`, `mcu_pcnt`, `mcu_mcpwm`, `mcu_twai` (five CAN frames bit-exact on
+the wire; TEC stops at 128 with no ACK) and `mcu_twai_bus` (two ESP32s: ACK, replies, arbitration); the
+class project II1P06 with 8 sessions at once, 8 of 8 at 1.000-1.019x real time with all 23 display lines.
+
+As of 2026-11-02 the packaged executable adds patch 0023 (chain 0011-0023 re-applied reproduces the
+working tree exactly; SHA-256 `512C581F5F...`, see `bin/BUILD-PROVENANCE-1H.txt`), the second batch of
+the audit:
+
+- `hw/ssi/esp32_spi.c`: HSPI/VSPI do the command, address, dummy and data phases (half and full duplex)
+  with bit lengths, CPOL/CPHA in all four modes (the edges are the adapter's), the trans-done interrupt
+  and lldesc DMA in and out (irq 52-54), from the chip's reset values (`SPI_CLOCK` 0x80003043,
+  `SPI_USER` 0x80000040); the period comes from the APB at each transaction.
+- `softmmu/vnext_b.c`: with an interrupt the Core models armed (snapshot byte 100) the soft writes hold
+  the guest too, so an edge they produce reaches a capture at its instant.
+- Resets with the chip's scope (`hw/xtensa/esp32.c`, `hw/misc/esp32_dport.c`): a digital reset also
+  resets LEDC, PCNT, MCPWM, TWAI and SENS and tells the Core (0x3FF48FFC); a CPU reset (`esp_restart()`)
+  resets only the CPUs; `DPORT_PERIP_RST_EN` resets each peripheral on both edges of its bit
+  (`perip-rst` lines) and goes to the Core's adapter module at the register.
+- `hw/char/esp32_uart.c`: each FIFO, CLKDIV and CONF0 store reaches the Core from the vCPU at its
+  instant (a bottom half used to publish them later, and the guest saw the UART idle while the Core was
+  still sending: a reset right after a flush cut the output). The TX side paces the same frames as the
+  Core, with `ST_UTX_OUT`, `TXFIFO_CNT` without the byte in the shifter and a latched `TX_DONE` (it was
+  inverted); CONF0 resets to 0x0800001C.
+- `hw/nvram/esp32_efuse.c`: a read takes 10 us. It was a 100 ms placeholder, three of them per boot.
+- Sleep (`hw/misc/esp32_rtc_cntl.c`, the new `hw/misc/esp32_rtcio.c`, `hw/timer/esp32_timg.c`,
+  `hw/timer/esp32_frc_timer.c`, `hw/gpio/esp32_gpio.c`):
+  - deep sleep wakes on the RTC timer, ext0 and ext1, as a DEEPSLEEP_RESET that keeps RTC memory and
+    time; the RTC memory CRC engine the ROM polls exists; the timer-group watchdogs are off with the
+    digital domain;
+  - light sleep wakes on the timer, ext0 and GPIO; CCOUNT (with CCOMPARE), TIMG and FRC hold while the
+    clocks are gated;
+  - a change of the APB clock no longer recounts the timers' whole time at the new rate.
+- `hw/xtensa/esp32.c`: the RTC FAST data view also reaches the APP CPU (ESP-IDF reads RTC_FAST_ATTR data
+  in `esp_sleep_start()` from the core that sleeps).
+- `softmmu/simuliface.c`: a legacy `writeReg()` inside `qemu_init()` (the power-on reset) publishes
+  nothing instead of aborting on the uninitialized arena lock.
+- Diagnostics, off by default: `LASECSIMUL_UART_TRACE`, `LASECSIMUL_RTC_TRACE`, `LASECSIMUL_PC_SAMPLE=N`.
+
+Measured on `512C581F5F`: the external-QEMU battery 31 of 31, one at a time, including the new
+`mcu_spi_modes`, `mcu_soc_reset` (CPU reset keeps PCNT and PWM; `periph_module_reset()` and the system
+reset reset them), `mcu_deep_sleep` and `mcu_light_sleep`; `mcu_twai_bus` takes 13 s (it was about
+150 s, most of it the eFuse waits); the class project II1P06 with 8 sessions at once, 8 of 8 at
+0.993-1.014x real time with every LCD sample right.
+
+As of 2026-11-02 the packaged executable adds patch 0024 (chain 0011-0024 re-applied reproduces the
+working tree exactly; SHA-256 `8864A0CA40...`, see `bin/BUILD-PROVENANCE-1H.txt`), the third batch of
+the audit. It ships with `mcu_abi` 3.5 (`get_pin_analog`) and the adapter's RtcIo and Soc modules.
+
+- `hw/misc/esp32_sens.c`: the touch sensor. The measurement FSM (sleep, XPD, window) counts
+  T * I * slope / (2 * (20 pF + C_ext) * dV), with I = 1.72 uA per slope step and dV from `TOUCH_CFG`.
+  The Core measures C_ext on each pad's net and returns it through the snapshot before the window ends.
+  Channels 8 and 9 are swapped as on the chip. The threshold interrupt and the deep-sleep touch wakeup
+  (`hw/misc/esp32_rtc_cntl.c`) work too. Before, the count was a fixed ~1500 with noise.
+- `hw/misc/esp32_rtcio.c`: `RTC_GPIO_OUT`, `RTC_GPIO_ENABLE` and the pad registers go to the Core, where a
+  pad muxed to the RTC domain loses the digital output and the RTC GPIO drives it with the RUE/RDE pulls.
+  The DACs come out on GPIO25/26 at 3.3 * D / 255 through 20 Ohm. The resync of every RTC IO register at a
+  digital reset is gone (the adapter resets the digital domain itself and keeps the RTC one).
+- `hw/char/esp32_uart.c`: the whole frame format (parity, 5-8 data bits, 1/1.5/2 stop bits,
+  `RS485_CONF` DL0/DL1), paced with the Core's integer formula; the receive errors the Core sees on the
+  wire latch `PARITY_ERR`, `FRM_ERR` and `BRK_DET` (C2A payload byte 2), a full FIFO `RXFIFO_OVF`; the
+  TX break (`TXD_BRK`, `TX_BRK_NUM`, `TX_BRK_DONE`); `uart_write_bytes_with_break()` waited forever before.
+
+Measured on `8864A0CA40`: the external-QEMU battery 34 of 34, one at a time, including the new
+`mcu_touch` (bare pad 70, 100 pF 11, 470 pF 2; the deep-sleep touch wakeup), `mcu_dac` (codes
+64/128/192 at 828/1656/2485 mV) and `mcu_uart_format` (seven formats timed to the frame length, the
+three receive errors, the break, the inversion); the class project II1P06 with 8 sessions at once, 8 of 8
+at 1.000-1.002x real time with all 23 display lines.
+
+As of 2026-11-02 the packaged executable adds patch 0025 (chain 0011-0025 re-applied reproduces the
+working tree exactly; SHA-256 `5B26C905C6...`, see `bin/BUILD-PROVENANCE-1H.txt`), the fourth batch of
+the audit. It ships with the adapter's I2S DAC stream, I2S ADC sampler and I2C slave engine.
+
+- The new `hw/misc/esp32_i2s.c`: I2S0/I2S1 (they were unimplemented stubs, and `i2s_write()`/`i2s_read()`
+  waited forever for the DMA). The TRM's reset values; an exact rational entry period from PLL_F160M or the
+  APLL; TX lldesc DMA through the 64-entry FIFO (`OUT_DONE`, `OUT_EOF` per `OUT_EOF_MODE`, `OUT_TOTAL_EOF`),
+  RX DMA (`IN_DONE`, `IN_SUC_EOF` per `RXEOF_NUM`), the CPU FIFO mode; RX reads the DIN pin's level. The
+  built-in DAC mode sends each sample to the Core with its instant; the built-in ADC mode converts the
+  voltages the Core sampled at the sample instants.
+- The new `hw/misc/esp32_apbctrl.c`: APB_CTRL with its registers (it was a stub; DATE keeps the ECO3
+  marker), the SAR ADC digital controller among them.
+- `hw/misc/esp32_ana.c`: the analog I2C host register of the APLL keeps its registers and reads the
+  calibration as done (`use_apll` hung in `rtc_clk_apll_coeff_set()`); they set the APLL frequency.
+- `hw/nvram/esp32_efuse.c`: without an eFuse image, the factory fuses of an ESP32-D0WD-V3 (rev1, rev2, the
+  D0WD package). It read as revision 0, and ESP-IDF ran its rev-0 workarounds.
+- `hw/i2c/esp32_i2c.c`: the slave mode (the bus is the Core's engine): `SLAVE_ADDR`, the FIFOs and
+  thresholds, `TRANS_COMPLETE`, `STATUS.SLAVE_RW` and `SCL_MAIN_STATE_LAST`; `I2C_CTR` resets to 0x3.
+
+Measured on `5B26C905C6`: the external-QEMU battery 38 of 38, one at a time, including the new `mcu_i2s`,
+`mcu_i2s_dac`, `mcu_i2s_adc` and `mcu_i2c_slave` (two ESP32s); the class project II1P06 with 8 sessions at
+once, 8 of 8 at 1.000x real time with all 23 display lines.
+
+As of 2026-11-02 the packaged executable adds patch 0026 (chain 0011-0026 re-applied reproduces the
+working tree exactly; SHA-256 `62193BC173...`, see `bin/BUILD-PROVENANCE-1H.txt`), the fifth batch of the
+audit (item 13). It ships with the adapter's APB_CLK report.
+
+- `hw/xtensa/esp32.c`, `hw/misc/esp32_apbctrl.c`: `APB_CTRL_SYSCLK_CONF.PRE_DIV_CNT` divides XTAL and
+  RC_FAST (`setCpuFrequencyMhz(20)` and `(10)` stayed at 40 MHz); the APLL is a CPU source too. Each change of
+  APB_CLK goes to the Core, whose LEDC, PCNT filter, MCPWM capture, TWAI, I2C and UARTs counted 80 MHz always.
+- `hw/char/esp32_uart.c`: a UART on APB takes the new bit time at the change; the Core gets the raw divider
+  and computes the same integer value.
+- `hw/i2c/esp32_i2c.c`: the SCL period follows the APB; it is sent to the Core before it is stored (a replayed
+  store never sent it again).
+
+Measured on `62193BC173`: the external-QEMU battery 39 of 39 one at a time (with `esp32_adapter` reporting the
+80 MHz APB before its LEDC checks, and one rerun of `mcu_scheduler_pacing_sync_real_qemu`), including the new
+`mcu_cpu_freq`; the class project II1P06 with 8 sessions at once, third run 7 of 8 at 1.000x and one at
+1.025x.
+
+As of 2026-11-02 the packaged executable adds patch 0027 (chain 0011-0027 re-applied reproduces the
+working tree modulo Windows CRLF conversion; SHA-256 `F59B3C15EE57...`, see `bin/BUILD-PROVENANCE-1H.txt`),
+the RMT receiver (item 3b) of the ESP32 peripheral-fidelity audit:
+
+- `hw/ssi/esp32_rmt.c`, `softmmu/vnext_b.c`: RMT RX configuration and incoming Core events update the RX RAM,
+  write pointer, used count, status, and RX_END/ERR interrupt bits. `MEM_WR_RST` resets the pointer; `RX_EN` is
+  CONF1 bit 1 and `MEM_WR_RST` bit 2, as in the TRM.
+- The Core adapter applies the RMT filter in APB cycles and ends a receive after `IDLE_THRES`, with a hard
+  wakeup at the event deadline. The ESP32 original has no carrier demodulation on RX or ping-pong mode (both
+  are S2-and-later features); tick rounding has no counter-phase model.
+
+Measured on `F59B3C15EE57`: the external-QEMU battery passed 40/40 tests one at a time, including `mcu_rmt_rx`;
+three II1P06 class runs with 8 concurrent sessions all measured 1.000x-1.005x, with 22-23 correct LCD/PCD
+lines per session.
+
+
+As of 2026-11-02 the packaged executable adds patch 0028 (chain 0011-0028 re-applied modulo Windows CRLF conversion; SHA-256 `55D1F3461999...`, see `bin/BUILD-PROVENANCE-1H.txt`), light-sleep peripheral clock gating (item 6b):
+
+- QEMU publishes Soc register `0x3FF48FF4` before stalling on light-sleep entry; bit 0 gates the digital clock and bit 1 reports RTC8M retention from `RTC_CNTL_CLK_CONF.CK8M_FORCE_PU`. Wake restores the Core clock first, retrying if the Core lane is full.
+- The adapter freezes APB/REF_TICK LEDC, PCNT filtering/counting, MCPWM, RMT TX/RX, TWAI, UART, I2C and SPI; it shifts scheduled deadlines on wake. Low-speed LEDC timers sourced by RTC8M keep running only when the IDF retained RTC8M.
+- Measured: the 50 ms `mcu_light_sleep_periph` firmware configured both LEDC sources and verified PCNT did not accumulate during sleep (at most two wake-boundary edges); it does not directly observe the RTC8M output during sleep.
+
+Measured on `55D1F3461999`: the external-QEMU battery passed 41/41 tests one at a time, including both light-sleep tests; three II1P06 runs with 8 sessions each: A and C all 1.000x, B six 1.000x plus 0.995x and 1.022x, with 22-23 correct LCD/PCD lines per session.
+
+
+As of 2026-11-02 the packaged executable adds patch 0029 (chain 0011-0029; SHA-256 `8C8502DBB27E13664CCD127DE9DBAD2F59313DE7EA312999656811EE760ECFD3`, see `bin/BUILD-PROVENANCE-1H.txt`), DAC cosine generator (item 8):
+
+- QEMU forwards `SENS_SAR_DAC_CTRL1/2` writes to the adapter before storing guest state, preserving VNEXT_B replay ordering. The adapter models RTC8M `FSTEP`, per-channel CW selection, scale, DC offset, phase and the four bit-inversion modes, and routes the cosine output to DAC1/2.
+- `mcu_dac_cw` configures both channels at 1 kHz with opposite phase, samples the outputs through ADC1 and checks amplitude and negative cross-correlation. It passed, as did `mcu_dac` and `mcu_i2s_dac`.
+- Measured: external-QEMU battery 42/42 tests one at a time; three II1P06 runs with 8 sessions each ranged 0.993x-1.018x, with 22-23 correct LCD/PCD lines per session.
+- DAC-specific current limiting remains unmodeled: the consulted ESP-IDF 4.4 guide/source and ESP32 datasheet do not specify a DAC current clamp.
+
+
+Paired Core/adapter/device candidate validated with QEMU `8C8502DB` (same QEMU 0029 binary):
+
+- Core item 17: peer lookahead is 10 us. `mcu_twai_bus` passed in 5 s vs 13 s recorded at the 1 us baseline; `mcu_i2c_slave` remained 152 s. Larger 100 us/1 ms experiments were rejected after repeatable TWAI bus errors.
+- SPI item 1b: ABI 4.2+ slave byte exchange returns MISO to the ESP32; the topology pair includes the MISO node. The mode is allowed only when clock/MOSI/MISO are otherwise unobserved and no `logic.shift_reg` q0-q7 output is instrumented; otherwise it falls back to bit edges. `mcu_spi_miso` produced 54,528 correct bytes in 8,010 ms wall (2,859 ms simulated) in byte mode, versus 10,560 correct bytes in 8,003 ms (571 ms simulated) forced bit-by-bit, approximately 5x faster.
+- Final battery remained 42/42 PASS. Final II1P06 class runs with 8 sessions each: A 0.999x-1.000x, B 1.000x, C 0.973x-1.003x; 22-23 correct LCD/PCD lines per session.

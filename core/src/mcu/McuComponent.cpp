@@ -1,4 +1,4 @@
-#ifdef _WIN32
+﻿#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #endif
@@ -57,14 +57,14 @@ uint64_t tailSimuTimePs(const qemu::QemuArenaBridge& arena, uint64_t writeIndex,
 }
 
 // Lockstep exato: maior intervalo de tempo do guest sem sincronizar com o Core, mesmo sem eventos.
-// Mantém o guest no ritmo do tempo real (o Core faz o pacing) e o tempo da sessão andando. Medido
-// (2026-10-29): 5 ou 10 ms dividem as sincronizações por 2 sem ganhar ritmo -- cada uma só demora mais.
+// MantÃ©m o guest no ritmo do tempo real (o Core faz o pacing) e o tempo da sessÃ£o andando. Medido
+// (2026-10-29): 5 ou 10 ms dividem as sincronizaÃ§Ãµes por 2 sem ganhar ritmo -- cada uma sÃ³ demora mais.
 constexpr uint64_t kLockstepQuantumNs = 1'000'000;
-// Folga sobre a posição provada dos outros MCUs em lockstep: sem ela os dois guests esperariam um pelo
-// outro para sempre. É o maior atraso com que um sinal entre dois MCUs pode chegar.
-constexpr uint64_t kLockstepPeerLookaheadNs = 1'000;
+// Folga sobre a posiÃ§Ã£o provada dos outros MCUs em lockstep: sem ela os dois guests esperariam um pelo
+// outro para sempre. Ã‰ o maior atraso com que um sinal entre dois MCUs pode chegar.
+constexpr uint64_t kLockstepPeerLookaheadNs = 10'000;
 
-// LASECSIMUL_LOCKSTEP_TRACE=1: onde vai o tempo de parede de cada sincronização do lockstep.
+// LASECSIMUL_LOCKSTEP_TRACE=1: onde vai o tempo de parede de cada sincronizaÃ§Ã£o do lockstep.
 bool lockstepTraceEnabled() {
     static const bool enabled = [] {
         const char* value = std::getenv("LASECSIMUL_LOCKSTEP_TRACE");
@@ -77,15 +77,17 @@ uint64_t steadyNowNs() {
         std::chrono::steady_clock::now().time_since_epoch()).count());
 }
 
-// Só o que stamp() aplica a um pino: o nível de um pino dirigido, ou o pull de um não dirigido.
+// SÃ³ o que stamp() aplica a um pino: uma fonte analÃ³gica (que prevalece), o nÃ­vel de um pino dirigido, ou o
+// pull de um nÃ£o dirigido.
 uint8_t electricalPinState(uint8_t state) {
     constexpr uint8_t kDriven = QemuModule::kPinOutputEnabled | QemuModule::kPinOutputHigh;
     constexpr uint8_t kPulls = QemuModule::kPinPullUp | QemuModule::kPinPullDown;
+    if ((state & QemuModule::kPinAnalog) != 0) return QemuModule::kPinAnalog;
     return static_cast<uint8_t>(state & ((state & QemuModule::kPinOutputEnabled) != 0 ? kDriven : kPulls));
 }
 
-// Estado elétrico de `bitsOrLines` de `module`, lido em lotes de até 64 linhas sem alocar;
-// `visit(posição, estado)` para cada linha, na ordem dada.
+// Estado elÃ©trico de `bitsOrLines` de `module`, lido em lotes de atÃ© 64 linhas sem alocar;
+// `visit(posiÃ§Ã£o, estado)` para cada linha, na ordem dada.
 template <class Visit>
 void visitPinStates(const QemuModule& module, std::span<const uint32_t> bitsOrLines, Visit&& visit) {
     std::array<uint8_t, 64> states{};
@@ -103,7 +105,7 @@ struct LockstepTrace {
 };
 LockstepTrace g_lockstepTrace;
 
-// Lido uma vez: consultado a cada escrita de GPIO e a cada transação I2C do VNEXT_B, e getenv no
+// Lido uma vez: consultado a cada escrita de GPIO e a cada transaÃ§Ã£o I2C do VNEXT_B, e getenv no
 // CRT do Windows varre o bloco de ambiente inteiro (mesmo achado de analogTraceEnabled no adaptador).
 bool vnextTraceEnabled() {
     static const bool enabled = [] {
@@ -117,38 +119,102 @@ bool vnextTraceEnabled() {
 // do snapshot compartilhado (vnext_b_gpio_read em softmmu/vnext_b.c): GPIO_IN nos bytes 0-7,
 // GPIO_IN1 nos bytes 8-15 -- nunca com um pedido de leitura ao Core.
 constexpr std::array<uint64_t, 2> kVnextBGpioInAddresses{0x3FF4403Cull, 0x3FF44040ull};
+// TensÃµes dos 18 pads de ADC (ADC1_CH0..7, ADC2_CH0..9), em dÃ©cimos de mV, nos bytes 16-51 do mesmo
+// snapshot: o modelo SENS do QEMU aplica a funÃ§Ã£o de transferÃªncia do chip na leitura de MEAS1/MEAS2.
+// Canal privado do mÃ³dulo ADC do adaptador (Esp32Adapter.cpp, kAdcPadVoltageOffset).
+constexpr uint64_t kAdapterAdcBase = 0x3FF48800ull;
+constexpr uint64_t kAdapterAdcPadVoltageOffset = 0x300;
+constexpr std::array<uint64_t, 2> kAdapterI2cBases = {0x3FF53000ull, 0x3FF67000ull};
+constexpr uint64_t kAdapterI2cSlaveEventOffset = 0xF0C; // um evento do escravo, valido 63
+constexpr uint64_t kVnextBI2cSlaveOffset = 0xF4;        // no QEMU: esp32_i2c_vnext_slave
+constexpr uint64_t kAdapterI2sAdcSamplesOffset = 0x3D0; // ate' tres tensoes, quantas [50:48], valido 63
+constexpr uint64_t kVnextBI2sAdcAddress = 0x3FF4F0F0;   // I2S0 do QEMU: esp32_i2s_vnext_adc
+// Sensor de toque: capacitancia externa de cada canal (0,1 pF) e o ultimo pedido medido (snapshot 104-125).
+constexpr uint64_t kAdapterTouchCapOffset = 0x384;
+constexpr uint64_t kAdapterTouchDoneOffset = 0x3AC;
+constexpr uint32_t kVnextBTouchChannels = 10;
+constexpr uint32_t kVnextBAdcPadCount = 18;
+// PCNT do adaptador (o contador mora lÃ¡): os 8 contadores vÃ£o nos bytes 56-71 do snapshot; cada evento
+// (limite, limiar, zero) vai ao QEMU pelo C2A em PCNT_Un_STATUS; "armado" = algum evento pode virar
+// interrupÃ§Ã£o, e entÃ£o todo evento do Core Ã© rÃ­gido, como com uma interrupÃ§Ã£o de GPIO armada.
+constexpr uint64_t kAdapterPcntBase = 0x3FF57000ull;
+constexpr uint64_t kAdapterPcntStatusOffset = 0x90;
+constexpr uint64_t kAdapterPcntCountOffset = 0x200;
+constexpr uint64_t kAdapterPcntEventOffset = 0x240;
+constexpr uint64_t kAdapterPcntArmedOffset = 0x244;
+constexpr uint64_t kAdapterPcntEventValid = 1ull << 31;
+constexpr uint32_t kVnextBPcntUnits = 8;
+// MCPWM0/1 do adaptador (as formas de onda saem de lÃ¡): escrever 0x2F0 trava os TIMERn_STATUS no
+// instante, que vÃ£o nos bytes 72-95 do snapshot; 0x240/0x244 dÃ£o o prÃ³ximo evento (registrador, valor);
+// 0x248 = alguma interrupÃ§Ã£o habilitada.
+constexpr std::array<uint64_t, 2> kAdapterMcpwmBases{0x3FF5E000ull, 0x3FF6C000ull};
+constexpr uint64_t kAdapterMcpwmLatchOffset = 0x2F0;
+constexpr uint64_t kAdapterMcpwmStatusOffset = 0x200;
+constexpr uint64_t kAdapterMcpwmEventOffset = 0x240;
+constexpr uint64_t kAdapterMcpwmArmedOffset = 0x248;
+// TWAI do adaptador (o protocolo CAN roda lÃ¡, bit a bit nos pinos): 0x208 dÃ¡ SR | TEC << 8 | REC << 16, nos
+// bytes 96-99 do snapshot; 0x200/0x204 dÃ£o o prÃ³ximo evento (registrador, valor) -- IR, ALC, ECC, MOD e os
+// quadros recebidos; 0x20C Ã© o instante do prÃ³ximo despertar que levanta interrupÃ§Ã£o (rÃ­gido).
+constexpr uint64_t kAdapterTwaiBase = 0x3FF6B000ull;
+constexpr uint64_t kAdapterTwaiEventOffset = 0x200;
+constexpr uint64_t kAdapterTwaiStateOffset = 0x208;
+constexpr uint64_t kAdapterTwaiHardDueOffset = 0x20C;
+// RMT do adaptador: 0x500 da' o proximo item/fim que o receptor gravou (para o QEMU, esp32_rmt_vnext_rx, em
+// 0x480), 0x50C o instante do proximo fim de recepcao (RX_END, rigido).
+constexpr uint64_t kAdapterRmtBase = 0x3FF56000ull;
+constexpr uint64_t kAdapterRmtRxEventOffset = 0x500;
+constexpr uint64_t kAdapterRmtRxHardDueOffset = 0x50C;
+constexpr uint64_t kVnextBRmtRxAddress = 0x3FF56480ull;
+// Os modulos que publicam um despertar rigido: o instante em que levantam interrupcao.
+constexpr std::array<std::pair<uint64_t, uint64_t>, 2> kAdapterHardDue{{
+    {kAdapterTwaiBase, kAdapterTwaiHardDueOffset}, {kAdapterRmtBase, kAdapterRmtRxHardDueOffset}}};
+// O QEMU reiniciou os perifÃ©ricos digitais do SoC (esp32_soc_reset: reset de software, watchdog, saÃ­da do
+// deep sleep): os que o adaptador modela nos pinos -- GPIO, UART, I2C, SPI, LEDC, RMT, PCNT, MCPWM, TWAI --
+// voltam ao reset tambÃ©m. EndereÃ§o privado que nenhum mÃ³dulo do adaptador ocupa.
+constexpr uint64_t kQemuSocPeriphResetAddress = 0x3FF48FFCull;
 
-// I2C elétrico do VNEXT_B: periféricos I2C0/I2C1 do ESP32 (mesmos endereços que o QEMU usa em
+// I2C elÃ©trico do VNEXT_B: perifÃ©ricos I2C0/I2C1 do ESP32 (mesmos endereÃ§os que o QEMU usa em
 // vnext_i2c_address) e o protocolo privado do motor do adaptador (Esp32Adapter.cpp, kI2cCoreOpOffset).
 constexpr uint64_t kVnextBI2c0Base = 0x3FF53000ull;
 constexpr uint64_t kVnextBI2c1Base = 0x3FF67000ull;
-// Flags do BATCH (byte 1 do envelope): START 1, fim lógico da transação 2 (STOP *ou* END -- a
+// Flags do BATCH (byte 1 do envelope): START 1, fim lÃ³gico da transaÃ§Ã£o 2 (STOP *ou* END -- a
 // fronteira em que os modelos de dispositivo do fast path consolidam), READ 4; e para o caminho
-// elétrico: a lista termina num STOP de verdade 8 (END segura o barramento, sem STOP no fio) e o
-// mestre dá NACK no último byte lido 16 (ACK_VAL do último READ). Ver esp32_i2c.c no fork QEMU.
+// elÃ©trico: a lista termina num STOP de verdade 8 (END segura o barramento, sem STOP no fio) e o
+// mestre dÃ¡ NACK no Ãºltimo byte lido 16 (ACK_VAL do Ãºltimo READ). Ver esp32_i2c.c no fork QEMU.
 constexpr uint8_t kVnextBI2cStart = 1u, kVnextBI2cWireStop = 8u, kVnextBI2cLastReadNack = 16u;
 constexpr uint64_t kAdapterI2cLowPeriodOffset = 0x00;
 constexpr uint64_t kAdapterI2cStatusOffset = 0x08;
-// USART do adaptador: UART_FIFO (lê e consome um byte do FIFO de RX), UART_STATUS (bits 0..9 = bytes
-// no FIFO de RX) e o canal privado 0xF00 (1 = um quadro de RX está sendo recebido agora).
+// USART do adaptador: UART_FIFO (lÃª e consome um byte do FIFO de RX), UART_STATUS (bits 0..9 = bytes
+// no FIFO de RX) e o canal privado 0xF00 (1 = um quadro de RX estÃ¡ sendo recebido agora).
 constexpr uint64_t kAdapterUsartFifoOffset = 0x00;
 constexpr uint64_t kAdapterUsartStatusOffset = 0x1C;
 constexpr uint64_t kAdapterUsartRxCountMask = 0x3FF;
 constexpr uint64_t kAdapterUsartRxBusyOffset = 0xF00;
+constexpr uint64_t kAdapterUsartRxEntryOffset = 0xF04; // byte | erros de recepcao << 8
 constexpr uint64_t kAdapterI2cStatusBusBusy = 1u << 4;
 constexpr uint64_t kAdapterI2cCoreOpOffset = 0xF00;
 constexpr uint64_t kAdapterI2cCoreResultCountOffset = 0xF04;
 constexpr uint64_t kAdapterI2cCoreResultOffset = 0xF08;
-// Canal privado do módulo GPIO do adaptador: pinos 0-31 / 32-39 com interrupção armada.
+// Canal privado do mÃ³dulo GPIO do adaptador: pinos 0-31 / 32-39 com interrupÃ§Ã£o armada.
 constexpr uint64_t kAdapterGpioIrqArmedAddress = 0x3FF44F00;
+// SPI do adaptador: o canal privado 0xF80 lÃª (e consome) o prÃ³ximo byte recebido no MISO -- [7:0] o
+// byte, bit 8 vÃ¡lido, [31:16] a posiÃ§Ã£o no buffer de recepÃ§Ã£o --, entregue ao QEMU no endereÃ§o do
+// buffer (A_SPI_W0).
+constexpr uint64_t kAdapterSpiDataOffset = 0x80;
+constexpr uint64_t kAdapterSpiRxOffset = 0xF80;
+constexpr uint64_t kAdapterSpiRxValid = 1u << 8;
+constexpr uint64_t kAdapterSpiMisoByteOffset = 0xF84;
 
-// Módulos cujos despertares só mexem em saídas deste MCU (e no snapshot de GPIO_IN): eventos suaves
+// MÃ³dulos cujos despertares sÃ³ mexem em saÃ­das deste MCU (e no snapshot de GPIO_IN): eventos suaves
 // do lockstep. O I2C fica de fora -- cada fase publica o estado do barramento para o QEMU (C2A).
 bool lockstepSoftModule(ModuleKind kind) {
-    return kind == ModuleKind::Spi || kind == ModuleKind::Pwm || kind == ModuleKind::Usart;
+    // Timer: o PCNT do ESP32 -- o despertar sÃ³ confirma uma borda filtrada no contador, que o QEMU lÃª
+    // pelo snapshot; com um evento armado todo evento jÃ¡ Ã© rÃ­gido (vnextBGpioInterruptArmedLocked).
+    return kind == ModuleKind::Spi || kind == ModuleKind::Pwm || kind == ModuleKind::Usart ||
+           kind == ModuleKind::Timer;
 }
 
-// LASECSIMUL_LOCKSTEP_SOFT=0: toda borda vale como rígida (diagnóstico; mesmo resultado, mais lento).
+// LASECSIMUL_LOCKSTEP_SOFT=0: toda borda vale como rÃ­gida (diagnÃ³stico; mesmo resultado, mais lento).
 bool lockstepSoftEventsEnabled() {
     static const bool enabled = [] {
         const char* value = std::getenv("LASECSIMUL_LOCKSTEP_SOFT");
@@ -198,8 +264,16 @@ std::optional<uint64_t> McuComponent::lockstepLimitNs() const {
 
 bool McuComponent::vnextBGpioInterruptArmedLocked() const {
     QemuModule* gpio = findModule(kVnextBGpioInAddresses[0]);
-    return gpio && (gpio->readRegister(kAdapterGpioIrqArmedAddress) != 0 ||
-                    gpio->readRegister(kAdapterGpioIrqArmedAddress + 4) != 0);
+    if (gpio && (gpio->readRegister(kAdapterGpioIrqArmedAddress) != 0 ||
+                 gpio->readRegister(kAdapterGpioIrqArmedAddress + 4) != 0))
+        return true;
+    QemuModule* pcnt = findModule(kAdapterPcntBase);
+    if (pcnt && pcnt->readRegister(kAdapterPcntBase + kAdapterPcntArmedOffset) != 0) return true;
+    for (const uint64_t base : kAdapterMcpwmBases) {
+        QemuModule* mcpwm = findModule(base);
+        if (mcpwm && mcpwm->readRegister(base + kAdapterMcpwmArmedOffset) != 0) return true;
+    }
+    return false;
 }
 
 double McuComponent::lockstepCpuDilation() const {
@@ -211,19 +285,19 @@ void McuComponent::publishLockstepTime(uint64_t nowNs, uint64_t nextEventNs, uin
     if (!m_controller.lockstep()) return;
     std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
     if (!m_controller.vnextBActive() || !m_controller.lockstep()) return;
-    // O C2A publicado neste ciclo (aqui e no stamp/eventos) espera a campainha; qualquer saída
+    // O C2A publicado neste ciclo (aqui e no stamp/eventos) espera a campainha; qualquer saÃ­da
     // abaixo a toca uma vez, mesmo sem tempo novo para publicar.
     struct FlushSignalOnExit {
         qemu::VnextBAttachment& attachment;
         ~FlushSignalOnExit() { attachment.flushSignal(); }
     } flushOnExit{m_controller.vnextBAttachment()};
-    // Entradas antes do tempo: o QEMU consome o C2A ao soltar as vCPUs, então uma borda que o
+    // Entradas antes do tempo: o QEMU consome o C2A ao soltar as vCPUs, entÃ£o uma borda que o
     // circuito produziu neste instante chega ao guest neste mesmo instante.
     publishVnextBGpioInputsLocked();
     const uint64_t seqBeforeLimit = m_lockstepObservedSyncSeq.load(std::memory_order_acquire);
     const uint64_t originNs = m_qemuTimeOriginNs.load(std::memory_order_relaxed);
     const uint64_t limitNs = vnextEventTimeNs(originNs, lockstepProvenNs());
-    // Tudo até doneNs está processado: o instante atual, nunca além do que o QEMU provou, e antes
+    // Tudo atÃ© doneNs estÃ¡ processado: o instante atual, nunca alÃ©m do que o QEMU provou, e antes
     // de qualquer evento que ainda espera na fila.
     uint64_t doneNs = std::min(nowNs, limitNs);
     if (nextEventNs <= doneNs) {
@@ -232,15 +306,15 @@ void McuComponent::publishLockstepTime(uint64_t nowNs, uint64_t nextEventNs, uin
     }
     if (doneNs < originNs) return;
     const uint64_t timeNs = doneNs - originNs;
-    // Dois horizontes, ambos à frente de doneNs (nextEventNs > doneNs aqui, e o próximo evento
-    // rígido nunca vem antes do próximo evento):
-    //  - de entrada: o próximo evento de qualquer tipo pode mover um pad -- uma leitura de GPIO_IN
+    // Dois horizontes, ambos Ã  frente de doneNs (nextEventNs > doneNs aqui, e o prÃ³ximo evento
+    // rÃ­gido nunca vem antes do prÃ³ximo evento):
+    //  - de entrada: o prÃ³ximo evento de qualquer tipo pode mover um pad -- uma leitura de GPIO_IN
     //    a partir dele sincroniza;
-    //  - rígido: o guest não passa dele sem sincronizar. Eventos suaves (bordas que só mexem em
-    //    saídas deste MCU: SPI, LEDC, UART TX) ficam de fora enquanto nenhum pino tiver interrupção
-    //    armada -- sem interrupção, uma borda só é vista lendo GPIO_IN. Com uma armada, qualquer borda
-    //    pode chegar a ela pelo circuito e vale como rígida.
-    // Teto comum: o quantum e, com outros MCUs em lockstep, o ponto até onde eles já chegaram.
+    //  - rÃ­gido: o guest nÃ£o passa dele sem sincronizar. Eventos suaves (bordas que sÃ³ mexem em
+    //    saÃ­das deste MCU: SPI, LEDC, UART TX) ficam de fora enquanto nenhum pino tiver interrupÃ§Ã£o
+    //    armada -- sem interrupÃ§Ã£o, uma borda sÃ³ Ã© vista lendo GPIO_IN. Com uma armada, qualquer borda
+    //    pode chegar a ela pelo circuito e vale como rÃ­gida.
+    // Teto comum: o quantum e, com outros MCUs em lockstep, o ponto atÃ© onde eles jÃ¡ chegaram.
     uint64_t capNs = timeNs + kLockstepQuantumNs;
     if (peersProvenNs != UINT64_MAX && peersProvenNs >= originNs)
         capNs = std::min(capNs, std::max(peersProvenNs - originNs, timeNs) + kLockstepPeerLookaheadNs);
@@ -271,12 +345,12 @@ void McuComponent::publishLockstepTime(uint64_t nowNs, uint64_t nextEventNs, uin
     m_lockstepPublishedTimeNs = timeNs;
     m_lockstepPublishedHorizonNs = horizonNs;
     m_lockstepPublishedInputHorizonNs = inputHorizonNs;
-    // Onde a simulação deveria estar pelo relógio real, na linha do tempo do artefato (0 = sem pacing).
+    // Onde a simulaÃ§Ã£o deveria estar pelo relÃ³gio real, na linha do tempo do artefato (0 = sem pacing).
     const uint64_t scheduleArtifactNs = scheduleNs && *scheduleNs > originNs ? *scheduleNs - originNs : 0;
-    // O QEMU espera só por isto: eco da syncSeq e Core no instante que ela pediu (<= limitNs). Depois
-    // que um eco já no limite a acordou, republicar horizonte ou ritmo da mesma sequência não muda o
-    // que ela espera: sem campainha (SetEvent custava ~1,5% da thread do Scheduler). A sequência tem
-    // de ser a mesma de antes da leitura do limite -- senão o limite pode ser anterior ao pedido dela.
+    // O QEMU espera sÃ³ por isto: eco da syncSeq e Core no instante que ela pediu (<= limitNs). Depois
+    // que um eco jÃ¡ no limite a acordou, republicar horizonte ou ritmo da mesma sequÃªncia nÃ£o muda o
+    // que ela espera: sem campainha (SetEvent custava ~1,5% da thread do Scheduler). A sequÃªncia tem
+    // de ser a mesma de antes da leitura do limite -- senÃ£o o limite pode ser anterior ao pedido dela.
     const bool signal = syncSeq != m_lockstepSatisfiedSeq;
     m_controller.vnextBAttachment().publishCoreTime(syncSeq, timeNs, horizonNs, inputHorizonNs, scheduleArtifactNs, signal);
     if (doneNs >= limitNs && syncSeq == seqBeforeLimit) m_lockstepSatisfiedSeq = syncSeq;
@@ -322,6 +396,8 @@ McuComponent::McuComponent(std::unique_ptr<IMcuAdapter> adapter, simulation::Sch
     m_modules = m_adapter->createModules();
     m_moduleWakeupDueNs.assign(m_modules.size(), QemuModule::kNoWakeup);
     m_moduleWakeupGeneration.assign(m_modules.size(), 0);
+    m_moduleHardDueNs.assign(m_modules.size(), QemuModule::kNoWakeup);
+    m_moduleHardGeneration.assign(m_modules.size(), 0);
 
     const auto pinMap = m_adapter->pinMap();
     m_pins.reserve(pinMap.size());
@@ -365,7 +441,7 @@ McuComponent::McuComponent(std::unique_ptr<IMcuAdapter> adapter, simulation::Sch
         batch.inputVoltages.reserve(batch.bitsOrLines.size());
     }
     m_pinStates.assign(pinMap.size(), 0);
-    // m_controller já chamou setMemoryRegions(m_adapter->memoryRegions()) no próprio construtor.
+    // m_controller jÃ¡ chamou setMemoryRegions(m_adapter->memoryRegions()) no prÃ³prio construtor.
 }
 
 McuComponent::~McuComponent() {
@@ -391,9 +467,9 @@ void McuComponent::onAssignedIndex(uint32_t index) {
 }
 
 void McuComponent::startPolling(std::vector<DeferredSchedulerCall>* deferred) {
-    // Recargas dentro da mesma timeline reutilizam o callback que já está na fila: ele executará
-    // contra a arena atual e schedulePollAt() impede duplicatas. Scheduler::reset() é diferente:
-    // ele descarta callbacks sem executar onPollEvent(), portanto sua geração monotônica informa
+    // Recargas dentro da mesma timeline reutilizam o callback que jÃ¡ estÃ¡ na fila: ele executarÃ¡
+    // contra a arena atual e schedulePollAt() impede duplicatas. Scheduler::reset() Ã© diferente:
+    // ele descarta callbacks sem executar onPollEvent(), portanto sua geraÃ§Ã£o monotÃ´nica informa
     // quando a flag local precisa ser liberada e callbacks da timeline anterior invalidados.
     const uint64_t schedulerResetGeneration = m_scheduler.resetGeneration();
     if (m_pollSchedulerResetGeneration != schedulerResetGeneration) {
@@ -498,21 +574,21 @@ void McuComponent::wakePollWorkerLocked() {
 void McuComponent::onSettleFinished() {
     if (!m_changeAwaitingSettle.load(std::memory_order_acquire) ||
         !m_changeAwaitingSettle.exchange(false, std::memory_order_acq_rel)) return;
-    // A campainha é trocada sob este mutex (bindPollDoorbellLocked/stopFirmware).
+    // A campainha Ã© trocada sob este mutex (bindPollDoorbellLocked/stopFirmware).
     std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
     wakePollWorkerLocked();
 }
 
 void McuComponent::scheduleNextPoll(std::vector<DeferredSchedulerCall>* deferred, bool schedulerLockHeld) {
-    // +1ns (não `nowNs()` cru): quando chamado de dentro de `onPollEvent()` sem o Scheduler
-    // rodando em background (`isRunning()==false` -- driver síncrono via `step()`/testes), um
-    // evento reagendado EXATAMENTE no instante atual é reprocessado na MESMA passada de
-    // `runUntil()` (o laço interno consome qualquer evento com `timeNs <= nextTime`, e `m_nowNs`
-    // nunca avança processando um evento no MESMO instante) -- livelock genuíno, `m_nowNs` nunca
-    // avança, achado do diagnóstico "QEMU manda sinal mas vem como pulso e não retém": mascarado
-    // até aqui só porque o reset fantasma do EN/RST (ver `m_resetPinObserved`) fechava a arena
-    // antes deste laço rodar. O +1ns é imperceptível pro caso normal (`startPolling()`, chamado
-    // fora de `runUntil()`) e garante que `m_nowNs` sempre progride, então o laço termina.
+    // +1ns (nÃ£o `nowNs()` cru): quando chamado de dentro de `onPollEvent()` sem o Scheduler
+    // rodando em background (`isRunning()==false` -- driver sÃ­ncrono via `step()`/testes), um
+    // evento reagendado EXATAMENTE no instante atual Ã© reprocessado na MESMA passada de
+    // `runUntil()` (o laÃ§o interno consome qualquer evento com `timeNs <= nextTime`, e `m_nowNs`
+    // nunca avanÃ§a processando um evento no MESMO instante) -- livelock genuÃ­no, `m_nowNs` nunca
+    // avanÃ§a, achado do diagnÃ³stico "QEMU manda sinal mas vem como pulso e nÃ£o retÃ©m": mascarado
+    // atÃ© aqui sÃ³ porque o reset fantasma do EN/RST (ver `m_resetPinObserved`) fechava a arena
+    // antes deste laÃ§o rodar. O +1ns Ã© imperceptÃ­vel pro caso normal (`startPolling()`, chamado
+    // fora de `runUntil()`) e garante que `m_nowNs` sempre progride, entÃ£o o laÃ§o termina.
     schedulePollAt(m_scheduler.nowNs() + 1, deferred, schedulerLockHeld);
 }
 
@@ -520,10 +596,10 @@ void McuComponent::schedulePollAt(uint64_t timeNs, std::vector<DeferredScheduler
                                    bool schedulerLockHeld) {
     if (m_pollEventScheduled) {
         if (timeNs >= m_pollEventDueNs) return;
-        /* Um mailbox síncrono (I2C burst) pode chegar enquanto há um poll marcado para um evento
-         * normal futuro. Ele precisa preemptar esse prazo: o QEMU não pode avançar até receber a
-         * resposta, portanto esperar o evento futuro cria um bloqueio circular com o pacing. Não
-         * há cancelamento físico no Scheduler; avance a geração para tornar o callback antigo um
+        /* Um mailbox sÃ­ncrono (I2C burst) pode chegar enquanto hÃ¡ um poll marcado para um evento
+         * normal futuro. Ele precisa preemptar esse prazo: o QEMU nÃ£o pode avanÃ§ar atÃ© receber a
+         * resposta, portanto esperar o evento futuro cria um bloqueio circular com o pacing. NÃ£o
+         * hÃ¡ cancelamento fÃ­sico no Scheduler; avance a geraÃ§Ã£o para tornar o callback antigo um
          * no-op e publique o callback anterior. */
         ++m_pollGeneration;
     }
@@ -577,35 +653,35 @@ void McuComponent::onPollEvent() {
     m_pollEventDueNs = UINT64_MAX;
     if (m_scheduler.isRunning()) {
         // PERF-12: com um worker de verdade rodando em background, o busy-wait "sem evento ainda"
-        // sai da thread do Scheduler (onde travava TODOS os outros MCUs/settle atrás dele na fila,
+        // sai da thread do Scheduler (onde travava TODOS os outros MCUs/settle atrÃ¡s dele na fila,
         // ver docs/33-plano-revisao-arquitetural-core.md secao 5.3) e vai para uma thread dedicada
-        // por MCU -- ela mesma despacha eventos prontos (sob o mesmo m_callbackState->mutex que já
-        // serializa contra stamp()) e devolve o controle pra cá via schedulePollAt() assim que
-        // encontra um evento futuro, exatamente como o caminho síncrono abaixo já fazia.
+        // por MCU -- ela mesma despacha eventos prontos (sob o mesmo m_callbackState->mutex que jÃ¡
+        // serializa contra stamp()) e devolve o controle pra cÃ¡ via schedulePollAt() assim que
+        // encontra um evento futuro, exatamente como o caminho sÃ­ncrono abaixo jÃ¡ fazia.
         //
-        // Achado 2026-07-23 (janela entre "Scheduler alcançou o timestamp agendado" e "a thread de
-        // poll recém-criada rodou pela primeira vez"): este callback roda na própria thread do
-        // Scheduler, com Scheduler::m_mutex JÁ SOLTO (ver processNextEventUntilLocked: unlock ->
-        // callback() -> lock) -- então é seguro despachar aqui, direto, ANTES de delegar a thread
-        // dedicada. Sem isto, startBackgroundPollThreadIfNeeded() só CRIA a thread e retorna na
-        // hora (não espera ela rodar nem uma vez) -- o laço de runUntil() (nada mais dirty pra
-        // assentar ainda) ficava livre pra avançar m_nowNs por cima de eventos SEGUINTES do MESMO
-        // MCU antes da thread recém-criada sequer ganhar sua primeira fatia de CPU do SO pra
-        // despachar o evento atual. Despachar aqui, síncrono, fecha essa janela pro evento que JÁ
-        // SABEMOS estar pronto agora (é por isso que este callback disparou); a thread dedicada
-        // assume só o que sobrar (evento futuro ainda não vencido, ou nada). Ressalva honesta: essa
-        // janela é real e esta correção a fecha, mas NÃO é a causa do GPIO13 travado em LOW visto
-        // com firmware real. A causa foi o ACK de um SIM_FREQ do slot legado avançando uma escrita
-        // recém-chegada na fila; ver dispatchArenaEvent()/QemuArenaEvent::fromQueue.
+        // Achado 2026-07-23 (janela entre "Scheduler alcanÃ§ou o timestamp agendado" e "a thread de
+        // poll recÃ©m-criada rodou pela primeira vez"): este callback roda na prÃ³pria thread do
+        // Scheduler, com Scheduler::m_mutex JÃ SOLTO (ver processNextEventUntilLocked: unlock ->
+        // callback() -> lock) -- entÃ£o Ã© seguro despachar aqui, direto, ANTES de delegar a thread
+        // dedicada. Sem isto, startBackgroundPollThreadIfNeeded() sÃ³ CRIA a thread e retorna na
+        // hora (nÃ£o espera ela rodar nem uma vez) -- o laÃ§o de runUntil() (nada mais dirty pra
+        // assentar ainda) ficava livre pra avanÃ§ar m_nowNs por cima de eventos SEGUINTES do MESMO
+        // MCU antes da thread recÃ©m-criada sequer ganhar sua primeira fatia de CPU do SO pra
+        // despachar o evento atual. Despachar aqui, sÃ­ncrono, fecha essa janela pro evento que JÃ
+        // SABEMOS estar pronto agora (Ã© por isso que este callback disparou); a thread dedicada
+        // assume sÃ³ o que sobrar (evento futuro ainda nÃ£o vencido, ou nada). Ressalva honesta: essa
+        // janela Ã© real e esta correÃ§Ã£o a fecha, mas NÃƒO Ã© a causa do GPIO13 travado em LOW visto
+        // com firmware real. A causa foi o ACK de um SIM_FREQ do slot legado avanÃ§ando uma escrita
+        // recÃ©m-chegada na fila; ver dispatchArenaEvent()/QemuArenaEvent::fromQueue.
         while (m_polling.load(std::memory_order_acquire) && pollStepLocked() == PollStep::DispatchedReady) {
         }
         startBackgroundPollThreadIfNeeded();
         return;
     }
-    // Sem worker em background (driver síncrono via step()/runUntil(), ex: testes) -- mesma
-    // ressalva de sempre: uma thread dedicada aqui não teria quem drenar m_events por conta própria,
-    // então mantém o comportamento de sempre (reagenda +1ns e devolve o controle pro chamador
-    // síncrono em vez de bloquear esperando um evento que só chega quando ELE avançar o relógio).
+    // Sem worker em background (driver sÃ­ncrono via step()/runUntil(), ex: testes) -- mesma
+    // ressalva de sempre: uma thread dedicada aqui nÃ£o teria quem drenar m_events por conta prÃ³pria,
+    // entÃ£o mantÃ©m o comportamento de sempre (reagenda +1ns e devolve o controle pro chamador
+    // sÃ­ncrono em vez de bloquear esperando um evento que sÃ³ chega quando ELE avanÃ§ar o relÃ³gio).
     qemu::QemuArenaBridge& arena = m_controller.arenaBridge();
     while (m_polling.load(std::memory_order_acquire) && arena.isOpen()) {
         const PollStep step = pollStepLocked();
@@ -614,7 +690,7 @@ void McuComponent::onPollEvent() {
             scheduleNextPoll();
             return;
         }
-        // DispatchedReady: a próxima iteração agrupa ações do mesmo timestamp.
+        // DispatchedReady: a prÃ³xima iteraÃ§Ã£o agrupa aÃ§Ãµes do mesmo timestamp.
     }
 }
 
@@ -630,61 +706,61 @@ McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedule
             diag::trace(diag::ConsumerTraceEvent::D2_ReadIndexObserved, traceExecId, qs.writeIndex,
                         qs.readIndex, /*opcode=*/0xFFFFFFFFu /* I2C burst peek */);
         }
-        /* Achado 2026-08-27 (investigação TG0WDT_SYS_RESET): arena.pollI2cBurst() é um peek sem
-         * efeito colateral -- nada além de completeI2cBurst() consome o pedido. onPollEvent() (thread
-         * do próprio Scheduler, isCurrentThreadWorker()==true) cai no ramo de baixo e despacha
-         * sincronamente via processI2cBurstLocked(). Isso é intencional só pra fechar a janela de
+        /* Achado 2026-08-27 (investigaÃ§Ã£o TG0WDT_SYS_RESET): arena.pollI2cBurst() Ã© um peek sem
+         * efeito colateral -- nada alÃ©m de completeI2cBurst() consome o pedido. onPollEvent() (thread
+         * do prÃ³prio Scheduler, isCurrentThreadWorker()==true) cai no ramo de baixo e despacha
+         * sincronamente via processI2cBurstLocked(). Isso Ã© intencional sÃ³ pra fechar a janela de
          * partida ANTES da thread de poll dedicada existir (ver onPollEvent()) -- mas nada impedia
          * essa mesma chamada de continuar disparando em TODO poll subsequente do Scheduler mesmo
-         * depois da thread de fundo já estar rodando e ter copiado o MESMO pedido (ainda pendente,
+         * depois da thread de fundo jÃ¡ estar rodando e ter copiado o MESMO pedido (ainda pendente,
          * porque runBackgroundPollLoop() solta m_callbackState->mutex ANTES de despachar, de
-         * propósito, pra não bloquear o mutex durante uma chamada de dispositivo potencialmente
-         * lenta -- ver comentário em runBackgroundPollLoop()). As duas threads passavam no mesmo
+         * propÃ³sito, pra nÃ£o bloquear o mutex durante uma chamada de dispositivo potencialmente
+         * lenta -- ver comentÃ¡rio em runBackgroundPollLoop()). As duas threads passavam no mesmo
          * peek antes de qualquer uma publicar completeI2cBurst(), cada uma chamando
          * NativeDeviceProxy::transferI2c() (e portanto o i2c_transfer() do plugin) de forma
          * independente pro mesmo i2cRequestSeq -- violando a invariante do protocolo (um pedido, um
-         * dispatch, uma conclusão autoritativa). `pollThreadRunning` já é o estado de lifecycle
-         * existente da thread de fundo (CAS ao nascer, revertido em toda saída/falha de lançamento,
+         * dispatch, uma conclusÃ£o autoritativa). `pollThreadRunning` jÃ¡ Ã© o estado de lifecycle
+         * existente da thread de fundo (CAS ao nascer, revertido em toda saÃ­da/falha de lanÃ§amento,
          * ver startBackgroundPollThreadIfNeeded()/runBackgroundPollLoop()) -- reutilizado aqui como
-         * regra de ownership por-lifecycle em vez de um claim atômico por-pedido: enquanto ele está
-         * true, só a thread de fundo despacha I2C; a checagem abaixo faz a thread do Scheduler
-         * desistir (adiar, não descartar) sempre que a de fundo já estiver de pé, preservando o
+         * regra de ownership por-lifecycle em vez de um claim atÃ´mico por-pedido: enquanto ele estÃ¡
+         * true, sÃ³ a thread de fundo despacha I2C; a checagem abaixo faz a thread do Scheduler
+         * desistir (adiar, nÃ£o descartar) sempre que a de fundo jÃ¡ estiver de pÃ©, preservando o
          * comportamento original de fechar a janela de partida (antes dela existir,
-         * `pollThreadRunning` é false e este ramo despacha normalmente). */
+         * `pollThreadRunning` Ã© false e este ramo despacha normalmente). */
         const bool backgroundThreadOwnsI2c =
             m_callbackState->pollThreadRunning.load(std::memory_order_acquire);
         /* Achado 2026-09-28 (rolagem do SSD1306 ~4x mais lenta que no hardware): os dois ramos
          * abaixo reagendavam um poll do Scheduler no MESMO instante enquanto o pedido esperava a
          * thread de fundo. Como o QEMU publica o burst microssegundos depois de a worker drenar a
-         * escrita de CTR que o precede, a worker entrava num laço poll -> pedido pendente -> poll
+         * escrita de CTR que o precede, a worker entrava num laÃ§o poll -> pedido pendente -> poll
          * no mesmo nowNs (~700 mil callbacks/s medidos), tomando este mutex a cada volta. A thread
          * de fundo precisa dele para reivindicar e concluir o pedido e ficava faminta (p90 ~4 ms
-         * por aquisição, duas por burst); enquanto isso o relógio elétrico ficava parado, a fila
-         * da arena enchia e o firmware via cada transação I2C custar milissegundos. */
+         * por aquisiÃ§Ã£o, duas por burst); enquanto isso o relÃ³gio elÃ©trico ficava parado, a fila
+         * da arena enchia e o firmware via cada transaÃ§Ã£o I2C custar milissegundos. */
         if (m_scheduler.isRunning() && !m_scheduler.isCurrentThreadWorker()) {
-            // A thread de fundo perdeu a corrida contra um burst publicado depois da própria
-            // checagem do mailbox: a próxima iteração dela o reivindica, sem esperar outra
-            // campainha (que o QEMU não toca de novo enquanto aguarda esta resposta).
+            // A thread de fundo perdeu a corrida contra um burst publicado depois da prÃ³pria
+            // checagem do mailbox: a prÃ³xima iteraÃ§Ã£o dela o reivindica, sem esperar outra
+            // campainha (que o QEMU nÃ£o toca de novo enquanto aguarda esta resposta).
             return PollStep::DispatchedReady;
         }
         if (m_scheduler.isCurrentThreadWorker() && backgroundThreadOwnsI2c) {
             // A thread de fundo conclui o pedido sem a worker; ao terminar ela volta a olhar a
-            // fila e agenda o próximo poll necessário. Não reagende nada aqui.
+            // fila e agenda o prÃ³ximo poll necessÃ¡rio. NÃ£o reagende nada aqui.
             return PollStep::DeferredFuture;
         }
         if (processI2cBurstLocked()) return PollStep::DispatchedReady;
     }
-    // Um instante assentado por mudança elétrica, como no VNEXT_B: um lote de escritas atrasadas (QEMU
-    // à frente do Core) era despachado inteiro antes de o Scheduler assentar, e um pino que ia a 1 e
-    // voltava a 0 nunca existia no circuito. A próxima mudança espera a anterior ser estampada e o
-    // settle dela terminar, no mesmo instante: esperar now+1 travava, porque o Scheduler não passa do
-    // tempo virtual do MCU e o QEMU, com a fila cheia, não o avança. Na própria thread do Scheduler (ou
-    // sem a worker) não há settle em curso aqui; ao assentar, onSettleFinished() acorda a thread de poll.
+    // Um instante assentado por mudanÃ§a elÃ©trica, como no VNEXT_B: um lote de escritas atrasadas (QEMU
+    // Ã  frente do Core) era despachado inteiro antes de o Scheduler assentar, e um pino que ia a 1 e
+    // voltava a 0 nunca existia no circuito. A prÃ³xima mudanÃ§a espera a anterior ser estampada e o
+    // settle dela terminar, no mesmo instante: esperar now+1 travava, porque o Scheduler nÃ£o passa do
+    // tempo virtual do MCU e o QEMU, com a fila cheia, nÃ£o o avanÃ§a. Na prÃ³pria thread do Scheduler (ou
+    // sem a worker) nÃ£o hÃ¡ settle em curso aqui; ao assentar, onSettleFinished() acorda a thread de poll.
     if (m_changeAwaitingSettle.load(std::memory_order_acquire) &&
         (!m_scheduler.isRunning() || m_scheduler.isCurrentThreadWorker()))
         m_changeAwaitingSettle.store(false, std::memory_order_release);
     if (m_changeAwaitingStamp || m_changeAwaitingSettle.load(std::memory_order_acquire)) {
-        // Scheduler síncrono (testes): sem a thread de poll, o poll seguinte do Scheduler continua.
+        // Scheduler sÃ­ncrono (testes): sem a thread de poll, o poll seguinte do Scheduler continua.
         if (!m_scheduler.isRunning()) scheduleNextPoll(deferred);
         return PollStep::DeferredFuture;
     }
@@ -738,27 +814,27 @@ McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedule
     }
     if (!result.hasEvent || !result.event) return PollStep::NoEvent;
 
-    // nowNs() é um snapshot lock-free (m_nowSnapshotNs), nunca toca Scheduler::m_mutex -- seguro
+    // nowNs() Ã© um snapshot lock-free (m_nowSnapshotNs), nunca toca Scheduler::m_mutex -- seguro
     // chamar segurando m_callbackState->mutex independente de `deferred`.
     const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs.load(std::memory_order_relaxed), result.event->simuTimePs);
     const uint64_t nowNs = m_scheduler.nowNs();
     if (eventNs > nowNs) {
         /*
-         * A cabeça futura é uma fronteira segura: o QEMU já chegou a esse timestamp e
+         * A cabeÃ§a futura Ã© uma fronteira segura: o QEMU jÃ¡ chegou a esse timestamp e
          * schedulePollAt() instala um callback exatamente nele. Sem publicar essa fronteira ao
          * pacing, um gap de heartbeat maior que a folga (10,8ms > 5ms reproduzido sob MTTCG)
-         * cria um deadlock circular: Scheduler para antes do callback, Core não consome a cabeça,
-         * a fila enche e o QEMU não publica o heartbeat intermediário que liberaria o teto.
+         * cria um deadlock circular: Scheduler para antes do callback, Core nÃ£o consome a cabeÃ§a,
+         * a fila enche e o QEMU nÃ£o publica o heartbeat intermediÃ¡rio que liberaria o teto.
          *
-         * Não altera m_latestVirtualTimePs: métricas continuam representando somente eventos
-         * aplicados. A cabeça futura serve apenas para alcançar o callback que a aplicará.
+         * NÃ£o altera m_latestVirtualTimePs: mÃ©tricas continuam representando somente eventos
+         * aplicados. A cabeÃ§a futura serve apenas para alcanÃ§ar o callback que a aplicarÃ¡.
          */
         const uint64_t previous =
             m_nextPendingEventNs.exchange(eventNs, std::memory_order_relaxed);
         if (previous != eventNs) m_scheduler.notifyAdvanceLimitChanged();
-        // Mantém a ação na arena e agenda uma única entrada exatamente no instante publicado. NÃO
-        // avança m_latestVirtualTimePs aqui -- ver achado 2026-07-23 abaixo: isto só é seguro fazer
-        // depois de confirmar que o evento está sendo despachado agora, não só espiado.
+        // MantÃ©m a aÃ§Ã£o na arena e agenda uma Ãºnica entrada exatamente no instante publicado. NÃƒO
+        // avanÃ§a m_latestVirtualTimePs aqui -- ver achado 2026-07-23 abaixo: isto sÃ³ Ã© seguro fazer
+        // depois de confirmar que o evento estÃ¡ sendo despachado agora, nÃ£o sÃ³ espiado.
         schedulePollAt(eventNs, deferred);
         // TEMPORARY (ConsumerTrace investigation, round 2): the decisive question is WHY nowNs
         // doesn't reach eventNs before the queue stays saturated for ~3s -- record nowNs, eventNs,
@@ -781,20 +857,20 @@ McuComponent::PollStep McuComponent::pollStepLocked(std::vector<DeferredSchedule
     }
     m_nextPendingEventNs.store(0, std::memory_order_relaxed);
 
-    // Achado 2026-07-23 (sincronização de ritmo): só avança m_latestVirtualTimePs DEPOIS de
-    // confirmar `eventNs <= nowNs()` acima -- ou seja, só quando o evento está de fato sendo
-    // despachado agora, não quando foi meramente espiado (arena.poll() é PEEK, não consome; a fila
-    // pode ter até 32 entradas bufferizadas à frente do que foi realmente processado). Fazer isto
-    // ANTES do teste acima (versão original) deixava pacingPositionNs() refletir o timestamp de um
-    // evento ainda NÃO despachado -- com QEMU bufferizando rápido o bastante, isso inflava a
-    // posição relatada ao AdvanceLimitFn sem necessidade. Ressalva honesta: esta correção é uma
-    // melhoria de precisão real (confirmada sem regressão no ctest), mas investigação posterior
-    // (2026-07-23, ver .spec) mostrou que o salto de Scheduler::nowNs() pro fim da simulação em uma
-    // única chamada de runUntil() tinha uma causa DIFERENTE e mais simples (MCU com arena aberta
-    // mas zero eventos despachados sendo excluído do cálculo do teto em vez de contar como posição
+    // Achado 2026-07-23 (sincronizaÃ§Ã£o de ritmo): sÃ³ avanÃ§a m_latestVirtualTimePs DEPOIS de
+    // confirmar `eventNs <= nowNs()` acima -- ou seja, sÃ³ quando o evento estÃ¡ de fato sendo
+    // despachado agora, nÃ£o quando foi meramente espiado (arena.poll() Ã© PEEK, nÃ£o consome; a fila
+    // pode ter atÃ© 32 entradas bufferizadas Ã  frente do que foi realmente processado). Fazer isto
+    // ANTES do teste acima (versÃ£o original) deixava pacingPositionNs() refletir o timestamp de um
+    // evento ainda NÃƒO despachado -- com QEMU bufferizando rÃ¡pido o bastante, isso inflava a
+    // posiÃ§Ã£o relatada ao AdvanceLimitFn sem necessidade. Ressalva honesta: esta correÃ§Ã£o Ã© uma
+    // melhoria de precisÃ£o real (confirmada sem regressÃ£o no ctest), mas investigaÃ§Ã£o posterior
+    // (2026-07-23, ver .spec) mostrou que o salto de Scheduler::nowNs() pro fim da simulaÃ§Ã£o em uma
+    // Ãºnica chamada de runUntil() tinha uma causa DIFERENTE e mais simples (MCU com arena aberta
+    // mas zero eventos despachados sendo excluÃ­do do cÃ¡lculo do teto em vez de contar como posiÃ§Ã£o
     // 0 -- ver SimulationSession::computeSlowestMcuPositionNs()), e nenhuma das duas explica o
     // travamento de GPIO13 em LOW com firmware real. A causa foi o ACK de um SIM_FREQ do slot
-    // legado avançando uma entrada da fila sem despachá-la.
+    // legado avanÃ§ando uma entrada da fila sem despachÃ¡-la.
     {
         uint64_t observed = m_latestVirtualTimePs.load(std::memory_order_relaxed);
         bool advanced = false;
@@ -859,8 +935,8 @@ bool McuComponent::processI2cBurstLocked() {
     if (m_i2cTransferHandler && pending->txLen > 0) {
         const bool start = (pending->flags & 1u) != 0;
         const bool read = (pending->flags & 4u) != 0;
-        /* ABI 5 sempre transporta o byte de endereço em tx[0], inclusive em uma continuação sem
-         * START. Nesse caso ele é metadado de roteamento e não deve chegar ao payload do plugin. */
+        /* ABI 5 sempre transporta o byte de endereÃ§o em tx[0], inclusive em uma continuaÃ§Ã£o sem
+         * START. Nesse caso ele Ã© metadado de roteamento e nÃ£o deve chegar ao payload do plugin. */
         const uint32_t payloadOffset = 1u;
         I2cTransfer transfer{};
         transfer.address = static_cast<uint8_t>(pending->tx[0] >> 1);
@@ -902,7 +978,7 @@ void McuComponent::startBackgroundPollThreadIfNeeded() {
 #endif
     bool expected = false;
     if (!m_callbackState->pollThreadRunning.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
-        return; // já existe uma thread de poll ativa para este MCU -- ela vai pegar o estado atual.
+        return; // jÃ¡ existe uma thread de poll ativa para este MCU -- ela vai pegar o estado atual.
     }
 #ifdef _WIN32
     if (!ResetEvent(static_cast<HANDLE>(m_callbackState->stopEvent))) {
@@ -928,9 +1004,9 @@ void McuComponent::startBackgroundPollThreadIfNeeded() {
 }
 
 void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
-    // Nunca guarda `McuComponent*` fora do escopo do lock abaixo -- `state` (CallbackState) é a
-    // única coisa que esta thread mantém viva sozinha; McuComponent pode ser destruído a qualquer
-    // momento entre duas iterações (ver ~McuComponent(), que zera `owner` sob o mesmo mutex antes
+    // Nunca guarda `McuComponent*` fora do escopo do lock abaixo -- `state` (CallbackState) Ã© a
+    // Ãºnica coisa que esta thread mantÃ©m viva sozinha; McuComponent pode ser destruÃ­do a qualquer
+    // momento entre duas iteraÃ§Ãµes (ver ~McuComponent(), que zera `owner` sob o mesmo mutex antes
     // de qualquer membro ser desalocado).
     // TEMPORARY (ConsumerTrace investigation, see ConsumerTrace.hpp): identify this thread's
     // lifetime and the ONE synchronization primitive that can block D1 (entering the drain
@@ -972,10 +1048,10 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
                     restartAfterExit = true;
                 } else if (arena.pollI2cBurst() && self->m_scheduler.isRunning() &&
                            !self->m_scheduler.isCurrentThreadWorker()) {
-                    /* Não agende o mailbox na timeline: o QEMU está bloqueado esperando esta
-                     * resposta e pode não produzir o evento futuro que liberaria o pacing. Copie
-                     * o pedido aqui e execute depois de soltar o mutex do MCU. A topologia é
-                     * imutável durante Run e NativeDeviceProxy serializa o próprio estado. */
+                    /* NÃ£o agende o mailbox na timeline: o QEMU estÃ¡ bloqueado esperando esta
+                     * resposta e pode nÃ£o produzir o evento futuro que liberaria o pacing. Copie
+                     * o pedido aqui e execute depois de soltar o mutex do MCU. A topologia Ã©
+                     * imutÃ¡vel durante Run e NativeDeviceProxy serializa o prÃ³prio estado. */
                     backgroundI2c = arena.pollI2cBurst();
                     backgroundI2cHandler = self->m_i2cTransferHandler;
                     backgroundComponentIndex = self->m_componentIndex;
@@ -995,34 +1071,34 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
                 } else {
                     step = self->pollStepLocked(&deferred);
                     if (step == PollStep::NoEvent && !self->m_scheduler.isRunning()) {
-                        // O Scheduler deixou de rodar em background enquanto esperávamos (ex: Stop)
-                        // -- só sai, SEM reagendar. Achado 2026-07-22 (SessionRestartStressTest,
-                        // 15/15 ciclos travando pra sempre após o primeiro): reagendar aqui via
-                        // scheduleNextPoll() (versão antiga desta linha) deixava m_pollEventScheduled
+                        // O Scheduler deixou de rodar em background enquanto esperÃ¡vamos (ex: Stop)
+                        // -- sÃ³ sai, SEM reagendar. Achado 2026-07-22 (SessionRestartStressTest,
+                        // 15/15 ciclos travando pra sempre apÃ³s o primeiro): reagendar aqui via
+                        // scheduleNextPoll() (versÃ£o antiga desta linha) deixava m_pollEventScheduled
                         // preso em `true` para sempre sempre que este ramo disparasse durante
                         // SimulationSession::stopSimulation() -- ela para o Scheduler ANTES de
-                        // chamar stopFirmware() (de propósito: nenhum componente pode voltar a
-                        // agendar trabalho enquanto as MCUs são encerradas), então esta thread podia
+                        // chamar stopFirmware() (de propÃ³sito: nenhum componente pode voltar a
+                        // agendar trabalho enquanto as MCUs sÃ£o encerradas), entÃ£o esta thread podia
                         // flagrar "sem evento + Scheduler parou" bem nessa janela e agendar um
-                        // callback num Scheduler prestes a ser resetado. Esse callback é o ÚNICO
+                        // callback num Scheduler prestes a ser resetado. Esse callback Ã© o ÃšNICO
                         // lugar que zera m_pollEventScheduled (em onPollEvent()) -- mas
                         // Scheduler::reset() (chamado logo depois, em stopSimulation()) descarta a
-                        // fila de eventos sem executá-lo, e a flag ficava presa para sempre: todo
+                        // fila de eventos sem executÃ¡-lo, e a flag ficava presa para sempre: todo
                         // load posterior via startPolling()->scheduleNextPoll()->schedulePollAt()
                         // via a flag presa e desistia silenciosamente, nenhuma thread de poll nunca
                         // mais nascia, o MCU travava pra sempre. Nenhum chamador real de
                         // Scheduler::stop() deixa a arena aberta esperando um "ponto de retomada"
-                        // agendado (stopSimulation() sempre também chama stopFirmware()+reset() logo
-                        // em seguida) -- sair sem reagendar é seguro e evita a pegadinha.
+                        // agendado (stopSimulation() sempre tambÃ©m chama stopFirmware()+reset() logo
+                        // em seguida) -- sair sem reagendar Ã© seguro e evita a pegadinha.
                         stop = true;
                         restartAfterExit = true;
                     }
                 }
             }
         }
-        // As chamadas ao Scheduler coletadas acima (markDirty/scheduleEvent/scheduleAt) só
-        // disparam AQUI, com `state->mutex` já solto -- ver doc-comment de DeferredSchedulerCall
-        // no .hpp: stamp() (thread do Scheduler) adquire Scheduler::m_mutex e SÓ DEPOIS
+        // As chamadas ao Scheduler coletadas acima (markDirty/scheduleEvent/scheduleAt) sÃ³
+        // disparam AQUI, com `state->mutex` jÃ¡ solto -- ver doc-comment de DeferredSchedulerCall
+        // no .hpp: stamp() (thread do Scheduler) adquire Scheduler::m_mutex e SÃ“ DEPOIS
         // m_callbackState->mutex; segurar as duas ao mesmo tempo na ordem inversa aqui
         // deadlockaria assim que as duas threads se cruzassem no mesmo MCU.
         for (DeferredSchedulerCall& call : deferred) call();
@@ -1086,33 +1162,33 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
             break;
         }
         if (step == PollStep::DeferredFuture) {
-            /* ABI 5 acrescentou um pedido síncrono que pode ser publicado DEPOIS de termos
+            /* ABI 5 acrescentou um pedido sÃ­ncrono que pode ser publicado DEPOIS de termos
              * encontrado/agendado um evento normal futuro. Sem doorbell cross-process, encerrar
-             * esta thread aqui deixa o mailbox sem consumidor enquanto o QEMU está bloqueado e
-             * já não consegue publicar outro heartbeat que acorde o Core. Continue observando a
-             * arena; o callback futuro já está deduplicado por schedulePollAt(). O lock é solto a
-             * cada iteração, então o Scheduler pode executar o callback normalmente. */
+             * esta thread aqui deixa o mailbox sem consumidor enquanto o QEMU estÃ¡ bloqueado e
+             * jÃ¡ nÃ£o consegue publicar outro heartbeat que acorde o Core. Continue observando a
+             * arena; o callback futuro jÃ¡ estÃ¡ deduplicado por schedulePollAt(). O lock Ã© solto a
+             * cada iteraÃ§Ã£o, entÃ£o o Scheduler pode executar o callback normalmente. */
             /* `yield()` sozinho causa starvation no Windows: esta thread readquire o mutex em um
-             * laço quente antes de a worker conseguir executar o callback recém-agendado. A pausa
-             * ocorre fora do mutex e limita a latência de descoberta do mailbox sem ocupar um
-             * núcleo nem impedir o Scheduler. */
+             * laÃ§o quente antes de a worker conseguir executar o callback recÃ©m-agendado. A pausa
+             * ocorre fora do mutex e limita a latÃªncia de descoberta do mailbox sem ocupar um
+             * nÃºcleo nem impedir o Scheduler. */
             diag::trace(diag::ConsumerTraceEvent::D6_LoopExit, 0, 0, 0, /*reason=*/2 /* deferred-future wait */);
             waitForPollWork(state);
             continue;
         }
-        if (step == PollStep::DispatchedReady) continue; // agrupa ações do mesmo timestamp.
+        if (step == PollStep::DispatchedReady) continue; // agrupa aÃ§Ãµes do mesmo timestamp.
         diag::trace(diag::ConsumerTraceEvent::D6_LoopExit, 0, 0, 0, /*reason=*/3 /* no-event wait */);
         waitForPollWork(state);
     }
     diag::trace(diag::ConsumerTraceEvent::ThreadStop, 0, 0, 0);
     if (restartAfterExit) {
         /*
-         * Stop -> Run pode começar enquanto esta thread destacada já decidiu sair, mas antes de
-         * publicar pollThreadRunning=false. Nesse intervalo startPolling() vê a flag antiga em
-         * true e não cria uma substituta; sem este handoff, a thread antiga sai logo depois e a
+         * Stop -> Run pode comeÃ§ar enquanto esta thread destacada jÃ¡ decidiu sair, mas antes de
+         * publicar pollThreadRunning=false. Nesse intervalo startPolling() vÃª a flag antiga em
+         * true e nÃ£o cria uma substituta; sem este handoff, a thread antiga sai logo depois e a
          * nova arena fica sem consumidor. Reavalie somente depois de baixar a flag. Se o novo Run
-         * já estiver ativo, o CAS transfere a responsabilidade para uma única nova thread; se ele
-         * começar depois desta checagem, verá a flag false e fará a mesma coisa.
+         * jÃ¡ estiver ativo, o CAS transfere a responsabilidade para uma Ãºnica nova thread; se ele
+         * comeÃ§ar depois desta checagem, verÃ¡ a flag false e farÃ¡ a mesma coisa.
          */
         std::lock_guard<std::recursive_mutex> lock(state->mutex);
         state->pollThreadRunning.store(false, std::memory_order_release);
@@ -1128,9 +1204,91 @@ void McuComponent::runBackgroundPollLoop(std::shared_ptr<CallbackState> state) {
     }
 }
 
+// Corpo comum dos dois despertares de um mÃ³dulo (o normal e o rÃ­gido do TWAI), com o mutex do callback.
+void McuComponent::runModuleWakeupLocked(size_t moduleIndex, std::vector<DeferredSchedulerCall>& schedulerCalls) {
+    const uint64_t nowNs = m_scheduler.nowNs();
+    const uint64_t before = electricalOutputFingerprint();
+    m_modules[moduleIndex]->onWakeup(nowNs);
+    if (m_modules[moduleIndex]->kind() == ModuleKind::Spi) {
+        deliverSpiBytesLocked(*m_modules[moduleIndex]);
+        if (m_controller.vnextBActive()) deliverVnextBSpiRxLocked(*m_modules[moduleIndex]);
+    }
+    if (m_controller.vnextBActive() && m_modules[moduleIndex]->kind() == ModuleKind::Usart)
+        deliverVnextBUartRxLocked(*m_modules[moduleIndex]);
+    if (m_controller.vnextBActive() && m_modules[moduleIndex]->kind() == ModuleKind::I2c) {
+        auto& attachment = m_controller.vnextBAttachment();
+        const uint64_t base = m_modules[moduleIndex]->memStart();
+        attachment.publishRegisterResult(base + 0x08, m_modules[moduleIndex]->readRegister(base + 0x08));
+        attachment.publishRegisterResult(base + 0x58, m_modules[moduleIndex]->readRegister(base + 0x58));
+        // Pode iniciar a prÃ³xima transaÃ§Ã£o da fila: conta na mudanÃ§a elÃ©trica abaixo.
+        completeVnextBElectricalI2cIfDoneLocked();
+    }
+    const bool changed = before != electricalOutputFingerprint();
+    // Este callback jÃ¡ roda com Scheduler::m_mutex liberado (ver
+    // Scheduler::processNextEventUntilLocked: unlock -> callback() -> lock) e na prÃ³pria
+    // thread do Scheduler. Mesmo assim, chamadas que adquirem o lock do Scheduler
+    // sÃ£o deferred atÃ© liberar o lock de lifetime do callback (ordem de locks).
+    scheduleModuleWakeup(moduleIndex, nowNs, false, &schedulerCalls);
+    // MudanÃ§a de FIFO/RX ou bit TX repetido nÃ£o altera o circuito elÃ©trico.
+    if (changed) m_scheduler.markDirty(m_componentIndex);
+}
+
+void McuComponent::postModuleWakeup(uint64_t nowNs, uint64_t delayNs, simulation::Scheduler::EventCallback callback,
+                                    bool soft, bool schedulerLockHeld, std::vector<DeferredSchedulerCall>* deferred) {
+    if (deferred) {
+        // Ver doc-comment de DeferredSchedulerCall no .hpp -- evita inversÃ£o de ordem de lock com
+        // stamp() quando quem chama Ã© a thread de poll dedicada (segurando m_callbackState->mutex).
+        deferred->push_back([&scheduler = m_scheduler, targetNs = nowNs + delayNs, callback = std::move(callback), soft]() mutable {
+            scheduler.scheduleAt(targetNs, std::move(callback), soft);
+        });
+    } else if (schedulerLockHeld) {
+        m_scheduler.scheduleEventUnlocked(delayNs, std::move(callback), soft);
+    } else {
+        m_scheduler.scheduleAt(m_scheduler.nowNs() + delayNs, std::move(callback), soft);
+    }
+}
+
+// TWAI: as bordas do prÃ³prio TX despertam o mÃ³dulo como evento suave; o instante previsto da prÃ³xima
+// interrupÃ§Ã£o (fim de quadro, erro, recuperaÃ§Ã£o de bus off) vem num segundo despertar, rÃ­gido, que o
+// adaptador publica em kAdapterTwaiHardDueOffset -- o guest para ali, nÃ£o em cada bit.
+void McuComponent::scheduleModuleHardWakeup(size_t moduleIndex, uint64_t nowNs, bool schedulerLockHeld,
+                                            std::vector<DeferredSchedulerCall>* deferred) {
+    QemuModule& module = *m_modules[moduleIndex];
+    const auto hard = std::find_if(kAdapterHardDue.begin(), kAdapterHardDue.end(),
+                                   [&module](const auto& entry) { return module.owns(entry.first); });
+    if (hard == kAdapterHardDue.end()) return;
+    const uint64_t dueNs = module.readRegister(hard->first + hard->second);
+    if (dueNs == QemuModule::kNoWakeup) {
+        if (m_moduleHardDueNs[moduleIndex] != QemuModule::kNoWakeup) ++m_moduleHardGeneration[moduleIndex];
+        m_moduleHardDueNs[moduleIndex] = QemuModule::kNoWakeup;
+        return;
+    }
+    const uint64_t atNs = std::max(dueNs, nowNs);
+    if (m_moduleHardDueNs[moduleIndex] != QemuModule::kNoWakeup && m_moduleHardDueNs[moduleIndex] <= atNs) return;
+    m_moduleHardDueNs[moduleIndex] = atNs;
+    const uint64_t generation = ++m_moduleHardGeneration[moduleIndex];
+    const std::weak_ptr<CallbackState> weakState = m_callbackState;
+    auto callback = [weakState, moduleIndex, generation] {
+        const std::shared_ptr<CallbackState> state = weakState.lock();
+        if (!state) return;
+        std::vector<DeferredSchedulerCall> schedulerCalls;
+        {
+            std::lock_guard<std::recursive_mutex> lock(state->mutex);
+            McuComponent* self = state->owner;
+            if (!self || moduleIndex >= self->m_moduleHardGeneration.size()) return;
+            if (self->m_moduleHardGeneration[moduleIndex] != generation) return;
+            self->m_moduleHardDueNs[moduleIndex] = QemuModule::kNoWakeup;
+            self->runModuleWakeupLocked(moduleIndex, schedulerCalls);
+        }
+        for (auto& call : schedulerCalls) call();
+    };
+    postModuleWakeup(nowNs, atNs - nowNs, std::move(callback), false, schedulerLockHeld, deferred);
+}
+
 void McuComponent::scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool schedulerLockHeld,
                                          std::vector<DeferredSchedulerCall>* deferred) {
     if (moduleIndex >= m_modules.size()) return;
+    scheduleModuleHardWakeup(moduleIndex, nowNs, schedulerLockHeld, deferred);
 
     const uint64_t delayNs = m_modules[moduleIndex]->nextWakeupDelayNs(nowNs);
     if (delayNs == QemuModule::kNoWakeup) {
@@ -1152,52 +1310,21 @@ void McuComponent::scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool
         if (!state) return;
         std::vector<DeferredSchedulerCall> schedulerCalls;
         {
-        std::lock_guard<std::recursive_mutex> lock(state->mutex);
-        McuComponent* self = state->owner;
-        if (!self || moduleIndex >= self->m_moduleWakeupGeneration.size()) return;
-        if (self->m_moduleWakeupGeneration[moduleIndex] != generation) return;
-        self->m_moduleWakeupDueNs[moduleIndex] = QemuModule::kNoWakeup;
-        const uint64_t nowNs = self->m_scheduler.nowNs();
-        const uint64_t before = self->electricalOutputFingerprint();
-        self->m_modules[moduleIndex]->onWakeup(nowNs);
-        if (self->m_modules[moduleIndex]->kind() == ModuleKind::Spi) self->deliverSpiBytesLocked(*self->m_modules[moduleIndex]);
-        if (self->m_controller.vnextBActive() && self->m_modules[moduleIndex]->kind() == ModuleKind::Usart)
-            self->deliverVnextBUartRxLocked(*self->m_modules[moduleIndex]);
-        if (self->m_controller.vnextBActive() && self->m_modules[moduleIndex]->kind() == ModuleKind::I2c) {
-            auto& attachment = self->m_controller.vnextBAttachment();
-            const uint64_t base = self->m_modules[moduleIndex]->memStart();
-            attachment.publishRegisterResult(base + 0x08, self->m_modules[moduleIndex]->readRegister(base + 0x08));
-            attachment.publishRegisterResult(base + 0x58, self->m_modules[moduleIndex]->readRegister(base + 0x58));
-            // Pode iniciar a próxima transação da fila: conta na mudança elétrica abaixo.
-            self->completeVnextBElectricalI2cIfDoneLocked();
-        }
-        const bool changed = before != self->electricalOutputFingerprint();
-        // Este callback já roda com Scheduler::m_mutex liberado (ver
-        // Scheduler::processNextEventUntilLocked: unlock -> callback() -> lock) e na própria
-        // thread do Scheduler. Mesmo assim, chamadas que adquirem o lock do Scheduler
-        // são deferred até liberar o lock de lifetime do callback (ordem de locks).
-        self->scheduleModuleWakeup(moduleIndex, nowNs, false, &schedulerCalls);
-        // Mudança de FIFO/RX ou bit TX repetido não altera o circuito elétrico.
-        if (changed) self->m_scheduler.markDirty(self->m_componentIndex);
+            std::lock_guard<std::recursive_mutex> lock(state->mutex);
+            McuComponent* self = state->owner;
+            if (!self || moduleIndex >= self->m_moduleWakeupGeneration.size()) return;
+            if (self->m_moduleWakeupGeneration[moduleIndex] != generation) return;
+            self->m_moduleWakeupDueNs[moduleIndex] = QemuModule::kNoWakeup;
+            self->runModuleWakeupLocked(moduleIndex, schedulerCalls);
         }
         for (auto& call : schedulerCalls) call();
     };
-    // A USART só mexe em saídas deste MCU enquanto transmite. Recebendo um quadro, o despertar entrega
-    // um byte ao FIFO de RX do QEMU no fim do stop bit: é uma entrada do guest, rígida como uma borda.
+    // A USART sÃ³ mexe em saÃ­das deste MCU enquanto transmite. Recebendo um quadro, o despertar entrega
+    // um byte ao FIFO de RX do QEMU no fim do stop bit: Ã© uma entrada do guest, rÃ­gida como uma borda.
     const bool soft = lockstepSoftModule(m_modules[moduleIndex]->kind()) &&
                       !(m_modules[moduleIndex]->kind() == ModuleKind::Usart &&
                         m_modules[moduleIndex]->readRegister(m_modules[moduleIndex]->memStart() + kAdapterUsartRxBusyOffset) != 0);
-    if (deferred) {
-        // Ver doc-comment de DeferredSchedulerCall no .hpp -- evita inversão de ordem de lock com
-        // stamp() quando quem chama é a thread de poll dedicada (segurando m_callbackState->mutex).
-        deferred->push_back([&scheduler = m_scheduler, targetNs = nowNs + delayNs, callback = std::move(callback), soft]() mutable {
-            scheduler.scheduleAt(targetNs, std::move(callback), soft);
-        });
-    } else if (schedulerLockHeld) {
-        m_scheduler.scheduleEventUnlocked(delayNs, std::move(callback), soft);
-    } else {
-        m_scheduler.scheduleAt(m_scheduler.nowNs() + delayNs, std::move(callback), soft);
-    }
+    postModuleWakeup(nowNs, delayNs, std::move(callback), soft, schedulerLockHeld, deferred);
 }
 
 void McuComponent::scheduleWakeupsForAllModules(uint64_t nowNs, bool schedulerLockHeld,
@@ -1237,7 +1364,7 @@ std::string McuComponent::drainUsartMonitorHex(uint64_t regionStart, bool tx) co
     return hex;
 }
 
-// USART cujo TX sai agora pelo pino: o próprio módulo no pino dedicado, ou a USART que o adaptador
+// USART cujo TX sai agora pelo pino: o prÃ³prio mÃ³dulo no pino dedicado, ou a USART que o adaptador
 // roteou para esta linha de GPIO (IO_MUX ou matriz). Com o mutex do callback tomado.
 QemuModule* McuComponent::uartTxModuleOfPinLocked(size_t localPinIndex) const {
     const std::span<const PinMapping> mappings = m_adapter->pinMap();
@@ -1262,19 +1389,24 @@ bool McuComponent::pinHasUartTxWireTap(size_t localPinIndex) const {
     return usart && usart->hasWireTap();
 }
 
-void McuComponent::setSpiBytePairs(std::vector<uint32_t> clockPins, std::vector<uint32_t> dataPins) {
+void McuComponent::setSpiBytePairs(std::vector<uint32_t> clockPins, std::vector<uint32_t> dataPins,
+                                   std::vector<uint32_t> misoPins) {
     std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
-    m_adapter->setSpiBytePairs(clockPins, dataPins);
+    m_adapter->setSpiBytePairsWithMiso(clockPins, dataPins, misoPins);
 }
 
 void McuComponent::deliverSpiBytesLocked(QemuModule& spi) {
     uint8_t byte = 0;
     uint32_t clockPin = 0, dataPin = 0;
-    // Um despertar fecha no máximo um byte; o limite só protege de um adaptador defeituoso.
+    // Um despertar fecha no mÃ¡ximo um byte; o limite sÃ³ protege de um adaptador defeituoso.
     for (int guard = 0; guard < 64 && spi.drainSpiByte(byte, clockPin, dataPin); ++guard) {
-        if (m_spiByteHandler) m_spiByteHandler(m_componentIndex, clockPin, dataPin, byte);
+        if (m_spiByteHandler) {
+            const std::optional<uint8_t> miso = m_spiByteHandler(m_componentIndex, clockPin, dataPin, byte);
+            if (miso) spi.writeRegisterAt(spi.memStart() + kAdapterSpiMisoByteOffset, *miso, m_scheduler.nowNs());
+        }
     }
 }
+
 
 void McuComponent::setPinConnected(size_t localPinIndex, bool connected) {
     std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
@@ -1322,8 +1454,8 @@ McuComponent::tryDrainUartTxWireTap(size_t localPinIndex, uint32_t receiver, boo
     QemuModule* module = uartTxModuleOfPinLocked(localPinIndex);
     if (!module) return std::nullopt;
 
-    // No chip dois receptores no mesmo TX veem os mesmos bytes (o GPIO1 e o UART0_TX são o mesmo
-    // U0TXD): o tap do adaptador é drenado uma vez e cada byte vai para a fila de todo receptor cujo
+    // No chip dois receptores no mesmo TX veem os mesmos bytes (o GPIO1 e o UART0_TX sÃ£o o mesmo
+    // U0TXD): o tap do adaptador Ã© drenado uma vez e cada byte vai para a fila de todo receptor cujo
     // pino carrega agora este TX -- uma vez por receptor, mesmo com dois pinos dele no mesmo TX.
     auto self = std::find_if(m_uartTapReceivers.begin(), m_uartTapReceivers.end(),
                              [receiver](const UartTapReceiver& r) { return r.component == receiver; });
@@ -1377,20 +1509,33 @@ void McuComponent::injectUsartRxHex(uint64_t regionStart, const std::string& hex
     module->injectRxBytes(bytes.data(), bytes.size());
     if (!m_controller.vnextBActive()) return;
     deliverVnextBUartRxLocked(*module);
-    // Fora do ciclo do Scheduler (caixa de envio do monitor): toca a campainha já.
+    // Fora do ciclo do Scheduler (caixa de envio do monitor): toca a campainha jÃ¡.
     m_controller.vnextBAttachment().flushSignal();
 }
 
 void McuComponent::deliverVnextBUartRxLocked(QemuModule& usart) {
-    // VNEXT_B: o FIFO de RX que o firmware lê é o do modelo de UART do QEMU. O byte que o adaptador
-    // decodificou no pino (ou recebeu da caixa de envio do monitor) segue para lá pelo C2A; com o
-    // anel cheio fica no FIFO do adaptador até o próximo despertar ou a próxima chamada.
+    // VNEXT_B: o FIFO de RX que o firmware lÃª Ã© o do modelo de UART do QEMU. O byte que o adaptador
+    // decodificou no pino (ou recebeu da caixa de envio do monitor) segue para lÃ¡ pelo C2A; com o
+    // anel cheio fica no FIFO do adaptador atÃ© o prÃ³ximo despertar ou a prÃ³xima chamada.
     auto& attachment = m_controller.vnextBAttachment();
     const uint64_t base = usart.memStart();
     while ((usart.readRegister(base + kAdapterUsartStatusOffset) & kAdapterUsartRxCountMask) != 0 &&
            !attachment.c2aFull()) {
-        const uint8_t byte = static_cast<uint8_t>(usart.readRegister(base + kAdapterUsartFifoOffset));
-        attachment.publishUartRxByte(usart.index(), byte);
+        const uint64_t entry = usart.readRegister(base + kAdapterUsartRxEntryOffset);
+        attachment.publishUartRxByte(usart.index(), static_cast<uint8_t>(entry), static_cast<uint8_t>((entry >> 8) & 7u));
+    }
+}
+
+void McuComponent::deliverVnextBSpiRxLocked(QemuModule& spi) {
+    // VNEXT_B: o byte que o adaptador recebeu no MISO vai ao W0..W15 do modelo de SPI do QEMU pelo C2A,
+    // antes de o QEMU ver o tempo que o contÃ©m (publishLockstepTime publica as entradas primeiro). Com
+    // o anel cheio fica no adaptador atÃ© a prÃ³xima chamada.
+    auto& attachment = m_controller.vnextBAttachment();
+    const uint64_t base = spi.memStart();
+    while (!attachment.c2aFull()) {
+        const uint64_t value = spi.readRegister(base + kAdapterSpiRxOffset);
+        if ((value & kAdapterSpiRxValid) == 0) break;
+        attachment.publishRegisterResult(base + kAdapterSpiDataOffset, value);
     }
 }
 
@@ -1411,8 +1556,8 @@ std::vector<PropertyDescriptor> McuComponent::propertyDescriptors() {
         }
         // Lado ESCRITA do monitor (mcu_abi.h minor 7) -- caixa de envio do "Abrir monitor serial"
         // injeta hex aqui, que vira bytes reais no RX desta USART via injectUsartRxHex/
-        // QemuModule::injectRxBytes. `get` nunca é lido pelo caminho previsto (write-only de
-        // verdade, ao contrário dos dois acima que são somente-leitura).
+        // QemuModule::injectRxBytes. `get` nunca Ã© lido pelo caminho previsto (write-only de
+        // verdade, ao contrÃ¡rio dos dois acima que sÃ£o somente-leitura).
         {
             PropertyDescriptor descriptor;
             descriptor.name = "uart" + std::to_string(region.moduleIndex) + "_rx_inject_hex";
@@ -1430,15 +1575,26 @@ std::vector<PropertyDescriptor> McuComponent::propertyDescriptors() {
 }
 
 uint64_t McuComponent::electricalOutputFingerprint() const {
-    // FNV-1a do que stamp() aplica a cada pino, sem alocação, uma leitura em lote por módulo. Inclui
-    // a posição implicitamente pela ordem fixa dos lotes. O pull de um pino não dirigido entra:
-    // pinMode(INPUT_PULLUP) num pino solto muda o nível do pad como no chip, sem esperar outro
+    // FNV-1a do que stamp() aplica a cada pino, sem alocaÃ§Ã£o, uma leitura em lote por mÃ³dulo. Inclui
+    // a posiÃ§Ã£o implicitamente pela ordem fixa dos lotes. O pull de um pino nÃ£o dirigido entra:
+    // pinMode(INPUT_PULLUP) num pino solto muda o nÃ­vel do pad como no chip, sem esperar outro
     // pino mudar para o MCU ser estampado de novo.
     uint64_t fingerprint = 1469598103934665603ull;
     for (const PinBatch& batch : m_pinBatches) {
-        visitPinStates(*batch.module, batch.bitsOrLines, [&](size_t, uint8_t state) {
+        visitPinStates(*batch.module, batch.bitsOrLines, [&](size_t position, uint8_t state) {
             fingerprint ^= state;
             fingerprint *= 1099511628211ull;
+            // Uma fonte analogica muda de valor sem mudar o estado (o DAC, a tensao da medicao de toque).
+            double volts = 0.0, ohms = 0.0;
+            if ((state & QemuModule::kPinAnalog) != 0 && batch.module->pinAnalog(batch.bitsOrLines[position], volts, ohms)) {
+                uint64_t bits[2];
+                std::memcpy(&bits[0], &volts, sizeof(double));
+                std::memcpy(&bits[1], &ohms, sizeof(double));
+                for (const uint64_t word : bits) {
+                    fingerprint ^= word;
+                    fingerprint *= 1099511628211ull;
+                }
+            }
         });
     }
     return fingerprint;
@@ -1446,10 +1602,45 @@ uint64_t McuComponent::electricalOutputFingerprint() const {
 
 void McuComponent::publishVnextBGpioInputsLocked() {
     if (!m_controller.vnextBActive()) return;
-    std::array<uint64_t, 2> words{};
+    std::array<uint64_t, 16> words{};
     for (size_t i = 0; i < kVnextBGpioInAddresses.size(); ++i) {
         if (QemuModule* module = findModule(kVnextBGpioInAddresses[i])) words[i] = module->readRegister(kVnextBGpioInAddresses[i]);
     }
+    if (QemuModule* adc = findModule(kAdapterAdcBase)) {
+        for (uint32_t pad = 0; pad < kVnextBAdcPadCount; ++pad) {
+            const uint64_t tenthsMv = adc->readRegister(kAdapterAdcBase + kAdapterAdcPadVoltageOffset + 4u * pad) & 0xFFFFu;
+            words[2 + pad / 4] |= tenthsMv << (16u * (pad % 4));
+        }
+        for (uint32_t channel = 0; channel < kVnextBTouchChannels; ++channel) {
+            const uint64_t tenthsPf = adc->readRegister(kAdapterAdcBase + kAdapterTouchCapOffset + 4u * channel) & 0xFFFFu;
+            words[13 + channel / 4] |= tenthsPf << (16u * (channel % 4));
+        }
+        words[15] |= (adc->readRegister(kAdapterAdcBase + kAdapterTouchDoneOffset) & 0xFFFFu) << 32;
+    }
+    QemuModule* pcnt = findModule(kAdapterPcntBase);
+    if (pcnt) {
+        for (uint32_t unit = 0; unit < kVnextBPcntUnits; ++unit) {
+            const uint64_t count = pcnt->readRegister(kAdapterPcntBase + kAdapterPcntCountOffset + 4u * unit) & 0xFFFFu;
+            words[7 + unit / 4] |= count << (16u * (unit % 4));
+        }
+    }
+    const uint64_t latchNs = m_scheduler.nowNsUnlocked();
+    for (size_t unit = 0; unit < kAdapterMcpwmBases.size(); ++unit) {
+        QemuModule* mcpwm = findModule(kAdapterMcpwmBases[unit]);
+        if (!mcpwm) continue;
+        mcpwm->writeRegisterAt(kAdapterMcpwmBases[unit] + kAdapterMcpwmLatchOffset, 0, latchNs);
+        for (uint32_t timer = 0; timer < 3; ++timer) {
+            const uint32_t index = static_cast<uint32_t>(unit) * 3u + timer; // bytes 72 + 4 * index
+            const uint64_t status = mcpwm->readRegister(kAdapterMcpwmBases[unit] + kAdapterMcpwmStatusOffset + 4u * timer) & 0xFFFFFFFFu;
+            words[9 + index / 2] |= status << (32u * (index % 2));
+        }
+    }
+    QemuModule* twai = findModule(kAdapterTwaiBase);
+    if (twai) words[12] = twai->readRegister(kAdapterTwaiBase + kAdapterTwaiStateOffset) & 0xFFFFFFu;
+    // Byte 100: uma interrupÃ§Ã£o de um perifÃ©rico daqui estÃ¡ armada (PCNT, MCPWM, GPIO). O QEMU entÃ£o segura
+    // toda escrita, tambÃ©m as "suaves": a borda que a escrita produz pode virar interrupÃ§Ã£o pelo circuito,
+    // e tem de chegar no instante dela (vnext_b_gpio_write, mesma regra da interrupÃ§Ã£o de GPIO do QEMU).
+    if (vnextBGpioInterruptArmedLocked()) words[12] |= 1ull << 32;
     qemu::VnextBAttachment& attachment = m_controller.vnextBAttachment();
     if (!m_vnextBGpioInPublished || words != m_vnextBPublishedGpioIn) {
         if (attachment.publishSnapshot(reinterpret_cast<const uint8_t*>(words.data()), sizeof(words))) {
@@ -1460,11 +1651,67 @@ void McuComponent::publishVnextBGpioInputsLocked() {
     // The snapshot only serves the guest's own GPIO_IN reads. The real chip also latches an edge
     // interrupt the moment the pad changes, so each changed word is pushed to QEMU's GPIO model
     // as well (esp32_gpio_vnext_input). A full C2A ring is retried on the next call.
-    for (size_t i = 0; i < words.size(); ++i) {
+    for (size_t i = 0; i < kVnextBGpioInAddresses.size(); ++i) {
         if (m_vnextBNotifiedGpioInValid[i] && m_vnextBNotifiedGpioIn[i] == words[i]) continue;
         if (!attachment.publishRegisterResult(kVnextBGpioInAddresses[i], words[i])) continue;
         m_vnextBNotifiedGpioIn[i] = words[i];
         m_vnextBNotifiedGpioInValid[i] = true;
+    }
+    // Bytes do MISO que ficaram no adaptador com o anel C2A cheio.
+    for (const std::unique_ptr<QemuModule>& module : m_modules) {
+        if (module->kind() == ModuleKind::Spi) deliverVnextBSpiRxLocked(*module);
+    }
+    // RMT RX: os itens que o receptor gravou e o fim da recepÃ§Ã£o vÃ£o Ã  RAM do canal no QEMU. Com o anel cheio
+    // ficam no adaptador.
+    if (QemuModule* rmt = findModule(kAdapterRmtBase)) {
+        while (!attachment.c2aFull()) {
+            const uint64_t event = rmt->readRegister(kAdapterRmtBase + kAdapterRmtRxEventOffset);
+            if ((event >> 63) == 0) break;
+            attachment.publishRegisterResult(kVnextBRmtRxAddress, event & ~(1ull << 63));
+        }
+    }
+    // I2C escravo: endereÃ§ado, byte recebido, byte da TX FIFO no fio, STOP -- o QEMU (esp32_i2c_vnext_slave)
+    // os pÃµe na FIFO de RX e nas interrupÃ§Ãµes. Com o anel cheio ficam no adaptador.
+    for (const uint64_t base : kAdapterI2cBases) {
+        QemuModule* i2c = findModule(base);
+        while (i2c && !attachment.c2aFull()) {
+            const uint64_t event = i2c->readRegister(base + kAdapterI2cSlaveEventOffset);
+            if ((event >> 63) == 0) break;
+            attachment.publishRegisterResult(base + kVnextBI2cSlaveOffset, event & ~(1ull << 63));
+        }
+    }
+    // O modo ADC do I2S0: as tensÃµes que o adaptador amostrou nos instantes das amostras vÃ£o ao QEMU, que as
+    // converte e escreve na DMA antes de o seu tempo passar delas. Com o anel cheio ficam no adaptador.
+    if (QemuModule* adc = findModule(kAdapterAdcBase)) {
+        while (!attachment.c2aFull()) {
+            const uint64_t samples = adc->readRegister(kAdapterAdcBase + kAdapterI2sAdcSamplesOffset);
+            if ((samples >> 63) == 0) break;
+            attachment.publishRegisterResult(kVnextBI2sAdcAddress, samples & ~(1ull << 63));
+        }
+    }
+    // Eventos do PCNT (limite, limiar, zero): o QEMU trava STATUS_Un e levanta a interrupÃ§Ã£o. Com o anel
+    // cheio ficam no adaptador atÃ© a prÃ³xima chamada.
+    while (pcnt && !attachment.c2aFull()) {
+        const uint64_t event = pcnt->readRegister(kAdapterPcntBase + kAdapterPcntEventOffset);
+        if ((event & kAdapterPcntEventValid) == 0) break;
+        const uint64_t unit = (event >> 16) & 0x7u;
+        attachment.publishRegisterResult(kAdapterPcntBase + kAdapterPcntStatusOffset + 4u * unit, event & 0xFFFFu);
+    }
+    // Eventos do MCPWM (INT_RAW, captura, status de falha), na ordem em que aconteceram.
+    for (const uint64_t base : kAdapterMcpwmBases) {
+        QemuModule* mcpwm = findModule(base);
+        while (mcpwm && !attachment.c2aFull()) {
+            const uint64_t reg = mcpwm->readRegister(base + kAdapterMcpwmEventOffset);
+            if ((reg & (1ull << 31)) == 0) break;
+            attachment.publishRegisterResult(base + (reg & 0xFFFu), mcpwm->readRegister(base + kAdapterMcpwmEventOffset + 4u));
+        }
+    }
+    // Eventos do TWAI, na ordem: as palavras de um quadro recebido chegam antes do commit em RMC.
+    while (twai && !attachment.c2aFull()) {
+        const uint64_t reg = twai->readRegister(kAdapterTwaiBase + kAdapterTwaiEventOffset);
+        if ((reg & (1ull << 31)) == 0) break;
+        attachment.publishRegisterResult(kAdapterTwaiBase + (reg & 0xFFu),
+                                         twai->readRegister(kAdapterTwaiBase + kAdapterTwaiEventOffset + 4u));
     }
 }
 
@@ -1473,8 +1720,8 @@ void McuComponent::startOrQueueVnextBElectricalI2cLocked(uint32_t lane, uint64_t
     m_vnextBQueuedI2c.push_back(VnextBElectricalI2c{lane, requestSeq, std::move(op)});
     if (m_vnextBElectricalI2c) return;
     startVnextBElectricalI2cLocked(nowNs);
-    // Transação sem nada para pôr no fio (continuação só com o endereço de roteamento) não gera
-    // wakeup do motor: conclui já.
+    // TransaÃ§Ã£o sem nada para pÃ´r no fio (continuaÃ§Ã£o sÃ³ com o endereÃ§o de roteamento) nÃ£o gera
+    // wakeup do motor: conclui jÃ¡.
     completeVnextBElectricalI2cIfDoneLocked();
 }
 
@@ -1483,9 +1730,9 @@ void McuComponent::startVnextBElectricalI2cLocked(uint64_t nowNs) {
         VnextBElectricalI2c transaction = std::move(m_vnextBQueuedI2c.front());
         m_vnextBQueuedI2c.pop_front();
         // Envelope BATCH (ver o despacho em pollAndDispatchPendingEvents): [0] barramento,
-        // [1] flags (START 1, STOP 2, READ 4), [2..3] bytes tx, [4..5] bytes rx, [6..13] período de
-        // bit em ns, [14..] tx -- tx[0] é sempre o byte de endereço, mas numa continuação sem START
-        // ele só identifica o alvo e não vai para o fio.
+        // [1] flags (START 1, STOP 2, READ 4), [2..3] bytes tx, [4..5] bytes rx, [6..13] perÃ­odo de
+        // bit em ns, [14..] tx -- tx[0] Ã© sempre o byte de endereÃ§o, mas numa continuaÃ§Ã£o sem START
+        // ele sÃ³ identifica o alvo e nÃ£o vai para o fio.
         const std::vector<uint8_t>& op = transaction.op;
         uint16_t txBytes = 0, rxBytes = 0;
         uint64_t periodNs = 0;
@@ -1515,7 +1762,7 @@ void McuComponent::startVnextBElectricalI2cLocked(uint64_t nowNs) {
             queue(kAdapterI2cOpWrite, tx[0], false, true);
         }
         for (uint16_t i = 1; i < txBytes; ++i) queue(kAdapterI2cOpWrite, tx[i], false, true);
-        // O mestre confirma cada byte lido; o último leva o ACK_VAL do último READ da lista (ESP-IDF:
+        // O mestre confirma cada byte lido; o Ãºltimo leva o ACK_VAL do Ãºltimo READ da lista (ESP-IDF:
         // READ n-1 com ACK + READ 1 com NACK antes do STOP).
         for (uint16_t i = 0; i < rxBytes; ++i) queue(kAdapterI2cOpRead, 0, lastReadNack && i + 1 == rxBytes, false);
         if (stop) queue(kAdapterI2cOpStop, 0, false, false);
@@ -1533,7 +1780,7 @@ void McuComponent::completeVnextBElectricalI2cIfDoneLocked() {
     I2cTransferResult result{};
     result.handled = true;
     result.firstNack = UINT32_MAX;
-    result.addressAck = !transaction.start; // continuação: o alvo já foi selecionado antes
+    result.addressAck = !transaction.start; // continuaÃ§Ã£o: o alvo jÃ¡ foi selecionado antes
     std::array<uint8_t, 32> rx{};
     uint32_t rxCount = 0;
     uint32_t writes = 0;
@@ -1560,13 +1807,13 @@ void McuComponent::completeVnextBElectricalI2cIfDoneLocked() {
     if (published) m_vnextI2cCompletionCount.fetch_add(1, std::memory_order_relaxed);
     m_vnextBElectricalI2c.reset();
     startVnextBElectricalI2cLocked(m_scheduler.nowNsUnlocked());
-    completeVnextBElectricalI2cIfDoneLocked(); // próxima da fila também pode não ter nada no fio
+    completeVnextBElectricalI2cIfDoneLocked(); // prÃ³xima da fila tambÃ©m pode nÃ£o ter nada no fio
 }
 
 McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
     uint64_t nowNs, std::vector<DeferredSchedulerCall>* deferred, bool schedulerLockHeld) {
     if (m_controller.vnextBActive()) {
-        // Entradas que mudaram por outro caminho (ex.: GPIO matrix reroteada) também precisam
+        // Entradas que mudaram por outro caminho (ex.: GPIO matrix reroteada) tambÃ©m precisam
         // chegar ao snapshot antes de o firmware ler GPIO_IN de novo.
         publishVnextBGpioInputsLocked();
         // PLAN_MTTCG_VNEXT_B_CAUSALITY.md sections 9/10: temporal-merge arbiter across lanes,
@@ -1577,8 +1824,8 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
         auto& attachment = m_controller.vnextBAttachment();
         const uint32_t laneCount = attachment.view().control->lane_count;
         const uint64_t originNs = m_qemuTimeOriginNs.load(std::memory_order_relaxed);
-        // Lockstep: a sequência é lida ANTES do instante e das filas -- tudo que o QEMU publicou
-        // antes dela é visto (e despachado ou agendado) nesta chamada; só então ela é ecoada.
+        // Lockstep: a sequÃªncia Ã© lida ANTES do instante e das filas -- tudo que o QEMU publicou
+        // antes dela Ã© visto (e despachado ou agendado) nesta chamada; sÃ³ entÃ£o ela Ã© ecoada.
         const bool lockstep = m_controller.lockstep();
         const uint64_t observedSyncSeq = lockstep ? attachment.artifactSyncSeq() : 0;
 
@@ -1667,9 +1914,9 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
                 traceRecorder.setCurrentI2cRequest(0);
                 traceRecorder.setRuntimeIdentity({});
                 if (!result.handled) {
-                    // O fast path só vale quando o barramento é indistinguível de uma transferência
-                    // direta (só dispositivos I2C, túneis e resistores). Com instrumento, pull-up ou
-                    // dispositivo sem i2c_transfer, a transação roda eletricamente, como no chip.
+                    // O fast path sÃ³ vale quando o barramento Ã© indistinguÃ­vel de uma transferÃªncia
+                    // direta (sÃ³ dispositivos I2C, tÃºneis e resistores). Com instrumento, pull-up ou
+                    // dispositivo sem i2c_transfer, a transaÃ§Ã£o roda eletricamente, como no chip.
                     const uint64_t before = electricalOutputFingerprint();
                     startOrQueueVnextBElectricalI2cLocked(lane, requestSeq, std::vector<uint8_t>(op, op + opBytes), nowNs);
                     return before != electricalOutputFingerprint();
@@ -1693,7 +1940,9 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
                              static_cast<unsigned long long>(std::chrono::duration_cast<std::chrono::nanoseconds>(
                                  std::chrono::steady_clock::now().time_since_epoch()).count()));
             const uint64_t before = electricalOutputFingerprint();
-            if (QemuModule* module = findModule(address)) {
+            if (address == kQemuSocPeriphResetAddress) {
+                socDigitalResetLocked(address, vnextEventTimeNs(originNs, event.timestamp_ns));
+            } else if (QemuModule* module = findModule(address)) {
                 module->writeRegisterAt(address, value, vnextEventTimeNs(originNs, event.timestamp_ns));
             }
             return before != electricalOutputFingerprint();
@@ -1706,11 +1955,11 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
         bool changed = false;
         uint32_t dispatchedCount = 0;
         bool budgetExhausted = false;
-        // Uma mudança elétrica por settle: escritas de GPIO são aplicadas na hora no módulo, então
-        // despachar CLK=1 e CLK=0 na mesma rodada apagava o pulso antes de o solver vê-lo (SPI por
-        // bit-bang chegava sem bordas ao display). Mesmo princípio do caminho legado ("dirty
-        // primeiro", ver pollStepLocked()): depois de uma mudança, devolve o controle para o
-        // chamador marcar dirty/assentar e continua na próxima rodada (now+1 ns).
+        // Uma mudanÃ§a elÃ©trica por settle: escritas de GPIO sÃ£o aplicadas na hora no mÃ³dulo, entÃ£o
+        // despachar CLK=1 e CLK=0 na mesma rodada apagava o pulso antes de o solver vÃª-lo (SPI por
+        // bit-bang chegava sem bordas ao display). Mesmo princÃ­pio do caminho legado ("dirty
+        // primeiro", ver pollStepLocked()): depois de uma mudanÃ§a, devolve o controle para o
+        // chamador marcar dirty/assentar e continua na prÃ³xima rodada (now+1 ns).
         bool yieldForSettle = false;
         for (;;) {
             std::array<qemu::VnextBLanePeek, LASEC_AT_MAX_LANES> peeks{};
@@ -1781,7 +2030,7 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
         // with acquire semantics so a publish racing the ack is still caught -- never rely on a
         // second doorbell transition for backlog that was already in the ring, and never busy-
         // loop when only a future head remains (10.4 step 5: "se houver somente evento futuro,
-        // manter o callback temporal; não criar busy loop").
+        // manter o callback temporal; nÃ£o criar busy loop").
         //
         // E143/E144 (EVIDENCE.md, 2026-09-08; H143): the previous form of this block used
         // hasPendingLaneEvents() (write_seq != read_seq on any lane) to decide whether to
@@ -1808,9 +2057,9 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
         // VnextBArbiterTest.cpp's H143 RED/GREEN cases) for the policy this mirrors.
         const bool notified = attachment.notificationPending();
         if (notified) attachment.acknowledgeNotification();
-        // Depois de ceder para o settle, só há o que continuar se ainda houver evento nas filas
+        // Depois de ceder para o settle, sÃ³ hÃ¡ o que continuar se ainda houver evento nas filas
         // (relido depois do ack, como o rearm abaixo). Um poll vazio em now+1 virava, no lockstep,
-        // um horizonte 1 ns à frente e uma sincronização a mais por escrita.
+        // um horizonte 1 ns Ã  frente e uma sincronizaÃ§Ã£o a mais por escrita.
         if (yieldForSettle && !budgetExhausted && attachment.hasPendingLaneEvents())
             scheduleNextPoll(deferred, schedulerLockHeld);
         if (!budgetExhausted && !yieldForSettle) {
@@ -1867,19 +2116,19 @@ McuComponent::PollStep McuComponent::pollAndDispatchPendingEvents(
     qemu::QemuArenaBridge& arenaBridge = m_controller.arenaBridge();
     if (!arenaBridge.isOpen()) return PollStep::NoEvent;
     // PERF-13 (protocolo v3, ver qemu_arena_abi.h): a arena agora tem uma fila de escritas/
-    // heartbeat, não mais um slot único -- mas este caminho (chamado de dentro de stamp(), uma
-    // vez por iteração de Newton) continua processando no máximo um evento por chamada de
-    // propósito: mantém cada stamp() rápido e deixa o esvaziamento de rajadas maiores pra
-    // onPollEvent()/runBackgroundPollLoop() (que já drenam a fila inteira em loop quando o
-    // Scheduler está rodando em background, ver PERF-12) -- um laço aqui dentro só duplicaria
+    // heartbeat, nÃ£o mais um slot Ãºnico -- mas este caminho (chamado de dentro de stamp(), uma
+    // vez por iteraÃ§Ã£o de Newton) continua processando no mÃ¡ximo um evento por chamada de
+    // propÃ³sito: mantÃ©m cada stamp() rÃ¡pido e deixa o esvaziamento de rajadas maiores pra
+    // onPollEvent()/runBackgroundPollLoop() (que jÃ¡ drenam a fila inteira em loop quando o
+    // Scheduler estÃ¡ rodando em background, ver PERF-12) -- um laÃ§o aqui dentro sÃ³ duplicaria
     // esse trabalho e prenderia stamp() por mais tempo sem necessidade.
     const qemu::QemuPollResult result = arenaBridge.poll();
     if (!result.hasEvent || !result.event) return PollStep::NoEvent;
     const uint64_t eventNs = qemuEventTimeNs(m_qemuTimeOriginNs.load(std::memory_order_relaxed), result.event->simuTimePs);
-    // Uma stamp causada por outra parte do circuito não pode antecipar o relógio virtual do QEMU.
-    // A entrada permanece na fila; onPollEvent() já está agendado para consumi-la no instante certo.
+    // Uma stamp causada por outra parte do circuito nÃ£o pode antecipar o relÃ³gio virtual do QEMU.
+    // A entrada permanece na fila; onPollEvent() jÃ¡ estÃ¡ agendado para consumi-la no instante certo.
     if (eventNs > nowNs && !m_syntheticArenaForTesting) return PollStep::DeferredFuture;
-    // Estampada logo a seguir por este mesmo stamp(); a próxima mudança espera o settle terminar.
+    // Estampada logo a seguir por este mesmo stamp(); a prÃ³xima mudanÃ§a espera o settle terminar.
     if (dispatchArenaEvent(*result.event, m_syntheticArenaForTesting ? nowNs : eventNs)) m_changeAwaitingStamp = true;
     return PollStep::DispatchedReady;
 }
@@ -1890,15 +2139,17 @@ bool McuComponent::dispatchArenaEvent(const qemu::QemuArenaEvent& event, uint64_
     const uint64_t before = electricalOutputFingerprint();
     uint64_t readValue = 0;
     if (event.simuAction == LSDN_SIM_WRITE) {
-        if (QemuModule* module = findModule(event.regAddr)) {
+        if (event.regAddr == kQemuSocPeriphResetAddress) {
+            socDigitalResetLocked(event.regAddr, eventTimeNs);
+        } else if (QemuModule* module = findModule(event.regAddr)) {
             module->writeRegisterAt(event.regAddr, event.regData, eventTimeNs);
         }
     } else if (event.simuAction == LSDN_SIM_READ) {
         if (QemuModule* module = findModule(event.regAddr)) readValue = module->readRegister(event.regAddr);
     }
 
-    // O ACK é determinado pela ORIGEM. QEMUs anteriores ao ajuste de protocolo ainda publicam
-    // SIM_FREQ no slot único; usar acknowledgeWrite() nesse caso pode avançar uma entrada da fila
+    // O ACK Ã© determinado pela ORIGEM. QEMUs anteriores ao ajuste de protocolo ainda publicam
+    // SIM_FREQ no slot Ãºnico; usar acknowledgeWrite() nesse caso pode avanÃ§ar uma entrada da fila
     // que chegou entre poll() e este ponto, descartando-a sem dispatch.
     if (event.fromQueue) {
         arenaBridge.acknowledgeWrite();
@@ -1914,14 +2165,14 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
     std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
     ++m_stampCount;
     lasecsimul::simulation::diag::ProvenanceTracker::instance().recordStampEntry(m_componentIndex);
-    // Mantém o contrato de chamadas que marcam o MCU dirty explicitamente (testes sintéticos,
-    // hosts ABI e futuras fontes de interrupção). O poll periódico continua desacoplado do MNA:
-    // ele só marca dirty quando a saída elétrica muda.
+    // MantÃ©m o contrato de chamadas que marcam o MCU dirty explicitamente (testes sintÃ©ticos,
+    // hosts ABI e futuras fontes de interrupÃ§Ã£o). O poll periÃ³dico continua desacoplado do MNA:
+    // ele sÃ³ marca dirty quando a saÃ­da elÃ©trica muda.
     // schedulerLockHeld=true: stamp() runs inside Scheduler::runUntil()'s settle loop, which
     // holds Scheduler::m_mutex throughout (same reasoning as this function's own
     // scheduleWakeupsForAllModules(..., true) call below -- see schedulePollAt()'s doc-comment).
-    // Se uma mudança elétrica já despachada (VNEXT_B ou LEGACY) ainda não foi estampada, estampa-a
-    // primeiro (o laço de pinos abaixo); a próxima sai no poll de continuação, depois deste solve.
+    // Se uma mudanÃ§a elÃ©trica jÃ¡ despachada (VNEXT_B ou LEGACY) ainda nÃ£o foi estampada, estampa-a
+    // primeiro (o laÃ§o de pinos abaixo); a prÃ³xima sai no poll de continuaÃ§Ã£o, depois deste solve.
     const PollStep pollStepResult = m_changeAwaitingStamp
         ? PollStep::DispatchedReady
         : m_changeAwaitingSettle.load(std::memory_order_acquire)
@@ -1931,12 +2182,12 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
         pollStepResult == PollStep::DispatchedReady, pollStepResult == PollStep::DeferredFuture,
         pollStepResult == PollStep::NoEvent);
 
-    // Ponte pino<->matriz, genérica (ver doc da classe): pra cada PinMapping, pergunta ao módulo
-    // responsável (nunca sabe qual chip é) se aquele bit está em modo saída -- se sim, dirige o
-    // pino real; se não, lê a tensão atual do pino e alimenta de volta no módulo (pra uma leitura
-    // de registrador futura, ex: GPIO_IN_REG, devolver o valor certo). Estado e entradas vão em
-    // lote, uma chamada de cada por módulo: todo estado é lido antes das entradas desta rodada
-    // (uma entrada só muda uma saída por wakeup do periférico, ver get_pin_states em mcu_abi.h).
+    // Ponte pino<->matriz, genÃ©rica (ver doc da classe): pra cada PinMapping, pergunta ao mÃ³dulo
+    // responsÃ¡vel (nunca sabe qual chip Ã©) se aquele bit estÃ¡ em modo saÃ­da -- se sim, dirige o
+    // pino real; se nÃ£o, lÃª a tensÃ£o atual do pino e alimenta de volta no mÃ³dulo (pra uma leitura
+    // de registrador futura, ex: GPIO_IN_REG, devolver o valor certo). Estado e entradas vÃ£o em
+    // lote, uma chamada de cada por mÃ³dulo: todo estado Ã© lido antes das entradas desta rodada
+    // (uma entrada sÃ³ muda uma saÃ­da por wakeup do perifÃ©rico, ver get_pin_states em mcu_abi.h).
     for (const PinBatch& batch : m_pinBatches) {
         visitPinStates(*batch.module, batch.bitsOrLines,
                        [&](size_t position, uint8_t state) { m_pinStates[batch.pinIndices[position]] = state; });
@@ -1949,43 +2200,53 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
             continue;
         }
         if (m_pinBatchByPin[i] == kNoPinBatch) {
-            // Sem módulo concreto pra essa faixa ainda (ex: UART0_RX/TX -- só GPIO está
-            // implementado nesta versão, ver Esp32Adapter::createModules()) -- mesma rede de
-            // segurança do ramo "entrada" abaixo: nunca deixar uma linha inteiramente zerada.
+            // Sem mÃ³dulo concreto pra essa faixa ainda (ex: UART0_RX/TX -- sÃ³ GPIO estÃ¡
+            // implementado nesta versÃ£o, ver Esp32Adapter::createModules()) -- mesma rede de
+            // seguranÃ§a do ramo "entrada" abaixo: nunca deixar uma linha inteiramente zerada.
             matrix.addConductanceToGround(m_pins[i], kFloatingConductance);
             continue;
         }
 
         const uint8_t state = m_pinStates[i];
-        if ((state & QemuModule::kPinOutputEnabled) != 0) {
+        double analogVolts = 0.0, analogOhms = 0.0;
+        if ((state & QemuModule::kPinAnalog) != 0 &&
+            m_pinBatches[m_pinBatchByPin[i]].module->pinAnalog(mapping.bitOrLine, analogVolts, analogOhms)) {
+            // Fonte analogica do periferico (sensor de toque medindo, DAC): o equivalente de Norton, e a
+            // tensao do pad continua indo ao modulo -- quem a dirige tambem a mede.
+            matrix.addConductanceToGround(m_pins[i], 1.0 / analogOhms);
+            matrix.addCurrentToGround(m_pins[i], analogVolts / analogOhms);
+            PinBatch& batch = m_pinBatches[m_pinBatchByPin[i]];
+            batch.inputBits.push_back(mapping.bitOrLine);
+            batch.inputVoltages.push_back(matrix.getNodeVoltage(m_pins[i]));
+        } else if ((state & QemuModule::kPinOutputEnabled) != 0) {
             const double targetVolts = (state & QemuModule::kPinOutputHigh) != 0 ? kDriveHighVolts : 0.0;
             matrix.addConductanceToGround(m_pins[i], kDriveConductance);
             matrix.addCurrentToGround(m_pins[i], targetVolts * kDriveConductance);
         } else {
-            // Alta impedância (não baixa o pino de propósito -- quem estiver do outro lado do
-            // fio decide o nível) MAS nunca zero: um pino sem fio nenhum (a maioria, a maior
+            // Alta impedÃ¢ncia (nÃ£o baixa o pino de propÃ³sito -- quem estiver do outro lado do
+            // fio decide o nÃ­vel) MAS nunca zero: um pino sem fio nenhum (a maioria, a maior
             // parte do tempo) cairia numa linha zerada da matriz -- sistema singular, mesmo bug
-            // já corrigido em WaveGen::stamp() pro pino "gnd" não-bipolar (ver doc lá).
+            // jÃ¡ corrigido em WaveGen::stamp() pro pino "gnd" nÃ£o-bipolar (ver doc lÃ¡).
             //
-            // kDriveConductance/kFloatingConductance agora são as impedâncias REAIS de `IoPin` do
-            // SimulIDE (40Ω/1e7Ω, ver comentário no .hpp) -- spread ~2.5e5, a MESMA ordem de
-            // grandeza que o SimulIDE opera sem nenhum "colchão" especial, mesmo com um MCU de
+            // kDriveConductance/kFloatingConductance agora sÃ£o as impedÃ¢ncias REAIS de `IoPin` do
+            // SimulIDE (40Î©/1e7Î©, ver comentÃ¡rio no .hpp) -- spread ~2.5e5, a MESMA ordem de
+            // grandeza que o SimulIDE opera sem nenhum "colchÃ£o" especial, mesmo com um MCU de
             // dezenas de pinos flutuando ao mesmo tempo. O valor antigo (1e6/1e-6, spread 1e12) era
-            // inflado de propósito só pra manter `rcond()` longe do piso de rejeição de
-            // `CircuitGroup::singular()` (<= 1e-14) -- mas por não ter correspondência física
+            // inflado de propÃ³sito sÃ³ pra manter `rcond()` longe do piso de rejeiÃ§Ã£o de
+            // `CircuitGroup::singular()` (<= 1e-14) -- mas por nÃ£o ter correspondÃªncia fÃ­sica
             // nenhuma, deixava o grupo perigosamente perto desse piso sempre que compartilhava
-            // `CircuitGroup` com um componente não-linear em convergência (ex: `DiodeLegArray` do
-            // LED do usuário), causando reset fantasma do RST/EN sincronizado com o toggle do GPIO
-            // (achado 2026-07-17). Valores físicos reais são estruturalmente mais seguros aqui, não
-            // menos -- não dependem de um spread artificial pra ficar bem-condicionados.
+            // `CircuitGroup` com um componente nÃ£o-linear em convergÃªncia (ex: `DiodeLegArray` do
+            // LED do usuÃ¡rio), causando reset fantasma do RST/EN sincronizado com o toggle do GPIO
+            // (achado 2026-07-17). Valores fÃ­sicos reais sÃ£o estruturalmente mais seguros aqui, nÃ£o
+            // menos -- nÃ£o dependem de um spread artificial pra ficar bem-condicionados.
             //
             // Pull-up/pull-down INTERNO (ex: IO_MUX FUN_PU/FUN_PD do ESP32, ver
             // `QemuModule::pullState()`): quando o firmware habilita, o pino deixa de ser
-            // puramente flutuante -- mesmo princípio elétrico do pull-up dedicado do RST/EN
-            // (`stampResetPin()`), só que condicionado ao registrador real em vez de sempre-ligado.
+            // puramente flutuante -- mesmo princÃ­pio elÃ©trico do pull-up dedicado do RST/EN
+            // (`stampResetPin()`), sÃ³ que condicionado ao registrador real em vez de sempre-ligado.
             // Os dois juntos (pull-up E pull-down habilitados ao mesmo tempo, config incomum mas
-            // fisicamente válida) simplesmente somam as duas stamps -- resultado real é um divisor
-            // de tensão mais forte, não um erro a ser resolvido aqui.
+            // fisicamente vÃ¡lida) simplesmente somam as duas stamps -- resultado real Ã© um divisor
+            // de tensÃ£o mais forte, nÃ£o um erro a ser resolvido aqui.
             const bool pullUp = (state & QemuModule::kPinPullUp) != 0;
             const bool pullDown = (state & QemuModule::kPinPullDown) != 0;
             if (pullUp) {
@@ -1999,8 +2260,8 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
                 matrix.addConductanceToGround(m_pins[i], kFloatingConductance);
             }
             // Pino dedicado de uma USART sem nada ligado (o UART0_RX quando o circuito usa o pad GPIO3,
-            // como a WROOM32): no chip o sinal tem um pad só, e um pino solto em 0 V sobrescrevia, a
-            // cada stamp, o nível que o pad roteado entrega -- a USART nunca via o start bit.
+            // como a WROOM32): no chip o sinal tem um pad sÃ³, e um pino solto em 0 V sobrescrevia, a
+            // cada stamp, o nÃ­vel que o pad roteado entrega -- a USART nunca via o start bit.
             if (mapping.moduleKind == ModuleKind::Usart && i < m_pinConnected.size() && !m_pinConnected[i]) continue;
             PinBatch& batch = m_pinBatches[m_pinBatchByPin[i]];
             batch.inputBits.push_back(mapping.bitOrLine);
@@ -2013,7 +2274,7 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
         batch.inputBits.clear();
         batch.inputVoltages.clear();
     }
-    // LEGACY: a mudança entrou na matriz; a próxima espera o fim deste settle (onSettleFinished()). O
+    // LEGACY: a mudanÃ§a entrou na matriz; a prÃ³xima espera o fim deste settle (onSettleFinished()). O
     // VNEXT_B continua pelo poll que agendou ao ceder (now+1, depois deste settle).
     if (m_changeAwaitingStamp && !m_controller.vnextBActive())
         m_changeAwaitingSettle.store(true, std::memory_order_release);
@@ -2025,15 +2286,15 @@ void McuComponent::stamp(MnaMatrixView& matrix) {
 void McuComponent::loadFirmware(const std::filesystem::path& firmwarePath, const std::string& arenaName,
                                  const std::string& qemuBinaryOverride, McuDebugOptions debug,
                                  RuntimeLaunchIdentity identity) {
-    // Também permite recarregar firmware enquanto o watcher está aguardando o próximo timestamp.
+    // TambÃ©m permite recarregar firmware enquanto o watcher estÃ¡ aguardando o prÃ³ximo timestamp.
     stopPolling();
     // Achado 2026-07-21 (mesma classe de bug do doc-comment de DeferredSchedulerCall no .hpp):
     // loadMcuFirmware/stopMcuFirmware chamam isto direto de CoreApplication::handleMessage, na
-    // thread de IPC -- NÃO na thread do Scheduler. Se startPolling()/markDirty() chamassem o
+    // thread de IPC -- NÃƒO na thread do Scheduler. Se startPolling()/markDirty() chamassem o
     // Scheduler direto aqui, segurando m_callbackState->mutex, e a thread do Scheduler estivesse
     // em stamp() deste MESMO MCU nesse instante (Scheduler::m_mutex -> CallbackState::mutex), as
-    // duas travariam. loadFirmwareLocked() só ANEXA em `deferred`; disparamos aqui, uma vez, já
-    // fora do lock (chamador único e não-reentrante -- ver as bordas de onEvent(), que chamam
+    // duas travariam. loadFirmwareLocked() sÃ³ ANEXA em `deferred`; disparamos aqui, uma vez, jÃ¡
+    // fora do lock (chamador Ãºnico e nÃ£o-reentrante -- ver as bordas de onEvent(), que chamam
     // loadFirmwareLocked() direto pelo motivo oposto).
     std::vector<DeferredSchedulerCall> deferred;
     {
@@ -2055,27 +2316,35 @@ void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath,
 
     if (m_controller.isRunning() || m_controller.arenaBridge().isOpen()) stopFirmware();
     resetModulesAndWakeups();
+    // Outro firmware: o que a execucao anterior mandou pela UART e ninguem leu fica para tras.
+    for (UartTapReceiver& r : m_uartTapReceivers) r.pending.clear();
+    for (const std::unique_ptr<QemuModule>& m : m_modules) {
+        uint8_t byte = 0;
+        while (m->drainWireTapByte(byte)) {}
+        while (m->drainMonitorByte(true, byte)) {}
+        while (m->drainMonitorByte(false, byte)) {}
+    }
 
-    // McuController::start() já cobre a sequência "Core cria a arena antes de o QEMU poder
-    // anexá-la, depois inicia o processo" (mesmo código exercitado por McuControllerRealQemuTest
-    // contra o binário QEMU de verdade) -- ver comentário do membro m_controller no .hpp.
+    // McuController::start() jÃ¡ cobre a sequÃªncia "Core cria a arena antes de o QEMU poder
+    // anexÃ¡-la, depois inicia o processo" (mesmo cÃ³digo exercitado por McuControllerRealQemuTest
+    // contra o binÃ¡rio QEMU de verdade) -- ver comentÃ¡rio do membro m_controller no .hpp.
     m_gdbPort = debug.gdbPort;
     m_syntheticArenaForTesting = false;
     // Achado 2026-07-22 (session_restart_stress_test intermitente sob carga): latestVirtualTimeNs()
-    // rastreia o MAIOR simuTimePs já visto (compare_exchange que nunca retrocede, ver seu
-    // doc-comment no .hpp) -- sem este reset, um firmware recarregado (novo processo QEMU, relógio
-    // -icount próprio recomeçando perto de 0) nunca conseguia AVANÇAR esse indicador até seu
-    // simuTimePs cru ultrapassar organicamente o pico deixado pela sessão ANTERIOR, deixando o
+    // rastreia o MAIOR simuTimePs jÃ¡ visto (compare_exchange que nunca retrocede, ver seu
+    // doc-comment no .hpp) -- sem este reset, um firmware recarregado (novo processo QEMU, relÃ³gio
+    // -icount prÃ³prio recomeÃ§ando perto de 0) nunca conseguia AVANÃ‡AR esse indicador atÃ© seu
+    // simuTimePs cru ultrapassar organicamente o pico deixado pela sessÃ£o ANTERIOR, deixando o
     // indicador de "MCU real-time %" (SimulationSession::firstMcuVirtualTimeNs) preso num valor
-    // antigo e cada vez mais desonesto por vários ciclos de Stop->Run.
+    // antigo e cada vez mais desonesto por vÃ¡rios ciclos de Stop->Run.
     //
-    // Achado 2026-07-23: zera ANTES de setar a nova origem (ordem invertida em relação a antes) --
-    // pacingPositionNs() lê os dois campos cross-thread, sem lock. Se um leitor pegar a transição
-    // no meio nesta ordem, o pior caso é combinar a origem VELHA com virtualTimePs ZERADO, dando uma
-    // posição um pouco ATRASADA (efeito: espera um instante a mais, inofensivo). Na ordem antiga
-    // (origem primeiro), o pior caso combinava a origem NOVA com o simuTimePs VELHO da sessão
-    // anterior, dando uma posição espúria no FUTURO (efeito: deixaria o elétrico correr à frente
-    // indevidamente, ainda que só por uma janela curta).
+    // Achado 2026-07-23: zera ANTES de setar a nova origem (ordem invertida em relaÃ§Ã£o a antes) --
+    // pacingPositionNs() lÃª os dois campos cross-thread, sem lock. Se um leitor pegar a transiÃ§Ã£o
+    // no meio nesta ordem, o pior caso Ã© combinar a origem VELHA com virtualTimePs ZERADO, dando uma
+    // posiÃ§Ã£o um pouco ATRASADA (efeito: espera um instante a mais, inofensivo). Na ordem antiga
+    // (origem primeiro), o pior caso combinava a origem NOVA com o simuTimePs VELHO da sessÃ£o
+    // anterior, dando uma posiÃ§Ã£o espÃºria no FUTURO (efeito: deixaria o elÃ©trico correr Ã  frente
+    // indevidamente, ainda que sÃ³ por uma janela curta).
     m_latestVirtualTimePs.store(0, std::memory_order_relaxed);
     m_latestVnextBVirtualTimeNs.store(0, std::memory_order_relaxed);
     // R3c: a heartbeat tick from the PREVIOUS generation must never be mistaken for the new
@@ -2105,8 +2374,8 @@ void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath,
                        });
     diag::trace(diag::ConsumerTraceEvent::ArenaBind, identity.sessionExecutionId, 0, 0,
                 identity.launchGeneration);
-    // Anexação VNEXT_B nova = snapshot novo e zerado: republica o nível atual das entradas (ex.:
-    // botão já em 5 V desde t=0 nunca gera borda depois da carga do firmware).
+    // AnexaÃ§Ã£o VNEXT_B nova = snapshot novo e zerado: republica o nÃ­vel atual das entradas (ex.:
+    // botÃ£o jÃ¡ em 5 V desde t=0 nunca gera borda depois da carga do firmware).
     m_vnextBGpioInPublished = false;
     m_vnextBNotifiedGpioInValid = {};
     m_changeAwaitingStamp = false;
@@ -2130,8 +2399,8 @@ void McuComponent::loadFirmwareLocked(const std::filesystem::path& firmwarePath,
 void McuComponent::stopFirmware() {
     const uint64_t traceExecId = m_controller.runtimeIdentity().sessionExecutionId;
     diag::trace(diag::ConsumerTraceEvent::ArenaUnbind, traceExecId, 0, 0);
-    // O callback pode estar aguardando o QEMU publicar o próximo timestamp segurando apenas este
-    // mutex de lifetime. Sinalize primeiro para que ele saia; só então serialize o teardown.
+    // O callback pode estar aguardando o QEMU publicar o prÃ³ximo timestamp segurando apenas este
+    // mutex de lifetime. Sinalize primeiro para que ele saia; sÃ³ entÃ£o serialize o teardown.
     stopPolling();
     std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
     m_controller.stop();
@@ -2149,13 +2418,13 @@ std::string McuComponent::qemuLogs() const {
 
 void McuComponent::openSyntheticArenaForTesting(const std::string& arenaName) {
     // Mesma ressalva de loadFirmware(): pode ser chamado de uma thread de teste diferente da do
-    // Scheduler enquanto ele já está rodando (ver McuComponentLivePollThreadTest.cpp) -- não pode
+    // Scheduler enquanto ele jÃ¡ estÃ¡ rodando (ver McuComponentLivePollThreadTest.cpp) -- nÃ£o pode
     // chamar o Scheduler direto segurando m_callbackState->mutex.
     std::vector<DeferredSchedulerCall> deferred;
     {
         std::lock_guard<std::recursive_mutex> lock(m_callbackState->mutex);
         m_syntheticArenaForTesting = true;
-        // Ordem invertida (zera primeiro, seta origem depois) -- ver comentário em loadFirmwareLocked().
+        // Ordem invertida (zera primeiro, seta origem depois) -- ver comentÃ¡rio em loadFirmwareLocked().
         m_latestVirtualTimePs.store(0, std::memory_order_relaxed);
         m_latestVnextBVirtualTimeNs.store(0, std::memory_order_relaxed);
         m_vnextBHeartbeatWatermarkNs.store(0, std::memory_order_relaxed);
@@ -2190,31 +2459,52 @@ uint64_t McuComponent::peekAndResetMaxQueueOccupancyForTesting() {
     return ps.maxOccupancy.exchange(0, std::memory_order_relaxed);
 }
 
-void McuComponent::resetModulesAndWakeups() {
-    for (const std::unique_ptr<QemuModule>& m : m_modules) m->reset();
-    for (UartTapReceiver& r : m_uartTapReceivers) r.pending.clear();
+void McuComponent::socDigitalResetLocked(uint64_t address, uint64_t nowNs) {
+    // Reset do digital pedido pelo QEMU: o adaptador sabe o que e' digital (reinicia) e o que e' do dominio do
+    // RTC (fica), e o recebe no endereco; aqui so' caem os despertares ja' agendados. Sem modulo no endereco
+    // (um adaptador mais antigo), todo modulo volta ao reset.
+    QemuModule* module = findModule(address);
+    if (!module) {
+        resetModulesAndWakeups();
+        return;
+    }
+    module->writeRegisterAt(address, 1, nowNs);
     for (size_t i = 0; i < m_modules.size(); ++i) {
-        ++m_moduleWakeupGeneration[i]; // invalida qualquer wakeup já agendado antes do reset
+        ++m_moduleWakeupGeneration[i];
         m_moduleWakeupDueNs[i] = QemuModule::kNoWakeup;
+        ++m_moduleHardGeneration[i];
+        m_moduleHardDueNs[i] = QemuModule::kNoWakeup;
+    }
+}
+
+void McuComponent::resetModulesAndWakeups() {
+    // Os bytes que os receptores UART ainda nao leram ja' sairam no fio: um reset do chip (do guest, do
+    // pino EN) nao os desfaz -- so' carregar outro firmware (loadFirmwareLocked) os descarta.
+    for (const std::unique_ptr<QemuModule>& m : m_modules) m->reset();
+    for (size_t i = 0; i < m_modules.size(); ++i) {
+        ++m_moduleWakeupGeneration[i]; // invalida qualquer wakeup jÃ¡ agendado antes do reset
+        m_moduleWakeupDueNs[i] = QemuModule::kNoWakeup;
+        ++m_moduleHardGeneration[i];
+        m_moduleHardDueNs[i] = QemuModule::kNoWakeup;
     }
 }
 
 void McuComponent::stampResetPin(MnaMatrixView& matrix, const Pin& pin) {
-    // ModuleKind::Reset (ex: EN do ESP32) nunca tem QemuModule -- é linha de controle de
-    // hardware, não registrador. Sem fio externo, fica puxado pra ALTO por um pull-up DEDICADO
-    // (`kWeakPullConductance`, 100kΩ, idêntico a `Esp32Pin::m_pullAdmit`/`setPullup(1e5)` do
-    // SimulIDE real) -- NUNCA o `kFloatingConductance` genérico de GPIO (que puxa fraco pra terra,
-    // sentido oposto, e é 100x mais fraco): "sem ligação" aqui tem que significar "não resetado",
-    // com força elétrica de pull-up de verdade, não um resíduo de "flutuando" emprestado de outro
-    // tipo de pino. Um circuito real (botão + pull-up externo, igual ao EN real do DevKit) com
-    // condutância ainda mais forte domina e decide o nível de verdade quando presente.
+    // ModuleKind::Reset (ex: EN do ESP32) nunca tem QemuModule -- Ã© linha de controle de
+    // hardware, nÃ£o registrador. Sem fio externo, fica puxado pra ALTO por um pull-up DEDICADO
+    // (`kWeakPullConductance`, 100kÎ©, idÃªntico a `Esp32Pin::m_pullAdmit`/`setPullup(1e5)` do
+    // SimulIDE real) -- NUNCA o `kFloatingConductance` genÃ©rico de GPIO (que puxa fraco pra terra,
+    // sentido oposto, e Ã© 100x mais fraco): "sem ligaÃ§Ã£o" aqui tem que significar "nÃ£o resetado",
+    // com forÃ§a elÃ©trica de pull-up de verdade, nÃ£o um resÃ­duo de "flutuando" emprestado de outro
+    // tipo de pino. Um circuito real (botÃ£o + pull-up externo, igual ao EN real do DevKit) com
+    // condutÃ¢ncia ainda mais forte domina e decide o nÃ­vel de verdade quando presente.
     //
-    // Só modelagem ELÉTRICA aqui -- a detecção de borda (reset/reload) mora em `onEvent()`, que só
-    // é chamado pelo framework depois do solver convergir E numa transição REAL de nível (ver
-    // comentário de `onEvent()` no .hpp). `stamp()` roda várias vezes por rodada de convergência do
-    // Newton (uma vez por iteração até o dirty-set esvaziar); ler `matrix.getNodeVoltage(pin)` AQUI
-    // e comparar contra o estado anterior seria repetir o bug de cold-start já corrigido (a leitura
-    // de uma iteração intermediária, ainda não convergida, sendo tratada como uma borda real).
+    // SÃ³ modelagem ELÃ‰TRICA aqui -- a detecÃ§Ã£o de borda (reset/reload) mora em `onEvent()`, que sÃ³
+    // Ã© chamado pelo framework depois do solver convergir E numa transiÃ§Ã£o REAL de nÃ­vel (ver
+    // comentÃ¡rio de `onEvent()` no .hpp). `stamp()` roda vÃ¡rias vezes por rodada de convergÃªncia do
+    // Newton (uma vez por iteraÃ§Ã£o atÃ© o dirty-set esvaziar); ler `matrix.getNodeVoltage(pin)` AQUI
+    // e comparar contra o estado anterior seria repetir o bug de cold-start jÃ¡ corrigido (a leitura
+    // de uma iteraÃ§Ã£o intermediÃ¡ria, ainda nÃ£o convergida, sendo tratada como uma borda real).
     matrix.addConductanceToGround(pin, kWeakPullConductance);
     matrix.addCurrentToGround(pin, kDriveHighVolts * kWeakPullConductance);
 }
@@ -2228,13 +2518,13 @@ void McuComponent::onEvent(const ComponentEvent& event) {
     const bool levelHigh = event.b != 0;
     const PinMapping& mapping = mappings[event.a];
     if (mapping.moduleKind != ModuleKind::Reset) {
-        // O pad de entrada continua fisicamente conectado quando o GPIO está configurado como
-        // saída. ESP-IDF/Arduino `digitalRead(pin)` lê GPIO_IN (nível real do pad), não o latch
-        // GPIO_OUT. Antes só atualizávamos a entrada no ramo de alta impedância de stamp(); depois
-        // de pinMode(OUTPUT), digitalRead() ficava preso no último zero e o padrão comum
-        // `digitalWrite(pin, !digitalRead(pin))` escrevia HIGH para sempre. O evento chega após a
-        // convergência do solver, portanto também preserva o comportamento real quando uma carga
-        // externa altera o nível do pad dirigido.
+        // O pad de entrada continua fisicamente conectado quando o GPIO estÃ¡ configurado como
+        // saÃ­da. ESP-IDF/Arduino `digitalRead(pin)` lÃª GPIO_IN (nÃ­vel real do pad), nÃ£o o latch
+        // GPIO_OUT. Antes sÃ³ atualizÃ¡vamos a entrada no ramo de alta impedÃ¢ncia de stamp(); depois
+        // de pinMode(OUTPUT), digitalRead() ficava preso no Ãºltimo zero e o padrÃ£o comum
+        // `digitalWrite(pin, !digitalRead(pin))` escrevia HIGH para sempre. O evento chega apÃ³s a
+        // convergÃªncia do solver, portanto tambÃ©m preserva o comportamento real quando uma carga
+        // externa altera o nÃ­vel do pad dirigido.
         if (event.a < m_moduleByPin.size()) {
             if (QemuModule* module = m_moduleByPin[event.a]) {
                 module->setInputLevelAt(mapping.bitOrLine, levelHigh, m_scheduler.nowNsUnlocked());
@@ -2246,20 +2536,20 @@ void McuComponent::onEvent(const ComponentEvent& event) {
     m_resetPinHigh = levelHigh;
 
     if (!levelHigh) {
-        // Borda de descida CONFIRMADA (o framework só chama onEvent numa transição real, com a
-        // tensão já convergida -- ver `SimulationSession::settleStep()`, passo 3b): EN/RST ativo
-        // (baixo) -- mantém o chip parado enquanto durar, igual a hardware real (CHIP_PU
-        // desasserta, CPU não roda). stopFirmware()/loadFirmware() chamam Scheduler::markDirty
-        // (toma m_mutex) -- nunca direto de dentro de onEvent()/stamp() (deadlock, `onEvent()` é
-        // chamado com o m_mutex do Scheduler já travado por `Scheduler::runUntil()`, ver doc de
+        // Borda de descida CONFIRMADA (o framework sÃ³ chama onEvent numa transiÃ§Ã£o real, com a
+        // tensÃ£o jÃ¡ convergida -- ver `SimulationSession::settleStep()`, passo 3b): EN/RST ativo
+        // (baixo) -- mantÃ©m o chip parado enquanto durar, igual a hardware real (CHIP_PU
+        // desasserta, CPU nÃ£o roda). stopFirmware()/loadFirmware() chamam Scheduler::markDirty
+        // (toma m_mutex) -- nunca direto de dentro de onEvent()/stamp() (deadlock, `onEvent()` Ã©
+        // chamado com o m_mutex do Scheduler jÃ¡ travado por `Scheduler::runUntil()`, ver doc de
         // scheduleEventUnlocked em Scheduler.hpp), por isso agendado.
         const std::weak_ptr<CallbackState> weakState = m_callbackState;
         m_scheduler.scheduleEventUnlocked(0, [weakState] {
             const std::shared_ptr<CallbackState> state = weakState.lock();
             if (!state) return;
             // Achado 2026-07-21 (ver doc-comment de DeferredSchedulerCall no .hpp): este callback
-            // já roda com `state->mutex` travado por TODA a duração do bloco abaixo -- markDirty()
-            // só pode disparar DEPOIS que `innerLock` solta de vez, senão inverte a ordem de lock
+            // jÃ¡ roda com `state->mutex` travado por TODA a duraÃ§Ã£o do bloco abaixo -- markDirty()
+            // sÃ³ pode disparar DEPOIS que `innerLock` solta de vez, senÃ£o inverte a ordem de lock
             // contra qualquer chamador concorrente que segure Scheduler::m_mutex primeiro (ex:
             // componentHealth() via Scheduler::trySynchronized() -> McuComponent::health()).
             simulation::Scheduler* scheduler = nullptr;
@@ -2269,7 +2559,7 @@ void McuComponent::onEvent(const ComponentEvent& event) {
                 McuComponent* self = state->owner;
                 if (!self) return;
                 self->resetModulesAndWakeups();
-                self->stopFirmware(); // não toca o Scheduler (só m_controller.stop()) -- seguro aninhado.
+                self->stopFirmware(); // nÃ£o toca o Scheduler (sÃ³ m_controller.stop()) -- seguro aninhado.
                 scheduler = &self->m_scheduler;
                 componentIndex = self->m_componentIndex;
             }
@@ -2277,16 +2567,16 @@ void McuComponent::onEvent(const ComponentEvent& event) {
         });
     } else if (!firmwareRunning() && !m_lastFirmwarePath.empty()) {
         // Borda de subida: EN/RST liberado -- reinicia o firmware do zero (mesmo path/arena do
-        // loadFirmware() anterior), igual a hardware real (CPU reinicia do vetor de boot). SÓ
-        // quando o firmware NÃO está rodando (`!firmwareRunning()`) -- sem essa guarda, a 1ª borda
-        // de subida natural (`m_previousNodeVoltages` do framework começa em 0V pra QUALQUER nó
-        // recém-criado, então a tensão real ~3.3V do próprio `loadFirmware()` que acabou de rodar
-        // JÁ conta como "subida") disparava um reload IMEDIATO logo depois de todo `loadFirmware()`
-        // legítimo -- matava o processo QEMU recém-iniciado antes do firmware rodar qualquer coisa
-        // (achado 2026-07-17: usuário reportou "nem o pulso eu detecto mais" depois da correção do
+        // loadFirmware() anterior), igual a hardware real (CPU reinicia do vetor de boot). SÃ“
+        // quando o firmware NÃƒO estÃ¡ rodando (`!firmwareRunning()`) -- sem essa guarda, a 1Âª borda
+        // de subida natural (`m_previousNodeVoltages` do framework comeÃ§a em 0V pra QUALQUER nÃ³
+        // recÃ©m-criado, entÃ£o a tensÃ£o real ~3.3V do prÃ³prio `loadFirmware()` que acabou de rodar
+        // JÃ conta como "subida") disparava um reload IMEDIATO logo depois de todo `loadFirmware()`
+        // legÃ­timo -- matava o processo QEMU recÃ©m-iniciado antes do firmware rodar qualquer coisa
+        // (achado 2026-07-17: usuÃ¡rio reportou "nem o pulso eu detecto mais" depois da correÃ§Ã£o do
         // reset fantasma -- o reset fantasma tinha virado um reload fantasma). Sem firmware
-        // carregado ainda (`m_lastFirmwarePath` vazio, ex: 1ª borda de subida do pull-up no boot
-        // antes de qualquer `loadFirmware()`), não há o que recarregar de qualquer forma.
+        // carregado ainda (`m_lastFirmwarePath` vazio, ex: 1Âª borda de subida do pull-up no boot
+        // antes de qualquer `loadFirmware()`), nÃ£o hÃ¡ o que recarregar de qualquer forma.
         const std::filesystem::path firmwarePath = m_lastFirmwarePath;
         const std::string arenaName = m_lastArenaName;
         const std::string qemuOverride = m_lastQemuBinaryOverride;
@@ -2295,9 +2585,9 @@ void McuComponent::onEvent(const ComponentEvent& event) {
         m_scheduler.scheduleEventUnlocked(0, [weakState, firmwarePath, arenaName, qemuOverride, debug] {
             const std::shared_ptr<CallbackState> state = weakState.lock();
             if (!state) return;
-            // Chama loadFirmwareLocked() (não o loadFirmware() público) de propósito: este
-            // callback já segura `state->mutex` (reentrante) pela duração do bloco -- disparar as
-            // chamadas ao Scheduler só depois que ELE solta de vez, mesma razão do ramo de descida
+            // Chama loadFirmwareLocked() (nÃ£o o loadFirmware() pÃºblico) de propÃ³sito: este
+            // callback jÃ¡ segura `state->mutex` (reentrante) pela duraÃ§Ã£o do bloco -- disparar as
+            // chamadas ao Scheduler sÃ³ depois que ELE solta de vez, mesma razÃ£o do ramo de descida
             // acima (ver doc-comment de DeferredSchedulerCall no .hpp).
             std::vector<DeferredSchedulerCall> deferred;
             {

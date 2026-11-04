@@ -44,7 +44,7 @@ public:
     /** Um byte que um SPI mestre transmitiu sem bordas pelo par de pinos (clock, dado) -- ver
      * `setSpiBytePairs`. Argumentos: índice do MCU, pino de clock, pino de dado (espaço de
      * `pins()`), byte na ordem do fio. Chamado na thread do Scheduler, no instante do fim do byte. */
-    using SpiByteHandler = std::function<void(uint32_t, uint32_t, uint32_t, uint8_t)>;
+    using SpiByteHandler = std::function<std::optional<uint8_t>(uint32_t, uint32_t, uint32_t, uint8_t)>;
     McuComponent(std::unique_ptr<IMcuAdapter> adapter, simulation::Scheduler& scheduler, std::span<const Pin> requestedPins = {});
     ~McuComponent() override;
 
@@ -133,7 +133,8 @@ public:
     void setSpiByteHandler(SpiByteHandler handler) { m_spiByteHandler = std::move(handler); }
     /** Pela sessão, a cada topologia (simulação parada): pares de pinos (clock, dado) cujos fios só
      * ligam escravos SPI que aceitam bytes inteiros -- ver `IMcuAdapter::setSpiBytePairs`. */
-    void setSpiBytePairs(std::vector<uint32_t> clockPins, std::vector<uint32_t> dataPins);
+    void setSpiBytePairs(std::vector<uint32_t> clockPins, std::vector<uint32_t> dataPins,
+                         std::vector<uint32_t> misoPins);
     /** Repassa pro adaptador concreto -- ver `IMcuAdapter::resolveI2cPinIndex`. `McuComponent`
      * continua neutro de chip (não interpreta o resultado, só repassa o índice de pino pra quem
      * chamou resolver a topologia -- `SimulationSession`). */
@@ -403,6 +404,11 @@ private:
     void wakePollWorkerLocked();
     void scheduleModuleWakeup(size_t moduleIndex, uint64_t nowNs, bool schedulerLockHeld,
                                std::vector<DeferredSchedulerCall>* deferred = nullptr);
+    void scheduleModuleHardWakeup(size_t moduleIndex, uint64_t nowNs, bool schedulerLockHeld,
+                                  std::vector<DeferredSchedulerCall>* deferred);
+    void postModuleWakeup(uint64_t nowNs, uint64_t delayNs, simulation::Scheduler::EventCallback callback, bool soft,
+                          bool schedulerLockHeld, std::vector<DeferredSchedulerCall>* deferred);
+    void runModuleWakeupLocked(size_t moduleIndex, std::vector<DeferredSchedulerCall>& schedulerCalls);
     void scheduleWakeupsForAllModules(uint64_t nowNs, bool schedulerLockHeld,
                                        std::vector<DeferredSchedulerCall>* deferred = nullptr);
     /** Corpo de `loadFirmware()` -- espera `m_callbackState->mutex` JÁ travado pelo chamador (uma
@@ -438,6 +444,9 @@ private:
     uint64_t electricalOutputFingerprint() const;
     void stampResetPin(MnaMatrixView& matrix, const Pin& pin);
     void resetModulesAndWakeups();
+    /** Reset do digital do chip (o QEMU escreve kQemuSocPeriphResetAddress): vai ao modulo do adaptador nesse
+     * endereco, que separa digital de RTC, e invalida os despertares agendados. */
+    void socDigitalResetLocked(uint64_t address, uint64_t nowNs);
     QemuModule* findModule(uint64_t address) const;
     /** Drena TODO o buffer de monitor (até esvaziar ou `kUsartMonitorDrainGuard` iterações, o que
      * vier primeiro -- nunca deveria bater no guard em uso normal, é só proteção contra um adaptador
@@ -454,6 +463,9 @@ private:
     /** VNEXT_B: passa ao QEMU (C2A) os bytes que estão no FIFO de RX da USART do adaptador. Com
      * `m_callbackState->mutex` tomado. */
     void deliverVnextBUartRxLocked(QemuModule& usart);
+    /** VNEXT_B: passa ao QEMU (C2A) os bytes que o SPI do adaptador recebeu no MISO. Com
+     * `m_callbackState->mutex` tomado. */
+    void deliverVnextBSpiRxLocked(QemuModule& spi);
 
     // Mesmas impedâncias REAIS de `IoPin` no SimulIDE real (`.codex-simulide-src/src/gui/
     // circuitwidget/iopin.cpp` -- `m_outputImp`/`m_inputImp`, usadas por `Esp32Pin`/todo pino de
@@ -503,6 +515,9 @@ private:
     std::vector<uint8_t> m_pinConnected;   // setPinConnected(): 1 = há algo no nó (vazio = todos)
     std::vector<uint64_t> m_moduleWakeupDueNs;
     std::vector<uint64_t> m_moduleWakeupGeneration;
+    // Segundo despertar, rígido, de módulos que o publicam (o TWAI): ver scheduleModuleHardWakeup().
+    std::vector<uint64_t> m_moduleHardDueNs;
+    std::vector<uint64_t> m_moduleHardGeneration;
     // Dono real do processo QEMU + arena de memória compartilhada -- ver McuController.hpp. Eram
     // dois membros próprios (QemuArenaBridge/QemuProcessManager) duplicando exatamente o que
     // McuController já fazia; unificado (achado de auditoria arquitetural 2026-07-09, D11) pra ter
@@ -573,8 +588,9 @@ private:
     // Última syncSeq ecoada com o Core já no instante que o QEMU provou: a espera dela foi atendida
     // e acordada, as publicações seguintes da mesma sequência não precisam da campainha.
     uint64_t m_lockstepSatisfiedSeq = UINT64_MAX;
-    // Último GPIO_IN/GPIO_IN1 publicado no snapshot (ver publishVnextBGpioInputsLocked()).
-    std::array<uint64_t, 2> m_vnextBPublishedGpioIn{};
+    // Último snapshot publicado (ver publishVnextBGpioInputsLocked()): GPIO_IN, GPIO_IN1, as tensões
+    // dos 18 pads de ADC, os 8 contadores do PCNT e os 6 TIMERn_STATUS do MCPWM.
+    std::array<uint64_t, 16> m_vnextBPublishedGpioIn{};
     bool m_vnextBGpioInPublished = false;
     // Último GPIO_IN/GPIO_IN1 entregue ao modelo de GPIO do QEMU como evento C2A (interrupção na borda).
     std::array<uint64_t, 2> m_vnextBNotifiedGpioIn{};

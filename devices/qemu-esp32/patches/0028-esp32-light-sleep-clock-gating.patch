@@ -1,0 +1,103 @@
+diff --git a/hw/misc/esp32_rtc_cntl.c b/hw/misc/esp32_rtc_cntl.c
+index f3545e2..b9152ff 100644
+--- a/hw/misc/esp32_rtc_cntl.c
++++ b/hw/misc/esp32_rtc_cntl.c
+@@ -70,13 +70,10 @@ static bool esp32_rtc_trace(void)
+     return enabled;
+ }
+ 
+-static void esp32_rtc_wake(Esp32RtcCntlState *s, uint32_t cause)
++static void esp32_rtc_wake_finish(Esp32RtcCntlState *s, uint32_t cause)
+ {
+-    if (esp32_rtc_trace())
+-        fprintf(stderr, "[RTC] wake cause=0x%x sleeping=%d deep=%d now=%" PRId64 "\n", cause, s->sleeping,
+-                s->sleep_deep, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
+-    if (!s->sleeping) return;
+     s->sleeping = false;
++    s->sleep_wake_pending = false;
+     timer_del(&s->sleep_timer);
+     uint32_t *wakeup = esp32_rtc_reg(s, A_RTC_CNTL_WAKEUP_STATE);
+     *wakeup = FIELD_DP32(*wakeup, RTC_CNTL_WAKEUP_STATE, WAKEUP_CAUSE, cause);
+@@ -99,6 +96,36 @@ static void esp32_rtc_wake(Esp32RtcCntlState *s, uint32_t cause)
+     esp32_rtc_update_cpu_stall(s);
+ }
+ 
++/* Wake callbacks run outside the vCPU. Publish the Core clock restore first; retry while its lane is full so
++ * the peripherals resume before the RTC releases the guest cores. */
++static void esp32_rtc_wake_retry(void *opaque)
++{
++    Esp32RtcCntlState *s = opaque;
++    if (!s->sleeping || !s->sleep_wake_pending) return;
++    if (writeReg(0x3FF48FF4, 0) != VNEXT_PUBLISHED) {
++        timer_mod_ns(&s->sleep_wake_retry_timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + 1000);
++        return;
++    }
++    const uint32_t cause = s->sleep_wake_cause;
++    s->sleep_wake_pending = false;
++    esp32_rtc_wake_finish(s, cause);
++}
++
++static void esp32_rtc_wake(Esp32RtcCntlState *s, uint32_t cause)
++{
++    if (esp32_rtc_trace())
++        fprintf(stderr, "[RTC] wake cause=0x%x sleeping=%d deep=%d now=%" PRId64 "\n", cause, s->sleeping,
++                s->sleep_deep, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL));
++    if (!s->sleeping || s->sleep_wake_pending) return;
++    if (!s->sleep_deep && writeReg(0x3FF48FF4, 0) != VNEXT_PUBLISHED) {
++        s->sleep_wake_pending = true;
++        s->sleep_wake_cause = cause;
++        timer_mod_ns(&s->sleep_wake_retry_timer, qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + 1000);
++        return;
++    }
++    esp32_rtc_wake_finish(s, cause);
++}
++
+ /* ext0: one RTC GPIO (RTC_IO_EXT_WAKEUP0.SEL) at EXT_WAKEUP0_LV; ext1: the RTC GPIOs of EXT_WAKEUP1.SEL,
+  * any high (EXT_WAKEUP1_LV 1) or all low (0); GPIO (light sleep only, the digital GPIO stays powered): a pin
+  * with GPIO_PINn.WAKEUP_ENABLE at its INT_TYPE level. All are level wakeups. */
+@@ -169,6 +196,12 @@ static void esp32_rtc_sleep_start(Esp32RtcCntlState *s)
+     if (s->sleeping) return;
+     s->sleep_deep = FIELD_EX32(*esp32_rtc_reg(s, A_RTC_CNTL_DIG_PWC), RTC_CNTL_DIG_PWC, DG_WRAP_PD_EN);
+     if (s->sleep_deep) writeReg(0x3FF48FFC, 1); /* first: may replay this store (vNext-B) */
++    else {
++        /* bit 0 gates APB/REF_TICK peripherals; bit 1 says IDF kept RTC8M powered for LEDC low-speed timers. */
++        const uint32_t clk_conf = *esp32_rtc_reg(s, A_RTC_CNTL_CLK_CONF);
++        const uint32_t keep_8m = (clk_conf & BIT(26)) != 0 ? 2u : 0u;
++        if (writeReg(0x3FF48FF4, 1u | keep_8m) != VNEXT_PUBLISHED) return;
++    }
+     if (s->sleep_deep) qemu_set_irq(s->dig_power_down, 1);
+     s->sleeping = true;
+     for (int i = 0; i < ESP32_CPU_COUNT; ++i) qemu_set_irq(s->cpu_stall_req[i], 1);
+@@ -430,6 +463,8 @@ static void esp32_rtc_cntl_reset(DeviceState *dev)
+     s->int_raw = 0;
+     s->sleeping = false;
+     timer_del(&s->sleep_timer);
++    timer_del(&s->sleep_wake_retry_timer);
++    s->sleep_wake_pending = false;
+     /* RTC_CNTL_CLK_CONF reset values: SoC clock on XTAL, slow clock on the 150 kHz RC, fast clock
+      * on the 8 MHz RC. Propagated to the SoC (esp32_clk_update) so APB_CLK and the CPU clock are
+      * the reset ones, not 0 or whatever the firmware had switched to before this reset. */
+@@ -459,6 +494,7 @@ static void esp32_rtc_cntl_init(Object *obj)
+     qdev_init_gpio_out_named(DEVICE(sbd), &s->dig_power_down, ESP32_RTC_DIG_PD_GPIO, 1);
+     qdev_init_gpio_out_named(DEVICE(sbd), &s->dig_clock_gate, ESP32_RTC_DIG_CLK_GATE_GPIO, 1);
+     timer_init_ns(&s->sleep_timer, QEMU_CLOCK_VIRTUAL, esp32_rtc_sleep_timer_cb, s);
++    timer_init_ns(&s->sleep_wake_retry_timer, QEMU_CLOCK_VIRTUAL, esp32_rtc_wake_retry, s);
+     esp32_rtc_cntl_device = s;
+ 
+     for (int i = 0; i < ESP32_CPU_COUNT; ++i) {
+diff --git a/include/hw/misc/esp32_rtc_cntl.h b/include/hw/misc/esp32_rtc_cntl.h
+index bb0f327..4779947 100644
+--- a/include/hw/misc/esp32_rtc_cntl.h
++++ b/include/hw/misc/esp32_rtc_cntl.h
+@@ -89,8 +89,11 @@ typedef struct Esp32RtcCntlState {
+      * DEEPSLEEP_RESET, the RTC domain (these registers, RTC memory, the RTC timer) kept; light sleep
+      * resumes the cores with SLP_WAKEUP_INT_RAW. */
+     QEMUTimer sleep_timer;
++    QEMUTimer sleep_wake_retry_timer;
+     bool sleeping;
+     bool sleep_deep;
++    bool sleep_wake_pending;
++    uint32_t sleep_wake_cause;
+     /* RTC FAST memory (8 KB, set by the SoC) for the memory CRC engine (RTC_CNTL_MEM_CRC). */
+     uint8_t *rtc_fast_ram;
+ } Esp32RtcCntlState;

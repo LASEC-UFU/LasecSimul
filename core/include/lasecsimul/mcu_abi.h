@@ -33,7 +33,11 @@ extern "C" {
 #endif
 
 #define LSDN_MCU_ABI_VERSION_MAJOR 3
-#define LSDN_MCU_ABI_VERSION_MINOR 4
+#define LSDN_MCU_ABI_VERSION_MINOR 6
+/* Minor 5 (2026-11-02): entrou get_pin_analog (LsdnQemuModuleVTable) e LSDN_PIN_STATE_ANALOG -- uma linha
+ * dirigida por uma fonte analogica (tensao atras de uma resistencia) em vez da saida digital: o sensor de
+ * toque do ESP32 carregando o pad na medicao, o DAC. O Core estampa o equivalente de Norton e continua
+ * levando a tensao do pad ao modulo. O Core so' le este slot de um plugin com minor >= 5. */
 /* Minor 4 (2026-10-31): entrou uart_tx_on_line (LsdnQemuModuleVTable) -- qual USART sai agora por
  * uma linha de GPIO. No ESP32 o U0TXD é o próprio GPIO1 (função do IO_MUX), e a matriz leva qualquer
  * TX a outro pino; o tap byte-exato e os frames sem bordas (minor 1) só reconheciam o pino dedicado
@@ -236,6 +240,10 @@ typedef struct LsdnQemuModuleVTable {
     /* ABI 3.4: índice + 1 da USART cujo TX sai agora pela linha `bit_or_line` deste módulo de GPIO
      * (função do IO_MUX ou matriz de GPIO), 0 se nenhuma (ver minor 4). Opcional -- NULL = nenhuma. */
     uint32_t (*uart_tx_on_line)(LsdnQemuModule* module, uint32_t bit_or_line);
+    /* ABI 3.5: a fonte analogica que dirige a linha agora (estado LSDN_PIN_STATE_ANALOG): *out_volts atras
+     * de *out_ohms (> 0). Devolve 1, ou 0 se a linha nao tem fonte analogica (vale o estado digital).
+     * Opcional -- NULL = nenhuma linha analogica. */
+    int32_t  (*get_pin_analog)(LsdnQemuModule* module, uint32_t bit_or_line, double* out_volts, double* out_ohms);
 } LsdnQemuModuleVTable;
 
 #define LSDN_PULL_NONE 0u
@@ -247,6 +255,7 @@ typedef struct LsdnQemuModuleVTable {
 #define LSDN_PIN_STATE_OUTPUT_HIGH (1u << 1)
 #define LSDN_PIN_STATE_PULL_UP (1u << 2)
 #define LSDN_PIN_STATE_PULL_DOWN (1u << 3)
+#define LSDN_PIN_STATE_ANALOG (1u << 4) /* ABI 3.5: get_pin_analog descreve a fonte; prevalece sobre a saida digital */
 
 /* Um modulo concreto devolvido por create_modules(): estado opaco + vtable + identidade
  * (moduleKind/moduleIndex, mesma identidade ja usada em LsdnMemoryRegion/LsdnPinMapping) -- e assim
@@ -294,6 +303,9 @@ typedef struct LsdnMcuVTable {
      * um SPI mestre pode transmitir bytes sem bordas (ver minor 3); count=0 desliga. */
     void (*set_spi_byte_pairs)(LsdnMcuAdapter* adapter, const uint32_t* clock_pins, const uint32_t* data_pins,
                                uint32_t count);
+    /* ABI 3.6: SPI pairs with their physical MISO pad (UINT32_MAX means no byte MISO response). */
+    void (*set_spi_byte_pairs_miso)(LsdnMcuAdapter* adapter, const uint32_t* clock_pins, const uint32_t* data_pins,
+                                    const uint32_t* miso_pins, uint32_t count);
 } LsdnMcuVTable;
 
 /* Simbolo exportado por um plugin de adaptador de MCU — distinto de lsdn_get_vtable (dispositivos)

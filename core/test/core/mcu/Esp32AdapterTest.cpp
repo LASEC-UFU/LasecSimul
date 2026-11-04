@@ -154,7 +154,9 @@ int main() {
                 "GPIO2 maps to GPIO bit 2");
 
     const auto modules = adapter->createModules();
-    TEST_ASSERT(modules.size() == 11, "createModules() devolve GPIO/IOMUX/USART/I2C/SPI + ADC e PWM");
+    TEST_ASSERT(modules.size() == 19,
+                "createModules() devolve GPIO/IOMUX/USART/I2C/SPI + ADC, LEDC, RMT, PCNT, 2 MCPWM, TWAI, DPORT_PERIP_RST_EN, "
+                "RTC_IO e o reset do digital");
     bool hasGpioModule = false;
     bool hasIoMuxModule = false;
     QemuModule* gpioModule = nullptr;
@@ -398,6 +400,11 @@ int main() {
         // o duty novo so vale no proximo estouro do contador (aqui, em t = 1 ms).
         if (ioMuxModule) ioMuxModule->writeRegister(0x3FF49000 + 0x2C, 2u << 12u);
         gpioModule->writeRegister(0x3FF44000 + 0x530 + 27u * 4u, 71u);
+        // O APB_CLK de 80 MHz que o QEMU informa quando o boot passa para o PLL (o adaptador sai do reset no
+        // XTAL, 40 MHz, como o chip).
+        for (const auto& m : modules) {
+            if (m->owns(0x3FF48FF8)) m->writeRegisterAt(0x3FF48FF8, 80'000'000u, 0);
+        }
         if (pwmModule) {
             pwmModule->writeRegisterAt(0x3FF59000 + 0x140, 8u | (80'000u << 5u) | 0x02000000u, 0);
             pwmModule->writeRegisterAt(0x3FF59000 + 0x000, 1u << 2, 0);        // SIG_OUT_EN, timer 0
@@ -463,6 +470,19 @@ int main() {
                 }
             }
             TEST_ASSERT(fadeOk, "fade do LEDC: o duty anda DUTY_SCALE a cada DUTY_CYCLE periodos, DUTY_NUM vezes");
+        }
+        // DPORT_PERIP_RST_EN.LEDC_RST (bit 11), o pulso do periph_module_reset(): o PWM para e o LEDC volta
+        // ao reset, com a saida no nivel de reset.
+        QemuModule* dportModule = nullptr;
+        for (const std::unique_ptr<QemuModule>& m : modules)
+            if (m->owns(0x3FF000C4)) dportModule = m.get();
+        TEST_ASSERT(dportModule != nullptr, "modulo do DPORT_PERIP_RST_EN existe");
+        if (dportModule && pwmModule) {
+            TEST_ASSERT(pwmModule->nextWakeupDelayNs(21'000'000u) != QemuModule::kNoWakeup, "o PWM ainda corre");
+            dportModule->writeRegisterAt(0x3FF000C4, 1u << 11, 21'000'000u);
+            dportModule->writeRegisterAt(0x3FF000C4, 0, 21'000'000u);
+            TEST_ASSERT(pwmModule->nextWakeupDelayNs(21'000'000u) == QemuModule::kNoWakeup && !gpioModule->outputLevel(27),
+                        "LEDC_RST para o PWM e deixa o GPIO27 baixo");
         }
         gpioModule->writeRegister(0x3FF44000 + 0x530 + 27u * 4u, 0x100u);                  // devolve ao GPIO puro
 
@@ -873,6 +893,25 @@ int main() {
                     "sem par declarado: 8 pulsos de SCLK no pad e nada na fila de bytes");
         gpioModule->writeRegister(0x3FF44000 + 0x530 + 14u * 4u, 0x100u);
         gpioModule->writeRegister(0x3FF44000 + 0x530 + 13u * 4u, 0x100u);
+
+        // ---- 80 MHz (SPI_CLK_EQU_SYSCLK): 12,5 ns por bit, que nao e' um numero inteiro de ns. Cada
+        // borda sai arredondada uma vez a partir do inicio do byte e o byte dura exatos 100 ns (antes o
+        // periodo era truncado em 12 ns: 96 ns por byte, SCLK a 83 MHz). ----
+        spiModule->writeRegister(kSpiBase + 0x18, 12'500u);
+        constexpr uint64_t kFastStartNs = 100'000;
+        spiModule->writeRegisterAt(kSpiBase + 0x80, 0xA5u, kFastStartNs);
+        std::vector<uint64_t> fastEdges;
+        const uint64_t fastEndNs = pumpWakeups(spiModule, kFastStartNs, 20,
+                                               [&](uint64_t at) { fastEdges.push_back(at - kFastStartNs); });
+        const std::vector<uint64_t> kFastEdgesNs{6, 13, 19, 25, 31, 38, 44, 50, 56, 63, 69, 75, 81, 88, 94, 100};
+        TEST_ASSERT(fastEdges == kFastEdgesNs,
+                    "SPI 80 MHz: as 16 bordas de SCLK em k x 6,25 ns do inicio do byte, arredondadas");
+        TEST_ASSERT(fastEndNs == kFastStartNs + 100, "SPI 80 MHz: um byte dura exatos 8 x 12,5 ns = 100 ns");
+
+        spiModule->writeRegister(kSpiBase + 0x18, 37'500u); // APB/3 = 26,67 MHz
+        spiModule->writeRegisterAt(kSpiBase + 0x80, 0xA5u, fastEndNs);
+        TEST_ASSERT(pumpWakeups(spiModule, fastEndNs, 20, [](uint64_t) {}) == fastEndNs + 300,
+                    "SPI 26,67 MHz (APB/3): um byte dura 8 x 37,5 ns = 300 ns (antes 288 ns)");
     }
 
     // Transacao I2C comandada pelo Core (VNEXT_B, BATCH que o fast path nao atende): operacoes nos

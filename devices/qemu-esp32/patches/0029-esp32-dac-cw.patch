@@ -1,0 +1,23 @@
+diff --git a/hw/misc/esp32_sens.c b/hw/misc/esp32_sens.c
+index 9075d80..35587b6 100644
+--- a/hw/misc/esp32_sens.c
++++ b/hw/misc/esp32_sens.c
+@@ -354,9 +354,15 @@ static void esp32_sens_write(void *opaque, hwaddr addr, uint64_t value,
+         esp32_sens_touch_fsm_update();
+         return;
+     }
+-    /* SAR_DAC_CTRL1.DAC_DIG_FORCE: the DACs take I2S0's samples (built-in DAC mode, hw/misc/esp32_i2s.c) instead
+-     * of PDAC; the Core drives the pads (adapter RtcIo module). First: it may replay this store. */
+-    if (addr == 0x98 && ((s->regs[0x98 / 4] ^ (uint32_t)value) & BIT(22))) writeReg(0x3FF484F4, (value >> 22) & 1);
++    /* DAC sources/config reach the Core before this guest store is accepted: a full VNEXT_B lane replays it.
++     * The Core drives analog pins; F4 selects I2S DMA and FC carries the SENS cosine-generator registers. */
++    if (addr == 0x98) {
++        if (((s->regs[0x98 / 4] ^ (uint32_t)value) & BIT(22)) &&
++            writeReg(0x3FF484F4, (value >> 22) & 1) != VNEXT_PUBLISHED) return;
++        if (writeReg(0x3FF484FC, (uint32_t)value & 0x1FFFFu) != VNEXT_PUBLISHED) return;
++    } else if (addr == 0x9c) {
++        if (writeReg(0x3FF484FC, BIT(31) | ((uint32_t)value & 0x07FFFFFFu)) != VNEXT_PUBLISHED) return;
++    }
+     if (addr < sizeof(s->regs)) s->regs[addr / 4] = (uint32_t)value;
+     switch(addr) {
+     case 0x54://SENS_MEAS1_START_SAR

@@ -147,6 +147,26 @@ void NativeMcuAdapterProxy::setSpiBytePairs(std::span<const uint32_t> clockPins,
     if (!ok) m_health = PluginHealthStatus::Faulted;
 }
 
+void NativeMcuAdapterProxy::setSpiBytePairsWithMiso(std::span<const uint32_t> clockPins,
+                                                    std::span<const uint32_t> dataPins,
+                                                    std::span<const uint32_t> misoPins) {
+    const LsdnMcuVTable* vt = m_module->mcuVTable();
+    if (m_health == PluginHealthStatus::Faulted) return;
+    const uint32_t count = static_cast<uint32_t>(std::min({clockPins.size(), dataPins.size(), misoPins.size()}));
+    if (m_module->abiMinor() >= 6 && vt->set_spi_byte_pairs_miso) {
+        const bool ok = CrashGuard::call(m_chipId, [&] {
+            vt->set_spi_byte_pairs_miso(m_handle, clockPins.data(), dataPins.data(), misoPins.data(), count);
+        });
+        if (!ok) m_health = PluginHealthStatus::Faulted;
+        return;
+    }
+    std::vector<uint32_t> clocks, data;
+    for (uint32_t i = 0; i < count; ++i) {
+        if (misoPins[i] == UINT32_MAX) { clocks.push_back(clockPins[i]); data.push_back(dataPins[i]); }
+    }
+    setSpiBytePairs(clocks, data);
+}
+
 std::optional<uint32_t> NativeMcuAdapterProxy::resolveI2cPinIndex(uint32_t bus, bool sda) const {
     const LsdnMcuVTable* vt = m_module->mcuVTable();
     if (!vt->resolve_i2c_pin || m_health == PluginHealthStatus::Faulted) return std::nullopt;

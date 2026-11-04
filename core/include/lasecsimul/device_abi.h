@@ -33,7 +33,7 @@ extern "C" {
 #endif
 
 #define LSDN_ABI_VERSION_MAJOR 4
-#define LSDN_ABI_VERSION_MINOR 1
+#define LSDN_ABI_VERSION_MINOR 3
 /* Minor 1 (2026-10-30): entraram spi_input/spi_clock_byte (LsdnDeviceVTable) -- entrada de escravo
  * SPI que recebe bytes inteiros em vez de 16 bordas por byte. O Core só lê estes slots de um plugin
  * que declara minor >= 1 (a vtable de um plugin mais antigo termina antes deles). */
@@ -198,6 +198,11 @@ typedef struct LsdnDeviceVTable {
      * nesse caso o MCU não gera as bordas desses dois fios. */
     uint32_t    (*spi_input)(LsdnDevice* dev, uint32_t* clock_pin, uint32_t* data_pin);
     void        (*spi_clock_byte)(LsdnDevice* dev, uint8_t byte);
+    /* ABI 4.2: MISO output pin and byte-exchange fast path. */
+    uint32_t    (*spi_output_pin)(LsdnDevice* dev, uint32_t* pin);
+    uint32_t    (*spi_exchange_byte)(LsdnDevice* dev, uint8_t mosi, uint8_t* miso);
+    /* ABI 4.3: all outputs whose intermediate shifts are observable (e.g. q0..q7). */
+    uint32_t    (*spi_output_pins)(LsdnDevice* dev, uint32_t* pins, uint32_t capacity);
 } LsdnDeviceVTable;
 
 /* Unico simbolo exportado por um plugin de dispositivo. */

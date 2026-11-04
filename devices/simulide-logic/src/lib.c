@@ -1110,11 +1110,49 @@ static uint32_t i2c_transfer(LsdnDevice* dev, const LsdnI2cTransfer* transfer,
     return 1;
 }
 
+static uint32_t spi_input(LsdnDevice* dev, uint32_t* clock_pin, uint32_t* data_pin) {
+    LogicDevice* s = (LogicDevice*)dev;
+    if (!s || !streq(s, "logic.shift_reg") || !clock_pin || !data_pin) return 0;
+    *clock_pin = 0;
+    *data_pin = 1;
+    return 1;
+}
+
+static uint32_t spi_output_pin(LsdnDevice* dev, uint32_t* pin) {
+    LogicDevice* s = (LogicDevice*)dev;
+    if (!s || !streq(s, "logic.shift_reg") || !pin) return 0;
+    *pin = 10; /* q7: clk, data, rst, q0..q7 */
+    return 1;
+}
+
+static uint32_t spi_output_pins(LsdnDevice* dev, uint32_t* pins, uint32_t capacity) {
+    LogicDevice* s = (LogicDevice*)dev;
+    if (!s || !streq(s, "logic.shift_reg")) return 0;
+    if (pins && capacity >= 8) for (uint32_t i = 0; i < 8; ++i) pins[i] = 3u + i;
+    return 8;
+}
+
+static uint32_t spi_exchange_byte(LsdnDevice* dev, uint8_t mosi, uint8_t* miso) {
+    LogicDevice* s = (LogicDevice*)dev;
+    if (!s || !streq(s, "logic.shift_reg") || !miso) return 0;
+    uint8_t received = 0;
+    for (int bit = 7; bit >= 0; --bit) {
+        if (s->pin_level[2]) {
+            s->state = 0;
+            continue;
+        }
+        received = (uint8_t)((received << 1) | ((s->state >> 7) & 1u));
+        s->state = ((s->state << 1) | ((mosi >> bit) & 1u)) & 0xFFu;
+    }
+    *miso = received;
+    return 1;
+}
+
 static void destroy(LsdnDevice* dev) { free(dev); }
 
 static const LsdnDeviceVTable kVTable = {
     create, init, stamp, post_step, on_event, get_property, set_property, get_state, set_state,
-    destroy, i2c_transfer
+    destroy, i2c_transfer, spi_input, NULL, spi_output_pin, spi_exchange_byte, spi_output_pins
 };
 
 LSDN_EXPORT
