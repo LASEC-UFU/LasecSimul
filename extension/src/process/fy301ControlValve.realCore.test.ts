@@ -119,10 +119,19 @@ function float(value: number): number[] {
       assert(Math.abs(real - 50) < 1.5 && Math.abs((await position()) - 50) < 1.5, `abertura ${real}, FY ${await position()}`);
     });
 
-    // What the extension saves in the .lsproj (`@fy301.hartVariablesJson`) after the Auto Setup.
+    // What the extension saves in the .lsproj after the Auto Setup: the same property list, in the same order, as
+    // `syncHartSubcircuitPropertiesFromRuntime` (extension/src/core/coreLifecycle.ts).
     let savedVariablesJson = "";
+    const saved: Array<[string, unknown]> = [];
     await test("a calibração do Auto Setup fica nas variáveis salvas com o projeto (setup.rest/setup.full, EEPROM)", async () => {
+      await transact(18, [...Buffer.from("196b71c32820" + "820820820820820820820820", "hex"), 26, 11, 126]);   // Cmd 18: tag FV-102 (ASCII empacotado), descritor, data
       await transact(48);   // any transaction refreshes the persisted JSON
+      for (const name of ["hartVariablesJson", "hartAdditionalJson", "hartBurstJson", "hartDynamicVariableAssignments", "tag", "unit",
+        "pollingAddress", "message", "descriptor", "dateDay", "dateMonth", "dateYear", "finalAssemblyNumber", "longTag", "loopCurrentMode",
+        "alarmSelectionCode", "writeProtectCode", "hartConfigChangeCounter", "configurationChangedFlags"]) {
+        const value = await client.getProperty(inner, name);
+        if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") saved.push([name, value]);
+      }
       savedVariablesJson = String(await client.getProperty(inner, "hartVariablesJson"));
       const variables = JSON.parse(savedVariablesJson) as Array<{ id: string; value: number }>;
       const rest = variables.find((variable) => variable.id === "setup.rest")?.value ?? NaN;
@@ -284,7 +293,11 @@ function float(value: number): number[] {
     await test("projeto reaberto: um FY301 com as variáveis salvas posiciona pela calibração gravada, sem novo Auto Setup", async () => {
       const valve2 = await client.addComponent("subcircuits.process.control_valve", {}, [], "Válvula (reaberta)");
       const fy2 = await client.addComponent("subcircuits.hart.smar_fy301", {}, fyPins, "FY301 (reaberto)");
-      await client.setSubcircuitChildProperty(fy2.instanceId, "fy301", "hartVariablesJson", savedVariablesJson);
+      for (const [name, value] of saved) await client.setSubcircuitChildProperty(fy2.instanceId, "fy301", name, value);
+      const inner2 = await client.getSubcircuitChildInstanceId(fy2.instanceId, "fy301");
+      assert(String(await client.getProperty(inner2, "hartVariablesStatus")) === "OK",
+        `configuração salva aceita: ${await client.getProperty(inner2, "hartVariablesStatus")}`);
+      assert(String(await client.getProperty(inner2, "tag")).trim() === "FV-102", `tag ${await client.getProperty(inner2, "tag")}`);
       const command2 = await client.addComponent("control.constant", { value: 0.012 }, [{ id: "out", x: 0, y: 0 }], "Saída 2 (A)");
       const ao2 = await client.addComponent("bridges.controlled_current_source", {}, [{ id: "command", x: 0, y: 0 }, { id: "p", x: 0, y: 10 }, { id: "n", x: 0, y: 20 }],
         "Saída analógica 2");

@@ -981,7 +981,12 @@ void HartCommunicationComponent::rebuildConfiguredPlan() {
             const size_t end = comma == std::string::npos ? m_hartDynamicVariableAssignments.size() : comma;
             try {
                 const unsigned long code = std::stoul(m_hartDynamicVariableAssignments.substr(at, end - at));
-                if (code > 255 || (code != 250 && std::none_of(device.variables.begin(), device.variables.end(),
+                // 246 is the Primary Variable alias (the default PV slot, saved with the project): valid
+                // whenever the device has a PV, even if its own Device Variable code is another one (the
+                // FY301 position is code 1). Rejecting it made a saved FY301 reopen with the factory plan.
+                const bool primaryAlias = code == 246 && std::any_of(device.variables.begin(), device.variables.end(),
+                    [](const auto& variable) { return variable.role == HartVariableRole::PrimaryVariable || variable.id == "PV"; });
+                if (code > 255 || (code != 250 && !primaryAlias && std::none_of(device.variables.begin(), device.variables.end(),
                         [code](const auto& variable) { return variable.deviceVariableCode == code; })))
                     throw std::invalid_argument("unknown device variable code");
                 assignments[slot] = static_cast<uint8_t>(code);

@@ -164,12 +164,48 @@ export function updateBoardOverlayPropertyCommand(
   value: string | number | boolean,
   options: McuCommandOptions
 ): void {
+  // O `value` de um controle gráfico é estado de tela: o widget não existe no Core.
+  if (persistBoardOverlayOperatorWrite(outerComponentId, innerComponentId, name, value, options) === "graphical") return;
   if (!state.coreClient) return;
   const coreId = coreInstanceIdByComponentId.get(outerComponentId);
   if (!coreId) return;
   state.coreClient
     .setSubcircuitChildProperty(coreId, innerComponentId, name, value)
     .catch((err) => options.reportCoreWarning(`atualizar "${innerComponentId}.${name}" (Modo Placa)`, err));
+}
+
+/**
+ * Operador num controle HMI exposto (slider, botão, setpoint dentro de um subsistema/subcircuito):
+ * o valor escrito no componente-alvo interno fica na INSTÂNCIA (`@interno.prop`, o mesmo lugar das
+ * Propriedades exportadas, ver `childPropertyOverrides.ts`) e vai junto quando o projeto é salvo --
+ * reabrir o projeto recria o filho já com ele (`applyChildPropertyOverridesToCore`). Só o alvo de
+ * processo é gravado: o `value` do próprio controle gráfico é estado de tela.
+ */
+function persistBoardOverlayOperatorWrite(
+  outerComponentId: string,
+  innerComponentId: string,
+  name: string,
+  value: string | number | boolean,
+  options: McuCommandOptions
+): "graphical" | "persisted" | "unchanged" | undefined {
+  const outer = getComponentById(outerComponentId);
+  const sourceId = resolveSourceIdForComponent(outerComponentId);
+  if (!outer || !sourceId) return undefined;
+  const inner = options.gatherInternalComponentSnapshots(sourceId)?.find((entry) => entry.id === innerComponentId);
+  if (!inner) return undefined;
+  // (`graphical` do catálogo não serve: uma constante de processo também é marcada assim)
+  if (inner.typeId.startsWith("graphics.")) return "graphical";
+  const key = `@${innerComponentId}.${name}`;
+  if (outer.properties[key] === value) return "unchanged";
+  state.schematicState = {
+    ...state.schematicState,
+    components: state.schematicState.components.map((entry) =>
+      entry.id === outerComponentId ? { ...entry, properties: { ...entry.properties, [key]: value } } : entry
+    ),
+  };
+  options.syncSchematicPanel();
+  state.schematicPanel?.setDirty(true);
+  return "persisted";
 }
 
 export async function chooseMcuFirmwareCommand(componentId: string, options: McuCommandOptions): Promise<void> {
@@ -503,7 +539,15 @@ export async function requestBoardOverlayDataCommand(
   const snapshots = options.gatherInternalComponentSnapshots(sourceId);
   if (!snapshots) return;
   const outer = getComponentById(componentId);
-  const items = snapshots.map((item) => {
+  const items = snapshots.map((original) => {
+    // Valores gravados na instância (`@interno.prop`: Propriedades exportadas e operação dos
+    // controles expostos) valem sobre os da definição também para a tela.
+    const prefix = `@${original.id}.`;
+    const overrides = outer ? Object.entries(outer.properties).filter(([key]) => key.startsWith(prefix)) : [];
+    const item = overrides.length === 0 ? original : {
+      ...original,
+      properties: { ...original.properties, ...Object.fromEntries(overrides.map(([key, value]) => [key.slice(prefix.length), value])) },
+    } as typeof original;
     if (!outer || !isMcuHostTypeId(item.typeId)) return item;
     const firmwarePath = exposedMcuRuntimeProperty(outer.properties, item.id, "firmwarePath");
     const qemuBinaryOverride = exposedMcuRuntimeProperty(outer.properties, item.id, "qemuBinaryOverride");
