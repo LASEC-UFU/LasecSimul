@@ -640,6 +640,15 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
         // disclosed gap, distinct from the response-content bug fixed here.
         std::array<uint8_t, 9> statusBytes{};
         statusBytes[0] = selected->plan.diagnosticStatus;
+        // Device-specific status bytes owned by the model (e.g. the FY301 setup status in byte 1).
+        for (size_t k = 0; k < selected->plan.statusVariables.size() && 1 + k < statusBytes.size(); ++k) {
+            for (size_t i = 0; i < selected->plan.variables.size() && i < selected->variableValues.size(); ++i) {
+                if (selected->plan.variables[i].id != selected->plan.statusVariables[k]) continue;
+                const double value = selected->variableValues[i];
+                statusBytes[1 + k] = static_cast<uint8_t>(std::isfinite(value) ? std::clamp(std::llround(value), 0LL, 255LL) : 0);
+                break;
+            }
+        }
         if (selected->plan.statusSimulationEnabled) {
             for (size_t index = 0; index < selected->plan.simulatedStatusMask.size(); ++index) {
                 if (selected->plan.simulatedStatusMask[index] == 0) continue;
@@ -1158,7 +1167,9 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
 
 HartTransferSettings hartTransferSettings(const HartDevicePlan& plan) noexcept {
     HartTransferSettings settings;
-    settings.function = plan.pvTransferFunctionCode;
+    // A vendor code list (FY301 flow characteristic) or an analog input: the code shapes the device's
+    // own model, never its 4-20 mA signal.
+    settings.function = plan.transferFunctionCodes.empty() && !plan.analogInput ? plan.pvTransferFunctionCode : 0;
     for (const auto& variable : plan.variables) {
         if (variable.transferParameter == 1) settings.cutoffPercent = static_cast<float>(variable.value);
         else if (variable.transferParameter == 2) settings.cutoffMode = static_cast<uint8_t>(variable.value);
@@ -1210,6 +1221,20 @@ HartAnalogOutput hartEvaluateAnalogOutput(double primaryValue, float lowerRangeV
         output.outputPercent = (alarmMilliamps - 4.0f) / 16.0f * 100.0f;
         output.saturated = true;
     }
+    return output;
+}
+
+HartAnalogOutput hartEvaluateAnalogInput(float measuredMilliamps, uint8_t rangeUnitCode, float lowerRangeValue,
+                                         float upperRangeValue) noexcept {
+    HartAnalogOutput output;
+    const float milliamps = std::isfinite(measuredMilliamps) ? measuredMilliamps : 0.0f;
+    output.milliamps = milliamps;
+    // Units 39 = milliamperes: the range IS the input split range in mA (Smar FY301 Command 35).
+    // Otherwise the range is read as percent of the 4-20 mA input signal.
+    const float signal = rangeUnitCode == 39 ? milliamps : (milliamps - 4.0f) / 16.0f * 100.0f;
+    const float span = upperRangeValue - lowerRangeValue;
+    output.percentOfRange = span != 0.0f && std::isfinite(span) ? (signal - lowerRangeValue) / span * 100.0f : 0.0f;
+    output.outputPercent = output.percentOfRange;
     return output;
 }
 

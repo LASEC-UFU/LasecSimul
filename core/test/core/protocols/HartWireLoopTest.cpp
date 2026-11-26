@@ -334,6 +334,7 @@ struct InputLoop {
     HartCommunicationComponent* device = nullptr;
     TestCurrentSource* source = nullptr;
     uint32_t deviceIndex = 0;
+    uint32_t sourceIndex = 0;
     double lineMin = 1e9, lineMax = -1e9;
     bool recordLine = false;
 
@@ -365,7 +366,7 @@ struct InputLoop {
                 lineMax = std::max(lineMax, volts);
             });
         });
-        const uint32_t sourceIndex = session.addComponent("test.current_source", {});
+        sourceIndex = session.addComponent("test.current_source", {});
         registry::ComponentParams modemParams;
         modemParams.properties["connection"] = modemConnection;
         const uint32_t modemIndex = session.addComponent(HartModemComponent::kTypeId, modemParams);
@@ -448,10 +449,12 @@ void currentInputTests(const std::function<Bytes(const Bytes&)>& expected) {
         check(driftDuringHart < 0.02, "I5 the master's carrier does not move the measured setpoint (input filter): drift " +
               std::to_string(driftDuringHart * 1000) + " uA");
         loop.source->amps = 0.003;
+        loop.session.scheduler().dirtySet().insert(loop.sourceIndex); // a property change restamps the source
         loop.session.scheduler().step(300'000'000);
         const Bytes silent = loop.transact(request(0), 0, 600'000'000);
         check(withoutPreambles(silent).empty() && std::fabs(loop.measured() - 3.0) < 0.01,
-              "I6 below the 3.8 mA minimum the device is off: no HART reply at 3.0 mA");
+              "I6 below the 3.8 mA minimum the device is off: no HART reply at 3.0 mA (measured " +
+              std::to_string(loop.measured()) + " mA, " + std::to_string(withoutPreambles(silent).size()) + " reply bytes)");
         uint8_t telemetry[64] = {};
         const size_t size = loop.device->getTelemetryState(telemetry, sizeof telemetry);
         check(size > 16 && telemetry[12] == 0 && telemetry[13] == 0, "I7 ...and its display is blank");

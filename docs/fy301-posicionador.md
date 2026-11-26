@@ -50,40 +50,52 @@ porque só os pinos ligados entram na lista.
 Pinos: `LOOP+`/`LOOP-` (elétricos), `SUP` (suprimento de ar, bar), `OUT1` (saída pneumática, bar) e `POS`
 (curso da haste lido pelo ímã/sensor Hall, mm).
 
-Cadeia de blocos (período de 1 ms, necessário para o laço servo de ganho alto):
+Cadeia de blocos (`sl.fcn`/`sl.unit_delay`, período de 1 ms, necessário para o laço servo de ganho alto):
 
 ```text
-4-20 mA -> split range -> Auto/Man (SP%) -> CHAR -> limites -> TSO -> TIME (taxa) -> setpoint de posição
-POS (mm) -> calibração do Auto Setup -> LOPOS/UPPOS -> ação direta/reversa (TYPE) -> posição %
-erro (com AIR_T) -> PI (3 x KP, TR) -> sinal do piezo/carretel (% do suprimento) -> OUT1 = % x SUP
+4-20 mA -> split range (Cmd 35, % da faixa) -> Local (SP% do Cmd 226) / Remoto -> curva (Cmd 47) -> limites -> TSO -> TIME -> setpoint
+POS (mm) -> calibração do Auto Setup (Cmd 152) -> trims LOPOS/UPPOS (Cmd 168) -> ação direta/reversa (Cmd 157) -> PV = posição %
+erro (com AIR_T, Cmd 129) -> PI (3 x KP, TR em min/rep; Cmd 218/219) -> piezo/carretel (% do suprimento) -> OUT1 = % x SUP
 ```
 
-| Parâmetro (Propriedades exportadas) | Padrão | Manual |
-|---|---|---|
-| TYPE (0 Lind, 1 Linr, 2 Rotd, 3 Rotr) | 0 | seção 4 |
-| AIR_T (0 AIR_OPEN, 1 AIR_CLOSED) | 0 | seção 4 |
-| CHAR (0 Lin; 1-3 EP 1:25/1:33/1:50; 4-6 abertura rápida hiperbólica 1:25/1:33/1:50) | 0 | seção 3 |
-| MODE (0 Auto, 1 Man) e SP% | Auto, 0 % | seção 4 |
-| TIME (s, de 0 a 100 %) | 1 | seção 4 (1 a 60 s) |
-| KP, TR (min/rep) | 40, 2 | seção 4 (KP 35-45 e TR ~2 em válvulas lineares) |
-| LOPOS, UPPOS (%) | 0, 100 | seção 4 |
-| TSO (%) | 0 (desligado) | seção 3 |
-| Limites do setpoint, split range (mA) | 0-100 %, 4-20 mA | seção 3 |
-| SETUP (0 Parado, 1 Executar) | 0 | seção 3 (Auto Setup) |
+**Toda a configuração é feita por HART**, com os comandos do DD da Smar (revisão 2) e o DTM do FY301
+(LasecFDT ou PACTware): o dispositivo é o único dono dos parâmetros, que o modelo lê pelos pinos de saída das
+variáveis HART. O mapa completo de comandos e a forma como foi obtido estão em
+[fy301-dtm-engenharia-reversa.md](fy301-dtm-engenharia-reversa.md). A configuração escrita pelo DTM é gravada no
+`.lsproj` ao salvar, parar ou reconstruir (como no LD301).
+
+| Parâmetro | Comando | Padrão de fábrica | Manual |
+|---|---|---|---|
+| Tipo (Linear/Rotary) | 187/188 | Linear | seção 4 (TYPE) |
+| Ação (Direct/Reverse) | 156/157 | Direct | seção 4 (TYPE Lind/Linr) |
+| Ar para (Open/Close) = AIR_T | 128/129 | Open | seção 4 |
+| Curva: 0 Linear, 1 EP 1:50, 2 AR 1:50, 3 Tabela, 4 EP 1:25, 5 AR 1:25, 6 EP 1:33, 7 AR 1:33 | 47 (lida no 15) | Linear | seção 3 |
+| Tabela de 16 pontos (X entrada %, Y posição %) | 133/134/135 | 2 pontos 0-100 | seção 3 |
+| KP, TR (min/rep), banda morta | 217-220 | 40, 2, 0 | seção 4 |
+| TIME abertura/fechamento (s), TSO e banda do TSO (%), limites do SP (%) | 221/222 | 0 (sem limite), 0, 0-100 | seções 3 e 4 |
+| Split range (mA) | 35 (lido no 15) | 4-20 mA | seção 3 |
+| SP Local/Remoto e SP% local | 223-226 | Remoto | seção 4 (MODE/SP%) |
+| Auto Setup / Setup manual | 152 / 250 | — | seção 3 |
+| Trims de posição inferior/superior (%) | 168 | 0 / 100 | seção 4 (LOPOS/UPPOS) |
+| LCD (PV% ou SP%) | 247/248 | PV% | seção 3 |
+
+Nas Propriedades exportadas ficam só os dados físicos: a escala de fábrica do sensor de posição (30 mm) e a
+temperatura ambiente.
 
 - **Curvas:** igual porcentagem `100·(R^(s/100) - 1)/(R - 1)`; abertura rápida hiperbólica
   `100·R·s/(1 + (R - 1)·s)` (s em 0-1). O manual nomeia as curvas mas não traz as fórmulas.
 - **Auto Setup** (cerca de 50 s no simulador; cerca de 4 min no aparelho): 0-25 s sem ar, grava a posição
-  de repouso; 25-50 s com ar total, grava a outra ponta; a integral é zerada. Antes do primeiro Auto Setup,
-  a escala do sensor é a de fábrica (30 mm): num curso de 20 mm, 50 % no display são 75 % de abertura real.
+  de repouso; 25-50 s com ar total, grava a outra ponta; a integral é zerada. Progresso no Cmd 33 código 17 e
+  estado no Cmd 48 byte 1 (15 = em andamento). Antes do primeiro Auto Setup a escala do sensor é a de fábrica
+  (30 mm): num curso de 20 mm, 50 % no display são 75 % de abertura real.
+- **Ação × AIR_T:** com ação reversa num atuador ar-para-abrir o AIR_T tem de ser *Close* (manual, seção 4);
+  a combinação errada dá realimentação positiva e a válvula vai a um extremo.
 - **Servo:** ganho interno 3 x KP (piezo + carretel). Com KP 40 a válvula assenta em cerca de 1 s e a integral
   remove os últimos décimos de %; KP perto de 0,5 é lento e deixa erro.
-- **HART:** PV = setpoint (sinal de entrada, 0-100 % para 4-20 mA), SV = posição, TV = corrente de entrada,
-  QV = OUT1 (bar), variável 4 = setpoint de posição. O Comando 2 informa a corrente lida; o Comando 33 lê a
-  posição (variável 1). O Comando 3 embutido do dispositivo padrão devolve só a PV (a DSL não sobrescreve
-  comandos Universais). Display: posição (variável 1) e setpoint de posição (variável 4), alternados.
-- **Identidade (inferida):** Smar 3E, tipo 03 (sequência LD301 01, TT301 02), HART 5 (o manual cita
-  endereços de multidrop 1 a 15), software 4 (manual da versão 4.XX), ID 0B 2A 61.
+- **HART:** PV = posição (%, código 1); faixa (Cmd 15/35) = split range em mA; Cmd 2/3 = corrente medida e %
+  do split range; Cmd 33 com os códigos do DTM (0 entrada mA, 2 entrada %, 1 posição, 6 SP, 17 progresso do
+  setup …). Display: PV% ou SP% conforme o Cmd 248.
+- **Identidade:** Smar 3E, tipo 03, HART 5, revisão do dispositivo 2 (a do DD `0202`), firmware 2.04, ID 0B 2A 61.
 
 O preset antigo `protocol.hart.device.smar_fy301` continua registrado (projetos antigos abrem), oculto da
 paleta como os do LD301 e do TT301.
@@ -101,8 +113,8 @@ paleta como os do LD301 e do TT301.
 
 | Teste | O que prova |
 |---|---|
-| `hart_wire_loop` I0-I8 | carga de 550 Ω (6,6 V a 12 mA), corrente medida, Cmd 0/13 byte a byte pelo modem em paralelo, 0,5 Vpp, filtro de entrada, desligado abaixo de 3,8 mA, display apagado, modem em série não ouve |
-| `fy301ControlValve.realCore.test.ts` | escala de fábrica antes do Auto Setup; Auto Setup; Cmd 2 = 12,000 mA, Cmd 33; 4/20 mA; EP 1:50 → 12,4 %; manual; split range; AIR_T trocado; fonte de corrente com a ordem de pinos da paleta |
+| `hart_wire_loop` I0-I8 | carga de 550 Ω (6,6 V a 12 mA), corrente medida, Cmd 0/13 byte a byte pelo modem em paralelo, 0,5 Vpp, a portadora HART não mexe na corrente medida (retida durante a portadora), desligado abaixo de 3,8 mA, display apagado, modem em série não ouve |
+| `fy301ControlValve.realCore.test.ts` | toda a configuração por HART, com os bytes do DTM: escala de fábrica antes do Auto Setup; Auto Setup (Cmd 152, Cmd 48, Cmd 33 código 17); Cmd 2/15/33; 4/20 mA; Cmd 47 EP 1:50 → 12,4 % e código inválido recusado; SP local (224/226); split range pelo Cmd 35; TIME e TSO (222); tabela (133-135); ação reversa + AIR_T; AIR_T trocado; contadores (166); Cmd 242; sem sinal |
 | `hartSmarDevices.test.ts`, `paletteTree.test.ts` | pinos e modo do FY301, imagem dentro das margens, preset antigo oculto |
 | `control_block_subcircuit` (3) | a planta da válvula instancia e compila |
 

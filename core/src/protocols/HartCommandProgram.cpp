@@ -9,6 +9,11 @@
 namespace lasecsimul::protocols {
 
 HartAnalogOutput hartAnalogOutput(const HartExecutionVariables& variables) noexcept {
+    // A loop-powered actuator does not drive the loop: Commands 2/3 report the current it measures and
+    // the percent of range is that current within the PV range (the input split range, Command 35).
+    if (variables.analogInput)
+        return hartEvaluateAnalogInput(variables.measuredInputMilliamps, variables.rangeUnitCode,
+                                       variables.lowerRangeValue, variables.upperRangeValue);
     HartAnalogOutput output = hartEvaluateAnalogOutput(variables.primaryVariable, variables.lowerRangeValue, variables.upperRangeValue,
                                     variables.analogLowerSaturationPercent, variables.analogUpperSaturationPercent,
                                     variables.fixedCurrentMode, variables.fixedCurrentMilliamps,
@@ -137,6 +142,7 @@ std::optional<std::span<const uint8_t>> evalExpr(const HartExpr& expr, HartExecu
                 case HartVarId::AlarmSelectionCode: scratch[0] = vars.alarmSelectionCode; return std::span(scratch.data(), 1);
                 case HartVarId::WriteProtectCode: scratch[0] = vars.writeProtectCode; return std::span(scratch.data(), 1);
                 case HartVarId::ImplementedUniversalRevision: scratch[0] = vars.implementedUniversalRevision; return std::span(scratch.data(), 1);
+                case HartVarId::RangeUnitCode: scratch[0] = vars.rangeUnitCode; return std::span(scratch.data(), 1);
             }
             return std::nullopt;
         case HartExpr::Kind::OutputPercent: {

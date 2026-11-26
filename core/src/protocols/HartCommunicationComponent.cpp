@@ -311,6 +311,12 @@ void HartCommunicationComponent::resolveProfileTraits(const registry::ComponentP
     t.responseDataLimits = stringProperty(p, "hartResponseDataLimits",
         defaults.contains("hartResponseDataLimits") && defaults["hartResponseDataLimits"].is_string()
             ? defaults["hartResponseDataLimits"].get<std::string>() : "");
+    t.transferFunctionCodes = stringProperty(p, "hartTransferFunctionCodes",
+        defaults.contains("hartTransferFunctionCodes") && defaults["hartTransferFunctionCodes"].is_string()
+            ? defaults["hartTransferFunctionCodes"].get<std::string>() : "");
+    t.statusVariables = stringProperty(p, "hartStatusVariables",
+        defaults.contains("hartStatusVariables") && defaults["hartStatusVariables"].is_string()
+            ? defaults["hartStatusVariables"].get<std::string>() : "");
 }
 
 HartLcdPage HartCommunicationComponent::displayPage(const std::string& source, const HartDevicePlan& plan, double pv,
@@ -432,12 +438,21 @@ HartLcdFrame HartCommunicationComponent::displayFrame(std::optional<uint64_t> el
     input.outputSaturated = measured.saturated && !plan->fixedCurrentMode;
     input.fixedCurrent = plan->fixedCurrentMode;
     input.multidrop = plan->loopCurrentMode == 0;
-    input.transferFunctionCode = plan->pvTransferFunctionCode;
+    // The square-root annunciators describe a transmitter's output; a vendor characterization code
+    // (FY301) or an actuator's input shows none.
+    input.transferFunctionCode = hartTransferSettings(*plan).function;
     input.glass = static_cast<uint8_t>(std::clamp(m_displayGlass, 0.0, 1.0));
     HartAnalogOutput shown = driven;
     if (profile && profile->burnoutPercentFollowsOutput && std::isfinite(hartAlarmMilliamps(*profile, *plan)) &&
         !plan->fixedCurrentMode && plan->loopCurrentMode != 0)
         shown.percentOfRange = shown.outputPercent;
+    if (plan->analogInput) {
+        // An actuator reads the loop: "current"/"percent" pages show the measured input.
+        input.outputSaturated = false;
+        input.fixedCurrent = false;
+        const uint8_t units = primary != plan->variables.end() && primary->rangeUnitCode != 0xFF ? primary->rangeUnitCode : 57;
+        shown = hartEvaluateAnalogInput(static_cast<float>(m_loopCurrent * 1000.0), units, lower, upper);
+    }
     input.first = displayPage(m_displayVariable1, *plan, pv, shown);
     input.second = displayPage(m_displayVariable2, *plan, pv, shown);
     return hartLcdCompose(input);
@@ -660,6 +675,32 @@ void HartCommunicationComponent::rebuildConfiguredPlan() {
     device.configurationChangedMasters = m_configurationChangedFlags;
     device.sensorFault = m_sensorFault || m_signalSensorFault;
     if (m_configurationChangedFlags != 0) device.diagnosticStatus = static_cast<uint8_t>(device.diagnosticStatus | 0x40u);
+    // A loop-powered actuator reads the loop: Commands 2/3 and the percent of range use the measured
+    // current (`analogInputVariable`).
+    device.analogInput = m_analogInput;
+    device.analogInputVariable = m_analogInput ? m_inputCurrentVariable : std::string{};
+    // "0-7" / "0,1,4": Command 47 codes of this device (empty: linear/square root).
+    for (size_t at = 0; at < m_traits.transferFunctionCodes.size();) {
+        const size_t comma = std::min(m_traits.transferFunctionCodes.find(',', at), m_traits.transferFunctionCodes.size());
+        const std::string item = m_traits.transferFunctionCodes.substr(at, comma - at);
+        at = comma + 1;
+        try {
+            const size_t dash = item.find('-');
+            const long first = std::stol(item.substr(0, dash));
+            const long last = dash == std::string::npos ? first : std::stol(item.substr(dash + 1));
+            for (long code = std::max(0L, first); code <= std::min(255L, last); ++code)
+                device.transferFunctionCodes.push_back(static_cast<uint8_t>(code));
+        } catch (...) {}
+    }
+    // "setup.status,diag": Command 48 bytes 1, 2, ...
+    for (size_t at = 0; at < m_traits.statusVariables.size();) {
+        const size_t comma = std::min(m_traits.statusVariables.find(',', at), m_traits.statusVariables.size());
+        std::string item = m_traits.statusVariables.substr(at, comma - at);
+        at = comma + 1;
+        item.erase(0, item.find_first_not_of(' '));
+        item.erase(item.find_last_not_of(' ') + 1);
+        if (!item.empty()) device.statusVariables.push_back(item);
+    }
     const HartDeviceProfile* base = m_profiles.find(device.profileId);
     if (!base) { m_profileId = "lasecsimul.hart.process-simul-compatible"; device.profileId = m_profileId; base = m_profiles.find(device.profileId); }
     // This transmitter's own profile: the registered one reshaped by the
@@ -1350,14 +1391,48 @@ void HartCommunicationComponent::feedPrimary(double raw) {
     }
 }
 
+double HartCommunicationComponent::inputAmpsBefore(uint64_t tNs) const noexcept {
+    // Newest recorded value at or before tNs; the oldest one when the history does not reach back.
+    double value = m_loopCurrent;
+    for (size_t k = 0; k < m_inputHistoryCount; ++k) {
+        const size_t index = (m_inputHistoryNext + m_inputHistory.size() - 1 - k) % m_inputHistory.size();
+        value = m_inputHistory[index].amps;
+        if (m_inputHistory[index].t <= tNs) break;
+    }
+    return value;
+}
+
 void HartCommunicationComponent::postStep(uint64_t deltaNs) {
     if (m_fieldDevice && m_analogInput) {
-        // Input stage filter: the 4-20 mA setpoint without the HART carrier riding on it.
-        const double alpha = 1.0 - std::exp(-static_cast<double>(deltaNs) * 1e-9 / kInputFilterSeconds);
+        // Input stage filter: the 4-20 mA setpoint without the HART carrier riding on it. While a carrier
+        // is on the wire the measurement is held (HART band rejection, see kInputCarrierLeadNs).
+        const uint64_t now = m_scheduler.nowNsUnlocked();
+        const bool carrier = m_wireTx.active() || m_wireRx.carrierAt(now);
         const double before = m_loopCurrent;
-        m_loopCurrent += (m_inputRawAmps - m_loopCurrent) * alpha;
+        if (carrier) {
+            if (!m_inputHolding) {
+                m_inputHolding = true;
+                m_loopCurrent = inputAmpsBefore(now > kInputCarrierLeadNs ? now - kInputCarrierLeadNs : 0);
+            }
+            m_inputHoldUntilNs = now + kInputCarrierTailNs;
+        } else if (m_inputHolding && now >= m_inputHoldUntilNs) {
+            m_inputHolding = false;
+        }
+        if (!m_inputHolding) {
+            const double alpha = 1.0 - std::exp(-static_cast<double>(deltaNs) * 1e-9 / kInputFilterSeconds);
+            m_loopCurrent += (m_inputRawAmps - m_loopCurrent) * alpha;
+            m_inputHistory[m_inputHistoryNext] = {now, m_loopCurrent};
+            m_inputHistoryNext = (m_inputHistoryNext + 1) % m_inputHistory.size();
+            m_inputHistoryCount = std::min(m_inputHistoryCount + 1, m_inputHistory.size());
+        }
         publishInputCurrent();
-        if (std::fabs(m_loopCurrent - before) > 1e-9) m_scheduler.dirtySet().insert(m_componentIndex);
+        // The raw current is read in stamp(): restamp while the filter moves or the measurement is held,
+        // and at least every kInputRestampNs once it settled -- otherwise a new loop current would never
+        // be measured (a settled, unchanged device is not restamped by anything else).
+        if (m_inputHolding || std::fabs(m_loopCurrent - before) > 1e-9 || now >= m_inputLastStampNs + kInputRestampNs) {
+            m_inputLastStampNs = now;
+            m_scheduler.dirtySet().insert(m_componentIndex);
+        }
     }
     if (!m_fieldDevice || !std::isfinite(m_rawPrimary) || !std::isfinite(m_dampedPrimary)) return;
     const double tau = primaryDampingSeconds();
@@ -1383,6 +1458,23 @@ std::optional<double> HartCommunicationComponent::signalOutput(std::string_view 
     const auto variable = std::find_if(plan->variables.begin(), plan->variables.end(),
         [&](const auto& candidate) { return candidate.id == variableId; });
     if (variable == plan->variables.end() || variable->direction != HartVariableDirection::Output) return std::nullopt;
+    // Device state the model needs but no variable stores: the Command 47 code, and for a loop-powered
+    // actuator the input in percent of its split range (Command 35) or the measured current.
+    if (variable->derivedSource == HartDerivedSource::TransferFunctionCode) return static_cast<double>(plan->pvTransferFunctionCode);
+    if (plan->analogInput && (variable->derivedSource == HartDerivedSource::PercentRange ||
+                              variable->derivedSource == HartDerivedSource::LoopCurrent)) {
+        const auto primary = std::find_if(plan->variables.begin(), plan->variables.end(), [](const auto& candidate) {
+            return candidate.deviceVariableCode == 246 || candidate.role == HartVariableRole::PrimaryVariable ||
+                   candidate.id == "PV" || candidate.id == "primary";
+        });
+        const double measured = m_engine.variableValue(m_deviceId, plan->analogInputVariable).value_or(0.0);
+        if (variable->derivedSource == HartDerivedSource::LoopCurrent) return measured;
+        if (primary == plan->variables.end()) return std::nullopt;
+        const uint8_t units = primary->rangeUnitCode != 0xFF ? primary->rangeUnitCode : primary->deviceVariableUnit;
+        return static_cast<double>(hartEvaluateAnalogInput(static_cast<float>(measured), units,
+            std::isfinite(primary->lowerRangeValue) ? primary->lowerRangeValue : 4.0f,
+            std::isfinite(primary->upperRangeValue) ? primary->upperRangeValue : 20.0f).percentOfRange);
+    }
     return m_engine.variableValue(m_deviceId, variableId);
 }
 
@@ -1428,6 +1520,8 @@ std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode
         numberSchema("hartPrivateLabel", "Private Label Distributor (Command 0, HART 7)", "HART Perfil", "", 0, 0, 65535),
         numberSchema("hartDeviceProfile", "Device Profile (Command 0, HART 7)", "HART Perfil", "", 1, 0, 255),
         textSchema("hartResponseDataLimits", "Bytes de dados maximos por comando (ex.: 15=17)", "HART Perfil", ""),
+        textSchema("hartTransferFunctionCodes", "Codigos aceitos pelo Cmd 47 (ex.: 0-7; vazio = 0 linear, 1 raiz)", "HART Perfil", ""),
+        textSchema("hartStatusVariables", "Variaveis dos bytes 1, 2... do Cmd 48 (ex.: setup.status)", "HART Perfil", ""),
         textSchema("hartDynamicVariableAssignments", "Atribuicoes PV/SV/TV/QV (4 codigos separados por virgula)", "HART Perfil", ""),
         numberSchema("hartConfigChangeCounter", "Contador de mudancas de configuracao (Command 0, HART 6/7)", "HART", "", 0, 0, 65535),
         {"sensorFault", "Simular falha do sensor", "Sensor", "", PropertyValueKind::Bool, "checkbox", false},
@@ -1568,7 +1662,7 @@ PropertyValue HartCommunicationComponent::propertyValue(const std::string& id) c
     if (id == "hartColdStartKeptByCommand0") return m_traits.coldStartKeptByCommand0;
     if (id == "hartBurnoutPercentFollowsOutput") return m_traits.burnoutPercentFollowsOutput;
     if (id == "hartMaxDeviceVariables") return m_traits.maxDeviceVariables; if (id == "hartPrivateLabel") return m_traits.privateLabel;
-    if (id == "hartDeviceProfile") return m_traits.deviceProfile; if (id == "hartResponseDataLimits") return m_traits.responseDataLimits;
+    if (id == "hartDeviceProfile") return m_traits.deviceProfile; if (id == "hartResponseDataLimits") return m_traits.responseDataLimits; if (id == "hartTransferFunctionCodes") return m_traits.transferFunctionCodes; if (id == "hartStatusVariables") return m_traits.statusVariables;
     if (id == "hartDynamicVariableAssignments") return m_hartDynamicVariableAssignments;
     if (id == "hartConfigChangeCounter") return static_cast<double>(m_configChangeCounter);
     if (id == "displayGlass") return m_displayGlass;
@@ -1637,6 +1731,8 @@ void HartCommunicationComponent::setPropertyValue(const std::string& id, const P
     else if (id == "hartPrivateLabel") { m_traits.privateLabel = std::get<double>(v); rebuildConfiguredPlan(); }
     else if (id == "hartDeviceProfile") { m_traits.deviceProfile = std::get<double>(v); rebuildConfiguredPlan(); }
     else if (id == "hartResponseDataLimits") { m_traits.responseDataLimits = std::get<std::string>(v); rebuildConfiguredPlan(); }
+    else if (id == "hartTransferFunctionCodes") { m_traits.transferFunctionCodes = std::get<std::string>(v); rebuildConfiguredPlan(); }
+    else if (id == "hartStatusVariables") { m_traits.statusVariables = std::get<std::string>(v); rebuildConfiguredPlan(); }
     else if (id == "hartDynamicVariableAssignments") { m_hartDynamicVariableAssignments = std::get<std::string>(v); rebuildConfiguredPlan(); }
     else if (id == "hartConfigChangeCounter") { m_configChangeCounter = static_cast<uint32_t>(std::clamp(std::get<double>(v), 0.0, 65535.0)); rebuildConfiguredPlan(); }
     else if (id == "sensorFault") { m_sensorFault = std::get<bool>(v); m_engine.setSensorFault(m_deviceId, m_sensorFault || m_signalSensorFault); }

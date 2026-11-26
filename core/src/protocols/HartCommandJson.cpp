@@ -11,7 +11,8 @@ namespace lasecsimul::protocols {
 namespace {
 
 struct VarIdName { HartVarId id; const char* name; };
-constexpr std::array<VarIdName, 15> kVarIdNames{{
+constexpr std::array<VarIdName, 16> kVarIdNames{{
+    {HartVarId::RangeUnitCode, "RangeUnitCode"},
     {HartVarId::ManufacturerId, "ManufacturerId"},
     {HartVarId::DeviceType, "DeviceType"},
     {HartVarId::DeviceId, "DeviceId"},

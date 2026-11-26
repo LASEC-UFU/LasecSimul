@@ -354,6 +354,8 @@ inline constexpr uint8_t PercentRange = 243;
 inline constexpr uint8_t LoopCurrent = 244;
 inline constexpr uint8_t SetpointRange = 245;
 inline constexpr uint8_t PidError = 246;
+/** The Command 47 code (HartDevicePlan::pvTransferFunctionCode), published to the model. */
+inline constexpr uint8_t TransferFunctionCode = 247;
 }
 
 /** The only public value-ownership choices for a HART variable. */
@@ -537,6 +539,20 @@ struct HartDevicePlan {
      * fields. PV damping is owned by VariableConfiguration::dampingValue,
      * the canonical Device Variable property shared by Commands 34/54/15. */
     uint8_t pvTransferFunctionCode = 0x00;
+    /** Codes Command 47 accepts. Empty: Common Table 3 linear/square root (0, 1). A device whose code
+     * is a vendor characterization (the Smar FY301 flow characteristic: 0 linear ... 7 quick opening
+     * 1:33) lists its own codes; the code is then only stored and published, never applied to an
+     * analog output. */
+    std::vector<uint8_t> transferFunctionCodes;
+    /** The analog loop is an INPUT (a loop-powered actuator such as a valve positioner): the device
+     * reads the 4-20 mA written by the controller. Commands 2/3 then report the measured current and
+     * the percent of range is that current within the PV range (the input "split range"), never a
+     * current computed from the PV. `analogInputVariable` holds the measured milliamps. */
+    bool analogInput = false;
+    std::string analogInputVariable;
+    /** Device-specific status: the values of these variables fill Command 48 bytes 1, 2, ...
+     * (byte 0 stays the diagnostic status). */
+    std::vector<std::string> statusVariables;
     uint8_t alarmSelectionCode = 0xFB;
     uint8_t writeProtectCode = 0xFB;
     /** The Write Protect Code value that refuses writes (Common Table 7:
@@ -741,6 +757,12 @@ HartAnalogOutput hartEvaluateAnalogOutput(double primaryValue, float lowerRangeV
                                           uint8_t loopCurrentMode,
                                           float alarmMilliamps = std::numeric_limits<float>::quiet_NaN(),
                                           HartTransferSettings transfer = {}) noexcept;
+/** Analog INPUT device (HartDevicePlan::analogInput, e.g. a valve positioner): the loop current is the
+ * measured one and the percent of range is that current within the PV range -- the input "split
+ * range" written by Command 35 -- in mA (units 39) or in percent of the 4-20 mA signal (any other
+ * unit). Nothing is saturated or trimmed: the device does not drive the loop. */
+HartAnalogOutput hartEvaluateAnalogInput(float measuredMilliamps, uint8_t rangeUnitCode, float lowerRangeValue,
+                                         float upperRangeValue) noexcept;
 /** Burnout current the device drives now (sensor fault + Alarm Selection
  * Code 0 High / 1 Low), or NaN when the output follows the PV. */
 float hartAlarmMilliamps(const HartDeviceProfile& profile, const HartDevicePlan& plan) noexcept;

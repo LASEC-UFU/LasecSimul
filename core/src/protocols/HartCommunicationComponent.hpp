@@ -192,6 +192,10 @@ private:
         double maxDeviceVariables = 0, privateLabel = 0, deviceProfile = 1;
         /** "15=17": at most 17 response data bytes for Command 15. */
         std::string responseDataLimits;
+        /** "0-7": the codes Command 47 accepts (empty: 0 linear, 1 square root). */
+        std::string transferFunctionCodes;
+        /** "setup.status,diag.byte2": variables that fill Command 48 bytes 1, 2, ... */
+        std::string statusVariables;
     } m_traits;
     /** Configuration Change Counter (HART 6/7 Command 0), persisted. */
     uint32_t m_configChangeCounter = 0;
@@ -252,6 +256,23 @@ private:
     double m_inputRawAmps = 0.0;
     double m_publishedInputMilliamps = std::numeric_limits<double>::quiet_NaN();
     static constexpr double kInputFilterSeconds = 0.02;
+    /** HART band rejection of the analog input (HCF: a HART signal must not disturb an actuator's
+     * analog input). While a carrier is on the wire (the master's request or the device's own reply)
+     * the measured current is held at its value from before the carrier began. The solver samples
+     * the 1200/2200 Hz carrier only at step ends: with real-time step sizes the samples alias to low
+     * frequency and a first-order filter alone let +-0.7 mA through. The receiver declares a carrier
+     * after a few bit times, so the held value is taken `kInputCarrierLeadNs` back. */
+    static constexpr uint64_t kInputCarrierLeadNs = 5'000'000;
+    static constexpr uint64_t kInputCarrierTailNs = 2'000'000;
+    struct InputSample { uint64_t t = 0; double amps = 0.0; };
+    std::array<InputSample, 1024> m_inputHistory{};
+    size_t m_inputHistoryNext = 0;
+    size_t m_inputHistoryCount = 0;
+    bool m_inputHolding = false;
+    uint64_t m_inputHoldUntilNs = 0;
+    static constexpr uint64_t kInputRestampNs = 5'000'000;
+    uint64_t m_inputLastStampNs = 0;
+    double inputAmpsBefore(uint64_t tNs) const noexcept;
     bool inputPowered() const noexcept { return !m_analogInput || m_loopCurrent * 1000.0 >= m_inputMinimumMilliamps; }
     void stampCurrentInput(MnaMatrixView& matrix);
     void publishInputCurrent();

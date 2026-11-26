@@ -977,7 +977,9 @@ std::vector<HartCommandDefinition> HartReferenceCatalog::commandProgramDefinitio
         cmd.resp = {
             HartStatement{HartAppendStmt{HartExpr::var(HartVarId::AlarmSelectionCode)}},
             HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PvTransferFunctionCode)}},
-            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::PrimaryVariableUnit)}},
+            // HCF_SPEC-127 6.15 byte 2 is the units of the range values, the same code Command 35
+            // writes; equal to the PV units unless the range was written in other units (FY301: mA).
+            HartStatement{HartAppendStmt{HartExpr::var(HartVarId::RangeUnitCode)}},
             HartStatement{HartAppendStmt{HartExpr::var(HartVarId::UpperRangeValue)}},
             HartStatement{HartAppendStmt{HartExpr::var(HartVarId::LowerRangeValue)}},
             HartStatement{std::move(pvDamping)},
@@ -1151,6 +1153,12 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
         vars.burnoutPercentFollowsOutput = profile.burnoutPercentFollowsOutput;
         vars.loopCurrentZeroTrim = plan.loopCurrentZeroTrim;
         vars.loopCurrentGainTrim = plan.loopCurrentGainTrim;
+        vars.analogInput = plan.analogInput;
+        if (plan.analogInput) {
+            const auto measured = std::find_if(plan.variables.begin(), plan.variables.end(),
+                [&](const auto& candidate) { return candidate.id == plan.analogInputVariable; });
+            vars.measuredInputMilliamps = measured != plan.variables.end() ? static_cast<float>(measured->value) : 0.0f;
+        }
         vars.diagnosticStatus = plan.diagnosticStatus;
         vars.primaryVariable = static_cast<float>(primaryValue + plan.primaryVariableZeroOffset);
         std::vector<HartExecutionVariables::DeviceVariable> deviceVariables;
@@ -2906,7 +2914,14 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                     return response.writeBytes(HartTypeCodec::encodeFloat32BE(measured));
                 }
                 case 0x2F: // HCF common table 3: linear/square-root are the modeled selections.
-                    if (request.size() != 1 || request[0] > 1) return false;
+                    if (request.size() != 1) return false;
+                    if (plan.transferFunctionCodes.empty()) {
+                        if (request[0] > 1) return false;
+                    } else if (std::find(plan.transferFunctionCodes.begin(), plan.transferFunctionCodes.end(), request[0]) ==
+                               plan.transferFunctionCodes.end()) {
+                        // A device with its own code list (e.g. the FY301 flow characteristics 0-7).
+                        return response.fail(HartResponseCodes::InvalidSelection);
+                    }
                     plan.pvTransferFunctionCode = request[0];
                     ++plan.configurationChangedCounter; plan.diagnosticStatus = static_cast<uint8_t>(plan.diagnosticStatus | 0x40u);
                     return response.writeByte(request[0]);

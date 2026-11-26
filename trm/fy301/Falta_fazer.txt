@@ -1,10 +1,10 @@
 Roteiro de capturas para fechar o FY301 (mesmo formato das capturas do LD301 e do TT301)
 
-Hoje o FY301 do simulador tem o comportamento elétrico e de posicionamento do manual, mas nenhuma troca HART
-foi capturada no aparelho real. Responde aos comandos Universais e de Prática Comum do dispositivo padrão; os
-comandos próprios da Smar (configuração, Auto Setup, trims) não existem ainda: no simulador, os parâmetros do
-ajuste local (TYPE, AIR_T, CHAR, MODE, SP%, TIME, KP, TR, LOPOS, UPPOS, SETUP, TSO, limites, split range) ficam
-em Propriedades Exportadas do FY301.
+Hoje o FY301 do simulador implementa os comandos do DD da Smar (revisão do dispositivo 2, DD 0202) e foi
+conferido contra o DTM Smar FY301 3.02 pelo LasecFDT (docs/fy301-dtm-engenharia-reversa.md). Toda a configuração
+(TYPE/ação, AIR_T, curva, KP, TR, TIME, limites, TSO, split range, local/remoto, tabela, Auto Setup) é feita por
+HART. Falta confirmar no aparelho real o que o DD não diz: o conteúdo da resposta do Cmd 242 (fábrica), os
+tempos do Auto Setup, a tensão nos bornes e os valores de diagnóstico (Hall, piezo, odômetro, reversões).
 
 Preparação
 - PACTware -> modem HART -> FY301, com o mesmo programa que gerou "saida do trm hart TT301.txt" (SERIAL RX e UDP RX).

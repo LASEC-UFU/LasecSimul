@@ -1414,11 +1414,20 @@ export function rebuildCoreFromSchematicState(): Promise<void> {
   return queueCoreRebuild();
 }
 
-/** HART writes received at runtime mutate the field device inside the LD301
- * subcircuit. Capture its non-volatile properties into the parent project's
- * child overrides before a Core rebuild destroys that runtime instance. This
- * makes a normal Save, Stop, or schematic edit/rebuild preserve PACTware and
- * in-simulator changes in the `.lsproj`. */
+/** SMAR HART field devices and the id of the HART device inside each subcircuit. */
+const HART_FIELD_DEVICE_CHILD: Readonly<Record<string, string>> = {
+  "subcircuits.hart.smar_ld301": "ld301",
+  "subcircuits.hart.smar_tt301": "tt301",
+  "subcircuits.hart.smar_fy301": "fy301",
+};
+
+/** HART writes received at runtime mutate the field device inside the LD301,
+ * TT301 or FY301 subcircuit (the FY301 keeps its whole configuration there:
+ * action, air to, characterization, split range, KP/TR, Auto Setup...).
+ * Capture its non-volatile properties into the parent project's child
+ * overrides before a Core rebuild destroys that runtime instance. This makes a
+ * normal Save, Stop, or schematic edit/rebuild preserve DTM (LasecFDT,
+ * PACTware) and in-simulator changes in the `.lsproj`. */
 export async function syncHartSubcircuitPropertiesFromRuntime(): Promise<boolean> {
   const client = state.coreClient;
   if (!client) return false;
@@ -1430,14 +1439,15 @@ export async function syncHartSubcircuitPropertiesFromRuntime(): Promise<boolean
   ] as const;
   let changed = false;
   for (const component of state.schematicState.components) {
-    if (component.typeId !== "subcircuits.hart.smar_ld301") continue;
+    const child = HART_FIELD_DEVICE_CHILD[component.typeId];
+    if (!child) continue;
     const outerId = coreInstanceIdByComponentId.get(component.id);
     if (!outerId) continue;
-    const childId = await client.getSubcircuitChildInstanceId(outerId, "ld301");
+    const childId = await client.getSubcircuitChildInstanceId(outerId, child);
     for (const name of persistedProperties) {
       const value = await client.getProperty(childId, name);
       if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") continue;
-      const key = `@ld301.${name}`;
+      const key = `@${child}.${name}`;
       if (JSON.stringify(component.properties[key]) === JSON.stringify(value)) continue;
       component.properties[key] = value;
       changed = true;

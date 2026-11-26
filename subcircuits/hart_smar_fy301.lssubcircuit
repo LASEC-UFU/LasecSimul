@@ -14,7 +14,7 @@
   ],
   "workspaceSection": "process",
   "help": {
-    "description": "Posicionador de válvula SMAR FY301 (HART). Alimentado pelo próprio laço: os bornes + e − recebem o sinal de 4-20 mA escrito pelo controlador (carga de cerca de 550 Ω, mínimo de 3,8 mA) e respondem HART modulando a tensão; ligue o modem HART em paralelo na linha. SUP recebe o suprimento de ar, OUT1 vai ao atuador e POS é a posição da haste lida pelo ímã (sensor Hall). Os parâmetros do ajuste local do manual (TYPE, AIR_T, CHAR, MODE, SP%, TIME, KP, TR, LOPOS, UPPOS, SETUP, TSO, limites e split range) ficam em Propriedades Exportadas. O display mostra a posição e o setpoint."
+    "description": "Posicionador de válvula SMAR FY301 (HART 5, revisão 2). Alimentado pelo próprio laço: os bornes + e − recebem o 4-20 mA escrito pelo controlador (carga de cerca de 550 Ω, mínimo de 3,8 mA) e respondem HART modulando a tensão; ligue o modem HART em paralelo na linha. SUP recebe o suprimento de ar, OUT1 vai ao atuador e POS é a posição da haste lida pelo ímã (sensor Hall). Toda a configuração (ação, ar para abrir/fechar, caracterização, KP, TR, TIME, limites, TSO, split range, modo local/remoto, tabela, Auto Setup) é feita por HART, com os comandos do DD da Smar: use o DTM do FY301 no LasecFDT ou no PACTware. O display mostra a posição (PV%) ou o setpoint (SP%)."
   },
   "components": [
     {
@@ -28,44 +28,47 @@
         "configurationChangedFlags": 0,
         "dateDay": 1,
         "dateMonth": 1,
-        "dateYear": 124,
+        "dateYear": 126,
         "descriptor": "POSICIONADOR",
-        "finalAssemblyNumber": 0,
-        "message": "",
+        "finalAssemblyNumber": 12345,
+        "message": "FY301",
         "tag": "FY301",
         "uniqueId": "0B2A61",
         "unit": "%",
         "writeProtectCode": 0,
-        "sensorLowVolts": 0,
-        "sensorHighVolts": 5,
-        "sensorLowValue": 0,
-        "sensorHighValue": 100,
+        "sensorLowVolts": 0.0,
+        "sensorHighVolts": 5.0,
+        "sensorLowValue": 0.0,
+        "sensorHighValue": 100.0,
         "hartManufacturerId": 62,
         "hartDeviceType": 3,
         "hartRequestPreambles": 5,
         "hartUniversalRevision": 5,
-        "hartDeviceRevision": 1,
-        "hartSoftwareRevision": 4,
-        "hartHardwareRevision": 1,
+        "hartDeviceRevision": 2,
+        "hartSoftwareRevision": 36,
+        "hartHardwareRevision": 8,
         "hartFlags": 0,
         "hartImplementedRevision": 5,
-        "hartCommandSet": "0-3,6,11-19,33-48,59",
+        "hartCommandSet": "0-3,6,11-19,33-48",
         "hartWriteProtectActiveCode": 1,
-        "analogSaturationLowPercent": -25,
-        "analogSaturationHighPercent": 125,
+        "hartTransferFunctionCodes": "0-7",
+        "hartStatusVariables": "setup.status",
+        "hartOperationCounters": "35=counter.maOpenClose;47=counter.flowChar;157=counter.directReverse;222=counter.servoLimits;218=counter.kp;219=counter.tr;129=counter.airTo;224=counter.localRemote;226=counter.spValue;203,228=counter.failSafe;152=counter.autoSetup;168=counter.travelClose;188=counter.motionType;45=counter.trim4mA;46=counter.trim20mA;235=counter.performance",
+        "analogSaturationLowPercent": -25.0,
+        "analogSaturationHighPercent": 125.0,
         "analogLoopDirection": "input",
-        "analogInputResistance": 550,
+        "analogInputResistance": 550.0,
         "analogInputMinimumMilliamps": 3.8,
         "analogInputVariable": "inputCurrent",
         "sensorFault": false,
         "displayInstalled": true,
         "displayModelName": "FY301",
-        "displayVariable1": "dv:1",
-        "displayVariable2": "dv:4",
-        "displayCodeMap": "",
+        "displayVariable1": "var:display.indication",
+        "displayVariable2": "",
+        "displayCodeMap": "1=dv:1/1,2=dv:6/1",
         "displayGlass": 0,
-        "hartVariablesJson": "[{\"id\":\"PV\",\"name\":\"Setpoint (sinal de entrada 4-20 mA)\",\"role\":\"PV\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":0,\"deviceVariableUnit\":57,\"classification\":91,\"family\":6,\"lowerRangeValue\":0.0,\"upperRangeValue\":100.0,\"dampingValue\":0.0},{\"id\":\"position\",\"name\":\"Posicao da valvula\",\"role\":\"SV\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":1,\"deviceVariableUnit\":57,\"classification\":91,\"family\":6},{\"id\":\"inputCurrent\",\"name\":\"Corrente de entrada\",\"role\":\"TV\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":2,\"deviceVariableUnit\":39},{\"id\":\"outputPressure\",\"name\":\"Pressao de saida (OUT1)\",\"role\":\"QV\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":3,\"deviceVariableUnit\":7},{\"id\":\"spFinal\",\"name\":\"Setpoint de posicao (apos curva, limites e TIME)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":4,\"deviceVariableUnit\":57}]",
-        "hartCommandsJson": "[]"
+        "hartVariablesJson": "[{\"id\":\"PV\",\"name\":\"PV: posicao da valvula\",\"role\":\"PV\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"%\",\"value\":0.0,\"deviceVariableCode\":1,\"deviceVariableUnit\":57,\"classification\":0,\"family\":250,\"lowerRangeValue\":4.0,\"upperRangeValue\":20.0,\"rangeUnitCode\":39,\"allowedUnitCodes\":[39],\"upperTransducerLimit\":20.0,\"lowerTransducerLimit\":4.0,\"minimumSpan\":4.0,\"transducerSerialNumber\":76543},{\"id\":\"inputCurrent\",\"name\":\"Corrente de entrada (mA)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":0,\"deviceVariableUnit\":39},{\"id\":\"inputPercent\",\"name\":\"Entrada (% do split range)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":2,\"deviceVariableUnit\":57,\"derivedSource\":243},{\"id\":\"mv\",\"name\":\"MV: sinal do piezo (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":3,\"deviceVariableUnit\":57},{\"id\":\"error\",\"name\":\"Desvio SP - PV (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":4,\"deviceVariableUnit\":57},{\"id\":\"setpoint\",\"name\":\"SP: setpoint de posicao (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":6,\"deviceVariableUnit\":57},{\"id\":\"integral\",\"name\":\"Parcela integral do servo (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":7,\"deviceVariableUnit\":57},{\"id\":\"hall\",\"name\":\"Sensor Hall (contagens)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":8,\"deviceVariableUnit\":250},{\"id\":\"temperature\",\"name\":\"Temperatura (C)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":30.0,\"deviceVariableCode\":9,\"deviceVariableUnit\":32},{\"id\":\"piezo\",\"name\":\"Tensao do piezo (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":10,\"deviceVariableUnit\":57},{\"id\":\"temperatureF\",\"name\":\"Temperatura (F)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":86.0,\"deviceVariableCode\":11,\"deviceVariableUnit\":33},{\"id\":\"mileage\",\"name\":\"Odometro (mm)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":12,\"deviceVariableUnit\":49},{\"id\":\"strokes\",\"name\":\"Cursos completos\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":13,\"deviceVariableUnit\":250},{\"id\":\"reversals\",\"name\":\"Reversoes\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":14,\"deviceVariableUnit\":250},{\"id\":\"temperatureLow\",\"name\":\"Menor temperatura (C)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":30.0,\"deviceVariableCode\":15,\"deviceVariableUnit\":32},{\"id\":\"temperatureHigh\",\"name\":\"Maior temperatura (C)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":30.0,\"deviceVariableCode\":16,\"deviceVariableUnit\":32},{\"id\":\"setupProgress\",\"name\":\"Progresso do Auto Setup (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":17,\"deviceVariableUnit\":57},{\"id\":\"openingTime\",\"name\":\"Tempo de abertura (s)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":20,\"deviceVariableUnit\":51},{\"id\":\"closingTime\",\"name\":\"Tempo de fechamento (s)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":21,\"deviceVariableUnit\":51},{\"id\":\"out1\",\"name\":\"Pressao OUT1 (bar)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":23,\"deviceVariableUnit\":7},{\"id\":\"out2\",\"name\":\"Pressao OUT2 (bar)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":24,\"deviceVariableUnit\":7},{\"id\":\"supplyPressure\",\"name\":\"Pressao de suprimento (bar)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":25,\"deviceVariableUnit\":7},{\"id\":\"flowChar\",\"name\":\"Caracterizacao (Cmd 47)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0,\"derivedSource\":247},{\"id\":\"setup.status\",\"name\":\"Estado do setup\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0,\"codes\":{\"0\":\"None\",\"1\":\"Low Air Supply\",\"2\":\"No Magnet\",\"3\":\"No Hall\",\"15\":\"Setup in Process\",\"16\":\"Piezo Out of Range\",\"17\":\"Magnet not Centralized\"}},{\"id\":\"display.connection\",\"name\":\"LCD instalado (Cmd 128)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1,\"codes\":{\"1\":\"Yes\",\"250\":\"No\"}},{\"id\":\"airTo\",\"name\":\"Ar para (Cmd 128/129)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0,\"codes\":{\"0\":\"Open\",\"1\":\"Close\"}},{\"id\":\"localKeys\",\"name\":\"Ajuste local (Cmd 132)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1,\"codes\":{\"0\":\"Disable\",\"1\":\"Enable\"}},{\"id\":\"protection\",\"name\":\"Protecao (Cmd 170)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"table.points\",\"name\":\"Pontos da tabela (Cmd 133/135)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":2},{\"id\":\"setup.toggle\",\"name\":\"Auto Setup: comando (Cmd 152 alterna)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0},{\"id\":\"backup.operation\",\"name\":\"Backup/Restore (Cmd 153)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"valve.action\",\"name\":\"Acao (Cmd 156/157)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0,\"codes\":{\"0\":\"Direct\",\"1\":\"Reverse\"}},{\"id\":\"trim.control\",\"name\":\"Trim: byte de controle (Cmd 168)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"trim.lower\",\"name\":\"Trim da posicao inferior (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"trim.upper\",\"name\":\"Trim da posicao superior (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":100.0},{\"id\":\"orderCode\",\"name\":\"Codigo de pedido (Cmd 173/174)\",\"role\":\"VendorSpecific\",\"type\":\"Ascii\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0,\"text\":\"FY301-1-1-0-0-0-0-0-0-0\",\"width\":25},{\"id\":\"actuatorId\",\"name\":\"Identificacao do atuador (Cmd 183/184)\",\"role\":\"VendorSpecific\",\"type\":\"Ascii\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0,\"text\":\"ATUADOR\",\"width\":16},{\"id\":\"valveId\",\"name\":\"Identificacao da valvula (Cmd 185/186)\",\"role\":\"VendorSpecific\",\"type\":\"Ascii\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0,\"text\":\"VALVULA\",\"width\":16},{\"id\":\"valve.motion\",\"name\":\"Tipo (Cmd 187/188)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0,\"codes\":{\"0\":\"Linear\",\"1\":\"Rotary\"}},{\"id\":\"travel.deadbandUnit\",\"name\":\"Unidade da banda morta do odometro\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":57},{\"id\":\"travel.deadband\",\"name\":\"Banda morta do odometro\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1.0},{\"id\":\"travel.limitUnit\",\"name\":\"Unidade do limite do odometro\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":57},{\"id\":\"travel.limit\",\"name\":\"Limite do odometro\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1000.0},{\"id\":\"travel.lengthUnit\",\"name\":\"Unidade do curso\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":49},{\"id\":\"travel.length\",\"name\":\"Curso\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":20.0},{\"id\":\"deviation.deadband\",\"name\":\"Desvio: banda morta (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":5.0},{\"id\":\"deviation.time\",\"name\":\"Desvio: tempo (s)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":10.0},{\"id\":\"reversal.deadband\",\"name\":\"Reversoes: banda morta (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1.0},{\"id\":\"reversal.limit\",\"name\":\"Reversoes: limite\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1000.0},{\"id\":\"failSafe\",\"name\":\"Posicao de seguranca (Cmd 203)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1,\"codes\":{\"0\":\"Open\",\"1\":\"Close\",\"2\":\"Pwr_up_in\"}},{\"id\":\"pid.mode\",\"name\":\"Servo: modo (Cmd 214/215)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0,\"codes\":{\"0\":\"Not_Bypass\",\"1\":\"Bypass\"}},{\"id\":\"servo.kp\",\"name\":\"KP do servo\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":40.0},{\"id\":\"servo.tr\",\"name\":\"TR do servo (min/rep)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":2.0},{\"id\":\"servo.deadband\",\"name\":\"Banda morta do servo (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"sp.rateUpTime\",\"name\":\"TIME de abertura (s, 0 = sem limite)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"sp.rateDownTime\",\"name\":\"TIME de fechamento (s, 0 = sem limite)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"tso.cutoff\",\"name\":\"TSO: corte baixo (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"sp.highLimit\",\"name\":\"Limite superior do setpoint (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":100.0},{\"id\":\"sp.lowLimit\",\"name\":\"Limite inferior do setpoint (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"tso.deadband\",\"name\":\"TSO: banda morta (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"sp.mode\",\"name\":\"Setpoint: 0 Local (SP%), 1 Remoto (4-20 mA)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":1,\"codes\":{\"0\":\"Local\",\"1\":\"Remote\"}},{\"id\":\"sp.local\",\"name\":\"SP% local\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"powerUp\",\"name\":\"Posicao de partida (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"diag.enable\",\"name\":\"Diagnostico habilitado\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1,\"codes\":{\"0\":\"Disable\",\"1\":\"Enable\"}},{\"id\":\"diag.reset\",\"name\":\"Reset do diagnostico (Cmd 232)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"ref.motion\",\"name\":\"Referencia: tipo\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"ref.action\",\"name\":\"Referencia: acao\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"ref.airTo\",\"name\":\"Referencia: ar para\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1},{\"id\":\"ref.openTime\",\"name\":\"Referencia: tempo de abertura\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"ref.closeTime\",\"name\":\"Referencia: tempo de fechamento\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"ref.kp\",\"name\":\"Referencia: KP\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":40.0},{\"id\":\"ref.tr\",\"name\":\"Referencia: TR\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":2.0},{\"id\":\"ref.char\",\"name\":\"Referencia: caracterizacao\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"ref.openingTime\",\"name\":\"Referencia: tempo medido de abertura\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"ref.closingTime\",\"name\":\"Referencia: tempo medido de fechamento\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"display.indication\",\"name\":\"LCD (Cmd 247/248)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1,\"codes\":{\"1\":\"PV(%)\",\"2\":\"SP(%)\"}},{\"id\":\"manualSetup\",\"name\":\"Setup manual: passo (Cmd 249/250)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0},{\"id\":\"table.c0\",\"name\":\"Tabela X1 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"table.c1\",\"name\":\"Tabela X2 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":6.6667},{\"id\":\"table.c2\",\"name\":\"Tabela X3 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":13.3333},{\"id\":\"table.c3\",\"name\":\"Tabela X4 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":20.0},{\"id\":\"table.c4\",\"name\":\"Tabela X5 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":26.6667},{\"id\":\"table.c5\",\"name\":\"Tabela X6 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":33.3333},{\"id\":\"table.c6\",\"name\":\"Tabela X7 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":40.0},{\"id\":\"table.c7\",\"name\":\"Tabela X8 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":46.6667},{\"id\":\"table.c8\",\"name\":\"Tabela X9 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":53.3333},{\"id\":\"table.c9\",\"name\":\"Tabela X10 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":60.0},{\"id\":\"table.c10\",\"name\":\"Tabela X11 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":66.6667},{\"id\":\"table.c11\",\"name\":\"Tabela X12 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":73.3333},{\"id\":\"table.c12\",\"name\":\"Tabela X13 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":80.0},{\"id\":\"table.c13\",\"name\":\"Tabela X14 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":86.6667},{\"id\":\"table.c14\",\"name\":\"Tabela X15 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":93.3333},{\"id\":\"table.c15\",\"name\":\"Tabela X16 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":100.0},{\"id\":\"table.c16\",\"name\":\"Tabela Y1 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"table.c17\",\"name\":\"Tabela Y2 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":6.6667},{\"id\":\"table.c18\",\"name\":\"Tabela Y3 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":13.3333},{\"id\":\"table.c19\",\"name\":\"Tabela Y4 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":20.0},{\"id\":\"table.c20\",\"name\":\"Tabela Y5 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":26.6667},{\"id\":\"table.c21\",\"name\":\"Tabela Y6 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":33.3333},{\"id\":\"table.c22\",\"name\":\"Tabela Y7 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":40.0},{\"id\":\"table.c23\",\"name\":\"Tabela Y8 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":46.6667},{\"id\":\"table.c24\",\"name\":\"Tabela Y9 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":53.3333},{\"id\":\"table.c25\",\"name\":\"Tabela Y10 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":60.0},{\"id\":\"table.c26\",\"name\":\"Tabela Y11 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":66.6667},{\"id\":\"table.c27\",\"name\":\"Tabela Y12 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":73.3333},{\"id\":\"table.c28\",\"name\":\"Tabela Y13 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":80.0},{\"id\":\"table.c29\",\"name\":\"Tabela Y14 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":86.6667},{\"id\":\"table.c30\",\"name\":\"Tabela Y15 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":93.3333},{\"id\":\"table.c31\",\"name\":\"Tabela Y16 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":100.0},{\"id\":\"counter.maOpenClose\",\"name\":\"Contador: maOpenClose\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.flowChar\",\"name\":\"Contador: flowChar\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.directReverse\",\"name\":\"Contador: directReverse\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.servoLimits\",\"name\":\"Contador: servoLimits\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.kp\",\"name\":\"Contador: kp\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.tr\",\"name\":\"Contador: tr\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.airTo\",\"name\":\"Contador: airTo\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.localRemote\",\"name\":\"Contador: localRemote\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.spValue\",\"name\":\"Contador: spValue\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.failSafe\",\"name\":\"Contador: failSafe\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.autoSetup\",\"name\":\"Contador: autoSetup\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.travelClose\",\"name\":\"Contador: travelClose\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.travelOpen\",\"name\":\"Contador: travelOpen\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.motionType\",\"name\":\"Contador: motionType\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.trim4mA\",\"name\":\"Contador: trim4mA\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.trim20mA\",\"name\":\"Contador: trim20mA\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.password\",\"name\":\"Contador: password\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.confLevel\",\"name\":\"Contador: confLevel\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.performance\",\"name\":\"Contador: performance\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0}]",
+        "hartCommandsJson": "[{\"enabled\":true,\"id\":128,\"name\":\"Read Static Data, Materials and Air To\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"display.connection\"},{\"kind\":\"variable\",\"variable\":\"airTo\"}]},{\"enabled\":true,\"id\":129,\"name\":\"Write Air To\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"airTo\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"airTo\"}]},{\"enabled\":true,\"id\":130,\"name\":\"Write Lower Transducer Trim Point\",\"responseSteps\":[]},{\"enabled\":true,\"id\":131,\"name\":\"Write Upper Transducer Trim Point\",\"responseSteps\":[]},{\"enabled\":true,\"id\":132,\"name\":\"Read Local Key Mode Control\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"localKeys\"}]},{\"enabled\":true,\"id\":133,\"name\":\"Read Table Function\",\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"table.points\"},{\"kind\":\"variableTable\",\"variables\":[\"table.c0\",\"table.c1\",\"table.c2\",\"table.c3\",\"table.c4\",\"table.c5\",\"table.c6\",\"table.c7\",\"table.c8\",\"table.c9\",\"table.c10\",\"table.c11\",\"table.c12\",\"table.c13\",\"table.c14\",\"table.c15\",\"table.c16\",\"table.c17\",\"table.c18\",\"table.c19\",\"table.c20\",\"table.c21\",\"table.c22\",\"table.c23\",\"table.c24\",\"table.c25\",\"table.c26\",\"table.c27\",\"table.c28\",\"table.c29\",\"table.c30\",\"table.c31\"],\"indexByte\":0,\"addend\":0},{\"kind\":\"variableTable\",\"variables\":[\"table.c0\",\"table.c1\",\"table.c2\",\"table.c3\",\"table.c4\",\"table.c5\",\"table.c6\",\"table.c7\",\"table.c8\",\"table.c9\",\"table.c10\",\"table.c11\",\"table.c12\",\"table.c13\",\"table.c14\",\"table.c15\",\"table.c16\",\"table.c17\",\"table.c18\",\"table.c19\",\"table.c20\",\"table.c21\",\"table.c22\",\"table.c23\",\"table.c24\",\"table.c25\",\"table.c26\",\"table.c27\",\"table.c28\",\"table.c29\",\"table.c30\",\"table.c31\"],\"indexByte\":0,\"addend\":1},{\"kind\":\"variableTable\",\"variables\":[\"table.c0\",\"table.c1\",\"table.c2\",\"table.c3\",\"table.c4\",\"table.c5\",\"table.c6\",\"table.c7\",\"table.c8\",\"table.c9\",\"table.c10\",\"table.c11\",\"table.c12\",\"table.c13\",\"table.c14\",\"table.c15\",\"table.c16\",\"table.c17\",\"table.c18\",\"table.c19\",\"table.c20\",\"table.c21\",\"table.c22\",\"table.c23\",\"table.c24\",\"table.c25\",\"table.c26\",\"table.c27\",\"table.c28\",\"table.c29\",\"table.c30\",\"table.c31\"],\"indexByte\":0,\"addend\":2},{\"kind\":\"variableTable\",\"variables\":[\"table.c0\",\"table.c1\",\"table.c2\",\"table.c3\",\"table.c4\",\"table.c5\",\"table.c6\",\"table.c7\",\"table.c8\",\"table.c9\",\"table.c10\",\"table.c11\",\"table.c12\",\"table.c13\",\"table.c14\",\"table.c15\",\"table.c16\",\"table.c17\",\"table.c18\",\"table.c19\",\"table.c20\",\"table.c21\",\"table.c22\",\"table.c23\",\"table.c24\",\"table.c25\",\"table.c26\",\"table.c27\",\"table.c28\",\"table.c29\",\"table.c30\",\"table.c31\"],\"indexByte\":0,\"addend\":3}]},{\"enabled\":true,\"id\":134,\"name\":\"Write Table Function\",\"writeSteps\":[{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"00\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c0\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"01\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c1\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"02\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c2\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"03\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c3\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"04\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c4\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"05\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c5\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"06\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c6\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"07\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c7\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"08\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c8\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"09\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c9\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"0A\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c10\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"0B\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c11\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"0C\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c12\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"0D\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c13\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"0E\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c14\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"0F\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c15\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"10\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c16\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"11\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c17\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"12\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c18\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"13\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c19\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"14\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c20\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"15\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c21\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"16\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c22\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"17\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c23\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"18\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c24\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"19\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c25\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"1A\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c26\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"1B\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c27\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"1C\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c28\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"1D\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c29\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"1E\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c30\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"1F\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c31\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]}],\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variableTable\",\"variables\":[\"table.c0\",\"table.c1\",\"table.c2\",\"table.c3\",\"table.c4\",\"table.c5\",\"table.c6\",\"table.c7\",\"table.c8\",\"table.c9\",\"table.c10\",\"table.c11\",\"table.c12\",\"table.c13\",\"table.c14\",\"table.c15\",\"table.c16\",\"table.c17\",\"table.c18\",\"table.c19\",\"table.c20\",\"table.c21\",\"table.c22\",\"table.c23\",\"table.c24\",\"table.c25\",\"table.c26\",\"table.c27\",\"table.c28\",\"table.c29\",\"table.c30\",\"table.c31\"],\"indexByte\":0,\"addend\":0}]},{\"enabled\":true,\"id\":135,\"name\":\"Write Number of Table Points\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"table.points\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"table.points\"}]},{\"enabled\":true,\"id\":152,\"name\":\"Setup (Auto Setup)\",\"writeSteps\":[{\"kind\":\"if\",\"lhs\":{\"kind\":\"variable\",\"variable\":\"setup.toggle\"},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"00\"},\"then\":[{\"kind\":\"set\",\"target\":\"setup.toggle\",\"value\":{\"kind\":\"hex\",\"bytes\":\"01\"}}],\"else\":[{\"kind\":\"set\",\"target\":\"setup.toggle\",\"value\":{\"kind\":\"hex\",\"bytes\":\"00\"}}]}],\"responseSteps\":[]},{\"enabled\":true,\"id\":153,\"name\":\"Backup / Restore\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"backup.operation\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"backup.operation\"},{\"kind\":\"bodySlice\",\"offset\":1,\"length\":1}]},{\"enabled\":true,\"id\":156,\"name\":\"Read Valve Action\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"valve.action\"}]},{\"enabled\":true,\"id\":157,\"name\":\"Write Valve Action\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"valve.action\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"valve.action\"}]},{\"enabled\":true,\"id\":166,\"name\":\"Read Counter of Change\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"counter.maOpenClose\"},{\"kind\":\"variable\",\"variable\":\"counter.flowChar\"},{\"kind\":\"variable\",\"variable\":\"counter.directReverse\"},{\"kind\":\"variable\",\"variable\":\"counter.servoLimits\"},{\"kind\":\"variable\",\"variable\":\"counter.kp\"},{\"kind\":\"variable\",\"variable\":\"counter.tr\"},{\"kind\":\"variable\",\"variable\":\"counter.airTo\"},{\"kind\":\"variable\",\"variable\":\"counter.localRemote\"},{\"kind\":\"variable\",\"variable\":\"counter.spValue\"},{\"kind\":\"variable\",\"variable\":\"counter.failSafe\"},{\"kind\":\"variable\",\"variable\":\"counter.autoSetup\"},{\"kind\":\"variable\",\"variable\":\"counter.travelClose\"},{\"kind\":\"variable\",\"variable\":\"counter.travelOpen\"},{\"kind\":\"variable\",\"variable\":\"counter.motionType\"},{\"kind\":\"variable\",\"variable\":\"counter.trim4mA\"},{\"kind\":\"variable\",\"variable\":\"counter.trim20mA\"},{\"kind\":\"variable\",\"variable\":\"counter.password\"},{\"kind\":\"variable\",\"variable\":\"counter.confLevel\"},{\"kind\":\"variable\",\"variable\":\"counter.performance\"}]},{\"enabled\":true,\"id\":168,\"name\":\"Lower / Upper Position Trim\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"trim.control\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"00\"},\"then\":[{\"kind\":\"set\",\"target\":\"trim.lower\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[{\"kind\":\"set\",\"target\":\"trim.upper\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}]}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"trim.control\"},{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}]},{\"enabled\":true,\"id\":170,\"name\":\"Read Local Keys Mode Control\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"protection\"}]},{\"enabled\":true,\"id\":173,\"name\":\"Read Smar Order Code\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"orderCode\"}]},{\"enabled\":true,\"id\":174,\"name\":\"Write Smar Order Code\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"orderCode\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":25}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"orderCode\"}]},{\"enabled\":true,\"id\":183,\"name\":\"Read Actuator Id\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"actuatorId\"}]},{\"enabled\":true,\"id\":184,\"name\":\"Write Actuator Id\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"actuatorId\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":16}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"actuatorId\"}]},{\"enabled\":true,\"id\":185,\"name\":\"Read Valve Id\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"valveId\"}]},{\"enabled\":true,\"id\":186,\"name\":\"Write Valve Id\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"valveId\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":16}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"valveId\"}]},{\"enabled\":true,\"id\":187,\"name\":\"Read Valve Motion Type\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"valve.motion\"}]},{\"enabled\":true,\"id\":188,\"name\":\"Write Valve Motion Type\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"valve.motion\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"valve.motion\"}]},{\"enabled\":true,\"id\":189,\"name\":\"Read Mileage Limit and Span\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"travel.deadbandUnit\"},{\"kind\":\"variable\",\"variable\":\"travel.deadband\"},{\"kind\":\"variable\",\"variable\":\"travel.limitUnit\"},{\"kind\":\"variable\",\"variable\":\"travel.limit\"},{\"kind\":\"variable\",\"variable\":\"travel.lengthUnit\"},{\"kind\":\"variable\",\"variable\":\"travel.length\"}]},{\"enabled\":true,\"id\":190,\"name\":\"Write Mileage Limit and Span\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"travel.deadband\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":4}},{\"kind\":\"set\",\"target\":\"travel.limit\",\"value\":{\"kind\":\"bodySlice\",\"offset\":4,\"length\":4}},{\"kind\":\"set\",\"target\":\"travel.length\",\"value\":{\"kind\":\"bodySlice\",\"offset\":8,\"length\":4}},{\"kind\":\"set\",\"target\":\"travel.lengthUnit\",\"value\":{\"kind\":\"bodySlice\",\"offset\":12,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"travel.deadband\"},{\"kind\":\"variable\",\"variable\":\"travel.limit\"},{\"kind\":\"variable\",\"variable\":\"travel.length\"},{\"kind\":\"variable\",\"variable\":\"travel.lengthUnit\"}]},{\"enabled\":true,\"id\":193,\"name\":\"Read Deviation and Reversal\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"deviation.deadband\"},{\"kind\":\"variable\",\"variable\":\"deviation.time\"},{\"kind\":\"variable\",\"variable\":\"reversal.deadband\"},{\"kind\":\"variable\",\"variable\":\"reversal.limit\"}]},{\"enabled\":true,\"id\":194,\"name\":\"Write Deviation and Reversal\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"deviation.deadband\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":4}},{\"kind\":\"set\",\"target\":\"deviation.time\",\"value\":{\"kind\":\"bodySlice\",\"offset\":4,\"length\":4}},{\"kind\":\"set\",\"target\":\"reversal.deadband\",\"value\":{\"kind\":\"bodySlice\",\"offset\":8,\"length\":4}},{\"kind\":\"set\",\"target\":\"reversal.limit\",\"value\":{\"kind\":\"bodySlice\",\"offset\":12,\"length\":4}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"deviation.deadband\"},{\"kind\":\"variable\",\"variable\":\"deviation.time\"},{\"kind\":\"variable\",\"variable\":\"reversal.deadband\"},{\"kind\":\"variable\",\"variable\":\"reversal.limit\"}]},{\"enabled\":true,\"id\":203,\"name\":\"Write Fail Safe Mode\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"failSafe\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"failSafe\"}]},{\"enabled\":true,\"id\":214,\"name\":\"Read Servo PID Mode\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"pid.mode\"}]},{\"enabled\":true,\"id\":215,\"name\":\"Write Servo PID Mode\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"pid.mode\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"pid.mode\"}]},{\"enabled\":true,\"id\":216,\"name\":\"Read Servo PID Variables\",\"responseSteps\":[{\"kind\":\"hex\",\"bytes\":\"39\"},{\"kind\":\"variable\",\"variable\":\"PV\"},{\"kind\":\"hex\",\"bytes\":\"39\"},{\"kind\":\"variable\",\"variable\":\"setpoint\"},{\"kind\":\"hex\",\"bytes\":\"39\"},{\"kind\":\"variable\",\"variable\":\"mv\"},{\"kind\":\"hex\",\"bytes\":\"00\"},{\"kind\":\"variable\",\"variable\":\"pid.mode\"},{\"kind\":\"hex\",\"bytes\":\"39\"},{\"kind\":\"variable\",\"variable\":\"error\"}]},{\"enabled\":true,\"id\":217,\"name\":\"Read Servo PID Parameters\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"servo.kp\"},{\"kind\":\"variable\",\"variable\":\"servo.tr\"},{\"kind\":\"hex\",\"bytes\":\"000000\"},{\"kind\":\"variable\",\"variable\":\"servo.deadband\"}]},{\"enabled\":true,\"id\":218,\"name\":\"Write Servo KP\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"servo.kp\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":4}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"servo.kp\"}]},{\"enabled\":true,\"id\":219,\"name\":\"Write Servo TR\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"servo.tr\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":4}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"servo.tr\"}]},{\"enabled\":true,\"id\":220,\"name\":\"Write Servo Dead Band\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"servo.deadband\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":4}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"servo.deadband\"}]},{\"enabled\":true,\"id\":221,\"name\":\"Read Servo SP Limits\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"sp.rateUpTime\"},{\"kind\":\"variable\",\"variable\":\"sp.rateDownTime\"},{\"kind\":\"variable\",\"variable\":\"tso.cutoff\"},{\"kind\":\"variable\",\"variable\":\"sp.highLimit\"},{\"kind\":\"variable\",\"variable\":\"sp.lowLimit\"},{\"kind\":\"variable\",\"variable\":\"tso.deadband\"}]},{\"enabled\":true,\"id\":222,\"name\":\"Write Servo SP Limits\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"sp.rateUpTime\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":4}},{\"kind\":\"set\",\"target\":\"sp.rateDownTime\",\"value\":{\"kind\":\"bodySlice\",\"offset\":4,\"length\":4}},{\"kind\":\"set\",\"target\":\"tso.cutoff\",\"value\":{\"kind\":\"bodySlice\",\"offset\":8,\"length\":4}},{\"kind\":\"set\",\"target\":\"sp.highLimit\",\"value\":{\"kind\":\"bodySlice\",\"offset\":12,\"length\":4}},{\"kind\":\"set\",\"target\":\"sp.lowLimit\",\"value\":{\"kind\":\"bodySlice\",\"offset\":16,\"length\":4}},{\"kind\":\"set\",\"target\":\"tso.deadband\",\"value\":{\"kind\":\"bodySlice\",\"offset\":20,\"length\":4}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"sp.rateUpTime\"},{\"kind\":\"variable\",\"variable\":\"sp.rateDownTime\"},{\"kind\":\"variable\",\"variable\":\"tso.cutoff\"},{\"kind\":\"variable\",\"variable\":\"sp.highLimit\"},{\"kind\":\"variable\",\"variable\":\"sp.lowLimit\"},{\"kind\":\"variable\",\"variable\":\"tso.deadband\"}]},{\"enabled\":true,\"id\":223,\"name\":\"Read SP Mode\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"sp.mode\"}]},{\"enabled\":true,\"id\":224,\"name\":\"Write SP Mode\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"sp.mode\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"sp.mode\"},{\"kind\":\"bodySlice\",\"offset\":1,\"length\":1}]},{\"enabled\":true,\"id\":225,\"name\":\"Read SP Percentage\",\"responseSteps\":[{\"kind\":\"hex\",\"bytes\":\"39\"},{\"kind\":\"variable\",\"variable\":\"setpoint\"}]},{\"enabled\":true,\"id\":226,\"name\":\"Write SP Percentage\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"sp.local\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"sp.local\"},{\"kind\":\"bodySlice\",\"offset\":5,\"length\":1}]},{\"enabled\":true,\"id\":227,\"name\":\"Read Power Up Position\",\"responseSteps\":[{\"kind\":\"hex\",\"bytes\":\"39\"},{\"kind\":\"variable\",\"variable\":\"powerUp\"}]},{\"enabled\":true,\"id\":228,\"name\":\"Write Power Up Position\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"powerUp\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"powerUp\"}]},{\"enabled\":true,\"id\":230,\"name\":\"Read Diagnostic Enable\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"diag.enable\"}]},{\"enabled\":true,\"id\":231,\"name\":\"Write Diagnostic Enable\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"diag.enable\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"diag.enable\"}]},{\"enabled\":true,\"id\":232,\"name\":\"Reset Settings\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"diag.reset\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"diag.reset\"}]},{\"enabled\":true,\"id\":233,\"name\":\"Read Diagnosis Reference\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"ref.motion\"},{\"kind\":\"variable\",\"variable\":\"ref.action\"},{\"kind\":\"variable\",\"variable\":\"ref.airTo\"},{\"kind\":\"variable\",\"variable\":\"ref.openTime\"},{\"kind\":\"variable\",\"variable\":\"ref.closeTime\"},{\"kind\":\"variable\",\"variable\":\"ref.kp\"},{\"kind\":\"variable\",\"variable\":\"ref.tr\"},{\"kind\":\"variable\",\"variable\":\"ref.char\"}]},{\"enabled\":true,\"id\":234,\"name\":\"Write Diagnosis Reference\",\"responseSteps\":[],\"writeSteps\":[{\"kind\":\"set\",\"target\":\"ref.motion\",\"value\":{\"kind\":\"variable\",\"variable\":\"valve.motion\"}},{\"kind\":\"set\",\"target\":\"ref.action\",\"value\":{\"kind\":\"variable\",\"variable\":\"valve.action\"}},{\"kind\":\"set\",\"target\":\"ref.airTo\",\"value\":{\"kind\":\"variable\",\"variable\":\"airTo\"}},{\"kind\":\"set\",\"target\":\"ref.openTime\",\"value\":{\"kind\":\"variable\",\"variable\":\"sp.rateUpTime\"}},{\"kind\":\"set\",\"target\":\"ref.closeTime\",\"value\":{\"kind\":\"variable\",\"variable\":\"sp.rateDownTime\"}},{\"kind\":\"set\",\"target\":\"ref.kp\",\"value\":{\"kind\":\"variable\",\"variable\":\"servo.kp\"}},{\"kind\":\"set\",\"target\":\"ref.tr\",\"value\":{\"kind\":\"variable\",\"variable\":\"servo.tr\"}},{\"kind\":\"set\",\"target\":\"ref.openingTime\",\"value\":{\"kind\":\"variable\",\"variable\":\"openingTime\"}},{\"kind\":\"set\",\"target\":\"ref.closingTime\",\"value\":{\"kind\":\"variable\",\"variable\":\"closingTime\"}}]},{\"enabled\":true,\"id\":235,\"name\":\"Get Performance Time\",\"responseSteps\":[]},{\"enabled\":true,\"id\":236,\"name\":\"Read Diagnosis Reference Times\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"ref.openingTime\"},{\"kind\":\"variable\",\"variable\":\"ref.closingTime\"},{\"kind\":\"variable\",\"variable\":\"openingTime\"},{\"kind\":\"variable\",\"variable\":\"closingTime\"}]},{\"enabled\":true,\"id\":237,\"name\":\"Read Diagnosis Variables\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"travel.lengthUnit\"},{\"kind\":\"variable\",\"variable\":\"mileage\"},{\"kind\":\"hex\",\"bytes\":\"FA\"},{\"kind\":\"variable\",\"variable\":\"strokes\"},{\"kind\":\"hex\",\"bytes\":\"FA\"},{\"kind\":\"variable\",\"variable\":\"reversals\"},{\"kind\":\"hex\",\"bytes\":\"20\"},{\"kind\":\"variable\",\"variable\":\"temperatureLow\"},{\"kind\":\"hex\",\"bytes\":\"20\"},{\"kind\":\"variable\",\"variable\":\"temperatureHigh\"}]},{\"enabled\":true,\"id\":242,\"name\":\"Factory Data (DTM)\",\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":2},{\"kind\":\"hex\",\"bytes\":\"000000000000000000000000000000000000000000000000000000000000\"}]},{\"enabled\":true,\"id\":246,\"name\":\"Read Pressure Status\",\"responseSteps\":[{\"kind\":\"hex\",\"bytes\":\"04\"}]},{\"enabled\":true,\"id\":247,\"name\":\"Read Display Indication\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"display.indication\"}]},{\"enabled\":true,\"id\":248,\"name\":\"Write Display Indication\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"display.indication\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"display.indication\"}]},{\"enabled\":true,\"id\":249,\"name\":\"Read Manual Setup\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"manualSetup\"}]},{\"enabled\":true,\"id\":250,\"name\":\"Write Manual Setup\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"manualSetup\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"manualSetup\"}]}]"
       },
       "visual": {
         "x": 320,
@@ -147,235 +150,6 @@
       }
     },
     {
-      "id": "c_type",
-      "typeId": "control.constant",
-      "properties": {
-        "value": 0,
-        "unit": "",
-        "options": "0=Lind (linear, direta);1=Linr (linear, reversa);2=Rotd (rotativa, direta);3=Rotr (rotativa, reversa)"
-      },
-      "visual": {
-        "x": 200,
-        "y": 260,
-        "rotation": 0
-      },
-      "label": "TYPE — Tipo de válvula e ação"
-    },
-    {
-      "id": "c_air",
-      "typeId": "control.constant",
-      "properties": {
-        "value": 0,
-        "unit": "",
-        "options": "0=AIR_OPEN (o ar aumenta a posição);1=AIR_CLOSED (o ar diminui a posição)"
-      },
-      "visual": {
-        "x": 200,
-        "y": 320,
-        "rotation": 0
-      },
-      "label": "AIR_T — Efeito do ar"
-    },
-    {
-      "id": "c_char",
-      "typeId": "control.constant",
-      "properties": {
-        "value": 0,
-        "unit": "",
-        "options": "0=Lin (linear);1=EP 1:25 (igual porcentagem);2=EP 1:33;3=EP 1:50;4=AR 1:25 (abertura rápida, hiperbólica);5=AR 1:33;6=AR 1:50"
-      },
-      "visual": {
-        "x": 200,
-        "y": 380,
-        "rotation": 0
-      },
-      "label": "CHAR — Curva de caracterização"
-    },
-    {
-      "id": "c_mode",
-      "typeId": "control.constant",
-      "properties": {
-        "value": 0,
-        "unit": "",
-        "options": "0=Auto (segue os 4-20 mA);1=Man (segue o SP%)"
-      },
-      "visual": {
-        "x": 200,
-        "y": 440,
-        "rotation": 0
-      },
-      "label": "MODE — Modo de operação"
-    },
-    {
-      "id": "c_sp",
-      "typeId": "control.constant",
-      "properties": {
-        "value": 0,
-        "unit": "%"
-      },
-      "visual": {
-        "x": 200,
-        "y": 500,
-        "rotation": 0
-      },
-      "label": "SP% — Setpoint no modo manual"
-    },
-    {
-      "id": "c_time",
-      "typeId": "control.constant",
-      "properties": {
-        "value": 1,
-        "unit": "s"
-      },
-      "visual": {
-        "x": 200,
-        "y": 560,
-        "rotation": 0
-      },
-      "label": "TIME — Tempo de variação do setpoint (0 a 100 %)"
-    },
-    {
-      "id": "c_kp",
-      "typeId": "control.constant",
-      "properties": {
-        "value": 40,
-        "unit": ""
-      },
-      "visual": {
-        "x": 200,
-        "y": 620,
-        "rotation": 0
-      },
-      "label": "KP — Ganho proporcional do servo"
-    },
-    {
-      "id": "c_tr",
-      "typeId": "control.constant",
-      "properties": {
-        "value": 2,
-        "unit": "min/rep"
-      },
-      "visual": {
-        "x": 200,
-        "y": 680,
-        "rotation": 0
-      },
-      "label": "TR — Tempo integral do servo"
-    },
-    {
-      "id": "c_lopos",
-      "typeId": "control.constant",
-      "properties": {
-        "value": 0,
-        "unit": "%"
-      },
-      "visual": {
-        "x": 200,
-        "y": 740,
-        "rotation": 0
-      },
-      "label": "LOPOS — Ajuste da posição inferior"
-    },
-    {
-      "id": "c_uppos",
-      "typeId": "control.constant",
-      "properties": {
-        "value": 100,
-        "unit": "%"
-      },
-      "visual": {
-        "x": 200,
-        "y": 800,
-        "rotation": 0
-      },
-      "label": "UPPOS — Ajuste da posição superior"
-    },
-    {
-      "id": "c_tso",
-      "typeId": "control.constant",
-      "properties": {
-        "value": 0,
-        "unit": "%"
-      },
-      "visual": {
-        "x": 200,
-        "y": 860,
-        "rotation": 0
-      },
-      "label": "TSO — Fechamento estanque abaixo de (0 = desligado)"
-    },
-    {
-      "id": "c_spl",
-      "typeId": "control.constant",
-      "properties": {
-        "value": 0,
-        "unit": "%"
-      },
-      "visual": {
-        "x": 200,
-        "y": 920,
-        "rotation": 0
-      },
-      "label": "Limite inferior do setpoint"
-    },
-    {
-      "id": "c_sph",
-      "typeId": "control.constant",
-      "properties": {
-        "value": 100,
-        "unit": "%"
-      },
-      "visual": {
-        "x": 200,
-        "y": 980,
-        "rotation": 0
-      },
-      "label": "Limite superior do setpoint"
-    },
-    {
-      "id": "c_slo",
-      "typeId": "control.constant",
-      "properties": {
-        "value": 4,
-        "unit": "mA"
-      },
-      "visual": {
-        "x": 200,
-        "y": 1040,
-        "rotation": 0
-      },
-      "label": "Split range: corrente do 0 %"
-    },
-    {
-      "id": "c_shi",
-      "typeId": "control.constant",
-      "properties": {
-        "value": 20,
-        "unit": "mA"
-      },
-      "visual": {
-        "x": 200,
-        "y": 1100,
-        "rotation": 0
-      },
-      "label": "Split range: corrente do 100 %"
-    },
-    {
-      "id": "c_setup",
-      "typeId": "control.constant",
-      "properties": {
-        "value": 0,
-        "unit": "",
-        "options": "0=Parado;1=Executar"
-      },
-      "visual": {
-        "x": 200,
-        "y": 1160,
-        "rotation": 0
-      },
-      "label": "SETUP — Auto Setup (mude para Executar para iniciar)"
-    },
-    {
       "id": "c_factory_span",
       "typeId": "control.constant",
       "properties": {
@@ -387,331 +161,709 @@
         "y": 260,
         "rotation": 0
       },
-      "label": "Curso de fábrica do sensor de posição (antes do Auto Setup)"
+      "label": "Escala de fábrica do sensor de posição (antes do Auto Setup)"
     },
     {
-      "id": "pv_in",
+      "id": "c_temperature",
+      "typeId": "control.constant",
+      "properties": {
+        "value": 30,
+        "unit": "°C"
+      },
+      "visual": {
+        "x": 40,
+        "y": 320,
+        "rotation": 0
+      },
+      "label": "Temperatura ambiente do posicionador"
+    },
+    {
+      "id": "powered",
       "typeId": "sl.fcn",
       "properties": {
-        "Expr": "(u(1) - 4)/16*100",
+        "Expr": "u(1) > 3.8",
         "SampleTime": "0.001"
       },
       "visual": {
-        "x": 640,
+        "x": 700,
         "y": 300,
         "rotation": 0
       },
-      "label": "PV: sinal de entrada em % (4-20 mA)"
+      "label": "Alimentado pelo laço (> 3,8 mA)"
     },
     {
-      "id": "in_pct",
+      "id": "sp_in",
       "typeId": "sl.fcn",
       "properties": {
-        "Expr": "(u(1) - u(2))/((u(3) - u(2) > 0.1)*(u(3) - u(2)) + (u(3) - u(2) < 0.1001)*0.1)*100 + ((u(1) - u(2))/((u(3) - u(2) > 0.1)*(u(3) - u(2)) + (u(3) - u(2) < 0.1001)*0.1)*100 < 0)*(0 - (u(1) - u(2))/((u(3) - u(2) > 0.1)*(u(3) - u(2)) + (u(3) - u(2) < 0.1001)*0.1)*100) + ((u(1) - u(2))/((u(3) - u(2) > 0.1)*(u(3) - u(2)) + (u(3) - u(2) < 0.1001)*0.1)*100 > 100)*(100 - (u(1) - u(2))/((u(3) - u(2) > 0.1)*(u(3) - u(2)) + (u(3) - u(2) < 0.1001)*0.1)*100)",
+        "Expr": "(u(1) < 0.5)*((((((u(2))+(-5)+abs((u(2))-(-5)))/2))+(105)-abs(((((u(2))+(-5)+abs((u(2))-(-5)))/2))-(105)))/2) + (u(1) > 0.5)*((((((u(3))+(-5)+abs((u(3))-(-5)))/2))+(105)-abs(((((u(3))+(-5)+abs((u(3))-(-5)))/2))-(105)))/2)",
         "SampleTime": "0.001"
       },
       "visual": {
-        "x": 640,
-        "y": 360,
+        "x": 700,
+        "y": 370,
         "rotation": 0
       },
-      "label": "Entrada em % do split range"
+      "label": "Setpoint: Local (SP% por HART) ou Remoto (4-20 mA no split range)"
     },
     {
-      "id": "sp_src",
-      "typeId": "sl.fcn",
+      "id": "sp_in__mux",
+      "typeId": "sl.mux",
       "properties": {
-        "Expr": "(u(2) < 0.5)*u(1) + (u(2) > 0.5)*(u(3) + (u(3) < 0)*(0 - u(3)) + (u(3) > 100)*(100 - u(3)))",
-        "SampleTime": "0.001"
+        "Inputs": "3"
       },
       "visual": {
         "x": 640,
-        "y": 420,
+        "y": 370,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "sp_table",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "(u(1) < u(3))*u(19) + (u(2) > 1.5)*(u(1) >= u(3))*(u(1) < u(4))*(u(19) + (u(20) - u(19))*(u(1) - u(3))/(((u(4) - u(3))+( 0.001)+abs((u(4) - u(3))-( 0.001)))/2)) + (u(2) > 2.5)*(u(1) >= u(4))*(u(1) < u(5))*(u(20) + (u(21) - u(20))*(u(1) - u(4))/(((u(5) - u(4))+( 0.001)+abs((u(5) - u(4))-( 0.001)))/2)) + (u(2) > 3.5)*(u(1) >= u(5))*(u(1) < u(6))*(u(21) + (u(22) - u(21))*(u(1) - u(5))/(((u(6) - u(5))+( 0.001)+abs((u(6) - u(5))-( 0.001)))/2)) + (u(2) > 4.5)*(u(1) >= u(6))*(u(1) < u(7))*(u(22) + (u(23) - u(22))*(u(1) - u(6))/(((u(7) - u(6))+( 0.001)+abs((u(7) - u(6))-( 0.001)))/2)) + (u(2) > 5.5)*(u(1) >= u(7))*(u(1) < u(8))*(u(23) + (u(24) - u(23))*(u(1) - u(7))/(((u(8) - u(7))+( 0.001)+abs((u(8) - u(7))-( 0.001)))/2)) + (u(2) > 6.5)*(u(1) >= u(8))*(u(1) < u(9))*(u(24) + (u(25) - u(24))*(u(1) - u(8))/(((u(9) - u(8))+( 0.001)+abs((u(9) - u(8))-( 0.001)))/2)) + (u(2) > 7.5)*(u(1) >= u(9))*(u(1) < u(10))*(u(25) + (u(26) - u(25))*(u(1) - u(9))/(((u(10) - u(9))+( 0.001)+abs((u(10) - u(9))-( 0.001)))/2)) + (u(2) > 8.5)*(u(1) >= u(10))*(u(1) < u(11))*(u(26) + (u(27) - u(26))*(u(1) - u(10))/(((u(11) - u(10))+( 0.001)+abs((u(11) - u(10))-( 0.001)))/2)) + (u(2) > 9.5)*(u(1) >= u(11))*(u(1) < u(12))*(u(27) + (u(28) - u(27))*(u(1) - u(11))/(((u(12) - u(11))+( 0.001)+abs((u(12) - u(11))-( 0.001)))/2)) + (u(2) > 10.5)*(u(1) >= u(12))*(u(1) < u(13))*(u(28) + (u(29) - u(28))*(u(1) - u(12))/(((u(13) - u(12))+( 0.001)+abs((u(13) - u(12))-( 0.001)))/2)) + (u(2) > 11.5)*(u(1) >= u(13))*(u(1) < u(14))*(u(29) + (u(30) - u(29))*(u(1) - u(13))/(((u(14) - u(13))+( 0.001)+abs((u(14) - u(13))-( 0.001)))/2)) + (u(2) > 12.5)*(u(1) >= u(14))*(u(1) < u(15))*(u(30) + (u(31) - u(30))*(u(1) - u(14))/(((u(15) - u(14))+( 0.001)+abs((u(15) - u(14))-( 0.001)))/2)) + (u(2) > 13.5)*(u(1) >= u(15))*(u(1) < u(16))*(u(31) + (u(32) - u(31))*(u(1) - u(15))/(((u(16) - u(15))+( 0.001)+abs((u(16) - u(15))-( 0.001)))/2)) + (u(2) > 14.5)*(u(1) >= u(16))*(u(1) < u(17))*(u(32) + (u(33) - u(32))*(u(1) - u(16))/(((u(17) - u(16))+( 0.001)+abs((u(17) - u(16))-( 0.001)))/2)) + (u(2) > 15.5)*(u(1) >= u(17))*(u(1) < u(18))*(u(33) + (u(34) - u(33))*(u(1) - u(17))/(((u(18) - u(17))+( 0.001)+abs((u(18) - u(17))-( 0.001)))/2)) + (abs(u(2) - 2) < 0.5)*(u(1) >= u(4))*u(20) + (abs(u(2) - 3) < 0.5)*(u(1) >= u(5))*u(21) + (abs(u(2) - 4) < 0.5)*(u(1) >= u(6))*u(22) + (abs(u(2) - 5) < 0.5)*(u(1) >= u(7))*u(23) + (abs(u(2) - 6) < 0.5)*(u(1) >= u(8))*u(24) + (abs(u(2) - 7) < 0.5)*(u(1) >= u(9))*u(25) + (abs(u(2) - 8) < 0.5)*(u(1) >= u(10))*u(26) + (abs(u(2) - 9) < 0.5)*(u(1) >= u(11))*u(27) + (abs(u(2) - 10) < 0.5)*(u(1) >= u(12))*u(28) + (abs(u(2) - 11) < 0.5)*(u(1) >= u(13))*u(29) + (abs(u(2) - 12) < 0.5)*(u(1) >= u(14))*u(30) + (abs(u(2) - 13) < 0.5)*(u(1) >= u(15))*u(31) + (abs(u(2) - 14) < 0.5)*(u(1) >= u(16))*u(32) + (abs(u(2) - 15) < 0.5)*(u(1) >= u(17))*u(33) + (abs(u(2) - 16) < 0.5)*(u(1) >= u(18))*u(34)",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 700,
+        "y": 440,
         "rotation": 0
       },
-      "label": "Setpoint: Auto (4-20 mA) ou Man (SP%)"
+      "label": "Tabela de 16 pontos (CHAR = Tabela)"
+    },
+    {
+      "id": "sp_table__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "34"
+      },
+      "visual": {
+        "x": 640,
+        "y": 440,
+        "rotation": 0
+      }
     },
     {
       "id": "sp_char",
       "typeId": "sl.fcn",
       "properties": {
-        "Expr": "(u(2) > -0.5)*(u(2) < 0.5)*u(1) + (u(2) > 0.5)*(u(2) < 1.5)*(100*(25^(u(1)/100) - 1)/(25 - 1)) + (u(2) > 1.5)*(u(2) < 2.5)*(100*(33^(u(1)/100) - 1)/(33 - 1)) + (u(2) > 2.5)*(u(2) < 3.5)*(100*(50^(u(1)/100) - 1)/(50 - 1)) + (u(2) > 3.5)*(u(2) < 4.5)*(100*25*(u(1)/100)/(1 + (25 - 1)*(u(1)/100))) + (u(2) > 4.5)*(u(2) < 5.5)*(100*33*(u(1)/100)/(1 + (33 - 1)*(u(1)/100))) + (u(2) > 5.5)*(u(2) < 6.5)*(100*50*(u(1)/100)/(1 + (50 - 1)*(u(1)/100)))",
+        "Expr": "(abs(u(2) - 0) < 0.5)*(u(1)) + (abs(u(2) - 1) < 0.5)*(100*(50^((((u(1))+(0)+abs((u(1))-(0)))/2)/100) - 1)/(50 - 1)) + (abs(u(2) - 2) < 0.5)*(100*50*((((u(1))+(0)+abs((u(1))-(0)))/2)/100)/(1 + (50 - 1)*((((u(1))+(0)+abs((u(1))-(0)))/2)/100))) + (abs(u(2) - 4) < 0.5)*(100*(25^((((u(1))+(0)+abs((u(1))-(0)))/2)/100) - 1)/(25 - 1)) + (abs(u(2) - 5) < 0.5)*(100*25*((((u(1))+(0)+abs((u(1))-(0)))/2)/100)/(1 + (25 - 1)*((((u(1))+(0)+abs((u(1))-(0)))/2)/100))) + (abs(u(2) - 6) < 0.5)*(100*(33^((((u(1))+(0)+abs((u(1))-(0)))/2)/100) - 1)/(33 - 1)) + (abs(u(2) - 7) < 0.5)*(100*33*((((u(1))+(0)+abs((u(1))-(0)))/2)/100)/(1 + (33 - 1)*((((u(1))+(0)+abs((u(1))-(0)))/2)/100))) + (abs(u(2) - 3) < 0.5)*u(3)",
         "SampleTime": "0.001"
       },
       "visual": {
-        "x": 640,
-        "y": 480,
+        "x": 700,
+        "y": 510,
         "rotation": 0
       },
-      "label": "CHAR: setpoint caracterizado (%)"
+      "label": "Caracterização (Cmd 47): 0 Lin, 1 EP 1:50, 2 AR 1:50, 3 Tabela, 4 EP 1:25, 5 AR 1:25, 6 EP 1:33, 7 AR 1:33"
+    },
+    {
+      "id": "sp_char__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 640,
+        "y": 510,
+        "rotation": 0
+      }
     },
     {
       "id": "sp_lim",
       "typeId": "sl.fcn",
       "properties": {
-        "Expr": "u(1) + (u(1) < u(2))*(u(2) - u(1)) + (u(1) > u(3))*(u(3) - u(1))",
+        "Expr": "((((((u(1))+( u(2))+abs((u(1))-( u(2))))/2))+( (((u(3))+( u(2))+abs((u(3))-( u(2))))/2))-abs(((((u(1))+( u(2))+abs((u(1))-( u(2))))/2))-( (((u(3))+( u(2))+abs((u(3))-( u(2))))/2))))/2)",
         "SampleTime": "0.001"
       },
       "visual": {
-        "x": 640,
-        "y": 540,
+        "x": 700,
+        "y": 580,
         "rotation": 0
       },
       "label": "Limites do setpoint"
     },
     {
-      "id": "sp_t",
-      "typeId": "sl.fcn",
+      "id": "sp_lim__mux",
+      "typeId": "sl.mux",
       "properties": {
-        "Expr": "(u(3) > 0.0001)*(u(2) < u(3))*(0 - 5) + (1 - (u(3) > 0.0001)*(u(2) < u(3)))*u(1)",
-        "SampleTime": "0.001"
+        "Inputs": "3"
       },
       "visual": {
         "x": 640,
-        "y": 600,
+        "y": 580,
         "rotation": 0
-      },
-      "label": "TSO: abaixo do limite, fecha estanque"
+      }
     },
     {
-      "id": "sp_rate",
+      "id": "tso_on",
       "typeId": "sl.fcn",
       "properties": {
-        "Expr": "20*(u(1) - u(2)) + (20*(u(1) - u(2)) < 0 - 100/((u(3) > 0.1)*u(3) + (u(3) < 0.1001)*0.1))*(0 - 100/((u(3) > 0.1)*u(3) + (u(3) < 0.1001)*0.1) - 20*(u(1) - u(2))) + (20*(u(1) - u(2)) > 100/((u(3) > 0.1)*u(3) + (u(3) < 0.1001)*0.1))*(100/((u(3) > 0.1)*u(3) + (u(3) < 0.1001)*0.1) - 20*(u(1) - u(2)))",
+        "Expr": "(u(2) > 0.001)*((u(1) < u(2)) + (1 - (u(1) < u(2)))*(u(4) > 0.5)*(u(1) < u(2) + u(3)))",
         "SampleTime": "0.001"
       },
       "visual": {
-        "x": 640,
-        "y": 660,
+        "x": 700,
+        "y": 650,
         "rotation": 0
       },
-      "label": "TIME: taxa do setpoint (%/s)"
+      "label": "TSO ativo (fechamento estanque)"
     },
     {
-      "id": "sp_r",
-      "typeId": "sl.discrete_time_integrator",
+      "id": "tso_on__mux",
+      "typeId": "sl.mux",
       "properties": {
-        "IntegratorMethod": "Integration: Forward Euler",
-        "gainval": "1",
+        "Inputs": "4"
+      },
+      "visual": {
+        "x": 640,
+        "y": 650,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "tso_prev",
+      "typeId": "sl.unit_delay",
+      "properties": {
         "InitialCondition": "0",
         "SampleTime": "0.001"
       },
       "visual": {
-        "x": 420,
-        "y": 600,
+        "x": 700,
+        "y": 720,
+        "rotation": 0
+      },
+      "label": "TSO: estado anterior"
+    },
+    {
+      "id": "sp_t",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "(u(2) > 0.5)*(0 - 5) + (u(2) < 0.5)*u(1)",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 700,
+        "y": 790,
+        "rotation": 0
+      },
+      "label": "TSO: setpoint de fechamento estanque"
+    },
+    {
+      "id": "sp_t__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 640,
+        "y": 790,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "sp_step",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "u(2) + ((((((u(1) - u(2))+( 0 - 100*0.001/(((u(4))+( 0.001)+abs((u(4))-( 0.001)))/2))+abs((u(1) - u(2))-( 0 - 100*0.001/(((u(4))+( 0.001)+abs((u(4))-( 0.001)))/2))))/2))+( 100*0.001/(((u(3))+( 0.001)+abs((u(3))-( 0.001)))/2))-abs(((((u(1) - u(2))+( 0 - 100*0.001/(((u(4))+( 0.001)+abs((u(4))-( 0.001)))/2))+abs((u(1) - u(2))-( 0 - 100*0.001/(((u(4))+( 0.001)+abs((u(4))-( 0.001)))/2))))/2))-( 100*0.001/(((u(3))+( 0.001)+abs((u(3))-( 0.001)))/2))))/2)",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 700,
+        "y": 860,
+        "rotation": 0
+      },
+      "label": "TIME: taxa do setpoint"
+    },
+    {
+      "id": "sp_step__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "4"
+      },
+      "visual": {
+        "x": 640,
+        "y": 860,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "sp_r",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "(u(2) > 0.5)*u(1)",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 700,
+        "y": 930,
         "rotation": 0
       },
       "label": "Setpoint de posição (%)"
     },
     {
-      "id": "setup_in",
-      "typeId": "sl.fcn",
+      "id": "sp_r__mux",
+      "typeId": "sl.mux",
       "properties": {
-        "Expr": "u(1) > 0.5",
-        "SampleTime": "0.001"
+        "Inputs": "2"
       },
       "visual": {
         "x": 640,
-        "y": 720,
+        "y": 930,
         "rotation": 0
-      },
-      "label": "Auto Setup: contagem"
+      }
     },
     {
-      "id": "setup_reset",
-      "typeId": "sl.fcn",
+      "id": "sp_r_prev",
+      "typeId": "sl.unit_delay",
       "properties": {
-        "Expr": "(u(1) < 0.5)*10*u(2)",
+        "InitialCondition": "0",
         "SampleTime": "0.001"
       },
       "visual": {
-        "x": 640,
-        "y": 780,
+        "x": 700,
+        "y": 1000,
         "rotation": 0
       },
-      "label": "Auto Setup: zera"
+      "label": "Setpoint de posição anterior"
     },
     {
-      "id": "setup_timer",
-      "typeId": "process.accumulator",
+      "id": "setup_toggle_prev",
+      "typeId": "sl.unit_delay",
       "properties": {
-        "initial": 0,
-        "samplePeriodNs": 1000000
+        "InitialCondition": "0",
+        "SampleTime": "0.001"
       },
       "visual": {
-        "x": 420,
-        "y": 660,
+        "x": 700,
+        "y": 1070,
+        "rotation": 0
+      },
+      "label": "Auto Setup: comando anterior"
+    },
+    {
+      "id": "setup_start",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "abs(u(1) - u(2)) > 0.5",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 700,
+        "y": 1140,
+        "rotation": 0
+      },
+      "label": "Auto Setup: início"
+    },
+    {
+      "id": "setup_start__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 640,
+        "y": 1140,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "setup_time",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "(u(1) < 0.5)*(u(2) + (u(3) > 0.5)*0.001)",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 700,
+        "y": 1210,
         "rotation": 0
       },
       "label": "Tempo do Auto Setup (s)"
     },
     {
-      "id": "setup_active",
-      "typeId": "sl.fcn",
+      "id": "setup_time__mux",
+      "typeId": "sl.mux",
       "properties": {
-        "Expr": "(u(1) > 0.5)*(u(2) < 50)",
-        "SampleTime": "0.001"
+        "Inputs": "3"
       },
       "visual": {
         "x": 640,
-        "y": 840,
+        "y": 1210,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "setup_time_prev",
+      "typeId": "sl.unit_delay",
+      "properties": {
+        "InitialCondition": "0",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 960,
+        "y": 300,
+        "rotation": 0
+      },
+      "label": "Tempo do Auto Setup anterior"
+    },
+    {
+      "id": "setup_run",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "(u(1) > 0.5) + (u(1) < 0.5)*(u(3) > 0.5)*(u(2) < 50)",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 960,
+        "y": 370,
         "rotation": 0
       },
       "label": "Auto Setup em andamento"
     },
     {
+      "id": "setup_run__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 900,
+        "y": 370,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "setup_run_prev",
+      "typeId": "sl.unit_delay",
+      "properties": {
+        "InitialCondition": "0",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 960,
+        "y": 440,
+        "rotation": 0
+      },
+      "label": "Auto Setup em andamento (anterior)"
+    },
+    {
+      "id": "setup_done",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "(u(1) < 0.5)*((u(2) > 49.9) + (u(2) < 49.9)*(u(3) > 0.5))",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 960,
+        "y": 510,
+        "rotation": 0
+      },
+      "label": "Auto Setup concluído"
+    },
+    {
+      "id": "setup_done__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 900,
+        "y": 510,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "setup_done_prev",
+      "typeId": "sl.unit_delay",
+      "properties": {
+        "InitialCondition": "0",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 960,
+        "y": 580,
+        "rotation": 0
+      },
+      "label": "Auto Setup concluído (anterior)"
+    },
+    {
       "id": "setup_progress",
       "typeId": "sl.fcn",
       "properties": {
-        "Expr": "(u(1) > 0.5)*((u(2) < 50)*u(2)*2 + (u(2) > 49.9999)*100)",
+        "Expr": "(u(2) > 0.5)*(((u(1)*2)+( 99)-abs((u(1)*2)-( 99)))/2) + (u(2) < 0.5)*(u(3) > 0.5)*100",
         "SampleTime": "0.001"
       },
       "visual": {
-        "x": 640,
-        "y": 900,
+        "x": 960,
+        "y": 650,
         "rotation": 0
       },
-      "label": "Auto Setup (%)"
+      "label": "Progresso do Auto Setup (%)"
     },
     {
-      "id": "hold_rest_in",
+      "id": "setup_progress__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 900,
+        "y": 650,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "zero",
       "typeId": "sl.fcn",
       "properties": {
-        "Expr": "(u(1) > 0.5)*(u(2) > 20)*(u(2) < 25)*(u(3) - u(4) > 0)*(u(3) - u(4))*5",
+        "Expr": "0*u(1)",
         "SampleTime": "0.001"
       },
       "visual": {
-        "x": 640,
-        "y": 960,
-        "rotation": 0
-      },
-      "label": "Auto Setup: grava a posição (rest)"
-    },
-    {
-      "id": "hold_rest_out",
-      "typeId": "sl.fcn",
-      "properties": {
-        "Expr": "(u(1) > 0.5)*(u(2) > 20)*(u(2) < 25)*(u(4) - u(3) > 0)*(u(4) - u(3))*5",
-        "SampleTime": "0.001"
-      },
-      "visual": {
-        "x": 860,
-        "y": 300,
-        "rotation": 0
-      },
-      "label": "Auto Setup: grava a posição (rest)"
-    },
-    {
-      "id": "hold_rest",
-      "typeId": "process.accumulator",
-      "properties": {
-        "initial": 0,
-        "samplePeriodNs": 1000000
-      },
-      "visual": {
-        "x": 420,
+        "x": 960,
         "y": 720,
         "rotation": 0
       },
-      "label": "Posição sem ar (mm)"
+      "label": "Zero"
     },
     {
-      "id": "hold_full_in",
-      "typeId": "sl.fcn",
+      "id": "first",
+      "typeId": "sl.unit_delay",
       "properties": {
-        "Expr": "(u(1) > 0.5)*(u(2) > 45)*(u(2) < 50)*(u(3) - u(4) > 0)*(u(3) - u(4))*5",
+        "InitialCondition": "1",
         "SampleTime": "0.001"
       },
       "visual": {
-        "x": 860,
-        "y": 360,
+        "x": 960,
+        "y": 790,
         "rotation": 0
       },
-      "label": "Auto Setup: grava a posição (full)"
+      "label": "Primeira amostra"
     },
     {
-      "id": "hold_full_out",
+      "id": "hold_rest",
       "typeId": "sl.fcn",
       "properties": {
-        "Expr": "(u(1) > 0.5)*(u(2) > 45)*(u(2) < 50)*(u(4) - u(3) > 0)*(u(4) - u(3))*5",
+        "Expr": "(u(6) > 0.5)*0 + (u(6) < 0.5)*(((((u(1) > 0.5)*(u(2) > 20)*(u(2) < 25) + (abs(u(5) - 1) < 0.5))+( 1)-abs(((u(1) > 0.5)*(u(2) > 20)*(u(2) < 25) + (abs(u(5) - 1) < 0.5))-( 1)))/2)*u(3) + (1 - ((((u(1) > 0.5)*(u(2) > 20)*(u(2) < 25) + (abs(u(5) - 1) < 0.5))+( 1)-abs(((u(1) > 0.5)*(u(2) > 20)*(u(2) < 25) + (abs(u(5) - 1) < 0.5))-( 1)))/2))*u(4))",
         "SampleTime": "0.001"
       },
       "visual": {
-        "x": 860,
-        "y": 420,
+        "x": 960,
+        "y": 860,
         "rotation": 0
       },
-      "label": "Auto Setup: grava a posição (full)"
+      "label": "Auto Setup: posição gravada (sem ar, mm)"
+    },
+    {
+      "id": "hold_rest__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "7"
+      },
+      "visual": {
+        "x": 900,
+        "y": 860,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "hold_rest_prev",
+      "typeId": "sl.unit_delay",
+      "properties": {
+        "InitialCondition": "0",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 960,
+        "y": 930,
+        "rotation": 0
+      },
+      "label": "Posição gravada (sem ar), anterior"
     },
     {
       "id": "hold_full",
-      "typeId": "process.accumulator",
+      "typeId": "sl.fcn",
       "properties": {
-        "initial": 30,
-        "samplePeriodNs": 1000000
+        "Expr": "(u(6) > 0.5)*u(7) + (u(6) < 0.5)*(((((u(1) > 0.5)*(u(2) > 45)*(u(2) < 50) + (abs(u(5) - 2) < 0.5))+( 1)-abs(((u(1) > 0.5)*(u(2) > 45)*(u(2) < 50) + (abs(u(5) - 2) < 0.5))-( 1)))/2)*u(3) + (1 - ((((u(1) > 0.5)*(u(2) > 45)*(u(2) < 50) + (abs(u(5) - 2) < 0.5))+( 1)-abs(((u(1) > 0.5)*(u(2) > 45)*(u(2) < 50) + (abs(u(5) - 2) < 0.5))-( 1)))/2))*u(4))",
+        "SampleTime": "0.001"
       },
       "visual": {
-        "x": 420,
-        "y": 780,
+        "x": 960,
+        "y": 1000,
         "rotation": 0
       },
-      "label": "Posição com ar total (mm)"
+      "label": "Auto Setup: posição gravada (ar total, mm)"
+    },
+    {
+      "id": "hold_full__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "7"
+      },
+      "visual": {
+        "x": 900,
+        "y": 1000,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "hold_full_prev",
+      "typeId": "sl.unit_delay",
+      "properties": {
+        "InitialCondition": "0",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 960,
+        "y": 1070,
+        "rotation": 0
+      },
+      "label": "Posição gravada (ar total), anterior"
     },
     {
       "id": "pos_raw",
       "typeId": "sl.fcn",
       "properties": {
-        "Expr": "(u(1) - ((u(2) < u(3))*u(2) + (1 - (u(2) < u(3)))*u(3)))/(((u(2) < u(3))*u(3) + (1 - (u(2) < u(3)))*u(2) - ((u(2) < u(3))*u(2) + (1 - (u(2) < u(3)))*u(3)) > 0.1)*((u(2) < u(3))*u(3) + (1 - (u(2) < u(3)))*u(2) - ((u(2) < u(3))*u(2) + (1 - (u(2) < u(3)))*u(3))) + ((u(2) < u(3))*u(3) + (1 - (u(2) < u(3)))*u(2) - ((u(2) < u(3))*u(2) + (1 - (u(2) < u(3)))*u(3)) < 0.1001)*0.1)*100",
+        "Expr": "(u(1) - (((u(2))+( u(3))-abs((u(2))-( u(3))))/2))/(((abs(u(3) - u(2)))+( 0.1)+abs((abs(u(3) - u(2)))-( 0.1)))/2)*100",
         "SampleTime": "0.001"
       },
       "visual": {
-        "x": 860,
-        "y": 480,
+        "x": 960,
+        "y": 1140,
         "rotation": 0
       },
-      "label": "Abertura medida pelo sensor (% do curso calibrado)"
+      "label": "Posição pelo sensor (% do curso calibrado)"
+    },
+    {
+      "id": "pos_raw__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 900,
+        "y": 1140,
+        "rotation": 0
+      }
     },
     {
       "id": "pos_trim",
       "typeId": "sl.fcn",
       "properties": {
-        "Expr": "(u(1) - u(2))/((u(3) - u(2) > 0.1)*(u(3) - u(2)) + (u(3) - u(2) < 0.1001)*0.1)*100",
+        "Expr": "(u(1) - u(2))/(((u(3) - u(2))+( 0.1)+abs((u(3) - u(2))-( 0.1)))/2)*100",
         "SampleTime": "0.001"
       },
       "visual": {
-        "x": 860,
-        "y": 540,
+        "x": 960,
+        "y": 1210,
         "rotation": 0
       },
-      "label": "LOPOS/UPPOS"
+      "label": "Trim de posição inferior/superior (LOPOS/UPPOS)"
+    },
+    {
+      "id": "pos_trim__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 900,
+        "y": 1210,
+        "rotation": 0
+      }
     },
     {
       "id": "pos",
       "typeId": "sl.fcn",
       "properties": {
-        "Expr": "(1 - ((u(2) > 0.5)*(u(2) < 1.5) + (u(2) > 2.5)))*u(1) + ((u(2) > 0.5)*(u(2) < 1.5) + (u(2) > 2.5))*(100 - u(1))",
+        "Expr": "(u(2) < 0.5)*u(1) + (u(2) > 0.5)*(100 - u(1))",
         "SampleTime": "0.001"
       },
       "visual": {
-        "x": 860,
-        "y": 600,
+        "x": 1220,
+        "y": 300,
         "rotation": 0
       },
-      "label": "Posição (%): direta ou reversa (TYPE)"
+      "label": "PV: posição (%), ação direta ou reversa"
+    },
+    {
+      "id": "pos__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 1160,
+        "y": 300,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "hall",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "1000 + 100*u(1)",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1220,
+        "y": 370,
+        "rotation": 0
+      },
+      "label": "Sensor Hall (contagens)"
     },
     {
       "id": "err",
       "typeId": "sl.fcn",
       "properties": {
-        "Expr": "(1 - 2*(u(3) > 0.5))*(u(1) - u(2))",
+        "Expr": "(abs(u(1) - u(2)) > u(3))*(u(1) - u(2))",
         "SampleTime": "0.001"
       },
       "visual": {
-        "x": 860,
-        "y": 660,
+        "x": 1220,
+        "y": 440,
         "rotation": 0
       },
-      "label": "Desvio do servo (com o efeito do ar)"
+      "label": "Desvio do servo (%)"
+    },
+    {
+      "id": "err__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 1160,
+        "y": 440,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "err_air",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "(1 - 2*(u(2) > 0.5))*u(1)",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1220,
+        "y": 510,
+        "rotation": 0
+      },
+      "label": "Desvio com o efeito do ar (AIR_T)"
+    },
+    {
+      "id": "err_air__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 1160,
+        "y": 510,
+        "rotation": 0
+      }
     },
     {
       "id": "u",
@@ -721,273 +873,11 @@
         "SampleTime": "0.001"
       },
       "visual": {
-        "x": 860,
-        "y": 720,
+        "x": 1220,
+        "y": 580,
         "rotation": 0
       },
       "label": "Saída do PI (%)"
-    },
-    {
-      "id": "servo_i_in",
-      "typeId": "sl.fcn",
-      "properties": {
-        "Expr": "(1 - u(4))*(u(3) > 0.001)*(1 - (u(2) > 100)*(u(1) > 0) - (u(2) < 0)*(u(1) < 0))*u(1)/(((u(3) > 0.001)*u(3) + (u(3) < 0.0011)*1)*60) - u(4)*5*u(5)",
-        "SampleTime": "0.001"
-      },
-      "visual": {
-        "x": 860,
-        "y": 780,
-        "rotation": 0
-      },
-      "label": "TR: integral (anti-saturação; zerada no Auto Setup)"
-    },
-    {
-      "id": "servo_i",
-      "typeId": "sl.discrete_time_integrator",
-      "properties": {
-        "IntegratorMethod": "Integration: Forward Euler",
-        "gainval": "1",
-        "InitialCondition": "0",
-        "SampleTime": "0.001"
-      },
-      "visual": {
-        "x": 420,
-        "y": 840,
-        "rotation": 0
-      },
-      "label": "Integral do servo"
-    },
-    {
-      "id": "out_pct",
-      "typeId": "sl.fcn",
-      "properties": {
-        "Expr": "(u(4) > 3.8)*(u(2)*(u(3) > 25)*100 + (1 - u(2))*(u(1) + (u(1) < 0)*(0 - u(1)) + (u(1) > 100)*(100 - u(1))))",
-        "SampleTime": "0.001"
-      },
-      "visual": {
-        "x": 860,
-        "y": 840,
-        "rotation": 0
-      },
-      "label": "Sinal do piezo/carretel (% do suprimento); sem sinal (< 3,8 mA) a saída esvazia"
-    },
-    {
-      "id": "out1_bar",
-      "typeId": "sl.fcn",
-      "properties": {
-        "Expr": "u(1)/100*((u(2) > 0)*u(2))",
-        "SampleTime": "0.001"
-      },
-      "visual": {
-        "x": 860,
-        "y": 900,
-        "rotation": 0
-      },
-      "label": "OUT1 (bar)"
-    },
-    {
-      "id": "in_pct__mux",
-      "typeId": "sl.mux",
-      "properties": {
-        "Inputs": "3"
-      },
-      "visual": {
-        "x": 560,
-        "y": 360,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "sp_src__mux",
-      "typeId": "sl.mux",
-      "properties": {
-        "Inputs": "3"
-      },
-      "visual": {
-        "x": 560,
-        "y": 420,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "sp_char__mux",
-      "typeId": "sl.mux",
-      "properties": {
-        "Inputs": "2"
-      },
-      "visual": {
-        "x": 560,
-        "y": 480,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "sp_lim__mux",
-      "typeId": "sl.mux",
-      "properties": {
-        "Inputs": "3"
-      },
-      "visual": {
-        "x": 560,
-        "y": 540,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "sp_t__mux",
-      "typeId": "sl.mux",
-      "properties": {
-        "Inputs": "3"
-      },
-      "visual": {
-        "x": 560,
-        "y": 600,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "sp_rate__mux",
-      "typeId": "sl.mux",
-      "properties": {
-        "Inputs": "3"
-      },
-      "visual": {
-        "x": 560,
-        "y": 660,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "setup_reset__mux",
-      "typeId": "sl.mux",
-      "properties": {
-        "Inputs": "2"
-      },
-      "visual": {
-        "x": 560,
-        "y": 780,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "setup_active__mux",
-      "typeId": "sl.mux",
-      "properties": {
-        "Inputs": "2"
-      },
-      "visual": {
-        "x": 560,
-        "y": 840,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "setup_progress__mux",
-      "typeId": "sl.mux",
-      "properties": {
-        "Inputs": "2"
-      },
-      "visual": {
-        "x": 560,
-        "y": 900,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "hold_rest_in__mux",
-      "typeId": "sl.mux",
-      "properties": {
-        "Inputs": "4"
-      },
-      "visual": {
-        "x": 560,
-        "y": 960,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "hold_rest_out__mux",
-      "typeId": "sl.mux",
-      "properties": {
-        "Inputs": "4"
-      },
-      "visual": {
-        "x": 780,
-        "y": 300,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "hold_full_in__mux",
-      "typeId": "sl.mux",
-      "properties": {
-        "Inputs": "4"
-      },
-      "visual": {
-        "x": 780,
-        "y": 360,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "hold_full_out__mux",
-      "typeId": "sl.mux",
-      "properties": {
-        "Inputs": "4"
-      },
-      "visual": {
-        "x": 780,
-        "y": 420,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "pos_raw__mux",
-      "typeId": "sl.mux",
-      "properties": {
-        "Inputs": "3"
-      },
-      "visual": {
-        "x": 780,
-        "y": 480,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "pos_trim__mux",
-      "typeId": "sl.mux",
-      "properties": {
-        "Inputs": "3"
-      },
-      "visual": {
-        "x": 780,
-        "y": 540,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "pos__mux",
-      "typeId": "sl.mux",
-      "properties": {
-        "Inputs": "2"
-      },
-      "visual": {
-        "x": 780,
-        "y": 600,
-        "rotation": 0
-      }
-    },
-    {
-      "id": "err__mux",
-      "typeId": "sl.mux",
-      "properties": {
-        "Inputs": "3"
-      },
-      "visual": {
-        "x": 780,
-        "y": 660,
-        "rotation": 0
-      }
     },
     {
       "id": "u__mux",
@@ -996,34 +886,90 @@
         "Inputs": "3"
       },
       "visual": {
-        "x": 780,
-        "y": 720,
+        "x": 1160,
+        "y": 580,
         "rotation": 0
       }
     },
     {
-      "id": "servo_i_in__mux",
-      "typeId": "sl.mux",
+      "id": "servo_i",
+      "typeId": "sl.fcn",
       "properties": {
-        "Inputs": "5"
+        "Expr": "(u(5) < 0.5)*(u(6) > 0.5)*(u(4) + (u(3) > 0.001)*(1 - (u(2) > 100)*(u(1) > 0) - (u(2) < 0)*(u(1) < 0))*u(1)*0.001/((((u(3))+( 0.001)+abs((u(3))-( 0.001)))/2)*60))",
+        "SampleTime": "0.001"
       },
       "visual": {
-        "x": 780,
-        "y": 780,
+        "x": 1220,
+        "y": 650,
+        "rotation": 0
+      },
+      "label": "TR: integral (anti-saturação; zerada no Auto Setup e sem sinal)"
+    },
+    {
+      "id": "servo_i__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "6"
+      },
+      "visual": {
+        "x": 1160,
+        "y": 650,
         "rotation": 0
       }
+    },
+    {
+      "id": "servo_i_prev",
+      "typeId": "sl.unit_delay",
+      "properties": {
+        "InitialCondition": "0",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1220,
+        "y": 720,
+        "rotation": 0
+      },
+      "label": "Integral do servo (anterior)"
+    },
+    {
+      "id": "out_pct",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "(u(2) > 0.5)*((u(3) > 0.5)*(u(4) > 25)*100 + (u(3) < 0.5)*(abs(u(5) - 2) < 0.5)*100 + (u(3) < 0.5)*(abs(u(5) - 1) > 0.5)*(abs(u(5) - 2) > 0.5)*((u(6) > 0.5)*(((((((u(8) < 0.5)*u(7) + (u(8) > 0.5)*(100 - u(7)))+( 0)+abs(((u(8) < 0.5)*u(7) + (u(8) > 0.5)*(100 - u(7)))-( 0)))/2))+( 100)-abs((((((u(8) < 0.5)*u(7) + (u(8) > 0.5)*(100 - u(7)))+( 0)+abs(((u(8) < 0.5)*u(7) + (u(8) > 0.5)*(100 - u(7)))-( 0)))/2))-( 100)))/2) + (u(6) < 0.5)*((((((u(1))+( 0)+abs((u(1))-( 0)))/2))+( 100)-abs(((((u(1))+( 0)+abs((u(1))-( 0)))/2))-( 100)))/2)))",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1220,
+        "y": 790,
+        "rotation": 0
+      },
+      "label": "Sinal do piezo/carretel (% do suprimento); sem sinal (< 3,8 mA) a saída esvazia"
     },
     {
       "id": "out_pct__mux",
       "typeId": "sl.mux",
       "properties": {
-        "Inputs": "4"
+        "Inputs": "8"
       },
       "visual": {
-        "x": 780,
-        "y": 840,
+        "x": 1160,
+        "y": 790,
         "rotation": 0
       }
+    },
+    {
+      "id": "out1_bar",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "u(1)/100*(((u(2))+( 0)+abs((u(2))-( 0)))/2)",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1220,
+        "y": 860,
+        "rotation": 0
+      },
+      "label": "OUT1 (bar)"
     },
     {
       "id": "out1_bar__mux",
@@ -1032,10 +978,264 @@
         "Inputs": "2"
       },
       "visual": {
-        "x": 780,
-        "y": 900,
+        "x": 1160,
+        "y": 860,
         "rotation": 0
       }
+    },
+    {
+      "id": "out2_bar",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "(((u(2))+( 0)+abs((u(2))-( 0)))/2) - u(1)",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1220,
+        "y": 930,
+        "rotation": 0
+      },
+      "label": "OUT2 (bar, ação dupla)"
+    },
+    {
+      "id": "out2_bar__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "2"
+      },
+      "visual": {
+        "x": 1160,
+        "y": 930,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "supply_bar",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "(((u(1))+( 0)+abs((u(1))-( 0)))/2)",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1220,
+        "y": 1000,
+        "rotation": 0
+      },
+      "label": "Suprimento (bar)"
+    },
+    {
+      "id": "setup_status",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "(u(1) > 0.5)*15 + (u(1) < 0.5)*((u(2) < 1)*1 + (u(2) >= 1)*(u(5) > 0.5)*(abs(u(4) - u(3)) < 1)*2)",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1220,
+        "y": 1070,
+        "rotation": 0
+      },
+      "label": "Estado do setup: 15 em andamento, 1 ar baixo, 2 sem ímã"
+    },
+    {
+      "id": "setup_status__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "5"
+      },
+      "visual": {
+        "x": 1160,
+        "y": 1070,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "x_prev",
+      "typeId": "sl.unit_delay",
+      "properties": {
+        "InitialCondition": "0",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1220,
+        "y": 1140,
+        "rotation": 0
+      },
+      "label": "Posição anterior (mm)"
+    },
+    {
+      "id": "mileage",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "u(3) + abs(u(1) - u(2))",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1220,
+        "y": 1210,
+        "rotation": 0
+      },
+      "label": "Odômetro (mm)"
+    },
+    {
+      "id": "mileage__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 1160,
+        "y": 1210,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "mileage_prev",
+      "typeId": "sl.unit_delay",
+      "properties": {
+        "InitialCondition": "0",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1480,
+        "y": 300,
+        "rotation": 0
+      },
+      "label": "Odômetro anterior"
+    },
+    {
+      "id": "strokes",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "floor(u(1)/(((2*abs(u(3) - u(2)))+( 1)+abs((2*abs(u(3) - u(2)))-( 1)))/2))",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1480,
+        "y": 370,
+        "rotation": 0
+      },
+      "label": "Cursos completos"
+    },
+    {
+      "id": "strokes__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 1420,
+        "y": 370,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "dir",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "(u(1) - u(2) > 0.0005) - (u(1) - u(2) < 0 - 0.0005) + (abs(u(1) - u(2)) <= 0.0005)*u(3)",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1480,
+        "y": 440,
+        "rotation": 0
+      },
+      "label": "Sentido do movimento"
+    },
+    {
+      "id": "dir__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 1420,
+        "y": 440,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "dir_prev",
+      "typeId": "sl.unit_delay",
+      "properties": {
+        "InitialCondition": "0",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1480,
+        "y": 510,
+        "rotation": 0
+      },
+      "label": "Sentido anterior"
+    },
+    {
+      "id": "reversals",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "u(3) + (abs(u(1) - u(2)) > 1.5)",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1480,
+        "y": 580,
+        "rotation": 0
+      },
+      "label": "Reversões"
+    },
+    {
+      "id": "reversals__mux",
+      "typeId": "sl.mux",
+      "properties": {
+        "Inputs": "3"
+      },
+      "visual": {
+        "x": 1420,
+        "y": 580,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "reversals_prev",
+      "typeId": "sl.unit_delay",
+      "properties": {
+        "InitialCondition": "0",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1480,
+        "y": 650,
+        "rotation": 0
+      },
+      "label": "Reversões (anterior)"
+    },
+    {
+      "id": "temp_f",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "u(1)*1.8 + 32",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1480,
+        "y": 720,
+        "rotation": 0
+      },
+      "label": "Temperatura (F)"
+    },
+    {
+      "id": "temp_c",
+      "typeId": "sl.fcn",
+      "properties": {
+        "Expr": "u(1)",
+        "SampleTime": "0.001"
+      },
+      "visual": {
+        "x": 1480,
+        "y": 790,
+        "rotation": 0
+      },
+      "label": "Temperatura (C)"
     }
   ],
   "topology": {
@@ -1079,7 +1279,7 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "pv_in",
+          "componentId": "powered",
           "pinId": "in1"
         },
         "points": []
@@ -1088,13 +1288,13 @@
         "id": "w-4",
         "from": {
           "kind": "port",
-          "componentId": "pv_in",
-          "pinId": "out1"
+          "componentId": "fy301",
+          "pinId": "sp.mode"
         },
         "to": {
           "kind": "port",
-          "componentId": "fy301",
-          "pinId": "PV"
+          "componentId": "sp_in__mux",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1103,12 +1303,12 @@
         "from": {
           "kind": "port",
           "componentId": "fy301",
-          "pinId": "inputCurrent"
+          "pinId": "sp.local"
         },
         "to": {
           "kind": "port",
-          "componentId": "in_pct__mux",
-          "pinId": "in1"
+          "componentId": "sp_in__mux",
+          "pinId": "in2"
         },
         "points": []
       },
@@ -1116,13 +1316,13 @@
         "id": "w-6",
         "from": {
           "kind": "port",
-          "componentId": "c_slo",
-          "pinId": "out"
+          "componentId": "fy301",
+          "pinId": "inputPercent"
         },
         "to": {
           "kind": "port",
-          "componentId": "in_pct__mux",
-          "pinId": "in2"
+          "componentId": "sp_in__mux",
+          "pinId": "in3"
         },
         "points": []
       },
@@ -1130,13 +1330,13 @@
         "id": "w-7",
         "from": {
           "kind": "port",
-          "componentId": "c_shi",
-          "pinId": "out"
+          "componentId": "sp_in__mux",
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "in_pct__mux",
-          "pinId": "in3"
+          "componentId": "sp_in",
+          "pinId": "in1"
         },
         "points": []
       },
@@ -1144,12 +1344,12 @@
         "id": "w-8",
         "from": {
           "kind": "port",
-          "componentId": "in_pct",
+          "componentId": "sp_in",
           "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_src__mux",
+          "componentId": "sp_table__mux",
           "pinId": "in1"
         },
         "points": []
@@ -1158,12 +1358,12 @@
         "id": "w-9",
         "from": {
           "kind": "port",
-          "componentId": "c_mode",
-          "pinId": "out"
+          "componentId": "fy301",
+          "pinId": "table.points"
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_src__mux",
+          "componentId": "sp_table__mux",
           "pinId": "in2"
         },
         "points": []
@@ -1172,12 +1372,12 @@
         "id": "w-10",
         "from": {
           "kind": "port",
-          "componentId": "c_sp",
-          "pinId": "out"
+          "componentId": "fy301",
+          "pinId": "table.c0"
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_src__mux",
+          "componentId": "sp_table__mux",
           "pinId": "in3"
         },
         "points": []
@@ -1186,7 +1386,455 @@
         "id": "w-11",
         "from": {
           "kind": "port",
-          "componentId": "sp_src",
+          "componentId": "fy301",
+          "pinId": "table.c1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in4"
+        },
+        "points": []
+      },
+      {
+        "id": "w-12",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c2"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in5"
+        },
+        "points": []
+      },
+      {
+        "id": "w-13",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c3"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in6"
+        },
+        "points": []
+      },
+      {
+        "id": "w-14",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c4"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in7"
+        },
+        "points": []
+      },
+      {
+        "id": "w-15",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c5"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in8"
+        },
+        "points": []
+      },
+      {
+        "id": "w-16",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c6"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in9"
+        },
+        "points": []
+      },
+      {
+        "id": "w-17",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c7"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in10"
+        },
+        "points": []
+      },
+      {
+        "id": "w-18",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c8"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in11"
+        },
+        "points": []
+      },
+      {
+        "id": "w-19",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c9"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in12"
+        },
+        "points": []
+      },
+      {
+        "id": "w-20",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c10"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in13"
+        },
+        "points": []
+      },
+      {
+        "id": "w-21",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c11"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in14"
+        },
+        "points": []
+      },
+      {
+        "id": "w-22",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c12"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in15"
+        },
+        "points": []
+      },
+      {
+        "id": "w-23",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c13"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in16"
+        },
+        "points": []
+      },
+      {
+        "id": "w-24",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c14"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in17"
+        },
+        "points": []
+      },
+      {
+        "id": "w-25",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c15"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in18"
+        },
+        "points": []
+      },
+      {
+        "id": "w-26",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c16"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in19"
+        },
+        "points": []
+      },
+      {
+        "id": "w-27",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c17"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in20"
+        },
+        "points": []
+      },
+      {
+        "id": "w-28",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c18"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in21"
+        },
+        "points": []
+      },
+      {
+        "id": "w-29",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c19"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in22"
+        },
+        "points": []
+      },
+      {
+        "id": "w-30",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c20"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in23"
+        },
+        "points": []
+      },
+      {
+        "id": "w-31",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c21"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in24"
+        },
+        "points": []
+      },
+      {
+        "id": "w-32",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c22"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in25"
+        },
+        "points": []
+      },
+      {
+        "id": "w-33",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c23"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in26"
+        },
+        "points": []
+      },
+      {
+        "id": "w-34",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c24"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in27"
+        },
+        "points": []
+      },
+      {
+        "id": "w-35",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c25"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in28"
+        },
+        "points": []
+      },
+      {
+        "id": "w-36",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c26"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in29"
+        },
+        "points": []
+      },
+      {
+        "id": "w-37",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c27"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in30"
+        },
+        "points": []
+      },
+      {
+        "id": "w-38",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c28"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in31"
+        },
+        "points": []
+      },
+      {
+        "id": "w-39",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c29"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in32"
+        },
+        "points": []
+      },
+      {
+        "id": "w-40",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c30"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in33"
+        },
+        "points": []
+      },
+      {
+        "id": "w-41",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "table.c31"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "in34"
+        },
+        "points": []
+      },
+      {
+        "id": "w-42",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_table__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_table",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-43",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_in",
           "pinId": "out1"
         },
         "to": {
@@ -1197,11 +1845,11 @@
         "points": []
       },
       {
-        "id": "w-12",
+        "id": "w-44",
         "from": {
           "kind": "port",
-          "componentId": "c_char",
-          "pinId": "out"
+          "componentId": "fy301",
+          "pinId": "flowChar"
         },
         "to": {
           "kind": "port",
@@ -1211,7 +1859,35 @@
         "points": []
       },
       {
-        "id": "w-13",
+        "id": "w-45",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_table",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_char__mux",
+          "pinId": "in3"
+        },
+        "points": []
+      },
+      {
+        "id": "w-46",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_char__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_char",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-47",
         "from": {
           "kind": "port",
           "componentId": "sp_char",
@@ -1225,11 +1901,11 @@
         "points": []
       },
       {
-        "id": "w-14",
+        "id": "w-48",
         "from": {
           "kind": "port",
-          "componentId": "c_spl",
-          "pinId": "out"
+          "componentId": "fy301",
+          "pinId": "sp.lowLimit"
         },
         "to": {
           "kind": "port",
@@ -1239,11 +1915,11 @@
         "points": []
       },
       {
-        "id": "w-15",
+        "id": "w-49",
         "from": {
           "kind": "port",
-          "componentId": "c_sph",
-          "pinId": "out"
+          "componentId": "fy301",
+          "pinId": "sp.highLimit"
         },
         "to": {
           "kind": "port",
@@ -1253,7 +1929,105 @@
         "points": []
       },
       {
-        "id": "w-16",
+        "id": "w-50",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_lim__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_lim",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-51",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_char",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tso_on__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-52",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "tso.cutoff"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tso_on__mux",
+          "pinId": "in2"
+        },
+        "points": []
+      },
+      {
+        "id": "w-53",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "tso.deadband"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tso_on__mux",
+          "pinId": "in3"
+        },
+        "points": []
+      },
+      {
+        "id": "w-54",
+        "from": {
+          "kind": "port",
+          "componentId": "tso_prev",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tso_on__mux",
+          "pinId": "in4"
+        },
+        "points": []
+      },
+      {
+        "id": "w-55",
+        "from": {
+          "kind": "port",
+          "componentId": "tso_on__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tso_on",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-56",
+        "from": {
+          "kind": "port",
+          "componentId": "tso_on",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "tso_prev",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-57",
         "from": {
           "kind": "port",
           "componentId": "sp_lim",
@@ -1267,10 +2041,10 @@
         "points": []
       },
       {
-        "id": "w-17",
+        "id": "w-58",
         "from": {
           "kind": "port",
-          "componentId": "sp_char",
+          "componentId": "tso_on",
           "pinId": "out1"
         },
         "to": {
@@ -1281,21 +2055,21 @@
         "points": []
       },
       {
-        "id": "w-18",
+        "id": "w-59",
         "from": {
           "kind": "port",
-          "componentId": "c_tso",
-          "pinId": "out"
+          "componentId": "sp_t__mux",
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_t__mux",
-          "pinId": "in3"
+          "componentId": "sp_t",
+          "pinId": "in1"
         },
         "points": []
       },
       {
-        "id": "w-19",
+        "id": "w-60",
         "from": {
           "kind": "port",
           "componentId": "sp_t",
@@ -1303,171 +2077,395 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_rate__mux",
+          "componentId": "sp_step__mux",
           "pinId": "in1"
         },
         "points": []
       },
       {
-        "id": "w-20",
+        "id": "w-61",
         "from": {
           "kind": "port",
-          "componentId": "sp_r",
+          "componentId": "sp_r_prev",
           "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_rate__mux",
+          "componentId": "sp_step__mux",
           "pinId": "in2"
         },
         "points": []
       },
       {
-        "id": "w-21",
+        "id": "w-62",
         "from": {
-          "kind": "port",
-          "componentId": "c_time",
-          "pinId": "out"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "sp_rate__mux",
-          "pinId": "in3"
-        },
-        "points": []
-      },
-      {
-        "id": "w-22",
-        "from": {
-          "kind": "port",
-          "componentId": "sp_rate",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "sp_r",
-          "pinId": "in1"
-        },
-        "points": []
-      },
-      {
-        "id": "w-23",
-        "from": {
-          "kind": "port",
-          "componentId": "sp_r",
-          "pinId": "out1"
-        },
-        "to": {
           "kind": "port",
           "componentId": "fy301",
-          "pinId": "spFinal"
+          "pinId": "sp.rateUpTime"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_step__mux",
+          "pinId": "in3"
         },
         "points": []
       },
       {
-        "id": "w-24",
+        "id": "w-63",
         "from": {
           "kind": "port",
-          "componentId": "c_setup",
-          "pinId": "out"
+          "componentId": "fy301",
+          "pinId": "sp.rateDownTime"
         },
         "to": {
           "kind": "port",
-          "componentId": "setup_in",
+          "componentId": "sp_step__mux",
+          "pinId": "in4"
+        },
+        "points": []
+      },
+      {
+        "id": "w-64",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_step__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "sp_step",
           "pinId": "in1"
         },
         "points": []
       },
       {
-        "id": "w-25",
+        "id": "w-65",
         "from": {
           "kind": "port",
-          "componentId": "c_setup",
-          "pinId": "out"
+          "componentId": "sp_step",
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "setup_reset__mux",
+          "componentId": "sp_r__mux",
           "pinId": "in1"
         },
         "points": []
       },
       {
-        "id": "w-26",
+        "id": "w-66",
         "from": {
           "kind": "port",
-          "componentId": "setup_timer",
-          "pinId": "out"
+          "componentId": "powered",
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "setup_reset__mux",
+          "componentId": "sp_r__mux",
           "pinId": "in2"
         },
         "points": []
       },
       {
-        "id": "w-27",
+        "id": "w-67",
         "from": {
           "kind": "port",
-          "componentId": "setup_in",
+          "componentId": "sp_r__mux",
           "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "setup_timer",
-          "pinId": "in"
-        },
-        "points": []
-      },
-      {
-        "id": "w-28",
-        "from": {
-          "kind": "port",
-          "componentId": "setup_reset",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "setup_timer",
-          "pinId": "outflow"
-        },
-        "points": []
-      },
-      {
-        "id": "w-29",
-        "from": {
-          "kind": "port",
-          "componentId": "c_setup",
-          "pinId": "out"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "setup_active__mux",
+          "componentId": "sp_r",
           "pinId": "in1"
         },
         "points": []
       },
       {
-        "id": "w-30",
+        "id": "w-68",
         "from": {
           "kind": "port",
-          "componentId": "setup_timer",
-          "pinId": "out"
+          "componentId": "sp_r",
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "setup_active__mux",
+          "componentId": "sp_r_prev",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-69",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "setup.toggle"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_toggle_prev",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-70",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "setup.toggle"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_start__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-71",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_toggle_prev",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_start__mux",
           "pinId": "in2"
         },
         "points": []
       },
       {
-        "id": "w-31",
+        "id": "w-72",
         "from": {
           "kind": "port",
-          "componentId": "c_setup",
-          "pinId": "out"
+          "componentId": "setup_start__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_start",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-73",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_start",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_time__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-74",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_time_prev",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_time__mux",
+          "pinId": "in2"
+        },
+        "points": []
+      },
+      {
+        "id": "w-75",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_run_prev",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_time__mux",
+          "pinId": "in3"
+        },
+        "points": []
+      },
+      {
+        "id": "w-76",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_time__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_time",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-77",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_time",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_time_prev",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-78",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_start",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_run__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-79",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_time",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_run__mux",
+          "pinId": "in2"
+        },
+        "points": []
+      },
+      {
+        "id": "w-80",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_run_prev",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_run__mux",
+          "pinId": "in3"
+        },
+        "points": []
+      },
+      {
+        "id": "w-81",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_run__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_run",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-82",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_run",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_run_prev",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-83",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_run",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_done__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-84",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_time",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_done__mux",
+          "pinId": "in2"
+        },
+        "points": []
+      },
+      {
+        "id": "w-85",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_done_prev",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_done__mux",
+          "pinId": "in3"
+        },
+        "points": []
+      },
+      {
+        "id": "w-86",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_done__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_done",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-87",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_done",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_done_prev",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-88",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_time",
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1477,11 +2475,11 @@
         "points": []
       },
       {
-        "id": "w-32",
+        "id": "w-89",
         "from": {
           "kind": "port",
-          "componentId": "setup_timer",
-          "pinId": "out"
+          "componentId": "setup_run",
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1491,35 +2489,91 @@
         "points": []
       },
       {
-        "id": "w-33",
+        "id": "w-90",
         "from": {
           "kind": "port",
-          "componentId": "c_setup",
-          "pinId": "out"
+          "componentId": "setup_done",
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest_in__mux",
+          "componentId": "setup_progress__mux",
+          "pinId": "in3"
+        },
+        "points": []
+      },
+      {
+        "id": "w-91",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_progress__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_progress",
           "pinId": "in1"
         },
         "points": []
       },
       {
-        "id": "w-34",
+        "id": "w-92",
         "from": {
           "kind": "port",
-          "componentId": "setup_timer",
-          "pinId": "out"
+          "componentId": "t_supply",
+          "pinId": "value"
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest_in__mux",
+          "componentId": "zero",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-93",
+        "from": {
+          "kind": "port",
+          "componentId": "zero",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "first",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-94",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_run",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-95",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_time",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest__mux",
           "pinId": "in2"
         },
         "points": []
       },
       {
-        "id": "w-35",
+        "id": "w-96",
         "from": {
           "kind": "port",
           "componentId": "t_position",
@@ -1527,55 +2581,125 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest_in__mux",
+          "componentId": "hold_rest__mux",
           "pinId": "in3"
         },
         "points": []
       },
       {
-        "id": "w-36",
+        "id": "w-97",
         "from": {
           "kind": "port",
-          "componentId": "hold_rest",
-          "pinId": "out"
+          "componentId": "hold_rest_prev",
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest_in__mux",
+          "componentId": "hold_rest__mux",
           "pinId": "in4"
         },
         "points": []
       },
       {
-        "id": "w-37",
+        "id": "w-98",
         "from": {
           "kind": "port",
-          "componentId": "c_setup",
+          "componentId": "fy301",
+          "pinId": "manualSetup"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest__mux",
+          "pinId": "in5"
+        },
+        "points": []
+      },
+      {
+        "id": "w-99",
+        "from": {
+          "kind": "port",
+          "componentId": "first",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest__mux",
+          "pinId": "in6"
+        },
+        "points": []
+      },
+      {
+        "id": "w-100",
+        "from": {
+          "kind": "port",
+          "componentId": "c_factory_span",
           "pinId": "out"
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest_out__mux",
+          "componentId": "hold_rest__mux",
+          "pinId": "in7"
+        },
+        "points": []
+      },
+      {
+        "id": "w-101",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_rest__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest",
           "pinId": "in1"
         },
         "points": []
       },
       {
-        "id": "w-38",
+        "id": "w-102",
         "from": {
           "kind": "port",
-          "componentId": "setup_timer",
-          "pinId": "out"
+          "componentId": "hold_rest",
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest_out__mux",
+          "componentId": "hold_rest_prev",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-103",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_run",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_full__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-104",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_time",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_full__mux",
           "pinId": "in2"
         },
         "points": []
       },
       {
-        "id": "w-39",
+        "id": "w-105",
         "from": {
           "kind": "port",
           "componentId": "t_position",
@@ -1583,195 +2707,97 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest_out__mux",
+          "componentId": "hold_full__mux",
           "pinId": "in3"
         },
         "points": []
       },
       {
-        "id": "w-40",
+        "id": "w-106",
         "from": {
           "kind": "port",
-          "componentId": "hold_rest",
-          "pinId": "out"
+          "componentId": "hold_full_prev",
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest_out__mux",
+          "componentId": "hold_full__mux",
           "pinId": "in4"
         },
         "points": []
       },
       {
-        "id": "w-41",
+        "id": "w-107",
         "from": {
           "kind": "port",
-          "componentId": "hold_rest_in",
-          "pinId": "out1"
+          "componentId": "fy301",
+          "pinId": "manualSetup"
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest",
-          "pinId": "in"
+          "componentId": "hold_full__mux",
+          "pinId": "in5"
         },
         "points": []
       },
       {
-        "id": "w-42",
+        "id": "w-108",
         "from": {
           "kind": "port",
-          "componentId": "hold_rest_out",
+          "componentId": "first",
           "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_rest",
-          "pinId": "outflow"
+          "componentId": "hold_full__mux",
+          "pinId": "in6"
         },
         "points": []
       },
       {
-        "id": "w-43",
+        "id": "w-109",
         "from": {
           "kind": "port",
-          "componentId": "c_setup",
+          "componentId": "c_factory_span",
           "pinId": "out"
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_full_in__mux",
+          "componentId": "hold_full__mux",
+          "pinId": "in7"
+        },
+        "points": []
+      },
+      {
+        "id": "w-110",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_full__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_full",
           "pinId": "in1"
         },
         "points": []
       },
       {
-        "id": "w-44",
-        "from": {
-          "kind": "port",
-          "componentId": "setup_timer",
-          "pinId": "out"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "hold_full_in__mux",
-          "pinId": "in2"
-        },
-        "points": []
-      },
-      {
-        "id": "w-45",
-        "from": {
-          "kind": "port",
-          "componentId": "t_position",
-          "pinId": "value"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "hold_full_in__mux",
-          "pinId": "in3"
-        },
-        "points": []
-      },
-      {
-        "id": "w-46",
+        "id": "w-111",
         "from": {
           "kind": "port",
           "componentId": "hold_full",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "hold_full_in__mux",
-          "pinId": "in4"
-        },
-        "points": []
-      },
-      {
-        "id": "w-47",
-        "from": {
-          "kind": "port",
-          "componentId": "c_setup",
-          "pinId": "out"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "hold_full_out__mux",
+          "componentId": "hold_full_prev",
           "pinId": "in1"
         },
         "points": []
       },
       {
-        "id": "w-48",
-        "from": {
-          "kind": "port",
-          "componentId": "setup_timer",
-          "pinId": "out"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "hold_full_out__mux",
-          "pinId": "in2"
-        },
-        "points": []
-      },
-      {
-        "id": "w-49",
-        "from": {
-          "kind": "port",
-          "componentId": "t_position",
-          "pinId": "value"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "hold_full_out__mux",
-          "pinId": "in3"
-        },
-        "points": []
-      },
-      {
-        "id": "w-50",
-        "from": {
-          "kind": "port",
-          "componentId": "hold_full",
-          "pinId": "out"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "hold_full_out__mux",
-          "pinId": "in4"
-        },
-        "points": []
-      },
-      {
-        "id": "w-51",
-        "from": {
-          "kind": "port",
-          "componentId": "hold_full_in",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "hold_full",
-          "pinId": "in"
-        },
-        "points": []
-      },
-      {
-        "id": "w-52",
-        "from": {
-          "kind": "port",
-          "componentId": "hold_full_out",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "hold_full",
-          "pinId": "outflow"
-        },
-        "points": []
-      },
-      {
-        "id": "w-53",
+        "id": "w-112",
         "from": {
           "kind": "port",
           "componentId": "t_position",
@@ -1785,11 +2811,11 @@
         "points": []
       },
       {
-        "id": "w-54",
+        "id": "w-113",
         "from": {
           "kind": "port",
           "componentId": "hold_rest",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1799,11 +2825,11 @@
         "points": []
       },
       {
-        "id": "w-55",
+        "id": "w-114",
         "from": {
           "kind": "port",
           "componentId": "hold_full",
-          "pinId": "out"
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -1813,7 +2839,21 @@
         "points": []
       },
       {
-        "id": "w-56",
+        "id": "w-115",
+        "from": {
+          "kind": "port",
+          "componentId": "pos_raw__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pos_raw",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-116",
         "from": {
           "kind": "port",
           "componentId": "pos_raw",
@@ -1827,11 +2867,11 @@
         "points": []
       },
       {
-        "id": "w-57",
+        "id": "w-117",
         "from": {
           "kind": "port",
-          "componentId": "c_lopos",
-          "pinId": "out"
+          "componentId": "fy301",
+          "pinId": "trim.lower"
         },
         "to": {
           "kind": "port",
@@ -1841,11 +2881,11 @@
         "points": []
       },
       {
-        "id": "w-58",
+        "id": "w-118",
         "from": {
           "kind": "port",
-          "componentId": "c_uppos",
-          "pinId": "out"
+          "componentId": "fy301",
+          "pinId": "trim.upper"
         },
         "to": {
           "kind": "port",
@@ -1855,7 +2895,21 @@
         "points": []
       },
       {
-        "id": "w-59",
+        "id": "w-119",
+        "from": {
+          "kind": "port",
+          "componentId": "pos_trim__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pos_trim",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-120",
         "from": {
           "kind": "port",
           "componentId": "pos_trim",
@@ -1869,11 +2923,11 @@
         "points": []
       },
       {
-        "id": "w-60",
+        "id": "w-121",
         "from": {
           "kind": "port",
-          "componentId": "c_type",
-          "pinId": "out"
+          "componentId": "fy301",
+          "pinId": "valve.action"
         },
         "to": {
           "kind": "port",
@@ -1883,21 +2937,35 @@
         "points": []
       },
       {
-        "id": "w-61",
+        "id": "w-122",
         "from": {
           "kind": "port",
-          "componentId": "pos",
+          "componentId": "pos__mux",
           "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "fy301",
-          "pinId": "position"
+          "componentId": "pos",
+          "pinId": "in1"
         },
         "points": []
       },
       {
-        "id": "w-62",
+        "id": "w-123",
+        "from": {
+          "kind": "port",
+          "componentId": "t_position",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hall",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-124",
         "from": {
           "kind": "port",
           "componentId": "sp_r",
@@ -1911,7 +2979,7 @@
         "points": []
       },
       {
-        "id": "w-63",
+        "id": "w-125",
         "from": {
           "kind": "port",
           "componentId": "pos",
@@ -1925,11 +2993,11 @@
         "points": []
       },
       {
-        "id": "w-64",
+        "id": "w-126",
         "from": {
           "kind": "port",
-          "componentId": "c_air",
-          "pinId": "out"
+          "componentId": "fy301",
+          "pinId": "servo.deadband"
         },
         "to": {
           "kind": "port",
@@ -1939,10 +3007,66 @@
         "points": []
       },
       {
-        "id": "w-65",
+        "id": "w-127",
+        "from": {
+          "kind": "port",
+          "componentId": "err__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "err",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-128",
         "from": {
           "kind": "port",
           "componentId": "err",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "err_air__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-129",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "airTo"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "err_air__mux",
+          "pinId": "in2"
+        },
+        "points": []
+      },
+      {
+        "id": "w-130",
+        "from": {
+          "kind": "port",
+          "componentId": "err_air__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "err_air",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-131",
+        "from": {
+          "kind": "port",
+          "componentId": "err_air",
           "pinId": "out1"
         },
         "to": {
@@ -1953,10 +3077,10 @@
         "points": []
       },
       {
-        "id": "w-66",
+        "id": "w-132",
         "from": {
           "kind": "port",
-          "componentId": "servo_i",
+          "componentId": "servo_i_prev",
           "pinId": "out1"
         },
         "to": {
@@ -1967,11 +3091,11 @@
         "points": []
       },
       {
-        "id": "w-67",
+        "id": "w-133",
         "from": {
           "kind": "port",
-          "componentId": "c_kp",
-          "pinId": "out"
+          "componentId": "fy301",
+          "pinId": "servo.kp"
         },
         "to": {
           "kind": "port",
@@ -1981,21 +3105,35 @@
         "points": []
       },
       {
-        "id": "w-68",
+        "id": "w-134",
         "from": {
           "kind": "port",
-          "componentId": "err",
+          "componentId": "u__mux",
           "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "servo_i_in__mux",
+          "componentId": "u",
           "pinId": "in1"
         },
         "points": []
       },
       {
-        "id": "w-69",
+        "id": "w-135",
+        "from": {
+          "kind": "port",
+          "componentId": "err_air",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "servo_i__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-136",
         "from": {
           "kind": "port",
           "componentId": "u",
@@ -2003,58 +3141,72 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "servo_i_in__mux",
+          "componentId": "servo_i__mux",
           "pinId": "in2"
         },
         "points": []
       },
       {
-        "id": "w-70",
+        "id": "w-137",
         "from": {
           "kind": "port",
-          "componentId": "c_tr",
-          "pinId": "out"
+          "componentId": "fy301",
+          "pinId": "servo.tr"
         },
         "to": {
           "kind": "port",
-          "componentId": "servo_i_in__mux",
+          "componentId": "servo_i__mux",
           "pinId": "in3"
         },
         "points": []
       },
       {
-        "id": "w-71",
+        "id": "w-138",
         "from": {
           "kind": "port",
-          "componentId": "setup_active",
+          "componentId": "servo_i_prev",
           "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "servo_i_in__mux",
+          "componentId": "servo_i__mux",
           "pinId": "in4"
         },
         "points": []
       },
       {
-        "id": "w-72",
+        "id": "w-139",
         "from": {
           "kind": "port",
-          "componentId": "servo_i",
+          "componentId": "setup_run",
           "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "servo_i_in__mux",
+          "componentId": "servo_i__mux",
           "pinId": "in5"
         },
         "points": []
       },
       {
-        "id": "w-73",
+        "id": "w-140",
         "from": {
           "kind": "port",
-          "componentId": "servo_i_in",
+          "componentId": "powered",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "servo_i__mux",
+          "pinId": "in6"
+        },
+        "points": []
+      },
+      {
+        "id": "w-141",
+        "from": {
+          "kind": "port",
+          "componentId": "servo_i__mux",
           "pinId": "out1"
         },
         "to": {
@@ -2065,7 +3217,21 @@
         "points": []
       },
       {
-        "id": "w-74",
+        "id": "w-142",
+        "from": {
+          "kind": "port",
+          "componentId": "servo_i",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "servo_i_prev",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-143",
         "from": {
           "kind": "port",
           "componentId": "u",
@@ -2079,10 +3245,10 @@
         "points": []
       },
       {
-        "id": "w-75",
+        "id": "w-144",
         "from": {
           "kind": "port",
-          "componentId": "setup_active",
+          "componentId": "powered",
           "pinId": "out1"
         },
         "to": {
@@ -2093,11 +3259,11 @@
         "points": []
       },
       {
-        "id": "w-76",
+        "id": "w-145",
         "from": {
           "kind": "port",
-          "componentId": "setup_timer",
-          "pinId": "out"
+          "componentId": "setup_run",
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -2107,11 +3273,11 @@
         "points": []
       },
       {
-        "id": "w-77",
+        "id": "w-146",
         "from": {
           "kind": "port",
-          "componentId": "fy301",
-          "pinId": "inputCurrent"
+          "componentId": "setup_time",
+          "pinId": "out1"
         },
         "to": {
           "kind": "port",
@@ -2121,7 +3287,77 @@
         "points": []
       },
       {
-        "id": "w-78",
+        "id": "w-147",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "manualSetup"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out_pct__mux",
+          "pinId": "in5"
+        },
+        "points": []
+      },
+      {
+        "id": "w-148",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "pid.mode"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out_pct__mux",
+          "pinId": "in6"
+        },
+        "points": []
+      },
+      {
+        "id": "w-149",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_r",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out_pct__mux",
+          "pinId": "in7"
+        },
+        "points": []
+      },
+      {
+        "id": "w-150",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "airTo"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out_pct__mux",
+          "pinId": "in8"
+        },
+        "points": []
+      },
+      {
+        "id": "w-151",
+        "from": {
+          "kind": "port",
+          "componentId": "out_pct__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out_pct",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-152",
         "from": {
           "kind": "port",
           "componentId": "out_pct",
@@ -2135,7 +3371,7 @@
         "points": []
       },
       {
-        "id": "w-79",
+        "id": "w-153",
         "from": {
           "kind": "port",
           "componentId": "t_supply",
@@ -2149,7 +3385,21 @@
         "points": []
       },
       {
-        "id": "w-80",
+        "id": "w-154",
+        "from": {
+          "kind": "port",
+          "componentId": "out1_bar__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out1_bar",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-155",
         "from": {
           "kind": "port",
           "componentId": "out1_bar",
@@ -2163,7 +3413,665 @@
         "points": []
       },
       {
-        "id": "w-81",
+        "id": "w-156",
+        "from": {
+          "kind": "port",
+          "componentId": "out1_bar",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out2_bar__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-157",
+        "from": {
+          "kind": "port",
+          "componentId": "t_supply",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out2_bar__mux",
+          "pinId": "in2"
+        },
+        "points": []
+      },
+      {
+        "id": "w-158",
+        "from": {
+          "kind": "port",
+          "componentId": "out2_bar__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "out2_bar",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-159",
+        "from": {
+          "kind": "port",
+          "componentId": "t_supply",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "supply_bar",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-160",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_run",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_status__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-161",
+        "from": {
+          "kind": "port",
+          "componentId": "t_supply",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_status__mux",
+          "pinId": "in2"
+        },
+        "points": []
+      },
+      {
+        "id": "w-162",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_rest",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_status__mux",
+          "pinId": "in3"
+        },
+        "points": []
+      },
+      {
+        "id": "w-163",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_full",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_status__mux",
+          "pinId": "in4"
+        },
+        "points": []
+      },
+      {
+        "id": "w-164",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_done",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_status__mux",
+          "pinId": "in5"
+        },
+        "points": []
+      },
+      {
+        "id": "w-165",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_status__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_status",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-166",
+        "from": {
+          "kind": "port",
+          "componentId": "t_position",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "x_prev",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-167",
+        "from": {
+          "kind": "port",
+          "componentId": "t_position",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "mileage__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-168",
+        "from": {
+          "kind": "port",
+          "componentId": "x_prev",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "mileage__mux",
+          "pinId": "in2"
+        },
+        "points": []
+      },
+      {
+        "id": "w-169",
+        "from": {
+          "kind": "port",
+          "componentId": "mileage_prev",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "mileage__mux",
+          "pinId": "in3"
+        },
+        "points": []
+      },
+      {
+        "id": "w-170",
+        "from": {
+          "kind": "port",
+          "componentId": "mileage__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "mileage",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-171",
+        "from": {
+          "kind": "port",
+          "componentId": "mileage",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "mileage_prev",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-172",
+        "from": {
+          "kind": "port",
+          "componentId": "mileage",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "strokes__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-173",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_rest",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "strokes__mux",
+          "pinId": "in2"
+        },
+        "points": []
+      },
+      {
+        "id": "w-174",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_full",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "strokes__mux",
+          "pinId": "in3"
+        },
+        "points": []
+      },
+      {
+        "id": "w-175",
+        "from": {
+          "kind": "port",
+          "componentId": "strokes__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "strokes",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-176",
+        "from": {
+          "kind": "port",
+          "componentId": "t_position",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dir__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-177",
+        "from": {
+          "kind": "port",
+          "componentId": "x_prev",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dir__mux",
+          "pinId": "in2"
+        },
+        "points": []
+      },
+      {
+        "id": "w-178",
+        "from": {
+          "kind": "port",
+          "componentId": "dir_prev",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dir__mux",
+          "pinId": "in3"
+        },
+        "points": []
+      },
+      {
+        "id": "w-179",
+        "from": {
+          "kind": "port",
+          "componentId": "dir__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dir",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-180",
+        "from": {
+          "kind": "port",
+          "componentId": "dir",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "dir_prev",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-181",
+        "from": {
+          "kind": "port",
+          "componentId": "dir",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "reversals__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-182",
+        "from": {
+          "kind": "port",
+          "componentId": "dir_prev",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "reversals__mux",
+          "pinId": "in2"
+        },
+        "points": []
+      },
+      {
+        "id": "w-183",
+        "from": {
+          "kind": "port",
+          "componentId": "reversals_prev",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "reversals__mux",
+          "pinId": "in3"
+        },
+        "points": []
+      },
+      {
+        "id": "w-184",
+        "from": {
+          "kind": "port",
+          "componentId": "reversals__mux",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "reversals",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-185",
+        "from": {
+          "kind": "port",
+          "componentId": "reversals",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "reversals_prev",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-186",
+        "from": {
+          "kind": "port",
+          "componentId": "c_temperature",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "temp_f",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-187",
+        "from": {
+          "kind": "port",
+          "componentId": "c_temperature",
+          "pinId": "out"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "temp_c",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-188",
+        "from": {
+          "kind": "port",
+          "componentId": "pos",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "PV"
+        },
+        "points": []
+      },
+      {
+        "id": "w-189",
+        "from": {
+          "kind": "port",
+          "componentId": "sp_r",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "setpoint"
+        },
+        "points": []
+      },
+      {
+        "id": "w-190",
+        "from": {
+          "kind": "port",
+          "componentId": "out_pct",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "mv"
+        },
+        "points": []
+      },
+      {
+        "id": "w-191",
+        "from": {
+          "kind": "port",
+          "componentId": "err",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "error"
+        },
+        "points": []
+      },
+      {
+        "id": "w-192",
+        "from": {
+          "kind": "port",
+          "componentId": "servo_i",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "integral"
+        },
+        "points": []
+      },
+      {
+        "id": "w-193",
+        "from": {
+          "kind": "port",
+          "componentId": "hall",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "hall"
+        },
+        "points": []
+      },
+      {
+        "id": "w-194",
+        "from": {
+          "kind": "port",
+          "componentId": "temp_c",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "temperature"
+        },
+        "points": []
+      },
+      {
+        "id": "w-195",
+        "from": {
+          "kind": "port",
+          "componentId": "out_pct",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "piezo"
+        },
+        "points": []
+      },
+      {
+        "id": "w-196",
+        "from": {
+          "kind": "port",
+          "componentId": "temp_f",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "temperatureF"
+        },
+        "points": []
+      },
+      {
+        "id": "w-197",
+        "from": {
+          "kind": "port",
+          "componentId": "mileage",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "mileage"
+        },
+        "points": []
+      },
+      {
+        "id": "w-198",
+        "from": {
+          "kind": "port",
+          "componentId": "strokes",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "strokes"
+        },
+        "points": []
+      },
+      {
+        "id": "w-199",
+        "from": {
+          "kind": "port",
+          "componentId": "reversals",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "reversals"
+        },
+        "points": []
+      },
+      {
+        "id": "w-200",
+        "from": {
+          "kind": "port",
+          "componentId": "temp_c",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "temperatureLow"
+        },
+        "points": []
+      },
+      {
+        "id": "w-201",
+        "from": {
+          "kind": "port",
+          "componentId": "temp_c",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "temperatureHigh"
+        },
+        "points": []
+      },
+      {
+        "id": "w-202",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_progress",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "setupProgress"
+        },
+        "points": []
+      },
+      {
+        "id": "w-203",
         "from": {
           "kind": "port",
           "componentId": "out1_bar",
@@ -2172,303 +4080,51 @@
         "to": {
           "kind": "port",
           "componentId": "fy301",
-          "pinId": "outputPressure"
+          "pinId": "out1"
         },
         "points": []
       },
       {
-        "id": "in_pct__w1",
+        "id": "w-204",
         "from": {
           "kind": "port",
-          "componentId": "in_pct__mux",
+          "componentId": "out2_bar",
           "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "in_pct",
-          "pinId": "in1"
+          "componentId": "fy301",
+          "pinId": "out2"
         },
-        "vertices": []
+        "points": []
       },
       {
-        "id": "sp_src__w1",
+        "id": "w-205",
         "from": {
           "kind": "port",
-          "componentId": "sp_src__mux",
+          "componentId": "supply_bar",
           "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_src",
-          "pinId": "in1"
+          "componentId": "fy301",
+          "pinId": "supplyPressure"
         },
-        "vertices": []
+        "points": []
       },
       {
-        "id": "sp_char__w1",
+        "id": "w-206",
         "from": {
           "kind": "port",
-          "componentId": "sp_char__mux",
+          "componentId": "setup_status",
           "pinId": "out1"
         },
         "to": {
           "kind": "port",
-          "componentId": "sp_char",
-          "pinId": "in1"
+          "componentId": "fy301",
+          "pinId": "setup.status"
         },
-        "vertices": []
-      },
-      {
-        "id": "sp_lim__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "sp_lim__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "sp_lim",
-          "pinId": "in1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "sp_t__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "sp_t__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "sp_t",
-          "pinId": "in1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "sp_rate__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "sp_rate__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "sp_rate",
-          "pinId": "in1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "setup_reset__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "setup_reset__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "setup_reset",
-          "pinId": "in1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "setup_active__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "setup_active__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "setup_active",
-          "pinId": "in1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "setup_progress__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "setup_progress__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "setup_progress",
-          "pinId": "in1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "hold_rest_in__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "hold_rest_in__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "hold_rest_in",
-          "pinId": "in1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "hold_rest_out__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "hold_rest_out__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "hold_rest_out",
-          "pinId": "in1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "hold_full_in__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "hold_full_in__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "hold_full_in",
-          "pinId": "in1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "hold_full_out__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "hold_full_out__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "hold_full_out",
-          "pinId": "in1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "pos_raw__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "pos_raw__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "pos_raw",
-          "pinId": "in1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "pos_trim__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "pos_trim__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "pos_trim",
-          "pinId": "in1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "pos__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "pos__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "pos",
-          "pinId": "in1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "err__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "err__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "err",
-          "pinId": "in1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "u__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "u__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "u",
-          "pinId": "in1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "servo_i_in__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "servo_i_in__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "servo_i_in",
-          "pinId": "in1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "out_pct__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "out_pct__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "out_pct",
-          "pinId": "in1"
-        },
-        "vertices": []
-      },
-      {
-        "id": "out1_bar__w1",
-        "from": {
-          "kind": "port",
-          "componentId": "out1_bar__mux",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "out1_bar",
-          "pinId": "in1"
-        },
-        "vertices": []
+        "points": []
       }
     ]
   },
@@ -2592,21 +4248,7 @@
   ],
   "exportedPropertyComponentIds": [
     "fy301",
-    "c_type",
-    "c_air",
-    "c_char",
-    "c_mode",
-    "c_sp",
-    "c_time",
-    "c_kp",
-    "c_tr",
-    "c_lopos",
-    "c_uppos",
-    "c_tso",
-    "c_spl",
-    "c_sph",
-    "c_slo",
-    "c_shi",
-    "c_setup"
+    "c_factory_span",
+    "c_temperature"
   ]
 }

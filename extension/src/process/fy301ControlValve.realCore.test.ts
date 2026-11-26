@@ -12,10 +12,13 @@ import { createPlantTemplateLookup } from "../project/plantTemplates";
  * The controller's analog output (a current source) WRITES the 4-20 mA; the FY301 reads it (loop
  * powered, ~550 ohm), drives OUT1 and reads the stem travel through the magnet.
  *
+ * The positioner is configured ONLY through HART, with the commands of the Smar FY301 DD (device
+ * revision 2) exactly as the Smar FY301 DTM 3.02 sends them (docs/fy301-dtm-engenharia-reversa.md).
+ *
  * Outside `npm test` (needs the compiled Core):
  *   npm run compile && node out/process/fy301ControlValve.realCore.test.js
  */
-const { test, finish } = createTestRunner("FY301 + válvula de controle (Core real)");
+const { test, finish } = createTestRunner("FY301 + válvula de controle (Core real, configuração por HART)");
 
 const extensionRoot = path.resolve(__dirname, "..", "..");
 const repoRoot = path.resolve(extensionRoot, "..");
@@ -26,6 +29,12 @@ function request(command: number, data: number[] = []): string {
   const frame = Buffer.concat([Buffer.from(longAddress, "hex"), Buffer.from([command, data.length, ...data])]);
   const checksum = frame.reduce((xor, octet) => xor ^ octet, 0);
   return Buffer.concat([Buffer.alloc(5, 0xff), frame, Buffer.from([checksum])]).toString("hex");
+}
+
+function float(value: number): number[] {
+  const bytes = Buffer.alloc(4);
+  bytes.writeFloatBE(value, 0);
+  return [...bytes];
 }
 
 (async () => {
@@ -66,95 +75,199 @@ function request(command: number, data: number[] = []): string {
     const read = async (owner: string, localId: string): Promise<number> =>
       (await client.getComponentState(await childOf(owner, localId))).readDoubleLE(0);
     const opening = () => read(valve.instanceId, "opening");
-    const fyPosition = () => read(fy.instanceId, "pos");
-    const setFy = (id: string, value: number) => client.setSubcircuitChildProperty(fy.instanceId, id, "value", value);
     const milliamps = async (value: number) => client.setProperty(command.instanceId, "value", value / 1000);
+    const seconds = (s: number) => client.step(Math.round(s * 1e9));
+    /** Response data bytes (after response code and device status) and the response code. */
     const transact = async (cmd: number, data: number[] = []) => {
       const frame = Buffer.from((await client.hartTransact(inner, request(cmd, data))).frameHex, "hex");
-      return frame.subarray(frame.findIndex((octet) => octet === 0x86));
+      const start = frame.findIndex((octet) => octet === 0x86);
+      const count = frame[start + 7]!;
+      return { rc: frame[start + 8]!, data: frame.subarray(start + 10, start + 8 + count) };
     };
+    const cmd33 = async (codes: number[]) => {
+      const { data } = await transact(33, codes);
+      return codes.map((code, index) => ({ code: data[index * 6]!, units: data[index * 6 + 1]!, value: data.readFloatBE(index * 6 + 2) }));
+    };
+    const position = async () => (await cmd33([1]))[0]!.value;
 
-    await test("12 mA antes do Auto Setup: o FY301 lê 12 mA e posiciona pela escala de fábrica do sensor (abertura real ≠ 50 %)", async () => {
-      await client.step(20_000_000_000);
-      const position = await fyPosition();
+    await test("Cmd 0: Smar FY301, HART 5, revisão do dispositivo 2 (DD 0202)", async () => {
+      const { data } = await transact(0);
+      assert(data[1] === 0x3e && data[2] === 0x03 && data[4] === 5 && data[5] === 2, `Cmd 0 ${data.toString("hex")}`);
+    });
+
+    await test("12 mA antes do Auto Setup: posiciona pela escala de fábrica do sensor (abertura real ≠ 50 %)", async () => {
+      await seconds(20);
+      const fyPosition = await position();
       const real = await opening();
-      assert(Math.abs(position - 50) < 1.5, `FY301 posição ${position}`);
+      assert(Math.abs(fyPosition - 50) < 1.5, `FY301 posição ${fyPosition}`);
       assert(Math.abs(real - 75) < 3, `abertura real ${real} (escala de fábrica de 30 mm num curso de 20 mm)`);
     });
 
-    await test("Auto Setup: grava a posição sem ar e com ar total; depois 12 mA → 50 % de abertura", async () => {
-      await setFy("c_setup", 1);
-      await client.step(60_000_000_000);
-      const rest = await read(fy.instanceId, "hold_rest");
-      const full = await read(fy.instanceId, "hold_full");
-      assert(Math.abs(rest - 0) < 0.3 && Math.abs(full - 20) < 0.3, `sem ar ${rest} mm, ar total ${full} mm`);
-      await client.step(20_000_000_000);
+    await test("Auto Setup pelo Cmd 152: Cmd 48 byte 1 = 15 (em andamento), Cmd 33 código 17 = progresso; depois 12 mA → 50 %", async () => {
+      const start = await transact(152);
+      assert(start.rc === 0, `Cmd 152 RC ${start.rc}`);
+      await seconds(10);
+      const status = await transact(48);
+      const progress = (await cmd33([17]))[0]!.value;
+      assert(status.data[1] === 15 && progress > 15 && progress < 25, `Cmd 48 ${status.data.toString("hex")}, progresso ${progress}`);
+      await seconds(45);
+      const done = await transact(48);
+      const finalProgress = (await cmd33([17]))[0]!.value;
+      assert(done.data[1] === 0 && finalProgress === 100, `fim: Cmd 48 ${done.data.toString("hex")}, progresso ${finalProgress}`);
+      await seconds(20);
       const real = await opening();
-      assert(Math.abs(real - 50) < 1.5 && Math.abs((await fyPosition()) - 50) < 1.5, `abertura ${real}, FY ${await fyPosition()}`);
+      assert(Math.abs(real - 50) < 1.5 && Math.abs((await position()) - 50) < 1.5, `abertura ${real}, FY ${await position()}`);
     });
 
-    await test("HART: Cmd 2 informa a corrente lida (12,000 mA, 50 %); Cmd 33 lê a posição (variável 1) e a corrente (variável 2)", async () => {
+    await test("Cmd 2 = corrente medida e % do split range; Cmd 15 = split range em mA; Cmd 33 do DTM (0, 2, 1, 6)", async () => {
       const cmd2 = await transact(2);
-      const current = cmd2.readFloatBE(10);
-      const percent = cmd2.readFloatBE(14);
+      const current = cmd2.data.readFloatBE(0);
+      const percent = cmd2.data.readFloatBE(4);
       assert(Math.abs(current - 12) < 0.01 && Math.abs(percent - 50) < 0.1, `Cmd 2: ${current} mA, ${percent} %`);
-      const cmd33 = await transact(33, [1, 2]);
-      const position = cmd33.readFloatBE(12);
-      const input = cmd33.readFloatBE(18);
-      assert(cmd33[10] === 1 && cmd33[11] === 0x39 && Math.abs(position - (await fyPosition())) < 0.5, `Cmd 33 posição ${position}`);
-      assert(cmd33[16] === 2 && cmd33[17] === 0x27 && Math.abs(input - 12) < 0.01, `Cmd 33 corrente ${input} mA`);
+      const cmd15 = await transact(15);
+      assert(cmd15.data[1] === 0 && cmd15.data[2] === 39 && cmd15.data.readFloatBE(3) === 20 && cmd15.data.readFloatBE(7) === 4,
+        `Cmd 15 ${cmd15.data.toString("hex")}`);
+      const [input, inputPercent, pv, sp] = await cmd33([0, 2, 1, 6]);
+      assert(input!.units === 39 && Math.abs(input!.value - 12) < 0.01, `entrada ${input!.value} mA`);
+      assert(inputPercent!.units === 57 && Math.abs(inputPercent!.value - 50) < 0.1, `entrada ${inputPercent!.value} %`);
+      assert(pv!.units === 57 && Math.abs(pv!.value - 50) < 0.5 && Math.abs(sp!.value - 50) < 0.1, `PV ${pv!.value}, SP ${sp!.value}`);
     });
 
     await test("4 mA fecha e 20 mA abre totalmente (ar para abrir, ação direta)", async () => {
       await milliamps(4);
-      await client.step(15_000_000_000);
+      await seconds(15);
       const closed = await opening();
       await milliamps(20);
-      await client.step(15_000_000_000);
+      await seconds(15);
       const open = await opening();
       assert(closed < 1 && open > 99, `4 mA ${closed} %, 20 mA ${open} %`);
+      await milliamps(12);
     });
 
-    await test("CHAR igual porcentagem 1:50: 12 mA → 12,4 % de abertura", async () => {
-      await milliamps(12);
-      await setFy("c_char", 3);
-      await client.step(20_000_000_000);
+    await test("Cmd 47 = 1 (igual porcentagem 1:50): 12 mA → 12,4 % de abertura; Cmd 15 informa o código; código 8 é recusado (RC 2)", async () => {
+      const set = await transact(47, [1]);
+      assert(set.rc === 0 && set.data[0] === 1, `Cmd 47 RC ${set.rc}`);
+      await seconds(20);
       const real = await opening();
       assert(Math.abs(real - 12.39) < 1.2, `abertura ${real}`);
-      await setFy("c_char", 0);
+      assert((await transact(15)).data[1] === 1, "Cmd 15 código da curva");
+      assert((await transact(47, [8])).rc === 2, "código 8 recusado");
+      await transact(47, [0]);
     });
 
-    await test("modo manual: SP 30 % → 30 % de abertura, independente da corrente", async () => {
-      await setFy("c_sp", 30);
-      await setFy("c_mode", 1);
-      await client.step(20_000_000_000);
+    await test("SP local (Cmd 224 00 01 + Cmd 226 SP 30 %): 30 % de abertura, independente da corrente; Cmd 225 lê o SP", async () => {
+      await transact(224, [0, 1]);
+      await transact(226, [0x39, ...float(30), 0]);
+      await seconds(20);
       assert(Math.abs((await opening()) - 30) < 1.5, `abertura ${await opening()}`);
-      await setFy("c_mode", 0);
+      const sp = (await transact(225)).data.readFloatBE(1);
+      assert(Math.abs(sp - 30) < 0.1, `Cmd 225 ${sp}`);
+      await transact(224, [1, 1]);
+      await seconds(15);
     });
 
-    await test("split range 4-12 mA: 8 mA → 50 %", async () => {
-      await setFy("c_shi", 12);
+    await test("split range pelo Cmd 35 (4-12 mA, unidade mA): 8 mA → 50 %; Cmd 2 = 8 mA e 50 %", async () => {
+      const set = await transact(35, [39, ...float(12), ...float(4)]);
+      assert(set.rc === 0, `Cmd 35 RC ${set.rc}`);
       await milliamps(8);
-      await client.step(20_000_000_000);
+      await seconds(20);
       assert(Math.abs((await opening()) - 50) < 1.5, `abertura ${await opening()}`);
-      await setFy("c_shi", 20);
+      const cmd2 = await transact(2);
+      assert(Math.abs(cmd2.data.readFloatBE(0) - 8) < 0.01 && Math.abs(cmd2.data.readFloatBE(4) - 50) < 0.1, "Cmd 2 no split range");
+      await transact(35, [39, ...float(20), ...float(4)]);
+      await milliamps(12);
+      await seconds(15);
+    });
+
+    await test("TIME de abertura 10 s (Cmd 222): 4 → 20 mA leva ~10 s", async () => {
+      await milliamps(4);
+      await seconds(15);
+      await transact(222, [...float(10), ...float(0), ...float(0), ...float(100), ...float(0), ...float(0)]);
+      await milliamps(20);
+      await seconds(5);
+      const half = await opening();
+      await seconds(10);
+      const full = await opening();
+      assert(half > 35 && half < 60 && full > 99, `5 s: ${half} %, 15 s: ${full} %`);
+      await transact(222, [...float(0), ...float(0), ...float(0), ...float(100), ...float(0), ...float(0)]);
+      await milliamps(12);
+      await seconds(15);
+    });
+
+    await test("TSO 5 % (Cmd 222): abaixo de 5 % de sinal a válvula fecha estanque", async () => {
+      await transact(222, [...float(0), ...float(0), ...float(5), ...float(100), ...float(0), ...float(0)]);
+      await milliamps(4.6); // 3,75 %
+      await seconds(15);
+      assert((await opening()) < 0.5, `abertura ${await opening()}`);
+      await transact(222, [...float(0), ...float(0), ...float(0), ...float(100), ...float(0), ...float(0)]);
+      await milliamps(12);
+      await seconds(15);
+    });
+
+    await test("tabela (Cmd 135 + 134): 2 pontos (0;0) e (100;50), curva 3 → 20 mA = 50 %; Cmd 133 lê o grupo 0", async () => {
+      await transact(135, [2]);
+      await transact(134, [0, ...float(0)]);
+      await transact(134, [1, ...float(100)]);
+      await transact(134, [16, ...float(0)]);
+      await transact(134, [17, ...float(50)]);
+      await transact(47, [3]);
+      await milliamps(20);
+      await seconds(20);
+      assert(Math.abs((await opening()) - 50) < 1.5, `abertura ${await opening()}`);
+      const group = await transact(133, [0]);
+      assert(group.data[0] === 0 && group.data[1] === 2 && group.data.readFloatBE(2) === 0 && group.data.readFloatBE(6) === 100,
+        `Cmd 133 ${group.data.toString("hex")}`);
+      await transact(47, [0]);
+      await milliamps(12);
+      await seconds(15);
+    });
+
+    await test("ação reversa (Cmd 157 = 1) com AIR_CLOSED (Cmd 129 = 1, manual seção 4: ação reversa + ar para abrir): 4 mA abre, 20 mA fecha", async () => {
+      await transact(157, [1]);
+      await transact(129, [1]);
+      await milliamps(4);
+      await seconds(15);
+      const at4 = await opening();
+      await milliamps(20);
+      await seconds(15);
+      const at20 = await opening();
+      assert(at4 > 99 && at20 < 1, `4 mA ${at4} %, 20 mA ${at20} %`);
+      await transact(157, [0]);
+      await transact(129, [0]);
+      await milliamps(12);
+      await seconds(15);
+    });
+
+    await test("AIR_T trocado (Cmd 129 = Close num atuador ar-para-abrir): realimentação positiva, a válvula vai a um extremo", async () => {
+      await transact(129, [1]);
+      await seconds(20);
+      const real = await opening();
+      assert(real < 2 || real > 98, `abertura ${real}`);
+      await transact(129, [0]);
+      await seconds(15);
+    });
+
+    await test("KP pelo Cmd 218 incrementa o contador de operações (Cmd 166, 19 bytes); Cmd 217 lê KP e TR", async () => {
+      const before = (await transact(166)).data;
+      await transact(218, float(35));
+      const after = (await transact(166)).data;
+      assert(before.length === 19 && after[4] === before[4]! + 1, `contadores ${before.toString("hex")} → ${after.toString("hex")}`);
+      const params = (await transact(217)).data;
+      assert(params.readFloatBE(0) === 35 && params.readFloatBE(4) === 2, `Cmd 217 ${params.toString("hex")}`);
+      await transact(218, float(40));
+    });
+
+    await test("Cmd 242 (leitura de fábrica do DTM) devolve a chave 03 10", async () => {
+      const { rc, data } = await transact(242, [3, 0x10]);
+      assert(rc === 0 && data[0] === 3 && data[1] === 0x10, `Cmd 242 ${data.toString("hex")}`);
     });
 
     await test("sem sinal (2 mA, abaixo de 3,8 mA): o FY301 desliga, OUT1 esvazia e a mola leva a válvula à posição de falha (fechada)", async () => {
       await milliamps(2);
-      await client.step(10_000_000_000);
+      await seconds(10);
       assert((await opening()) < 1 && (await read(fy.instanceId, "out1_bar")) < 0.01, `abertura ${await opening()}`);
       await milliamps(12);
-      await client.step(10_000_000_000);
-    });
-
-    await test("AIR_T trocado (AIR_CLOSED num atuador ar-para-abrir): realimentação positiva, a válvula vai a um extremo", async () => {
-      await milliamps(12);
-      await setFy("c_air", 1);
-      await client.step(20_000_000_000);
-      const real = await opening();
-      assert(real < 2 || real > 98, `abertura ${real}`);
-      await setFy("c_air", 0);
+      await seconds(10);
     });
   } finally {
     await client.stop().catch(() => undefined);

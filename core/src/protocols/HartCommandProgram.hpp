@@ -65,6 +65,10 @@ enum class HartVarId : uint8_t {
     AlarmSelectionCode,        // 1 byte enum (Common Table 6) -- default 251 (None)
     WriteProtectCode,          // 1 byte enum (Common Table 7) -- default 251 (None, not implemented)
     ImplementedUniversalRevision, // 1 byte -- HartDeviceProfile::implementedUniversalRevision (layout selector)
+    /** 1 byte -- the units of the Upper/Lower Range Values (Command 15 byte 2, Command 35). HCF_SPEC-151
+     * 7.3: range units do not change PV units, so a device whose range is the input "split range" in mA
+     * (Smar FY301) reports mA here while its PV (valve position) stays in %. */
+    RangeUnitCode,
 };
 
 enum class HartDeviceVariableField : uint8_t {
@@ -280,6 +284,10 @@ struct HartExecutionVariables {
     bool burnoutPercentFollowsOutput = false;
     float loopCurrentZeroTrim = 0.0f;
     float loopCurrentGainTrim = 1.0f;
+    /** Analog INPUT device (HartDevicePlan::analogInput): the measured loop current, in mA. Loop current
+     * and percent of range then come from it (hartAnalogOutput), not from the PV. */
+    bool analogInput = false;
+    float measuredInputMilliamps = std::numeric_limits<float>::quiet_NaN();
     uint8_t diagnosticStatus = 0;
     struct UserVariable {
         std::string id;
