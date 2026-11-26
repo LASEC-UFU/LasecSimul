@@ -67,7 +67,7 @@
         "displayVariable2": "",
         "displayCodeMap": "1=dv:1/1,2=dv:6/1",
         "displayGlass": 0,
-        "hartVariablesJson": "[{\"id\":\"PV\",\"name\":\"PV: posicao da valvula\",\"role\":\"PV\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"%\",\"value\":0.0,\"deviceVariableCode\":1,\"deviceVariableUnit\":57,\"classification\":0,\"family\":250,\"lowerRangeValue\":4.0,\"upperRangeValue\":20.0,\"rangeUnitCode\":39,\"allowedUnitCodes\":[39],\"upperTransducerLimit\":20.0,\"lowerTransducerLimit\":4.0,\"minimumSpan\":4.0,\"transducerSerialNumber\":76543},{\"id\":\"inputCurrent\",\"name\":\"Corrente de entrada (mA)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":0,\"deviceVariableUnit\":39},{\"id\":\"inputPercent\",\"name\":\"Entrada (% do split range)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":2,\"deviceVariableUnit\":57,\"derivedSource\":243},{\"id\":\"mv\",\"name\":\"MV: sinal do piezo (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":3,\"deviceVariableUnit\":57},{\"id\":\"error\",\"name\":\"Desvio SP - PV (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":4,\"deviceVariableUnit\":57},{\"id\":\"setpoint\",\"name\":\"SP: setpoint de posicao (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":6,\"deviceVariableUnit\":57},{\"id\":\"integral\",\"name\":\"Parcela integral do servo (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":7,\"deviceVariableUnit\":57},{\"id\":\"hall\",\"name\":\"Sensor Hall (contagens)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":8,\"deviceVariableUnit\":250},{\"id\":\"temperature\",\"name\":\"Temperatura (C)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":30.0,\"deviceVariableCode\":9,\"deviceVariableUnit\":32},{\"id\":\"piezo\",\"name\":\"Tensao do piezo (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":10,\"deviceVariableUnit\":57},{\"id\":\"temperatureF\",\"name\":\"Temperatura (F)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":86.0,\"deviceVariableCode\":11,\"deviceVariableUnit\":33},{\"id\":\"mileage\",\"name\":\"Odometro (mm)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":12,\"deviceVariableUnit\":49},{\"id\":\"strokes\",\"name\":\"Cursos completos\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":13,\"deviceVariableUnit\":250},{\"id\":\"reversals\",\"name\":\"Reversoes\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":14,\"deviceVariableUnit\":250},{\"id\":\"temperatureLow\",\"name\":\"Menor temperatura (C)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":30.0,\"deviceVariableCode\":15,\"deviceVariableUnit\":32},{\"id\":\"temperatureHigh\",\"name\":\"Maior temperatura (C)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":30.0,\"deviceVariableCode\":16,\"deviceVariableUnit\":32},{\"id\":\"setupProgress\",\"name\":\"Progresso do Auto Setup (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":17,\"deviceVariableUnit\":57},{\"id\":\"openingTime\",\"name\":\"Tempo de abertura (s)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":20,\"deviceVariableUnit\":51},{\"id\":\"closingTime\",\"name\":\"Tempo de fechamento (s)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":21,\"deviceVariableUnit\":51},{\"id\":\"out1\",\"name\":\"Pressao OUT1 (bar)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":23,\"deviceVariableUnit\":7},{\"id\":\"out2\",\"name\":\"Pressao OUT2 (bar)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":24,\"deviceVariableUnit\":7},{\"id\":\"supplyPressure\",\"name\":\"Pressao de suprimento (bar)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":25,\"deviceVariableUnit\":7},{\"id\":\"flowChar\",\"name\":\"Caracterizacao (Cmd 47)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0,\"derivedSource\":247},{\"id\":\"setup.status\",\"name\":\"Estado do setup\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0,\"codes\":{\"0\":\"None\",\"1\":\"Low Air Supply\",\"2\":\"No Magnet\",\"3\":\"No Hall\",\"15\":\"Setup in Process\",\"16\":\"Piezo Out of Range\",\"17\":\"Magnet not Centralized\"}},{\"id\":\"display.connection\",\"name\":\"LCD instalado (Cmd 128)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1,\"codes\":{\"1\":\"Yes\",\"250\":\"No\"}},{\"id\":\"airTo\",\"name\":\"Ar para (Cmd 128/129)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0,\"codes\":{\"0\":\"Open\",\"1\":\"Close\"}},{\"id\":\"localKeys\",\"name\":\"Ajuste local (Cmd 132)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1,\"codes\":{\"0\":\"Disable\",\"1\":\"Enable\"}},{\"id\":\"protection\",\"name\":\"Protecao (Cmd 170)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"table.points\",\"name\":\"Pontos da tabela (Cmd 133/135)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":2},{\"id\":\"setup.toggle\",\"name\":\"Auto Setup: comando (Cmd 152 alterna)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0},{\"id\":\"backup.operation\",\"name\":\"Backup/Restore (Cmd 153)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"valve.action\",\"name\":\"Acao (Cmd 156/157)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0,\"codes\":{\"0\":\"Direct\",\"1\":\"Reverse\"}},{\"id\":\"trim.control\",\"name\":\"Trim: byte de controle (Cmd 168)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"trim.lower\",\"name\":\"Trim da posicao inferior (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"trim.upper\",\"name\":\"Trim da posicao superior (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":100.0},{\"id\":\"orderCode\",\"name\":\"Codigo de pedido (Cmd 173/174)\",\"role\":\"VendorSpecific\",\"type\":\"Ascii\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0,\"text\":\"FY301-1-1-0-0-0-0-0-0-0\",\"width\":25},{\"id\":\"actuatorId\",\"name\":\"Identificacao do atuador (Cmd 183/184)\",\"role\":\"VendorSpecific\",\"type\":\"Ascii\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0,\"text\":\"ATUADOR\",\"width\":16},{\"id\":\"valveId\",\"name\":\"Identificacao da valvula (Cmd 185/186)\",\"role\":\"VendorSpecific\",\"type\":\"Ascii\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0,\"text\":\"VALVULA\",\"width\":16},{\"id\":\"valve.motion\",\"name\":\"Tipo (Cmd 187/188)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0,\"codes\":{\"0\":\"Linear\",\"1\":\"Rotary\"}},{\"id\":\"travel.deadbandUnit\",\"name\":\"Unidade da banda morta do odometro\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":57},{\"id\":\"travel.deadband\",\"name\":\"Banda morta do odometro\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1.0},{\"id\":\"travel.limitUnit\",\"name\":\"Unidade do limite do odometro\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":57},{\"id\":\"travel.limit\",\"name\":\"Limite do odometro\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1000.0},{\"id\":\"travel.lengthUnit\",\"name\":\"Unidade do curso\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":49},{\"id\":\"travel.length\",\"name\":\"Curso\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":20.0},{\"id\":\"deviation.deadband\",\"name\":\"Desvio: banda morta (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":5.0},{\"id\":\"deviation.time\",\"name\":\"Desvio: tempo (s)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":10.0},{\"id\":\"reversal.deadband\",\"name\":\"Reversoes: banda morta (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1.0},{\"id\":\"reversal.limit\",\"name\":\"Reversoes: limite\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1000.0},{\"id\":\"failSafe\",\"name\":\"Posicao de seguranca (Cmd 203)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1,\"codes\":{\"0\":\"Open\",\"1\":\"Close\",\"2\":\"Pwr_up_in\"}},{\"id\":\"pid.mode\",\"name\":\"Servo: modo (Cmd 214/215)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0,\"codes\":{\"0\":\"Not_Bypass\",\"1\":\"Bypass\"}},{\"id\":\"servo.kp\",\"name\":\"KP do servo\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":40.0},{\"id\":\"servo.tr\",\"name\":\"TR do servo (min/rep)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":2.0},{\"id\":\"servo.deadband\",\"name\":\"Banda morta do servo (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"sp.rateUpTime\",\"name\":\"TIME de abertura (s, 0 = sem limite)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"sp.rateDownTime\",\"name\":\"TIME de fechamento (s, 0 = sem limite)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"tso.cutoff\",\"name\":\"TSO: corte baixo (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"sp.highLimit\",\"name\":\"Limite superior do setpoint (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":100.0},{\"id\":\"sp.lowLimit\",\"name\":\"Limite inferior do setpoint (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"tso.deadband\",\"name\":\"TSO: banda morta (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"sp.mode\",\"name\":\"Setpoint: 0 Local (SP%), 1 Remoto (4-20 mA)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":1,\"codes\":{\"0\":\"Local\",\"1\":\"Remote\"}},{\"id\":\"sp.local\",\"name\":\"SP% local\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"powerUp\",\"name\":\"Posicao de partida (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"diag.enable\",\"name\":\"Diagnostico habilitado\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1,\"codes\":{\"0\":\"Disable\",\"1\":\"Enable\"}},{\"id\":\"diag.reset\",\"name\":\"Reset do diagnostico (Cmd 232)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"ref.motion\",\"name\":\"Referencia: tipo\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"ref.action\",\"name\":\"Referencia: acao\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"ref.airTo\",\"name\":\"Referencia: ar para\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1},{\"id\":\"ref.openTime\",\"name\":\"Referencia: tempo de abertura\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"ref.closeTime\",\"name\":\"Referencia: tempo de fechamento\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"ref.kp\",\"name\":\"Referencia: KP\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":40.0},{\"id\":\"ref.tr\",\"name\":\"Referencia: TR\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":2.0},{\"id\":\"ref.char\",\"name\":\"Referencia: caracterizacao\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"ref.openingTime\",\"name\":\"Referencia: tempo medido de abertura\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"ref.closingTime\",\"name\":\"Referencia: tempo medido de fechamento\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"display.indication\",\"name\":\"LCD (Cmd 247/248)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1,\"codes\":{\"1\":\"PV(%)\",\"2\":\"SP(%)\"}},{\"id\":\"manualSetup\",\"name\":\"Setup manual: passo (Cmd 249/250)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0},{\"id\":\"table.c0\",\"name\":\"Tabela X1 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"table.c1\",\"name\":\"Tabela X2 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":6.6667},{\"id\":\"table.c2\",\"name\":\"Tabela X3 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":13.3333},{\"id\":\"table.c3\",\"name\":\"Tabela X4 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":20.0},{\"id\":\"table.c4\",\"name\":\"Tabela X5 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":26.6667},{\"id\":\"table.c5\",\"name\":\"Tabela X6 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":33.3333},{\"id\":\"table.c6\",\"name\":\"Tabela X7 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":40.0},{\"id\":\"table.c7\",\"name\":\"Tabela X8 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":46.6667},{\"id\":\"table.c8\",\"name\":\"Tabela X9 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":53.3333},{\"id\":\"table.c9\",\"name\":\"Tabela X10 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":60.0},{\"id\":\"table.c10\",\"name\":\"Tabela X11 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":66.6667},{\"id\":\"table.c11\",\"name\":\"Tabela X12 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":73.3333},{\"id\":\"table.c12\",\"name\":\"Tabela X13 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":80.0},{\"id\":\"table.c13\",\"name\":\"Tabela X14 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":86.6667},{\"id\":\"table.c14\",\"name\":\"Tabela X15 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":93.3333},{\"id\":\"table.c15\",\"name\":\"Tabela X16 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":100.0},{\"id\":\"table.c16\",\"name\":\"Tabela Y1 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"table.c17\",\"name\":\"Tabela Y2 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":6.6667},{\"id\":\"table.c18\",\"name\":\"Tabela Y3 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":13.3333},{\"id\":\"table.c19\",\"name\":\"Tabela Y4 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":20.0},{\"id\":\"table.c20\",\"name\":\"Tabela Y5 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":26.6667},{\"id\":\"table.c21\",\"name\":\"Tabela Y6 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":33.3333},{\"id\":\"table.c22\",\"name\":\"Tabela Y7 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":40.0},{\"id\":\"table.c23\",\"name\":\"Tabela Y8 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":46.6667},{\"id\":\"table.c24\",\"name\":\"Tabela Y9 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":53.3333},{\"id\":\"table.c25\",\"name\":\"Tabela Y10 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":60.0},{\"id\":\"table.c26\",\"name\":\"Tabela Y11 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":66.6667},{\"id\":\"table.c27\",\"name\":\"Tabela Y12 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":73.3333},{\"id\":\"table.c28\",\"name\":\"Tabela Y13 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":80.0},{\"id\":\"table.c29\",\"name\":\"Tabela Y14 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":86.6667},{\"id\":\"table.c30\",\"name\":\"Tabela Y15 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":93.3333},{\"id\":\"table.c31\",\"name\":\"Tabela Y16 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":100.0},{\"id\":\"counter.maOpenClose\",\"name\":\"Contador: maOpenClose\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.flowChar\",\"name\":\"Contador: flowChar\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.directReverse\",\"name\":\"Contador: directReverse\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.servoLimits\",\"name\":\"Contador: servoLimits\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.kp\",\"name\":\"Contador: kp\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.tr\",\"name\":\"Contador: tr\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.airTo\",\"name\":\"Contador: airTo\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.localRemote\",\"name\":\"Contador: localRemote\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.spValue\",\"name\":\"Contador: spValue\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.failSafe\",\"name\":\"Contador: failSafe\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.autoSetup\",\"name\":\"Contador: autoSetup\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.travelClose\",\"name\":\"Contador: travelClose\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.travelOpen\",\"name\":\"Contador: travelOpen\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.motionType\",\"name\":\"Contador: motionType\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.trim4mA\",\"name\":\"Contador: trim4mA\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.trim20mA\",\"name\":\"Contador: trim20mA\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.password\",\"name\":\"Contador: password\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.confLevel\",\"name\":\"Contador: confLevel\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.performance\",\"name\":\"Contador: performance\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0}]",
+        "hartVariablesJson": "[{\"id\":\"PV\",\"name\":\"PV: posicao da valvula\",\"role\":\"PV\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"%\",\"value\":0.0,\"deviceVariableCode\":1,\"deviceVariableUnit\":57,\"classification\":0,\"family\":250,\"lowerRangeValue\":4.0,\"upperRangeValue\":20.0,\"rangeUnitCode\":39,\"allowedUnitCodes\":[39],\"upperTransducerLimit\":20.0,\"lowerTransducerLimit\":4.0,\"minimumSpan\":4.0,\"transducerSerialNumber\":76543},{\"id\":\"inputCurrent\",\"name\":\"Corrente de entrada (mA)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":0,\"deviceVariableUnit\":39},{\"id\":\"inputPercent\",\"name\":\"Entrada (% do split range)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":2,\"deviceVariableUnit\":57,\"derivedSource\":243},{\"id\":\"mv\",\"name\":\"MV: sinal do piezo (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":3,\"deviceVariableUnit\":57},{\"id\":\"error\",\"name\":\"Desvio SP - PV (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":4,\"deviceVariableUnit\":57},{\"id\":\"setpoint\",\"name\":\"SP: setpoint de posicao (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":6,\"deviceVariableUnit\":57},{\"id\":\"integral\",\"name\":\"Parcela integral do servo (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":7,\"deviceVariableUnit\":57},{\"id\":\"hall\",\"name\":\"Sensor Hall (contagens)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":8,\"deviceVariableUnit\":250},{\"id\":\"temperature\",\"name\":\"Temperatura (C)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":30.0,\"deviceVariableCode\":9,\"deviceVariableUnit\":32},{\"id\":\"piezo\",\"name\":\"Tensao do piezo (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":10,\"deviceVariableUnit\":57},{\"id\":\"temperatureF\",\"name\":\"Temperatura (F)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":86.0,\"deviceVariableCode\":11,\"deviceVariableUnit\":33},{\"id\":\"mileage\",\"name\":\"Odometro (mm)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":12,\"deviceVariableUnit\":49},{\"id\":\"strokes\",\"name\":\"Cursos completos\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":13,\"deviceVariableUnit\":250},{\"id\":\"reversals\",\"name\":\"Reversoes\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":14,\"deviceVariableUnit\":250},{\"id\":\"temperatureLow\",\"name\":\"Menor temperatura (C)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":30.0,\"deviceVariableCode\":15,\"deviceVariableUnit\":32},{\"id\":\"temperatureHigh\",\"name\":\"Maior temperatura (C)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":30.0,\"deviceVariableCode\":16,\"deviceVariableUnit\":32},{\"id\":\"setupProgress\",\"name\":\"Progresso do Auto Setup (%)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":17,\"deviceVariableUnit\":57},{\"id\":\"openingTime\",\"name\":\"Tempo de abertura (s)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":20,\"deviceVariableUnit\":51},{\"id\":\"closingTime\",\"name\":\"Tempo de fechamento (s)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":21,\"deviceVariableUnit\":51},{\"id\":\"out1\",\"name\":\"Pressao OUT1 (bar)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":23,\"deviceVariableUnit\":7},{\"id\":\"out2\",\"name\":\"Pressao OUT2 (bar)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":24,\"deviceVariableUnit\":7},{\"id\":\"supplyPressure\",\"name\":\"Pressao de suprimento (bar)\",\"role\":\"DeviceSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0.0,\"deviceVariableCode\":25,\"deviceVariableUnit\":7},{\"id\":\"flowChar\",\"name\":\"Caracterizacao (Cmd 47)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0,\"derivedSource\":247},{\"id\":\"setup.status\",\"name\":\"Estado do setup\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Input\",\"unit\":\"\",\"value\":0,\"codes\":{\"0\":\"None\",\"1\":\"Low Air Supply\",\"2\":\"No Magnet\",\"3\":\"No Hall\",\"15\":\"Setup in Process\",\"16\":\"Piezo Out of Range\",\"17\":\"Magnet not Centralized\"}},{\"id\":\"display.connection\",\"name\":\"LCD instalado (Cmd 128)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1,\"codes\":{\"1\":\"Yes\",\"250\":\"No\"}},{\"id\":\"airTo\",\"name\":\"Ar para (Cmd 128/129)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0,\"codes\":{\"0\":\"Open\",\"1\":\"Close\"}},{\"id\":\"localKeys\",\"name\":\"Ajuste local (Cmd 132)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1,\"codes\":{\"0\":\"Disable\",\"1\":\"Enable\"}},{\"id\":\"protection\",\"name\":\"Protecao (Cmd 170)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"table.points\",\"name\":\"Pontos da tabela (Cmd 133/135)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":2},{\"id\":\"setup.toggle\",\"name\":\"Auto Setup: comando (Cmd 152 alterna)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0},{\"id\":\"backup.operation\",\"name\":\"Backup/Restore (Cmd 153)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"valve.action\",\"name\":\"Acao (Cmd 156/157)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0,\"codes\":{\"0\":\"Direct\",\"1\":\"Reverse\"}},{\"id\":\"trim.control\",\"name\":\"Trim: byte de controle (Cmd 168)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"trim.lower\",\"name\":\"Trim da posicao inferior (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"trim.upper\",\"name\":\"Trim da posicao superior (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":100.0},{\"id\":\"orderCode\",\"name\":\"Codigo de pedido (Cmd 173/174)\",\"role\":\"VendorSpecific\",\"type\":\"Ascii\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0,\"text\":\"FY301-1-1-0-0-0-0-0-0-0\",\"width\":25},{\"id\":\"actuatorId\",\"name\":\"Identificacao do atuador (Cmd 183/184)\",\"role\":\"VendorSpecific\",\"type\":\"Ascii\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0,\"text\":\"ATUADOR\",\"width\":16},{\"id\":\"valveId\",\"name\":\"Identificacao da valvula (Cmd 185/186)\",\"role\":\"VendorSpecific\",\"type\":\"Ascii\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0,\"text\":\"VALVULA\",\"width\":16},{\"id\":\"valve.motion\",\"name\":\"Tipo (Cmd 187/188)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0,\"codes\":{\"0\":\"Linear\",\"1\":\"Rotary\"}},{\"id\":\"travel.deadbandUnit\",\"name\":\"Unidade da banda morta do odometro\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":57},{\"id\":\"travel.deadband\",\"name\":\"Banda morta do odometro\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1.0},{\"id\":\"travel.limitUnit\",\"name\":\"Unidade do limite do odometro\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":57},{\"id\":\"travel.limit\",\"name\":\"Limite do odometro\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1000.0},{\"id\":\"travel.lengthUnit\",\"name\":\"Unidade do curso\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":49},{\"id\":\"travel.length\",\"name\":\"Curso\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":20.0},{\"id\":\"deviation.deadband\",\"name\":\"Desvio: banda morta (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":5.0},{\"id\":\"deviation.time\",\"name\":\"Desvio: tempo (s)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":10.0},{\"id\":\"reversal.deadband\",\"name\":\"Reversoes: banda morta (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1.0},{\"id\":\"reversal.limit\",\"name\":\"Reversoes: limite\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1000.0},{\"id\":\"failSafe\",\"name\":\"Posicao de seguranca (Cmd 203)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1,\"codes\":{\"0\":\"Open\",\"1\":\"Close\",\"2\":\"Pwr_up_in\"}},{\"id\":\"pid.mode\",\"name\":\"Servo: modo (Cmd 214/215)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0,\"codes\":{\"0\":\"Not_Bypass\",\"1\":\"Bypass\"}},{\"id\":\"servo.kp\",\"name\":\"KP do servo\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":40.0},{\"id\":\"servo.tr\",\"name\":\"TR do servo (min/rep)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":2.0},{\"id\":\"servo.deadband\",\"name\":\"Banda morta do servo (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"sp.rateUpTime\",\"name\":\"TIME de abertura (s, 0 = sem limite)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"sp.rateDownTime\",\"name\":\"TIME de fechamento (s, 0 = sem limite)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"tso.cutoff\",\"name\":\"TSO: corte baixo (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"sp.highLimit\",\"name\":\"Limite superior do setpoint (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":100.0},{\"id\":\"sp.lowLimit\",\"name\":\"Limite inferior do setpoint (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"tso.deadband\",\"name\":\"TSO: banda morta (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"sp.mode\",\"name\":\"Setpoint: 0 Local (SP%), 1 Remoto (4-20 mA)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":1,\"codes\":{\"0\":\"Local\",\"1\":\"Remote\"}},{\"id\":\"sp.local\",\"name\":\"SP% local\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"powerUp\",\"name\":\"Posicao de partida (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"diag.enable\",\"name\":\"Diagnostico habilitado\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1,\"codes\":{\"0\":\"Disable\",\"1\":\"Enable\"}},{\"id\":\"diag.reset\",\"name\":\"Reset do diagnostico (Cmd 232)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"ref.motion\",\"name\":\"Referencia: tipo\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"ref.action\",\"name\":\"Referencia: acao\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"ref.airTo\",\"name\":\"Referencia: ar para\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1},{\"id\":\"ref.openTime\",\"name\":\"Referencia: tempo de abertura\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"ref.closeTime\",\"name\":\"Referencia: tempo de fechamento\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"ref.kp\",\"name\":\"Referencia: KP\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":40.0},{\"id\":\"ref.tr\",\"name\":\"Referencia: TR\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":2.0},{\"id\":\"ref.char\",\"name\":\"Referencia: caracterizacao\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"ref.openingTime\",\"name\":\"Referencia: tempo medido de abertura\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"ref.closingTime\",\"name\":\"Referencia: tempo medido de fechamento\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0.0},{\"id\":\"display.indication\",\"name\":\"LCD (Cmd 247/248)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":1,\"codes\":{\"1\":\"PV(%)\",\"2\":\"SP(%)\"}},{\"id\":\"manualSetup\",\"name\":\"Setup manual: passo (Cmd 249/250)\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0},{\"id\":\"setup.restMeasured\",\"name\":\"Auto Setup: posicao gravada sem ar (mm)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":-1.0},{\"id\":\"setup.fullMeasured\",\"name\":\"Auto Setup: posicao gravada com ar total (mm)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Input\",\"unit\":\"\",\"value\":-1.0},{\"id\":\"setup.rest\",\"name\":\"Calibracao (EEPROM): posicao sem ar (mm)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":-1.0,\"retainFrom\":\"setup.restMeasured\"},{\"id\":\"setup.full\",\"name\":\"Calibracao (EEPROM): posicao com ar total (mm)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":-1.0,\"retainFrom\":\"setup.fullMeasured\"},{\"id\":\"table.c0\",\"name\":\"Tabela X1 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"table.c1\",\"name\":\"Tabela X2 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":6.6667},{\"id\":\"table.c2\",\"name\":\"Tabela X3 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":13.3333},{\"id\":\"table.c3\",\"name\":\"Tabela X4 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":20.0},{\"id\":\"table.c4\",\"name\":\"Tabela X5 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":26.6667},{\"id\":\"table.c5\",\"name\":\"Tabela X6 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":33.3333},{\"id\":\"table.c6\",\"name\":\"Tabela X7 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":40.0},{\"id\":\"table.c7\",\"name\":\"Tabela X8 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":46.6667},{\"id\":\"table.c8\",\"name\":\"Tabela X9 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":53.3333},{\"id\":\"table.c9\",\"name\":\"Tabela X10 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":60.0},{\"id\":\"table.c10\",\"name\":\"Tabela X11 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":66.6667},{\"id\":\"table.c11\",\"name\":\"Tabela X12 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":73.3333},{\"id\":\"table.c12\",\"name\":\"Tabela X13 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":80.0},{\"id\":\"table.c13\",\"name\":\"Tabela X14 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":86.6667},{\"id\":\"table.c14\",\"name\":\"Tabela X15 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":93.3333},{\"id\":\"table.c15\",\"name\":\"Tabela X16 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":100.0},{\"id\":\"table.c16\",\"name\":\"Tabela Y1 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":0.0},{\"id\":\"table.c17\",\"name\":\"Tabela Y2 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":6.6667},{\"id\":\"table.c18\",\"name\":\"Tabela Y3 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":13.3333},{\"id\":\"table.c19\",\"name\":\"Tabela Y4 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":20.0},{\"id\":\"table.c20\",\"name\":\"Tabela Y5 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":26.6667},{\"id\":\"table.c21\",\"name\":\"Tabela Y6 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":33.3333},{\"id\":\"table.c22\",\"name\":\"Tabela Y7 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":40.0},{\"id\":\"table.c23\",\"name\":\"Tabela Y8 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":46.6667},{\"id\":\"table.c24\",\"name\":\"Tabela Y9 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":53.3333},{\"id\":\"table.c25\",\"name\":\"Tabela Y10 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":60.0},{\"id\":\"table.c26\",\"name\":\"Tabela Y11 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":66.6667},{\"id\":\"table.c27\",\"name\":\"Tabela Y12 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":73.3333},{\"id\":\"table.c28\",\"name\":\"Tabela Y13 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":80.0},{\"id\":\"table.c29\",\"name\":\"Tabela Y14 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":86.6667},{\"id\":\"table.c30\",\"name\":\"Tabela Y15 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":93.3333},{\"id\":\"table.c31\",\"name\":\"Tabela Y16 (%)\",\"role\":\"VendorSpecific\",\"type\":\"Float32\",\"direction\":\"Output\",\"unit\":\"\",\"value\":100.0},{\"id\":\"counter.maOpenClose\",\"name\":\"Contador: maOpenClose\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.flowChar\",\"name\":\"Contador: flowChar\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.directReverse\",\"name\":\"Contador: directReverse\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.servoLimits\",\"name\":\"Contador: servoLimits\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.kp\",\"name\":\"Contador: kp\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.tr\",\"name\":\"Contador: tr\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.airTo\",\"name\":\"Contador: airTo\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.localRemote\",\"name\":\"Contador: localRemote\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.spValue\",\"name\":\"Contador: spValue\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.failSafe\",\"name\":\"Contador: failSafe\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.autoSetup\",\"name\":\"Contador: autoSetup\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.travelClose\",\"name\":\"Contador: travelClose\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.travelOpen\",\"name\":\"Contador: travelOpen\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.motionType\",\"name\":\"Contador: motionType\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.trim4mA\",\"name\":\"Contador: trim4mA\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.trim20mA\",\"name\":\"Contador: trim20mA\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.password\",\"name\":\"Contador: password\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.confLevel\",\"name\":\"Contador: confLevel\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0},{\"id\":\"counter.performance\",\"name\":\"Contador: performance\",\"role\":\"VendorSpecific\",\"type\":\"UInt8\",\"direction\":\"Internal\",\"unit\":\"\",\"value\":0}]",
         "hartCommandsJson": "[{\"enabled\":true,\"id\":128,\"name\":\"Read Static Data, Materials and Air To\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"display.connection\"},{\"kind\":\"variable\",\"variable\":\"airTo\"}]},{\"enabled\":true,\"id\":129,\"name\":\"Write Air To\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"airTo\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"airTo\"}]},{\"enabled\":true,\"id\":130,\"name\":\"Write Lower Transducer Trim Point\",\"responseSteps\":[]},{\"enabled\":true,\"id\":131,\"name\":\"Write Upper Transducer Trim Point\",\"responseSteps\":[]},{\"enabled\":true,\"id\":132,\"name\":\"Read Local Key Mode Control\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"localKeys\"}]},{\"enabled\":true,\"id\":133,\"name\":\"Read Table Function\",\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"table.points\"},{\"kind\":\"variableTable\",\"variables\":[\"table.c0\",\"table.c1\",\"table.c2\",\"table.c3\",\"table.c4\",\"table.c5\",\"table.c6\",\"table.c7\",\"table.c8\",\"table.c9\",\"table.c10\",\"table.c11\",\"table.c12\",\"table.c13\",\"table.c14\",\"table.c15\",\"table.c16\",\"table.c17\",\"table.c18\",\"table.c19\",\"table.c20\",\"table.c21\",\"table.c22\",\"table.c23\",\"table.c24\",\"table.c25\",\"table.c26\",\"table.c27\",\"table.c28\",\"table.c29\",\"table.c30\",\"table.c31\"],\"indexByte\":0,\"addend\":0},{\"kind\":\"variableTable\",\"variables\":[\"table.c0\",\"table.c1\",\"table.c2\",\"table.c3\",\"table.c4\",\"table.c5\",\"table.c6\",\"table.c7\",\"table.c8\",\"table.c9\",\"table.c10\",\"table.c11\",\"table.c12\",\"table.c13\",\"table.c14\",\"table.c15\",\"table.c16\",\"table.c17\",\"table.c18\",\"table.c19\",\"table.c20\",\"table.c21\",\"table.c22\",\"table.c23\",\"table.c24\",\"table.c25\",\"table.c26\",\"table.c27\",\"table.c28\",\"table.c29\",\"table.c30\",\"table.c31\"],\"indexByte\":0,\"addend\":1},{\"kind\":\"variableTable\",\"variables\":[\"table.c0\",\"table.c1\",\"table.c2\",\"table.c3\",\"table.c4\",\"table.c5\",\"table.c6\",\"table.c7\",\"table.c8\",\"table.c9\",\"table.c10\",\"table.c11\",\"table.c12\",\"table.c13\",\"table.c14\",\"table.c15\",\"table.c16\",\"table.c17\",\"table.c18\",\"table.c19\",\"table.c20\",\"table.c21\",\"table.c22\",\"table.c23\",\"table.c24\",\"table.c25\",\"table.c26\",\"table.c27\",\"table.c28\",\"table.c29\",\"table.c30\",\"table.c31\"],\"indexByte\":0,\"addend\":2},{\"kind\":\"variableTable\",\"variables\":[\"table.c0\",\"table.c1\",\"table.c2\",\"table.c3\",\"table.c4\",\"table.c5\",\"table.c6\",\"table.c7\",\"table.c8\",\"table.c9\",\"table.c10\",\"table.c11\",\"table.c12\",\"table.c13\",\"table.c14\",\"table.c15\",\"table.c16\",\"table.c17\",\"table.c18\",\"table.c19\",\"table.c20\",\"table.c21\",\"table.c22\",\"table.c23\",\"table.c24\",\"table.c25\",\"table.c26\",\"table.c27\",\"table.c28\",\"table.c29\",\"table.c30\",\"table.c31\"],\"indexByte\":0,\"addend\":3}]},{\"enabled\":true,\"id\":134,\"name\":\"Write Table Function\",\"writeSteps\":[{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"00\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c0\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"01\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c1\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"02\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c2\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"03\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c3\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"04\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c4\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"05\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c5\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"06\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c6\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"07\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c7\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"08\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c8\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"09\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c9\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"0A\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c10\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"0B\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c11\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"0C\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c12\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"0D\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c13\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"0E\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c14\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"0F\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c15\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"10\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c16\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"11\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c17\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"12\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c18\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"13\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c19\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"14\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c20\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"15\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c21\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"16\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c22\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"17\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c23\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"18\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c24\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"19\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c25\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"1A\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c26\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"1B\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c27\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"1C\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c28\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"1D\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c29\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"1E\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c30\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"1F\"},\"then\":[{\"kind\":\"set\",\"target\":\"table.c31\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[]}],\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variableTable\",\"variables\":[\"table.c0\",\"table.c1\",\"table.c2\",\"table.c3\",\"table.c4\",\"table.c5\",\"table.c6\",\"table.c7\",\"table.c8\",\"table.c9\",\"table.c10\",\"table.c11\",\"table.c12\",\"table.c13\",\"table.c14\",\"table.c15\",\"table.c16\",\"table.c17\",\"table.c18\",\"table.c19\",\"table.c20\",\"table.c21\",\"table.c22\",\"table.c23\",\"table.c24\",\"table.c25\",\"table.c26\",\"table.c27\",\"table.c28\",\"table.c29\",\"table.c30\",\"table.c31\"],\"indexByte\":0,\"addend\":0}]},{\"enabled\":true,\"id\":135,\"name\":\"Write Number of Table Points\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"table.points\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"table.points\"}]},{\"enabled\":true,\"id\":152,\"name\":\"Setup (Auto Setup)\",\"writeSteps\":[{\"kind\":\"if\",\"lhs\":{\"kind\":\"variable\",\"variable\":\"setup.toggle\"},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"00\"},\"then\":[{\"kind\":\"set\",\"target\":\"setup.toggle\",\"value\":{\"kind\":\"hex\",\"bytes\":\"01\"}}],\"else\":[{\"kind\":\"set\",\"target\":\"setup.toggle\",\"value\":{\"kind\":\"hex\",\"bytes\":\"00\"}}]}],\"responseSteps\":[]},{\"enabled\":true,\"id\":153,\"name\":\"Backup / Restore\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"backup.operation\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"backup.operation\"},{\"kind\":\"bodySlice\",\"offset\":1,\"length\":1}]},{\"enabled\":true,\"id\":156,\"name\":\"Read Valve Action\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"valve.action\"}]},{\"enabled\":true,\"id\":157,\"name\":\"Write Valve Action\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"valve.action\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"valve.action\"}]},{\"enabled\":true,\"id\":166,\"name\":\"Read Counter of Change\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"counter.maOpenClose\"},{\"kind\":\"variable\",\"variable\":\"counter.flowChar\"},{\"kind\":\"variable\",\"variable\":\"counter.directReverse\"},{\"kind\":\"variable\",\"variable\":\"counter.servoLimits\"},{\"kind\":\"variable\",\"variable\":\"counter.kp\"},{\"kind\":\"variable\",\"variable\":\"counter.tr\"},{\"kind\":\"variable\",\"variable\":\"counter.airTo\"},{\"kind\":\"variable\",\"variable\":\"counter.localRemote\"},{\"kind\":\"variable\",\"variable\":\"counter.spValue\"},{\"kind\":\"variable\",\"variable\":\"counter.failSafe\"},{\"kind\":\"variable\",\"variable\":\"counter.autoSetup\"},{\"kind\":\"variable\",\"variable\":\"counter.travelClose\"},{\"kind\":\"variable\",\"variable\":\"counter.travelOpen\"},{\"kind\":\"variable\",\"variable\":\"counter.motionType\"},{\"kind\":\"variable\",\"variable\":\"counter.trim4mA\"},{\"kind\":\"variable\",\"variable\":\"counter.trim20mA\"},{\"kind\":\"variable\",\"variable\":\"counter.password\"},{\"kind\":\"variable\",\"variable\":\"counter.confLevel\"},{\"kind\":\"variable\",\"variable\":\"counter.performance\"}]},{\"enabled\":true,\"id\":168,\"name\":\"Lower / Upper Position Trim\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"trim.control\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}},{\"kind\":\"if\",\"lhs\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},\"rhs\":{\"kind\":\"hex\",\"bytes\":\"00\"},\"then\":[{\"kind\":\"set\",\"target\":\"trim.lower\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"else\":[{\"kind\":\"set\",\"target\":\"trim.upper\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}]}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"trim.control\"},{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}]},{\"enabled\":true,\"id\":170,\"name\":\"Read Local Keys Mode Control\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"protection\"}]},{\"enabled\":true,\"id\":173,\"name\":\"Read Smar Order Code\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"orderCode\"}]},{\"enabled\":true,\"id\":174,\"name\":\"Write Smar Order Code\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"orderCode\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":25}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"orderCode\"}]},{\"enabled\":true,\"id\":183,\"name\":\"Read Actuator Id\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"actuatorId\"}]},{\"enabled\":true,\"id\":184,\"name\":\"Write Actuator Id\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"actuatorId\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":16}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"actuatorId\"}]},{\"enabled\":true,\"id\":185,\"name\":\"Read Valve Id\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"valveId\"}]},{\"enabled\":true,\"id\":186,\"name\":\"Write Valve Id\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"valveId\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":16}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"valveId\"}]},{\"enabled\":true,\"id\":187,\"name\":\"Read Valve Motion Type\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"valve.motion\"}]},{\"enabled\":true,\"id\":188,\"name\":\"Write Valve Motion Type\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"valve.motion\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"valve.motion\"}]},{\"enabled\":true,\"id\":189,\"name\":\"Read Mileage Limit and Span\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"travel.deadbandUnit\"},{\"kind\":\"variable\",\"variable\":\"travel.deadband\"},{\"kind\":\"variable\",\"variable\":\"travel.limitUnit\"},{\"kind\":\"variable\",\"variable\":\"travel.limit\"},{\"kind\":\"variable\",\"variable\":\"travel.lengthUnit\"},{\"kind\":\"variable\",\"variable\":\"travel.length\"}]},{\"enabled\":true,\"id\":190,\"name\":\"Write Mileage Limit and Span\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"travel.deadband\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":4}},{\"kind\":\"set\",\"target\":\"travel.limit\",\"value\":{\"kind\":\"bodySlice\",\"offset\":4,\"length\":4}},{\"kind\":\"set\",\"target\":\"travel.length\",\"value\":{\"kind\":\"bodySlice\",\"offset\":8,\"length\":4}},{\"kind\":\"set\",\"target\":\"travel.lengthUnit\",\"value\":{\"kind\":\"bodySlice\",\"offset\":12,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"travel.deadband\"},{\"kind\":\"variable\",\"variable\":\"travel.limit\"},{\"kind\":\"variable\",\"variable\":\"travel.length\"},{\"kind\":\"variable\",\"variable\":\"travel.lengthUnit\"}]},{\"enabled\":true,\"id\":193,\"name\":\"Read Deviation and Reversal\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"deviation.deadband\"},{\"kind\":\"variable\",\"variable\":\"deviation.time\"},{\"kind\":\"variable\",\"variable\":\"reversal.deadband\"},{\"kind\":\"variable\",\"variable\":\"reversal.limit\"}]},{\"enabled\":true,\"id\":194,\"name\":\"Write Deviation and Reversal\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"deviation.deadband\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":4}},{\"kind\":\"set\",\"target\":\"deviation.time\",\"value\":{\"kind\":\"bodySlice\",\"offset\":4,\"length\":4}},{\"kind\":\"set\",\"target\":\"reversal.deadband\",\"value\":{\"kind\":\"bodySlice\",\"offset\":8,\"length\":4}},{\"kind\":\"set\",\"target\":\"reversal.limit\",\"value\":{\"kind\":\"bodySlice\",\"offset\":12,\"length\":4}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"deviation.deadband\"},{\"kind\":\"variable\",\"variable\":\"deviation.time\"},{\"kind\":\"variable\",\"variable\":\"reversal.deadband\"},{\"kind\":\"variable\",\"variable\":\"reversal.limit\"}]},{\"enabled\":true,\"id\":203,\"name\":\"Write Fail Safe Mode\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"failSafe\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"failSafe\"}]},{\"enabled\":true,\"id\":214,\"name\":\"Read Servo PID Mode\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"pid.mode\"}]},{\"enabled\":true,\"id\":215,\"name\":\"Write Servo PID Mode\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"pid.mode\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"pid.mode\"}]},{\"enabled\":true,\"id\":216,\"name\":\"Read Servo PID Variables\",\"responseSteps\":[{\"kind\":\"hex\",\"bytes\":\"39\"},{\"kind\":\"variable\",\"variable\":\"PV\"},{\"kind\":\"hex\",\"bytes\":\"39\"},{\"kind\":\"variable\",\"variable\":\"setpoint\"},{\"kind\":\"hex\",\"bytes\":\"39\"},{\"kind\":\"variable\",\"variable\":\"mv\"},{\"kind\":\"hex\",\"bytes\":\"00\"},{\"kind\":\"variable\",\"variable\":\"pid.mode\"},{\"kind\":\"hex\",\"bytes\":\"39\"},{\"kind\":\"variable\",\"variable\":\"error\"}]},{\"enabled\":true,\"id\":217,\"name\":\"Read Servo PID Parameters\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"servo.kp\"},{\"kind\":\"variable\",\"variable\":\"servo.tr\"},{\"kind\":\"hex\",\"bytes\":\"000000\"},{\"kind\":\"variable\",\"variable\":\"servo.deadband\"}]},{\"enabled\":true,\"id\":218,\"name\":\"Write Servo KP\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"servo.kp\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":4}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"servo.kp\"}]},{\"enabled\":true,\"id\":219,\"name\":\"Write Servo TR\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"servo.tr\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":4}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"servo.tr\"}]},{\"enabled\":true,\"id\":220,\"name\":\"Write Servo Dead Band\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"servo.deadband\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":4}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"servo.deadband\"}]},{\"enabled\":true,\"id\":221,\"name\":\"Read Servo SP Limits\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"sp.rateUpTime\"},{\"kind\":\"variable\",\"variable\":\"sp.rateDownTime\"},{\"kind\":\"variable\",\"variable\":\"tso.cutoff\"},{\"kind\":\"variable\",\"variable\":\"sp.highLimit\"},{\"kind\":\"variable\",\"variable\":\"sp.lowLimit\"},{\"kind\":\"variable\",\"variable\":\"tso.deadband\"}]},{\"enabled\":true,\"id\":222,\"name\":\"Write Servo SP Limits\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"sp.rateUpTime\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":4}},{\"kind\":\"set\",\"target\":\"sp.rateDownTime\",\"value\":{\"kind\":\"bodySlice\",\"offset\":4,\"length\":4}},{\"kind\":\"set\",\"target\":\"tso.cutoff\",\"value\":{\"kind\":\"bodySlice\",\"offset\":8,\"length\":4}},{\"kind\":\"set\",\"target\":\"sp.highLimit\",\"value\":{\"kind\":\"bodySlice\",\"offset\":12,\"length\":4}},{\"kind\":\"set\",\"target\":\"sp.lowLimit\",\"value\":{\"kind\":\"bodySlice\",\"offset\":16,\"length\":4}},{\"kind\":\"set\",\"target\":\"tso.deadband\",\"value\":{\"kind\":\"bodySlice\",\"offset\":20,\"length\":4}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"sp.rateUpTime\"},{\"kind\":\"variable\",\"variable\":\"sp.rateDownTime\"},{\"kind\":\"variable\",\"variable\":\"tso.cutoff\"},{\"kind\":\"variable\",\"variable\":\"sp.highLimit\"},{\"kind\":\"variable\",\"variable\":\"sp.lowLimit\"},{\"kind\":\"variable\",\"variable\":\"tso.deadband\"}]},{\"enabled\":true,\"id\":223,\"name\":\"Read SP Mode\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"sp.mode\"}]},{\"enabled\":true,\"id\":224,\"name\":\"Write SP Mode\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"sp.mode\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"sp.mode\"},{\"kind\":\"bodySlice\",\"offset\":1,\"length\":1}]},{\"enabled\":true,\"id\":225,\"name\":\"Read SP Percentage\",\"responseSteps\":[{\"kind\":\"hex\",\"bytes\":\"39\"},{\"kind\":\"variable\",\"variable\":\"setpoint\"}]},{\"enabled\":true,\"id\":226,\"name\":\"Write SP Percentage\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"sp.local\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"sp.local\"},{\"kind\":\"bodySlice\",\"offset\":5,\"length\":1}]},{\"enabled\":true,\"id\":227,\"name\":\"Read Power Up Position\",\"responseSteps\":[{\"kind\":\"hex\",\"bytes\":\"39\"},{\"kind\":\"variable\",\"variable\":\"powerUp\"}]},{\"enabled\":true,\"id\":228,\"name\":\"Write Power Up Position\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"powerUp\",\"value\":{\"kind\":\"bodySlice\",\"offset\":1,\"length\":4}}],\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1},{\"kind\":\"variable\",\"variable\":\"powerUp\"}]},{\"enabled\":true,\"id\":230,\"name\":\"Read Diagnostic Enable\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"diag.enable\"}]},{\"enabled\":true,\"id\":231,\"name\":\"Write Diagnostic Enable\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"diag.enable\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"diag.enable\"}]},{\"enabled\":true,\"id\":232,\"name\":\"Reset Settings\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"diag.reset\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"diag.reset\"}]},{\"enabled\":true,\"id\":233,\"name\":\"Read Diagnosis Reference\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"ref.motion\"},{\"kind\":\"variable\",\"variable\":\"ref.action\"},{\"kind\":\"variable\",\"variable\":\"ref.airTo\"},{\"kind\":\"variable\",\"variable\":\"ref.openTime\"},{\"kind\":\"variable\",\"variable\":\"ref.closeTime\"},{\"kind\":\"variable\",\"variable\":\"ref.kp\"},{\"kind\":\"variable\",\"variable\":\"ref.tr\"},{\"kind\":\"variable\",\"variable\":\"ref.char\"}]},{\"enabled\":true,\"id\":234,\"name\":\"Write Diagnosis Reference\",\"responseSteps\":[],\"writeSteps\":[{\"kind\":\"set\",\"target\":\"ref.motion\",\"value\":{\"kind\":\"variable\",\"variable\":\"valve.motion\"}},{\"kind\":\"set\",\"target\":\"ref.action\",\"value\":{\"kind\":\"variable\",\"variable\":\"valve.action\"}},{\"kind\":\"set\",\"target\":\"ref.airTo\",\"value\":{\"kind\":\"variable\",\"variable\":\"airTo\"}},{\"kind\":\"set\",\"target\":\"ref.openTime\",\"value\":{\"kind\":\"variable\",\"variable\":\"sp.rateUpTime\"}},{\"kind\":\"set\",\"target\":\"ref.closeTime\",\"value\":{\"kind\":\"variable\",\"variable\":\"sp.rateDownTime\"}},{\"kind\":\"set\",\"target\":\"ref.kp\",\"value\":{\"kind\":\"variable\",\"variable\":\"servo.kp\"}},{\"kind\":\"set\",\"target\":\"ref.tr\",\"value\":{\"kind\":\"variable\",\"variable\":\"servo.tr\"}},{\"kind\":\"set\",\"target\":\"ref.openingTime\",\"value\":{\"kind\":\"variable\",\"variable\":\"openingTime\"}},{\"kind\":\"set\",\"target\":\"ref.closingTime\",\"value\":{\"kind\":\"variable\",\"variable\":\"closingTime\"}}]},{\"enabled\":true,\"id\":235,\"name\":\"Get Performance Time\",\"responseSteps\":[]},{\"enabled\":true,\"id\":236,\"name\":\"Read Diagnosis Reference Times\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"ref.openingTime\"},{\"kind\":\"variable\",\"variable\":\"ref.closingTime\"},{\"kind\":\"variable\",\"variable\":\"openingTime\"},{\"kind\":\"variable\",\"variable\":\"closingTime\"}]},{\"enabled\":true,\"id\":237,\"name\":\"Read Diagnosis Variables\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"travel.lengthUnit\"},{\"kind\":\"variable\",\"variable\":\"mileage\"},{\"kind\":\"hex\",\"bytes\":\"FA\"},{\"kind\":\"variable\",\"variable\":\"strokes\"},{\"kind\":\"hex\",\"bytes\":\"FA\"},{\"kind\":\"variable\",\"variable\":\"reversals\"},{\"kind\":\"hex\",\"bytes\":\"20\"},{\"kind\":\"variable\",\"variable\":\"temperatureLow\"},{\"kind\":\"hex\",\"bytes\":\"20\"},{\"kind\":\"variable\",\"variable\":\"temperatureHigh\"}]},{\"enabled\":true,\"id\":242,\"name\":\"Factory Data (DTM)\",\"responseSteps\":[{\"kind\":\"bodySlice\",\"offset\":0,\"length\":2},{\"kind\":\"hex\",\"bytes\":\"000000000000000000000000000000000000000000000000000000000000\"}]},{\"enabled\":true,\"id\":246,\"name\":\"Read Pressure Status\",\"responseSteps\":[{\"kind\":\"hex\",\"bytes\":\"04\"}]},{\"enabled\":true,\"id\":247,\"name\":\"Read Display Indication\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"display.indication\"}]},{\"enabled\":true,\"id\":248,\"name\":\"Write Display Indication\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"display.indication\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"display.indication\"}]},{\"enabled\":true,\"id\":249,\"name\":\"Read Manual Setup\",\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"manualSetup\"}]},{\"enabled\":true,\"id\":250,\"name\":\"Write Manual Setup\",\"writeSteps\":[{\"kind\":\"set\",\"target\":\"manualSetup\",\"value\":{\"kind\":\"bodySlice\",\"offset\":0,\"length\":1}}],\"responseSteps\":[{\"kind\":\"variable\",\"variable\":\"manualSetup\"}]}]"
       },
       "visual": {
@@ -445,7 +445,7 @@
       "id": "setup_start",
       "typeId": "sl.fcn",
       "properties": {
-        "Expr": "abs(u(1) - u(2)) > 0.5",
+        "Expr": "(u(3) < 0.5)*(abs(u(1) - u(2)) > 0.5)",
         "SampleTime": "0.001"
       },
       "visual": {
@@ -459,7 +459,7 @@
       "id": "setup_start__mux",
       "typeId": "sl.mux",
       "properties": {
-        "Inputs": "2"
+        "Inputs": "3"
       },
       "visual": {
         "x": 640,
@@ -645,7 +645,7 @@
       "id": "hold_rest",
       "typeId": "sl.fcn",
       "properties": {
-        "Expr": "(u(6) > 0.5)*0 + (u(6) < 0.5)*(((((u(1) > 0.5)*(u(2) > 20)*(u(2) < 25) + (abs(u(5) - 1) < 0.5))+( 1)-abs(((u(1) > 0.5)*(u(2) > 20)*(u(2) < 25) + (abs(u(5) - 1) < 0.5))-( 1)))/2)*u(3) + (1 - ((((u(1) > 0.5)*(u(2) > 20)*(u(2) < 25) + (abs(u(5) - 1) < 0.5))+( 1)-abs(((u(1) > 0.5)*(u(2) > 20)*(u(2) < 25) + (abs(u(5) - 1) < 0.5))-( 1)))/2))*u(4))",
+        "Expr": "(u(6) > 0.5)*((u(8) > 0 - 0.5)*u(8) + (u(8) < 0 - 0.5)*0) + (u(6) < 0.5)*(((((u(1) > 0.5)*(u(2) > 20)*(u(2) < 25) + (abs(u(5) - 1) < 0.5))+( 1)-abs(((u(1) > 0.5)*(u(2) > 20)*(u(2) < 25) + (abs(u(5) - 1) < 0.5))-( 1)))/2)*u(3) + (1 - ((((u(1) > 0.5)*(u(2) > 20)*(u(2) < 25) + (abs(u(5) - 1) < 0.5))+( 1)-abs(((u(1) > 0.5)*(u(2) > 20)*(u(2) < 25) + (abs(u(5) - 1) < 0.5))-( 1)))/2))*u(4))",
         "SampleTime": "0.001"
       },
       "visual": {
@@ -659,7 +659,7 @@
       "id": "hold_rest__mux",
       "typeId": "sl.mux",
       "properties": {
-        "Inputs": "7"
+        "Inputs": "8"
       },
       "visual": {
         "x": 900,
@@ -685,7 +685,7 @@
       "id": "hold_full",
       "typeId": "sl.fcn",
       "properties": {
-        "Expr": "(u(6) > 0.5)*u(7) + (u(6) < 0.5)*(((((u(1) > 0.5)*(u(2) > 45)*(u(2) < 50) + (abs(u(5) - 2) < 0.5))+( 1)-abs(((u(1) > 0.5)*(u(2) > 45)*(u(2) < 50) + (abs(u(5) - 2) < 0.5))-( 1)))/2)*u(3) + (1 - ((((u(1) > 0.5)*(u(2) > 45)*(u(2) < 50) + (abs(u(5) - 2) < 0.5))+( 1)-abs(((u(1) > 0.5)*(u(2) > 45)*(u(2) < 50) + (abs(u(5) - 2) < 0.5))-( 1)))/2))*u(4))",
+        "Expr": "(u(6) > 0.5)*((u(8) > 0 - 0.5)*u(8) + (u(8) < 0 - 0.5)*u(7)) + (u(6) < 0.5)*(((((u(1) > 0.5)*(u(2) > 45)*(u(2) < 50) + (abs(u(5) - 2) < 0.5))+( 1)-abs(((u(1) > 0.5)*(u(2) > 45)*(u(2) < 50) + (abs(u(5) - 2) < 0.5))-( 1)))/2)*u(3) + (1 - ((((u(1) > 0.5)*(u(2) > 45)*(u(2) < 50) + (abs(u(5) - 2) < 0.5))+( 1)-abs(((u(1) > 0.5)*(u(2) > 45)*(u(2) < 50) + (abs(u(5) - 2) < 0.5))-( 1)))/2))*u(4))",
         "SampleTime": "0.001"
       },
       "visual": {
@@ -699,7 +699,7 @@
       "id": "hold_full__mux",
       "typeId": "sl.mux",
       "properties": {
-        "Inputs": "7"
+        "Inputs": "8"
       },
       "visual": {
         "x": 900,
@@ -2240,6 +2240,20 @@
         "id": "w-72",
         "from": {
           "kind": "port",
+          "componentId": "first",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_start__mux",
+          "pinId": "in3"
+        },
+        "points": []
+      },
+      {
+        "id": "w-73",
+        "from": {
+          "kind": "port",
           "componentId": "setup_start__mux",
           "pinId": "out1"
         },
@@ -2251,7 +2265,7 @@
         "points": []
       },
       {
-        "id": "w-73",
+        "id": "w-74",
         "from": {
           "kind": "port",
           "componentId": "setup_start",
@@ -2265,7 +2279,7 @@
         "points": []
       },
       {
-        "id": "w-74",
+        "id": "w-75",
         "from": {
           "kind": "port",
           "componentId": "setup_time_prev",
@@ -2279,7 +2293,7 @@
         "points": []
       },
       {
-        "id": "w-75",
+        "id": "w-76",
         "from": {
           "kind": "port",
           "componentId": "setup_run_prev",
@@ -2293,7 +2307,7 @@
         "points": []
       },
       {
-        "id": "w-76",
+        "id": "w-77",
         "from": {
           "kind": "port",
           "componentId": "setup_time__mux",
@@ -2302,20 +2316,6 @@
         "to": {
           "kind": "port",
           "componentId": "setup_time",
-          "pinId": "in1"
-        },
-        "points": []
-      },
-      {
-        "id": "w-77",
-        "from": {
-          "kind": "port",
-          "componentId": "setup_time",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "setup_time_prev",
           "pinId": "in1"
         },
         "points": []
@@ -2324,6 +2324,20 @@
         "id": "w-78",
         "from": {
           "kind": "port",
+          "componentId": "setup_time",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_time_prev",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-79",
+        "from": {
+          "kind": "port",
           "componentId": "setup_start",
           "pinId": "out1"
         },
@@ -2335,7 +2349,7 @@
         "points": []
       },
       {
-        "id": "w-79",
+        "id": "w-80",
         "from": {
           "kind": "port",
           "componentId": "setup_time",
@@ -2349,7 +2363,7 @@
         "points": []
       },
       {
-        "id": "w-80",
+        "id": "w-81",
         "from": {
           "kind": "port",
           "componentId": "setup_run_prev",
@@ -2363,7 +2377,7 @@
         "points": []
       },
       {
-        "id": "w-81",
+        "id": "w-82",
         "from": {
           "kind": "port",
           "componentId": "setup_run__mux",
@@ -2372,20 +2386,6 @@
         "to": {
           "kind": "port",
           "componentId": "setup_run",
-          "pinId": "in1"
-        },
-        "points": []
-      },
-      {
-        "id": "w-82",
-        "from": {
-          "kind": "port",
-          "componentId": "setup_run",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "setup_run_prev",
           "pinId": "in1"
         },
         "points": []
@@ -2399,13 +2399,27 @@
         },
         "to": {
           "kind": "port",
-          "componentId": "setup_done__mux",
+          "componentId": "setup_run_prev",
           "pinId": "in1"
         },
         "points": []
       },
       {
         "id": "w-84",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_run",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "setup_done__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-85",
         "from": {
           "kind": "port",
           "componentId": "setup_time",
@@ -2419,7 +2433,7 @@
         "points": []
       },
       {
-        "id": "w-85",
+        "id": "w-86",
         "from": {
           "kind": "port",
           "componentId": "setup_done_prev",
@@ -2433,7 +2447,7 @@
         "points": []
       },
       {
-        "id": "w-86",
+        "id": "w-87",
         "from": {
           "kind": "port",
           "componentId": "setup_done__mux",
@@ -2447,7 +2461,7 @@
         "points": []
       },
       {
-        "id": "w-87",
+        "id": "w-88",
         "from": {
           "kind": "port",
           "componentId": "setup_done",
@@ -2461,7 +2475,7 @@
         "points": []
       },
       {
-        "id": "w-88",
+        "id": "w-89",
         "from": {
           "kind": "port",
           "componentId": "setup_time",
@@ -2475,7 +2489,7 @@
         "points": []
       },
       {
-        "id": "w-89",
+        "id": "w-90",
         "from": {
           "kind": "port",
           "componentId": "setup_run",
@@ -2489,7 +2503,7 @@
         "points": []
       },
       {
-        "id": "w-90",
+        "id": "w-91",
         "from": {
           "kind": "port",
           "componentId": "setup_done",
@@ -2503,7 +2517,7 @@
         "points": []
       },
       {
-        "id": "w-91",
+        "id": "w-92",
         "from": {
           "kind": "port",
           "componentId": "setup_progress__mux",
@@ -2517,7 +2531,7 @@
         "points": []
       },
       {
-        "id": "w-92",
+        "id": "w-93",
         "from": {
           "kind": "port",
           "componentId": "t_supply",
@@ -2531,7 +2545,7 @@
         "points": []
       },
       {
-        "id": "w-93",
+        "id": "w-94",
         "from": {
           "kind": "port",
           "componentId": "zero",
@@ -2545,7 +2559,7 @@
         "points": []
       },
       {
-        "id": "w-94",
+        "id": "w-95",
         "from": {
           "kind": "port",
           "componentId": "setup_run",
@@ -2559,7 +2573,7 @@
         "points": []
       },
       {
-        "id": "w-95",
+        "id": "w-96",
         "from": {
           "kind": "port",
           "componentId": "setup_time",
@@ -2573,7 +2587,7 @@
         "points": []
       },
       {
-        "id": "w-96",
+        "id": "w-97",
         "from": {
           "kind": "port",
           "componentId": "t_position",
@@ -2587,7 +2601,7 @@
         "points": []
       },
       {
-        "id": "w-97",
+        "id": "w-98",
         "from": {
           "kind": "port",
           "componentId": "hold_rest_prev",
@@ -2601,7 +2615,7 @@
         "points": []
       },
       {
-        "id": "w-98",
+        "id": "w-99",
         "from": {
           "kind": "port",
           "componentId": "fy301",
@@ -2615,7 +2629,7 @@
         "points": []
       },
       {
-        "id": "w-99",
+        "id": "w-100",
         "from": {
           "kind": "port",
           "componentId": "first",
@@ -2629,7 +2643,7 @@
         "points": []
       },
       {
-        "id": "w-100",
+        "id": "w-101",
         "from": {
           "kind": "port",
           "componentId": "c_factory_span",
@@ -2643,7 +2657,21 @@
         "points": []
       },
       {
-        "id": "w-101",
+        "id": "w-102",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "setup.rest"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest__mux",
+          "pinId": "in8"
+        },
+        "points": []
+      },
+      {
+        "id": "w-103",
         "from": {
           "kind": "port",
           "componentId": "hold_rest__mux",
@@ -2652,34 +2680,6 @@
         "to": {
           "kind": "port",
           "componentId": "hold_rest",
-          "pinId": "in1"
-        },
-        "points": []
-      },
-      {
-        "id": "w-102",
-        "from": {
-          "kind": "port",
-          "componentId": "hold_rest",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "hold_rest_prev",
-          "pinId": "in1"
-        },
-        "points": []
-      },
-      {
-        "id": "w-103",
-        "from": {
-          "kind": "port",
-          "componentId": "setup_run",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "hold_full__mux",
           "pinId": "in1"
         },
         "points": []
@@ -2688,6 +2688,34 @@
         "id": "w-104",
         "from": {
           "kind": "port",
+          "componentId": "hold_rest",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_rest_prev",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-105",
+        "from": {
+          "kind": "port",
+          "componentId": "setup_run",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_full__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-106",
+        "from": {
+          "kind": "port",
           "componentId": "setup_time",
           "pinId": "out1"
         },
@@ -2699,7 +2727,7 @@
         "points": []
       },
       {
-        "id": "w-105",
+        "id": "w-107",
         "from": {
           "kind": "port",
           "componentId": "t_position",
@@ -2713,7 +2741,7 @@
         "points": []
       },
       {
-        "id": "w-106",
+        "id": "w-108",
         "from": {
           "kind": "port",
           "componentId": "hold_full_prev",
@@ -2727,7 +2755,7 @@
         "points": []
       },
       {
-        "id": "w-107",
+        "id": "w-109",
         "from": {
           "kind": "port",
           "componentId": "fy301",
@@ -2741,7 +2769,7 @@
         "points": []
       },
       {
-        "id": "w-108",
+        "id": "w-110",
         "from": {
           "kind": "port",
           "componentId": "first",
@@ -2755,7 +2783,7 @@
         "points": []
       },
       {
-        "id": "w-109",
+        "id": "w-111",
         "from": {
           "kind": "port",
           "componentId": "c_factory_span",
@@ -2769,7 +2797,21 @@
         "points": []
       },
       {
-        "id": "w-110",
+        "id": "w-112",
+        "from": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "setup.full"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "hold_full__mux",
+          "pinId": "in8"
+        },
+        "points": []
+      },
+      {
+        "id": "w-113",
         "from": {
           "kind": "port",
           "componentId": "hold_full__mux",
@@ -2779,48 +2821,6 @@
           "kind": "port",
           "componentId": "hold_full",
           "pinId": "in1"
-        },
-        "points": []
-      },
-      {
-        "id": "w-111",
-        "from": {
-          "kind": "port",
-          "componentId": "hold_full",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "hold_full_prev",
-          "pinId": "in1"
-        },
-        "points": []
-      },
-      {
-        "id": "w-112",
-        "from": {
-          "kind": "port",
-          "componentId": "t_position",
-          "pinId": "value"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "pos_raw__mux",
-          "pinId": "in1"
-        },
-        "points": []
-      },
-      {
-        "id": "w-113",
-        "from": {
-          "kind": "port",
-          "componentId": "hold_rest",
-          "pinId": "out1"
-        },
-        "to": {
-          "kind": "port",
-          "componentId": "pos_raw__mux",
-          "pinId": "in2"
         },
         "points": []
       },
@@ -2833,13 +2833,55 @@
         },
         "to": {
           "kind": "port",
+          "componentId": "hold_full_prev",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-115",
+        "from": {
+          "kind": "port",
+          "componentId": "t_position",
+          "pinId": "value"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pos_raw__mux",
+          "pinId": "in1"
+        },
+        "points": []
+      },
+      {
+        "id": "w-116",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_rest",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "pos_raw__mux",
+          "pinId": "in2"
+        },
+        "points": []
+      },
+      {
+        "id": "w-117",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_full",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
           "componentId": "pos_raw__mux",
           "pinId": "in3"
         },
         "points": []
       },
       {
-        "id": "w-115",
+        "id": "w-118",
         "from": {
           "kind": "port",
           "componentId": "pos_raw__mux",
@@ -2853,7 +2895,7 @@
         "points": []
       },
       {
-        "id": "w-116",
+        "id": "w-119",
         "from": {
           "kind": "port",
           "componentId": "pos_raw",
@@ -2867,7 +2909,7 @@
         "points": []
       },
       {
-        "id": "w-117",
+        "id": "w-120",
         "from": {
           "kind": "port",
           "componentId": "fy301",
@@ -2881,7 +2923,7 @@
         "points": []
       },
       {
-        "id": "w-118",
+        "id": "w-121",
         "from": {
           "kind": "port",
           "componentId": "fy301",
@@ -2895,7 +2937,7 @@
         "points": []
       },
       {
-        "id": "w-119",
+        "id": "w-122",
         "from": {
           "kind": "port",
           "componentId": "pos_trim__mux",
@@ -2909,7 +2951,7 @@
         "points": []
       },
       {
-        "id": "w-120",
+        "id": "w-123",
         "from": {
           "kind": "port",
           "componentId": "pos_trim",
@@ -2923,7 +2965,7 @@
         "points": []
       },
       {
-        "id": "w-121",
+        "id": "w-124",
         "from": {
           "kind": "port",
           "componentId": "fy301",
@@ -2937,7 +2979,7 @@
         "points": []
       },
       {
-        "id": "w-122",
+        "id": "w-125",
         "from": {
           "kind": "port",
           "componentId": "pos__mux",
@@ -2951,7 +2993,7 @@
         "points": []
       },
       {
-        "id": "w-123",
+        "id": "w-126",
         "from": {
           "kind": "port",
           "componentId": "t_position",
@@ -2965,7 +3007,7 @@
         "points": []
       },
       {
-        "id": "w-124",
+        "id": "w-127",
         "from": {
           "kind": "port",
           "componentId": "sp_r",
@@ -2979,7 +3021,7 @@
         "points": []
       },
       {
-        "id": "w-125",
+        "id": "w-128",
         "from": {
           "kind": "port",
           "componentId": "pos",
@@ -2993,7 +3035,7 @@
         "points": []
       },
       {
-        "id": "w-126",
+        "id": "w-129",
         "from": {
           "kind": "port",
           "componentId": "fy301",
@@ -3007,7 +3049,7 @@
         "points": []
       },
       {
-        "id": "w-127",
+        "id": "w-130",
         "from": {
           "kind": "port",
           "componentId": "err__mux",
@@ -3021,7 +3063,7 @@
         "points": []
       },
       {
-        "id": "w-128",
+        "id": "w-131",
         "from": {
           "kind": "port",
           "componentId": "err",
@@ -3035,7 +3077,7 @@
         "points": []
       },
       {
-        "id": "w-129",
+        "id": "w-132",
         "from": {
           "kind": "port",
           "componentId": "fy301",
@@ -3049,7 +3091,7 @@
         "points": []
       },
       {
-        "id": "w-130",
+        "id": "w-133",
         "from": {
           "kind": "port",
           "componentId": "err_air__mux",
@@ -3063,7 +3105,7 @@
         "points": []
       },
       {
-        "id": "w-131",
+        "id": "w-134",
         "from": {
           "kind": "port",
           "componentId": "err_air",
@@ -3077,7 +3119,7 @@
         "points": []
       },
       {
-        "id": "w-132",
+        "id": "w-135",
         "from": {
           "kind": "port",
           "componentId": "servo_i_prev",
@@ -3091,7 +3133,7 @@
         "points": []
       },
       {
-        "id": "w-133",
+        "id": "w-136",
         "from": {
           "kind": "port",
           "componentId": "fy301",
@@ -3105,7 +3147,7 @@
         "points": []
       },
       {
-        "id": "w-134",
+        "id": "w-137",
         "from": {
           "kind": "port",
           "componentId": "u__mux",
@@ -3119,7 +3161,7 @@
         "points": []
       },
       {
-        "id": "w-135",
+        "id": "w-138",
         "from": {
           "kind": "port",
           "componentId": "err_air",
@@ -3133,7 +3175,7 @@
         "points": []
       },
       {
-        "id": "w-136",
+        "id": "w-139",
         "from": {
           "kind": "port",
           "componentId": "u",
@@ -3147,7 +3189,7 @@
         "points": []
       },
       {
-        "id": "w-137",
+        "id": "w-140",
         "from": {
           "kind": "port",
           "componentId": "fy301",
@@ -3161,7 +3203,7 @@
         "points": []
       },
       {
-        "id": "w-138",
+        "id": "w-141",
         "from": {
           "kind": "port",
           "componentId": "servo_i_prev",
@@ -3175,7 +3217,7 @@
         "points": []
       },
       {
-        "id": "w-139",
+        "id": "w-142",
         "from": {
           "kind": "port",
           "componentId": "setup_run",
@@ -3189,7 +3231,7 @@
         "points": []
       },
       {
-        "id": "w-140",
+        "id": "w-143",
         "from": {
           "kind": "port",
           "componentId": "powered",
@@ -3203,7 +3245,7 @@
         "points": []
       },
       {
-        "id": "w-141",
+        "id": "w-144",
         "from": {
           "kind": "port",
           "componentId": "servo_i__mux",
@@ -3217,7 +3259,7 @@
         "points": []
       },
       {
-        "id": "w-142",
+        "id": "w-145",
         "from": {
           "kind": "port",
           "componentId": "servo_i",
@@ -3231,7 +3273,7 @@
         "points": []
       },
       {
-        "id": "w-143",
+        "id": "w-146",
         "from": {
           "kind": "port",
           "componentId": "u",
@@ -3245,7 +3287,7 @@
         "points": []
       },
       {
-        "id": "w-144",
+        "id": "w-147",
         "from": {
           "kind": "port",
           "componentId": "powered",
@@ -3259,7 +3301,7 @@
         "points": []
       },
       {
-        "id": "w-145",
+        "id": "w-148",
         "from": {
           "kind": "port",
           "componentId": "setup_run",
@@ -3273,7 +3315,7 @@
         "points": []
       },
       {
-        "id": "w-146",
+        "id": "w-149",
         "from": {
           "kind": "port",
           "componentId": "setup_time",
@@ -3287,7 +3329,7 @@
         "points": []
       },
       {
-        "id": "w-147",
+        "id": "w-150",
         "from": {
           "kind": "port",
           "componentId": "fy301",
@@ -3301,7 +3343,7 @@
         "points": []
       },
       {
-        "id": "w-148",
+        "id": "w-151",
         "from": {
           "kind": "port",
           "componentId": "fy301",
@@ -3315,7 +3357,7 @@
         "points": []
       },
       {
-        "id": "w-149",
+        "id": "w-152",
         "from": {
           "kind": "port",
           "componentId": "sp_r",
@@ -3329,7 +3371,7 @@
         "points": []
       },
       {
-        "id": "w-150",
+        "id": "w-153",
         "from": {
           "kind": "port",
           "componentId": "fy301",
@@ -3343,7 +3385,7 @@
         "points": []
       },
       {
-        "id": "w-151",
+        "id": "w-154",
         "from": {
           "kind": "port",
           "componentId": "out_pct__mux",
@@ -3357,7 +3399,7 @@
         "points": []
       },
       {
-        "id": "w-152",
+        "id": "w-155",
         "from": {
           "kind": "port",
           "componentId": "out_pct",
@@ -3371,7 +3413,7 @@
         "points": []
       },
       {
-        "id": "w-153",
+        "id": "w-156",
         "from": {
           "kind": "port",
           "componentId": "t_supply",
@@ -3385,7 +3427,7 @@
         "points": []
       },
       {
-        "id": "w-154",
+        "id": "w-157",
         "from": {
           "kind": "port",
           "componentId": "out1_bar__mux",
@@ -3399,7 +3441,7 @@
         "points": []
       },
       {
-        "id": "w-155",
+        "id": "w-158",
         "from": {
           "kind": "port",
           "componentId": "out1_bar",
@@ -3413,7 +3455,7 @@
         "points": []
       },
       {
-        "id": "w-156",
+        "id": "w-159",
         "from": {
           "kind": "port",
           "componentId": "out1_bar",
@@ -3427,7 +3469,7 @@
         "points": []
       },
       {
-        "id": "w-157",
+        "id": "w-160",
         "from": {
           "kind": "port",
           "componentId": "t_supply",
@@ -3441,7 +3483,7 @@
         "points": []
       },
       {
-        "id": "w-158",
+        "id": "w-161",
         "from": {
           "kind": "port",
           "componentId": "out2_bar__mux",
@@ -3455,7 +3497,7 @@
         "points": []
       },
       {
-        "id": "w-159",
+        "id": "w-162",
         "from": {
           "kind": "port",
           "componentId": "t_supply",
@@ -3469,7 +3511,7 @@
         "points": []
       },
       {
-        "id": "w-160",
+        "id": "w-163",
         "from": {
           "kind": "port",
           "componentId": "setup_run",
@@ -3483,7 +3525,7 @@
         "points": []
       },
       {
-        "id": "w-161",
+        "id": "w-164",
         "from": {
           "kind": "port",
           "componentId": "t_supply",
@@ -3497,7 +3539,7 @@
         "points": []
       },
       {
-        "id": "w-162",
+        "id": "w-165",
         "from": {
           "kind": "port",
           "componentId": "hold_rest",
@@ -3511,7 +3553,7 @@
         "points": []
       },
       {
-        "id": "w-163",
+        "id": "w-166",
         "from": {
           "kind": "port",
           "componentId": "hold_full",
@@ -3525,7 +3567,7 @@
         "points": []
       },
       {
-        "id": "w-164",
+        "id": "w-167",
         "from": {
           "kind": "port",
           "componentId": "setup_done",
@@ -3539,7 +3581,7 @@
         "points": []
       },
       {
-        "id": "w-165",
+        "id": "w-168",
         "from": {
           "kind": "port",
           "componentId": "setup_status__mux",
@@ -3553,7 +3595,7 @@
         "points": []
       },
       {
-        "id": "w-166",
+        "id": "w-169",
         "from": {
           "kind": "port",
           "componentId": "t_position",
@@ -3567,7 +3609,7 @@
         "points": []
       },
       {
-        "id": "w-167",
+        "id": "w-170",
         "from": {
           "kind": "port",
           "componentId": "t_position",
@@ -3581,7 +3623,7 @@
         "points": []
       },
       {
-        "id": "w-168",
+        "id": "w-171",
         "from": {
           "kind": "port",
           "componentId": "x_prev",
@@ -3595,7 +3637,7 @@
         "points": []
       },
       {
-        "id": "w-169",
+        "id": "w-172",
         "from": {
           "kind": "port",
           "componentId": "mileage_prev",
@@ -3609,7 +3651,7 @@
         "points": []
       },
       {
-        "id": "w-170",
+        "id": "w-173",
         "from": {
           "kind": "port",
           "componentId": "mileage__mux",
@@ -3623,7 +3665,7 @@
         "points": []
       },
       {
-        "id": "w-171",
+        "id": "w-174",
         "from": {
           "kind": "port",
           "componentId": "mileage",
@@ -3637,7 +3679,7 @@
         "points": []
       },
       {
-        "id": "w-172",
+        "id": "w-175",
         "from": {
           "kind": "port",
           "componentId": "mileage",
@@ -3651,7 +3693,7 @@
         "points": []
       },
       {
-        "id": "w-173",
+        "id": "w-176",
         "from": {
           "kind": "port",
           "componentId": "hold_rest",
@@ -3665,7 +3707,7 @@
         "points": []
       },
       {
-        "id": "w-174",
+        "id": "w-177",
         "from": {
           "kind": "port",
           "componentId": "hold_full",
@@ -3679,7 +3721,7 @@
         "points": []
       },
       {
-        "id": "w-175",
+        "id": "w-178",
         "from": {
           "kind": "port",
           "componentId": "strokes__mux",
@@ -3693,7 +3735,7 @@
         "points": []
       },
       {
-        "id": "w-176",
+        "id": "w-179",
         "from": {
           "kind": "port",
           "componentId": "t_position",
@@ -3707,7 +3749,7 @@
         "points": []
       },
       {
-        "id": "w-177",
+        "id": "w-180",
         "from": {
           "kind": "port",
           "componentId": "x_prev",
@@ -3721,7 +3763,7 @@
         "points": []
       },
       {
-        "id": "w-178",
+        "id": "w-181",
         "from": {
           "kind": "port",
           "componentId": "dir_prev",
@@ -3735,7 +3777,7 @@
         "points": []
       },
       {
-        "id": "w-179",
+        "id": "w-182",
         "from": {
           "kind": "port",
           "componentId": "dir__mux",
@@ -3749,7 +3791,7 @@
         "points": []
       },
       {
-        "id": "w-180",
+        "id": "w-183",
         "from": {
           "kind": "port",
           "componentId": "dir",
@@ -3763,7 +3805,7 @@
         "points": []
       },
       {
-        "id": "w-181",
+        "id": "w-184",
         "from": {
           "kind": "port",
           "componentId": "dir",
@@ -3777,7 +3819,7 @@
         "points": []
       },
       {
-        "id": "w-182",
+        "id": "w-185",
         "from": {
           "kind": "port",
           "componentId": "dir_prev",
@@ -3791,7 +3833,7 @@
         "points": []
       },
       {
-        "id": "w-183",
+        "id": "w-186",
         "from": {
           "kind": "port",
           "componentId": "reversals_prev",
@@ -3805,7 +3847,7 @@
         "points": []
       },
       {
-        "id": "w-184",
+        "id": "w-187",
         "from": {
           "kind": "port",
           "componentId": "reversals__mux",
@@ -3819,7 +3861,7 @@
         "points": []
       },
       {
-        "id": "w-185",
+        "id": "w-188",
         "from": {
           "kind": "port",
           "componentId": "reversals",
@@ -3833,7 +3875,7 @@
         "points": []
       },
       {
-        "id": "w-186",
+        "id": "w-189",
         "from": {
           "kind": "port",
           "componentId": "c_temperature",
@@ -3847,7 +3889,7 @@
         "points": []
       },
       {
-        "id": "w-187",
+        "id": "w-190",
         "from": {
           "kind": "port",
           "componentId": "c_temperature",
@@ -3861,7 +3903,7 @@
         "points": []
       },
       {
-        "id": "w-188",
+        "id": "w-191",
         "from": {
           "kind": "port",
           "componentId": "pos",
@@ -3875,7 +3917,7 @@
         "points": []
       },
       {
-        "id": "w-189",
+        "id": "w-192",
         "from": {
           "kind": "port",
           "componentId": "sp_r",
@@ -3889,7 +3931,7 @@
         "points": []
       },
       {
-        "id": "w-190",
+        "id": "w-193",
         "from": {
           "kind": "port",
           "componentId": "out_pct",
@@ -3903,7 +3945,7 @@
         "points": []
       },
       {
-        "id": "w-191",
+        "id": "w-194",
         "from": {
           "kind": "port",
           "componentId": "err",
@@ -3917,7 +3959,7 @@
         "points": []
       },
       {
-        "id": "w-192",
+        "id": "w-195",
         "from": {
           "kind": "port",
           "componentId": "servo_i",
@@ -3931,7 +3973,7 @@
         "points": []
       },
       {
-        "id": "w-193",
+        "id": "w-196",
         "from": {
           "kind": "port",
           "componentId": "hall",
@@ -3945,7 +3987,7 @@
         "points": []
       },
       {
-        "id": "w-194",
+        "id": "w-197",
         "from": {
           "kind": "port",
           "componentId": "temp_c",
@@ -3959,7 +4001,7 @@
         "points": []
       },
       {
-        "id": "w-195",
+        "id": "w-198",
         "from": {
           "kind": "port",
           "componentId": "out_pct",
@@ -3973,7 +4015,7 @@
         "points": []
       },
       {
-        "id": "w-196",
+        "id": "w-199",
         "from": {
           "kind": "port",
           "componentId": "temp_f",
@@ -3987,7 +4029,7 @@
         "points": []
       },
       {
-        "id": "w-197",
+        "id": "w-200",
         "from": {
           "kind": "port",
           "componentId": "mileage",
@@ -4001,7 +4043,7 @@
         "points": []
       },
       {
-        "id": "w-198",
+        "id": "w-201",
         "from": {
           "kind": "port",
           "componentId": "strokes",
@@ -4015,7 +4057,7 @@
         "points": []
       },
       {
-        "id": "w-199",
+        "id": "w-202",
         "from": {
           "kind": "port",
           "componentId": "reversals",
@@ -4029,7 +4071,7 @@
         "points": []
       },
       {
-        "id": "w-200",
+        "id": "w-203",
         "from": {
           "kind": "port",
           "componentId": "temp_c",
@@ -4043,7 +4085,7 @@
         "points": []
       },
       {
-        "id": "w-201",
+        "id": "w-204",
         "from": {
           "kind": "port",
           "componentId": "temp_c",
@@ -4057,7 +4099,7 @@
         "points": []
       },
       {
-        "id": "w-202",
+        "id": "w-205",
         "from": {
           "kind": "port",
           "componentId": "setup_progress",
@@ -4071,7 +4113,7 @@
         "points": []
       },
       {
-        "id": "w-203",
+        "id": "w-206",
         "from": {
           "kind": "port",
           "componentId": "out1_bar",
@@ -4085,7 +4127,7 @@
         "points": []
       },
       {
-        "id": "w-204",
+        "id": "w-207",
         "from": {
           "kind": "port",
           "componentId": "out2_bar",
@@ -4099,7 +4141,7 @@
         "points": []
       },
       {
-        "id": "w-205",
+        "id": "w-208",
         "from": {
           "kind": "port",
           "componentId": "supply_bar",
@@ -4113,7 +4155,7 @@
         "points": []
       },
       {
-        "id": "w-206",
+        "id": "w-209",
         "from": {
           "kind": "port",
           "componentId": "setup_status",
@@ -4123,6 +4165,34 @@
           "kind": "port",
           "componentId": "fy301",
           "pinId": "setup.status"
+        },
+        "points": []
+      },
+      {
+        "id": "w-210",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_rest",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "setup.restMeasured"
+        },
+        "points": []
+      },
+      {
+        "id": "w-211",
+        "from": {
+          "kind": "port",
+          "componentId": "hold_full",
+          "pinId": "out1"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "fy301",
+          "pinId": "setup.fullMeasured"
         },
         "points": []
       }

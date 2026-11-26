@@ -862,6 +862,7 @@ void HartCommunicationComponent::rebuildConfiguredPlan() {
             }
             variable.derivedSource = static_cast<uint8_t>(std::clamp(item.value("derivedSource", 255), 0, 255));
             variable.runtimeMutable = item.value("runtimeMutable", false);
+            variable.retainFrom = item.value("retainFrom", std::string{});
             variable.transferParameter = static_cast<uint8_t>(std::clamp(item.value("transferParameter", 0), 0, 2));
             variable.direction = parseDirection(item.value("direction", std::string{}));
             variable.deviceVariableCode = static_cast<uint8_t>(std::clamp(item.value("deviceVariableCode", 255), 0, 255));

@@ -119,6 +119,17 @@ function float(value: number): number[] {
       assert(Math.abs(real - 50) < 1.5 && Math.abs((await position()) - 50) < 1.5, `abertura ${real}, FY ${await position()}`);
     });
 
+    // What the extension saves in the .lsproj (`@fy301.hartVariablesJson`) after the Auto Setup.
+    let savedVariablesJson = "";
+    await test("a calibração do Auto Setup fica nas variáveis salvas com o projeto (setup.rest/setup.full, EEPROM)", async () => {
+      await transact(48);   // any transaction refreshes the persisted JSON
+      savedVariablesJson = String(await client.getProperty(inner, "hartVariablesJson"));
+      const variables = JSON.parse(savedVariablesJson) as Array<{ id: string; value: number }>;
+      const rest = variables.find((variable) => variable.id === "setup.rest")?.value ?? NaN;
+      const full = variables.find((variable) => variable.id === "setup.full")?.value ?? NaN;
+      assert(Math.abs(rest - 0) < 0.2 && Math.abs(full - 20) < 0.2, `setup.rest ${rest} mm, setup.full ${full} mm (curso de 20 mm)`);
+    });
+
     await test("Cmd 2 = corrente medida e % do split range; Cmd 15 = split range em mA; Cmd 33 do DTM (0, 2, 1, 6)", async () => {
       const cmd2 = await transact(2);
       const current = cmd2.data.readFloatBE(0);
@@ -268,6 +279,27 @@ function float(value: number): number[] {
       assert((await opening()) < 1 && (await read(fy.instanceId, "out1_bar")) < 0.01, `abertura ${await opening()}`);
       await milliamps(12);
       await seconds(10);
+    });
+
+    await test("projeto reaberto: um FY301 com as variáveis salvas posiciona pela calibração gravada, sem novo Auto Setup", async () => {
+      const valve2 = await client.addComponent("subcircuits.process.control_valve", {}, [], "Válvula (reaberta)");
+      const fy2 = await client.addComponent("subcircuits.hart.smar_fy301", {}, fyPins, "FY301 (reaberto)");
+      await client.setSubcircuitChildProperty(fy2.instanceId, "fy301", "hartVariablesJson", savedVariablesJson);
+      const command2 = await client.addComponent("control.constant", { value: 0.012 }, [{ id: "out", x: 0, y: 0 }], "Saída 2 (A)");
+      const ao2 = await client.addComponent("bridges.controlled_current_source", {}, [{ id: "command", x: 0, y: 0 }, { id: "p", x: 0, y: 10 }, { id: "n", x: 0, y: 20 }],
+        "Saída analógica 2");
+      await client.applyWireTopologyTransaction([
+        { kind: "connect", from: { componentId: command2.instanceId, pinId: "out" }, to: { componentId: ao2.instanceId, pinId: "command" } },
+        { kind: "connect", from: { componentId: ao2.instanceId, pinId: "p" }, to: port(fy2, "loop_plus") },
+        { kind: "connect", from: port(fy2, "loop_minus"), to: { componentId: ao2.instanceId, pinId: "n" } },
+        { kind: "connect", from: { componentId: ao2.instanceId, pinId: "n" }, to: { componentId: ground.instanceId, pinId: "pin" } },
+        { kind: "connect", from: port(fy2, "out1"), to: port(valve2, "out1") },
+        { kind: "connect", from: port(valve2, "supply"), to: port(fy2, "supply") },
+        { kind: "connect", from: port(valve2, "position"), to: port(fy2, "position") },
+      ]);
+      await seconds(20);
+      const real = await read(valve2.instanceId, "opening");
+      assert(Math.abs(real - 50) < 1.5, `abertura ${real} (sem a calibração seria ~75 %)`);
     });
   } finally {
     await client.stop().catch(() => undefined);

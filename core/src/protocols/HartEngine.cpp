@@ -423,6 +423,9 @@ bool HartEngine::setVariableInput(std::string_view deviceId, std::string_view va
             if (device.plan.variables[i].id != variableId) continue;
             if (device.plan.variables[i].direction != HartVariableDirection::Input) return false;
             device.variableValues[i] = value;
+            // Non-volatile copies (VariableConfiguration::retainFrom) follow the live value.
+            for (size_t j = 0; j < device.plan.variables.size() && j < device.variableValues.size(); ++j)
+                if (device.plan.variables[j].retainFrom == variableId) device.variableValues[j] = value;
             return true;
         }
         return false;

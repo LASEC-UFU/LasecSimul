@@ -499,6 +499,11 @@ struct HartDevicePlan {
          * PercentRange is mapped linearly onto this variable's own
          * lower/upperRangeValue (e.g. a "user unit" scaled PV). */
         uint8_t derivedSource = HartDerivedSource::None;
+        /** Non-volatile copy of an Input variable (device EEPROM): every value the model writes to the
+         * Input variable `retainFrom` is also stored here. The variable is persisted with the project,
+         * so a model can read it back (Output) as the value it had when the project was saved -- e.g.
+         * the FY301 Auto Setup calibration. Empty = not retained. */
+        std::string retainFrom;
         /** Value of an `Ascii` variable. */
         std::string textValue;
         /** Optional analog transfer parameter: 1=cutoff percent, 2=cutoff mode.

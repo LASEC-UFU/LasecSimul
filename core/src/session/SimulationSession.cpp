@@ -472,6 +472,9 @@ bool SimulationSession::publishSimulationPlan() {
     std::shared_ptr<const simulation::SimulationPlan> staged = simulation::PlanCompiler::compile(input);
     m_runtimeState.bind(staged);
     ++m_bridgeTopologyRevision; // a new plan may re-number or re-list components
+    // The first sample of the new plan already sees the HART devices' Output variables (configuration
+    // and the values saved with the project, e.g. a positioner's calibration), not a zero.
+    publishHartOutputsToSignalUnlocked();
     m_runtimeState.signals.executeUntil(m_runtimeState.virtualTimeNs);
     if (const std::optional<uint64_t> next = m_runtimeState.signals.nextEventNs();
         next && *next > m_runtimeState.virtualTimeNs &&

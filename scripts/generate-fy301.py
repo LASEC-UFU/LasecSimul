@@ -220,6 +220,13 @@ variables = [
     par("ref.closingTime", "Referencia: tempo medido de fechamento", 0.0, "Float32"),
     par("display.indication", "LCD (Cmd 247/248)", 1, codes={"1": "PV(%)", "2": "SP(%)"}),
     par("manualSetup", "Setup manual: passo (Cmd 249/250)", 0, "UInt8", "Output"),
+    # Auto Setup calibration (EEPROM): the model writes the recorded positions to the Input variables and the
+    # device keeps a non-volatile copy (retainFrom) that is saved with the project and read back on start.
+    # -1 = never calibrated (factory scale 0 to c_factory_span mm).
+    par("setup.restMeasured", "Auto Setup: posicao gravada sem ar (mm)", -1.0, "Float32", "Input"),
+    par("setup.fullMeasured", "Auto Setup: posicao gravada com ar total (mm)", -1.0, "Float32", "Input"),
+    par("setup.rest", "Calibracao (EEPROM): posicao sem ar (mm)", -1.0, "Float32", "Output", retainFrom="setup.restMeasured"),
+    par("setup.full", "Calibracao (EEPROM): posicao com ar total (mm)", -1.0, "Float32", "Output", retainFrom="setup.fullMeasured"),
 ]
 # Characterization table (Commands 133/134): coordinates 0-15 = X (input %), 16-31 = Y (position %)
 TABLE = [f"table.c{k}" for k in range(32)]
@@ -460,7 +467,9 @@ delay("sp_r_prev", "sp_r", 0, "Setpoint de posição anterior")
 
 # --- Auto Setup (Command 152 toggles setup.toggle) ---------------------------------------------------
 delay("setup_toggle_prev", H("setup.toggle"), 0, "Auto Setup: comando anterior")
-fcn("setup_start", [("a", H("setup.toggle")), ("b", "setup_toggle_prev")], "abs(a - b) > 0.5", "Auto Setup: início")
+# The toggle is saved with the project: on the first sample (project opened) there is no edge.
+fcn("setup_start", [("a", H("setup.toggle")), ("b", "setup_toggle_prev"), ("f", "first")], "(f < 0.5)*(abs(a - b) > 0.5)",
+    "Auto Setup: início")
 fcn("setup_time", [("s", "setup_start"), ("t", "setup_time_prev"), ("run", "setup_run_prev")],
     f"(s < 0.5)*(t + (run > 0.5)*{DT})", "Tempo do Auto Setup (s)")
 delay("setup_time_prev", "setup_time", 0, "Tempo do Auto Setup anterior")
@@ -473,15 +482,17 @@ delay("setup_done_prev", "setup_done", 0, "Auto Setup concluído (anterior)")
 fcn("setup_progress", [("t", "setup_time"), ("run", "setup_run"), ("done", "setup_done")],
     "(run > 0.5)*min(t*2, 99) + (run < 0.5)*(done > 0.5)*100", "Progresso do Auto Setup (%)")
 # records: rest position (no air, 20-25 s) and full-air position (45-50 s); manual setup steps 1/2 too.
-# Before the first Auto Setup the sensor scale is the factory one: 0 to `c_factory_span` mm.
+# On start the calibration saved with the project (setup.rest/setup.full, EEPROM); never calibrated (-1): the
+# factory sensor scale, 0 to `c_factory_span` mm.
 fcn("zero", [("s", "t_supply")], "0*s", "Zero")
 delay("first", "zero", 1, "Primeira amostra")
 for name, window, manual, text in (("rest", "(t > 20)*(t < 25)", 1, "sem ar"), ("full", "(t > 45)*(t < 50)", 2, "ar total")):
     gate = f"min((run > 0.5)*{window} + (abs(ms - {manual}) < 0.5), 1)"
-    start = "0" if name == "rest" else "fs"
+    factory = "0" if name == "rest" else "fs"
+    start = f"(e > 0 - 0.5)*e + (e < 0 - 0.5)*{factory}"
     fcn(f"hold_{name}", [("run", "setup_run"), ("t", "setup_time"), ("x", "t_position"), ("h", f"hold_{name}_prev"),
-                         ("ms", H("manualSetup")), ("f", "first"), ("fs", "c_factory_span")],
-        f"(f > 0.5)*{start} + (f < 0.5)*({gate}*x + (1 - {gate})*h)", f"Auto Setup: posição gravada ({text}, mm)")
+                         ("ms", H("manualSetup")), ("f", "first"), ("fs", "c_factory_span"), ("e", H(f"setup.{name}"))],
+        f"(f > 0.5)*({start}) + (f < 0.5)*({gate}*x + (1 - {gate})*h)", f"Auto Setup: posição gravada ({text}, mm)")
     delay(f"hold_{name}_prev", f"hold_{name}", 0, f"Posição gravada ({text}), anterior")
 
 # --- position: Hall sensor, calibration, trims (LOPOS/UPPOS), action ---------------------------------
@@ -539,7 +550,8 @@ for source, pin in (("pos", "PV"), ("sp_r", "setpoint"), ("out_pct", "mv"), ("er
                     ("hall", "hall"), ("temp_c", "temperature"), ("out_pct", "piezo"), ("temp_f", "temperatureF"),
                     ("mileage", "mileage"), ("strokes", "strokes"), ("reversals", "reversals"), ("temp_c", "temperatureLow"),
                     ("temp_c", "temperatureHigh"), ("setup_progress", "setupProgress"), ("out1_bar", "out1"),
-                    ("out2_bar", "out2"), ("supply_bar", "supplyPressure"), ("setup_status", "setup.status")):
+                    ("out2_bar", "out2"), ("supply_bar", "supplyPressure"), ("setup_status", "setup.status"),
+                    ("hold_rest", "setup.restMeasured"), ("hold_full", "setup.fullMeasured")):
     link(source, "out1", DEVICE, pin)
 
 # =================================================================================================

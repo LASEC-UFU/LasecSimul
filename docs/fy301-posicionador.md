@@ -88,6 +88,15 @@ temperatura ambiente.
   de repouso; 25-50 s com ar total, grava a outra ponta; a integral é zerada. Progresso no Cmd 33 código 17 e
   estado no Cmd 48 byte 1 (15 = em andamento). Antes do primeiro Auto Setup a escala do sensor é a de fábrica
   (30 mm): num curso de 20 mm, 50 % no display são 75 % de abertura real.
+- **Calibração salva (EEPROM):** as posições gravadas pelo Auto Setup vão para `setup.restMeasured` /
+  `setup.fullMeasured` (Input) e o Core guarda uma cópia não volátil em `setup.rest` / `setup.full` (Output,
+  `"retainFrom"` no JSON das variáveis). Elas são salvas no `.lsproj` com o resto da configuração HART e o modelo
+  parte delas ao abrir o projeto (-1 = nunca calibrado: escala de fábrica). O comando do Auto Setup (Cmd 152
+  alterna `setup.toggle`, também salvo) só conta como borda depois da primeira amostra: reabrir o projeto não
+  dispara outro Auto Setup.
+- **Primeira amostra:** o Core publica as variáveis Output dos dispositivos HART no grafo de sinais antes da
+  primeira execução de um plano novo (`SimulationSession`, logo após compilar o plano); antes, a primeira
+  amostra via zero.
 - **Ação × AIR_T:** com ação reversa num atuador ar-para-abrir o AIR_T tem de ser *Close* (manual, seção 4);
   a combinação errada dá realimentação positiva e a válvula vai a um extremo.
 - **Servo:** ganho interno 3 x KP (piezo + carretel). Com KP 40 a válvula assenta em cerca de 1 s e a integral
