@@ -356,6 +356,11 @@ inline constexpr uint8_t SetpointRange = 245;
 inline constexpr uint8_t PidError = 246;
 /** The Command 47 code (HartDevicePlan::pvTransferFunctionCode), published to the model. */
 inline constexpr uint8_t TransferFunctionCode = 247;
+/** Analog output in percent of 4-20 mA, from the actual loop current (follows Loop Test and
+ * saturation): the LD301 "OUT (%)", Command 33 code 1. */
+inline constexpr uint8_t OutputPercent = 248;
+/** The primary variable in its current unit (the LD301 "PRES", Command 33 code 2). */
+inline constexpr uint8_t PrimaryValue = 249;
 }
 
 /** The only public value-ownership choices for a HART variable. */
@@ -558,6 +563,10 @@ struct HartDevicePlan {
     /** Device-specific status: the values of these variables fill Command 48 bytes 1, 2, ...
      * (byte 0 stays the diagnostic status). */
     std::vector<std::string> statusVariables;
+    /** Generic devices mirror the legacy Configuration Changed flag (0x40) into Command 48 byte 0.
+     * Devices whose byte 0 is manufacturer diagnostics (the Smar LD301/TT301/FY301 DTMs decode it)
+     * turn this off: the flag then lives only in the per-master device status byte. */
+    bool command48MirrorsConfigurationChanged = true;
     uint8_t alarmSelectionCode = 0xFB;
     uint8_t writeProtectCode = 0xFB;
     /** The Write Protect Code value that refuses writes (Common Table 7:
@@ -819,6 +828,8 @@ public:
      * direction: Output variables carry it to the Signal Graph and to the DSL commands. */
     bool setMeasuredVariable(std::string_view deviceId, std::string_view variableId, double value) noexcept;
     std::optional<double> variableValue(std::string_view deviceId, std::string_view variableId) const noexcept;
+    /** Index of `variableId` in the device plan (O(1)); nullopt when the device or variable is absent. */
+    std::optional<size_t> variableIndex(std::string_view deviceId, std::string_view variableId) const noexcept;
     /** Read-only view of a device's CURRENT runtime plan -- in particular the
      * identity fields a write command's `CommandProgramHook` may have
      * mutated (tag/message/descriptor/date/finalAssemblyNumber/longTag/
@@ -881,10 +892,20 @@ public:
     bool setSensorFault(std::string_view deviceId, bool fault) noexcept;
 
 private:
+    /** Variable id -> index, looked up by string_view (C++20 heterogeneous lookup). */
+    struct VariableIdHash {
+        using is_transparent = void;
+        size_t operator()(std::string_view id) const noexcept { return std::hash<std::string_view>{}(id); }
+    };
     struct RuntimeDevice {
         HartDevicePlan plan;
         const HartDeviceProfile* profile = nullptr;
         std::vector<double> variableValues;
+        /** The Signal Graph bridge reads/writes variables by id on every accepted step (the FY301 has
+         * dozens of ports and ~130 variables): O(1) instead of a string scan of the plan. */
+        std::unordered_map<std::string, size_t, VariableIdHash, std::equal_to<>> variableIndex;
+        /** For each variable, the variables that keep a non-volatile copy of it (`retainFrom`). */
+        std::vector<std::vector<size_t>> retainTargets;
         struct TrendSample { uint64_t timestamp = 0; float value = std::numeric_limits<float>::quiet_NaN(); uint8_t status = 0x30; };
         std::array<std::array<TrendSample, 12>, 4> trendSamples{};
         std::array<uint8_t, 4> trendSampleCounts{};

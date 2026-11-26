@@ -1428,6 +1428,21 @@ const HART_FIELD_DEVICE_CHILD: Readonly<Record<string, string>> = {
  * overrides before a Core rebuild destroys that runtime instance. This makes a
  * normal Save, Stop, or schematic edit/rebuild preserve DTM (LasecFDT,
  * PACTware) and in-simulator changes in the `.lsproj`. */
+/** `getProperty` never blocks the IPC thread on the Scheduler: while a simulation runs it answers
+ * `busy` whenever a step holds the lock (most of the time near real time). Saving the project then
+ * must retry, or a save mid-run fails ("simulacao ocupada; propriedade adiada"). */
+async function getPropertyRetryingBusy(client: NonNullable<typeof state.coreClient>, instanceId: string, name: string): Promise<unknown> {
+  const deadline = Date.now() + 5000;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await client.getProperty(instanceId, name);
+    } catch (err) {
+      if (!(err instanceof IpcError && err.code === "busy") || Date.now() > deadline) throw err;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(2 + attempt, 20)));
+    }
+  }
+}
+
 export async function syncHartSubcircuitPropertiesFromRuntime(): Promise<boolean> {
   const client = state.coreClient;
   if (!client) return false;
@@ -1445,7 +1460,7 @@ export async function syncHartSubcircuitPropertiesFromRuntime(): Promise<boolean
     if (!outerId) continue;
     const childId = await client.getSubcircuitChildInstanceId(outerId, child);
     for (const name of persistedProperties) {
-      const value = await client.getProperty(childId, name);
+      const value = await getPropertyRetryingBusy(client, childId, name);
       if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") continue;
       const key = `@${child}.${name}`;
       if (JSON.stringify(component.properties[key]) === JSON.stringify(value)) continue;

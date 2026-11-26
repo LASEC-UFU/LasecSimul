@@ -234,6 +234,14 @@ struct RateGroup {
     std::vector<ExecutionItem> items;
 };
 
+/** Block id -> index, looked up by string_view without building a std::string (C++20 heterogeneous
+ * lookup). The bridges publish/read external signals by block id on every accepted step. */
+struct SignalBlockIdHash {
+    using is_transparent = void;
+    size_t operator()(std::string_view id) const noexcept { return std::hash<std::string_view>{}(id); }
+};
+using SignalBlockIndex = std::unordered_map<std::string, uint32_t, SignalBlockIdHash, std::equal_to<>>;
+
 } // namespace
 
 class CompiledSignalGraph {
@@ -261,7 +269,7 @@ public:
     uint32_t kernelDiscreteCount = 0;
     uint16_t maxKernelInputs = 0;
     uint32_t maxKernelInputElements = 0;
-    std::unordered_map<std::string, uint32_t> blockIndexById;
+    SignalBlockIndex blockIndexById;
 };
 
 namespace {
@@ -549,7 +557,7 @@ std::shared_ptr<const CompiledSignalGraph> SignalCompiler::compile(const SignalG
     const uint32_t count = static_cast<uint32_t>(definition.blocks.size());
     graph->blocks.resize(count);
     graph->blockIds.resize(count);
-    std::unordered_map<std::string, uint32_t> blockById;
+    SignalBlockIndex blockById;
     for (uint32_t index = 0; index < count; ++index) {
         const auto& source = definition.blocks[index];
         validateBlock(source, definition.maxVectorWidth);
@@ -1990,32 +1998,36 @@ SignalSlotHandle SignalRuntime::output(std::string_view blockId) const {
     return SignalCompiler::output(m_graph, blockId);
 }
 
+namespace {
+/** O(1) block lookup: this runs for every bridged port on every accepted step (HART devices such as
+ * the FY301 bridge dozens of ports), and a linear scan of every block id of a plant-sized graph made
+ * that dominate the whole simulation. */
+const CompiledBlock* findCompiledBlock(const CompiledSignalGraph& graph, std::string_view blockId) {
+    const auto it = graph.blockIndexById.find(blockId);
+    return it == graph.blockIndexById.end() ? nullptr : &graph.blocks[it->second];
+}
+} // namespace
+
 SignalSlotHandle SignalCompiler::output(const std::shared_ptr<const CompiledSignalGraph>& graph,
                                         std::string_view blockId) {
     if (!graph) throw std::logic_error("SignalGraph ausente");
-    for (uint32_t index = 0; index < graph->blockIds.size(); ++index)
-        if (graph->blockIds[index] == blockId) return graph->blocks[index].output;
+    if (const CompiledBlock* block = findCompiledBlock(*graph, blockId)) return block->output;
     throw std::out_of_range("bloco de sinal inexistente: " + std::string(blockId));
 }
 
 SignalPortDefinition SignalCompiler::outputDefinition(const std::shared_ptr<const CompiledSignalGraph>& graph,
                                                       std::string_view blockId) {
     if (!graph) throw std::logic_error("SignalGraph ausente");
-    for (uint32_t index = 0; index < graph->blockIds.size(); ++index) {
-        if (graph->blockIds[index] == blockId) {
-            const SignalSlotHandle slot = graph->blocks[index].output;
-            return {"out", {slot.scalar, slot.width}, graph->blocks[index].outputUnit};
-        }
-    }
+    if (const CompiledBlock* block = findCompiledBlock(*graph, blockId))
+        return {"out", {block->output.scalar, block->output.width}, block->outputUnit};
     throw std::out_of_range("bloco de sinal inexistente: " + std::string(blockId));
 }
 
 bool SignalCompiler::isExternalInput(const std::shared_ptr<const CompiledSignalGraph>& graph,
                                      std::string_view blockId) {
     if (!graph) return false;
-    for (uint32_t index = 0; index < graph->blockIds.size(); ++index)
-        if (graph->blockIds[index] == blockId) return graph->blocks[index].kind == SignalBlockKind::ExternalInput;
-    return false;
+    const CompiledBlock* block = findCompiledBlock(*graph, blockId);
+    return block && block->kind == SignalBlockKind::ExternalInput;
 }
 
 double SignalRuntime::real(SignalSlotHandle slot, uint16_t element) const {
@@ -2032,9 +2044,10 @@ int64_t SignalRuntime::integer(SignalSlotHandle slot, uint16_t element) const {
 }
 
 void SignalRuntime::setExternalReal(std::string_view blockId, double value, uint16_t element) {
-    if (!SignalCompiler::isExternalInput(m_graph, blockId))
+    const CompiledBlock* block = m_graph ? findCompiledBlock(*m_graph, blockId) : nullptr;
+    if (!block || block->kind != SignalBlockKind::ExternalInput)
         throw std::invalid_argument("bridge so pode publicar em ExternalInput: " + std::string(blockId));
-    const SignalSlotHandle slot = output(blockId);
+    const SignalSlotHandle slot = block->output;
     if (slot.scalar != SignalScalarType::Real || element >= slot.width)
         throw std::invalid_argument("ExternalInput nao e Real/elemento invalido");
     const uint32_t offset = slot.offset + element;
@@ -2046,7 +2059,7 @@ void SignalRuntime::setExternalReal(std::string_view blockId, double value, uint
 
 void SignalRuntime::setKernelParameters(std::string_view blockId, std::span<const double> values) {
     if (!m_graph) throw std::logic_error("SignalGraph ausente");
-    const auto it = m_graph->blockIndexById.find(std::string(blockId));
+    const auto it = m_graph->blockIndexById.find(blockId);
     if (it == m_graph->blockIndexById.end()) throw std::out_of_range("bloco de sinal inexistente: " + std::string(blockId));
     const CompiledBlock& block = m_graph->blocks[it->second];
     if (block.kind != SignalBlockKind::Kernel) throw std::invalid_argument("bloco nao e Kernel: " + std::string(blockId));
@@ -2059,7 +2072,7 @@ void SignalRuntime::setKernelParameters(std::string_view blockId, std::span<cons
 
 std::span<const double> SignalRuntime::kernelParameters(std::string_view blockId) const {
     if (!m_graph) throw std::logic_error("SignalGraph ausente");
-    const auto it = m_graph->blockIndexById.find(std::string(blockId));
+    const auto it = m_graph->blockIndexById.find(blockId);
     if (it == m_graph->blockIndexById.end()) throw std::out_of_range("bloco de sinal inexistente: " + std::string(blockId));
     const CompiledBlock& block = m_graph->blocks[it->second];
     return {m_kernelParams.data() + block.paramOffset, block.paramCount};
@@ -2067,15 +2080,16 @@ std::span<const double> SignalRuntime::kernelParameters(std::string_view blockId
 
 std::span<const int64_t> SignalRuntime::kernelIntParameters(std::string_view blockId) const {
     if (!m_graph) throw std::logic_error("SignalGraph ausente");
-    const auto it = m_graph->blockIndexById.find(std::string(blockId));
+    const auto it = m_graph->blockIndexById.find(blockId);
     if (it == m_graph->blockIndexById.end()) throw std::out_of_range("bloco de sinal inexistente: " + std::string(blockId));
     return m_graph->blocks[it->second].intParameters;
 }
 
 void SignalRuntime::setExternalBool(std::string_view blockId, bool value, uint16_t element) {
-    if (!SignalCompiler::isExternalInput(m_graph, blockId))
+    const CompiledBlock* block = m_graph ? findCompiledBlock(*m_graph, blockId) : nullptr;
+    if (!block || block->kind != SignalBlockKind::ExternalInput)
         throw std::invalid_argument("bridge so pode publicar em ExternalInput: " + std::string(blockId));
-    const SignalSlotHandle slot = output(blockId);
+    const SignalSlotHandle slot = block->output;
     if (slot.scalar != SignalScalarType::Bool || element >= slot.width)
         throw std::invalid_argument("ExternalInput nao e Bool/elemento invalido");
     const uint32_t offset = slot.offset + element;
@@ -2086,9 +2100,10 @@ void SignalRuntime::setExternalBool(std::string_view blockId, bool value, uint16
 }
 
 void SignalRuntime::setExternalInt64(std::string_view blockId, int64_t value, uint16_t element) {
-    if (!SignalCompiler::isExternalInput(m_graph, blockId))
+    const CompiledBlock* block = m_graph ? findCompiledBlock(*m_graph, blockId) : nullptr;
+    if (!block || block->kind != SignalBlockKind::ExternalInput)
         throw std::invalid_argument("bridge so pode publicar em ExternalInput: " + std::string(blockId));
-    const SignalSlotHandle slot = output(blockId);
+    const SignalSlotHandle slot = block->output;
     if (slot.scalar != SignalScalarType::Int64 || element >= slot.width)
         throw std::invalid_argument("ExternalInput nao e Int64/elemento invalido");
     const uint32_t offset = slot.offset + element;

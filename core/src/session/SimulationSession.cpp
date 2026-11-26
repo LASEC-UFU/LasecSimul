@@ -2433,14 +2433,17 @@ void SimulationSession::sampleHartInputsFromSignalUnlocked() {
         if (!hart) continue;
         const std::vector<std::string>& wired = cache.hartWiredInputs[entry];
         if (wired.empty()) continue;
-        for (const SignalPortDescriptor& port : hart->cachedSignalPorts()) {
+        const std::vector<SignalPortDescriptor>& ports = hart->cachedSignalPorts();
+        const std::vector<std::string>& blockIds = hart->cachedSignalBlockIds();
+        for (size_t p = 0; p < ports.size(); ++p) {
+            const SignalPortDescriptor& port = ports[p];
             if (port.direction != SignalPortDirection::Input) continue;
             // Same rule as the electrical actuators below: only a port a real wire drives. An
             // unwired input's auto-generated relay reads 0 and used to overwrite, on every stable
             // step, the PV the device holds (set by its owner or by HART), e.g. 3.8 mA forever.
             if (std::find(wired.begin(), wired.end(), port.id) == wired.end()) continue;
             try {
-                const auto slot = m_runtimeState.signals.output(hart->signalBlockId(port.id));
+                const auto slot = m_runtimeState.signals.output(blockIds[p]);
                 const double value = port.kind == SignalValueKind::Digital
                     ? (m_runtimeState.signals.boolean(slot) ? 1.0 : 0.0)
                     : m_runtimeState.signals.real(slot);
@@ -2454,15 +2457,18 @@ void SimulationSession::publishHartOutputsToSignalUnlocked() {
     for (uint32_t index : bridgeCacheUnlocked().hartIndices) {
         auto* hart = dynamic_cast<protocols::HartCommunicationComponent*>(m_componentInstances[index].get());
         if (!hart) continue;
-        for (const SignalPortDescriptor& port : hart->cachedSignalPorts()) {
+        const std::vector<SignalPortDescriptor>& ports = hart->cachedSignalPorts();
+        const std::vector<std::string>& blockIds = hart->cachedSignalBlockIds();
+        for (size_t p = 0; p < ports.size(); ++p) {
+            const SignalPortDescriptor& port = ports[p];
             if (port.direction != SignalPortDirection::Output) continue;
             const auto value = hart->signalOutput(port.id);
             if (!value) continue;
             try {
                 if (port.kind == SignalValueKind::Digital)
-                    m_runtimeState.signals.setExternalBool(hart->signalBlockId(port.id), *value != 0.0);
+                    m_runtimeState.signals.setExternalBool(blockIds[p], *value != 0.0);
                 else
-                    m_runtimeState.signals.setExternalReal(hart->signalBlockId(port.id), *value);
+                    m_runtimeState.signals.setExternalReal(blockIds[p], *value);
             }
             catch (...) { }
         }

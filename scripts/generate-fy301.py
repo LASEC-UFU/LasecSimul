@@ -382,7 +382,7 @@ device_props = {
     "hartManufacturerId": 62, "hartDeviceType": 3, "hartRequestPreambles": 5, "hartUniversalRevision": 5, "hartDeviceRevision": 2,
     "hartSoftwareRevision": 0x24, "hartHardwareRevision": 8, "hartFlags": 0, "hartImplementedRevision": 5,
     "hartCommandSet": "0-3,6,11-19,33-48", "hartWriteProtectActiveCode": 1,
-    "hartTransferFunctionCodes": "0-7", "hartStatusVariables": "setup.status",
+    "hartTransferFunctionCodes": "0-7", "hartStatusVariables": "setup.status", "hartCommand48ConfigChanged": False,
     "hartOperationCounters": operation_counters,
     "analogSaturationLowPercent": -25.0, "analogSaturationHighPercent": 125.0,
     "analogLoopDirection": "input", "analogInputResistance": 550.0, "analogInputMinimumMilliamps": 3.8,

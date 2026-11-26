@@ -81,7 +81,8 @@
         "displayVariable2": "var:display.secondVariable",
         "displayCodeMap": "0=current,1=output,2=pv/1,3=dv:3/1,4=percent,5=value:pid.setpoint,6=dv:6,7=value:spGenerator.time,8=dv:8,9=value:pid.kp,10=value:pid.tr,11=value:pid.td,12=output",
         "displayGlass": 1,
-        "hartDynamicVariableAssignments": "2,3,1,2"
+        "hartDynamicVariableAssignments": "2,3,1,2",
+        "hartCommand48ConfigChanged": false
       },
       "visual": {
         "x": 320,

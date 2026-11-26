@@ -350,8 +350,15 @@ bool HartEngine::loadPlan(HartProtocolPlan plan) {
         if (!profile) return false;
         RuntimeDevice runtime{device, profile, {}};
         runtime.variableValues.reserve(device.variables.size());
-        for (const auto& variable : device.variables) {
-            runtime.variableValues.push_back(variable.value);
+        runtime.retainTargets.resize(device.variables.size());
+        for (size_t i = 0; i < device.variables.size(); ++i) {
+            runtime.variableValues.push_back(device.variables[i].value);
+            runtime.variableIndex.emplace(device.variables[i].id, i);   // first wins, as the old scan did
+        }
+        for (size_t j = 0; j < device.variables.size(); ++j) {
+            if (device.variables[j].retainFrom.empty()) continue;
+            const auto source = runtime.variableIndex.find(device.variables[j].retainFrom);
+            if (source != runtime.variableIndex.end()) runtime.retainTargets[source->second].push_back(j);
         }
         resolved.push_back(std::move(runtime));
     }
@@ -419,16 +426,14 @@ bool HartEngine::setVariableInput(std::string_view deviceId, std::string_view va
     if (!std::isfinite(value)) return false;
     for (RuntimeDevice& device : m_devices) {
         if (device.plan.id != deviceId) continue;
-        for (size_t i = 0; i < device.plan.variables.size(); ++i) {
-            if (device.plan.variables[i].id != variableId) continue;
-            if (device.plan.variables[i].direction != HartVariableDirection::Input) return false;
-            device.variableValues[i] = value;
-            // Non-volatile copies (VariableConfiguration::retainFrom) follow the live value.
-            for (size_t j = 0; j < device.plan.variables.size() && j < device.variableValues.size(); ++j)
-                if (device.plan.variables[j].retainFrom == variableId) device.variableValues[j] = value;
-            return true;
-        }
-        return false;
+        const auto found = device.variableIndex.find(variableId);
+        if (found == device.variableIndex.end()) return false;
+        const size_t i = found->second;
+        if (device.plan.variables[i].direction != HartVariableDirection::Input) return false;
+        device.variableValues[i] = value;
+        // Non-volatile copies (VariableConfiguration::retainFrom) follow the live value.
+        for (const size_t j : device.retainTargets[i]) device.variableValues[j] = value;
+        return true;
     }
     return false;
 }
@@ -437,12 +442,10 @@ bool HartEngine::setMeasuredVariable(std::string_view deviceId, std::string_view
     if (!std::isfinite(value)) return false;
     for (RuntimeDevice& device : m_devices) {
         if (device.plan.id != deviceId) continue;
-        for (size_t i = 0; i < device.plan.variables.size(); ++i) {
-            if (device.plan.variables[i].id != variableId) continue;
-            device.variableValues[i] = value;
-            return true;
-        }
-        return false;
+        const auto found = device.variableIndex.find(variableId);
+        if (found == device.variableIndex.end()) return false;
+        device.variableValues[found->second] = value;
+        return true;
     }
     return false;
 }
@@ -450,9 +453,19 @@ bool HartEngine::setMeasuredVariable(std::string_view deviceId, std::string_view
 std::optional<double> HartEngine::variableValue(std::string_view deviceId, std::string_view variableId) const noexcept {
     for (const RuntimeDevice& device : m_devices) {
         if (device.plan.id != deviceId) continue;
-        for (size_t i = 0; i < device.plan.variables.size(); ++i)
-            if (device.plan.variables[i].id == variableId) return device.variableValues[i];
-        return std::nullopt;
+        const auto found = device.variableIndex.find(variableId);
+        if (found == device.variableIndex.end() || found->second >= device.variableValues.size()) return std::nullopt;
+        return device.variableValues[found->second];
+    }
+    return std::nullopt;
+}
+
+std::optional<size_t> HartEngine::variableIndex(std::string_view deviceId, std::string_view variableId) const noexcept {
+    for (const RuntimeDevice& device : m_devices) {
+        if (device.plan.id != deviceId) continue;
+        const auto found = device.variableIndex.find(variableId);
+        if (found == device.variableIndex.end()) return std::nullopt;
+        return found->second;
     }
     return std::nullopt;
 }
@@ -642,7 +655,12 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
         // project has no per-Master device status bit yet -- and remains a
         // disclosed gap, distinct from the response-content bug fixed here.
         std::array<uint8_t, 9> statusBytes{};
-        statusBytes[0] = selected->plan.diagnosticStatus;
+        // `diagnosticStatus` also keeps the legacy single Configuration Changed flag (0x40). A device
+        // whose byte 0 is manufacturer diagnostics must not show it there: the Smar LD301 DTM's
+        // Diagnosis page raised a modal "Response Code: 2, Undefined" on every poll and froze.
+        statusBytes[0] = selected->plan.command48MirrorsConfigurationChanged
+            ? selected->plan.diagnosticStatus
+            : static_cast<uint8_t>(selected->plan.diagnosticStatus & ~HartDeviceStatusBits::ConfigurationChanged);
         // Device-specific status bytes owned by the model (e.g. the FY301 setup status in byte 1).
         for (size_t k = 0; k < selected->plan.statusVariables.size() && 1 + k < statusBytes.size(); ++k) {
             for (size_t i = 0; i < selected->plan.variables.size() && i < selected->variableValues.size(); ++i) {
@@ -733,7 +751,9 @@ bool HartEngine::execute(std::string_view bus, uint8_t pollingAddress, HartComma
             record.timestamp = 0xFFFFFFFFu;
             record.deviceStatus = selected->plan.diagnosticStatus;
             record.command48Data.fill(0);
-            record.command48Data[0] = selected->plan.diagnosticStatus;
+            record.command48Data[0] = selected->plan.command48MirrorsConfigurationChanged
+                ? selected->plan.diagnosticStatus
+                : static_cast<uint8_t>(selected->plan.diagnosticStatus & ~HartDeviceStatusBits::ConfigurationChanged);
         }
         if (!response.writeByte(0) || !put32(static_cast<uint32_t>(record.timestamp)) ||
             !put16Engine(static_cast<uint16_t>(record.configurationChangedCounter)) || !response.writeByte(static_cast<uint8_t>(record.deviceStatus)) ||

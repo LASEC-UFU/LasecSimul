@@ -683,6 +683,35 @@ int main(int argc, char** argv) {
         check(device.cmd(44, {0xFA}).responseCode != 0, "G3 unit 250 (Not Used) is rejected for the PV");
     }
 
+    // ----------------------------------- G'. DTM Observe (Command 33 codes 1-3) and Command 48
+    {
+        // The LD301 DTM "Observe" combos read OUT (mA) 0, OUT (%) 1, PRES 2, PV (%) 3 and PV 4 (the
+        // same codes as the LCD, Cmd 164). Codes 1-3 used to answer NaN / "not used".
+        Device device;
+        device.cmd(0);
+        const Reply observe = device.cmd(33, {0, 1, 2, 3});
+        check(observe.responseCode == 0 && observe.data.size() == 24, "G4 Command 33 answers codes 0, 1, 2 and 3");
+        const float milliamps = floatAt(observe.data, 2);
+        const float outPercent = floatAt(observe.data, 8);
+        const float pressure = floatAt(observe.data, 14);
+        const float pvPercent = floatAt(observe.data, 20);
+        check(observe.data[6] == 1 && observe.data[7] == 57 && std::abs(outPercent - (milliamps - 4.0f) / 0.16f) < 1e-3f,
+              "G5 code 1 = OUT (%) of the actual loop current");
+        check(observe.data[12] == 2 && observe.data[13] == device.cmd(1).data[0] && pressure == floatAt(device.cmd(1).data, 1),
+              "G6 code 2 = PRES, the PV in the PV unit");
+        check(observe.data[18] == 3 && observe.data[19] == 57 && std::isfinite(pvPercent) &&
+                  std::abs(pvPercent - floatAt(device.cmd(2).data, 4)) < 1e-3f,
+              "G7 code 3 = PV (%), the percent of range of Command 2");
+        check(device.cmd(44, {0x0C}).responseCode == 0 && device.cmd(33, {2}).data[1] == 0x0C, "G8 code 2 follows a Command 44 unit change");
+        check(device.cmd(40, f32(12.0f)).responseCode == 0 && std::abs(floatAt(device.cmd(33, {1}).data, 2) - 50.0f) < 1e-3f,
+              "G9 OUT (%) follows the Loop Test current");
+        device.cmd(40, f32(0.0f));
+        // Configuration Changed (now set by the writes above) belongs to the device status byte only.
+        const Reply status = device.cmd(48);
+        check((status.status & 0x40) && status.responseCode == 0 && status.data.size() >= 9 && status.data[0] == 0x00,
+              "G10 Command 48 byte 0 does not mirror Configuration Changed (the Smar DTM read it as an error)");
+    }
+
     // ------------------------------------------------------------ H. floats
     {
         const std::array<std::pair<float, Bytes>, 9> vectors{{

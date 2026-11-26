@@ -53,6 +53,7 @@
         "hartWriteProtectActiveCode": 1,
         "hartTransferFunctionCodes": "0-7",
         "hartStatusVariables": "setup.status",
+        "hartCommand48ConfigChanged": false,
         "hartOperationCounters": "35=counter.maOpenClose;47=counter.flowChar;157=counter.directReverse;222=counter.servoLimits;218=counter.kp;219=counter.tr;129=counter.airTo;224=counter.localRemote;226=counter.spValue;203,228=counter.failSafe;152=counter.autoSetup;168=counter.travelClose;188=counter.motionType;45=counter.trim4mA;46=counter.trim20mA;235=counter.performance",
         "analogSaturationLowPercent": -25.0,
         "analogSaturationHighPercent": 125.0,

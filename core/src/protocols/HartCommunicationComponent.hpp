@@ -57,6 +57,9 @@ public:
     std::vector<SignalPortDescriptor> signalPorts() const override;
     /** signalPorts() without the copy, for the per-step Signal Graph bridges. */
     const std::vector<SignalPortDescriptor>& cachedSignalPorts() const;
+    /** Signal block id of each cached port (same order as `cachedSignalPorts()`): the bridge uses
+     * them on every accepted step, so they are built once instead of formatted per call. */
+    const std::vector<std::string>& cachedSignalBlockIds() const;
 private:
     std::vector<SignalPortDescriptor> parseSignalPorts() const;
     /** Bumped on every assignment of m_hartVariablesJson: validating the port cache by comparing
@@ -64,6 +67,8 @@ private:
     uint64_t m_hartVariablesRevision = 1;
     mutable uint64_t m_signalPortsRevision = 0;
     mutable std::vector<SignalPortDescriptor> m_signalPortsCache;
+    mutable std::vector<std::string> m_signalBlockIdsCache;
+    mutable uint32_t m_signalBlockIdsIndex = 0xFFFFFFFFu;
 public:
     std::string signalBlockId(std::string_view variableId) const;
     bool setSignalInput(std::string_view variableId, double value) noexcept;
@@ -196,6 +201,8 @@ private:
         std::string transferFunctionCodes;
         /** "setup.status,diag.byte2": variables that fill Command 48 bytes 1, 2, ... */
         std::string statusVariables;
+        /** false: Command 48 byte 0 never mirrors Configuration Changed (manufacturer diagnostics). */
+        bool command48ConfigChanged = true;
     } m_traits;
     /** Configuration Change Counter (HART 6/7 Command 0), persisted. */
     uint32_t m_configChangeCounter = 0;

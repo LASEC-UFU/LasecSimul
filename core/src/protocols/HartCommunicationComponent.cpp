@@ -317,6 +317,9 @@ void HartCommunicationComponent::resolveProfileTraits(const registry::ComponentP
     t.statusVariables = stringProperty(p, "hartStatusVariables",
         defaults.contains("hartStatusVariables") && defaults["hartStatusVariables"].is_string()
             ? defaults["hartStatusVariables"].get<std::string>() : "");
+    t.command48ConfigChanged = p.property("hartCommand48ConfigChanged",
+        defaults.contains("hartCommand48ConfigChanged") && defaults["hartCommand48ConfigChanged"].is_boolean()
+            ? defaults["hartCommand48ConfigChanged"].get<bool>() : true);
 }
 
 HartLcdPage HartCommunicationComponent::displayPage(const std::string& source, const HartDevicePlan& plan, double pv,
@@ -692,6 +695,7 @@ void HartCommunicationComponent::rebuildConfiguredPlan() {
                 device.transferFunctionCodes.push_back(static_cast<uint8_t>(code));
         } catch (...) {}
     }
+    device.command48MirrorsConfigurationChanged = m_traits.command48ConfigChanged;
     // "setup.status,diag": Command 48 bytes 1, 2, ...
     for (size_t at = 0; at < m_traits.statusVariables.size();) {
         const size_t comma = std::min(m_traits.statusVariables.find(',', at), m_traits.statusVariables.size());
@@ -1136,8 +1140,20 @@ const std::vector<SignalPortDescriptor>& HartCommunicationComponent::cachedSigna
     if (m_signalPortsRevision != m_hartVariablesRevision) {
         m_signalPortsCache = parseSignalPorts();
         m_signalPortsRevision = m_hartVariablesRevision;
+        m_signalBlockIdsCache.clear();
     }
     return m_signalPortsCache;
+}
+
+const std::vector<std::string>& HartCommunicationComponent::cachedSignalBlockIds() const {
+    const std::vector<SignalPortDescriptor>& ports = cachedSignalPorts();
+    if (m_signalBlockIdsCache.size() != ports.size() || m_signalBlockIdsIndex != m_componentIndex) {
+        m_signalBlockIdsCache.clear();
+        m_signalBlockIdsCache.reserve(ports.size());
+        for (const SignalPortDescriptor& port : ports) m_signalBlockIdsCache.push_back(signalBlockId(port.id));
+        m_signalBlockIdsIndex = m_componentIndex;
+    }
+    return m_signalBlockIdsCache;
 }
 
 std::vector<SignalPortDescriptor> HartCommunicationComponent::parseSignalPorts() const {
@@ -1461,9 +1477,10 @@ std::optional<double> HartCommunicationComponent::signalOutput(std::string_view 
     // entirely on every caller already having filtered via `signalPorts()`.
     const HartDevicePlan* plan = m_engine.findDevicePlan(m_deviceId);
     if (!plan) return std::nullopt;
-    const auto variable = std::find_if(plan->variables.begin(), plan->variables.end(),
-        [&](const auto& candidate) { return candidate.id == variableId; });
-    if (variable == plan->variables.end() || variable->direction != HartVariableDirection::Output) return std::nullopt;
+    const std::optional<size_t> index = m_engine.variableIndex(m_deviceId, variableId);
+    if (!index || *index >= plan->variables.size()) return std::nullopt;
+    const auto variable = plan->variables.begin() + static_cast<std::ptrdiff_t>(*index);
+    if (variable->direction != HartVariableDirection::Output) return std::nullopt;
     // Device state the model needs but no variable stores: the Command 47 code, and for a loop-powered
     // actuator the input in percent of its split range (Command 35) or the measured current.
     if (variable->derivedSource == HartDerivedSource::TransferFunctionCode) return static_cast<double>(plan->pvTransferFunctionCode);
@@ -1528,6 +1545,7 @@ std::vector<PropertySchema> HartCommunicationComponent::propertySchema(Mode mode
         textSchema("hartResponseDataLimits", "Bytes de dados maximos por comando (ex.: 15=17)", "HART Perfil", ""),
         textSchema("hartTransferFunctionCodes", "Codigos aceitos pelo Cmd 47 (ex.: 0-7; vazio = 0 linear, 1 raiz)", "HART Perfil", ""),
         textSchema("hartStatusVariables", "Variaveis dos bytes 1, 2... do Cmd 48 (ex.: setup.status)", "HART Perfil", ""),
+        {"hartCommand48ConfigChanged", "Cmd 48 byte 0 espelha Configuration Changed (0x40)", "HART Perfil", "", PropertyValueKind::Bool, "checkbox", true},
         textSchema("hartDynamicVariableAssignments", "Atribuicoes PV/SV/TV/QV (4 codigos separados por virgula)", "HART Perfil", ""),
         numberSchema("hartConfigChangeCounter", "Contador de mudancas de configuracao (Command 0, HART 6/7)", "HART", "", 0, 0, 65535),
         {"sensorFault", "Simular falha do sensor", "Sensor", "", PropertyValueKind::Bool, "checkbox", false},
@@ -1668,7 +1686,7 @@ PropertyValue HartCommunicationComponent::propertyValue(const std::string& id) c
     if (id == "hartColdStartKeptByCommand0") return m_traits.coldStartKeptByCommand0;
     if (id == "hartBurnoutPercentFollowsOutput") return m_traits.burnoutPercentFollowsOutput;
     if (id == "hartMaxDeviceVariables") return m_traits.maxDeviceVariables; if (id == "hartPrivateLabel") return m_traits.privateLabel;
-    if (id == "hartDeviceProfile") return m_traits.deviceProfile; if (id == "hartResponseDataLimits") return m_traits.responseDataLimits; if (id == "hartTransferFunctionCodes") return m_traits.transferFunctionCodes; if (id == "hartStatusVariables") return m_traits.statusVariables;
+    if (id == "hartDeviceProfile") return m_traits.deviceProfile; if (id == "hartResponseDataLimits") return m_traits.responseDataLimits; if (id == "hartTransferFunctionCodes") return m_traits.transferFunctionCodes; if (id == "hartStatusVariables") return m_traits.statusVariables; if (id == "hartCommand48ConfigChanged") return m_traits.command48ConfigChanged;
     if (id == "hartDynamicVariableAssignments") return m_hartDynamicVariableAssignments;
     if (id == "hartConfigChangeCounter") return static_cast<double>(m_configChangeCounter);
     if (id == "displayGlass") return m_displayGlass;
@@ -1739,6 +1757,7 @@ void HartCommunicationComponent::setPropertyValue(const std::string& id, const P
     else if (id == "hartResponseDataLimits") { m_traits.responseDataLimits = std::get<std::string>(v); rebuildConfiguredPlan(); }
     else if (id == "hartTransferFunctionCodes") { m_traits.transferFunctionCodes = std::get<std::string>(v); rebuildConfiguredPlan(); }
     else if (id == "hartStatusVariables") { m_traits.statusVariables = std::get<std::string>(v); rebuildConfiguredPlan(); }
+    else if (id == "hartCommand48ConfigChanged") { m_traits.command48ConfigChanged = std::get<bool>(v); rebuildConfiguredPlan(); }
     else if (id == "hartDynamicVariableAssignments") { m_hartDynamicVariableAssignments = std::get<std::string>(v); rebuildConfiguredPlan(); }
     else if (id == "hartConfigChangeCounter") { m_configChangeCounter = static_cast<uint32_t>(std::clamp(std::get<double>(v), 0.0, 65535.0)); rebuildConfiguredPlan(); }
     else if (id == "sensorFault") { m_sensorFault = std::get<bool>(v); m_engine.setSensorFault(m_deviceId, m_sensorFault || m_signalSensorFault); }

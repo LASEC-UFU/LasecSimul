@@ -1178,6 +1178,15 @@ HartEngine::CommandProgramHook makeHook(std::shared_ptr<HartProgramMap> programs
                 : authored.value + authored.trimAdjustment);
             if (authored.derivedSource == HartDerivedSource::LoopCurrent) {
                 variable.value = hartLoopCurrentMilliamps(vars);
+            } else if (authored.derivedSource == HartDerivedSource::OutputPercent) {
+                variable.value = (hartLoopCurrentMilliamps(vars) - 4.0f) / 16.0f * 100.0f;
+            } else if (authored.derivedSource == HartDerivedSource::PrimaryValue) {
+                const auto primary = std::find_if(plan.variables.begin(), plan.variables.end(), [](const auto& candidate) {
+                    return candidate.deviceVariableCode == 246 || candidate.id == "PV" || candidate.id == "primary";
+                });
+                variable.value = vars.primaryVariable;
+                if (primary != plan.variables.end())
+                    variable.units = primary->deviceVariableUnit != 250 ? primary->deviceVariableUnit : profile.primaryVariableUnit;
             } else if (authored.derivedSource == HartDerivedSource::PercentRange) {
                 // Percent of range, optionally re-expressed on this
                 // variable's own 0 %/100 % points (a "user unit" PV).
